@@ -241,7 +241,7 @@ final class TheStash {
         from elementTarget: ElementTarget?,
         pointX: Double?,
         pointY: Double?
-    ) -> TheSafecracker.PointResolution {
+    ) -> PointResolution {
         if let elementTarget {
             let resolution = resolveTarget(elementTarget)
             guard let resolved = resolution.resolved else {
@@ -330,12 +330,38 @@ final class TheStash {
     let tripwire: TheTripwire
 
     /// TheBurglar handles parsing and populating the registry.
-    let burglar: TheBurglar
+    private let burglar: TheBurglar
 
-    /// Convenience: parse and apply in one step via TheBurglar.
+    // MARK: - Parse Pipeline Facades
+
+    /// Parse and apply in one step. Most callers use this.
     @discardableResult
     func refresh() -> TheBurglar.ParseResult? {
         burglar.refresh(into: self)
+    }
+
+    /// Read the live accessibility tree without mutating state.
+    func parse() -> TheBurglar.ParseResult? {
+        burglar.parse()
+    }
+
+    /// Apply a parse result to the registry. Returns assigned heistIds.
+    @discardableResult
+    func apply(_ result: TheBurglar.ParseResult) -> [String] {
+        burglar.apply(result, to: self)
+    }
+
+    /// Did the accessibility topology change between two snapshots?
+    func isTopologyChanged(
+        before: [AccessibilityElement],
+        after: [AccessibilityElement],
+        beforeHierarchy: [AccessibilityHierarchy],
+        afterHierarchy: [AccessibilityHierarchy]
+    ) -> Bool {
+        burglar.isTopologyChanged(
+            before: before, after: after,
+            beforeHierarchy: beforeHierarchy, afterHierarchy: afterHierarchy
+        )
     }
 
 }

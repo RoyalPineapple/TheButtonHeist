@@ -337,7 +337,7 @@ final class TheTripwire {
             .compactMap { $0 as? UIWindowScene }
             .flatMap { $0.windows }
             .filter { window in
-                !(window is TheFingerprints.FingerprintWindow)
+                !(window is any ButtonHeistOverlayWindow)
                     && !window.isHidden
                     && window.bounds.size != .zero
             }

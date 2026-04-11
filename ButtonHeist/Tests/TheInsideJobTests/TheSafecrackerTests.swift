@@ -11,7 +11,6 @@ final class TheSafecrackerTests: XCTestCase {
     override func setUp() async throws {
         tripwire = TheTripwire()
         safecracker = TheSafecracker()
-        safecracker.tripwire = tripwire
         safecracker.startKeyboardObservation()
     }
 

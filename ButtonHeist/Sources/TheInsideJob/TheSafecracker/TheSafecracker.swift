@@ -1,8 +1,15 @@
 #if canImport(UIKit)
 #if DEBUG
 import UIKit
-import AccessibilitySnapshotParser
 import TheScore
+
+/// Result of resolving a screen coordinate from an element target or explicit point.
+/// Shared between TheStash (resolution) and TheBrains (consumption).
+@MainActor
+enum PointResolution {
+    case success(CGPoint)
+    case failure(TheSafecracker.InteractionResult)
+}
 
 /// Cracks open the app's touch system for remote gesture injection.
 ///
@@ -17,12 +24,6 @@ import TheScore
 /// for fuzzing and debugging — it bypasses accessibilityActivate entirely.
 @MainActor
 final class TheSafecracker {
-
-    // MARK: - Crew References
-
-    /// Back-reference to the timing and window state observer.
-    /// Used by ensureOnScreen to wait for scroll animations to settle.
-    weak var tripwire: TheTripwire?
 
     // MARK: - Keyboard State
 
@@ -70,6 +71,11 @@ final class TheSafecracker {
     /// Visual interaction indicators for taps and gesture tracking.
     lazy var fingerprints = TheFingerprints()
 
+    /// Show a brief fingerprint indicator at a screen point.
+    func showFingerprint(at point: CGPoint) {
+        fingerprints.showFingerprint(at: point)
+    }
+
     // MARK: - Interaction Result
 
     /// Outcome of a high-level interaction (action, gesture, text entry).
@@ -92,13 +98,6 @@ final class TheSafecracker {
         static func failure(_ method: ActionMethod, message: String) -> InteractionResult {
             InteractionResult(success: false, method: method, message: message, value: nil)
         }
-    }
-
-    /// Result of resolving a screen coordinate from an element target or explicit point.
-    /// Uses a custom enum instead of `Result` so `InteractionResult` doesn't need `Error` conformance.
-    enum PointResolution {
-        case success(CGPoint)
-        case failure(InteractionResult)
     }
 
     // MARK: - Internal Touch State
@@ -463,7 +462,7 @@ final class TheSafecracker {
         let allWindows = UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .flatMap { $0.windows }
-            .filter { !($0 is TheFingerprints.FingerprintWindow) && !$0.isHidden }
+            .filter { !($0 is any ButtonHeistOverlayWindow) && !$0.isHidden }
             .sorted { $0.windowLevel > $1.windowLevel }
 
         for window in allWindows {

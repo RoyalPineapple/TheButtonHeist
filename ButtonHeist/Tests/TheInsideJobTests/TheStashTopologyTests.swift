@@ -95,7 +95,7 @@ final class TheStashTopologyTests: XCTestCase {
         let beforeElements = beforeHierarchy.sortedElements
         let afterElements = afterHierarchy.sortedElements
 
-        XCTAssertTrue(bagman.burglar.isTopologyChanged(
+        XCTAssertTrue(bagman.isTopologyChanged(
             before: beforeElements, after: afterElements,
             beforeHierarchy: beforeHierarchy, afterHierarchy: afterHierarchy
         ))
@@ -112,7 +112,7 @@ final class TheStashTopologyTests: XCTestCase {
 
         let elements = hierarchy.sortedElements
 
-        XCTAssertFalse(bagman.burglar.isTopologyChanged(
+        XCTAssertFalse(bagman.isTopologyChanged(
             before: elements, after: elements,
             beforeHierarchy: hierarchy, afterHierarchy: hierarchy
         ))
@@ -130,7 +130,7 @@ final class TheStashTopologyTests: XCTestCase {
             AccessibilityHierarchy.element($1, traversalIndex: $0)
         }
 
-        XCTAssertFalse(bagman.burglar.isTopologyChanged(
+        XCTAssertFalse(bagman.isTopologyChanged(
             before: beforeContent, after: afterContent,
             beforeHierarchy: beforeHierarchy, afterHierarchy: afterHierarchy
         ))
@@ -160,7 +160,7 @@ final class TheStashTopologyTests: XCTestCase {
                 + settingsContent.enumerated().map { .element($1, traversalIndex: 10 + $0) }),
         ]
 
-        XCTAssertTrue(bagman.burglar.isTopologyChanged(
+        XCTAssertTrue(bagman.isTopologyChanged(
             before: beforeHierarchy.sortedElements, after: afterHierarchy.sortedElements,
             beforeHierarchy: beforeHierarchy, afterHierarchy: afterHierarchy
         ))
@@ -184,7 +184,7 @@ final class TheStashTopologyTests: XCTestCase {
             AccessibilityHierarchy.element($1, traversalIndex: 100 + $0)
         }
 
-        XCTAssertFalse(bagman.burglar.isTopologyChanged(
+        XCTAssertFalse(bagman.isTopologyChanged(
             before: beforeHierarchy.sortedElements, after: afterHierarchy.sortedElements,
             beforeHierarchy: beforeHierarchy, afterHierarchy: afterHierarchy
         ))
@@ -197,7 +197,7 @@ final class TheStashTopologyTests: XCTestCase {
         before: [AccessibilityElement],
         after: [AccessibilityElement]
     ) -> Bool {
-        bagman.burglar.isTopologyChanged(
+        bagman.isTopologyChanged(
             before: before, after: after,
             beforeHierarchy: [], afterHierarchy: []
         )

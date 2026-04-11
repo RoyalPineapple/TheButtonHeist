@@ -58,16 +58,16 @@ final class ConnectionPhaseTests: XCTestCase {
         XCTAssertNotEqual(authFailed, sessionLocked)
     }
 
-    func testConnectionFailureAsFenceError() {
+    func testConnectionFailureAsConnectionError() {
         let errorFailure = TheHandoff.ConnectionFailure.error("boom")
         let authFailure = TheHandoff.ConnectionFailure.authFailed("bad token")
         let lockFailure = TheHandoff.ConnectionFailure.sessionLocked("in use")
 
-        XCTAssertEqual(errorFailure.asFenceError.errorDescription,
-                       FenceError.connectionFailed("boom").errorDescription)
-        XCTAssertEqual(authFailure.asFenceError.errorDescription,
-                       FenceError.authFailed("bad token").errorDescription)
-        XCTAssertEqual(lockFailure.asFenceError.errorDescription,
-                       FenceError.sessionLocked("in use").errorDescription)
+        XCTAssertEqual(errorFailure.asConnectionError.errorDescription,
+                       TheHandoff.ConnectionError.connectionFailed("boom").errorDescription)
+        XCTAssertEqual(authFailure.asConnectionError.errorDescription,
+                       TheHandoff.ConnectionError.authFailed("bad token").errorDescription)
+        XCTAssertEqual(lockFailure.asConnectionError.errorDescription,
+                       TheHandoff.ConnectionError.sessionLocked("in use").errorDescription)
     }
 }

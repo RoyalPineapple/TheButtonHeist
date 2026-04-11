@@ -13,14 +13,36 @@ public final class TheHandoff {
 
     // MARK: - State Machine Types
 
-    /// Why a connection failed — typed so callers can map to the right FenceError
-    /// without string parsing or callback interception.
+    /// Why a connection attempt failed. TheHandoff's own error type —
+    /// callers (TheFence) map this to their error domain at the boundary.
+    public enum ConnectionError: Error, LocalizedError {
+        case connectionFailed(String)
+        case authFailed(String)
+        case sessionLocked(String)
+        case timeout
+        case noDeviceFound
+        case noMatchingDevice(filter: String, available: [String])
+
+        public var errorDescription: String? {
+            switch self {
+            case .connectionFailed(let message): return message
+            case .authFailed(let reason): return "Authentication failed: \(reason)"
+            case .sessionLocked(let message): return "Session locked: \(message)"
+            case .timeout: return "Connection timed out"
+            case .noDeviceFound: return "No device found"
+            case .noMatchingDevice(let filter, let available):
+                return "No device matching '\(filter)' (available: \(available.joined(separator: ", ")))"
+            }
+        }
+    }
+
+    /// Why a connection failed — used as the associated value in ConnectionPhase.failed.
     public enum ConnectionFailure: Equatable {
         case error(String)
         case authFailed(String)
         case sessionLocked(String)
 
-        var asFenceError: FenceError {
+        var asConnectionError: ConnectionError {
             switch self {
             case .error(let message): return .connectionFailed(message)
             case .authFailed(let reason): return .authFailed(reason)
@@ -495,14 +517,14 @@ public final class TheHandoff {
                 onStatus?("Connected to \(displayName(for: device))")
                 return
             case .failed(let failure):
-                throw failure.asFenceError
+                throw failure.asConnectionError
             case .disconnected:
-                throw FenceError.connectionFailed("Disconnected during connection attempt")
+                throw ConnectionError.connectionFailed("Disconnected during connection attempt")
             case .connecting:
                 break
             }
             if DispatchTime.now().uptimeNanoseconds - connectionStart > connectionTimeout {
-                throw FenceError.connectionTimeout
+                throw ConnectionError.timeout
             }
             try await Task.sleep(for: .milliseconds(100))
         }

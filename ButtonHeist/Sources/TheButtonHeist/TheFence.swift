@@ -56,6 +56,19 @@ public enum FenceError: Error, LocalizedError {
     }
 }
 
+extension FenceError {
+    init(_ connectionError: TheHandoff.ConnectionError) {
+        switch connectionError {
+        case .connectionFailed(let message): self = .connectionFailed(message)
+        case .authFailed(let reason): self = .authFailed(reason)
+        case .sessionLocked(let message): self = .sessionLocked(message)
+        case .timeout: self = .connectionTimeout
+        case .noDeviceFound: self = .noDeviceFound
+        case .noMatchingDevice(let filter, let available): self = .noMatchingDevice(filter: filter, available: available)
+        }
+    }
+}
+
 /// Named timeout constants for TheFence operations.
 public enum Timeouts {
     /// Standard action timeout (15 seconds)
@@ -313,10 +326,14 @@ public final class TheFence {
 
     private func connect() async throws {
         let filter = config.deviceFilter ?? EnvironmentKey.buttonheistDevice.value
-        try await handoff.connectWithDiscovery(
-            filter: filter,
-            timeout: config.connectionTimeout
-        )
+        do {
+            try await handoff.connectWithDiscovery(
+                filter: filter,
+                timeout: config.connectionTimeout
+            )
+        } catch let error as TheHandoff.ConnectionError {
+            throw FenceError(error)
+        }
     }
 
     // MARK: - Interface Cache

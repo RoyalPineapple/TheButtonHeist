@@ -48,7 +48,7 @@ public struct DeviceResolver {
                     return device
                 }
                 if filter == nil, reachable.count > 1 {
-                    throw FenceError.noMatchingDevice(
+                    throw TheHandoff.ConnectionError.noMatchingDevice(
                         filter: "(none)",
                         available: reachable.map(\.name)
                     )
@@ -63,27 +63,27 @@ public struct DeviceResolver {
         }
     }
 
-    private func finalSelection() async throws(FenceError) -> DiscoveredDevice {
+    private func finalSelection() async throws(TheHandoff.ConnectionError) -> DiscoveredDevice {
         let reachable = await getDiscoveredDevices().reachable()
         if let device = Self.selectDevice(from: reachable, filter: filter) {
             return device
         }
 
         if filter == nil, reachable.count > 1 {
-            throw FenceError.noMatchingDevice(
+            throw TheHandoff.ConnectionError.noMatchingDevice(
                 filter: "(none)",
                 available: reachable.map(\.name)
             )
         }
 
         if let filter {
-            throw FenceError.noMatchingDevice(
+            throw TheHandoff.ConnectionError.noMatchingDevice(
                 filter: filter,
                 available: reachable.map(\.name)
             )
         }
 
-        throw FenceError.noDeviceFound
+        throw TheHandoff.ConnectionError.noDeviceFound
     }
 
     static func selectDevice(from devices: [DiscoveredDevice], filter: String?) -> DiscoveredDevice? {
