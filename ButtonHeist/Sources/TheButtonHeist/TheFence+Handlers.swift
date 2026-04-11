@@ -84,7 +84,7 @@ extension TheFence {
             let fileURL = try bookKeeper.writeScreenshot(
                 base64Data: screen.pngData,
                 requestId: artifactRequestId,
-                command: Command.getScreen.rawValue,
+                command: .getScreen,
                 metadata: metadata
             )
             return .screenshot(path: fileURL.path, width: screen.width, height: screen.height)
@@ -601,7 +601,7 @@ extension TheFence {
             let fileURL = try bookKeeper.writeRecording(
                 base64Data: recording.videoData,
                 requestId: artifactRequestId,
-                command: Command.stopRecording.rawValue,
+                command: .stopRecording,
                 metadata: metadata
             )
             return .recording(path: fileURL.path, payload: recording)
