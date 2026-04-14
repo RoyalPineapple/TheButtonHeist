@@ -85,8 +85,8 @@ struct DiscoveryRegistry {
     }
 }
 
-@ButtonHeistActor
 /// Discovers Button Heist services via Bonjour and emits device found/lost events.
+@ButtonHeistActor
 public final class DeviceDiscovery: DeviceDiscovering {
 
     private enum DiscoveryPhase {
