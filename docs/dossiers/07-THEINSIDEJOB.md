@@ -70,16 +70,26 @@ All message handling, encoding, broadcasting, and recording now live in [`TheGet
 
 ## Ownership
 
-```
-TheInsideJob (the job)
-├── TheGetaway (comms — dispatch, encode, broadcast, transport wiring, recording)
-├── TheTripwire (pulse — settle detection, injected into others)
-├── TheMuscle (auth — session locking, closure-wired to transport via TheGetaway)
-└── TheBrains (actions — execution, scroll, explore, delta, wait handlers)
-    ├── TheSafecracker (gestures)
-    │   └── TheFingerprints (overlay)
-    └── TheStash (registry)
-        └── TheBurglar (parsing, private)
+```mermaid
+graph TD
+    TIJ["<b>TheInsideJob</b><br/><i>the job</i>"]
+    TG["<b>TheGetaway</b><br/><i>comms — dispatch, encode,<br/>broadcast, transport, recording</i>"]
+    TT["<b>TheTripwire</b><br/><i>pulse — settle detection,<br/>injected into others</i>"]
+    TM["<b>TheMuscle</b><br/><i>auth — session locking,<br/>closure-wired via TheGetaway</i>"]
+    TB["<b>TheBrains</b><br/><i>actions — execution, scroll,<br/>explore, delta, wait handlers</i>"]
+    TS["<b>TheSafecracker</b><br/><i>gestures</i>"]
+    TF["<b>TheFingerprints</b><br/><i>overlay</i>"]
+    TSt["<b>TheStash</b><br/><i>registry</i>"]
+    TBu["<b>TheBurglar</b><br/><i>parsing, private</i>"]
+
+    TIJ --> TG
+    TIJ --> TT
+    TIJ --> TM
+    TIJ --> TB
+    TB --> TS
+    TS --> TF
+    TB --> TSt
+    TSt --> TBu
 ```
 
 ## Singleton Pattern and `configure()`

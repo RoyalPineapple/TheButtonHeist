@@ -108,12 +108,17 @@ A `DiscoveredDevice` is constructed with the IPv6 tunnel address and the configu
 
 **Protocol handshake**:
 
-```
-server → serverHello
-client → clientHello
-server → authRequired
-client → authenticate(token, driverId)   [or .watch in observeMode]
-server → info(ServerInfo)               [triggers .connected event]
+```mermaid
+sequenceDiagram
+    participant S as Server
+    participant C as Client
+    S->>C: serverHello
+    C->>S: clientHello
+    S->>C: authRequired
+    C->>S: authenticate(token, driverId)
+    Note right of C: or .watch in observeMode
+    S->>C: info(ServerInfo)
+    Note right of S: triggers .connected event
 ```
 
 `protocolVersion` is checked on every inbound envelope. A mismatch disconnects immediately with `.protocolMismatch`.
