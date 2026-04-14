@@ -24,6 +24,32 @@ Button Heist is split into three framework targets. Each has its own README with
 
 TheScore is the shared contract — both sides import it, neither side imports the other. Client encodes `ClientMessage`, server decodes it, processes it, encodes `ServerMessage`, client decodes the response.
 
+## How a tap command travels through the system
+
+```
+macOS                                          iOS
+─────                                          ───
+CLI/MCP
+  → TheFence.execute(request:)                 ← parses "one_finger_tap" to Command enum
+    → TheHandoff.send(.touchTap(target))       ← JSON + newline over TLS
+
+                        ─── wire ───
+
+      SimpleSocketServer receives bytes
+        → TheGetaway.handleClientMessage       ← decodes RequestEnvelope, routes by message type
+          → TheBrains.executeCommand(.touchTap) ← refresh tree, capture before-state
+            → TheStash.resolveTarget(target)   ← heistId lookup or matcher search
+            → TheSafecracker.tap(at: point)    ← UITouch + IOHIDEvent + sendEvent
+            → actionResultWithDelta(before:)   ← settle, re-parse, compute delta
+          ← ActionResult
+        → TheGetaway.sendMessage(.actionResult) ← encode ResponseEnvelope, respond
+
+                        ─── wire ───
+
+    ← TheHandoff.onActionResult                ← resolves PendingRequestTracker
+  ← FenceResponse.action(result:)
+```
+
 ## Where to start reading
 
 **If you want to understand the protocol:** Start with [`TheScore/`](TheScore/) — read `Messages.swift` then `Elements.swift`.
