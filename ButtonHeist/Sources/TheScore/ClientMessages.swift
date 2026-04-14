@@ -29,6 +29,7 @@ public struct RequestEnvelope: Codable, Sendable {
 
 // MARK: - Client -> Server Messages
 
+/// Messages sent from a connected client to the Inside Job server.
 public enum ClientMessage: Codable, Sendable {
     /// Version-negotiation hello sent immediately after receiving serverHello.
     case clientHello

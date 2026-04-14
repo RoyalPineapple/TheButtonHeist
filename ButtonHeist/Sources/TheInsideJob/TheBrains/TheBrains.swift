@@ -1,9 +1,11 @@
 #if canImport(UIKit)
 #if DEBUG
 import UIKit
-import AccessibilitySnapshotParser
-import TheScore
 import os.log
+
+import TheScore
+
+import AccessibilitySnapshotParser
 
 /// The brains of the operation — plans the play, sequences the crew.
 ///

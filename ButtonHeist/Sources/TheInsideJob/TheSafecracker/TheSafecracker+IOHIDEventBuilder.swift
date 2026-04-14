@@ -4,6 +4,8 @@ import UIKit
 
 extension TheSafecracker {
 
+    // MARK: - IOHIDEvent Construction
+
     struct FingerTouchData {
         let touch: UITouch
         let location: CGPoint
@@ -234,5 +236,5 @@ private func IOHIDEventSetFloatValue(_ event: UnsafeMutableRawPointer, _ field: 
     _IOHIDEventSetFloatValue(event, field, value)
 }
 
-#endif
-#endif
+#endif // DEBUG
+#endif // canImport(UIKit)

@@ -1,7 +1,8 @@
 import Foundation
 import Network
-import TheScore
 import os
+
+import TheScore
 
 /// TCP server using Network framework.
 /// Manages connections, newline-delimited message framing, and broadcasting.

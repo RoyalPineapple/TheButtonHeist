@@ -1,10 +1,13 @@
 #if canImport(UIKit)
 #if DEBUG
-import Foundation
 import CoreGraphics
+import Foundation
+
 import TheScore
 
 extension TheSafecracker {
+
+    // MARK: - Bezier Sampling
 
     /// Converts cubic bezier curves into evenly-spaced polyline samples. Used by `executeDrawBezier`.
     enum BezierSampler {
@@ -63,5 +66,5 @@ extension TheSafecracker {
         }
     }
 }
-#endif
-#endif
+#endif // DEBUG
+#endif // canImport(UIKit)

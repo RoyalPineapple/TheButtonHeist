@@ -4,11 +4,13 @@ import os.log
 
 private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "discovery")
 
+/// A single change in the discovered device list.
 enum DiscoveryMutation: Equatable {
     case found(DiscoveredDevice)
     case lost(DiscoveredDevice)
 }
 
+/// Deduplicates Bonjour advertisements by device identity, tracking the newest per identity.
 struct DiscoveryRegistry {
     struct Advertisement {
         let device: DiscoveredDevice
@@ -84,6 +86,7 @@ struct DiscoveryRegistry {
 }
 
 @ButtonHeistActor
+/// Discovers Button Heist services via Bonjour and emits device found/lost events.
 public final class DeviceDiscovery: DeviceDiscovering {
 
     private enum DiscoveryPhase {

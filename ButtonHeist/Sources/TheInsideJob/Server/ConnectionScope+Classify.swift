@@ -1,5 +1,6 @@
 import Foundation
 import Network
+
 import TheScore
 
 /// Abstraction over `NWInterface` for testability.

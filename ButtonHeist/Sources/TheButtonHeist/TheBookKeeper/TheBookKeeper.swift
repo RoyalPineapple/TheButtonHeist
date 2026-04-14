@@ -1,5 +1,6 @@
 import Foundation
 import os.log
+
 import TheScore
 
 private let logger = Logger(subsystem: "com.buttonheist.bookkeeper", category: "heist")
@@ -103,6 +104,7 @@ public enum BookKeeperError: Error, LocalizedError {
 
 // MARK: - TheBookKeeper
 
+/// Manages session lifecycle, command logging, artifact storage, and heist recording.
 @ButtonHeistActor
 public final class TheBookKeeper {
 

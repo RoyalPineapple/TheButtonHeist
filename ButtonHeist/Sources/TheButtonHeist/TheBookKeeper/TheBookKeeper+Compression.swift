@@ -2,6 +2,8 @@ import Foundation
 
 extension TheBookKeeper {
 
+    // MARK: - Session Compression
+
     func compressLog(in directory: URL) async throws -> URL {
         let logPath = directory.appendingPathComponent("session.jsonl")
         let compressedPath = directory.appendingPathComponent("session.jsonl.gz")

@@ -1,8 +1,9 @@
 #if canImport(UIKit)
 #if DEBUG
 import UIKit
-import TheScore
 import os.log
+
+import TheScore
 
 /// The getaway driver — runs comms between the wire and the crew.
 ///

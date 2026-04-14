@@ -5,6 +5,8 @@ import AccessibilitySnapshotParser
 
 extension TheBrains {
 
+    // MARK: - Screen Manifest
+
     /// Complete element map for a screen, including off-screen content.
     struct ScreenManifest {
 

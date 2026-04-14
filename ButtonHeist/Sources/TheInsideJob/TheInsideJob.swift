@@ -1,9 +1,11 @@
 #if canImport(UIKit)
 #if DEBUG
 import UIKit
-import AccessibilitySnapshotParser
-import TheScore
 import os.log
+
+import TheScore
+
+import AccessibilitySnapshotParser
 
 let insideJobLogger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "server")
 

@@ -2,17 +2,20 @@ import Foundation
 
 // MARK: - Format Version
 
+/// Version tracking for the session manifest format.
 public enum SessionFormatVersion {
     public static let current = "0.1.0"
 }
 
 // MARK: - Artifact Types
 
+/// Classification of artifacts stored in a session directory.
 public enum ArtifactType: String, Codable, Sendable, CaseIterable {
     case screenshot
     case recording
 }
 
+/// Success or failure classification for logged command responses.
 public enum ResponseStatus: String, Sendable, CaseIterable {
     case ok
     case error
@@ -20,6 +23,7 @@ public enum ResponseStatus: String, Sendable, CaseIterable {
 
 // MARK: - Metadata Types
 
+/// Dimensions captured alongside a screenshot artifact.
 public struct ScreenshotMetadata: Sendable {
     public let width: Double
     public let height: Double
@@ -30,6 +34,7 @@ public struct ScreenshotMetadata: Sendable {
     }
 }
 
+/// Dimensions and timing captured alongside a recording artifact.
 public struct RecordingMetadata: Sendable {
     public let width: Int
     public let height: Int
@@ -48,6 +53,7 @@ public struct RecordingMetadata: Sendable {
 
 // MARK: - Artifact Entry
 
+/// A single artifact (screenshot or recording) stored in a session directory.
 public struct ArtifactEntry: Codable, Sendable, Equatable {
     public let type: ArtifactType
     public let path: String
@@ -78,6 +84,7 @@ public struct ArtifactEntry: Codable, Sendable, Equatable {
 
 // MARK: - Session Manifest
 
+/// Durable index of a BookKeeper session — commands, artifacts, and timing.
 public struct SessionManifest: Codable, Sendable, Equatable {
     public let formatVersion: String
     public let sessionId: String

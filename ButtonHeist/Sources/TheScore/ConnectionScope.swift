@@ -17,6 +17,12 @@ public enum ConnectionScope: String, Sendable, CaseIterable, Codable {
     case usb
     case network
 
+    /// Default scopes: simulator and USB only (network is opt-in).
+    public static let `default`: Set<ConnectionScope> = [.simulator, .usb]
+
+    /// All scopes allowed (including network).
+    public static let all: Set<ConnectionScope> = Set(ConnectionScope.allCases)
+
     /// Parse a comma-separated scope string (e.g. "simulator,usb").
     /// Returns nil for empty/invalid input (caller should fall back to defaults).
     public static func parse(_ value: String) -> Set<ConnectionScope>? {
@@ -25,10 +31,4 @@ public enum ConnectionScope: String, Sendable, CaseIterable, Codable {
             .compactMap { ConnectionScope(rawValue: $0.trimmingCharacters(in: .whitespaces).lowercased()) }
         return scopes.isEmpty ? nil : Set(scopes)
     }
-
-    /// Default scopes: simulator and USB only (network is opt-in).
-    public static let `default`: Set<ConnectionScope> = [.simulator, .usb]
-
-    /// All scopes allowed (including network).
-    public static let all: Set<ConnectionScope> = Set(ConnectionScope.allCases)
 }

@@ -2,9 +2,12 @@ import Foundation
 
 extension TheBookKeeper {
 
+    // MARK: - Session Log Construction
+
     /// Keys that carry binary data and should be excluded from session logs.
     private static let binaryKeys: Set<String> = ["pngData", "videoData"]
 
+    /// Build a sanitized log entry for an incoming command.
     func buildCommandLogEntry(
         requestId: String,
         command: TheFence.Command,
@@ -34,6 +37,7 @@ extension TheBookKeeper {
         return entry
     }
 
+    /// Build a sanitized log entry for a command response.
     func buildResponseLogEntry(
         requestId: String,
         status: ResponseStatus,
@@ -57,6 +61,7 @@ extension TheBookKeeper {
         return entry
     }
 
+    /// Serialize a log entry as JSON and append it to the session log file.
     func appendLogLine(_ entry: [String: Any], to handle: FileHandle) throws {
         let jsonData = try JSONSerialization.data(withJSONObject: entry, options: [.sortedKeys])
         var lineData = jsonData
