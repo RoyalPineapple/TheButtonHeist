@@ -3,6 +3,7 @@
 import Foundation
 import UIKit
 import os.log
+
 import TheScore
 
 /// Manages client authentication, session token validation, and UI-based connection approval.

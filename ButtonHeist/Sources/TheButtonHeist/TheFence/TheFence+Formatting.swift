@@ -1,5 +1,6 @@
 import Foundation
 import os.log
+
 import TheScore
 
 private let logger = Logger(subsystem: "com.buttonheist.thefence", category: "formatting")

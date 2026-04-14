@@ -182,6 +182,7 @@ public enum ErrorKind: String, Codable, Sendable, CaseIterable {
     case actionFailed
 }
 
+/// The outcome of executing an action command, including post-action diagnostics.
 public struct ActionResult: Codable, Sendable {
     public let success: Bool
     public let method: ActionMethod
@@ -337,7 +338,7 @@ public struct ExploreResult: Codable, Sendable {
         self.explorationTime = explorationTime
     }
 
-    // MARK: Codable
+    // MARK: - Codable
 
     private enum CodingKeys: String, CodingKey {
         case elements, scrollCount, containersExplored, containersSkippedObscured, explorationTime
@@ -357,6 +358,18 @@ public struct ExploreResult: Codable, Sendable {
 
 /// Compact description of what changed in the accessibility hierarchy after an action.
 public struct InterfaceDelta: Codable, Sendable {
+
+    // MARK: - Nested Types
+
+    /// Classification of the change that occurred.
+    public enum DeltaKind: String, Codable, Sendable {
+        case noChange
+        case elementsChanged
+        case screenChanged
+    }
+
+    // MARK: - Properties
+
     /// What kind of change occurred
     public let kind: DeltaKind
 
@@ -375,6 +388,8 @@ public struct InterfaceDelta: Codable, Sendable {
     /// Full new interface (present only for .screenChanged)
     public let newInterface: Interface?
 
+    // MARK: - Init
+
     public init(
         kind: DeltaKind,
         elementCount: Int,
@@ -389,12 +404,6 @@ public struct InterfaceDelta: Codable, Sendable {
         self.removed = removed
         self.updated = updated
         self.newInterface = newInterface
-    }
-
-    public enum DeltaKind: String, Codable, Sendable {
-        case noChange
-        case elementsChanged
-        case screenChanged
     }
 }
 
@@ -704,8 +713,21 @@ public struct ScreenPayload: Codable, Sendable {
     }
 }
 
-/// Payload containing screen recording video data
+/// Payload containing screen recording video data.
 public struct RecordingPayload: Codable, Sendable {
+
+    // MARK: - Nested Types
+
+    /// Why the recording was stopped.
+    public enum StopReason: String, Codable, Sendable {
+        case manual
+        case inactivity
+        case maxDuration
+        case fileSizeLimit
+    }
+
+    // MARK: - Properties
+
     /// Base64-encoded MP4 video data (H.264)
     public let videoData: String
     /// Video width in pixels
@@ -724,16 +746,10 @@ public struct RecordingPayload: Codable, Sendable {
     public let endTime: Date
     /// Reason recording stopped
     public let stopReason: StopReason
-
-    public enum StopReason: String, Codable, Sendable {
-        case manual
-        case inactivity
-        case maxDuration
-        case fileSizeLimit
-    }
-
     /// Ordered log of interactions recorded during this session (nil if no interactions occurred)
     public let interactionLog: [InteractionEvent]?
+
+    // MARK: - Init
 
     public init(
         videoData: String,

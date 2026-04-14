@@ -1,10 +1,11 @@
+import CryptoKit
 import Foundation
 import Network
 import Security
-import CryptoKit
-import X509
-import SwiftASN1
 import os.log
+
+import SwiftASN1
+import X509
 
 private let logger = Logger(subsystem: "com.buttonheist.thegetaway", category: "tls")
 

@@ -2,6 +2,7 @@
 #if DEBUG
 import UIKit
 import os.log
+
 import TheScore
 
 private let autoStartLogger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "autostart")

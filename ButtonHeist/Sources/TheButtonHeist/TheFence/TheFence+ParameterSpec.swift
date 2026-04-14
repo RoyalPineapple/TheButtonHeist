@@ -7,16 +7,10 @@ import Foundation
 ///
 /// Declared at module scope (not nested in TheFence) to avoid inheriting @ButtonHeistActor isolation.
 public struct FenceParameterSpec: Sendable, Equatable {
-    public let key: String
-    public let type: ParamType
-    public let required: Bool
 
-    public init(key: String, type: ParamType, required: Bool = false) {
-        self.key = key
-        self.type = type
-        self.required = required
-    }
+    // MARK: - Nested Types
 
+    /// JSON-level type of a parameter value.
     public enum ParamType: String, Sendable, Equatable {
         case string
         case integer
@@ -25,6 +19,20 @@ public struct FenceParameterSpec: Sendable, Equatable {
         case stringArray
         case object
         case array        // generic array (points, segments, steps)
+    }
+
+    // MARK: - Properties
+
+    public let key: String
+    public let type: ParamType
+    public let required: Bool
+
+    // MARK: - Init
+
+    public init(key: String, type: ParamType, required: Bool = false) {
+        self.key = key
+        self.type = type
+        self.required = required
     }
 }
 

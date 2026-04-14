@@ -105,5 +105,5 @@ enum ObjCRuntime {
     }
 }
 
-#endif
-#endif
+#endif // DEBUG
+#endif // canImport(UIKit)

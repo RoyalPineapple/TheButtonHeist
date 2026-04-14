@@ -551,6 +551,52 @@ The `AccessibilitySnapshotBH` submodule points at our fork (`RoyalPineapple/Acce
 - When upstream `cashapp/AccessibilitySnapshot:main` updates, rebase our `main` onto the new upstream `main` rather than merging.
 - After updating the submodule, run `git submodule update --remote` and commit the new pin.
 
+## Swift File Structure
+
+Every Swift file follows the same section order. Skip sections that don't apply, but never reorder them.
+
+1. **Conditional compilation guards** (`#if canImport(UIKit)`, `#if DEBUG`)
+2. **Imports** — system frameworks, then project modules, then third-party. One blank line between groups when there are three or more imports total.
+3. **File-level declarations** — loggers, constants, free functions. Never at the bottom.
+4. **Primary type declaration** with a DocC summary comment.
+5. **Nested types** (`MARK: - Nested Types`) — enums, structs, typealiases. If >30 lines, move to its own file.
+6. **Properties** (`MARK: - Properties`) — stored lets, stored vars, computed vars. Grouped by visibility. Properties always come before methods.
+7. **Init** (`MARK: - Init`)
+8. **Responsibility groups** — each logical responsibility gets its own `MARK: -` section. Name the MARK after what it does, not what it is (`MARK: - Refresh Pipeline`, not `MARK: - Methods`). Within each section: public first, then internal, then private.
+9. **Private helpers** (`MARK: - Private Helpers`) — catch-all for small utilities that don't fit a responsibility group.
+10. **Conditional compilation closing** (`#endif // DEBUG`, `#endif // canImport(UIKit)`)
+
+Rules:
+- No bare methods floating outside of a MARK section (except properties and init).
+- Never interleave properties with methods.
+- Extensions on the same type in the same file use MARK sections, not `extension` blocks — unless the extension is for a protocol conformance.
+- Extension files (`TheBrains+Dispatch.swift`) have a single MARK at the top of the extension body describing their purpose.
+- `#endif` comments always say what they close.
+
+## DocC Documentation
+
+DocC comments (`///`) go on the API surface — types, public/internal methods, and public/internal properties that aren't self-evident. Use a one-line summary. Add a longer description only when the behavior isn't obvious from the name and signature.
+
+```swift
+/// Resolve a target to a unique element.
+///
+/// Returns `.resolved` on success, `.notFound` or `.ambiguous` with
+/// diagnostics on failure.
+func resolveTarget(_ target: ElementTarget) -> TargetResolution {
+```
+
+Do NOT document:
+- Private methods with self-evident names
+- Properties where the type and name say it all
+- Code flow that reads clearly
+- Closing braces or section separators
+
+Remove noise comments when encountered:
+- Empty `// MARK: -` with no text
+- `// TODO:` or `// FIXME:` with no actionable content
+- Comments that restate the code
+- Commented-out code
+
 ## Dossier Maintenance
 
 Crew member dossiers live in `docs/dossiers/`. When a PR changes a crew member's responsibilities, adds/removes types, or changes architecture:

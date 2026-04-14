@@ -1,6 +1,7 @@
 import Foundation
 import Network
 import os
+
 import TheScore
 
 private let reachabilityLogger = Logger(subsystem: "com.buttonheist.thehandoff", category: "reachability")

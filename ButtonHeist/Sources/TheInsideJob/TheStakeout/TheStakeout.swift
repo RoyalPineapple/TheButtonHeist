@@ -1,8 +1,9 @@
 #if canImport(UIKit)
 #if DEBUG
-import UIKit
 import AVFoundation
+import UIKit
 import os.log
+
 import TheScore
 
 private let logger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "recording")
@@ -460,5 +461,5 @@ final class TheStakeout {
     }
 }
 
-#endif
-#endif
+#endif // DEBUG
+#endif // canImport(UIKit)

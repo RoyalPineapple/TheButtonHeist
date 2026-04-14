@@ -5,6 +5,8 @@ import TheScore
 
 extension TheBrains {
 
+    // MARK: - Command Dispatch
+
     /// Execute a command through the full interaction pipeline:
     /// refresh → snapshot → execute → settle → delta → result.
     /// Returns the ActionResult for TheInsideJob to send/broadcast.

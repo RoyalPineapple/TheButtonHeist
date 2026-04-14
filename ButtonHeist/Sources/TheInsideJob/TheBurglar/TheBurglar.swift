@@ -1,8 +1,10 @@
 #if canImport(UIKit)
 #if DEBUG
 import UIKit
-import AccessibilitySnapshotParser
+
 import TheScore
+
+import AccessibilitySnapshotParser
 
 /// The crew member who breaks in and takes what he finds.
 ///

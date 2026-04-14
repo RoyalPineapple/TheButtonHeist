@@ -177,4 +177,4 @@ nonisolated extension USBDeviceDiscovery {
         return String(data: data, encoding: .utf8)
     }
 }
-#endif
+#endif // os(macOS)
