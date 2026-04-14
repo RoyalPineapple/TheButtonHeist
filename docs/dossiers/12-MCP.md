@@ -9,7 +9,7 @@
 This is the clean handshake between an AI agent and the rest of the crew:
 
 1. **28 typed tools** backed by `TheFence`
-2. **Tool-to-command routing** for both direct (23) and grouped (1) tools
+2. **Tool-to-command routing** for both direct (27) and grouped (1) tools
 3. **Response adaptation** for MCP clients: screenshots inline as MCP image content, video summarized
 4. **Idle disconnects** with automatic reconnect on the next tool call
 5. **File-based target configuration** via `TargetConfigResolver` (`.buttonheist.json` or `~/.config/buttonheist/config.json`)
@@ -123,7 +123,7 @@ flowchart TD
     Call["MCP CallTool"] --> Decode["decodeArguments → [String: Any]"]
     Decode --> Switch{"tool name?"}
 
-    Switch -->|"23 direct tools"| Direct["request['command'] = toolName"]
+    Switch -->|"27 direct tools"| Direct["request['command'] = toolName"]
     Switch -->|"gesture"| Grouped["request['command'] = request.removeValue('type')"]
 
     Direct --> Execute["fence.execute(request:)"]
