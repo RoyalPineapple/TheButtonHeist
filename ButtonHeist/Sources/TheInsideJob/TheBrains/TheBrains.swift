@@ -258,15 +258,9 @@ final class TheBrains {
         let currentHash = wireElements.hashValue
         guard currentHash != sent.treeHash else { return nil }
 
-        let tree = stash.convertTree(stash.currentHierarchy)
         return computeDelta(
             before: sent.beforeState,
-            afterSnapshot: snapshot,
-            fallbackDelta: InterfaceDelta(
-                kind: .screenChanged,
-                elementCount: wireElements.count,
-                newInterface: Interface(timestamp: Date(), elements: wireElements, tree: tree)
-            )
+            afterSnapshot: snapshot
         )
     }
 
@@ -320,7 +314,6 @@ final class TheBrains {
                 delta: delta, afterSnapshot: initial.snapshot, expectation: expectation,
                 start: start, round: 0, message: "already changed (0.0s)"
             ) {
-                recordSentState(treeHash: initial.wireHash)
                 return result
             }
         }
@@ -347,7 +340,6 @@ final class TheBrains {
                 delta: delta, afterSnapshot: current.snapshot, expectation: expectation,
                 start: start, round: round, message: "changed after \(elapsed)s (\(round) rounds)"
             ) {
-                recordSentState(treeHash: current.wireHash)
                 return result
             }
 
@@ -405,8 +397,7 @@ final class TheBrains {
     /// Compute delta between a before-state and an after-snapshot.
     private func computeDelta(
         before: BeforeState,
-        afterSnapshot: [TheStash.ScreenElement],
-        fallbackDelta: InterfaceDelta? = nil
+        afterSnapshot: [TheStash.ScreenElement]
     ) -> InterfaceDelta {
         let afterElements = stash.currentHierarchy.sortedElements
         let isScreenChange = tripwire.isScreenChange(
