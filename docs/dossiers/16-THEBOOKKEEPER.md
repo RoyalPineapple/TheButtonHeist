@@ -164,7 +164,7 @@ Fields:
 - `sessionId` — session identifier (header only)
 - `t` — ISO 8601 timestamp with fractional seconds
 - `requestId` — correlates command/response pairs
-- `command` — the `TheFence.Command` raw value (command records only)
+- `command` — the command name as a string (command records only)
 - `args` — the request arguments, minus binary data and the `"command"` key itself (command records only; omitted when empty)
 - `status` — `"ok"` or `"error"` (response records only)
 - `duration_ms` — wall-clock time from command to response (response records only)
@@ -267,6 +267,8 @@ case heistPlayback(completedSteps: Int, failedIndex: Int?, totalTimingMs: Int)
 All implement `humanFormatted()`, `compactFormatted()`, and `jsonDict()`.
 
 ### Logging integration
+
+TheBookKeeper's API accepts `String` command names at the boundary — it has no dependency on `TheFence.Command` or `FenceResponse`. TheFence passes `command.rawValue` when calling `logCommand`, `writeScreenshot`, `writeRecording`, and `recordHeistEvidence`. This keeps TheBookKeeper independently testable.
 
 TheFence's `execute(request:)` wraps every dispatch with `logCommand` (before) and `logResponse` (after), including timing in milliseconds. Errors that throw from dispatch are also logged before re-throwing. Both calls use `do/catch` with `os.log` warnings so logging failures never break command execution. The `requestId` generated in `execute()` is threaded into handlers via `_requestId` in the args dict, ensuring session log entries and artifact writes share the same correlation ID. When no session is active (`.idle` phase), both calls silently no-op.
 

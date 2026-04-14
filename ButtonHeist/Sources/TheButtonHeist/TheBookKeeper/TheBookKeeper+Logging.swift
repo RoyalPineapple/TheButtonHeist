@@ -7,7 +7,7 @@ extension TheBookKeeper {
 
     func buildCommandLogEntry(
         requestId: String,
-        command: TheFence.Command,
+        command: String,
         arguments: [String: Any]
     ) -> [String: Any] {
         var sanitizedArgs: [String: Any] = [:]
@@ -26,7 +26,7 @@ extension TheBookKeeper {
             "t": iso8601Now(),
             "type": "command",
             "requestId": requestId,
-            "command": command.rawValue,
+            "command": command,
         ]
         if !sanitizedArgs.isEmpty {
             entry["args"] = sanitizedArgs

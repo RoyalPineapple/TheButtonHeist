@@ -71,8 +71,7 @@ public final class TheInsideJob {
     let tripwire = TheTripwire()
     let brains: TheBrains
 
-    /// Convenience accessor for the registry.
-    var stash: TheStash { brains.stash }
+    // No stash accessor — TheInsideJob talks to TheBrains, not TheStash.
 
     private let allowedScopes: Set<ConnectionScope>
 
@@ -393,7 +392,7 @@ public final class TheInsideJob {
         // Recording & interactions — blocked for observers
         default:
             if isObserver {
-                var builder = ActionResultBuilder(method: .activate, screenName: stash.lastScreenName, screenId: stash.lastScreenId)
+                var builder = ActionResultBuilder(method: .activate, screenName: brains.screenName, screenId: brains.screenId)
                 builder.message = "Watch mode is read-only"
                 sendMessage(.actionResult(builder.failure(errorKind: .unsupported)), requestId: requestId, respond: respond)
                 return
@@ -414,11 +413,11 @@ public final class TheInsideJob {
                 // immediately. Reported as success (the UI moved forward) with the
                 // background delta carrying the full new interface.
                 if let backgroundDelta, backgroundDelta.kind == .screenChanged,
-                   let lastScreen = lastSentScreenId, lastScreen != stash.lastScreenId,
+                   let lastScreen = lastSentScreenId, lastScreen != brains.screenId,
                    message.actionTarget != nil {
-                    var builder = ActionResultBuilder(method: .waitForChange, screenName: stash.lastScreenName, screenId: stash.lastScreenId)
+                    var builder = ActionResultBuilder(method: .waitForChange, screenName: brains.screenName, screenId: brains.screenId)
                     builder.message = "Screen changed while you were thinking"
-                        + " (\(lastScreen) → \(stash.lastScreenId ?? "unknown"))"
+                        + " (\(lastScreen) → \(brains.screenId ?? "unknown"))"
                         + " — action skipped, here is the current state"
                     builder.interfaceDelta = backgroundDelta
                     let actionResult = builder.success()
@@ -463,36 +462,11 @@ public final class TheInsideJob {
 
     /// Check if the accessibility tree changed since the last response was sent.
     /// Returns a delta with the current interface if it did, nil if unchanged.
-    /// Uses stored before-state for proper element-level diffs when available.
+    /// Delegates entirely to TheBrains.
     func computeBackgroundDelta() -> InterfaceDelta? {
-        guard lastSentTreeHash != 0 else { return nil }
-        brains.refresh()
-        let snapshot = stash.selectElements()
-        let wireElements = TheStash.WireConversion.toWire(snapshot)
-        let currentHash = wireElements.hashValue
-        guard currentHash != lastSentTreeHash else { return nil }
-
-        guard let beforeState = lastSentBeforeState else {
-            let tree = stash.currentHierarchy.isEmpty
-                ? nil
-                : stash.currentHierarchy.map { TheStash.WireConversion.convertNode($0) }
-            return InterfaceDelta(
-                kind: .screenChanged,
-                elementCount: wireElements.count,
-                newInterface: Interface(timestamp: Date(), elements: wireElements, tree: tree)
-            )
-        }
-
-        let afterVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
-        let afterElements = stash.currentHierarchy.sortedElements
-        let isScreenChange = tripwire.isScreenChange(before: beforeState.viewController, after: afterVC)
-            || stash.isTopologyChanged(
-                before: beforeState.elements, after: afterElements,
-                beforeHierarchy: beforeState.hierarchy, afterHierarchy: stash.currentHierarchy
-            )
-        return TheStash.WireConversion.computeDelta(
-            before: beforeState.snapshot, after: snapshot,
-            afterTree: stash.currentHierarchy, isScreenChange: isScreenChange
+        brains.computeBackgroundDelta(
+            lastSentTreeHash: lastSentTreeHash,
+            lastSentBeforeState: lastSentBeforeState
         )
     }
 
@@ -514,9 +488,9 @@ public final class TheInsideJob {
         }
 
         sendMessage(.actionResult(actionResult), requestId: requestId, backgroundDelta: backgroundDelta, respond: respond)
-        lastSentTreeHash = TheStash.WireConversion.toWire(stash.selectElements()).hashValue
+        lastSentTreeHash = brains.wireHash(brains.selectElements())
         lastSentBeforeState = brains.captureBeforeState()
-        lastSentScreenId = stash.lastScreenId
+        lastSentScreenId = brains.screenId
 
         if muscle.hasSubscribers {
             let event = InteractionEvent(

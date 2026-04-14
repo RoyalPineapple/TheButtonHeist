@@ -142,12 +142,12 @@ extension TheBrains {
         let manifest = await exploreAndPrune()
         let afterSnapshot = stash.selectElements()
 
-        let delta = TheStash.WireConversion.computeDelta(
+        let delta = stash.computeDelta(
             before: before.snapshot, after: afterSnapshot,
             afterTree: stash.currentHierarchy, isScreenChange: false
         )
 
-        let exploreElements = afterSnapshot.map { TheStash.WireConversion.toWire($0) }
+        let exploreElements = stash.toWire(afterSnapshot)
 
         var builder = ActionResultBuilder(method: .explore, snapshot: afterSnapshot)
         builder.interfaceDelta = delta

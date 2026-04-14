@@ -12,8 +12,9 @@ TheBrains takes a command and works it through to a result:
 2. **Action execution pipelines** — Two generic pipelines: `performElementAction` (element-targeted: ensureOnScreen → resolve → check interactivity → perform action) and `performPointAction` (coordinate-targeted gestures). Each `executeXxx` method is a thin closure that feeds the pipeline.
 3. **Scroll orchestration** — `executeScroll`, `executeScrollToEdge`, `executeScrollToVisible` (one-shot jump to known position), `executeElementSearch` (iterative page-by-page search for unseen elements). See [04a-SCROLLING.md](04a-SCROLLING.md).
 4. **Screen exploration** — `exploreAndPrune()` scrolls every scrollable container to discover all elements, using `containerExploreStates` fingerprint caching to skip unchanged containers. Prunes elements no longer seen after a full explore cycle.
-5. **Delta cycle** — `captureBeforeState()` captures a `BeforeState` token; after the action, `actionResultWithDelta(before:)` settles via TheTripwire, parses via TheBurglar, detects screen changes, applies, explores, and computes the delta through a single codepath for both success and failure.
-6. **Refresh convenience** — `refresh()` delegates to `stash.burglar.refresh(into: stash)` and accumulates heistIds into `exploreCycleIds`.
+5. **Delta cycle** — `captureBeforeState()` captures a `BeforeState` token; after the action, `actionResultWithDelta(before:)` settles via TheTripwire, parses via TheStash, detects screen changes, applies, explores, and computes the delta through a single codepath for both success and failure.
+6. **Refresh convenience** — `refresh()` delegates to `stash.refresh()` and accumulates heistIds into `exploreCycleIds`. TheBurglar is TheStash's private implementation detail — TheBrains never references it.
+7. **Facades for TheInsideJob** — TheBrains exposes `selectElements()`, `toWire()`, `currentInterface()`, `computeDelta()`, `computeBackgroundDelta()`, `captureScreen()`, `screenName`, `screenId`, etc. so TheInsideJob never reaches through to TheStash.
 
 ## Architecture
 
@@ -77,16 +78,16 @@ flowchart TD
     A["actionResultWithDelta(before:)"] --> B{Action<br/>succeeded?}
     B -->|No| C["Return error ActionResult<br/>(same codepath, errorKind set)"]
     B -->|Yes| D["tripwire.waitForAllClear(1s)"]
-    D --> E["burglar.parse() → ParseResult<br/>(no mutation yet)"]
+    D --> E["stash.parse() → ParseResult<br/>(no mutation yet)"]
 
     E --> F{Screen change?<br/>VC identity OR topology}
     F -->|Yes| G["Clear registry + containerExploreStates<br/>(before apply)"]
-    F -->|No| H["burglar.apply(ParseResult)"]
+    F -->|No| H["stash.apply(ParseResult)"]
     G --> H
 
     H --> I["exploreAndPrune()<br/>(fingerprint-cached re-explore)"]
     I --> J["stash.selectElements()"]
-    J --> K["WireConversion.computeDelta(before, after)"]
+    J --> K["stash.computeDelta(before, after)"]
     K --> L["Return ActionResult<br/>with delta + explore stats"]
 ```
 
@@ -101,8 +102,8 @@ flowchart TD
 
 - **Owns** TheStash, TheSafecracker (created in `init`)
 - **References** TheTripwire (injected via `init(tripwire:)`)
-- **Accessed through** TheBurglar via `stash.burglar`
 - **Owned by** TheInsideJob (`let brains: TheBrains`)
+- **Does not reference** TheBurglar — parse/apply goes through TheStash's facade methods
 
 ## File Organization
 
@@ -116,7 +117,6 @@ flowchart TD
 
 ## Dependencies
 
-- **TheStash** (owned) — element registry, target resolution, wire conversion
+- **TheStash** (owned) — element registry, target resolution, wire conversion, parse pipeline (TheBurglar is TheStash's private detail)
 - **TheSafecracker** (owned) — raw gesture synthesis (fallback tap, scroll primitives, text entry, edit actions)
 - **TheTripwire** (injected) — settle detection, VC identity, window access
-- **TheBurglar** (via `stash.burglar`) — parse pipeline for refresh and delta cycle

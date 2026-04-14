@@ -208,7 +208,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
         // Refresh the tree so heistIds are assigned
         insideJob.brains.refresh()
-        let elements = insideJob.stash.selectElements()
+        let elements = insideJob.brains.selectElements()
 
         // Find the heistId for our element
         let heistId = elements.first(where: {

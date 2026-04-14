@@ -332,22 +332,26 @@ final class TheStash {
     /// TheBurglar handles parsing and populating the registry.
     private let burglar: TheBurglar
 
-    // MARK: - Parse Pipeline Facades
+    // MARK: - Parse Pipeline
+
+    /// Parsed accessibility snapshot. Opaque to callers — TheBurglar is an
+    /// implementation detail of TheStash.
+    typealias ParseResult = TheBurglar.ParseResult
 
     /// Parse and apply in one step. Most callers use this.
     @discardableResult
-    func refresh() -> TheBurglar.ParseResult? {
+    func refresh() -> ParseResult? {
         burglar.refresh(into: self)
     }
 
     /// Read the live accessibility tree without mutating state.
-    func parse() -> TheBurglar.ParseResult? {
+    func parse() -> ParseResult? {
         burglar.parse()
     }
 
     /// Apply a parse result to the registry. Returns assigned heistIds.
     @discardableResult
-    func apply(_ result: TheBurglar.ParseResult) -> [String] {
+    func apply(_ result: ParseResult) -> [String] {
         burglar.apply(result, to: self)
     }
 
@@ -362,6 +366,41 @@ final class TheStash {
             before: before, after: after,
             beforeHierarchy: beforeHierarchy, afterHierarchy: afterHierarchy
         )
+    }
+
+    // MARK: - Wire Conversion Facades
+
+    /// Convert a snapshot to wire format.
+    func toWire(_ entries: [ScreenElement]) -> [HeistElement] {
+        WireConversion.toWire(entries)
+    }
+
+    /// Convert a single element to wire format.
+    func toWire(_ entry: ScreenElement) -> HeistElement {
+        WireConversion.toWire(entry)
+    }
+
+    /// Convert the hierarchy tree to wire format.
+    func convertTree(_ hierarchy: [AccessibilityHierarchy]) -> [ElementNode]? {
+        hierarchy.isEmpty ? nil : hierarchy.map { WireConversion.convertNode($0) }
+    }
+
+    /// Compute the delta between two snapshots.
+    func computeDelta(
+        before: [ScreenElement],
+        after: [ScreenElement],
+        afterTree: [AccessibilityHierarchy]?,
+        isScreenChange: Bool
+    ) -> InterfaceDelta {
+        WireConversion.computeDelta(
+            before: before, after: after,
+            afterTree: afterTree, isScreenChange: isScreenChange
+        )
+    }
+
+    /// Get trait names for a trait bitmask.
+    func traitNames(_ traits: UIAccessibilityTraits) -> [HeistTrait] {
+        WireConversion.traitNames(traits)
     }
 
 }

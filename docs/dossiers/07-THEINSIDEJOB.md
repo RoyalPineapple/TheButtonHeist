@@ -74,10 +74,10 @@ graph TD
 | `TheBurglar.swift` | Hierarchy parsing, parse/apply pipeline, topology detection |
 | `TheStash.swift` | Element registry, target resolution, wire conversion, screen capture |
 | `ScreenManifest.swift` | Full-screen element census bookkeeping |
-| `Extensions/Pulse.swift` | `scheduleHierarchyUpdate`, `handlePulseTransition`, `startPollingLoop`, `broadcastIfChanged`, `sendInterface` |
-| `Extensions/Animation.swift` | `handleWaitForIdle`, `handleWaitForChange` — wait handlers with settle detection and expectation-driven polling |
-| `Extensions/Screen.swift` | Screen capture broadcast, recording start/stop handlers |
-| `Extensions/AutoStart.swift` | `@_cdecl` bridge for ObjC auto-start |
+| `Lifecycle/Pulse.swift` | `scheduleHierarchyUpdate`, `handlePulseTransition`, `startPollingLoop`, `broadcastIfChanged`, `sendInterface` |
+| `Lifecycle/Animation.swift` | `handleWaitForIdle`, `handleWaitForChange` — wait handlers with settle detection and expectation-driven polling |
+| `Lifecycle/Screen.swift` | Screen capture broadcast, recording start/stop handlers |
+| `Lifecycle/AutoStart.swift` | `@_cdecl` bridge for ObjC auto-start |
 | `SimpleSocketServer.swift` | NWListener TLS/TCP server, connection management |
 | `ServerTransport.swift` | Server-side networking protocol abstraction |
 | `TLSIdentity.swift` | ECDSA cert generation, SHA-256 fingerprint, Keychain persistence |

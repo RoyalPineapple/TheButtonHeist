@@ -20,9 +20,9 @@ extension TheInsideJob {
             before: before
         )
         sendMessage(.actionResult(actionResult), requestId: requestId, respond: respond)
-        lastSentTreeHash = TheStash.WireConversion.toWire(stash.selectElements()).hashValue
+        lastSentTreeHash = brains.wireHash(brains.selectElements())
         lastSentBeforeState = brains.captureBeforeState()
-        lastSentScreenId = stash.lastScreenId
+        lastSentScreenId = brains.screenId
     }
 
     // MARK: - Wait For Change Handler
@@ -38,8 +38,8 @@ extension TheInsideJob {
         let before = brains.captureBeforeState()
 
         brains.refresh()
-        let currentSnapshot = stash.selectElements()
-        let currentHash = TheStash.WireConversion.toWire(currentSnapshot).hashValue
+        let currentSnapshot = brains.selectElements()
+        let currentHash = brains.wireHash(currentSnapshot)
 
         // Fast path: tree already changed since the last response
         if let result = checkAlreadyChanged(
@@ -48,7 +48,7 @@ extension TheInsideJob {
             sendMessage(.actionResult(result), requestId: requestId, respond: respond)
             lastSentTreeHash = currentHash
             lastSentBeforeState = brains.captureBeforeState()
-            lastSentScreenId = stash.lastScreenId
+            lastSentScreenId = brains.screenId
             return
         }
 
@@ -64,13 +64,13 @@ extension TheInsideJob {
             _ = await tripwire.waitForAllClear(timeout: min(remaining, 1.0))
             guard brains.refresh() != nil else { continue }
 
-            let afterSnapshot = stash.selectElements()
-            let afterHash = TheStash.WireConversion.toWire(afterSnapshot).hashValue
+            let afterSnapshot = brains.selectElements()
+            let afterHash = brains.wireHash(afterSnapshot)
             round += 1
 
             if afterHash == beforeWireHash { continue }
 
-            let delta = computeDelta(before: before, afterSnapshot: afterSnapshot)
+            let delta = brains.computeDelta(before: before, afterSnapshot: afterSnapshot)
 
             if let result = evaluateChange(
                 delta: delta, afterSnapshot: afterSnapshot, expectation: expectation,
@@ -88,8 +88,8 @@ extension TheInsideJob {
 
         // Timeout
         let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
-        let afterSnapshot = stash.selectElements()
-        let delta = computeDelta(before: before, afterSnapshot: afterSnapshot)
+        let afterSnapshot = brains.selectElements()
+        let delta = brains.computeDelta(before: before, afterSnapshot: afterSnapshot)
         var timeoutBuilder = ActionResultBuilder(method: .waitForChange, snapshot: afterSnapshot)
         timeoutBuilder.message = expectation != nil
             ? "timed out after \(elapsed)s — expectation not met"
@@ -97,9 +97,9 @@ extension TheInsideJob {
         timeoutBuilder.interfaceDelta = delta
         let actionResult = timeoutBuilder.failure(errorKind: .timeout)
         sendMessage(.actionResult(actionResult), requestId: requestId, respond: respond)
-        lastSentTreeHash = TheStash.WireConversion.toWire(afterSnapshot).hashValue
+        lastSentTreeHash = brains.wireHash(afterSnapshot)
         lastSentBeforeState = brains.captureBeforeState()
-        lastSentScreenId = stash.lastScreenId
+        lastSentScreenId = brains.screenId
     }
 
     // MARK: - Wait For Change Helpers
@@ -112,7 +112,7 @@ extension TheInsideJob {
     ) -> ActionResult? {
         guard lastSentTreeHash != 0, currentHash != lastSentTreeHash else { return nil }
 
-        let delta = computeDelta(before: before, afterSnapshot: currentSnapshot)
+        let delta = brains.computeDelta(before: before, afterSnapshot: currentSnapshot)
         var builder = ActionResultBuilder(method: .waitForChange, snapshot: currentSnapshot)
         builder.interfaceDelta = delta
 
@@ -122,20 +122,6 @@ extension TheInsideJob {
 
         builder.message = "already changed (0.0s)"
         return builder.success()
-    }
-
-    private func computeDelta(before: TheBrains.BeforeState, afterSnapshot: [TheStash.ScreenElement]) -> InterfaceDelta {
-        let afterVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
-        let afterElements = stash.currentHierarchy.sortedElements
-        let isScreenChange = tripwire.isScreenChange(before: before.viewController, after: afterVC)
-            || stash.isTopologyChanged(
-                before: before.elements, after: afterElements,
-                beforeHierarchy: before.hierarchy, afterHierarchy: stash.currentHierarchy
-            )
-        return TheStash.WireConversion.computeDelta(
-            before: before.snapshot, after: afterSnapshot,
-            afterTree: stash.currentHierarchy, isScreenChange: isScreenChange
-        )
     }
 
     private func evaluateChange(
