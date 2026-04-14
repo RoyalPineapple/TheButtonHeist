@@ -4,7 +4,7 @@ import Foundation
 
 struct SessionLogCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "session-log",
+        commandName: "get_session_log",
         abstract: "Show the current session manifest and stats"
     )
 

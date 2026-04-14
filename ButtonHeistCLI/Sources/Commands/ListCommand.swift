@@ -4,7 +4,7 @@ import ButtonHeist
 
 struct ListCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "list",
+        commandName: "list_devices",
         abstract: "List available iOS devices running TheInsideJob"
     )
 

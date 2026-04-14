@@ -4,7 +4,7 @@ import ButtonHeist
 
 struct RecordCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "record",
+        commandName: "start_recording",
         abstract: "Record the screen of the connected device"
     )
 

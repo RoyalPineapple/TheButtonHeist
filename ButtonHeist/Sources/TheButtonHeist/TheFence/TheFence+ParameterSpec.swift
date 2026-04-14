@@ -96,10 +96,18 @@ extension TheFence.Command {
         case .increment, .decrement, .performCustomAction:
             return .notExposed
 
-        // Grouped under "gesture"
-        case .oneFingerTap, .longPress, .drag, .pinch, .rotate, .twoFingerTap,
+        // Subsumed: dismiss_keyboard is handled by edit_action's "dismiss" action
+        case .dismissKeyboard:
+            return .groupedUnder("edit_action")
+
+        // Grouped under "gesture" (including swipe)
+        case .swipe, .oneFingerTap, .longPress, .drag, .pinch, .rotate, .twoFingerTap,
              .drawPath, .drawBezier:
             return .groupedUnder("gesture")
+
+        // Grouped under "scroll"
+        case .scrollToVisible, .elementSearch, .scrollToEdge:
+            return .groupedUnder("scroll")
 
         // Everything else is a direct 1:1 tool
         default:

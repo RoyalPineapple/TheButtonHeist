@@ -127,10 +127,10 @@ enum ToolDefinitions {
     //   All matcher fields are AND. Start with just label, add traits if ambiguous.
 
     static let all: [Tool] = [
-        getInterface, activate, typeText, swipe, getScreen,
+        getInterface, activate, typeText, getScreen,
         waitForChange, waitFor, startRecording, stopRecording, listDevices,
-        gesture, editAction, dismissKeyboard, setPasteboard, getPasteboard,
-        scroll, scrollToVisible, elementSearch, scrollToEdge,
+        gesture, editAction, setPasteboard, getPasteboard,
+        scroll,
         runBatch, getSessionState,
         connect, listTargets,
         getSessionLog, archiveSession,
@@ -225,50 +225,6 @@ enum ToolDefinitions {
                 "text": ["type": "string", "description": "Text to type character-by-character"],
                 "deleteCount": ["type": "integer", "description": "Number of delete key taps before typing"],
                 "clearFirst": ["type": "boolean", "description": "Clear all existing text before typing (select-all + delete)"],
-                "expect": expectProperty,
-            ] as [String: Value]) { _, new in new }),
-            "additionalProperties": false,
-        ])
-    )
-
-    static let swipe = Tool(
-        name: "swipe",
-        description: """
-            Swipe on an element. Use direction for cardinal swipes (up/down/left/right) or \
-            start/end unit points (0-1 relative to element frame) for precise control. \
-            Unit points are device-independent: (0,0) is top-left, (1,1) is bottom-right, \
-            values outside 0-1 extend beyond the element frame.
-            """,
-        inputSchema: .object([
-            "type": "object",
-            "properties": .object(elementTargetProperties.merging([
-                "direction": [
-                    "type": "string",
-                    "description": "Swipe direction: up, down, left, right",
-                ],
-                "start": [
-                    "type": "object",
-                    "description": "Start unit point relative to element frame. (0,0)=top-left, (1,1)=bottom-right",
-                    "properties": [
-                        "x": ["type": "number", "description": "X position (0-1, values outside extend beyond frame)"],
-                        "y": ["type": "number", "description": "Y position (0-1, values outside extend beyond frame)"],
-                    ],
-                    "required": .array([.string("x"), .string("y")]),
-                ],
-                "end": [
-                    "type": "object",
-                    "description": "End unit point relative to element frame. (0,0)=top-left, (1,1)=bottom-right",
-                    "properties": [
-                        "x": ["type": "number", "description": "X position (0-1, values outside extend beyond frame)"],
-                        "y": ["type": "number", "description": "Y position (0-1, values outside extend beyond frame)"],
-                    ],
-                    "required": .array([.string("x"), .string("y")]),
-                ],
-                "startX": ["type": "number", "description": "Start X screen coordinate (alternative to unit-point start)"],
-                "startY": ["type": "number", "description": "Start Y screen coordinate"],
-                "endX": ["type": "number", "description": "End X screen coordinate (alternative to unit-point end)"],
-                "endY": ["type": "number", "description": "End Y screen coordinate"],
-                "duration": ["type": "number", "description": "Swipe duration in seconds"],
                 "expect": expectProperty,
             ] as [String: Value]) { _, new in new }),
             "additionalProperties": false,
@@ -379,85 +335,48 @@ enum ToolDefinitions {
         annotations: .init(readOnlyHint: true, idempotentHint: true)
     )
 
-    // MARK: - Scroll Tools
+    // MARK: - Scroll Tool
 
     static let scroll = Tool(
         name: "scroll",
         description: """
-            Scroll a scroll view by one page in a direction. Requires an element target — scrolls \
-            the nearest scrollable ancestor of that element. \
-            The direction determines which axis to scroll — scrolling "right" on an element inside \
-            a horizontal carousel scrolls the carousel, while scrolling "down" scrolls the outer list.
+            Scroll within scroll views. Set 'mode' to control behavior: \
+            \
+            page (default): Scroll by one page in a direction. Requires 'direction' and an element target — \
+            scrolls the nearest scrollable ancestor. The direction determines which axis: "right" on an element \
+            in a horizontal carousel scrolls the carousel, "down" scrolls the outer list. \
+            \
+            to_visible: Jump to a known element's position in its scroll view. The element must already be in \
+            the registry (seen in a previous get_interface or action delta). No-op if already visible. \
+            If the element has never been seen, use mode "search" instead. \
+            \
+            search: Find an element by scrolling through all scrollable containers. Use when the element has \
+            never been seen (not in the registry). Describe it by label, value, and/or traits. Automatically \
+            searches outermost containers first, adapting direction to each container's axis. \
+            \
+            to_edge: Scroll to an edge of a scroll view. Requires 'edge' (top/bottom/left/right) and an \
+            element target. "top"/"bottom" scroll vertically, "left"/"right" scroll horizontally.
             """,
         inputSchema: .object([
             "type": "object",
             "properties": .object(elementTargetProperties.merging([
+                "mode": [
+                    "type": "string",
+                    "enum": .array(["page", "to_visible", "search", "to_edge"].map { .string($0) }),
+                    "description": "Scroll mode (default: page)",
+                ],
                 "direction": [
                     "type": "string",
                     "enum": .array(["up", "down", "left", "right", "next", "previous"].map { .string($0) }),
-                    "description": "Scroll direction",
+                    "description": "Scroll direction (required for mode page, optional starting direction for mode search)",
                 ],
-                "expect": expectProperty,
-            ] as [String: Value]) { _, new in new }),
-            "required": .array([.string("direction")]),
-            "additionalProperties": false,
-        ])
-    )
-
-    static let scrollToVisible = Tool(
-        name: "scroll_to_visible",
-        description: """
-            Jump to a known element's position in its scroll view. The element must already be in \
-            the registry (seen in a previous get_interface or action delta). If the element is already \
-            visible, this is a no-op. If the element has never been seen, use element_search instead.
-            """,
-        inputSchema: .object([
-            "type": "object",
-            "properties": .object(elementTargetProperties.merging([
-                "expect": expectProperty,
-            ] as [String: Value]) { _, new in new }),
-            "additionalProperties": false,
-        ])
-    )
-
-    static let elementSearch = Tool(
-        name: "element_search",
-        description: """
-            Search for an element by scrolling through all scrollable containers on screen. \
-            Use when the element has never been seen (not in the registry). Describe the element \
-            by its natural accessibility properties: label, value, and/or traits (all specified \
-            fields must match). Automatically searches outermost containers first, adapting the \
-            scroll direction to each container's natural axis. Returns the found element or \
-            diagnostic info about the search.
-            """,
-        inputSchema: .object([
-            "type": "object",
-            "properties": .object(elementTargetProperties.merging([
-                "direction": ["type": "string", "enum": ["down", "up", "left", "right"], "description": "Starting scroll direction (default: down)"],
-                "expect": expectProperty,
-            ] as [String: Value]) { _, new in new }),
-            "additionalProperties": false,
-        ])
-    )
-
-    static let scrollToEdge = Tool(
-        name: "scroll_to_edge",
-        description: """
-            Scroll to an edge. Useful for scrolling to the top or bottom of a list. \
-            Targets the scrollable container that matches the edge's axis — "top"/"bottom" \
-            scroll vertically, "left"/"right" scroll horizontally.
-            """,
-        inputSchema: .object([
-            "type": "object",
-            "properties": .object(elementTargetProperties.merging([
                 "edge": [
                     "type": "string",
                     "enum": .array(["top", "bottom", "left", "right"].map { .string($0) }),
-                    "description": "Edge to scroll to",
+                    "description": "Edge to scroll to (required for mode to_edge)",
                 ],
                 "expect": expectProperty,
             ] as [String: Value]) { _, new in new }),
-            "required": .array([.string("edge")]),
             "additionalProperties": false,
         ])
     )
@@ -467,9 +386,13 @@ enum ToolDefinitions {
     static let gesture = Tool(
         name: "gesture",
         description: """
-            Perform low-level touch gestures. For element interactions, prefer 'activate' instead. \
-            Set 'type' to one of: one_finger_tap, drag, long_press, pinch, rotate, two_finger_tap, draw_path, draw_bezier. \
+            Perform touch gestures. For element interactions, prefer 'activate' instead. \
+            Set 'type' to one of: swipe, one_finger_tap, drag, long_press, pinch, rotate, \
+            two_finger_tap, draw_path, draw_bezier. \
             Common params: heistId or matcher fields (element target) or x/y (coordinates). \
+            swipe: 'direction' for cardinal swipes (up/down/left/right), or start/end unit points \
+            (0-1 relative to element frame) for precise control. Also accepts startX/startY/endX/endY \
+            for absolute screen coordinates. \
             one_finger_tap: synthetic tap at coordinates (use 'activate' for element interactions instead). \
             drag: endX, endY required. \
             long_press: duration (seconds, default 0.5). \
@@ -486,18 +409,40 @@ enum ToolDefinitions {
                 "type": [
                     "type": "string",
                     "enum": .array([
-                        "one_finger_tap", "drag", "long_press", "pinch",
+                        "swipe", "one_finger_tap", "drag", "long_press", "pinch",
                         "rotate", "two_finger_tap", "draw_path", "draw_bezier",
                     ].map { .string($0) }),
                     "description": "Gesture type",
                 ],
+                "direction": [
+                    "type": "string",
+                    "description": "Swipe direction: up, down, left, right",
+                ],
+                "start": [
+                    "type": "object",
+                    "description": "Swipe start unit point relative to element frame. (0,0)=top-left, (1,1)=bottom-right",
+                    "properties": [
+                        "x": ["type": "number", "description": "X position (0-1)"],
+                        "y": ["type": "number", "description": "Y position (0-1)"],
+                    ],
+                    "required": .array([.string("x"), .string("y")]),
+                ],
+                "end": [
+                    "type": "object",
+                    "description": "Swipe end unit point relative to element frame. (0,0)=top-left, (1,1)=bottom-right",
+                    "properties": [
+                        "x": ["type": "number", "description": "X position (0-1)"],
+                        "y": ["type": "number", "description": "Y position (0-1)"],
+                    ],
+                    "required": .array([.string("x"), .string("y")]),
+                ],
                 "x": ["type": "number", "description": "X coordinate"],
                 "y": ["type": "number", "description": "Y coordinate"],
-                "startX": ["type": "number", "description": "Start X coordinate (draw_bezier)"],
-                "startY": ["type": "number", "description": "Start Y coordinate (draw_bezier)"],
-                "endX": ["type": "number", "description": "End X coordinate (drag)"],
-                "endY": ["type": "number", "description": "End Y coordinate (drag)"],
-                "duration": ["type": "number", "description": "Duration in seconds (long_press default 0.5, draw_path, draw_bezier)"],
+                "startX": ["type": "number", "description": "Start X coordinate (swipe, draw_bezier)"],
+                "startY": ["type": "number", "description": "Start Y coordinate (swipe, draw_bezier)"],
+                "endX": ["type": "number", "description": "End X coordinate (swipe, drag)"],
+                "endY": ["type": "number", "description": "End Y coordinate (swipe, drag)"],
+                "duration": ["type": "number", "description": "Duration in seconds (swipe, long_press default 0.5, draw_path, draw_bezier)"],
                 "scale": ["type": "number", "description": "Pinch scale factor (>1 zoom in, <1 zoom out)"],
                 "angle": ["type": "number", "description": "Rotation angle in radians"],
                 "centerX": ["type": "number", "description": "Center X (pinch, rotate, two_finger_tap — defaults to element center or x)"],
@@ -518,31 +463,21 @@ enum ToolDefinitions {
     static let editAction = Tool(
         name: "edit_action",
         description: """
-            Perform an edit menu action (copy, paste, cut, select, selectAll) on the current first responder.
+            Perform an edit or keyboard action on the current first responder. \
+            Actions: copy, paste, cut, select, selectAll — standard edit menu actions. \
+            dismiss — dismiss the software keyboard (resign first responder).
             """,
         inputSchema: [
             "type": "object",
             "properties": [
                 "action": [
                     "type": "string",
-                    "enum": .array(["copy", "paste", "cut", "select", "selectAll"].map { .string($0) }),
-                    "description": "Edit action to perform",
+                    "enum": .array(["copy", "paste", "cut", "select", "selectAll", "dismiss"].map { .string($0) }),
+                    "description": "Action to perform",
                 ],
                 "expect": expectProperty,
             ],
             "required": .array([.string("action")]),
-            "additionalProperties": false,
-        ]
-    )
-
-    static let dismissKeyboard = Tool(
-        name: "dismiss_keyboard",
-        description: "Dismiss the software keyboard by resigning first responder.",
-        inputSchema: [
-            "type": "object",
-            "properties": [
-                "expect": expectProperty,
-            ],
             "additionalProperties": false,
         ]
     )

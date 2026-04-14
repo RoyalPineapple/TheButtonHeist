@@ -4,7 +4,7 @@ import Foundation
 
 struct PlayHeistCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "play-heist",
+        commandName: "play_heist",
         abstract: "Play back a recorded .heist file"
     )
 

@@ -38,29 +38,57 @@ struct ToolSyncTests {
     @Test("Every MCP tool maps to a valid command")
     func allMCPToolsMapToValidCommands() {
         let commandRawValues = Set(TheFence.Command.allCases.map(\.rawValue))
-        let gestureCommands: Set<String> = Set(
-            TheFence.Command.allCases
-                .filter { $0.mcpExposure == .groupedUnder("gesture") }
-                .map(\.rawValue)
-        )
+
+        // Collect grouped commands by their group tool name
+        var groupedCommands: [String: Set<String>] = [:]
+        for command in TheFence.Command.allCases {
+            if case .groupedUnder(let toolName) = command.mcpExposure {
+                groupedCommands[toolName, default: []].insert(command.rawValue)
+            }
+        }
 
         for tool in ToolDefinitions.all {
-            if tool.name == "gesture" {
-                // The gesture tool routes via its "type" parameter to individual commands.
-                // Verify the type enum values are all valid commands.
-                let typeValues = extractEnumValues(from: tool, property: "type")
-                for typeName in typeValues {
-                    #expect(
-                        gestureCommands.contains(typeName),
-                        "Gesture type '\(typeName)' is not a valid gesture command"
-                    )
+            if let expectedCommands = groupedCommands[tool.name] {
+                // Grouped tool — verify its enum values match the grouped commands.
+                // gesture uses "type", scroll uses "mode", edit_action uses "action"
+                let enumProperty: String
+                switch tool.name {
+                case "gesture": enumProperty = "type"
+                case "scroll": enumProperty = "mode"
+                case "edit_action": enumProperty = "action"
+                default: enumProperty = "type"
                 }
-                // Also verify every gesture command appears in the enum
-                for gestureCommand in gestureCommands {
+
+                let enumValues = extractEnumValues(from: tool, property: enumProperty)
+
+                if tool.name == "scroll" {
+                    // Scroll modes are synthetic names (page, to_visible, search, to_edge),
+                    // not raw command values. Verify the count matches.
+                    let expectedModes: Set<String> = ["page", "to_visible", "search", "to_edge"]
                     #expect(
-                        typeValues.contains(gestureCommand),
-                        "Gesture command '\(gestureCommand)' missing from gesture tool's type enum"
+                        enumValues == expectedModes,
+                        "Scroll tool modes \(enumValues.sorted()) don't match expected \(expectedModes.sorted())"
                     )
+                } else if tool.name == "edit_action" {
+                    // edit_action has "dismiss" which maps to dismiss_keyboard,
+                    // plus the standard edit actions. Just verify "dismiss" is present.
+                    #expect(
+                        enumValues.contains("dismiss"),
+                        "edit_action tool missing 'dismiss' in action enum"
+                    )
+                } else {
+                    for typeName in enumValues {
+                        #expect(
+                            expectedCommands.contains(typeName),
+                            "\(tool.name) type '\(typeName)' is not a valid grouped command"
+                        )
+                    }
+                    for groupedCommand in expectedCommands {
+                        #expect(
+                            enumValues.contains(groupedCommand),
+                            "Grouped command '\(groupedCommand)' missing from \(tool.name) tool's enum"
+                        )
+                    }
                 }
             } else {
                 #expect(
@@ -73,12 +101,13 @@ struct ToolSyncTests {
 
     @Test("MCP dispatch switch covers all tools")
     func dispatchSwitchCoversAllTools() {
-        // The direct tool names listed in the MCP switch at main.swift must match
-        // the direct tools in ToolDefinitions.all.
+        // Tools that are purely grouped (no matching direct command name)
+        let purelyGroupedToolNames: Set<String> = ["gesture"]
+
         let directToolNames = Set(
             ToolDefinitions.all
                 .map(\.name)
-                .filter { $0 != "gesture" }
+                .filter { !purelyGroupedToolNames.contains($0) }
         )
         let directCommands = Set(
             TheFence.Command.allCases
@@ -95,11 +124,18 @@ struct ToolSyncTests {
 
     // MARK: - Parameter Schema Sync
 
+    // Hybrid tools: their MCP tool name matches a direct command, but the tool
+    // also routes to other commands via a mode/action parameter. Their schemas
+    // are supersets of any individual command's spec, so we skip per-command
+    // schema checks and validate them via the grouped tool coverage test instead.
+    private static let hybridToolNames: Set<String> = ["scroll", "edit_action"]
+
     @Test("Direct tool schemas contain all parameter spec keys")
     func directToolSchemasContainSpecKeys() {
         let toolsByName = Dictionary(uniqueKeysWithValues: ToolDefinitions.all.map { ($0.name, $0) })
 
         for command in TheFence.Command.allCases where command.mcpExposure == .directTool {
+            guard !Self.hybridToolNames.contains(command.rawValue) else { continue }
             guard let tool = toolsByName[command.rawValue] else { continue }
             let schemaKeys = extractPropertyKeys(from: tool)
             let specKeys = Set(command.parameters.map(\.key))
@@ -118,6 +154,7 @@ struct ToolSyncTests {
         let toolsByName = Dictionary(uniqueKeysWithValues: ToolDefinitions.all.map { ($0.name, $0) })
 
         for command in TheFence.Command.allCases where command.mcpExposure == .directTool {
+            guard !Self.hybridToolNames.contains(command.rawValue) else { continue }
             guard let tool = toolsByName[command.rawValue] else { continue }
             let schemaKeys = extractPropertyKeys(from: tool)
             let specKeys = Set(command.parameters.map(\.key))
@@ -135,6 +172,7 @@ struct ToolSyncTests {
         let toolsByName = Dictionary(uniqueKeysWithValues: ToolDefinitions.all.map { ($0.name, $0) })
 
         for command in TheFence.Command.allCases where command.mcpExposure == .directTool {
+            guard !Self.hybridToolNames.contains(command.rawValue) else { continue }
             guard let tool = toolsByName[command.rawValue] else { continue }
             let schemaRequired = extractRequiredKeys(from: tool)
             let specRequired = Set(command.parameters.filter(\.required).map(\.key))
@@ -146,33 +184,47 @@ struct ToolSyncTests {
         }
     }
 
-    @Test("Gesture tool schema contains all gesture command parameter keys")
-    func gestureToolCoversAllGestureParams() {
-        guard let gestureTool = ToolDefinitions.all.first(where: { $0.name == "gesture" }) else {
-            Issue.record("No gesture tool found")
-            return
-        }
-        let gestureSchemaKeys = extractPropertyKeys(from: gestureTool)
+    @Test("Grouped tool schemas contain all grouped command parameter keys")
+    func groupedToolsCoverAllGroupedParams() {
+        let toolsByName = Dictionary(uniqueKeysWithValues: ToolDefinitions.all.map { ($0.name, $0) })
 
-        // Collect the union of all gesture command parameter keys
-        let gestureCommands = TheFence.Command.allCases.filter {
-            $0.mcpExposure == .groupedUnder("gesture")
-        }
-        var allGestureParamKeys = Set<String>()
-        for command in gestureCommands {
-            for param in command.parameters {
-                allGestureParamKeys.insert(param.key)
+        // Map of group tool name → synthetic keys added by the group (not in individual command specs)
+        let syntheticKeys: [String: Set<String>] = [
+            "gesture": ["type"],
+            "scroll": ["mode"],
+            "edit_action": ["action"],
+        ]
+
+        // Collect grouped commands by tool name
+        var groupsByTool: [String: [TheFence.Command]] = [:]
+        for command in TheFence.Command.allCases {
+            if case .groupedUnder(let toolName) = command.mcpExposure {
+                groupsByTool[toolName, default: []].append(command)
             }
         }
 
-        // The gesture tool also has a "type" key not in any individual command's spec
-        let schemaKeysMinusType = gestureSchemaKeys.subtracting(["type"])
+        for (toolName, commands) in groupsByTool {
+            guard let tool = toolsByName[toolName] else {
+                Issue.record("No tool found for group '\(toolName)'")
+                continue
+            }
+            let schemaKeys = extractPropertyKeys(from: tool)
+            let keysToIgnore = syntheticKeys[toolName] ?? []
+            let schemaKeysMinusSynthetic = schemaKeys.subtracting(keysToIgnore)
 
-        for paramKey in allGestureParamKeys {
-            #expect(
-                schemaKeysMinusType.contains(paramKey),
-                "Gesture param '\(paramKey)' is in a gesture command spec but missing from gesture tool schema"
-            )
+            var allParamKeys = Set<String>()
+            for command in commands {
+                for param in command.parameters {
+                    allParamKeys.insert(param.key)
+                }
+            }
+
+            for paramKey in allParamKeys {
+                #expect(
+                    schemaKeysMinusSynthetic.contains(paramKey),
+                    "\(toolName) param '\(paramKey)' is in a grouped command spec but missing from tool schema"
+                )
+            }
         }
     }
 

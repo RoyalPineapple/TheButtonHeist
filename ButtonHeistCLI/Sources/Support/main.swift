@@ -9,11 +9,11 @@ struct ButtonHeistApp: AsyncParsableCommand {
         abstract: "Inspect and interact with iOS app UI elements.",
         discussion: """
             Quick start — the five commands you need most:
-              buttonheist list                              # Find devices
+              buttonheist list_devices                      # Find devices
               buttonheist get_interface                     # Inspect UI hierarchy
               buttonheist activate --identifier "myButton"  # Tap a control
-              buttonheist type --text "hello"               # Type text
-              buttonheist screenshot                        # Capture screen
+              buttonheist type_text "hello"                 # Type text
+              buttonheist get_screen                        # Capture screen
 
             Use `buttonheist session` for an interactive REPL with all commands.
             """,
@@ -34,11 +34,17 @@ struct ButtonHeistApp: AsyncParsableCommand {
             ElementSearchCommand.self,
             ScrollToEdgeCommand.self,
 
-            // Accessibility actions (mirrors MCP accessibility_action)
-            ActionCommand.self,
+            // Edit & keyboard
+            EditActionCommand.self,
+            DismissKeyboardCommand.self,
 
             // Gestures
-            TouchCommand.self,
+            TapSubcommand.self,
+            LongPressSubcommand.self,
+            DragSubcommand.self,
+            PinchSubcommand.self,
+            RotateSubcommand.self,
+            TwoFingerTapSubcommand.self,
 
             // Pasteboard
             SetPasteboardCommand.self,

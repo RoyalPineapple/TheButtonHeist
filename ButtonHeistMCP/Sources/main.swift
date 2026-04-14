@@ -43,7 +43,7 @@ struct ButtonHeistMCPServer {
 
         1. **See** — `get_interface` returns every visible element with a heistId, label, \
         value, traits, and actions.
-        2. **Act** — `activate`, `type_text`, `scroll`, `swipe` — target by heistId or matcher. \
+        2. **Act** — `activate`, `type_text`, `scroll`, `gesture` — target by heistId or matcher. \
         Always attach `expect` when you know what should change.
         3. **Read the response** — every response tells you two things: what your action did \
         (`interfaceDelta`) and what changed while you were thinking (`[background: ...]`). \
@@ -62,13 +62,13 @@ struct ButtonHeistMCPServer {
         visual state matters.
 
         **Acting**: `activate` is your primary tool — it taps, toggles, follows links. \
-        `type_text` for keyboard input. `swipe` for directional gestures. `scroll` for \
-        paging through lists. Prefer `activate` over `gesture` — raw coordinates are \
-        fragile and don't record well.
+        `type_text` for keyboard input. `gesture` with type "swipe" for directional gestures. \
+        `scroll` for paging through lists. Prefer `activate` over `gesture` — raw coordinates \
+        are fragile and don't record well.
 
-        **Finding**: `scroll_to_visible` when you've seen an element before but it scrolled \
-        off-screen. `element_search` when you've never seen it — scrolls every container \
-        looking for a match. `wait_for` when you know a specific element will appear.
+        **Finding**: `scroll` with mode "to_visible" when you've seen an element before but it \
+        scrolled off-screen. `scroll` with mode "search" when you've never seen it — scrolls \
+        every container looking for a match. `wait_for` when you know a specific element will appear.
 
         **Waiting**: `wait_for_change` when the UI is updating asynchronously — network \
         requests, timers, animations completing. Pass an expectation to wait for the specific \
@@ -176,23 +176,47 @@ struct ButtonHeistMCPServer {
             // Route tool name → TheFence command
             switch params.name {
             // Direct 1:1 tools — tool name IS the command
-            case "get_interface", "activate", "type_text", "swipe", "get_screen",
+            case "get_interface", "activate", "type_text", "get_screen",
                  "wait_for_change", "wait_for", "start_recording", "stop_recording", "list_devices",
                  "set_pasteboard", "get_pasteboard",
-                 "scroll", "scroll_to_visible", "element_search", "scroll_to_edge",
-                 "edit_action", "dismiss_keyboard",
                  "run_batch", "get_session_state",
                  "connect", "list_targets",
                  "get_session_log", "archive_session",
                  "start_heist", "stop_heist", "play_heist":
                 request["command"] = params.name
 
-            // Grouped tool — "type" field becomes the command
+            // Grouped gesture tool — "type" field becomes the command
             case "gesture":
                 guard let type = request.removeValue(forKey: "type") as? String else {
                     return .init(content: [.text(text: "Missing required parameter: type", annotations: nil, _meta: nil)], isError: true)
                 }
                 request["command"] = type
+
+            // Grouped scroll tool — "mode" field selects the TheFence command
+            case "scroll":
+                let mode = (request.removeValue(forKey: "mode") as? String) ?? "page"
+                switch mode {
+                case "page":
+                    request["command"] = "scroll"
+                case "to_visible":
+                    request["command"] = "scroll_to_visible"
+                case "search":
+                    request["command"] = "element_search"
+                case "to_edge":
+                    request["command"] = "scroll_to_edge"
+                default:
+                    let message = "Unknown scroll mode: \(mode). Valid: page, to_visible, search, to_edge"
+                    return .init(content: [.text(text: message, annotations: nil, _meta: nil)], isError: true)
+                }
+
+            // edit_action routes "dismiss" to dismiss_keyboard
+            case "edit_action":
+                if let action = request["action"] as? String, action == "dismiss" {
+                    request.removeValue(forKey: "action")
+                    request["command"] = "dismiss_keyboard"
+                } else {
+                    request["command"] = "edit_action"
+                }
 
             default:
                 return .init(content: [.text(text: "Unknown tool: \(params.name)", annotations: nil, _meta: nil)], isError: true)

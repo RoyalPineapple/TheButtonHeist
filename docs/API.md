@@ -562,19 +562,15 @@ cd ButtonHeistMCP && swift build -c release
 | `get_interface` | Get UI element hierarchy. Pass `full: true` to include off-screen elements in scroll views. | `full`, `label`, `identifier`, `value`, `traits`, `excludeTraits` (optional filtering) |
 | `activate` | **Primary interaction tool.** Activate a UI element (activation-first pattern). Pass `action` for named actions (increment, decrement, custom) | `heistId`, `label`, `identifier`, `value`, `traits`, `excludeTraits`, `action`, `expect` |
 | `type_text` | Type text / delete characters | `text`, `deleteCount`, `clearFirst`, `heistId`, `label`, `identifier`, `value`, `traits`, `excludeTraits`, `expect` |
-| `swipe` | Swipe on element or between coordinates | `heistId` + `direction`, `start`/`end` (unit points), or `startX`/`startY`/`endX`/`endY`, `expect` |
 | `get_screen` | Capture PNG screenshot | `output` (file path, optional) |
 | `wait_for_change` | Wait for UI to change, optionally matching an expectation | `expect`, `timeout` |
 | `wait_for` | Wait for element to appear/disappear | `label`, `identifier`, `value`, `traits`, `excludeTraits`, `absent`, `timeout` |
 | `start_recording` | Start H.264/MP4 screen recording | `fps`, `scale`, `maxDuration`, `inactivityTimeout` |
 | `stop_recording` | Stop recording (returns metadata) | `output` (file path, optional) |
 | `list_devices` | List discovered iOS devices | — |
-| `gesture` | Low-level touch gestures (prefer `activate`) | `type` (required): `one_finger_tap`, `drag`, `long_press`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`; `expect` |
-| `edit_action` | Perform edit menu actions on first responder | `action` (required): `copy`, `paste`, `cut`, `select`, `selectAll`; `expect` |
-| `dismiss_keyboard` | Dismiss the software keyboard | `expect` |
-| `scroll` | Scroll a scroll view by one page in a direction | `direction` (required), `heistId`, `label`, `identifier`, `value`, `traits`, `excludeTraits`, `expect` |
-| `scroll_to_visible` | Search for an element by scrolling through a scroll view | `label`, `identifier`, `heistId`, `value`, `traits`, `excludeTraits`, `direction`, `expect` |
-| `scroll_to_edge` | Scroll to an edge of the nearest scroll view | `edge` (required), `heistId`, `label`, `identifier`, `value`, `traits`, `excludeTraits`, `expect` |
+| `gesture` | Touch gestures (prefer `activate`). Includes swipe. | `type` (required): `swipe`, `one_finger_tap`, `drag`, `long_press`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`; `expect` |
+| `edit_action` | Perform edit or keyboard actions on first responder | `action` (required): `copy`, `paste`, `cut`, `select`, `selectAll`, `dismiss`; `expect` |
+| `scroll` | Scroll within scroll views. Mode selects behavior. | `mode`: `page` (default), `to_visible`, `search`, `to_edge`; `direction`, `edge`, element target, `expect` |
 | `set_pasteboard` | Write text to the general pasteboard | `text` (required), `expect` |
 | `get_pasteboard` | Read text from the general pasteboard | `expect` |
 | `run_batch` | Execute an ordered batch of Fence requests in one MCP call | `steps` (required), `policy` |
@@ -593,8 +589,9 @@ Pass `action` to perform a named action instead of default activation:
 
 #### gesture
 
-Low-level touch gesture escape hatch. For element interactions, prefer `activate` instead. The `type` field selects the gesture:
+Touch gesture tool. For element interactions, prefer `activate` instead. The `type` field selects the gesture:
 
+- `swipe` — Swipe on element or between coordinates. `direction` for cardinal swipes, or `start`/`end` unit points (0-1 relative to element frame) for precise control. Also accepts `startX`/`startY`/`endX`/`endY` for absolute screen coordinates. Optional `duration`.
 - `one_finger_tap` — Synthetic tap at x/y coordinates
 - `drag` — Requires `endX`, `endY`
 - `long_press` — Optional `duration` (seconds, default 1.0)
@@ -606,11 +603,7 @@ Low-level touch gesture escape hatch. For element interactions, prefer `activate
 
 #### edit_action
 
-Perform an edit menu action on the current first responder. Requires `action`: `copy`, `paste`, `cut`, `select`, `selectAll`.
-
-#### dismiss_keyboard
-
-Dismiss the software keyboard by resigning first responder. No additional params.
+Perform an edit or keyboard action on the current first responder. Requires `action`: `copy`, `paste`, `cut`, `select`, `selectAll`, or `dismiss` (dismisses the software keyboard by resigning first responder).
 
 #### run_batch
 
@@ -1397,12 +1390,12 @@ All subcommands that connect to a device accept these connection options:
 
 Flags always take precedence over environment variables.
 
-### buttonheist list
+### buttonheist list_devices
 
 List discovered devices that answer a lightweight `status` probe.
 
 ```
-USAGE: buttonheist list [OPTIONS]
+USAGE: buttonheist list_devices [OPTIONS]
 
 OPTIONS:
   -t, --timeout <seconds> Discovery timeout in seconds (default: 3)
@@ -1433,76 +1426,62 @@ buttonheist activate --identifier loginButton
 buttonheist activate --index 3
 ```
 
-### buttonheist action
+### buttonheist edit_action
 
-Perform accessibility actions on UI elements. Mirrors the MCP `accessibility_action` tool. For activating elements (buttons, links, controls), use `buttonheist activate` instead.
+Perform an edit menu action on the current first responder.
 
 ```
-USAGE: buttonheist action [OPTIONS]
+USAGE: buttonheist edit_action <action>
+
+ARGUMENTS:
+  <action>                Edit action: copy, paste, cut, select, selectAll
 
 OPTIONS:
-  --identifier <id>       Element identifier
-  --index <n>             Traversal index
-  --type <type>           Action type: increment, decrement, custom, edit, dismiss_keyboard
-  --custom-action <name>  Custom action name (required when type is 'custom')
-  --edit-action <action>  Edit action: copy, paste, cut, select, select_all (required when type is 'edit')
-  -t, --timeout <seconds> Timeout in seconds (default: 10)
   -q, --quiet             Suppress status messages
   --device <filter>       Target a specific device
 ```
 
 Examples:
 ```bash
-buttonheist action --type increment --identifier volumeSlider
-buttonheist action --type custom --identifier myCell --custom-action "Delete"
-buttonheist action --type edit --edit-action copy
-buttonheist action --type dismiss_keyboard
+buttonheist edit_action copy
+buttonheist edit_action paste
+buttonheist edit_action selectAll
 ```
 
-### buttonheist swipe
+### buttonheist dismiss_keyboard
 
-Swipe on an element or between coordinates. Promoted to top-level for parity with the MCP `swipe` tool. Also available as `buttonheist touch swipe`.
+Dismiss the software keyboard by resigning first responder.
 
 ```
-USAGE: buttonheist swipe [OPTIONS]
+USAGE: buttonheist dismiss_keyboard [OPTIONS]
 
 OPTIONS:
-  --identifier <id>       Element identifier
-  --index <n>             Element index
-  --direction <dir>       Swipe direction: up, down, left, right
-  --from-x, --from-y      Start coordinates
-  --to-x, --to-y          End coordinates
-  --distance <points>     Swipe distance (for direction-based, default: 200)
-  --duration <seconds>    Swipe duration (default: 0.15)
-  -t, --timeout <seconds> Timeout in seconds (default: 10)
+  -q, --quiet             Suppress status messages
   --device <filter>       Target a specific device
 ```
 
-### buttonheist touch
+### Gesture Commands
 
-Low-level touch gestures. For tapping buttons and controls, prefer `buttonheist activate`.
+Low-level touch gestures registered as top-level commands. For tapping buttons and controls, prefer `buttonheist activate`.
 
-```
-USAGE: buttonheist touch <subcommand>
+| Command | Description |
+|---------|-------------|
+| `buttonheist one_finger_tap` | Raw synthetic tap at coordinates or element center |
+| `buttonheist long_press` | Long press at a point or element |
+| `buttonheist swipe` | Swipe between two points or in a direction |
+| `buttonheist drag` | Drag from one point to another |
+| `buttonheist pinch` | Pinch/zoom at a point or element |
+| `buttonheist rotate` | Rotate at a point or element |
+| `buttonheist two_finger_tap` | Tap with two fingers at a point or element |
 
-SUBCOMMANDS:
-  one_finger_tap          Raw synthetic tap at coordinates or element center
-  long_press              Long press at a point or element
-  swipe                   Swipe between two points or in a direction
-  drag                    Drag from one point to another
-  pinch                   Pinch/zoom at a point or element
-  rotate                  Rotate at a point or element
-  two_finger_tap          Tap with two fingers at a point or element
-```
+All gesture commands accept `--identifier <id>` or `--index <n>` to target an element, or coordinate options (`--x`, `--y`, `--from-x`, `--from-y`, `--to-x`, `--to-y`) for explicit positioning, and `--device` to target a specific device.
 
-All subcommands accept `--identifier <id>` or `--index <n>` to target an element, or coordinate options (`--x`, `--y`, `--from-x`, `--from-y`, `--to-x`, `--to-y`) for explicit positioning, and `--device` to target a specific device.
-
-### buttonheist type
+### buttonheist type_text
 
 Type text into a field by tapping keyboard keys.
 
 ```
-USAGE: buttonheist type [OPTIONS]
+USAGE: buttonheist type_text [OPTIONS]
 
 OPTIONS:
   --text <text>           Text to type
@@ -1518,15 +1497,15 @@ Outputs the current text field value to stdout after the operation. If no elemen
 Examples:
 ```bash
 # Type text and get the resulting value
-buttonheist type --text "Hello" --identifier "nameField"
+buttonheist type_text --text "Hello" --identifier "nameField"
 # Output: Hello
 
 # Delete 3 characters
-buttonheist type --delete 3 --identifier "nameField"
+buttonheist type_text --delete 3 --identifier "nameField"
 # Output: He
 
 # Delete and retype (correction)
-buttonheist type --delete 2 --text "llo World" --identifier "nameField"
+buttonheist type_text --delete 2 --text "llo World" --identifier "nameField"
 # Output: Hello World
 ```
 
@@ -1647,12 +1626,12 @@ buttonheist session --format json --session-timeout 300
 
 This command is useful for persistent connections where multiple commands need to share a single TCP session.
 
-### buttonheist screenshot
+### buttonheist get_screen
 
 Capture a screenshot from the connected device.
 
 ```
-USAGE: buttonheist screenshot [OPTIONS]
+USAGE: buttonheist get_screen [OPTIONS]
 
 OPTIONS:
   -o, --output <path>     Output file path (default: stdout as raw PNG)
@@ -1661,12 +1640,12 @@ OPTIONS:
   --device <filter>       Target a specific device
 ```
 
-### buttonheist record
+### buttonheist start_recording
 
 Record the screen as H.264/MP4 video. Recording auto-stops on inactivity.
 
 ```
-USAGE: buttonheist record [OPTIONS]
+USAGE: buttonheist start_recording [OPTIONS]
 
 OPTIONS:
   -o, --output <path>         Output file path (default: recording.mp4)
@@ -1857,12 +1836,12 @@ do {
 
 ```bash
 # List all discovered devices
-buttonheist list
-buttonheist list --format json
+buttonheist list_devices
+buttonheist list_devices --format json
 
 # Target a specific device (by short ID, UDID, or name)
 buttonheist --device a1b2 activate --identifier myButton
-buttonheist --device DEADBEEF-1234 screenshot --output screen.png
+buttonheist --device DEADBEEF-1234 get_screen --output screen.png
 
 # Get hierarchy as JSON via session
 echo '{"command":"get_interface"}' | buttonheist session --format json
@@ -1871,27 +1850,32 @@ echo '{"command":"get_interface"}' | buttonheist session --format json
 buttonheist activate --identifier loginButton
 buttonheist activate --index 3
 
-# Accessibility actions (increment, decrement, custom)
-buttonheist action --type increment --identifier volumeSlider
-buttonheist action --type decrement --identifier volumeSlider
-buttonheist action --type custom --identifier myCell --custom-action "Delete"
+# Named actions (increment, decrement, custom)
+buttonheist activate --identifier volumeSlider --action increment
+buttonheist activate --identifier volumeSlider --action decrement
+buttonheist activate --identifier myCell --action "Delete"
+
+# Edit actions
+buttonheist edit_action copy
+buttonheist edit_action paste
+buttonheist dismiss_keyboard
 
 # Capture screenshot
-buttonheist screenshot --output screen.png
+buttonheist get_screen --output screen.png
 
 # Touch gestures (low-level escape hatches)
-buttonheist touch one_finger_tap --x 100 --y 200
-buttonheist touch one_finger_tap --identifier loginButton
-buttonheist touch long_press --identifier myButton --duration 1.0
-buttonheist touch swipe --identifier list --direction up
-buttonheist touch drag --from-x 100 --from-y 200 --to-x 300 --to-y 200
-buttonheist touch pinch --identifier mapView --scale 2.0
-buttonheist touch rotate --x 200 --y 300 --angle 1.57
-buttonheist touch two_finger_tap --identifier zoomControl
+buttonheist one_finger_tap --x 100 --y 200
+buttonheist one_finger_tap --identifier loginButton
+buttonheist long_press --identifier myButton --duration 1.0
+buttonheist swipe --identifier list --direction up
+buttonheist drag --from-x 100 --from-y 200 --to-x 300 --to-y 200
+buttonheist pinch --identifier mapView --scale 2.0
+buttonheist rotate --x 200 --y 300 --angle 1.57
+buttonheist two_finger_tap --identifier zoomControl
 
 # Text entry
-buttonheist type --text "Hello World" --identifier nameField
-buttonheist type --delete 5 --text "World!" --identifier nameField
+buttonheist type_text --text "Hello World" --identifier nameField
+buttonheist type_text --delete 5 --text "World!" --identifier nameField
 
 # Scroll commands
 buttonheist scroll --identifier "buttonheist.longList.item-5" --direction up
