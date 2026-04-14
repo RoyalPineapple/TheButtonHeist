@@ -14,7 +14,9 @@ TheBrains takes a command and works it through to a result:
 4. **Screen exploration** — `exploreAndPrune()` scrolls every scrollable container to discover all elements, using `containerExploreStates` fingerprint caching to skip unchanged containers. Prunes elements no longer seen after a full explore cycle.
 5. **Delta cycle** — `captureBeforeState()` captures a `BeforeState` token; after the action, `actionResultWithDelta(before:)` settles via TheTripwire, parses via TheStash, detects screen changes, applies, explores, and computes the delta through a single codepath for both success and failure.
 6. **Refresh convenience** — `refresh()` delegates to `stash.refresh()` and accumulates heistIds into `exploreCycleIds`. TheBurglar is TheStash's private implementation detail — TheBrains never references it.
-7. **Facades for TheInsideJob** — TheBrains exposes `selectElements()`, `toWire()`, `currentInterface()`, `computeDelta()`, `computeBackgroundDelta()`, `captureScreen()`, `screenName`, `screenId`, etc. so TheInsideJob never reaches through to TheStash.
+7. **Wait handlers** — `executeWaitForIdle(timeout:)` and `executeWaitForChange(timeout:expectation:)` live here because they're accessibility-level work: refresh, settle, delta, expectation evaluation. The wait-for-change handler has a fast path (tree already changed) and slow path (poll loop).
+8. **Response state tracking** — `SentState` struct (treeHash, beforeState, screenId) tracks the last response sent to the driver. `recordSentState()` snapshots current state; `computeBackgroundDelta()` reads it. TheGetaway calls `recordSentState()` after every send.
+9. **TheGetaway-facing methods** — `currentInterface()`, `broadcastInterfaceIfChanged()`, `computeBackgroundDelta()`, `captureScreen()`, `captureScreenForRecording()`, `screenName`, `screenId`, `stakeout`. Purpose-built methods so TheGetaway and TheInsideJob never reach through to TheStash.
 
 ## Architecture
 

@@ -4,7 +4,7 @@ Command execution engine. Takes a `ClientMessage`, works it through refresh → 
 
 ## Reading order
 
-1. **`TheBrains+Dispatch.swift`** — Start here. `executeCommand(_:)` is the single entry point from TheInsideJob. A switch routes every `ClientMessage` case to one of four pipelines:
+1. **`TheBrains+Dispatch.swift`** — Start here. `executeCommand(_:)` is the single entry point from TheGetaway. A switch routes every `ClientMessage` case to one of four pipelines:
 
    - **`performInteraction`** (most commands) — refresh → captureBeforeState → action closure → actionResultWithDelta. Used by all accessibility actions and touch gestures.
    - **`performElementSearch`** — same shape but the scroll loop manages its own refresh/settle internally. Patches `ScrollSearchResult` onto the result.
@@ -19,7 +19,11 @@ Command execution engine. Takes a `ClientMessage`, works it through refresh → 
    - **`refresh()`** — delegates to `stash.refresh()`, accumulates heistIds into `exploreCycleIds` when an explore cycle is active.
    - **`actionResultWithDelta(before:)`** — the convergence point. On failure: immediate return from before-snapshot. On success: settle via `tripwire.waitForAllClear(1s)` → `stash.parse()` → screen-change detection (VC identity OR topology) → `stash.apply()` → `exploreAndPrune()` → snapshot → `stash.computeDelta()` → re-resolve target for post-action element metadata → `ActionResultBuilder.success()`.
 
-   **Facade methods** (bottom of file) — `selectElements()`, `toWire()`, `currentInterface()`, `computeDelta()`, `computeBackgroundDelta()`, `captureScreen()`, `screenName`, `screenId`, `elementCount`, `hierarchyHash`, `wireHash()`, `stakeout`. These exist so TheInsideJob never reaches through to TheStash.
+   **Response state** — `SentState` struct (treeHash, beforeState, screenId) tracks the last response sent to the driver. `recordSentState()` snapshots current state; `computeBackgroundDelta()` compares against it. TheGetaway calls `recordSentState()` after every send.
+
+   **Wait handlers** — `executeWaitForIdle(timeout:)` and `executeWaitForChange(timeout:expectation:)` live here (not in TheGetaway) because they're accessibility-level work: refresh, settle, delta, expectation evaluation. The wait-for-change handler has a fast path (tree already changed since last response) and a slow path (poll loop with `tripwire.waitForAllClear`).
+
+   **TheGetaway-facing methods** — `currentInterface()`, `broadcastInterfaceIfChanged()`, `computeBackgroundDelta()`, `captureScreen()`, `captureScreenForRecording()`, `screenName`, `screenId`, `stakeout`. These exist so TheGetaway and TheInsideJob never reach through to TheStash.
 
 3. **`TheBrains+Actions.swift`** — Two generic pipelines and all `executeXxx` methods:
    - `performElementAction(target:method:action:)` — ensureOnScreen → resolveTarget → checkInteractivity → action closure. Used by activate, increment, decrement, customAction.

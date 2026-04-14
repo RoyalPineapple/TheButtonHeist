@@ -1,46 +1,42 @@
-# TheInsideJob — The Inside Operative
+# TheInsideJob — The Job
 
 > **Module:** `ButtonHeist/Sources/TheInsideJob/`
 > **Platform:** iOS 17.0+ (UIKit, DEBUG builds only)
-> **Role:** Master coordinator of the entire iOS-side operation
+> **Role:** The job itself — singleton coordinator, crew assembly, server lifecycle
 
 ## Responsibilities
 
-TheInsideJob is the central hub running inside the target iOS app. It:
+TheInsideJob is the job. It assembles the crew, manages the operation lifecycle, and provides the public API. It does not handle messages, encode responses, or touch the accessibility tree — those are delegated to the crew.
 
-1. **Runs a TLS/TCP server** (`SimpleSocketServer`) listening for remote commands
-2. **Manages TLS identity** (`TLSIdentity`) — runtime-generated self-signed ECDSA certificates with SHA-256 fingerprint pinning
-3. **Provides server transport** (`ServerTransport`) — protocol abstraction for server-side networking
-4. **Broadcasts presence** via Bonjour mDNS (`_buttonheist._tcp`)
-5. **Drives hierarchy updates** via TheTripwire's pulse-based settle detection (no debounce timer)
-6. **Detects background changes** — `computeBackgroundDelta()` compares `lastSentTreeHash` against the live tree to detect changes that occurred while the agent was thinking; the delta is attached to the next `ResponseEnvelope`
-7. **Wait for change** — `handleWaitForChange` polls the settle gate in a loop, checking each settled state against an optional `ActionExpectation`, returning when the expectation is met or timeout expires
-8. **Polls for UI changes** at configurable intervals (default 2.0s, min 0.5s) as a supplementary mechanism
-9. **Dispatches all commands** to crew members via a two-level dispatch structure
-10. **Manages client subscriptions** and broadcasts hierarchy/screen updates
-11. **Filters connections by scope** (`ConnectionScope`) — classifies incoming connections at `.ready` using typed `NWEndpoint.Host` and interface detection
+1. **Singleton and public API** — `TheInsideJob.shared`, `configure(token:instanceId:)`, `start()`, `stop()`, `notifyChange()`, `startPolling()`, `stopPolling()`
+2. **Crew assembly** — creates TheMuscle, TheTripwire, TheBrains, and TheGetaway at init; wires them together
+3. **Server lifecycle** — creates TLS identity, creates ServerTransport, tells TheGetaway to wire transport, starts listening, advertises via Bonjour
+4. **App lifecycle** — observes `didEnterBackground` (suspend), `willEnterForeground` (resume), `willTerminate` (stop)
+5. **Suspend/resume** — tears down transport, pulse, keyboard observation, and cache on background; recreates everything on foreground
+6. **Polling management** — `PollingPhase` state machine, `makePollingTask` settle loop, pause/resume across background
+7. **Pulse routing** — receives `TheTripwire.PulseTransition` via callback, tells TheGetaway to broadcast on `.settled`
+8. **Accessibility observation** — listens for `elementFocusedNotification` and `voiceOverStatusDidChange`, tells TheGetaway to mark hierarchy invalidated
 
 ## Architecture Diagram
 
 ```mermaid
 graph TD
     subgraph TheInsideJob["TheInsideJob (Singleton, @MainActor)"]
-        Core["TheInsideJob.swift — Server lifecycle, message dispatch, performInteraction"]
-        Dispatch["TheInsideJob+Dispatch.swift — Grouped interaction dispatch"]
-        Pulse["Extensions/Pulse.swift — Invalidation, pulse transitions, settle-driven polling"]
-        Anim["Extensions/Animation.swift — waitForIdle handler"]
-        Screen["Extensions/Screen.swift — Screenshot capture, recording mgmt"]
-        Auto["Extensions/AutoStart.swift — @_cdecl entry point for ThePlant"]
+        Core["TheInsideJob.swift — Lifecycle, crew assembly, polling"]
+        Auto["AutoStart.swift — @_cdecl entry point for ThePlant"]
     end
 
     subgraph Crew["Crew Members (Owned)"]
+        Getaway["TheGetaway — Message dispatch, comms, recording"]
         Tripwire["TheTripwire — UI pulse, settle detection"]
-        Brains["TheBrains — Action dispatch, delta cycle"]
-        Stash["TheStash — Element registry, resolution"]
-        Burglar["TheBurglar — Parse pipeline"]
+        Brains["TheBrains — Action execution, delta cycle, wait handlers"]
         Muscle["TheMuscle — Auth & sessions"]
+    end
+
+    subgraph BrainsCrew["TheBrains' Crew"]
+        Stash["TheStash — Element registry, resolution"]
+        Burglar["TheBurglar — Parse pipeline (private to TheStash)"]
         Safecracker["TheSafecracker — Touch & text"]
-        Stakeout["TheStakeout — Recording"]
     end
 
     subgraph Transport["Transport"]
@@ -51,36 +47,40 @@ graph TD
 
     TLS --> Server
     STransport --> Server
+    Core --> Getaway
     Core --> Muscle
-    Core --> Stakeout
     Core --> Tripwire
     Core --> Brains
+    Getaway --> Muscle
+    Getaway --> Brains
+    Getaway --> STransport
     Brains --> Stash
     Brains --> Safecracker
     Stash --> Burglar
-    Core --> STransport
-    Dispatch --> Brains
-    Pulse --> Brains
-    Pulse --> Tripwire
-    Screen --> Stakeout
 ```
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `TheInsideJob.swift` | Core lifecycle, server wiring, message dispatch |
-| `TheBrains.swift` | Action dispatch, delta cycle, exploration orchestration |
-| `TheBurglar.swift` | Hierarchy parsing, parse/apply pipeline, topology detection |
-| `TheStash.swift` | Element registry, target resolution, wire conversion, screen capture |
-| `ScreenManifest.swift` | Full-screen element census bookkeeping |
-| `Lifecycle/Pulse.swift` | `scheduleHierarchyUpdate`, `handlePulseTransition`, `startPollingLoop`, `broadcastIfChanged`, `sendInterface` |
-| `Lifecycle/Animation.swift` | `handleWaitForIdle`, `handleWaitForChange` — wait handlers with settle detection and expectation-driven polling |
-| `Lifecycle/Screen.swift` | Screen capture broadcast, recording start/stop handlers |
-| `Lifecycle/AutoStart.swift` | `@_cdecl` bridge for ObjC auto-start |
-| `SimpleSocketServer.swift` | NWListener TLS/TCP server, connection management |
-| `ServerTransport.swift` | Server-side networking protocol abstraction |
-| `TLSIdentity.swift` | ECDSA cert generation, SHA-256 fingerprint, Keychain persistence |
+| `TheInsideJob.swift` | Singleton, crew assembly, server lifecycle, polling, app lifecycle |
+| `AutoStart.swift` | `@_cdecl` bridge for ObjC auto-start (ThePlant calls this) |
+
+All message handling, encoding, broadcasting, and recording now live in [`TheGetaway/`](../../ButtonHeist/Sources/TheInsideJob/TheGetaway/). See [17-THEGETAWAY.md](17-THEGETAWAY.md).
+
+## Ownership
+
+```
+TheInsideJob (the job)
+├── TheGetaway (comms — dispatch, encode, broadcast, transport wiring, recording)
+├── TheTripwire (pulse — settle detection, injected into others)
+├── TheMuscle (auth — session locking, closure-wired to transport via TheGetaway)
+└── TheBrains (actions — execution, scroll, explore, delta, wait handlers)
+    ├── TheSafecracker (gestures)
+    │   └── TheFingerprints (overlay)
+    └── TheStash (registry)
+        └── TheBurglar (parsing, private)
+```
 
 ## Singleton Pattern and `configure()`
 

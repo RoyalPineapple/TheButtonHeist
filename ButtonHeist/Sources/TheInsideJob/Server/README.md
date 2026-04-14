@@ -29,7 +29,7 @@ TLS/TCP server infrastructure — listener, transport, authentication, and conne
 
    Communicates outward entirely through injected closures (`sendToClient`, `markClientAuthenticated`, `disconnectClient`, `onClientAuthenticated`, `onSessionActiveChanged`).
 
-3. **`ServerTransport.swift`** — `@MainActor public final class NSObject`. Wraps `SimpleSocketServer` + `NetService`. `start(port:)` gets TLS parameters from `tlsIdentity`, starts the server. `advertise(serviceName:...)` creates a `NetService` with TXT record (cert fingerprint, simulator UDID, instance ID, etc.). `updateTXTRecord(_:)` merges entries and re-publishes.
+3. **`ServerTransport.swift`** — `@MainActor public final class NSObject`. Wraps `SimpleSocketServer` + `NetService`. Created by TheInsideJob, wired to TheMuscle by TheGetaway's `wireTransport(_:)`. `start(port:)` gets TLS parameters from `tlsIdentity`, starts the server. `advertise(serviceName:...)` creates a `NetService` with TXT record (cert fingerprint, simulator UDID, instance ID, etc.). `updateTXTRecord(_:)` merges entries and re-publishes.
 
 4. **`TLSIdentity.swift`** — `public actor`. `getOrCreate()` checks Keychain for stored identity, regenerates if expiry ≤30 days. `generateCertificate(validityDays:)` creates a `P256.Signing.PrivateKey`, builds a self-signed `X509.Certificate` (CN=ButtonHeist, ECDSA-SHA256, 1-year), serializes to DER. `computeFingerprint` hashes DER bytes with SHA-256. `createEphemeral()` generates cert, briefly stores in Keychain to get a `SecIdentity`, then immediately deletes both Keychain items.
 

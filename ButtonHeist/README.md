@@ -13,6 +13,7 @@ ButtonHeist/
 │   │   ├── Config/         #   Environment + target config
 │   │   └── Support/        #   Utilities
 │   └── TheInsideJob/       # Server framework (iOS)
+│       ├── TheGetaway/     #   Message routing + comms
 │       ├── TheBrains/      #   Action orchestration + delta cycle
 │       ├── TheStash/       #   Element registry + resolution
 │       ├── TheBurglar/     #   Accessibility tree parsing
@@ -20,7 +21,7 @@ ButtonHeist/
 │       ├── TheTripwire/    #   UI pulse + settle detection
 │       ├── TheStakeout/    #   Screen recording
 │       ├── Server/         #   TLS server + auth
-│       └── Lifecycle/      #   Pulse hooks + auto-start
+│       └── Support/        #   Utilities
 └── Tests/
     ├── TheScoreTests/
     ├── ButtonHeistTests/
@@ -50,7 +51,7 @@ TheScore is the shared contract. Client encodes `ClientMessage` (37 cases), serv
 
 ## Auto-start
 
-TheInsideJob starts automatically when the framework loads in DEBUG builds — no code changes needed. `ThePlant` (ObjC `+load`) dispatches to main queue, reads config from env vars or Info.plist, creates the server, and begins polling. See [`Lifecycle/`](Sources/TheInsideJob/Lifecycle/) for details.
+TheInsideJob starts automatically when the framework loads in DEBUG builds — no code changes needed. `ThePlant` (ObjC `+load`) dispatches to main queue, reads config from env vars or Info.plist, creates the server, and begins polling. See `AutoStart.swift` at the TheInsideJob root.
 
 ## Configuration
 

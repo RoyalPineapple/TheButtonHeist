@@ -32,6 +32,8 @@ TheScore is the shared contract — both sides import it, neither side imports t
 
 **If you want to understand how the iOS server processes actions:** Start with [`TheInsideJob/TheBrains/`](TheInsideJob/TheBrains/) — read `TheBrains+Dispatch.swift`.
 
+**If you want to understand message routing on the server:** Start with [`TheInsideJob/TheGetaway/`](TheInsideJob/TheGetaway/) — the two-level dispatch switch.
+
 **If you want to understand touch injection:** Start with [`TheInsideJob/TheSafecracker/`](TheInsideJob/TheSafecracker/) — read `SyntheticTouch.swift`.
 
 **If you want to understand the accessibility tree:** Start with [`TheInsideJob/TheStash/`](TheInsideJob/TheStash/) — read `TheStash.swift`, then [`TheBurglar/`](TheInsideJob/TheBurglar/).

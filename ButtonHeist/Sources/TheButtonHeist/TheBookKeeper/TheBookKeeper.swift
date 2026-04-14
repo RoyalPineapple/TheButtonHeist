@@ -367,7 +367,7 @@ public final class TheBookKeeper {
 
     public func logCommand(
         requestId: String,
-        command: String,
+        command: TheFence.Command,
         arguments: [String: Any]
     ) throws {
         guard case .active(var session) = phase else { return }
@@ -408,7 +408,7 @@ public final class TheBookKeeper {
     public func writeScreenshot(
         base64Data: String,
         requestId: String,
-        command: String,
+        command: TheFence.Command,
         metadata: ScreenshotMetadata
     ) throws -> URL {
         guard case .active(var session) = phase else {
@@ -420,7 +420,7 @@ public final class TheBookKeeper {
 
         let sequenceNumber = session.nextSequenceNumber
         session.nextSequenceNumber += 1
-        let filename = String(format: "%03d-%@.png", sequenceNumber, command)
+        let filename = String(format: "%03d-%@.png", sequenceNumber, command.rawValue)
         let subdirectory = session.directory.appendingPathComponent("screenshots")
         try FileManager.default.createDirectory(at: subdirectory, withIntermediateDirectories: true)
         let fileURL = subdirectory.appendingPathComponent(filename)
@@ -432,7 +432,7 @@ public final class TheBookKeeper {
             size: data.count,
             timestamp: Date(),
             requestId: requestId,
-            command: command,
+            command: command.rawValue,
             metadata: ["width": metadata.width, "height": metadata.height]
         )
         session.manifest.artifacts.append(entry)
@@ -445,7 +445,7 @@ public final class TheBookKeeper {
     public func writeRecording(
         base64Data: String,
         requestId: String,
-        command: String,
+        command: TheFence.Command,
         metadata: RecordingMetadata
     ) throws -> URL {
         guard case .active(var session) = phase else {
@@ -457,7 +457,7 @@ public final class TheBookKeeper {
 
         let sequenceNumber = session.nextSequenceNumber
         session.nextSequenceNumber += 1
-        let filename = String(format: "%03d-%@.mp4", sequenceNumber, command)
+        let filename = String(format: "%03d-%@.mp4", sequenceNumber, command.rawValue)
         let subdirectory = session.directory.appendingPathComponent("recordings")
         try FileManager.default.createDirectory(at: subdirectory, withIntermediateDirectories: true)
         let fileURL = subdirectory.appendingPathComponent(filename)
@@ -469,7 +469,7 @@ public final class TheBookKeeper {
             size: data.count,
             timestamp: Date(),
             requestId: requestId,
-            command: command,
+            command: command.rawValue,
             metadata: [
                 "width": Double(metadata.width),
                 "height": Double(metadata.height),
@@ -587,22 +587,22 @@ public final class TheBookKeeper {
     }
 
     /// Commands that should not appear in heist playbacks.
-    private static let excludedHeistCommands: Set<String> = [
-        "help", "status", "quit", "exit",
-        "list_devices", "get_interface", "get_screen",
-        "get_pasteboard",
-        "get_session_state", "connect", "list_targets",
-        "get_session_log", "archive_session",
-        "start_recording", "stop_recording",
-        "run_batch",
-        "start_heist", "stop_heist", "play_heist",
+    private static let excludedHeistCommands: Set<TheFence.Command> = [
+        .help, .status, .quit, .exit,
+        .listDevices, .getInterface, .getScreen,
+        .getPasteboard,
+        .getSessionState, .connect, .listTargets,
+        .getSessionLog, .archiveSession,
+        .startRecording, .stopRecording,
+        .runBatch,
+        .startHeist, .stopHeist, .playHeist,
     ]
 
     /// Record a successfully executed command for heist playback.
     /// Only records commands that succeeded — failed actions are skipped.
     /// - Parameter succeeded: Whether the command succeeded. Pass false to skip recording.
     public func recordHeistEvidence(
-        command: String,
+        command: TheFence.Command,
         args: [String: Any],
         succeeded: Bool = true,
         interfaceElements: [HeistElement]? = nil
@@ -616,7 +616,7 @@ public final class TheBookKeeper {
 
         let allElements = interfaceElements ?? Array(recording.interfaceCache.values)
         let step = buildStep(
-            command: command,
+            command: command.rawValue,
             args: args,
             cache: allElements,
             interfaceCache: recording.interfaceCache
@@ -631,7 +631,7 @@ public final class TheBookKeeper {
             lineData.append(contentsOf: [0x0A])
             recording.fileHandle.write(lineData)
         } catch {
-            logger.error("Failed to encode heist evidence for \(command): \(error.localizedDescription)")
+            logger.error("Failed to encode heist evidence for \(command.rawValue): \(error.localizedDescription)")
             return
         }
         recording.evidenceCount += 1

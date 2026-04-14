@@ -4,53 +4,48 @@ iOS server framework. Embeds in apps to expose the accessibility hierarchy over 
 
 ## Reading order
 
-Start with **`TheInsideJob.swift`** — the `@MainActor public final class` singleton. Three coexisting state machines:
+Start with **`TheInsideJob.swift`** — the `@MainActor public final class` singleton. This is the job itself: it assembles the crew, manages the server lifecycle, and provides the public API (`start()`, `stop()`, `notifyChange()`, `startPolling()`). It does not handle messages, encode responses, or touch the accessibility tree — those are delegated to the crew.
 
+Two state machines:
 - `ServerPhase`: `.stopped` / `.running(transport:)` / `.suspended` / `.resuming(task:)`
 - `PollingPhase`: `.disabled` / `.active(task:, interval:)` / `.paused(interval:)` — interval preserved across suspend/resume
-- `RecordingPhase`: `.idle` / `.recording(stakeout:)`
 
-**`start()`** creates a `TLSIdentity` (Keychain-persisted ECDSA cert, falls back to ephemeral), creates `ServerTransport`, calls `wireTransport(_:)` to install callbacks, starts listening, advertises via Bonjour, starts the pulse and keyboard observation.
+**`start()`** creates a TLS identity, creates ServerTransport, tells TheGetaway to wire the transport, starts listening, advertises via Bonjour, starts the pulse and keyboard observation.
 
-**`wireTransport(_:)`** connects TheMuscle (auth) to ServerTransport (networking) via five closures. Transport callbacks route to `handleClientMessage` (authenticated) or `muscle.handleUnauthenticatedMessage` (pre-auth).
+**`suspend()`** / **`resume()`** handle app backgrounding — tears down everything, recreates on foreground.
 
-**`handleClientMessage`** is the two-level dispatch:
-- Outer switch: protocol messages (ping, subscribe, status) and observation (requestInterface, requestScreen, waitForIdle/Change)
-- Inner switch (non-observers only): recording start/stop, or `brains.executeCommand(message)` for all action commands
-- Before dispatching actions: `computeBackgroundDelta()` checks if the tree changed while the agent was thinking — if the screen changed and the action targets a heistId, returns a synthetic "screen changed" result instead
-
-**`suspend()`** / **`resume()`** handle app backgrounding — tears down transport/pulse/cache, recreates everything on foreground with a fresh TLS identity.
+**`AutoStart.swift`** is the `@_cdecl` bridge called by ThePlant's ObjC `+load`. Reads config from env vars / Info.plist, dispatches `TheInsideJob.configure()` + `start()` + `startPolling()`.
 
 ## Layout
 
-| Folder | Start reading | What it does |
-|--------|--------------|--------------|
-| `TheBrains/` | `TheBrains+Dispatch.swift` | Command execution, scroll orchestration, exploration, delta cycle |
-| `TheStash/` | `TheStash.swift` | Element registry, target resolution, wire conversion |
-| `TheBurglar/` | `TheBurglar.swift` | Accessibility tree parsing (private to TheStash) |
-| `TheSafecracker/` | `SyntheticTouch.swift` | Touch injection, text input, gesture synthesis |
-| `TheTripwire/` | `TheTripwire.swift` | 10 Hz UI pulse, settle detection, VC tracking |
-| `TheStakeout/` | `TheStakeout.swift` | H.264/MP4 screen recording |
-| `Server/` | `SimpleSocketServer.swift` | TLS listener, auth, connection scope |
-| `Lifecycle/` | `Pulse.swift` | Hierarchy broadcast, wait handlers, auto-start |
-| `Support/` | `CancellableSleep.swift` | Shared utility |
+| Folder | Crew member | Role |
+|--------|-------------|------|
+| `TheGetaway/` | TheGetaway | Message dispatch, encode/decode, send/broadcast, transport wiring, recording |
+| `TheBrains/` | TheBrains | Action execution, scroll orchestration, exploration, delta cycle, wait handlers |
+| `TheStash/` | TheStash | Element registry, target resolution, wire conversion |
+| `TheBurglar/` | TheBurglar | Accessibility tree parsing (private to TheStash) |
+| `TheSafecracker/` | TheSafecracker | Touch injection, text input, gesture synthesis (includes TheFingerprints) |
+| `TheTripwire/` | TheTripwire | 10 Hz UI pulse, settle detection, VC tracking |
+| `TheStakeout/` | TheStakeout | H.264/MP4 screen recording |
+| `Server/` | TheMuscle + transport | TLS server, auth, connection scope |
+| `Support/` | — | CancellableSleep |
 
-Root files: `AccessibilityHierarchy+TreeOperations.swift` (catamorphism `folded()`, context-propagating `compactMap`, fingerprinting) and `AccessibilityHierarchy+Reconciliation.swift` (scroll-aware page stitching, content-space fingerprints). These are extensions on the parser library's types, used across TheBurglar, TheStash, and TheBrains.
+Root files: `TheInsideJob.swift` (singleton), `AutoStart.swift` (ObjC bridge), `AccessibilityHierarchy+*.swift` (shared parser extensions used by TheBurglar, TheStash, and TheBrains).
 
-## Ownership tree
+## Ownership
 
 ```
-TheInsideJob
-├── TheTripwire (owned, injected into TheBrains/TheStash/TheBurglar)
-├── TheMuscle (owned, closure-wired to ServerTransport)
-├── RecordingPhase → TheStakeout (on-demand, weak back-ref in TheStash)
-└── TheBrains (owned — TheInsideJob's only path to the element world)
-    ├── TheSafecracker (owned)
-    │   └── TheFingerprints (lazy)
-    └── TheStash (owned)
-        └── TheBurglar (private)
+TheInsideJob (the job — singleton, lifecycle, crew assembly)
+├── TheGetaway (comms — dispatch, encode, broadcast, transport wiring)
+├── TheTripwire (pulse — settle detection, injected into others)
+├── TheMuscle (auth — session locking, closure-wired to transport via TheGetaway)
+└── TheBrains (actions — execution, scroll, explore, delta, wait handlers)
+    ├── TheSafecracker (gestures — touch injection, text input)
+    │   └── TheFingerprints (visual overlay)
+    └── TheStash (registry — elements, resolution, wire conversion)
+        └── TheBurglar (parsing — accessibility tree read, private to TheStash)
 ```
 
-TheInsideJob talks to TheBrains — never directly to TheStash, TheBurglar, or TheSafecracker.
+TheInsideJob assembles and manages. TheGetaway drives comms. TheBrains drives accessibility. TheInsideJob never touches TheStash, TheBurglar, or TheSafecracker directly.
 
-> Full dossiers: [`docs/dossiers/`](../../../docs/dossiers/) — start with `07-THEINSIDEJOB.md`
+> Full dossiers: [`docs/dossiers/`](../../../docs/dossiers/)

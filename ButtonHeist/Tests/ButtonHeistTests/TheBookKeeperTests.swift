@@ -277,7 +277,7 @@ final class TheBookKeeperTests: XCTestCase {
         let fakePngData = String(repeating: "A", count: 5000)
         try bookKeeper.logCommand(
             requestId: "r1",
-            command: "get_screen",
+            command: .getScreen,
             arguments: ["command": "get_screen", "pngData": fakePngData]
         )
         guard case .active(let session) = bookKeeper.phase else {
