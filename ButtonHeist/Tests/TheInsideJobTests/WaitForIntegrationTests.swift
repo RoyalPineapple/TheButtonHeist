@@ -207,11 +207,11 @@ final class WaitForIntegrationTests: XCTestCase {
         defer { label.removeFromSuperview() }
 
         // Refresh the tree so heistIds are assigned
-        guard let snapshot = insideJob.brains.refreshAndSnapshot() else {
+        guard insideJob.brains.refresh() != nil else {
             XCTFail("Could not refresh accessibility tree")
             return
         }
-        let elements = snapshot.snapshot
+        let elements = insideJob.brains.stash.selectElements()
 
         // Find the heistId for our element
         let heistId = elements.first(where: {

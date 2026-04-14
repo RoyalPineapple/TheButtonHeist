@@ -279,11 +279,123 @@ final class TheBrains {
     /// Screen ID from the last response, for diagnostic messages.
     var lastSentScreenId: String? { lastSentState?.screenId }
 
-    // MARK: - Wait-for-Change Support
+    // MARK: - Wait For Idle
+
+    /// Run the wait-for-idle pipeline: refresh → before → settle → delta → result.
+    func executeWaitForIdle(timeout: TimeInterval) async -> ActionResult {
+        refresh()
+        let before = captureBeforeState()
+        let settled = await tripwire.waitForAllClear(timeout: timeout)
+
+        return await actionResultWithDelta(
+            success: true,
+            method: .waitForIdle,
+            message: settled ? "UI idle" : "Timed out after \(timeout)s, UI may still be animating",
+            before: before
+        )
+    }
+
+    // MARK: - Wait For Change
+
+    /// Run the wait-for-change pipeline: fast path (already changed) or slow path (poll loop).
+    func executeWaitForChange(timeout: TimeInterval, expectation: ActionExpectation?) async -> ActionResult {
+        let start = CFAbsoluteTimeGetCurrent()
+
+        // Capture baseline BEFORE refresh — this corresponds to the tree state
+        // at the time of the last response, giving us a proper before-state for
+        // element-level diffs on both the fast and slow paths.
+        let before = captureBeforeState()
+
+        guard let initial = refreshAndSnapshot() else {
+            var builder = ActionResultBuilder(method: .waitForChange, screenName: stash.lastScreenName, screenId: stash.lastScreenId)
+            builder.message = "Could not access root view"
+            return builder.failure(errorKind: .actionFailed)
+        }
+
+        // Fast path: tree already changed since the last response
+        let lastHash = lastSentState?.treeHash ?? 0
+        if lastHash != 0, initial.wireHash != lastHash {
+            let delta = computeDelta(before: before, afterSnapshot: initial.snapshot)
+            if let result = evaluateWaitForChange(
+                delta: delta, afterSnapshot: initial.snapshot, expectation: expectation,
+                start: start, round: 0, message: "already changed (0.0s)"
+            ) {
+                recordSentState(treeHash: initial.wireHash)
+                return result
+            }
+        }
+
+        // Slow path: poll until a change lands or we time out
+        let deadline = CFAbsoluteTimeGetCurrent() + timeout
+        var beforeWireHash = initial.wireHash
+        var round = 0
+
+        while CFAbsoluteTimeGetCurrent() < deadline {
+            let remaining = deadline - CFAbsoluteTimeGetCurrent()
+            guard remaining > 0 else { break }
+
+            _ = await tripwire.waitForAllClear(timeout: min(remaining, 1.0))
+            guard let current = refreshAndSnapshot() else { continue }
+            round += 1
+
+            if current.wireHash == beforeWireHash { continue }
+
+            let delta = computeDelta(before: before, afterSnapshot: current.snapshot)
+            let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
+
+            if let result = evaluateWaitForChange(
+                delta: delta, afterSnapshot: current.snapshot, expectation: expectation,
+                start: start, round: round, message: "changed after \(elapsed)s (\(round) rounds)"
+            ) {
+                recordSentState(treeHash: current.wireHash)
+                return result
+            }
+
+            beforeWireHash = current.wireHash
+            insideJobLogger.debug("wait_for_change round \(round): \(delta.kind.rawValue), expectation not yet met")
+        }
+
+        // Timeout
+        let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
+        let afterSnapshot = refreshAndSnapshot()?.snapshot ?? []
+        let delta = computeDelta(before: before, afterSnapshot: afterSnapshot)
+        var builder = ActionResultBuilder(method: .waitForChange, snapshot: afterSnapshot)
+        builder.message = expectation != nil
+            ? "timed out after \(elapsed)s — expectation not met"
+            : "timed out after \(elapsed)s — no change detected"
+        builder.interfaceDelta = delta
+        return builder.failure(errorKind: .timeout)
+    }
+
+    /// Evaluate whether a wait-for-change result meets the expectation.
+    /// Returns nil if the expectation is not met (caller should continue polling).
+    private func evaluateWaitForChange(
+        delta: InterfaceDelta,
+        afterSnapshot: [TheStash.ScreenElement],
+        expectation: ActionExpectation?,
+        start: CFAbsoluteTime,
+        round: Int,
+        message: String
+    ) -> ActionResult? {
+        var builder = ActionResultBuilder(method: .waitForChange, snapshot: afterSnapshot)
+        builder.interfaceDelta = delta
+
+        guard let expectation else {
+            builder.message = message
+            return builder.success()
+        }
+
+        guard expectation.validate(against: builder.success()).met else { return nil }
+
+        let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
+        builder.message = "expectation met after \(elapsed)s (\(round) rounds)"
+        return builder.success()
+    }
+
+    // MARK: - Private Helpers
 
     /// Refresh, snapshot, and compute wire hash in one call.
-    /// Returns nil if refresh fails.
-    func refreshAndSnapshot() -> (snapshot: [TheStash.ScreenElement], wireHash: Int)? {
+    private func refreshAndSnapshot() -> (snapshot: [TheStash.ScreenElement], wireHash: Int)? {
         guard refresh() != nil else { return nil }
         let snapshot = stash.selectElements()
         let wireHash = stash.toWire(snapshot).hashValue
@@ -291,8 +403,7 @@ final class TheBrains {
     }
 
     /// Compute delta between a before-state and an after-snapshot.
-    /// Falls back to `fallbackDelta` when no before-state exists.
-    func computeDelta(
+    private func computeDelta(
         before: BeforeState,
         afterSnapshot: [TheStash.ScreenElement],
         fallbackDelta: InterfaceDelta? = nil
