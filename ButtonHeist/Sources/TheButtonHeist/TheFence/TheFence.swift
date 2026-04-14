@@ -299,10 +299,15 @@ public final class TheFence {
 
         // Record the command for heist playback (skip during playback; no-ops when not recording)
         if case .idle = playbackPhase {
+            let responseSucceeded: Bool = {
+                if case .error = response { return false }
+                if let actionResult = response.actionResult, !actionResult.success { return false }
+                return true
+            }()
             bookKeeper.recordHeistEvidence(
                 command: command,
                 args: request,
-                response: response,
+                succeeded: responseSucceeded,
                 interfaceElements: lastInterfaceCache.isEmpty ? nil : Array(lastInterfaceCache.values)
             )
         }

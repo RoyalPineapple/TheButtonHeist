@@ -219,12 +219,11 @@ final class BookKeeperHeistTests: XCTestCase {
         bookKeeper.recordHeistEvidence(
             command: .activate,
             args: ["command": "activate", "label": "Missing"],
-            response: .error("element not found")
+            succeeded: false
         )
         bookKeeper.recordHeistEvidence(
             command: .activate,
-            args: ["command": "activate", "label": "Go"],
-            response: .ok(message: "activated")
+            args: ["command": "activate", "label": "Go"]
         )
 
         let heist = try bookKeeper.stopHeistRecording()
@@ -238,23 +237,15 @@ final class BookKeeperHeistTests: XCTestCase {
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
 
-        let failedResult = ActionResult(
-            success: false,
-            method: .activate,
-            message: "element not found",
-            errorKind: .elementNotFound
-        )
         bookKeeper.recordHeistEvidence(
             command: .activate,
             args: ["command": "activate", "label": "Missing"],
-            response: .action(result: failedResult)
+            succeeded: false
         )
 
-        let successResult = ActionResult(success: true, method: .activate)
         bookKeeper.recordHeistEvidence(
             command: .activate,
-            args: ["command": "activate", "label": "Go"],
-            response: .action(result: successResult)
+            args: ["command": "activate", "label": "Go"]
         )
 
         let heist = try bookKeeper.stopHeistRecording()
@@ -268,11 +259,9 @@ final class BookKeeperHeistTests: XCTestCase {
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
 
-        let result = ActionResult(success: true, method: .activate)
         bookKeeper.recordHeistEvidence(
             command: .activate,
-            args: ["command": "activate", "label": "Go"],
-            response: .action(result: result)
+            args: ["command": "activate", "label": "Go"]
         )
 
         let heist = try bookKeeper.stopHeistRecording()

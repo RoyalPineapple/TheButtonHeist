@@ -18,11 +18,12 @@ Button Heist is a remote iOS UI automation system structured as a heist crew. An
 | [TheSafecracker](04-THESAFECRACKER.md) | The Specialist | Touch injection, text input, gesture synthesis |
 | [TheStakeout](05-THESTAKEOUT.md) | The Lookout | Screen recording, video encoding |
 | [TheMuscle](06-THEMUSCLE.md) | The Bouncer | Authentication, session locking, on-device approval |
-| [TheInsideJob](07-THEINSIDEJOB.md) | The Inside Operative | iOS server coordinator, message dispatch, UI polling, TLS transport |
+| [TheInsideJob](07-THEINSIDEJOB.md) | The Job | Singleton coordinator, crew assembly, server lifecycle |
+| [TheGetaway](17-THEGETAWAY.md) | The Getaway Driver | Message dispatch, encode/decode, broadcast, transport wiring, recording |
 | [ThePlant](08-THEPLANT.md) | The Advance Man | Zero-config auto-start via ObjC +load |
 | [TheStash](13-THESTASH.md) | The Score Handler | Element registry, target resolution, wire conversion, screen capture |
 | [TheBurglar](13a-THEBURGLAR.md) | The Acquisition Specialist | Hierarchy parsing, parse/apply pipeline, topology detection |
-| [TheBrains](13b-THEBRAINS.md) | The Mastermind | Action execution, scroll orchestration, delta cycle, exploration |
+| [TheBrains](13b-THEBRAINS.md) | The Mastermind | Action execution, scroll orchestration, delta cycle, wait handlers, exploration |
 | [TheTripwire](14-THETRIPWIRE.md) | The Early Warning System | Animation detection, VC identity, presentation layer fingerprinting |
 
 ### Cross-Cutting
@@ -62,7 +63,7 @@ graph TD
     TheInsideJob --> TestApp
 ```
 
-> **Note:** TheStash, TheBurglar, TheBrains, TheTripwire, TheSafecracker, TheMuscle, TheStakeout, TheFingerprints, and ThePlant are all source groups compiled into the `TheInsideJob` framework target — they are not separate modules. They have separate dossiers because they are architecturally distinct subsystems with clear responsibilities.
+> **Note:** TheGetaway, TheBrains, TheStash, TheBurglar, TheTripwire, TheSafecracker, TheMuscle, TheStakeout, TheFingerprints, and ThePlant are all source groups compiled into the `TheInsideJob` framework target — they are not separate modules. They have separate dossiers because they are architecturally distinct subsystems with clear responsibilities. Each has its own folder under `Sources/TheInsideJob/` with a README walking through the code.
 
 ## End-to-End Data Flow
 
@@ -73,15 +74,15 @@ sequenceDiagram
     participant TH as TheHandoff
     participant DC as DeviceConnection
     participant SS as SimpleSocketServer
-    participant IJ as TheInsideJob
+    participant GW as TheGetaway
     participant TM2 as TheMuscle
-    participant TS as TheSafecracker
+    participant TB as TheBrains
 
     CLI->>TF: execute({"command":"activate","identifier":"btn"})
     TF->>TH: connectWithDiscovery()
     TH->>DC: connect(to: device)
     DC->>SS: TLS connect (cert fingerprint pinned via Bonjour TXT)
-    SS->>TM2: onClientConnected
+    SS->>TM2: onClientConnected (via TheGetaway wiring)
     TM2-->>DC: serverHello
     DC->>SS: clientHello
     TM2-->>DC: authRequired
@@ -89,14 +90,12 @@ sequenceDiagram
     TM2-->>DC: info(ServerInfo)
     TH->>DC: send(.activate(target))
     DC->>SS: JSON + newline
-    SS->>IJ: handleClientMessage
-    IJ->>IJ: brains.refresh()
-    IJ->>IJ: brains.captureBeforeState() (before)
-    IJ->>IJ: brains.executeCommand(.activate(target))
-    Note over IJ: TheBrains coordinates TheStash (resolve),<br/>TheSafecracker (gesture fallback)
-    IJ-->>IJ: InteractionResult
-    IJ->>IJ: computeDelta(before, after)
-    IJ-->>DC: actionResult(delta)
+    SS->>GW: handleClientMessage
+    GW->>TB: executeCommand(.activate(target))
+    Note over TB: TheBrains coordinates TheStash (resolve),<br/>TheSafecracker (gesture fallback),<br/>TheTripwire (settle), delta cycle
+    TB-->>GW: ActionResult
+    GW->>GW: recordAndBroadcast
+    GW-->>DC: actionResult(delta)
     DC-->>TH: onActionResult
     TH-->>TF: callback → continuation resume
     TF-->>CLI: response JSON

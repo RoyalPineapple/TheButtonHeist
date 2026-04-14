@@ -600,10 +600,11 @@ public final class TheBookKeeper {
 
     /// Record a successfully executed command for heist playback.
     /// Only records commands that succeeded — failed actions are skipped.
+    /// - Parameter succeeded: Whether the command succeeded. Pass false to skip recording.
     public func recordHeistEvidence(
         command: TheFence.Command,
         args: [String: Any],
-        response: FenceResponse? = nil,
+        succeeded: Bool = true,
         interfaceElements: [HeistElement]? = nil
     ) {
         guard case .active(var session) = phase,
@@ -611,10 +612,7 @@ public final class TheBookKeeper {
         guard !Self.excludedHeistCommands.contains(command) else { return }
 
         // Skip failed actions — only record successful outcomes
-        if let response {
-            if case .error = response { return }
-            if let actionResult = response.actionResult, !actionResult.success { return }
-        }
+        guard succeeded else { return }
 
         let allElements = interfaceElements ?? Array(recording.interfaceCache.values)
         let step = buildStep(
