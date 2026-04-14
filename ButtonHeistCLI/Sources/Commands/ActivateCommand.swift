@@ -41,24 +41,12 @@ struct ActivateCommand: AsyncParsableCommand {
     mutating func run() async throws {
         _ = try element.requireTarget()
 
-        let command: String
-        var request: [String: Any]
+        let parsedAction = action.map { ActivateAction(parsing: $0) }
+        let fenceCommand = parsedAction?.fenceCommand ?? .activate
+        var request: [String: Any] = ["command": fenceCommand.rawValue]
 
-        if let action {
-            switch action.lowercased() {
-            case "increment":
-                command = TheFence.Command.increment.rawValue
-                request = ["command": command]
-            case "decrement":
-                command = TheFence.Command.decrement.rawValue
-                request = ["command": command]
-            default:
-                command = TheFence.Command.performCustomAction.rawValue
-                request = ["command": command, "action": action]
-            }
-        } else {
-            command = TheFence.Command.activate.rawValue
-            request = ["command": command]
+        if case .custom(let name) = parsedAction {
+            request["action"] = name
         }
 
         try element.applyTo(&request)
@@ -70,5 +58,29 @@ struct ActivateCommand: AsyncParsableCommand {
             request: request,
             statusMessage: action.map { "Sending \($0)..." } ?? "Activating element..."
         )
+    }
+}
+
+// MARK: - ActivateAction
+
+private enum ActivateAction {
+    case increment
+    case decrement
+    case custom(String)
+
+    init(parsing string: String) {
+        switch TheFence.Command(rawValue: string.lowercased()) {
+        case .increment: self = .increment
+        case .decrement: self = .decrement
+        default: self = .custom(string)
+        }
+    }
+
+    var fenceCommand: TheFence.Command {
+        switch self {
+        case .increment: .increment
+        case .decrement: .decrement
+        case .custom: .performCustomAction
+        }
     }
 }

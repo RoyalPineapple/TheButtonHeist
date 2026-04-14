@@ -43,7 +43,7 @@ struct ButtonHeistMCPServer {
 
         1. **See** — `get_interface` returns every visible element with a heistId, label, \
         value, traits, and actions.
-        2. **Act** — `activate`, `type_text`, `scroll`, `swipe` — target by heistId or matcher. \
+        2. **Act** — `activate`, `type_text`, `scroll`, `gesture` — target by heistId or matcher. \
         Always attach `expect` when you know what should change.
         3. **Read the response** — every response tells you two things: what your action did \
         (`interfaceDelta`) and what changed while you were thinking (`[background: ...]`). \

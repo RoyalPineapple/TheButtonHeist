@@ -2,14 +2,14 @@
 
 > **Module:** `ButtonHeistMCP/Sources/`
 > **Platform:** macOS 14.0+
-> **Role:** Exposes Button Heist as 28 typed MCP tools for AI agents
+> **Role:** Exposes Button Heist as 23 typed MCP tools for AI agents
 
 ## Responsibilities
 
 This is the clean handshake between an AI agent and the rest of the crew:
 
-1. **28 typed tools** backed by `TheFence`
-2. **Tool-to-command routing** for both direct (27) and grouped (1) tools
+1. **23 typed tools** backed by `TheFence`
+2. **Tool-to-command routing** for direct, grouped, and hybrid tools
 3. **Response adaptation** for MCP clients: screenshots inline as MCP image content, video summarized
 4. **Idle disconnects** with automatic reconnect on the next tool call
 5. **File-based target configuration** via `TargetConfigResolver` (`.buttonheist.json` or `~/.config/buttonheist/config.json`)
@@ -20,7 +20,7 @@ This is the clean handshake between an AI agent and the rest of the crew:
 | File | Contents |
 |------|----------|
 | `main.swift` | `ButtonHeistMCPServer` entry point, `setUp()`, `handleToolCall`, `renderResponse` |
-| `ToolDefinitions.swift` | 28 tool schemas with `expectProperty` shared across action tools |
+| `ToolDefinitions.swift` | 23 tool schemas with `expectProperty` shared across action tools |
 
 `IdleMonitor` lives in the ButtonHeist framework (`ButtonHeist/Sources/TheButtonHeist/IdleMonitor.swift`), not in the MCP package.
 `TargetConfigResolver` lives in the ButtonHeist framework (`TargetConfig.swift`), not in the MCP package.
@@ -33,7 +33,7 @@ graph TD
         Main["main.swift — ButtonHeistMCPServer"]
         Server["swift-sdk Server"]
         Transport["StdioTransport"]
-        Tools["ToolDefinitions.swift — 28 tool schemas"]
+        Tools["ToolDefinitions.swift — 23 tool schemas"]
         Handler["handleToolCall — decode → route → execute → render"]
         Idle["IdleMonitor — fence.stop() after timeout"]
         Config["TargetConfigResolver — .buttonheist.json / ~/.config/..."]
@@ -55,43 +55,42 @@ graph TD
     Idle --> TheFence
 ```
 
-## Full Tool List (28 tools)
+## Full Tool List (23 tools)
 
 | # | Tool Name | Type | Key Parameters |
 |---|-----------|------|---------------|
 | 1 | `get_interface` | direct | `detail` (`"summary"`/`"full"`), `elements` (heistId filter array) |
 | 2 | `activate` | direct | element target, optional `action` for increment/decrement/custom |
 | 3 | `type_text` | direct | `text`, `clearFirst`, `deleteCount` |
-| 4 | `swipe` | direct | element target, `direction`, `start`/`end` (UnitPoint), `duration` |
-| 5 | `get_screen` | direct | `output` (file path, optional) |
-| 6 | `wait_for_idle` | direct | `timeout` |
-| 7 | `wait_for` | direct | element match fields, `absent`, `timeout` |
-| 8 | `start_recording` | direct | `fps`, `scale`, `inactivity_timeout`, `max_duration` |
-| 9 | `stop_recording` | direct | `output` (file path) |
-| 10 | `list_devices` | direct | (no params) |
-| 11 | `gesture` | grouped | `type` enum → underlying command |
-| 12 | `edit_action` | direct | `action` (copy/paste/cut/select/selectAll) |
-| 13 | `dismiss_keyboard` | direct | (no params beyond `expect`) |
-| 14 | `set_pasteboard` | direct | `text` |
-| 15 | `get_pasteboard` | direct | (no params) |
-| 16 | `scroll` | direct | element target, `direction` |
-| 17 | `scroll_to_visible` | direct | match fields, `direction` |
-| 18 | `scroll_to_edge` | direct | element target, `edge` |
-| 19 | `run_batch` | direct | `steps` array, `policy` |
-| 20 | `get_session_state` | direct | (no params) |
-| 21 | `connect` | direct | `target`, `device`, `token` |
-| 22 | `list_targets` | direct | (no params) |
-| 23 | `get_session_log` | direct | (no params) |
-| 24 | `archive_session` | direct | `delete_source` |
-| 25 | `start_heist` | direct | `name` |
-| 26 | `stop_heist` | direct | (no params) |
-| 27 | `play_heist` | direct | `name`, `dry_run` |
-| 28 | `element_search` | direct | match fields, `direction` |
+| 4 | `get_screen` | direct | `output` (file path, optional) |
+| 5 | `wait_for_change` | direct | `expect`, `timeout` |
+| 6 | `wait_for` | direct | element match fields, `absent`, `timeout` |
+| 7 | `start_recording` | direct | `fps`, `scale`, `inactivity_timeout`, `max_duration` |
+| 8 | `stop_recording` | direct | `output` (file path) |
+| 9 | `list_devices` | direct | (no params) |
+| 10 | `gesture` | grouped | `type` enum → underlying command (swipe, one_finger_tap, drag, long_press, pinch, rotate, two_finger_tap, draw_path, draw_bezier) |
+| 11 | `edit_action` | hybrid | `action`: copy/paste/cut/select/selectAll, or `"dismiss"` → routes to dismiss_keyboard |
+| 12 | `set_pasteboard` | direct | `text` |
+| 13 | `get_pasteboard` | direct | (no params) |
+| 14 | `scroll` | hybrid | `mode`: page (default), to_visible, search, to_edge; `direction`, `edge` |
+| 15 | `run_batch` | direct | `steps` array, `policy` |
+| 16 | `get_session_state` | direct | (no params) |
+| 17 | `connect` | direct | `target`, `device`, `token` |
+| 18 | `list_targets` | direct | (no params) |
+| 19 | `get_session_log` | direct | (no params) |
+| 20 | `archive_session` | direct | `delete_source` |
+| 21 | `start_heist` | direct | `name` |
+| 22 | `stop_heist` | direct | (no params) |
+| 23 | `play_heist` | direct | `name` |
 
-### Gesture subtypes
+### Grouped and hybrid tools
 
-`gesture` groups these commands under a `type` discriminator:
-`one_finger_tap`, `drag`, `long_press`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`
+`gesture` groups 9 gesture commands under a `type` discriminator:
+`swipe`, `one_finger_tap`, `drag`, `long_press`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`
+
+`scroll` uses a `mode` discriminator: `page` (default — scrolls one page), `to_visible` (jump to known element), `search` (scroll all containers looking for match), `to_edge` (scroll to edge).
+
+`edit_action` routes `"dismiss"` to the `dismiss_keyboard` TheFence command; all other actions go to the `edit_action` command.
 
 ## Key Tool Schemas
 
@@ -100,16 +99,6 @@ graph TD
 - `full`: `true` to explore the full screen including off-screen content in scroll views (returns all elements, restores scroll positions)
 - `elements`: optional `[String]` — heistIds to filter; omit for full tree
 - `readOnlyHint: true`, `idempotentHint: true`
-
-### `swipe`
-- Element targeting: `heistId` / `identifier` / `label` / `value` / `traits` / `excludeTraits`
-- `direction`: `up`, `down`, `left`, `right`
-- `start` / `end`: `{x: number, y: number}` — UnitPoint relative to element frame where `(0,0)` = top-left, `(1,1)` = bottom-right; values outside 0–1 extend beyond frame
-- `duration`: seconds
-
-### `scroll_to_visible`
-- Match fields: `heistId`, `identifier`, `label`, `value`, `traits`, `excludeTraits` — all specified fields must match (AND logic)
-- `direction`: `"down"` (default), `"up"`, `"left"`, `"right"`
 
 ### Shared `expect` property
 Used on all action tools. Accepts either:
@@ -123,18 +112,24 @@ flowchart TD
     Call["MCP CallTool"] --> Decode["decodeArguments → [String: Any]"]
     Decode --> Switch{"tool name?"}
 
-    Switch -->|"27 direct tools"| Direct["request['command'] = toolName"]
+    Switch -->|"direct tools"| Direct["request['command'] = toolName"]
     Switch -->|"gesture"| Grouped["request['command'] = request.removeValue('type')"]
+    Switch -->|"scroll"| ScrollRoute["extract mode → map to TheFence command"]
+    Switch -->|"edit_action"| EditRoute["'dismiss' → dismiss_keyboard, else → edit_action"]
 
     Direct --> Execute["fence.execute(request:)"]
     Grouped --> Execute
+    ScrollRoute --> Execute
+    EditRoute --> Execute
     Execute --> Reset["idleMonitor.resetTimer()"]
     Reset --> Render["renderResponse → CallTool.Result"]
 ```
 
 1. Direct tools map 1:1 to `request["command"] = toolName`
-2. Grouped tools extract `type` and use that as the underlying Fence command
-3. All requests end at `fence.execute(request:)`
+2. `gesture` extracts `type` and uses that as the underlying Fence command
+3. `scroll` extracts `mode` and maps to the corresponding Fence command (page → scroll, to_visible → scroll_to_visible, search → element_search, to_edge → scroll_to_edge)
+4. `edit_action` intercepts `"dismiss"` and routes to `dismiss_keyboard`; other actions pass through
+5. All requests end at `fence.execute(request:)`
 
 ## Response Behavior
 

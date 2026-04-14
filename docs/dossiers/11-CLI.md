@@ -24,18 +24,18 @@ graph TD
         Format["OutputFormat - human / json / compact (.auto is computed)"]
 
         subgraph Commands["Subcommands"]
-            List["list"]
-            Activate["activate"]
-            Action["action &lt;name&gt; - smart dispatch: increment/decrement/edit/dismiss/custom"]
+            ListDevices["list_devices"]
+            Activate["activate --action increment/decrement/custom"]
+            EditAction["edit_action copy/paste/cut/select/selectAll"]
+            DismissKeyboard["dismiss_keyboard"]
             Scroll["scroll / scroll_to_visible / scroll_to_edge"]
-            Swipe["swipe (top-level)"]
             Touch["touch - one_finger_tap / long_press / swipe / drag / pinch / rotate / two_finger_tap"]
-            TypeCmd["type"]
-            Screenshot["screenshot"]
+            TypeCmd["type_text"]
+            GetScreen["get_screen"]
             GetInterface["get_interface"]
-            WaitForIdle["wait_for_idle"]
+            WaitForChange["wait_for_change"]
             WaitFor["wait_for"]
-            Record["record / stop_recording"]
+            Record["start_recording / stop_recording"]
             Pasteboard["set_pasteboard / get_pasteboard"]
             Session["session - ReplSession"]
         end
@@ -46,16 +46,16 @@ graph TD
         end
     end
 
-    List --> Direct
+    ListDevices --> Direct
     Activate --> Direct
-    Action --> Direct
+    EditAction --> Direct
+    DismissKeyboard --> Direct
     Scroll --> Direct
-    Swipe --> Direct
     Touch --> Direct
     TypeCmd --> Direct
-    Screenshot --> Direct
+    GetScreen --> Direct
     GetInterface --> Direct
-    WaitForIdle --> Direct
+    WaitForChange --> Direct
     WaitFor --> Direct
     Record --> Direct
     Pasteboard --> Direct
@@ -92,10 +92,12 @@ The CLI is designed to mirror the MCP tool surface. Key mappings:
 
 | MCP Tool | CLI Command | Notes |
 |----------|-------------|-------|
-| `activate` | `activate` | Direct match |
-| `swipe` | `swipe` | Top-level in both |
-| `gesture` | `touch` | Grouped gestures |
-| `activate` (with `action` param) | `action <name>` | Positional smart dispatch: built-ins recognized, default is custom action |
+| `activate` | `activate` | Direct match; `--action` for increment/decrement/custom |
+| `gesture` | `touch` | Grouped gestures (swipe, one_finger_tap, drag, etc.) |
+| `scroll` (mode: page) | `scroll` | Direct match |
+| `scroll` (mode: to_visible/search/to_edge) | `scroll_to_visible` / `scroll_to_edge` | CLI keeps separate commands |
+| `edit_action` | `edit_action` | Direct match for copy/paste/cut/select/selectAll |
+| `edit_action` (action: dismiss) | `dismiss_keyboard` | CLI has separate command |
 | `wait_for` | `wait_for` | Direct match; matcher-only (no --heist-id) |
 | `run_batch`, `get_session_state` | `session` (REPL only) | Available via JSON input in session mode |
 | `connect` | `session` (REPL only) | Switch connection target at runtime |
