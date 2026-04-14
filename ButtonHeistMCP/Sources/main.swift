@@ -205,7 +205,8 @@ struct ButtonHeistMCPServer {
                 case "to_edge":
                     request["command"] = "scroll_to_edge"
                 default:
-                    return .init(content: [.text(text: "Unknown scroll mode: \(mode). Valid: page, to_visible, search, to_edge", annotations: nil, _meta: nil)], isError: true)
+                    let message = "Unknown scroll mode: \(mode). Valid: page, to_visible, search, to_edge"
+                    return .init(content: [.text(text: message, annotations: nil, _meta: nil)], isError: true)
                 }
 
             // edit_action routes "dismiss" to dismiss_keyboard
