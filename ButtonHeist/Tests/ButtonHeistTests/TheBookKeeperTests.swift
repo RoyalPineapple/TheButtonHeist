@@ -85,7 +85,7 @@ final class TheBookKeeperTests: XCTestCase {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-compress")
         // Write something so the log isn't empty
-        try bookKeeper.logCommand(requestId: "r1", command: "status", arguments: [:])
+        try bookKeeper.logCommand(requestId: "r1", command: .status, arguments: [:])
         try await bookKeeper.closeSession()
         guard case .closed(let session) = bookKeeper.phase else {
             return XCTFail("Expected closed phase")
@@ -98,7 +98,7 @@ final class TheBookKeeperTests: XCTestCase {
     func testArchiveSessionTransitionsToArchived() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-archive")
-        try bookKeeper.logCommand(requestId: "r1", command: "status", arguments: [:])
+        try bookKeeper.logCommand(requestId: "r1", command: .status, arguments: [:])
         try await bookKeeper.closeSession()
         let (archivePath, archiveManifest) = try await bookKeeper.archiveSession(deleteSource: false)
         if case .archived(let session) = bookKeeper.phase {
@@ -207,7 +207,7 @@ final class TheBookKeeperTests: XCTestCase {
         try bookKeeper.beginSession(identifier: "test-log")
         try bookKeeper.logCommand(
             requestId: "req-1",
-            command: "activate",
+            command: .activate,
             arguments: ["command": "activate", "identifier": "loginButton"]
         )
         guard case .active(let session) = bookKeeper.phase else {
@@ -264,9 +264,9 @@ final class TheBookKeeperTests: XCTestCase {
     func testLogCommandIncrementsCommandCount() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-count")
-        try bookKeeper.logCommand(requestId: "r1", command: "status", arguments: [:])
-        try bookKeeper.logCommand(requestId: "r2", command: "activate", arguments: [:])
-        try bookKeeper.logCommand(requestId: "r3", command: "scroll", arguments: [:])
+        try bookKeeper.logCommand(requestId: "r1", command: .status, arguments: [:])
+        try bookKeeper.logCommand(requestId: "r2", command: .activate, arguments: [:])
+        try bookKeeper.logCommand(requestId: "r3", command: .scroll, arguments: [:])
         XCTAssertEqual(bookKeeper.manifest?.commandCount, 3)
     }
 
@@ -292,7 +292,7 @@ final class TheBookKeeperTests: XCTestCase {
     func testLogCommandSilentWhenIdle() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         // Should not throw — just silently does nothing
-        try bookKeeper.logCommand(requestId: "r1", command: "status", arguments: [:])
+        try bookKeeper.logCommand(requestId: "r1", command: .status, arguments: [:])
     }
 
     // MARK: - Manifest
@@ -384,7 +384,7 @@ final class TheBookKeeperTests: XCTestCase {
         let fileURL = try bookKeeper.writeScreenshot(
             base64Data: base64,
             requestId: "r1",
-            command: "get_screen",
+            command: .getScreen,
             metadata: ScreenshotMetadata(width: 390, height: 844)
         )
         XCTAssertTrue(FileManager.default.fileExists(atPath: fileURL.path))
@@ -401,7 +401,7 @@ final class TheBookKeeperTests: XCTestCase {
         _ = try bookKeeper.writeScreenshot(
             base64Data: base64,
             requestId: "r1",
-            command: "get_screen",
+            command: .getScreen,
             metadata: ScreenshotMetadata(width: 390, height: 844)
         )
         XCTAssertEqual(bookKeeper.manifest?.artifacts.count, 1)
@@ -418,7 +418,7 @@ final class TheBookKeeperTests: XCTestCase {
         let fileURL = try bookKeeper.writeRecording(
             base64Data: base64,
             requestId: "r1",
-            command: "stop_recording",
+            command: .stopRecording,
             metadata: RecordingMetadata(width: 390, height: 844, duration: 5.0, fps: 8, frameCount: 40)
         )
         XCTAssertTrue(FileManager.default.fileExists(atPath: fileURL.path))
@@ -433,11 +433,11 @@ final class TheBookKeeperTests: XCTestCase {
         let testData = Data([0x89, 0x50, 0x4E, 0x47])
         let base64 = testData.base64EncodedString()
         let first = try bookKeeper.writeScreenshot(
-            base64Data: base64, requestId: "r1", command: "get_screen",
+            base64Data: base64, requestId: "r1", command: .getScreen,
             metadata: ScreenshotMetadata(width: 390, height: 844)
         )
         let second = try bookKeeper.writeScreenshot(
-            base64Data: base64, requestId: "r2", command: "get_screen",
+            base64Data: base64, requestId: "r2", command: .getScreen,
             metadata: ScreenshotMetadata(width: 390, height: 844)
         )
         XCTAssertTrue(first.lastPathComponent.hasPrefix("001-"))
@@ -475,7 +475,7 @@ final class TheBookKeeperTests: XCTestCase {
             try bookKeeper.writeScreenshot(
                 base64Data: "not-valid-base64!!!",
                 requestId: "r1",
-                command: "get_screen",
+                command: .getScreen,
                 metadata: ScreenshotMetadata(width: 390, height: 844)
             )
         ) { error in
@@ -492,7 +492,7 @@ final class TheBookKeeperTests: XCTestCase {
     func testLogCommandAndResponseProduceCorrelatedEntries() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-correlation")
-        try bookKeeper.logCommand(requestId: "req-42", command: "get_screen", arguments: ["command": "get_screen"])
+        try bookKeeper.logCommand(requestId: "req-42", command: .getScreen, arguments: ["command": "get_screen"])
         try bookKeeper.logResponse(
             requestId: "req-42",
             status: .ok,
@@ -548,7 +548,7 @@ final class TheBookKeeperTests: XCTestCase {
         _ = try bookKeeper.writeRecording(
             base64Data: base64,
             requestId: "r1",
-            command: "stop_recording",
+            command: .stopRecording,
             metadata: RecordingMetadata(width: 393, height: 852, duration: 12.5, fps: 8, frameCount: 100)
         )
         let artifact = bookKeeper.manifest?.artifacts.first
@@ -569,15 +569,15 @@ final class TheBookKeeperTests: XCTestCase {
         let mp4Data = Data([0x00, 0x00, 0x00, 0x1C]).base64EncodedString()
 
         let screenshot = try bookKeeper.writeScreenshot(
-            base64Data: pngData, requestId: "r1", command: "get_screen",
+            base64Data: pngData, requestId: "r1", command: .getScreen,
             metadata: ScreenshotMetadata(width: 390, height: 844)
         )
         let recording = try bookKeeper.writeRecording(
-            base64Data: mp4Data, requestId: "r2", command: "stop_recording",
+            base64Data: mp4Data, requestId: "r2", command: .stopRecording,
             metadata: RecordingMetadata(width: 390, height: 844, duration: 5.0, fps: 8, frameCount: 40)
         )
         let screenshot2 = try bookKeeper.writeScreenshot(
-            base64Data: pngData, requestId: "r3", command: "get_screen",
+            base64Data: pngData, requestId: "r3", command: .getScreen,
             metadata: ScreenshotMetadata(width: 390, height: 844)
         )
 

@@ -229,7 +229,7 @@ public final class TheFence {
 
         let requestId = (request["requestId"] as? String) ?? UUID().uuidString
         do {
-            try bookKeeper.logCommand(requestId: requestId, command: command.rawValue, arguments: request)
+            try bookKeeper.logCommand(requestId: requestId, command: command, arguments: request)
         } catch {
             logger.warning("Failed to log command \(command.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
@@ -305,7 +305,7 @@ public final class TheFence {
                 return true
             }()
             bookKeeper.recordHeistEvidence(
-                command: command.rawValue,
+                command: command,
                 args: request,
                 succeeded: responseSucceeded,
                 interfaceElements: lastInterfaceCache.isEmpty ? nil : Array(lastInterfaceCache.values)
