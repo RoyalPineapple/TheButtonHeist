@@ -749,6 +749,8 @@ public struct RecordingPayload: Codable, Sendable {
     /// Ordered log of interactions recorded during this session (nil if no interactions occurred)
     public let interactionLog: [InteractionEvent]?
 
+    // MARK: - Init
+
     public init(
         videoData: String,
         width: Int,
