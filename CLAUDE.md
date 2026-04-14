@@ -555,5 +555,5 @@ The `AccessibilitySnapshotBH` submodule points at our fork (`RoyalPineapple/Acce
 
 Crew member dossiers live in `docs/dossiers/`. When a PR changes a crew member's responsibilities, adds/removes types, or changes architecture:
 - Update the relevant dossier file
-- Update `00-OVERVIEW.md` if module dependencies change
+- Update `docs/dossiers/README.md` (the overview) if module dependencies change
 - Keep diagrams current

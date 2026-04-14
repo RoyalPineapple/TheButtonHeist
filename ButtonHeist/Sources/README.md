@@ -38,4 +38,4 @@ TheScore is the shared contract — both sides import it, neither side imports t
 
 ## Deep reference
 
-Architecture, design philosophy, diagrams, and the full picture live in [`docs/dossiers/`](../../docs/dossiers/). Start with [`00-OVERVIEW.md`](../../docs/dossiers/00-OVERVIEW.md).
+Architecture, design philosophy, diagrams, and the full picture live in [`docs/dossiers/`](../../docs/dossiers/).
