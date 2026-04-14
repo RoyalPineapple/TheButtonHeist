@@ -36,26 +36,18 @@ extension TheInsideJob {
     }
 
     /// Refresh the hierarchy and broadcast to subscribers if it changed.
-    /// The refresh always runs — even without subscribers — so the state
-    /// is never stale when a new client connects.
+    /// The refresh always runs (via brains) — even without subscribers —
+    /// so the state is never stale when a new client connects.
     private func broadcastIfChanged() {
-        guard let parseResult = brains.refresh() else { return }
+        guard let payload = brains.broadcastInterfaceIfChanged() else {
+            hierarchyInvalidated = false
+            return
+        }
         hierarchyInvalidated = false
 
         guard muscle.hasSubscribers else { return }
 
-        let snapshot = brains.selectElements()
-        let wireElements = brains.toWire(snapshot)
-        let currentHash = wireElements.hashValue
-
-        guard currentHash != brains.hierarchyHash else { return }
-        brains.hierarchyHash = currentHash
-
-        let tree = brains.convertTree(from: parseResult)
-        let payload = Interface(timestamp: Date(), elements: wireElements, tree: tree)
-
         broadcastToSubscribed(.interface(payload))
-
         broadcastScreen()
         stakeout?.noteScreenChange()
 
@@ -72,18 +64,12 @@ extension TheInsideJob {
             return
         }
 
-        // Explore on every sendInterface call. The container fingerprint cache
-        // makes this near-free on static screens — unchanged containers are skipped.
         let manifest = await brains.exploreAndPrune()
-        let elementCount = brains.elementCount
-        let time = String(format: "%.2f", manifest.explorationTime)
-        insideJobLogger.info("Explore: \(elementCount) elements (\(manifest.scrollCount) scrolls, \(time)s)")
+        insideJobLogger.info("Explore: \(manifest.elementCount) elements (\(manifest.scrollCount) scrolls, \(String(format: "%.2f", manifest.explorationTime))s)")
 
         let payload = brains.currentInterface()
         sendMessage(.interface(payload), requestId: requestId, respond: respond)
-        lastSentTreeHash = payload.elements.hashValue
-        lastSentBeforeState = brains.captureBeforeState()
-        lastSentScreenId = brains.screenId
+        brains.recordSentState(treeHash: payload.elements.hashValue)
     }
 }
 

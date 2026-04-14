@@ -184,31 +184,58 @@ final class TheBrains {
         stash.clearCache()
         containerExploreStates.removeAll()
         exploreCycleIds = nil
+        lastSentState = nil
     }
 
-    // MARK: - Facades for TheInsideJob
+    // MARK: - Response State Tracking
 
-    // These methods let TheInsideJob talk to TheBrains without reaching
-    // through to TheStash. TheStash's internal state is TheBrains' concern.
-
-    /// All elements in the registry sorted by traversal order.
-    func selectElements() -> [TheStash.ScreenElement] {
-        stash.selectElements()
+    /// State captured after each response sent to the driver.
+    /// Owned by TheBrains — TheInsideJob never reads the individual fields.
+    struct SentState {
+        let treeHash: Int
+        let beforeState: BeforeState
+        let screenId: String?
     }
 
-    /// Convert a snapshot to wire format.
-    func toWire(_ entries: [TheStash.ScreenElement]) -> [HeistElement] {
-        stash.toWire(entries)
+    /// The state of the last response sent to the driver.
+    /// Used by `computeBackgroundDelta` and `broadcastInterfaceIfChanged`.
+    private(set) var lastSentState: SentState?
+
+    /// Snapshot current state as "last sent" — call after every response to the driver.
+    func recordSentState() {
+        let snapshot = stash.selectElements()
+        lastSentState = SentState(
+            treeHash: stash.toWire(snapshot).hashValue,
+            beforeState: captureBeforeState(),
+            screenId: stash.lastScreenId
+        )
     }
 
-    /// Convert the hierarchy tree to wire format.
-    func convertTree() -> [ElementNode]? {
-        stash.convertTree(stash.currentHierarchy)
+    /// Record sent state from an already-known hash (avoids redundant wire conversion).
+    func recordSentState(treeHash: Int) {
+        lastSentState = SentState(
+            treeHash: treeHash,
+            beforeState: captureBeforeState(),
+            screenId: stash.lastScreenId
+        )
     }
 
-    /// Convert a parse result's hierarchy to wire nodes.
-    func convertTree(from parseResult: TheStash.ParseResult) -> [ElementNode] {
-        stash.convertTree(parseResult.hierarchy) ?? []
+    // MARK: - Broadcast Support
+
+    /// Refresh and return an Interface if the tree changed since the last broadcast.
+    /// Returns nil if refresh fails or the tree is unchanged. Updates the broadcast hash.
+    func broadcastInterfaceIfChanged() -> Interface? {
+        guard refresh() != nil else { return nil }
+
+        let snapshot = stash.selectElements()
+        let wireElements = stash.toWire(snapshot)
+        let currentHash = wireElements.hashValue
+
+        guard currentHash != stash.lastHierarchyHash else { return nil }
+        stash.lastHierarchyHash = currentHash
+
+        let tree = stash.convertTree(stash.currentHierarchy)
+        return Interface(timestamp: Date(), elements: wireElements, tree: tree)
     }
 
     /// Build a full Interface payload from current state.
@@ -219,31 +246,72 @@ final class TheBrains {
         return Interface(timestamp: Date(), elements: wireElements, tree: tree)
     }
 
-    /// Current screen name.
-    var screenName: String? { stash.lastScreenName }
+    // MARK: - Background Delta
 
-    /// Current screen ID.
-    var screenId: String? { stash.lastScreenId }
+    /// Check if the accessibility tree changed since the last response.
+    /// Returns nil if unchanged or no prior response was sent.
+    func computeBackgroundDelta() -> InterfaceDelta? {
+        guard let sent = lastSentState, sent.treeHash != 0 else { return nil }
+        refresh()
+        let snapshot = stash.selectElements()
+        let wireElements = stash.toWire(snapshot)
+        let currentHash = wireElements.hashValue
+        guard currentHash != sent.treeHash else { return nil }
 
-    /// Total element count in the registry.
-    var elementCount: Int { stash.registry.elements.count }
-
-    /// Hash for polling comparison. Read/write through TheBrains.
-    var hierarchyHash: Int {
-        get { stash.lastHierarchyHash }
-        set { stash.lastHierarchyHash = newValue }
+        let tree = stash.convertTree(stash.currentHierarchy)
+        return computeDelta(
+            before: sent.beforeState,
+            afterSnapshot: snapshot,
+            fallbackDelta: InterfaceDelta(
+                kind: .screenChanged,
+                elementCount: wireElements.count,
+                newInterface: Interface(timestamp: Date(), elements: wireElements, tree: tree)
+            )
+        )
     }
 
-    /// Wire hash for a snapshot.
-    func wireHash(_ snapshot: [TheStash.ScreenElement]) -> Int {
-        stash.toWire(snapshot).hashValue
+    /// Whether the screen changed since the last response (for fast-redirect logic).
+    var screenChangedSinceLastSent: Bool {
+        guard let sent = lastSentState else { return false }
+        return sent.screenId != stash.lastScreenId
     }
 
-    /// Stakeout for recording wiring.
-    var stakeout: TheStakeout? {
-        get { stash.stakeout }
-        set { stash.stakeout = newValue }
+    /// Screen ID from the last response, for diagnostic messages.
+    var lastSentScreenId: String? { lastSentState?.screenId }
+
+    // MARK: - Wait-for-Change Support
+
+    /// Refresh, snapshot, and compute wire hash in one call.
+    /// Returns nil if refresh fails.
+    func refreshAndSnapshot() -> (snapshot: [TheStash.ScreenElement], wireHash: Int)? {
+        guard refresh() != nil else { return nil }
+        let snapshot = stash.selectElements()
+        let wireHash = stash.toWire(snapshot).hashValue
+        return (snapshot, wireHash)
     }
+
+    /// Compute delta between a before-state and an after-snapshot.
+    /// Falls back to `fallbackDelta` when no before-state exists.
+    func computeDelta(
+        before: BeforeState,
+        afterSnapshot: [TheStash.ScreenElement],
+        fallbackDelta: InterfaceDelta? = nil
+    ) -> InterfaceDelta {
+        let afterElements = stash.currentHierarchy.sortedElements
+        let isScreenChange = tripwire.isScreenChange(
+            before: before.viewController,
+            after: tripwire.topmostViewController().map(ObjectIdentifier.init)
+        ) || stash.isTopologyChanged(
+            before: before.elements, after: afterElements,
+            beforeHierarchy: before.hierarchy, afterHierarchy: stash.currentHierarchy
+        )
+        return stash.computeDelta(
+            before: before.snapshot, after: afterSnapshot,
+            afterTree: stash.currentHierarchy, isScreenChange: isScreenChange
+        )
+    }
+
+    // MARK: - Screen Capture
 
     /// Capture the screen.
     func captureScreen() -> (image: UIImage, bounds: CGRect)? {
@@ -255,48 +323,20 @@ final class TheBrains {
         stash.captureScreenForRecording()
     }
 
-    /// Check if the tree has changed between two snapshots (topology check).
-    func isTopologyChanged(before: BeforeState, afterElements: [AccessibilityElement], afterHierarchy: [AccessibilityHierarchy]) -> Bool {
-        stash.isTopologyChanged(
-            before: before.elements, after: afterElements,
-            beforeHierarchy: before.hierarchy, afterHierarchy: afterHierarchy
-        )
-    }
+    // MARK: - Screen Name (for error messages)
 
-    /// Compute delta between a before-state and an after-snapshot.
-    func computeDelta(before: BeforeState, afterSnapshot: [TheStash.ScreenElement]) -> InterfaceDelta {
-        let afterElements = stash.currentHierarchy.sortedElements
-        let isScreenChange = tripwire.isScreenChange(before: before.viewController, after: tripwire.topmostViewController().map(ObjectIdentifier.init))
-            || stash.isTopologyChanged(
-                before: before.elements, after: afterElements,
-                beforeHierarchy: before.hierarchy, afterHierarchy: stash.currentHierarchy
-            )
-        return stash.computeDelta(
-            before: before.snapshot, after: afterSnapshot,
-            afterTree: stash.currentHierarchy, isScreenChange: isScreenChange
-        )
-    }
+    /// Current screen name.
+    var screenName: String? { stash.lastScreenName }
 
-    /// Compute the full background delta against a before-state.
-    /// Returns nil if the tree hasn't changed since lastSentTreeHash.
-    func computeBackgroundDelta(lastSentTreeHash: Int, lastSentBeforeState: BeforeState?) -> InterfaceDelta? {
-        guard lastSentTreeHash != 0 else { return nil }
-        refresh()
-        let snapshot = stash.selectElements()
-        let wireElements = stash.toWire(snapshot)
-        let currentHash = wireElements.hashValue
-        guard currentHash != lastSentTreeHash else { return nil }
+    /// Current screen ID.
+    var screenId: String? { stash.lastScreenId }
 
-        guard let beforeState = lastSentBeforeState else {
-            let tree = stash.convertTree(stash.currentHierarchy)
-            return InterfaceDelta(
-                kind: .screenChanged,
-                elementCount: wireElements.count,
-                newInterface: Interface(timestamp: Date(), elements: wireElements, tree: tree)
-            )
-        }
+    // MARK: - Recording Wiring
 
-        return computeDelta(before: beforeState, afterSnapshot: snapshot)
+    /// Stakeout for recording frame capture.
+    var stakeout: TheStakeout? {
+        get { stash.stakeout }
+        set { stash.stakeout = newValue }
     }
 
 }

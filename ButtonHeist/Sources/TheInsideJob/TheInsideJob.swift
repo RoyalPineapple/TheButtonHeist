@@ -116,20 +116,8 @@ public final class TheInsideJob {
     // Hierarchy invalidation (pulse-driven, replaces debounce timer)
     var hierarchyInvalidated = false
 
-    /// Hash of the wire elements included in the last response sent to the driver.
-    /// Used by wait_for_change to detect changes that happened between tool calls
-    /// (while the agent was thinking). Updated after every action response and
-    /// get_interface response.
-    var lastSentTreeHash: Int = 0
-
-    /// Snapshot of the screen elements at the time of the last response.
-    /// Used by computeBackgroundDelta to produce proper element-level diffs
-    /// instead of always reporting screenChanged.
-    var lastSentBeforeState: TheBrains.BeforeState?
-
-    /// Screen ID from the last response sent to the driver. When this differs
-    /// from the current screen, all heistIds the agent holds are stale.
-    var lastSentScreenId: String?
+    // Response state (lastSentTreeHash, lastSentBeforeState, lastSentScreenId)
+    // lives in TheBrains — see TheBrains.SentState and brains.recordSentState().
 
     // MARK: - Initialization
 
@@ -405,7 +393,7 @@ public final class TheInsideJob {
                 handleStopRecording(requestId: requestId, respond: respond)
             default:
                 stakeout?.noteActivity()
-                let backgroundDelta = computeBackgroundDelta()
+                let backgroundDelta = brains.computeBackgroundDelta()
 
                 // Fast redirect: if the screen changed in the background and the
                 // action targets a heistId, all heistIds are stale. Rather than
@@ -413,8 +401,9 @@ public final class TheInsideJob {
                 // immediately. Reported as success (the UI moved forward) with the
                 // background delta carrying the full new interface.
                 if let backgroundDelta, backgroundDelta.kind == .screenChanged,
-                   let lastScreen = lastSentScreenId, lastScreen != brains.screenId,
+                   brains.screenChangedSinceLastSent,
                    message.actionTarget != nil {
+                    let lastScreen = brains.lastSentScreenId ?? "unknown"
                     var builder = ActionResultBuilder(method: .waitForChange, screenName: brains.screenName, screenId: brains.screenId)
                     builder.message = "Screen changed while you were thinking"
                         + " (\(lastScreen) → \(brains.screenId ?? "unknown"))"
@@ -460,16 +449,6 @@ public final class TheInsideJob {
         return StatusPayload(identity: identity, session: session)
     }
 
-    /// Check if the accessibility tree changed since the last response was sent.
-    /// Returns a delta with the current interface if it did, nil if unchanged.
-    /// Delegates entirely to TheBrains.
-    func computeBackgroundDelta() -> InterfaceDelta? {
-        brains.computeBackgroundDelta(
-            lastSentTreeHash: lastSentTreeHash,
-            lastSentBeforeState: lastSentBeforeState
-        )
-    }
-
     /// Record to stakeout, send response, and broadcast to subscribers.
     private func recordAndBroadcast(
         command: ClientMessage,
@@ -488,9 +467,7 @@ public final class TheInsideJob {
         }
 
         sendMessage(.actionResult(actionResult), requestId: requestId, backgroundDelta: backgroundDelta, respond: respond)
-        lastSentTreeHash = brains.wireHash(brains.selectElements())
-        lastSentBeforeState = brains.captureBeforeState()
-        lastSentScreenId = brains.screenId
+        brains.recordSentState()
 
         if muscle.hasSubscribers {
             let event = InteractionEvent(

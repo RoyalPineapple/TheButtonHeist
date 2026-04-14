@@ -20,9 +20,7 @@ extension TheInsideJob {
             before: before
         )
         sendMessage(.actionResult(actionResult), requestId: requestId, respond: respond)
-        lastSentTreeHash = brains.wireHash(brains.selectElements())
-        lastSentBeforeState = brains.captureBeforeState()
-        lastSentScreenId = brains.screenId
+        brains.recordSentState()
     }
 
     // MARK: - Wait For Change Handler
@@ -37,24 +35,28 @@ extension TheInsideJob {
         // element-level diffs on both the fast and slow paths.
         let before = brains.captureBeforeState()
 
-        brains.refresh()
-        let currentSnapshot = brains.selectElements()
-        let currentHash = brains.wireHash(currentSnapshot)
+        guard let initial = brains.refreshAndSnapshot() else {
+            sendMessage(.error("Could not access root view"), requestId: requestId, respond: respond)
+            return
+        }
 
         // Fast path: tree already changed since the last response
-        if let result = checkAlreadyChanged(
-            before: before, currentSnapshot: currentSnapshot, currentHash: currentHash, expectation: expectation
-        ) {
-            sendMessage(.actionResult(result), requestId: requestId, respond: respond)
-            lastSentTreeHash = currentHash
-            lastSentBeforeState = brains.captureBeforeState()
-            lastSentScreenId = brains.screenId
-            return
+        let lastHash = brains.lastSentState?.treeHash ?? 0
+        if lastHash != 0, initial.wireHash != lastHash {
+            let delta = brains.computeDelta(before: before, afterSnapshot: initial.snapshot)
+            if let result = evaluateChange(
+                delta: delta, afterSnapshot: initial.snapshot, expectation: expectation,
+                start: start, round: 0, message: "already changed (0.0s)"
+            ) {
+                sendMessage(.actionResult(result), requestId: requestId, respond: respond)
+                brains.recordSentState(treeHash: initial.wireHash)
+                return
+            }
         }
 
         // Slow path: poll until a change lands or we time out
         let deadline = CFAbsoluteTimeGetCurrent() + timeout
-        var beforeWireHash = currentHash
+        var beforeWireHash = initial.wireHash
         var round = 0
 
         while CFAbsoluteTimeGetCurrent() < deadline {
@@ -62,83 +64,66 @@ extension TheInsideJob {
             guard remaining > 0 else { break }
 
             _ = await tripwire.waitForAllClear(timeout: min(remaining, 1.0))
-            guard brains.refresh() != nil else { continue }
-
-            let afterSnapshot = brains.selectElements()
-            let afterHash = brains.wireHash(afterSnapshot)
+            guard let current = brains.refreshAndSnapshot() else { continue }
             round += 1
 
-            if afterHash == beforeWireHash { continue }
+            if current.wireHash == beforeWireHash { continue }
 
-            let delta = brains.computeDelta(before: before, afterSnapshot: afterSnapshot)
+            let delta = brains.computeDelta(before: before, afterSnapshot: current.snapshot)
+            let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
 
             if let result = evaluateChange(
-                delta: delta, afterSnapshot: afterSnapshot, expectation: expectation,
-                start: start, round: round
+                delta: delta, afterSnapshot: current.snapshot, expectation: expectation,
+                start: start, round: round, message: "changed after \(elapsed)s (\(round) rounds)"
             ) {
                 sendMessage(.actionResult(result), requestId: requestId, respond: respond)
-                lastSentTreeHash = afterHash
-                lastSentBeforeState = brains.captureBeforeState()
+                brains.recordSentState(treeHash: current.wireHash)
                 return
             }
 
-            beforeWireHash = afterHash
+            beforeWireHash = current.wireHash
             insideJobLogger.debug("wait_for_change round \(round): \(delta.kind.rawValue), expectation not yet met")
         }
 
         // Timeout
         let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
-        let afterSnapshot = brains.selectElements()
+        let afterSnapshot: [TheStash.ScreenElement]
+        if let current = brains.refreshAndSnapshot() {
+            afterSnapshot = current.snapshot
+        } else {
+            afterSnapshot = []
+        }
         let delta = brains.computeDelta(before: before, afterSnapshot: afterSnapshot)
-        var timeoutBuilder = ActionResultBuilder(method: .waitForChange, snapshot: afterSnapshot)
-        timeoutBuilder.message = expectation != nil
+        var builder = ActionResultBuilder(method: .waitForChange, snapshot: afterSnapshot)
+        builder.message = expectation != nil
             ? "timed out after \(elapsed)s — expectation not met"
             : "timed out after \(elapsed)s — no change detected"
-        timeoutBuilder.interfaceDelta = delta
-        let actionResult = timeoutBuilder.failure(errorKind: .timeout)
-        sendMessage(.actionResult(actionResult), requestId: requestId, respond: respond)
-        lastSentTreeHash = brains.wireHash(afterSnapshot)
-        lastSentBeforeState = brains.captureBeforeState()
-        lastSentScreenId = brains.screenId
+        builder.interfaceDelta = delta
+        sendMessage(.actionResult(builder.failure(errorKind: .timeout)), requestId: requestId, respond: respond)
+        brains.recordSentState()
     }
 
     // MARK: - Wait For Change Helpers
 
-    private func checkAlreadyChanged(
-        before: TheBrains.BeforeState,
-        currentSnapshot: [TheStash.ScreenElement],
-        currentHash: Int,
-        expectation: ActionExpectation?
-    ) -> ActionResult? {
-        guard lastSentTreeHash != 0, currentHash != lastSentTreeHash else { return nil }
-
-        let delta = brains.computeDelta(before: before, afterSnapshot: currentSnapshot)
-        var builder = ActionResultBuilder(method: .waitForChange, snapshot: currentSnapshot)
-        builder.interfaceDelta = delta
-
-        if let expectation {
-            guard expectation.validate(against: builder.success()).met else { return nil }
-        }
-
-        builder.message = "already changed (0.0s)"
-        return builder.success()
-    }
-
     private func evaluateChange(
-        delta: InterfaceDelta, afterSnapshot: [TheStash.ScreenElement],
-        expectation: ActionExpectation?, start: CFAbsoluteTime, round: Int
+        delta: InterfaceDelta,
+        afterSnapshot: [TheStash.ScreenElement],
+        expectation: ActionExpectation?,
+        start: CFAbsoluteTime,
+        round: Int,
+        message: String
     ) -> ActionResult? {
-        let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
         var builder = ActionResultBuilder(method: .waitForChange, snapshot: afterSnapshot)
         builder.interfaceDelta = delta
 
         guard let expectation else {
-            builder.message = "changed after \(elapsed)s (\(round) rounds)"
+            builder.message = message
             return builder.success()
         }
 
         guard expectation.validate(against: builder.success()).met else { return nil }
 
+        let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
         builder.message = "expectation met after \(elapsed)s (\(round) rounds)"
         return builder.success()
     }
