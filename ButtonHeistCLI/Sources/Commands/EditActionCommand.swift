@@ -23,20 +23,14 @@ struct EditActionCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func validate() throws {
-        let normalized = action.lowercased().replacingOccurrences(of: "_", with: "")
-        guard EditAction.allCases.contains(where: {
-            $0.rawValue.lowercased().replacingOccurrences(of: "_", with: "") == normalized
-        }) else {
+        guard parseEditAction(from: action) != nil else {
             throw ValidationError("Unknown edit action: \(action). Valid: copy, paste, cut, select, selectAll")
         }
     }
 
     @ButtonHeistActor
     mutating func run() async throws {
-        let normalized = action.lowercased().replacingOccurrences(of: "_", with: "")
-        guard let editAction = EditAction.allCases.first(where: {
-            $0.rawValue.lowercased().replacingOccurrences(of: "_", with: "") == normalized
-        }) else {
+        guard let editAction = parseEditAction(from: action) else {
             throw ValidationError("Unknown edit action: \(action)")
         }
 
@@ -51,5 +45,14 @@ struct EditActionCommand: AsyncParsableCommand {
             request: request,
             statusMessage: "Sending \(editAction.rawValue)..."
         )
+    }
+}
+
+// MARK: - Private Helpers
+
+private func parseEditAction(from string: String) -> EditAction? {
+    let normalized = string.lowercased().replacingOccurrences(of: "_", with: "")
+    return EditAction.allCases.first {
+        $0.rawValue.lowercased().replacingOccurrences(of: "_", with: "") == normalized
     }
 }

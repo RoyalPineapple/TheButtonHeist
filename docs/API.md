@@ -1460,24 +1460,21 @@ OPTIONS:
   --device <filter>       Target a specific device
 ```
 
-### buttonheist touch
+### Gesture Commands
 
-Low-level touch gestures. For tapping buttons and controls, prefer `buttonheist activate`.
+Low-level touch gestures registered as top-level commands. For tapping buttons and controls, prefer `buttonheist activate`.
 
-```
-USAGE: buttonheist touch <subcommand>
+| Command | Description |
+|---------|-------------|
+| `buttonheist one_finger_tap` | Raw synthetic tap at coordinates or element center |
+| `buttonheist long_press` | Long press at a point or element |
+| `buttonheist swipe` | Swipe between two points or in a direction |
+| `buttonheist drag` | Drag from one point to another |
+| `buttonheist pinch` | Pinch/zoom at a point or element |
+| `buttonheist rotate` | Rotate at a point or element |
+| `buttonheist two_finger_tap` | Tap with two fingers at a point or element |
 
-SUBCOMMANDS:
-  one_finger_tap          Raw synthetic tap at coordinates or element center
-  long_press              Long press at a point or element
-  swipe                   Swipe between two points or in a direction
-  drag                    Drag from one point to another
-  pinch                   Pinch/zoom at a point or element
-  rotate                  Rotate at a point or element
-  two_finger_tap          Tap with two fingers at a point or element
-```
-
-All subcommands accept `--identifier <id>` or `--index <n>` to target an element, or coordinate options (`--x`, `--y`, `--from-x`, `--from-y`, `--to-x`, `--to-y`) for explicit positioning, and `--device` to target a specific device.
+All gesture commands accept `--identifier <id>` or `--index <n>` to target an element, or coordinate options (`--x`, `--y`, `--from-x`, `--from-y`, `--to-x`, `--to-y`) for explicit positioning, and `--device` to target a specific device.
 
 ### buttonheist type_text
 
@@ -1867,14 +1864,14 @@ buttonheist dismiss_keyboard
 buttonheist get_screen --output screen.png
 
 # Touch gestures (low-level escape hatches)
-buttonheist touch one_finger_tap --x 100 --y 200
-buttonheist touch one_finger_tap --identifier loginButton
-buttonheist touch long_press --identifier myButton --duration 1.0
-buttonheist touch swipe --identifier list --direction up
-buttonheist touch drag --from-x 100 --from-y 200 --to-x 300 --to-y 200
-buttonheist touch pinch --identifier mapView --scale 2.0
-buttonheist touch rotate --x 200 --y 300 --angle 1.57
-buttonheist touch two_finger_tap --identifier zoomControl
+buttonheist one_finger_tap --x 100 --y 200
+buttonheist one_finger_tap --identifier loginButton
+buttonheist long_press --identifier myButton --duration 1.0
+buttonheist swipe --identifier list --direction up
+buttonheist drag --from-x 100 --from-y 200 --to-x 300 --to-y 200
+buttonheist pinch --identifier mapView --scale 2.0
+buttonheist rotate --x 200 --y 300 --angle 1.57
+buttonheist two_finger_tap --identifier zoomControl
 
 # Text entry
 buttonheist type_text --text "Hello World" --identifier nameField

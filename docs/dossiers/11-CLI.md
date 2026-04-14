@@ -29,7 +29,7 @@ graph TD
             EditAction["edit_action copy/paste/cut/select/selectAll"]
             DismissKeyboard["dismiss_keyboard"]
             Scroll["scroll / scroll_to_visible / scroll_to_edge"]
-            Touch["touch - one_finger_tap / long_press / swipe / drag / pinch / rotate / two_finger_tap"]
+            Gestures["one_finger_tap / long_press / swipe / drag / pinch / rotate / two_finger_tap"]
             TypeCmd["type_text"]
             GetScreen["get_screen"]
             GetInterface["get_interface"]
@@ -51,7 +51,7 @@ graph TD
     EditAction --> Direct
     DismissKeyboard --> Direct
     Scroll --> Direct
-    Touch --> Direct
+    Gestures --> Direct
     TypeCmd --> Direct
     GetScreen --> Direct
     GetInterface --> Direct
@@ -93,9 +93,9 @@ The CLI is designed to mirror the MCP tool surface. Key mappings:
 | MCP Tool | CLI Command | Notes |
 |----------|-------------|-------|
 | `activate` | `activate` | Direct match; `--action` for increment/decrement/custom |
-| `gesture` | `touch` | Grouped gestures (swipe, one_finger_tap, drag, etc.) |
+| `gesture` | `one_finger_tap`, `long_press`, `swipe`, `drag`, `pinch`, `rotate`, `two_finger_tap` | Top-level gesture commands |
 | `scroll` (mode: page) | `scroll` | Direct match |
-| `scroll` (mode: to_visible/search/to_edge) | `scroll_to_visible` / `scroll_to_edge` | CLI keeps separate commands |
+| `scroll` (mode: to_visible/search/to_edge) | `scroll_to_visible` / `element_search` / `scroll_to_edge` | CLI keeps separate commands |
 | `edit_action` | `edit_action` | Direct match for copy/paste/cut/select/selectAll |
 | `edit_action` (action: dismiss) | `dismiss_keyboard` | CLI has separate command |
 | `wait_for` | `wait_for` | Direct match; matcher-only (no --heist-id) |
