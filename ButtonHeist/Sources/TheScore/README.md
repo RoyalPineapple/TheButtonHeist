@@ -4,7 +4,7 @@ Shared wire protocol. Every type that crosses the TCP boundary lives here. No UI
 
 ## Reading order
 
-1. **`Messages.swift`** — Start here. `WireMessageType` is a 68-case `String` enum — every JSON message has a `"type"` key whose value is one of these raw strings. Also defines `TXTRecordKey` (Bonjour record keys), `EnvironmentKey` (all env vars in one place), and the protocol/product version constants.
+1. **`Messages.swift`** — Start here. `WireMessageType` is a 54-case `String` enum — every JSON message has a `"type"` key whose value is one of these raw strings. Also defines `TXTRecordKey` (Bonjour record keys), `EnvironmentKey` (all env vars in one place), and the protocol/product version constants.
 
 2. **`Elements.swift`** — The element model. Nearly everything else references these types.
    - `HeistElement` — wire representation of one accessibility element (heistId, label, value, traits, frame, actions, etc.)

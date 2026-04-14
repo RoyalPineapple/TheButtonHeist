@@ -1,10 +1,10 @@
 # TheFence
 
-Command dispatch hub. Routes 47 commands between CLI/MCP callers and the iOS device.
+Command dispatch hub. Routes 42 commands between CLI/MCP callers and the iOS device.
 
 ## Reading order
 
-1. **`TheFence+CommandCatalog.swift`** — `Command: String, CaseIterable` enum with 47 cases. Raw values are the wire strings (`listDevices = "list_devices"`, etc.). This is the single source of truth for the command catalog.
+1. **`TheFence+CommandCatalog.swift`** — `Command: String, CaseIterable` enum with 42 cases. Raw values are the wire strings (`listDevices = "list_devices"`, etc.). This is the single source of truth for the command catalog.
 
 2. **`TheFence.swift`** — The `@ButtonHeistActor final class`. Start at `execute(request:)` — every command enters here.
 

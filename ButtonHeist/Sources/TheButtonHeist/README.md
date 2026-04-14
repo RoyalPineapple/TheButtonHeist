@@ -6,7 +6,7 @@ macOS client framework. CLI and MCP both enter through `TheFence.execute(request
 
 | Folder | What to read first | What it does |
 |--------|--------------------|--------------|
-| `TheFence/` | `TheFence.swift` → `TheFence+CommandCatalog.swift` | Command dispatch hub. 47-case `Command` enum, request-response correlation via `PendingRequestTracker`, response formatting. |
+| `TheFence/` | `TheFence.swift` → `TheFence+CommandCatalog.swift` | Command dispatch hub. 42-case `Command` enum, request-response correlation via `PendingRequestTracker`, response formatting. |
 | `TheHandoff/` | `DeviceProtocols.swift` → `TheHandoff.swift` | Device lifecycle. Bonjour/USB discovery, TLS connection, 3s keepalive, auto-reconnect (up to 60 attempts with exponential backoff). |
 | `TheBookKeeper/` | `TheBookKeeper.swift` | Session I/O. Append-only JSONL logs, sequence-numbered artifacts, gzip compression, heist recording with minimal-matcher synthesis. |
 | `Config/` | `EnvironmentConfig.swift` | Reads `BUTTONHEIST_*` env vars and `.buttonheist.json` target files. |

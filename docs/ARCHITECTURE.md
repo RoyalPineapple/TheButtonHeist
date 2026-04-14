@@ -351,7 +351,7 @@ flowchart TD
 
 ### ButtonHeistMCP (MCP Server)
 
-**Purpose**: Standalone MCP server that exposes 24 purpose-built tools backed by TheFence. Allows AI agents to drive iOS apps via MCP tool calls.
+**Purpose**: Standalone MCP server that exposes 28 purpose-built tools backed by TheFence. Allows AI agents to drive iOS apps via MCP tool calls.
 
 **Location**: `ButtonHeistMCP/`
 
@@ -359,12 +359,12 @@ flowchart TD
 ```
 ButtonHeistMCP (Swift executable, macOS 14+)
 ├── main.swift — Server setup, tool handler, response rendering
-├── ToolDefinitions.swift — 24 tool schemas
+├── ToolDefinitions.swift — 28 tool schemas
 └── Package.swift — Dependencies: ButtonHeist + swift-sdk (MCP)
 ```
 
 **Key Behaviors**:
-- 24 tools dispatch through `fence.execute(request:)`
+- 28 tools dispatch through `fence.execute(request:)`
 - Screenshots are returned as inline MCP image content items
 - Recording video data is replaced with a size summary to keep responses readable
 - Environment variables: `BUTTONHEIST_DEVICE`, `BUTTONHEIST_TOKEN`, `BUTTONHEIST_SESSION_TIMEOUT`
@@ -558,7 +558,7 @@ Observers never claim a session lock and cannot send commands. They receive the 
 ```mermaid
 flowchart TD
     A["tripwire.waitForAllClear()<br>(settle-driven, not timer-based)"] --> B["broadcastIfChanged()"]
-    B --> B2["bagman.refresh()<br/>(always runs — keeps state fresh)"]
+    B --> B2["stash.refresh()<br/>(always runs — keeps state fresh)"]
     B2 --> B1{"hasSubscribers?"}
     B1 -->|No| A
     B1 -->|Yes| E["snapshot(.visible) → [ScreenElement]"]
@@ -581,8 +581,8 @@ sequenceDiagram
     participant TSC as TheSafecracker
 
     Client->>IJ: activate / increment / decrement / customAction
-    IJ->>IJ: bagman.refresh() (parse → apply)
-    IJ->>IJ: bagman.resolveTarget(elementTarget)
+    IJ->>IJ: stash.refresh() (parse → apply)
+    IJ->>IJ: stash.resolveTarget(elementTarget)
     IJ->>IJ: Resolve live NSObject from ScreenElement
 
     alt activate
