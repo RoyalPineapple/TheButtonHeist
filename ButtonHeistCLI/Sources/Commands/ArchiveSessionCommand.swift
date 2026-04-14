@@ -4,7 +4,7 @@ import Foundation
 
 struct ArchiveSessionCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "archive-session",
+        commandName: "archive_session",
         abstract: "Close and archive the current session into a .tar.gz file"
     )
 

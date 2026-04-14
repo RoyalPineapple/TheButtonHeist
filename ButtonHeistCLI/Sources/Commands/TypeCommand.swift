@@ -3,7 +3,7 @@ import ButtonHeist
 
 struct TypeCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "type",
+        commandName: "type_text",
         abstract: "Type text into a field by tapping keyboard keys",
         discussion: """
             Type text character-by-character and/or delete characters.
@@ -13,10 +13,10 @@ struct TypeCommand: AsyncParsableCommand {
             as a heistId. Use -id or --heist-id to target without typing.
 
             Examples:
-              buttonheist type "Hello" btn_nameField
-              buttonheist type "Hello"
-              buttonheist type --delete 3 -id "nameField"
-              buttonheist type --delete 4 "orld" -id "nameField"
+              buttonheist type_text "Hello" btn_nameField
+              buttonheist type_text "Hello"
+              buttonheist type_text --delete 3 -id "nameField"
+              buttonheist type_text --delete 4 "orld" -id "nameField"
             """
     )
 

@@ -4,7 +4,7 @@ import Foundation
 
 struct StopHeistCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "stop-heist",
+        commandName: "stop_heist",
         abstract: "Stop recording and save the heist playback"
     )
 
