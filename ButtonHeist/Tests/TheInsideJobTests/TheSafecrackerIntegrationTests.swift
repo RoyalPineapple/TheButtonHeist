@@ -148,17 +148,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         }
 
         textField.becomeFirstResponder()
-
-        // Wait for keyboard to become active
-        let keyboardReady = XCTestExpectation(description: "Keyboard ready")
-        for _ in 0..<20 {
-            if KeyboardBridge.shared() != nil { break }
-            try await Task.sleep(for: .milliseconds(100))
-        }
-        if KeyboardBridge.shared() != nil {
-            keyboardReady.fulfill()
-        }
-        await fulfillment(of: [keyboardReady], timeout: 3.0)
+        try await waitForKeyboardBridge()
 
         let result = await safecracker.typeText("hello")
         XCTAssertTrue(result, "typeText should succeed when keyboard is active")
@@ -176,15 +166,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         }
 
         textField.becomeFirstResponder()
-
-        for _ in 0..<20 {
-            if KeyboardBridge.shared() != nil { break }
-            try await Task.sleep(for: .milliseconds(100))
-        }
-        guard KeyboardBridge.shared() != nil else {
-            XCTFail("Keyboard bridge not available")
-            return
-        }
+        try await waitForKeyboardBridge()
 
         // Select all text first, then delete
         let deleted = await safecracker.deleteText(count: 5)
@@ -232,6 +214,19 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         let points = [CGPoint(x: 0, y: 0), CGPoint(x: 100, y: 0)]
         let duration = safecracker.resolveDuration(nil, velocity: 200, points: points)
         XCTAssertEqual(duration, 0.5, accuracy: 0.01)
+    }
+
+    // MARK: - Private Helpers
+
+    private func waitForKeyboardBridge() async throws {
+        for _ in 0..<20 {
+            if KeyboardBridge.shared() != nil { return }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        guard KeyboardBridge.shared() != nil else {
+            XCTFail("Keyboard bridge not available after 2s")
+            return
+        }
     }
 }
 

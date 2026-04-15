@@ -26,10 +26,10 @@ enum NetDeltaAccumulator {
     ) -> InterfaceDelta {
         // Find steps after the last screen change and fold their element changes
         // into the screen change's interface
-        guard let screenIdx = deltas.lastIndex(where: { $0.kind == .screenChanged }) else {
+        guard let screenIndex = deltas.lastIndex(where: { $0.kind == .screenChanged }) else {
             return screenChange
         }
-        let afterScreen = Array(deltas[(screenIdx + 1)...])
+        let afterScreen = Array(deltas[(screenIndex + 1)...])
         let postDeltas = afterScreen.filter { $0.kind == .elementsChanged }
         if postDeltas.isEmpty {
             return screenChange
@@ -55,31 +55,31 @@ enum NetDeltaAccumulator {
         var netUpdated: [String: [PropertyChange]] = [:]  // heistId → latest changes
 
         for delta in deltas {
-            for el in delta.added ?? [] {
-                if netRemoved.contains(el.heistId) {
+            for element in delta.added ?? [] {
+                if netRemoved.contains(element.heistId) {
                     // Was removed earlier, now re-added → treat as net add
-                    netRemoved.remove(el.heistId)
-                    netAdded[el.heistId] = el
+                    netRemoved.remove(element.heistId)
+                    netAdded[element.heistId] = element
                 } else {
-                    netAdded[el.heistId] = el
+                    netAdded[element.heistId] = element
                 }
             }
-            for hid in delta.removed ?? [] {
-                if netAdded.removeValue(forKey: hid) != nil {
+            for heistId in delta.removed ?? [] {
+                if netAdded.removeValue(forKey: heistId) != nil {
                     // Was added earlier in this batch, now removed → nets to nothing
                 } else {
-                    netRemoved.insert(hid)
-                    netUpdated.removeValue(forKey: hid)
+                    netRemoved.insert(heistId)
+                    netUpdated.removeValue(forKey: heistId)
                 }
             }
             for update in delta.updated ?? [] {
                 // Keep latest property values per heistId
                 var existing = netUpdated[update.heistId] ?? []
                 for change in update.changes {
-                    if let idx = existing.firstIndex(where: { $0.property == change.property }) {
+                    if let index = existing.firstIndex(where: { $0.property == change.property }) {
                         // Same property updated again — keep original old, use new new
-                        existing[idx] = PropertyChange(
-                            property: change.property, old: existing[idx].old, new: change.new
+                        existing[index] = PropertyChange(
+                            property: change.property, old: existing[index].old, new: change.new
                         )
                     } else {
                         existing.append(change)

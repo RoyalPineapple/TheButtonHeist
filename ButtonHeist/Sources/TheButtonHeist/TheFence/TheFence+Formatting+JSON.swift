@@ -193,7 +193,7 @@ extension FenceResponse {
             "completedSteps": completedSteps,
             "totalTimingMs": totalTimingMs,
         ]
-        if let idx = failedIndex { dict["failedIndex"] = idx }
+        if let failedIndex { dict["failedIndex"] = failedIndex }
         if checked > 0 {
             dict["expectations"] = [
                 "checked": checked,
@@ -202,8 +202,8 @@ extension FenceResponse {
             ]
         }
         if !stepSummaries.isEmpty {
-            dict["stepSummaries"] = stepSummaries.enumerated().map { index, s in
-                Self.stepSummaryDict(index: index, summary: s)
+            dict["stepSummaries"] = stepSummaries.enumerated().map { index, summary in
+                Self.stepSummaryDict(index: index, summary: summary)
             }
         }
         if let netDelta {
@@ -212,14 +212,14 @@ extension FenceResponse {
         return dict
     }
 
-    private static func stepSummaryDict(index: Int, summary s: BatchStepSummary) -> [String: Any] {
-        var entry: [String: Any] = ["index": index, "command": s.command]
-        if let kind = s.deltaKind { entry["deltaKind"] = kind }
-        if let screen = s.screenName { entry["screenName"] = screen }
-        if let screenId = s.screenId { entry["screenId"] = screenId }
-        if let met = s.expectationMet { entry["expectationMet"] = met }
-        if let count = s.elementCount { entry["elementCount"] = count }
-        if let error = s.error { entry["error"] = error }
+    private static func stepSummaryDict(index: Int, summary: BatchStepSummary) -> [String: Any] {
+        var entry: [String: Any] = ["index": index, "command": summary.command]
+        if let kind = summary.deltaKind { entry["deltaKind"] = kind }
+        if let screen = summary.screenName { entry["screenName"] = screen }
+        if let screenId = summary.screenId { entry["screenId"] = screenId }
+        if let met = summary.expectationMet { entry["expectationMet"] = met }
+        if let count = summary.elementCount { entry["elementCount"] = count }
+        if let error = summary.error { entry["error"] = error }
         return entry
     }
 

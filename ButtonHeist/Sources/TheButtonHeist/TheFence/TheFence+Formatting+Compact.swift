@@ -145,8 +145,8 @@ extension FenceResponse {
 
     private static func scrollSearchItemInfo(_ search: ScrollSearchResult) -> String {
         if let total = search.totalItems {
-            let pct = total > 0 ? Int(Double(search.uniqueElementsSeen) / Double(total) * 100) : 0
-            return " (\(search.uniqueElementsSeen)/\(total) items seen, \(pct)%)"
+            let percentage = total > 0 ? Int(Double(search.uniqueElementsSeen) / Double(total) * 100) : 0
+            return " (\(search.uniqueElementsSeen)/\(total) items seen, \(percentage)%)"
         } else if search.uniqueElementsSeen > 0 {
             return " (\(search.uniqueElementsSeen) unique elements seen)"
         }
@@ -159,7 +159,7 @@ extension FenceResponse {
         netDelta: InterfaceDelta?
     ) -> String {
         var text = "batch: \(completedSteps) steps in \(totalTimingMs)ms"
-        if let idx = failedIndex { text += " (failed at \(idx))" }
+        if let failedIndex { text += " (failed at \(failedIndex))" }
         if checked > 0 { text += " [expectations: \(met)/\(checked)]" }
         if let lastScreenId = stepSummaries.last(where: { $0.screenId != nil })?.screenId {
             text = "\(lastScreenId) | \(text)"
@@ -227,8 +227,8 @@ extension FenceResponse {
         case .elementsChanged:
             var lines: [String] = ["\(method): elements changed (\(delta.elementCount) elements)"]
             if let added = delta.added, !added.isEmpty {
-                for el in added {
-                    lines.append("  + \(compactElementLine(el))")
+                for element in added {
+                    lines.append("  + \(compactElementLine(element))")
                 }
             }
             if let removed = delta.removed, !removed.isEmpty {

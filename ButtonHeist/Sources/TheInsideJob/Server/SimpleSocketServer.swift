@@ -14,7 +14,7 @@ public actor SimpleSocketServer {
 
     private static let maxBufferSize = 10_000_000 // 10 MB
     private static let maxConnections = 5
-    private static let maxMessagesPerSecond = 30
+    static let maxMessagesPerSecond = 30
 
     // MARK: - State Machines
 
