@@ -157,7 +157,8 @@ public final class TheInsideJob {
         let transport = ServerTransport(tlsIdentity: identity, allowedScopes: allowedScopes)
         getaway.wireTransport(transport)
 
-        let actualPort = try await transport.start(port: preferredPort)
+        let useLoopback = allowedScopes == [.simulator]
+        let actualPort = try await transport.start(port: preferredPort, bindToLoopback: useLoopback)
         serverPhase = .running(transport: transport)
 
         let scopeNames = allowedScopes.map(\.rawValue).sorted().joined(separator: ", ")
@@ -409,7 +410,8 @@ public final class TheInsideJob {
                 self.getaway.wireTransport(transport)
                 startedTransport = transport
 
-                let actualPort = try await transport.start(port: preferredPort)
+                let useLoopback = self.allowedScopes == [.simulator]
+                let actualPort = try await transport.start(port: preferredPort, bindToLoopback: useLoopback)
 
                 try Task.checkCancellation()
 

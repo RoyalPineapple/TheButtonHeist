@@ -69,7 +69,7 @@ let package = Package(
                 .product(name: "Crypto", package: "swift-crypto"),
             ],
             path: "Tests/ButtonHeistTests",
-            swiftSettings: [.swiftLanguageMode(.v5), .unsafeFlags(["-warnings-as-errors"])]
+            swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
         ),
         .testTarget(
             name: "TheInsideJobTests",
@@ -78,7 +78,7 @@ let package = Package(
                 .product(name: "Crypto", package: "swift-crypto"),
             ],
             path: "Tests/TheInsideJobTests",
-            swiftSettings: [.swiftLanguageMode(.v5), .unsafeFlags(["-warnings-as-errors"])]
+            swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
         )
     ]
 )
