@@ -134,7 +134,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
 
     // MARK: - Text Input
 
-    func testTypeTextIntoTextField() async {
+    func testTypeTextIntoTextField() async throws {
         let textField = UITextField()
         textField.frame = CGRect(x: 50, y: 400, width: 200, height: 44)
         textField.borderStyle = .roundedRect
@@ -165,7 +165,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         XCTAssertEqual(textField.text, "hello")
     }
 
-    func testDeleteTextFromTextField() async {
+    func testDeleteTextFromTextField() async throws {
         let textField = UITextField()
         textField.frame = CGRect(x: 50, y: 400, width: 200, height: 44)
         textField.text = "world"
