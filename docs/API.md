@@ -476,7 +476,7 @@ Typed response enum with `humanFormatted() -> String`, `jsonDict() -> [String: A
 | `archiveResult(path:manifest:)` | Archive path and final manifest for `archive_session` |
 | `heistStarted(message:)` | Heist recording started confirmation |
 | `heistStopped(path:stepCount:)` | Heist recording stopped with file path and step count |
-| `heistPlayback(completedSteps:failedIndex:totalTimingMs:failure:)` | Heist playback result with pass/fail and timing |
+| `heistPlayback(completedSteps:failedIndex:totalTimingMs:failure:report:)` | Heist playback result with pass/fail, timing, and per-step report |
 
 ### FenceError
 

@@ -81,20 +81,44 @@ extension HeistPlaybackReport {
     }
 }
 
+// MARK: - Playback Error Kind
+
+extension HeistPlaybackReport {
+    /// Classification of why a playback step failed.
+    public enum PlaybackErrorKind: String, Sendable, Equatable, CaseIterable {
+        /// TheFence-level error (invalid command, missing connection, etc.).
+        case fenceError
+        /// An unexpected exception was thrown during step execution.
+        case thrown
+        /// The target element was not found in the accessibility hierarchy.
+        case elementNotFound
+        /// The step timed out waiting for the expected result.
+        case timeout
+        /// The command is not supported in the current context.
+        case unsupported
+        /// The input arguments were invalid.
+        case inputError
+        /// Post-action validation failed.
+        case validationError
+        /// The action was executed but reported failure.
+        case actionFailed
+    }
+}
+
 // MARK: - Outcome
 
 extension HeistPlaybackReport {
     /// Whether a step passed or failed, with failure diagnostics.
     public enum Outcome: Sendable, Equatable {
         case passed
-        case failed(message: String, errorKind: String?)
+        case failed(message: String, errorKind: PlaybackErrorKind?)
 
         public var failureMessage: String? {
             if case .failed(let message, _) = self { return message }
             return nil
         }
 
-        public var failureType: String? {
+        public var failureType: PlaybackErrorKind? {
             if case .failed(_, let kind) = self { return kind }
             return nil
         }
@@ -137,7 +161,7 @@ extension HeistPlaybackReport {
                 xml += "/>\n"
             case .failed(let message, let errorKind):
                 xml += ">\n"
-                let failureType = errorKind ?? "playbackFailure"
+                let failureType = errorKind?.rawValue ?? "playbackFailure"
                 xml += "      <failure message=\"\(xmlEscape(message))\""
                 xml += " type=\"\(xmlEscape(failureType))\">"
                 xml += xmlEscape(failureBody(step: step, message: message))

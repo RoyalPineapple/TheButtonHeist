@@ -15,7 +15,7 @@ final class HeistPlaybackReportTests: XCTestCase {
     func testPartialFailureReport() {
         let report = makeReport(outcomes: [
             .passed,
-            .failed(message: "element not found", errorKind: "elementNotFound"),
+            .failed(message: "element not found", errorKind: .elementNotFound),
         ])
         XCTAssertEqual(report.passedCount, 1)
         XCTAssertEqual(report.failedCount, 1)
@@ -91,10 +91,10 @@ final class HeistPlaybackReportTests: XCTestCase {
     func testOutcomeFailedProperties() {
         let outcome = HeistPlaybackReport.Outcome.failed(
             message: "timeout waiting for element",
-            errorKind: "timeout"
+            errorKind: .timeout
         )
         XCTAssertEqual(outcome.failureMessage, "timeout waiting for element")
-        XCTAssertEqual(outcome.failureType, "timeout")
+        XCTAssertEqual(outcome.failureType, .timeout)
     }
 
     func testOutcomeFailedWithNilErrorKind() {
@@ -125,7 +125,7 @@ final class HeistPlaybackReportTests: XCTestCase {
     func testJunitXMLWithFailure() {
         let report = makeReport(outcomes: [
             .passed,
-            .failed(message: "element not found", errorKind: "elementNotFound"),
+            .failed(message: "element not found", errorKind: .elementNotFound),
         ])
         let xml = report.junitXML()
 
@@ -217,7 +217,7 @@ final class HeistPlaybackReportTests: XCTestCase {
             command: "swipe",
             target: ElementMatcher(label: "List", identifier: "main-list"),
             timeSeconds: 0.5,
-            outcome: .failed(message: "swipe failed", errorKind: "actionFailed")
+            outcome: .failed(message: "swipe failed", errorKind: .actionFailed)
         )
         let report = HeistPlaybackReport(
             heistName: "target-test",

@@ -754,13 +754,7 @@ extension TheFence {
                 failedIndex = index
                 let failedStep = PlaybackFailure.FailedStep(command: step.command, target: step.target)
                 failure = .thrown(step: failedStep, error: error.localizedDescription, interface: nil)
-                stepResults.append(HeistPlaybackReport.StepResult(
-                    index: index,
-                    command: step.command,
-                    target: step.target,
-                    timeSeconds: stepTime,
-                    outcome: .failed(message: error.localizedDescription, errorKind: nil)
-                ))
+                stepResults.append(stepResult(index: index, step: step, timeSeconds: stepTime, failure: failure))
                 break
             }
         }
@@ -807,12 +801,14 @@ extension TheFence {
         )
     }
 
-    /// Extract the error kind string from a PlaybackFailure.
-    private func failureErrorKind(_ failure: PlaybackFailure) -> String? {
+    /// Extract the typed error kind from a PlaybackFailure.
+    private func failureErrorKind(_ failure: PlaybackFailure) -> HeistPlaybackReport.PlaybackErrorKind? {
         switch failure {
-        case .fenceError: return "fenceError"
-        case .actionFailed(_, let result, _, _): return result.errorKind?.rawValue
-        case .thrown: return "thrown"
+        case .fenceError: return .fenceError
+        case .actionFailed(_, let result, _, _):
+            guard let errorKind = result.errorKind else { return nil }
+            return HeistPlaybackReport.PlaybackErrorKind(rawValue: errorKind.rawValue)
+        case .thrown: return .thrown
         }
     }
 

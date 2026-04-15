@@ -250,7 +250,7 @@ Five local-only commands dispatch to TheBookKeeper without sending anything to t
 | `archive_session` | `.archiveSession` | Closes and archives the session, returns `.archiveResult` with the archive path |
 | `start_heist` | `.startHeist` | Begins heist recording for the current session (auto-starts a session if needed) |
 | `stop_heist` | `.stopHeist` | Stops heist recording and writes the `.heist` file to the specified output path |
-| `play_heist` | `.playHeist` | Reads a `.heist` file and replays steps sequentially via `execute(request:)` |
+| `play_heist` | `.playHeist` | Reads a `.heist` file and replays steps sequentially via `execute(request:)`. CLI supports `--junit <path>` to write a JUnit XML report |
 
 All are in the no-connection-required guard alongside `get_session_state`, `list_devices`, `connect`, and `list_targets`.
 
@@ -261,7 +261,7 @@ case sessionLog(manifest: SessionManifest)
 case archiveResult(path: String, manifest: SessionManifest)
 case heistStarted
 case heistStopped(path: String, stepCount: Int)
-case heistPlayback(completedSteps: Int, failedIndex: Int?, totalTimingMs: Int)
+case heistPlayback(completedSteps: Int, failedIndex: Int?, totalTimingMs: Int, failure: PlaybackFailure? = nil, report: HeistPlaybackReport? = nil)
 ```
 
 All implement `humanFormatted()`, `compactFormatted()`, and `jsonDict()`.
