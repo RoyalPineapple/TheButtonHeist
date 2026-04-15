@@ -104,13 +104,13 @@ $BH record --output demo.mp4 --fps 8 --scale 0.5         # Record with touch ove
 
 The session REPL accepts both JSON and shorthand: `tap loginButton`, `type "hello"`, `scroll down list`, `screen`.
 
-Full gesture suite, text input with edit actions, three scroll modes, H.264 recording with touch overlay, WiFi and USB with TLS 1.3, multi-device session locking. Details in the [API Reference](docs/API.md).
+But wait, there's more: gestures, recording, pasteboard, scroll modes, multi-device. See the [API Reference](docs/API.md).
 
 ## How It Works
 
 The coordinate-based approach reads the accessibility tree, extracts element frames, and throws the rest away. The agent works with geometry, not meaning. Every action requires re-reading the full tree to know what happened.
 
-Button Heist works from the inside, the same position VoiceOver occupies. The framework lives in your app. It doesn't read the hierarchy and discard it. It watches it live.
+Button Heist works from the inside, the same position VoiceOver occupies. The framework lives in your app. It doesn't snapshot the hierarchy and discard it. It holds the live tree and sees every change as it happens.
 
 Three things follow from being inside:
 
@@ -181,7 +181,7 @@ But the deepest advantage isn't speed. The agent and a VoiceOver user are naviga
 
 Accessibility bugs stick around because the people who report them rarely have the leverage to get them prioritized. When an agent hits the same bug, it blocks automation and gets fixed. VoiceOver users benefit.
 
-Agents already write our code. When they look at what they built, they're looking through the accessibility layer.
+Agents already write our code. When they look at what they've built, they look through the accessibility layer. Make it good for them, and you've made it good for everyone.
 
 ## Benchmarks
 
