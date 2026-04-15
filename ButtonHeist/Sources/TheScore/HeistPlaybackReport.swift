@@ -9,19 +9,23 @@ public struct HeistPlaybackReport: Sendable, Equatable {
     public let heistName: String
     /// Bundle identifier of the app the heist targets.
     public let app: String
+    /// Total number of steps in the heist file (including unexecuted steps after an abort).
+    public let totalStepCount: Int
     /// Total wall-clock time for the entire playback, in seconds.
     public let totalTimeSeconds: Double
-    /// Per-step outcomes, in execution order.
+    /// Per-step outcomes, in execution order. May be shorter than `totalStepCount` if playback aborted.
     public let steps: [StepResult]
 
     public init(
         heistName: String,
         app: String,
+        totalStepCount: Int,
         totalTimeSeconds: Double,
         steps: [StepResult]
     ) {
         self.heistName = heistName
         self.app = app
+        self.totalStepCount = totalStepCount
         self.totalTimeSeconds = totalTimeSeconds
         self.steps = steps
     }
@@ -138,39 +142,35 @@ extension HeistPlaybackReport {
     /// ```
     /// <testsuites> → <testsuite> → <testcase> [→ <failure>]
     /// ```
-    /// Each heist step becomes a `<testcase>`. Failed steps include a
-    /// `<failure>` element with the error message and type.
+    /// Each heist is one `<testcase>`. A failed heist includes a `<failure>`
+    /// element with step-level diagnostics in the body.
     public func junitXML() -> String {
-        var xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-        let totalTests = steps.count
-        let totalFailures = failedCount
         let totalTime = String(format: "%.3f", totalTimeSeconds)
+        let failed = allPassed ? 0 : 1
 
-        xml += "<testsuites name=\"heist-playback\" tests=\"\(totalTests)\""
-        xml += " failures=\"\(totalFailures)\" time=\"\(totalTime)\">\n"
+        var xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        xml += "<testsuites name=\"heist-playback\" tests=\"1\""
+        xml += " failures=\"\(failed)\" time=\"\(totalTime)\">\n"
 
         xml += "  <testsuite name=\"\(xmlEscape(heistName))\""
-        xml += " tests=\"\(totalTests)\" failures=\"\(totalFailures)\""
+        xml += " tests=\"1\" failures=\"\(failed)\""
         xml += " time=\"\(totalTime)\">\n"
 
-        for step in steps {
-            let stepTime = String(format: "%.3f", step.timeSeconds)
-            xml += "    <testcase name=\"\(xmlEscape(step.displayName))\""
-            xml += " classname=\"\(xmlEscape(heistName))\""
-            xml += " time=\"\(stepTime)\""
+        xml += "    <testcase name=\"\(xmlEscape(heistName))\""
+        xml += " classname=\"\(xmlEscape(app))\""
+        xml += " time=\"\(totalTime)\""
 
-            switch step.outcome {
-            case .passed:
-                xml += "/>\n"
-            case .failed(let message, let errorKind):
-                xml += ">\n"
-                let failureType = errorKind?.typeName ?? "playbackFailure"
-                xml += "      <failure message=\"\(xmlEscape(message))\""
-                xml += " type=\"\(xmlEscape(failureType))\">"
-                xml += xmlEscape(failureBody(step: step, message: message))
-                xml += "</failure>\n"
-                xml += "    </testcase>\n"
-            }
+        if allPassed {
+            xml += "/>\n"
+        } else if let failedStep = steps.first(where: { !$0.passed }) {
+            xml += ">\n"
+            let message = failedStep.outcome.failureMessage ?? "playback failed"
+            let failureType = failedStep.outcome.failureType?.typeName ?? "playbackFailure"
+            xml += "      <failure message=\"\(xmlEscape(message))\""
+            xml += " type=\"\(xmlEscape(failureType))\">"
+            xml += xmlEscape(failureBody(failedStep: failedStep))
+            xml += "</failure>\n"
+            xml += "    </testcase>\n"
         }
 
         xml += "  </testsuite>\n"
@@ -180,9 +180,10 @@ extension HeistPlaybackReport {
 
     // MARK: - Private Helpers
 
-    private func failureBody(step: StepResult, message: String) -> String {
-        var body = "command: \(step.command)\n"
-        if let target = step.target {
+    private func failureBody(failedStep: StepResult) -> String {
+        var body = "Completed \(passedCount)/\(totalStepCount) steps before failure.\n"
+        body += "step: [\(failedStep.index)] \(failedStep.command)\n"
+        if let target = failedStep.target {
             var parts: [String] = []
             if let label = target.label { parts.append("label=\"\(label)\"") }
             if let identifier = target.identifier { parts.append("identifier=\"\(identifier)\"") }
@@ -191,7 +192,7 @@ extension HeistPlaybackReport {
                 body += "target: \(parts.joined(separator: ", "))\n"
             }
         }
-        body += "error: \(message)"
+        body += "error: \(failedStep.outcome.failureMessage ?? "unknown")"
         return body
     }
 }

@@ -755,6 +755,7 @@ extension TheFence {
         let report = HeistPlaybackReport(
             heistName: heistName,
             app: heist.app,
+            totalStepCount: heist.steps.count,
             totalTimeSeconds: totalTimeSeconds,
             steps: stepResults
         )

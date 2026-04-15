@@ -26,6 +26,7 @@ final class HeistPlaybackReportTests: XCTestCase {
         let report = HeistPlaybackReport(
             heistName: "empty",
             app: "com.test.app",
+            totalStepCount: 0,
             totalTimeSeconds: 0,
             steps: []
         )
@@ -113,27 +114,32 @@ final class HeistPlaybackReportTests: XCTestCase {
         let xml = report.junitXML()
 
         XCTAssertTrue(xml.hasPrefix("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"))
-        assertContains(xml, "tests=\"2\"")
+        assertContains(xml, "tests=\"1\"")
         assertContains(xml, "failures=\"0\"")
         assertContains(xml, "<testsuite name=\"test-heist\"")
+        assertContains(xml, "classname=\"com.test.app\"")
         // No <failure> elements
         XCTAssertFalse(xml.contains("<failure"))
-        // All testcases self-close
-        XCTAssertEqual(xml.components(separatedBy: "/>").count - 1, 2)
+        // Single testcase, self-closing
+        XCTAssertEqual(xml.components(separatedBy: "/>").count - 1, 1)
     }
 
     func testJunitXMLWithFailure() {
-        let report = makeReport(outcomes: [
-            .passed,
-            .failed(message: "element not found", errorKind: .action(.elementNotFound)),
-        ])
+        let report = makeReport(
+            outcomes: [
+                .passed,
+                .failed(message: "element not found", errorKind: .action(.elementNotFound)),
+            ],
+            totalStepCount: 10
+        )
         let xml = report.junitXML()
 
-        assertContains(xml, "tests=\"2\"")
+        assertContains(xml, "tests=\"1\"")
         assertContains(xml, "failures=\"1\"")
         assertContains(xml, "<failure message=\"element not found\"")
         assertContains(xml, "type=\"elementNotFound\"")
-        assertContains(xml, "command: activate")
+        assertContains(xml, "Completed 1/10 steps before failure.")
+        assertContains(xml, "step: [1] activate")
     }
 
     func testJunitXMLFailureWithNilErrorKind() {
@@ -149,12 +155,13 @@ final class HeistPlaybackReportTests: XCTestCase {
         let report = HeistPlaybackReport(
             heistName: "empty",
             app: "com.test.app",
+            totalStepCount: 0,
             totalTimeSeconds: 0,
             steps: []
         )
         let xml = report.junitXML()
 
-        assertContains(xml, "tests=\"0\"")
+        assertContains(xml, "tests=\"1\"")
         assertContains(xml, "failures=\"0\"")
         assertContains(xml, "</testsuite>")
     }
@@ -175,6 +182,7 @@ final class HeistPlaybackReportTests: XCTestCase {
         let report = HeistPlaybackReport(
             heistName: "escape-test",
             app: "com.test.app",
+            totalStepCount: 5,
             totalTimeSeconds: 0.1,
             steps: [step]
         )
@@ -184,25 +192,22 @@ final class HeistPlaybackReportTests: XCTestCase {
         assertContains(xml, "&lt;")
         assertContains(xml, "&gt;")
         assertContains(xml, "&quot;")
-        // Raw special chars should not appear in attribute values
-        XCTAssertFalse(xml.contains("name=\"[0] activate label=\"Save"))
     }
 
     // MARK: - JUnit XML: Timing
 
-    func testJunitXMLIncludesStepTiming() {
-        let step = HeistPlaybackReport.StepResult(
-            index: 0,
-            command: "activate",
-            target: nil,
-            timeSeconds: 1.234,
-            outcome: .passed
-        )
+    func testJunitXMLIncludesTotalTiming() {
         let report = HeistPlaybackReport(
             heistName: "timing",
             app: "com.test.app",
+            totalStepCount: 1,
             totalTimeSeconds: 1.234,
-            steps: [step]
+            steps: [
+                HeistPlaybackReport.StepResult(
+                    index: 0, command: "activate", target: nil,
+                    timeSeconds: 1.234, outcome: .passed
+                ),
+            ]
         )
         let xml = report.junitXML()
 
@@ -222,15 +227,24 @@ final class HeistPlaybackReportTests: XCTestCase {
         let report = HeistPlaybackReport(
             heistName: "target-test",
             app: "com.test.app",
+            totalStepCount: 10,
             totalTimeSeconds: 0.5,
             steps: [step]
         )
         let xml = report.junitXML()
 
-        assertContains(xml, "command: swipe")
+        assertContains(xml, "Completed 0/10 steps before failure.")
+        assertContains(xml, "step: [0] swipe")
         assertContains(xml, "label=&quot;List&quot;")
         assertContains(xml, "identifier=&quot;main-list&quot;")
         assertContains(xml, "error: swipe failed")
+    }
+
+    func testJunitXMLHeistNameAsTestcaseName() {
+        let report = makeReport(outcomes: [.passed])
+        let xml = report.junitXML()
+
+        assertContains(xml, "<testcase name=\"test-heist\"")
     }
 
     // MARK: - Equatable
@@ -246,7 +260,9 @@ final class HeistPlaybackReportTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func makeReport(outcomes: [HeistPlaybackReport.Outcome]) -> HeistPlaybackReport {
+    private func makeReport(
+        outcomes: [HeistPlaybackReport.Outcome], totalStepCount: Int? = nil
+    ) -> HeistPlaybackReport {
         let steps = outcomes.enumerated().map { index, outcome in
             HeistPlaybackReport.StepResult(
                 index: index,
@@ -259,6 +275,7 @@ final class HeistPlaybackReportTests: XCTestCase {
         return HeistPlaybackReport(
             heistName: "test-heist",
             app: "com.test.app",
+            totalStepCount: totalStepCount ?? outcomes.count,
             totalTimeSeconds: steps.reduce(0) { $0 + $1.timeSeconds },
             steps: steps
         )
