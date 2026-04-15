@@ -280,7 +280,7 @@ Button Heist is a debug-only development tool. Its security model is designed ar
 
 ### Bonjour Fingerprint Exposure
 
-The TLS certificate SHA-256 fingerprint is published in a plaintext Bonjour TXT record (`certfp` key in `ServerTransport.swift`). Any device on the LAN can read it. This is by design — clients need the fingerprint for trust-on-first-use pinning.
+The TLS certificate SHA-256 fingerprint is published in a plaintext Bonjour TXT record (`TXTRecordKey.certFingerprint` in `Messages.swift`, published via `ServerTransport.swift`). Any device on the LAN can read it. This is by design — clients need the fingerprint for trust-on-first-use pinning.
 
 **Risk**: A LAN-local attacker can read the fingerprint. However, SHA-256 is collision-resistant, so knowledge of the fingerprint does not enable certificate forgery. The fingerprint is a verifier, not a secret.
 
