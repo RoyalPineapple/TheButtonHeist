@@ -423,12 +423,12 @@ Search for an element by scrolling through scroll views. Uses an `ElementMatcher
 
 **By label:**
 ```json
-{"protocolVersion":"6.4","type":"scrollToVisible","payload":{"match":{"label":"Color Picker"}}}
+{"protocolVersion":"6.8","type":"scrollToVisible","payload":{"match":{"label":"Color Picker"}}}
 ```
 
 **Compound match with direction:**
 ```json
-{"protocolVersion":"6.4","type":"scrollToVisible","payload":{"match":{"label":"Settings","traits":["header"]},"direction":"up"}}
+{"protocolVersion":"6.8","type":"scrollToVisible","payload":{"match":{"label":"Settings","traits":["header"]},"direction":"up"}}
 ```
 
 **Response** includes `scrollSearchResult` on the `actionResult`:
@@ -525,7 +525,7 @@ Returns an `actionResult` with `method: "waitForChange"` and an `interfaceDelta`
 Wait for an element matching a predicate to appear (or disappear). Uses settle-event polling, not busy-waiting.
 
 ```json
-{"protocolVersion":"6.5","type":"waitFor","payload":{"match":{"label":"Loading"},"absent":true,"timeout":5.0}}
+{"protocolVersion":"6.8","type":"waitFor","payload":{"match":{"label":"Loading"},"absent":true,"timeout":5.0}}
 ```
 
 | Field | Type | Description |
@@ -853,7 +853,7 @@ Recording failed with an error.
 Broadcast to all subscribed clients (including observers) after a driver performs an action. Contains the command, result, and interface delta.
 
 ```json
-{"protocolVersion":"6.5","type":"interaction","payload":{"timestamp":1709472045.123,"command":{"type":"activate","payload":{"identifier":"loginButton"}},"result":{"success":true,"method":"syntheticTap","interfaceDelta":{"kind":"elementsChanged","elementCount":12,"updated":[{"heistId":"button·loginButton","changes":[{"property":"value","old":null,"new":"Loading..."}]}]}}}}
+{"protocolVersion":"6.8","type":"interaction","payload":{"timestamp":1709472045.123,"command":{"type":"activate","payload":{"identifier":"loginButton"}},"result":{"success":true,"method":"syntheticTap","interfaceDelta":{"kind":"elementsChanged","elementCount":12,"updated":[{"heistId":"button·loginButton","changes":[{"property":"value","old":null,"new":"Loading..."}]}]}}}}
 ```
 
 | Field | Type | Description |

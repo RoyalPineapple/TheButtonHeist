@@ -61,7 +61,7 @@ final class FenceResponseTests: XCTestCase {
 
     func testInterfaceWithElementsHumanFormatting() {
         let element = HeistElement(
-            order: 0, description: "Button", label: "Submit",
+            description: "Button", label: "Submit",
             value: nil, identifier: "submitBtn",
             frameX: 10, frameY: 20, frameWidth: 100, frameHeight: 44,
             actions: [.activate]
@@ -177,7 +177,7 @@ final class FenceResponseTests: XCTestCase {
 
     func testDeltaElementsChangedFormatting() {
         let added = [HeistElement(
-            order: 3, description: "New", label: "New Button",
+            description: "New", label: "New Button",
             value: nil, identifier: nil,
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44, actions: []
         )]
@@ -247,7 +247,7 @@ final class FenceResponseTests: XCTestCase {
 
     func testInterfaceJsonFormatting() {
         let element = HeistElement(
-            order: 0, description: "Button", label: "OK",
+            description: "Button", label: "OK",
             value: nil, identifier: nil,
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44, actions: []
         )

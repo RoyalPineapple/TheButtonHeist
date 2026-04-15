@@ -15,8 +15,8 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../submodules/AccessibilitySnapshotBH"),
-        .package(url: "https://github.com/apple/swift-certificates", from: "1.0.0"),
-        .package(url: "https://github.com/apple/swift-crypto", from: "3.0.0"),
+        .package(url: "https://github.com/apple/swift-certificates", .upToNextMinor(from: "1.18.0")),
+        .package(url: "https://github.com/apple/swift-crypto", .upToNextMinor(from: "3.15.0")),
     ],
     targets: [
         .target(
@@ -69,7 +69,7 @@ let package = Package(
                 .product(name: "Crypto", package: "swift-crypto"),
             ],
             path: "Tests/ButtonHeistTests",
-            swiftSettings: [.swiftLanguageMode(.v5), .unsafeFlags(["-warnings-as-errors"])]
+            swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
         ),
         .testTarget(
             name: "TheInsideJobTests",
@@ -78,7 +78,7 @@ let package = Package(
                 .product(name: "Crypto", package: "swift-crypto"),
             ],
             path: "Tests/TheInsideJobTests",
-            swiftSettings: [.swiftLanguageMode(.v5), .unsafeFlags(["-warnings-as-errors"])]
+            swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
         )
     ]
 )

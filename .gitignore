@@ -8,8 +8,8 @@ ButtonHeist/ButtonHeist.xcodeproj/
 ButtonHeist/Workspace.xcworkspace/
 ButtonHeist/Derived/
 
-# Package resolved files (regenerated on build)
-Package.resolved
+# Root Package.resolved (not used — CLI and MCP have their own)
+/Package.resolved
 
 # Xcode user-specific files
 *.xcuserstate

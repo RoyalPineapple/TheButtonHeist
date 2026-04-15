@@ -212,6 +212,12 @@ Visual interaction feedback for taps and continuous gestures. All overlays are d
 - `FingerprintWindow`: Live UIView-based overlay for on-device display (window level `statusBar + 100`)
 - Recordings include fingerprints because `captureScreenForRecording()` draws all windows (including `FingerprintWindow`) via `drawHierarchy`
 
+### Platform Support
+
+- **iPhone**: All screen sizes supported
+- **iPad**: Single-app mode supported. Multi-window (Split View, Slide Over, Stage Manager) is not supported — the framework assumes single-window coordinate space
+- **Accessibility settings**: The framework reads the iOS accessibility tree but does not adapt to system accessibility preference changes (Dynamic Type, Reduce Motion, etc.)
+
 ---
 
 ## TheHandoff (macOS Connection Lifecycle)
@@ -340,6 +346,15 @@ public enum RecordingPhase: Equatable {
 }
 ```
 
+### Device Protocols
+
+| Type | Description |
+|------|-------------|
+| `DeviceConnecting` | Protocol for device connection implementations. Defines `connect()`, `disconnect()`, `send(_:)`, and connection state callbacks. |
+| `DeviceDiscovering` | Protocol for device discovery implementations. Defines `start()`, `stop()`, and discovery event callbacks. |
+| `ConnectionEvent` | Events emitted by `DeviceConnecting`: `.connected`, `.disconnected(Error?)`, `.data(Data)` |
+| `DiscoveryEvent` | Events emitted by `DeviceDiscovering`: `.found(DiscoveredDevice)`, `.lost(DiscoveredDevice)`, `.stateChanged(isReady:)` |
+
 ---
 
 ## TheFence (Orchestration Layer)
@@ -437,7 +452,7 @@ Single source of truth for the 38 supported commands. Each case has a `rawValue`
 public enum FenceResponse
 ```
 
-Typed response enum with `humanFormatted() -> String` and `jsonDict() -> [String: Any]?` serialization.
+Typed response enum with `humanFormatted() -> String`, `jsonDict() -> [String: Any]?`, and `compactFormatted() -> String` (token-efficient compact text format used by MCP and JSON output modes) serialization.
 
 #### Cases
 
@@ -459,6 +474,9 @@ Typed response enum with `humanFormatted() -> String` and `jsonDict() -> [String
 | `targets(_:defaultTarget:)` | Named targets from config file with optional default |
 | `sessionLog(manifest:)` | Current session manifest for `get_session_log` |
 | `archiveResult(path:manifest:)` | Archive path and final manifest for `archive_session` |
+| `heistStarted(message:)` | Heist recording started confirmation |
+| `heistStopped(path:stepCount:)` | Heist recording stopped with file path and step count |
+| `heistPlayback(completedSteps:failedIndex:totalTimingMs:failure:)` | Heist playback result with pass/fail and timing |
 
 ### FenceError
 
@@ -549,7 +567,7 @@ Structured reason for why a connection was closed. Passed via `ConnectionEvent.d
 
 ### Overview
 
-MCP server exposing 21 purpose-built tools backed by TheFence. `activate` is the primary interaction tool — it uses the activation-first pattern (accessibility activation, then synthetic tap fallback). Pass `action` to `activate` to perform named actions (increment, decrement, or custom actions). Low-level touch gestures are grouped under `gesture` as escape hatches. Build with:
+MCP server exposing 23 purpose-built tools backed by TheFence. `activate` is the primary interaction tool — it uses the activation-first pattern (accessibility activation, then synthetic tap fallback). Pass `action` to `activate` to perform named actions (increment, decrement, or custom actions). Low-level touch gestures are grouped under `gesture` as escape hatches. Build with:
 
 ```bash
 cd ButtonHeistMCP && swift build -c release
@@ -653,7 +671,7 @@ With the default `stop_on_error` policy, the batch halts at the first mismet exp
 
 ```swift
 public let buttonHeistServiceType = "_buttonheist._tcp"
-public let protocolVersion = "6.4"  // Protocol v6.4: added ElementProperty.label for label change tracking
+public let protocolVersion = "6.8"  // Protocol v6.8: current wire protocol version
 ```
 
 ### ConnectionPhase
@@ -1365,6 +1383,16 @@ A single recorded interaction event captured during a Stakeout recording.
 - `command: ClientMessage` - The command that triggered this interaction
 - `result: ActionResult` - The result returned to the client
 - `interfaceDelta: InterfaceDelta?` - Compact delta describing what changed in the hierarchy (from result.interfaceDelta)
+
+### Playback Types
+
+| Type | Description |
+|------|-------------|
+| `HeistPlayback` | Recorded heist script for deterministic replay |
+| `HeistEvidence` | Single step of evidence from a heist execution |
+| `HeistValue` | Dynamically-typed JSON value (bool, int, double, string, array, object) |
+| `RecordedMetadata` | Metadata from the original recording session |
+| `RecordedFrame` | Single recorded command with its expected outcome |
 
 ---
 

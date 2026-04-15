@@ -87,6 +87,52 @@ jobs:
         timeout-minutes: 5
         run: swift build --target ButtonHeist
 
+  cli-tests:
+    runs-on: macos-15
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          submodules: recursive
+
+      - name: Resolve dependencies
+        timeout-minutes: 5
+        run: cd ButtonHeistCLI && swift package resolve
+
+      - name: Build CLI
+        timeout-minutes: 5
+        run: cd ButtonHeistCLI && swift build
+
+      - name: Run CLI tests
+        timeout-minutes: 5
+        run: cd ButtonHeistCLI && swift test
+
+  mcp-tests:
+    runs-on: macos-15
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          submodules: recursive
+
+      - name: Resolve dependencies
+        timeout-minutes: 5
+        run: cd ButtonHeistMCP && swift package resolve
+
+      - name: Build MCP server
+        timeout-minutes: 5
+        run: cd ButtonHeistMCP && swift build
+
+      - name: Run MCP tests
+        timeout-minutes: 5
+        run: cd ButtonHeistMCP && swift test
+
   macos-tests:
     runs-on: macos-15
     timeout-minutes: 15
@@ -216,6 +262,23 @@ jobs:
             xcodebuild -workspace ButtonHeist.xcworkspace -scheme "$scheme" \
               -destination "$DEST" build
           done
+
+      - name: Measure framework sizes
+        run: |
+          DERIVED=$(ls -td ~/Library/Developer/Xcode/DerivedData/ButtonHeist*/Build/Products/Debug-iphonesimulator/ | head -1)
+          echo "## Framework Sizes" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Framework | Size |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-----------|------|" >> "$GITHUB_STEP_SUMMARY"
+          for fw in TheInsideJob TheScore ThePlant; do
+            if [ -d "$DERIVED/${fw}.framework" ]; then
+              SIZE=$(du -sh "$DERIVED/${fw}.framework" | cut -f1)
+              echo "| ${fw} | ${SIZE} |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+          if [ -d "$DERIVED/BH Demo.app" ]; then
+            APP_SIZE=$(du -sh "$DERIVED/BH Demo.app" | cut -f1)
+            echo "| BH Demo.app (total) | ${APP_SIZE} |" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Wait for simulator boot
         timeout-minutes: 5

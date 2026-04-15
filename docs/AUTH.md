@@ -182,19 +182,19 @@ Auth messages use the standard newline-delimited JSON format wrapped in envelope
 ### Server → Client (ResponseEnvelope)
 
 ```json
-{"protocolVersion":"6.1","requestId":null,"type":"serverHello"}
-{"protocolVersion":"6.1","requestId":null,"type":"authRequired"}
-{"protocolVersion":"6.1","requestId":null,"type":"authApproved","payload":{"token":"A1B2C3D4-E5F6-..."}}
-{"protocolVersion":"6.1","requestId":null,"type":"authFailed","payload":"Invalid token. Retry without a token to request a fresh session."}
+{"protocolVersion":"6.8","requestId":null,"type":"serverHello"}
+{"protocolVersion":"6.8","requestId":null,"type":"authRequired"}
+{"protocolVersion":"6.8","requestId":null,"type":"authApproved","payload":{"token":"A1B2C3D4-E5F6-..."}}
+{"protocolVersion":"6.8","requestId":null,"type":"authFailed","payload":"Invalid token. Retry without a token to request a fresh session."}
 ```
 
 ### Client → Server (RequestEnvelope)
 
 ```json
-{"protocolVersion":"6.1","requestId":null,"type":"clientHello"}
-{"protocolVersion":"6.1","requestId":"req-1","type":"authenticate","payload":{"token":"my-secret-token"}}
-{"protocolVersion":"6.1","requestId":"req-2","type":"authenticate","payload":{"token":""}}
-{"protocolVersion":"6.1","requestId":null,"type":"watch","payload":{"token":""}}
+{"protocolVersion":"6.8","requestId":null,"type":"clientHello"}
+{"protocolVersion":"6.8","requestId":"req-1","type":"authenticate","payload":{"token":"my-secret-token"}}
+{"protocolVersion":"6.8","requestId":"req-2","type":"authenticate","payload":{"token":""}}
+{"protocolVersion":"6.8","requestId":null,"type":"watch","payload":{"token":""}}
 ```
 
 An empty token string in `authenticate` requests UI approval. A non-empty token attempts direct authentication. The `watch` message establishes a read-only observer connection.
@@ -271,8 +271,38 @@ These limits are enforced by `SimpleSocketServer` and apply to both authenticate
 | Rate limit | 30 msg/sec | Per-client, sliding 1-second window |
 | Receive buffer | 10 MB | Per-client; exceeded → disconnect |
 | Auth failure delay | 100 ms | Allows `authFailed` to arrive before TCP close |
-| Bind address (simulator) | `::1` (loopback) | Controlled by `bindToLoopback` parameter |
-| Bind address (device) | `::` (all interfaces) | Accepts WiFi and USB connections |
+| Bind address (simulator-only scope) | `::1` (loopback) | Automatic when `allowedScopes == [.simulator]` |
+| Bind address (USB/network scope) | `::` (all interfaces) | Accepts WiFi and USB connections |
+
+## Threat Model
+
+Button Heist is a debug-only development tool. Its security model is designed around the assumption that the attacker is not on the same machine or local network as the developer. The following documents the trust boundaries and known exposures.
+
+### Bonjour Fingerprint Exposure
+
+The TLS certificate SHA-256 fingerprint is published in a plaintext Bonjour TXT record (`TXTRecordKey.certFingerprint` in `Messages.swift`, published via `ServerTransport.swift`). Any device on the LAN can read it. This is by design — clients need the fingerprint for trust-on-first-use pinning.
+
+**Risk**: A LAN-local attacker can read the fingerprint. However, SHA-256 is collision-resistant, so knowledge of the fingerprint does not enable certificate forgery. The fingerprint is a verifier, not a secret.
+
+**Mitigation**: For environments where LAN visibility is a concern (e.g., shared office networks), use direct connection via `BUTTONHEIST_DEVICE=host:port` which bypasses Bonjour entirely.
+
+### Loopback TLS Bypass
+
+When connecting to loopback (simulator-to-same-Mac path) without a fingerprint, TLS certificate verification is skipped (`DeviceConnection.swift` `makeLoopbackTLSParameters`). The connection still uses TLS encryption, but any certificate is accepted.
+
+**Risk**: Any process on the same host can MITM the loopback connection.
+
+**Mitigation**: This path is simulator-only. The simulator and client run on the same machine where process isolation is the trust boundary. The bypass is logged at `.warning` level. On-device (USB/WiFi) connections always perform full fingerprint verification.
+
+### Token as Coordination, Not Security
+
+The session token prevents agent collisions, not unauthorized access. It is logged with `.public` privacy so that agents can self-diagnose auth mismatches by reading logs. The token appears in:
+
+- Console logs at server startup
+- `authApproved` wire messages (sent to the connecting client)
+- Environment variables (`INSIDEJOB_TOKEN`, `BUTTONHEIST_TOKEN`)
+
+The real access control is the `ConnectionScope` filter that restricts which network interfaces can connect (simulator, USB, or network). By default, only simulator and USB connections are accepted.
 
 ## Component Responsibilities
 

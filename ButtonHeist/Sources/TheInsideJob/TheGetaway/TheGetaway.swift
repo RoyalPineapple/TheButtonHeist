@@ -94,6 +94,12 @@ final class TheGetaway {
             }
         }
 
+        transport.onRateLimited = { [weak self] _, respond in
+            Task { @MainActor in
+                self?.sendMessage(.error("Rate limited: max \(SimpleSocketServer.maxMessagesPerSecond) messages per second"), respond: respond)
+            }
+        }
+
         transport.onUnauthenticatedData = { [weak self] clientId, data, respond in
             Task { @MainActor in
                 guard let self else { return }

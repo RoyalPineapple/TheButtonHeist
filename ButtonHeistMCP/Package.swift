@@ -11,7 +11,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../ButtonHeist"),
-        .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.11.0")
+        .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", .upToNextMinor(from: "0.11.0"))
     ],
     targets: [
         .executableTarget(
