@@ -104,50 +104,13 @@ $BH record --output demo.mp4 --fps 8 --scale 0.5         # Record with touch ove
 
 The session REPL accepts both JSON and shorthand: `tap loginButton`, `type "hello"`, `scroll down list`, `screen`.
 
-## What It Can Do
-
-### Interact
-
-The agent works the controls the way VoiceOver does, by meaning, not by pixel.
-
-- **Accessibility-first activation.** `activate` calls `accessibilityActivate()`, the exact code path VoiceOver takes, then falls back to synthetic tap. Gets past custom controls that swallow raw touch events
-- **Full gesture suite.** Long press, swipe, drag, pinch, rotate, two-finger tap, bezier paths via IOHIDEvent
-- **Text input.** Type, delete, clear, read back values. Edit actions: copy, paste, cut, select, selectAll. Pasteboard read/write without triggering the system paste dialog
-- **Scroll semantics.** `scroll` (one page), `scroll_to_visible` (find element), `scroll_to_edge` (jump to boundary)
-- **Accessibility actions.** Increment/decrement, named custom actions, dismiss keyboard
-
-### Inspect
-
-Every element has a stable identity and every action has a structured receipt.
-
-- **Full accessibility tree.** Labels, values, 43 named traits, frames, activation points, custom content, available actions
-- **Stable identifiers.** `heistId` derived from trait + label (`button_login`, `header_settings`), developer identifier takes priority
-- **Screenshots.** PNG capture, inline base64 or saved to file
-- **Animation idle detection.** Blocks until `CALayer` animations settle
-
-### Record
-
-Capture what the agent does, for debugging, demos, or audit trails.
-
-- **H.264/MP4 screen recording.** Configurable FPS (1-15), resolution scale (0.25-1.0)
-- **Touch overlay.** Finger position indicators baked into the video
-- **Auto-stop.** On inactivity timeout or max duration
-- **Interaction log.** Timestamped JSON of all actions during the session
-
-### Connect
-
-Multiple paths in, one API out.
-
-- **WiFi.** Bonjour auto-discovery on `_buttonheist._tcp`
-- **USB.** CoreDevice IPv6 tunnel discovery. Same API as WiFi
-- **Security.** TLS 1.3 with SHA-256 fingerprint pinning. Token auth with on-device Allow/Deny
-- **Multi-device.** Many instances, many simulators. Session locking (one driver at a time)
+Full gesture suite, text input with edit actions, three scroll modes, H.264 recording with touch overlay, WiFi and USB with TLS 1.3, multi-device session locking. Details in the [API Reference](docs/API.md).
 
 ## How It Works
 
 The coordinate-based approach reads the accessibility tree, extracts element frames, and throws the rest away. The agent works with geometry, not meaning. Every action requires re-reading the full tree to know what happened.
 
-Button Heist works from the inside, the same position VoiceOver occupies. The framework lives in your app, tracking the live hierarchy. No coordinate math, no reconstruction, no re-reading.
+Button Heist works from the inside, the same position VoiceOver occupies. The framework lives in your app. It doesn't read the hierarchy and discard it. It watches it live.
 
 Three things follow from being inside:
 
@@ -218,7 +181,7 @@ But the deepest advantage isn't speed. The agent and a VoiceOver user are naviga
 
 Accessibility bugs stick around because the people who report them rarely have the leverage to get them prioritized. When an agent hits the same bug, it blocks automation and gets fixed. VoiceOver users benefit.
 
-Agents already write our code. Accessibility is how they see what they built.
+Agents already write our code. When they look at what they built, they're looking through the accessibility layer.
 
 ## Benchmarks
 
@@ -307,53 +270,6 @@ Every heist needs a team.
 |------|------|
 | **ButtonHeistCLI** | Your orders. `list`, `session`, `activate`, `touch`, `type`, `screenshot`, `record`, and more |
 | **ButtonHeistMCP** | Agent interface. 23 tools that call through TheFence so AI agents can run the job natively |
-
-## Architecture
-
-```mermaid
-%% If you can read this, the diagram isn't rendering. Try github.com in a browser.
-graph TD
-    AI["AI Agent<br/>(Claude, or any MCP client)"]
-    HUMAN["A Human<br/>(You even)"]
-    MCP["buttonheist-mcp<br/>23 tools"]
-    CLI["buttonheist CLI<br/>31 subcommands"]
-    Client["TheFence / TheHandoff<br/>(ButtonHeist framework)"]
-    IJ["TheInsideJob<br/>(embedded in your app)"]
-    App["Your iOS App"]
-
-    AI -->|"MCP (JSON-RPC over stdio)"| MCP
-    MCP --> Client
-    HUMAN -->|"A Terminal"| CLI
-    CLI --> Client
-    Client -->|"TLS over WiFi / USB"| IJ
-    IJ --> App
-
-    subgraph Intelligence["Intelligence"]
-        HUMAN
-        AI
-    end
-
-    subgraph Mac["Your Mac"]
-        MCP
-        CLI
-        Client
-    end
-
-    subgraph Device["iOS Device or Simulator"]
-        IJ
-        App
-    end
-```
-
-### Modules
-
-| Module | Platform | What it does |
-|--------|----------|-------------|
-| **TheScore** | iOS + macOS | Wire protocol: `HeistElement`, `InterfaceDelta`, `ElementMatcher`. The contract both sides speak |
-| **TheInsideJob** | iOS | In-app server: TCP + Bonjour, accessibility capture, touch injection, recording, auth. Auto-starts via ObjC `+load` (DEBUG only) |
-| **ButtonHeist** | macOS | Client framework: TheFence (command dispatch + request correlation), TheHandoff (discovery + connection + state) |
-| **ButtonHeistMCP** | macOS | MCP server: 23 tools dispatching through TheFence |
-| **buttonheist** | macOS | CLI: interactive session REPL with auto-reconnect and three output formats (human/json/compact) |
 
 ## Development
 
