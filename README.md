@@ -175,7 +175,7 @@ Deltas, expectations, and batching, each one enabling the next. That's the compo
 
 ### 4. Every workflow writes its own regression test
 
-Because every action carries a semantic target and a structured result, Button Heist can record an agent's session as a replayable `.heist` file. Each step is captured as a semantic matcher — label, traits, identifier — not coordinates or ephemeral IDs. The matcher targets the accessibility contract, not transient UI state, so it stays stable across runs.
+Because every action carries a semantic target and a structured result, Button Heist can record an agent's session as a replayable `.heist` file. Each step is captured as a semantic matcher — label, traits, identifier — not coordinates. The matcher targets the accessibility contract, not layout.
 
 Replay re-executes each step through the same dispatch path. If an element can no longer be found by its accessibility properties, the test fails. That failure means one thing: an accessibility contract broke. The label changed, a trait disappeared, a custom action was removed. JUnit XML output (`--junit`) puts these into CI.
 
