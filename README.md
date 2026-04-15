@@ -6,11 +6,11 @@
 
 # Interface out. Agents in. Clean escape.
 
-There's a second interface running underneath every iOS app. Built for VoiceOver and the millions of blind and low-vision people who depend on it daily, the accessibility layer is the plumbing beneath the UI — every control, every action, every state, described in a semantic map we maintain under the pixel polish.
+There's a second interface running underneath every iOS app. Built for VoiceOver and the millions of blind and low-vision people who depend on it daily, the accessibility layer is the plumbing beneath the UI: every control, every action, every state, described in a semantic map we maintain under the pixel polish.
 
 In practice, coverage varies. VoiceOver users notice the gaps.
 
-Button Heist lets AI agents in through those same pipes — and gives them the same full control. Link one framework into your debug build and the agent works the interface from the inside. No coordinate math, no screenshot parsing. Same APIs VoiceOver uses. It activates a login button by name, calls `increment` on a stepper, triggers a "Delete" custom action directly, because the accessibility layer already says what everything is and does.
+Button Heist lets AI agents in through those same pipes, and gives them the same full control. Link one framework into your debug build and the agent works the interface from the inside. No coordinate math, no screenshot parsing. Same APIs VoiceOver uses. It activates a login button by name, calls `increment` on a stepper, triggers a "Delete" custom action directly, because the accessibility layer already says what everything is and does.
 
 Every interaction doubles as an accessibility audit: if the agent can't find a control, neither can VoiceOver.
 
@@ -78,7 +78,7 @@ Agent: "I need to log the user in"
 
 → run_batch([type_text into textfield_email, activate button_login])
   step 1: value → "user@example.com" ✓
-  step 2: screen changed — login gone, dashboard appeared ✓
+  step 2: screen changed: login gone, dashboard appeared ✓
 ```
 
 The agent stays focused on the task, not on driving the app.
@@ -110,7 +110,7 @@ The session REPL accepts both JSON and shorthand: `tap loginButton`, `type "hell
 
 The agent works the controls the way VoiceOver does, by meaning, not by pixel.
 
-- **Accessibility-first activation.** `activate` calls `accessibilityActivate()` — the exact code path VoiceOver takes — then falls back to synthetic tap. Gets past custom controls that swallow raw touch events
+- **Accessibility-first activation.** `activate` calls `accessibilityActivate()`, the exact code path VoiceOver takes, then falls back to synthetic tap. Gets past custom controls that swallow raw touch events
 - **Full gesture suite.** Long press, swipe, drag, pinch, rotate, two-finger tap, bezier paths via IOHIDEvent
 - **Text input.** Type, delete, clear, read back values. Edit actions: copy, paste, cut, select, selectAll. Pasteboard read/write without triggering the system paste dialog
 - **Scroll semantics.** `scroll` (one page), `scroll_to_visible` (find element), `scroll_to_edge` (jump to boundary)
@@ -147,7 +147,7 @@ Multiple paths in, one API out.
 
 The coordinate-based approach reads the accessibility tree, extracts element frames, and throws the rest away. The agent works with geometry, not meaning. Every action requires re-reading the full tree to know what happened.
 
-Button Heist works from the inside — the same position VoiceOver occupies. The framework lives in your app, tracking the live hierarchy and exposing to the agent only what it needs. We track the app state so the agent misses nothing. No coordinate math, no reconstruction, no re-reading.
+Button Heist works from the inside. The same position VoiceOver occupies. The framework lives in your app, tracking the live hierarchy and exposing to the agent only what it needs. We track the app state so the agent misses nothing. No coordinate math, no reconstruction, no re-reading.
 
 Three things follow from being inside:
 
@@ -175,7 +175,7 @@ Login screen gone, dashboard appeared, new elements ready to target. Value updat
 
 The agent doesn't need to re-read the screen. The next decision starts from where the last one landed.
 
-The crew inside keeps watch between jobs too. Every response carries a **background delta** — what changed in the UI while the agent was thinking. Content loaded, a dialog appeared, an animation settled. No stale intel.
+The crew inside keeps watch between jobs too. Every response carries a **background delta**: what changed in the UI while the agent was thinking. Content loaded, a dialog appeared, an animation settled. No stale intel.
 
 ### 2. Every action can verify itself
 
@@ -214,11 +214,11 @@ Two actions, two assertions, one round trip. If the email field doesn't update, 
 
 Deltas, expectations, and batching, each one enabling the next. That's the compound advantage.
 
-But the deepest advantage isn't speed. The agent and a VoiceOver user are navigating the same interface — same labels, same traits, same actions. A coordinate-based tool can tap a button with broken accessibility and never notice. Button Heist can't. If a control is invisible to VoiceOver, it's invisible to the agent. Every session is an accessibility audit, whether you asked for one or not.
+But the deepest advantage isn't speed. The agent and a VoiceOver user are navigating the same interface: same labels, same traits, same actions. A coordinate-based tool can tap a button with broken accessibility and never notice. Button Heist can't. If a control is invisible to VoiceOver, it's invisible to the agent. Every session is an accessibility audit, whether you asked for one or not.
 
 ## Benchmarks
 
-Tested against a coordinate-based MCP server using the same model, same app, same tasks. 96 trials across 16 UI automation tasks. Both tools ran against the same app using standard iOS design patterns — forms, navigation, lists, controls.
+Tested against a coordinate-based MCP server using the same model, same app, same tasks. 96 trials across 16 UI automation tasks. Both tools ran against the same app using standard iOS design patterns: forms, navigation, lists, controls.
 
 |  | Button Heist | Coordinate-based |
 |---|---|---|
@@ -255,9 +255,9 @@ The same action through Button Heist:
   ~ medium_button: traits "button, selected" → "button"
 ```
 
-"Tapped successfully" — that's the whole response. The agent has to re-read the entire screen to find out what happened. The delta reveals it all: which properties changed, which elements appeared and disappeared, the entirety of the new state. No follow-up needed.
+"Tapped successfully." That's the whole response. The agent has to re-read the entire screen to find out what happened. The delta reveals it all: which properties changed, which elements appeared and disappeared, the entirety of the new state. No follow-up needed.
 
-That difference compounds. Every action without a delta costs a full tree read. Over a 50-action workflow, that's 50 extra round trips filling the context window. On our longest benchmark — a multi-screen workflow touching settings, todos, calculator, notes, search, and more — Button Heist finished in under 8 minutes. The coordinate-based tool needed 20.
+That difference compounds. Every action without a delta costs a full tree read. Over a 50-action workflow, that's 50 extra round trips filling the context window. On our longest benchmark, a multi-screen workflow touching settings, todos, calculator, notes, search, and more, Button Heist finished in under 8 minutes. The coordinate-based tool needed 20.
 
 Full methodology and per-task data: [docs/BENCHMARKS.md](docs/BENCHMARKS.md)
 
