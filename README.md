@@ -173,7 +173,7 @@ Two actions, two assertions, one round trip. If the email field doesn't update, 
 
 Deltas, expectations, and batching, each one enabling the next. That's the compound advantage.
 
-But the deepest advantage isn't speed. The agent and a VoiceOver user navigate the same interface: labels, traits, actions. A coordinate-based tool can tap a button with broken accessibility and never notice. Button Heist can't. If VoiceOver can't see a control, neither can the agent. Every session is an accessibility audit, whether you asked for one or not.
+But the deepest advantage isn't speed. The agent and a VoiceOver user navigate the same hierarchy, interacting with the exact same elements. A coordinate-based tool can tap a button with broken accessibility and never notice. Button Heist can't. If VoiceOver can't see a control, neither can the agent. Every session is an accessibility audit, whether you asked for one or not.
 
 Accessibility bugs stick around because the people who report them rarely have the leverage to get them prioritized. When an agent hits the same bug, it blocks automation and gets fixed. VoiceOver users benefit.
 
