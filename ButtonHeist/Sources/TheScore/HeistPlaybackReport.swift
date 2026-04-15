@@ -85,23 +85,26 @@ extension HeistPlaybackReport {
 
 extension HeistPlaybackReport {
     /// Classification of why a playback step failed.
-    public enum PlaybackErrorKind: String, Sendable, Equatable, CaseIterable {
-        /// TheFence-level error (invalid command, missing connection, etc.).
-        case fenceError
+    ///
+    /// Playback-only failures (`fenceError`, `thrown`) live here; action-level
+    /// failures wrap `ErrorKind` directly so there's no mirrored case list to
+    /// keep in sync.
+    public enum PlaybackErrorKind: Sendable, Equatable {
+        /// Command-level error (invalid command, missing connection, etc.).
+        case commandError
         /// An unexpected exception was thrown during step execution.
         case thrown
-        /// The target element was not found in the accessibility hierarchy.
-        case elementNotFound
-        /// The step timed out waiting for the expected result.
-        case timeout
-        /// The command is not supported in the current context.
-        case unsupported
-        /// The input arguments were invalid.
-        case inputError
-        /// Post-action validation failed.
-        case validationError
-        /// The action was executed but reported failure.
-        case actionFailed
+        /// An action-level error reported by the server.
+        case action(ErrorKind)
+
+        /// String name for JUnit XML `type` attribute.
+        public var typeName: String {
+            switch self {
+            case .commandError: return "commandError"
+            case .thrown: return "thrown"
+            case .action(let kind): return kind.rawValue
+            }
+        }
     }
 }
 
@@ -161,7 +164,7 @@ extension HeistPlaybackReport {
                 xml += "/>\n"
             case .failed(let message, let errorKind):
                 xml += ">\n"
-                let failureType = errorKind?.rawValue ?? "playbackFailure"
+                let failureType = errorKind?.typeName ?? "playbackFailure"
                 xml += "      <failure message=\"\(xmlEscape(message))\""
                 xml += " type=\"\(xmlEscape(failureType))\">"
                 xml += xmlEscape(failureBody(step: step, message: message))

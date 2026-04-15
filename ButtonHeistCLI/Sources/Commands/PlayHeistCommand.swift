@@ -39,6 +39,10 @@ struct PlayHeistCommand: AsyncParsableCommand {
                 let url = URL(fileURLWithPath: junitPath)
                 try xml.write(to: url, atomically: true, encoding: .utf8)
                 logStatus("JUnit report written to \(junitPath)")
+            } else if case .heistPlayback = response {
+                logStatus("Warning: --junit requested but playback report was not available")
+            } else {
+                logStatus("Warning: --junit requested but playback did not produce a report")
             }
 
             CLIRunner.outputResponse(response, format: format)

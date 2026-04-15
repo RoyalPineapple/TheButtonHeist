@@ -1199,12 +1199,15 @@ final class TheFenceHandlerTests: XCTestCase {
             "command": "play_heist", "input": heistURL.path
         ])
 
-        guard case .heistPlayback(let completedSteps, let failedIndex, _, let failure, _) = response else {
+        guard case .heistPlayback(let completedSteps, let failedIndex, _, let failure, let report) = response else {
             return XCTFail("Expected heistPlayback response, got \(response)")
         }
         XCTAssertEqual(completedSteps, 0)
         XCTAssertNil(failedIndex)
         XCTAssertNil(failure)
+        XCTAssertNotNil(report)
+        XCTAssertEqual(report?.steps.count, 0)
+        XCTAssertTrue(report?.allPassed ?? false)
     }
 
     @ButtonHeistActor
@@ -1223,12 +1226,20 @@ final class TheFenceHandlerTests: XCTestCase {
             "command": "play_heist", "input": heistURL.path
         ])
 
-        guard case .heistPlayback(let completedSteps, let failedIndex, _, let failure, _) = response else {
+        guard case .heistPlayback(let completedSteps, let failedIndex, _, let failure, let report) = response else {
             return XCTFail("Expected heistPlayback response, got \(response)")
         }
         XCTAssertEqual(completedSteps, 3)
         XCTAssertNil(failedIndex)
         XCTAssertNil(failure)
+        XCTAssertNotNil(report)
+        XCTAssertEqual(report?.steps.count, 3)
+        XCTAssertTrue(report?.allPassed ?? false)
+        for (stepIndex, stepResult) in (report?.steps ?? []).enumerated() {
+            XCTAssertEqual(stepResult.index, stepIndex)
+            XCTAssertEqual(stepResult.command, "activate")
+            XCTAssertTrue(stepResult.passed)
+        }
 
         // Verify all three activate commands were sent
         let activateMessages = mockConn.sent.filter { message, _ in
@@ -1256,7 +1267,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "command": "play_heist", "input": heistURL.path
         ])
 
-        guard case .heistPlayback(let completedSteps, let failedIndex, _, let failure, _) = response else {
+        guard case .heistPlayback(let completedSteps, let failedIndex, _, let failure, let report) = response else {
             return XCTFail("Expected heistPlayback response, got \(response)")
         }
         XCTAssertEqual(completedSteps, 1)
@@ -1268,6 +1279,12 @@ final class TheFenceHandlerTests: XCTestCase {
         } else {
             XCTFail("Expected .fenceError, got \(String(describing: failure))")
         }
+        // Report should contain 2 steps: 1 passed + 1 failed
+        XCTAssertNotNil(report)
+        XCTAssertEqual(report?.steps.count, 2)
+        XCTAssertEqual(report?.passedCount, 1)
+        XCTAssertEqual(report?.failedCount, 1)
+        XCTAssertEqual(report?.steps.last?.outcome.failureType, .commandError)
     }
 
     @ButtonHeistActor
@@ -1285,7 +1302,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "command": "play_heist", "input": heistURL.path
         ])
 
-        guard case .heistPlayback(let completedSteps, let failedIndex, _, let failure, _) = response else {
+        guard case .heistPlayback(let completedSteps, let failedIndex, _, let failure, let report) = response else {
             return XCTFail("Expected heistPlayback response, got \(response)")
         }
         XCTAssertEqual(completedSteps, 0)
@@ -1293,6 +1310,11 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertNotNil(failure)
         XCTAssertEqual(failure?.step.command, "not_a_real_command")
         XCTAssertNotNil(failure?.errorMessage)
+        // Report should contain 1 failed step only (playback stopped at index 0)
+        XCTAssertNotNil(report)
+        XCTAssertEqual(report?.steps.count, 1)
+        XCTAssertEqual(report?.passedCount, 0)
+        XCTAssertEqual(report?.failedCount, 1)
     }
 
     @ButtonHeistActor

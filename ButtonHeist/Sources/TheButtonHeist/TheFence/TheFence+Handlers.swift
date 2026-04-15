@@ -703,6 +703,8 @@ extension TheFence {
         for (index, step) in heist.steps.enumerated() {
             let stepStart = CFAbsoluteTimeGetCurrent()
             let request = step.toRequestDictionary()
+            var stepFailure: PlaybackFailure?
+
             do {
                 let response = try await execute(request: request)
 
@@ -717,46 +719,29 @@ extension TheFence {
                     let scrollResponse = try await execute(request: scrollRequest)
                     if let scrollResult = scrollResponse.actionResult, scrollResult.success {
                         let retryResponse = try await execute(request: request)
-                        if let retryFailure = playbackFailure(step: step, response: retryResponse) {
-                            let stepTime = CFAbsoluteTimeGetCurrent() - stepStart
-                            stepResults.append(stepResult(index: index, step: step, timeSeconds: stepTime, failure: retryFailure))
-                            failedIndex = index
-                            failure = retryFailure
-                            break
-                        }
-                        let stepTime = CFAbsoluteTimeGetCurrent() - stepStart
-                        stepResults.append(stepResult(index: index, step: step, timeSeconds: stepTime, failure: nil))
-                        completedSteps += 1
-                        continue
+                        stepFailure = playbackFailure(step: step, response: retryResponse)
+                    } else {
+                        // Report the original action failure, not the scroll failure —
+                        // the root cause is the element not being found, not the scroll attempt.
+                        stepFailure = playbackFailure(step: step, response: response)
                     }
-                    let stepTime = CFAbsoluteTimeGetCurrent() - stepStart
-                    failedIndex = index
-                    // Report the original action failure, not the scroll failure —
-                    // the root cause is the element not being found, not the scroll attempt.
-                    let originalFailure = playbackFailure(step: step, response: response)
-                    failure = originalFailure
-                    stepResults.append(stepResult(index: index, step: step, timeSeconds: stepTime, failure: originalFailure))
-                    break
+                } else {
+                    stepFailure = playbackFailure(step: step, response: response)
                 }
-
-                if let stepFailure = playbackFailure(step: step, response: response) {
-                    let stepTime = CFAbsoluteTimeGetCurrent() - stepStart
-                    stepResults.append(stepResult(index: index, step: step, timeSeconds: stepTime, failure: stepFailure))
-                    failedIndex = index
-                    failure = stepFailure
-                    break
-                }
-                let stepTime = CFAbsoluteTimeGetCurrent() - stepStart
-                stepResults.append(stepResult(index: index, step: step, timeSeconds: stepTime, failure: nil))
-                completedSteps += 1
             } catch {
-                let stepTime = CFAbsoluteTimeGetCurrent() - stepStart
-                failedIndex = index
                 let failedStep = PlaybackFailure.FailedStep(command: step.command, target: step.target)
-                failure = .thrown(step: failedStep, error: error.localizedDescription, interface: nil)
-                stepResults.append(stepResult(index: index, step: step, timeSeconds: stepTime, failure: failure))
+                stepFailure = .thrown(step: failedStep, error: error.localizedDescription, interface: nil)
+            }
+
+            let stepTime = CFAbsoluteTimeGetCurrent() - stepStart
+            stepResults.append(stepResult(index: index, step: step, timeSeconds: stepTime, failure: stepFailure))
+
+            if let stepFailure {
+                failedIndex = index
+                failure = stepFailure
                 break
             }
+            completedSteps += 1
         }
 
         // Capture the live interface at time of failure for diagnostics
@@ -804,10 +789,10 @@ extension TheFence {
     /// Extract the typed error kind from a PlaybackFailure.
     private func failureErrorKind(_ failure: PlaybackFailure) -> HeistPlaybackReport.PlaybackErrorKind? {
         switch failure {
-        case .fenceError: return .fenceError
+        case .fenceError: return .commandError
         case .actionFailed(_, let result, _, _):
             guard let errorKind = result.errorKind else { return nil }
-            return HeistPlaybackReport.PlaybackErrorKind(rawValue: errorKind.rawValue)
+            return .action(errorKind)
         case .thrown: return .thrown
         }
     }
