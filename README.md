@@ -173,6 +173,14 @@ Two actions, two assertions, one round trip. If the email field doesn't update, 
 
 Deltas, expectations, and batching, each one enabling the next. That's the compound advantage.
 
+### 4. Every workflow writes its own regression test
+
+Because every action carries a semantic target and a structured result, Button Heist can record an agent's session as a replayable `.heist` file. Each step is captured as a semantic matcher — label, traits, identifier — not coordinates or ephemeral IDs. The matcher targets the accessibility contract, not transient UI state, so it stays stable across runs.
+
+Replay re-executes each step through the same dispatch path. If an element can no longer be found by its accessibility properties, the test fails. That failure means one thing: an accessibility contract broke. The label changed, a trait disappeared, a custom action was removed. JUnit XML output (`--junit`) puts these into CI.
+
+The agent did its job. The test suite wrote itself. And because matchers are semantic, the same recording works on any device, any screen size, any orientation. A coordinate-based recording breaks the moment the layout shifts. A semantic recording breaks only when the accessibility interface breaks.
+
 But the deepest advantage isn't speed. The agent and a VoiceOver user navigate the same hierarchy, interacting with the exact same elements. A coordinate-based tool can tap a button with broken accessibility and never notice. Button Heist can't. If VoiceOver can't see a control, neither can the agent. Every session is an accessibility audit, whether you asked for one or not.
 
 Accessibility bugs stick around because the people who report them rarely have the leverage to get them prioritized. When an agent hits the same bug, it blocks automation and gets fixed. VoiceOver users benefit.
@@ -258,7 +266,8 @@ Every heist needs a team.
 | Name | Role |
 |------|------|
 | **TheFence** | Runs the show. 42 commands dispatched from CLI and MCP, request-response correlation, async waits |
-| **TheHandoff** | Gets everyone in position. Bonjour + USB discovery, TLS connection, session state, injectable closures for testing |
+| **TheHandoff** | Gets everyone in position. Bonjour + USB discovery, TLS 1.3 connection, session state, injectable closures for testing |
+| **TheBookKeeper** | The accountant. Session logs, artifact storage, heist recording and replay. Turns agent sessions into portable `.heist` files with semantic matchers |
 
 ### The Legitimate Front
 
