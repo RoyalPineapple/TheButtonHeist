@@ -94,7 +94,7 @@ final class TheGetaway {
             }
         }
 
-        transport.onRateLimited = { [weak self] clientId, respond in
+        transport.onRateLimited = { [weak self] _, respond in
             Task { @MainActor in
                 self?.sendMessage(.error("Rate limited: max 30 messages per second"), respond: respond)
             }

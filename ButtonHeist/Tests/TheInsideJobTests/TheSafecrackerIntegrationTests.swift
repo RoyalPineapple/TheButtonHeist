@@ -138,6 +138,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         let textField = UITextField()
         textField.frame = CGRect(x: 50, y: 400, width: 200, height: 44)
         textField.borderStyle = .roundedRect
+        textField.autocapitalizationType = .none
         textField.isAccessibilityElement = true
         textField.accessibilityLabel = "TypeTest"
         window.addSubview(textField)
