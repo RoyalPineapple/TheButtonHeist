@@ -14,7 +14,7 @@ Button Heist lets AI agents in through those same pipes — and gives them the s
 
 Every interaction doubles as an accessibility audit: if the agent can't find a control, neither can VoiceOver.
 
-The heist works because the infrastructure was already in place. Apple built the tunnels. Once the agent is inside, everything else follows.
+The heist works because the infrastructure was already in place. A language interface designed for intelligence, with decades of research behind it.
 
 <!-- TODO: terminal GIF showing run_batch with delta response -->
 
@@ -145,11 +145,11 @@ Multiple paths in, one API out.
 
 ## How It Works
 
-Most iOS automation tools work from the outside: read the accessibility tree across a process boundary, extract element frames, compute tap coordinates, inject touch events at those coordinates. The agent never touches the real interface — it works with a coordinate-level approximation of it. Every action requires re-reading the full tree to know what happened.
+The coordinate-based approach reads the accessibility tree, extracts element frames, and throws the rest away. The agent works with geometry, not meaning. Every action requires re-reading the full tree to know what happened.
 
-Button Heist works from the inside. The framework lives in the app process, with direct access to the live accessibility hierarchy. When a control is a stepper, the agent calls `increment` — the same API path VoiceOver uses. When a row has a "Delete" custom action, the agent calls it by name. No coordinate math, no frame extraction, no re-reading the tree after every tap. This produces measurable gains — see [Benchmarks](docs/BENCHMARKS.md) for competitive data.
+Button Heist works from the inside — the same position VoiceOver occupies. The framework lives in your app, tracking the live hierarchy and exposing to the agent only what it needs. We track the app state so the agent misses nothing. No coordinate math, no reconstruction, no re-reading.
 
-Three things follow from this:
+Three things follow from being inside:
 
 ### 1. Every action tells the agent what changed
 
@@ -255,11 +255,17 @@ The same action through Button Heist:
   ~ medium_button: traits "button, selected" → "button"
 ```
 
-"Tapped successfully" tells the agent nothing — it has to re-read the entire screen to find out what happened. The delta reveals it all: which properties changed, which elements appeared and disappeared, the entirety of the new state. No follow-up needed.
+"Tapped successfully" — that's the whole response. The agent has to re-read the entire screen to find out what happened. The delta reveals it all: which properties changed, which elements appeared and disappeared, the entirety of the new state. No follow-up needed.
 
 That difference compounds. Every action without a delta costs a full tree read. Over a 50-action workflow, that's 50 extra round trips filling the context window. On our longest benchmark — a multi-screen workflow touching settings, todos, calculator, notes, search, and more — Button Heist finished in under 8 minutes. The coordinate-based tool needed 20.
 
 Full methodology and per-task data: [docs/BENCHMARKS.md](docs/BENCHMARKS.md)
+
+---
+
+*That's the job. What follows is the crew, the blueprints, and the fine print.*
+
+---
 
 ## Meet the Crew
 
