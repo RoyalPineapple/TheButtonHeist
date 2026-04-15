@@ -8,7 +8,7 @@
 
 There's a second interface running underneath every iOS app. Built for VoiceOver and the millions of blind and low-vision people who depend on it daily, the accessibility layer runs like plumbing beneath the UI. Invisible but essential, quietly connecting every control, every action, every state. A complete semantic map of the app, maintained by the developer. Like the best infrastructure, essential to some, unnoticed by most.
 
-Button Heist lets AI agents in through those pipes. Link one framework into your debug build and the agent works the interface from the inside. No coordinate math, no screenshot parsing. It activates a login button by name, calls `increment` on a stepper, triggers a "Delete" custom action directly, because the accessibility layer already says what everything is and does.
+Button Heist lets AI agents in through those pipes — and gives them the same full control. Link one framework into your debug build and the agent works the interface from the inside. No coordinate math, no screenshot parsing. Same APIs VoiceOver uses. It activates a login button by name, calls `increment` on a stepper, triggers a "Delete" custom action directly, because the accessibility layer already says what everything is and does.
 
 Every interaction doubles as an accessibility audit: if the agent can't find a control, neither can VoiceOver.
 
@@ -66,7 +66,7 @@ Then add the MCP server to your project's `.mcp.json`:
 }
 ```
 
-This exposes 28 tools to your agent: `get_interface`, `activate`, `type_text`, `run_batch`, `get_screen`, and more. The agent discovers your app via Bonjour automatically:
+This exposes 23 tools to your agent: `get_interface`, `activate`, `type_text`, `run_batch`, `get_screen`, and more. The agent discovers your app via Bonjour automatically:
 
 ```
 Agent: "I need to log the user in"
@@ -105,7 +105,7 @@ The session REPL accepts both JSON and shorthand: `tap loginButton`, `type "hell
 
 The agent works the controls the way VoiceOver does, by meaning, not by pixel.
 
-- **Accessibility-first activation.** `activate` calls `accessibilityActivate()` first, falls back to synthetic tap. Works on custom controls that swallow raw touch events
+- **Accessibility-first activation.** `activate` calls `accessibilityActivate()` — the exact code path VoiceOver takes — then falls back to synthetic tap. Gets past custom controls that swallow raw touch events
 - **Full gesture suite.** Long press, swipe, drag, pinch, rotate, two-finger tap, bezier paths via IOHIDEvent
 - **Text input.** Type, delete, clear, read back values. Edit actions: copy, paste, cut, select, selectAll. Pasteboard read/write without triggering the system paste dialog
 - **Scroll semantics.** `scroll` (one page), `scroll_to_visible` (find element), `scroll_to_edge` (jump to boundary)
@@ -135,7 +135,7 @@ Multiple paths in, one API out.
 
 - **WiFi.** Bonjour auto-discovery on `_buttonheist._tcp`
 - **USB.** CoreDevice IPv6 tunnel discovery. Same API as WiFi
-- **Security.** TLS 1.3 with SHA-256 fingerprint pinning. Token auth with on-device Allow/Deny
+- **Security.** TLS 1.2+ with SHA-256 fingerprint pinning. Token auth with on-device Allow/Deny
 - **Multi-device.** Many instances, many simulators. Session locking (one driver at a time)
 
 ## How It Works
@@ -169,6 +169,8 @@ After every command, Button Heist diffs the accessibility hierarchy and returns 
 Login screen gone, dashboard appeared, new elements ready to target. Value updates carry the property change inline: old value, new value, which element. When nothing changes, the delta says `"noChange"` and the agent pivots immediately.
 
 The agent doesn't need to re-read the screen. The next decision starts from where the last one landed.
+
+The crew inside keeps watch between jobs too. Every response carries a **background delta** — what changed in the UI while the agent was thinking. Content loaded, a dialog appeared, an animation settled. No stale intel.
 
 ### 2. Every action can verify itself
 
@@ -207,24 +209,27 @@ Two actions, two assertions, one round trip. If the email field doesn't update, 
 
 Deltas, expectations, and batching, each one enabling the next. That's the compound advantage.
 
+But the deepest advantage isn't speed. The agent and a VoiceOver user are navigating the same interface — same labels, same traits, same actions. A coordinate-based tool can tap a button with broken accessibility and never notice. Button Heist can't. If a control is invisible to VoiceOver, it's invisible to the agent. Every session is an accessibility audit, whether you asked for one or not.
+
 ## Benchmarks
 
-Tested against a coordinate-based MCP server using the same model, same app, same tasks. 90 trials across 15 UI automation tasks.
+Tested against a coordinate-based MCP server using the same model, same app, same tasks. 96 trials across 16 UI automation tasks.
 
 |  | Button Heist | Coordinate-based |
 |---|---|---|
-| **Wall time** | 40 min | 89 min |
-| **Tokens** | 9.2M | 22.9M |
-| **Cost** | $6.01 | $21.56 |
-| **Tasks completed** | 15/15 | 14/15 |
+| **Avg wall time** | 134s | 235s |
+| **Avg turns** | 14 | 43 |
+| **Avg cost** | $0.46 | $1.42 |
+| **Tasks completed** | 16/16 | 16/16 |
 
-**2.2x faster, 2.5x fewer tokens, 3.6x cheaper.** The gap scales with complexity:
+**2.4x faster, 3.1x fewer turns, 3.1x cheaper.** The gap scales with complexity:
 
 | Task type | Advantage | Why |
 |---|---|---|
-| Controls (steppers, pickers) | **5–8x** | Custom actions skip visual menus entirely |
-| Scroll + select | **5–6x** | Semantic find vs read-tree-compute-tap loops |
+| Scroll + select | **4–6x** | Semantic find vs read-tree-compute-tap loops |
+| Custom actions (order, complete, delete) | **3–5x** | Direct invocation vs visual menu navigation |
 | Multi-screen workflows | **2–3x** | Deltas eliminate redundant tree reads |
+| Scale (50+ actions) | **2.6x** | Per-action overhead compounds with task length |
 | Simple taps | ~1x | Both approaches handle simple buttons well |
 
 The difference is in what the agent gets back. A coordinate-based tap:
@@ -247,7 +252,7 @@ The same action through Button Heist:
 
 "Tapped successfully" tells the agent nothing — it has to re-read the entire screen to find out what happened. The delta reveals it all: which properties changed, which elements appeared and disappeared, the entirety of the new state. No follow-up needed.
 
-That difference compounds. Every action without a delta costs a full tree read. Over a 50-action workflow, that's 50 extra round trips filling the context window. On our longest benchmark — an 8-screen workflow touching settings, todos, calculator, notes, search, and more — Button Heist finished in 7 minutes. The coordinate-based tool timed out at 20.
+That difference compounds. Every action without a delta costs a full tree read. Over a 50-action workflow, that's 50 extra round trips filling the context window. On our longest benchmark — a multi-screen workflow touching settings, todos, calculator, notes, search, and more — Button Heist finished in under 8 minutes. The coordinate-based tool needed 20.
 
 Full methodology and per-task data: [docs/BENCHMARKS.md](docs/BENCHMARKS.md)
 
@@ -278,7 +283,7 @@ Every heist needs a team.
 
 | Name | Role |
 |------|------|
-| **TheFence** | Runs the show. 38 commands dispatched from CLI and MCP, request-response correlation, async waits |
+| **TheFence** | Runs the show. 43 commands dispatched from CLI and MCP, request-response correlation, async waits |
 | **TheHandoff** | Gets everyone in position. Bonjour + USB discovery, TLS connection, session state, injectable closures for testing |
 
 ### The Legitimate Front
@@ -286,7 +291,7 @@ Every heist needs a team.
 | Name | Role |
 |------|------|
 | **ButtonHeistCLI** | Your orders. `list`, `session`, `activate`, `touch`, `type`, `screenshot`, `record`, and more |
-| **ButtonHeistMCP** | Agent interface. 28 tools that call through TheFence so AI agents can run the job natively |
+| **ButtonHeistMCP** | Agent interface. 23 tools that call through TheFence so AI agents can run the job natively |
 
 ## Architecture
 
@@ -295,8 +300,8 @@ Every heist needs a team.
 graph TD
     AI["AI Agent<br/>(Claude, or any MCP client)"]
     HUMAN["A Human<br/>(You even)"]
-    MCP["buttonheist-mcp<br/>28 tools"]
-    CLI["buttonheist CLI<br/>25 subcommands"]
+    MCP["buttonheist-mcp<br/>23 tools"]
+    CLI["buttonheist CLI<br/>31 subcommands"]
     Client["TheFence / TheHandoff<br/>(ButtonHeist framework)"]
     IJ["TheInsideJob<br/>(embedded in your app)"]
     App["Your iOS App"]
@@ -332,7 +337,7 @@ graph TD
 | **TheScore** | iOS + macOS | Wire protocol: `HeistElement`, `InterfaceDelta`, `ElementMatcher`. The contract both sides speak |
 | **TheInsideJob** | iOS | In-app server: TCP + Bonjour, accessibility capture, touch injection, recording, auth. Auto-starts via ObjC `+load` (DEBUG only) |
 | **ButtonHeist** | macOS | Client framework: TheFence (command dispatch + request correlation), TheHandoff (discovery + connection + state) |
-| **ButtonHeistMCP** | macOS | MCP server: 28 tools dispatching through TheFence |
+| **ButtonHeistMCP** | macOS | MCP server: 23 tools dispatching through TheFence |
 | **buttonheist** | macOS | CLI: interactive session REPL with auto-reconnect and three output formats (human/json/compact) |
 
 ## Development
