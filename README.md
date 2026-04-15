@@ -6,13 +6,15 @@
 
 # Interface out. Agents in. Clean escape.
 
-There's a second interface running underneath every iOS app. Built for VoiceOver and the millions of blind and low-vision people who depend on it daily, the accessibility layer runs like plumbing beneath the UI. Invisible but essential, quietly connecting every control, every action, every state. A complete semantic map of the app, maintained by the developer. Like the best infrastructure, essential to some, unnoticed by most.
+There's a second interface running underneath every iOS app. Built for VoiceOver and the millions of blind and low-vision people who depend on it daily, the accessibility layer is the plumbing beneath the UI — every control, every action, every state, described in a semantic map we maintain under the pixel polish.
 
-Button Heist lets AI agents in through those pipes — and gives them the same full control. Link one framework into your debug build and the agent works the interface from the inside. No coordinate math, no screenshot parsing. Same APIs VoiceOver uses. It activates a login button by name, calls `increment` on a stepper, triggers a "Delete" custom action directly, because the accessibility layer already says what everything is and does.
+In practice, coverage varies. VoiceOver users notice the gaps.
+
+Button Heist lets AI agents in through those same pipes — and gives them the same full control. Link one framework into your debug build and the agent works the interface from the inside. No coordinate math, no screenshot parsing. Same APIs VoiceOver uses. It activates a login button by name, calls `increment` on a stepper, triggers a "Delete" custom action directly, because the accessibility layer already says what everything is and does.
 
 Every interaction doubles as an accessibility audit: if the agent can't find a control, neither can VoiceOver.
 
-The heist works because the infrastructure was already in place. Apple built the tunnels, developers maintain them. Once the agent is inside, everything else follows.
+The heist works because the infrastructure was already in place. Apple built the tunnels. Once the agent is inside, everything else follows.
 
 <!-- TODO: terminal GIF showing run_batch with delta response -->
 
@@ -70,10 +72,13 @@ This exposes 23 tools to your agent: `get_interface`, `activate`, `type_text`, `
 
 ```
 Agent: "I need to log the user in"
-→ get_interface → sees button_login, textfield_email, textfield_password
-→ run_batch([type email, tap login])
-← each step confirmed, login screen gone, dashboard appeared. Agent already
-  knows what's on screen and what to do next
+
+→ get_interface
+  textfield_email, textfield_password, button_login (12 elements)
+
+→ run_batch([type_text into textfield_email, activate button_login])
+  step 1: value → "user@example.com" ✓
+  step 2: screen changed — login gone, dashboard appeared ✓
 ```
 
 The agent stays focused on the task, not on driving the app.
@@ -213,7 +218,7 @@ But the deepest advantage isn't speed. The agent and a VoiceOver user are naviga
 
 ## Benchmarks
 
-Tested against a coordinate-based MCP server using the same model, same app, same tasks. 96 trials across 16 UI automation tasks.
+Tested against a coordinate-based MCP server using the same model, same app, same tasks. 96 trials across 16 UI automation tasks. Both tools ran against the same app using standard iOS design patterns — forms, navigation, lists, controls.
 
 |  | Button Heist | Coordinate-based |
 |---|---|---|
