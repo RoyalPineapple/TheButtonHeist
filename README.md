@@ -16,8 +16,6 @@ Every interaction doubles as an accessibility audit: if the agent can't find a c
 
 The heist works because the infrastructure was already in place. A language interface built for people to navigate apps by meaning. Turns out agents thrive in this same interface.
 
-<!-- TODO: terminal GIF showing run_batch with delta response -->
-
 ## Quick Start
 
 ### 1. Get the crew inside
