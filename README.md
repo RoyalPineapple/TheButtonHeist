@@ -6,7 +6,7 @@
 
 # Interface out. Agents in. Clean escape.
 
-There's a second interface running underneath every iOS app. Built for VoiceOver and the millions of blind and low-vision people who depend on it daily, the accessibility layer is the plumbing beneath the UI: every control, every action, every state, described in a semantic map we maintain under the pixel polish.
+There's a second interface running underneath every iOS app. Built for VoiceOver and the millions of blind and low-vision people who depend on it daily, the accessibility layer is the plumbing beneath the UI: every control, every action, every state, described in a semantic map we keep up to date under the pixel polish.
 
 In practice, coverage varies. VoiceOver users notice the gaps.
 
@@ -140,7 +140,7 @@ Multiple paths in, one API out.
 
 - **WiFi.** Bonjour auto-discovery on `_buttonheist._tcp`
 - **USB.** CoreDevice IPv6 tunnel discovery. Same API as WiFi
-- **Security.** TLS 1.2+ with SHA-256 fingerprint pinning. Token auth with on-device Allow/Deny
+- **Security.** TLS 1.3 with SHA-256 fingerprint pinning. Token auth with on-device Allow/Deny
 - **Multi-device.** Many instances, many simulators. Session locking (one driver at a time)
 
 ## How It Works
@@ -294,7 +294,7 @@ Every heist needs a team.
 
 | Name | Role |
 |------|------|
-| **TheFence** | Runs the show. 43 commands dispatched from CLI and MCP, request-response correlation, async waits |
+| **TheFence** | Runs the show. 42 commands dispatched from CLI and MCP, request-response correlation, async waits |
 | **TheHandoff** | Gets everyone in position. Bonjour + USB discovery, TLS connection, session state, injectable closures for testing |
 
 ### The Legitimate Front
