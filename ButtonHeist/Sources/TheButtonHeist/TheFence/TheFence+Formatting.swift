@@ -43,7 +43,7 @@ public enum FenceResponse {
     case archiveResult(path: String, manifest: SessionManifest)
     case heistStarted
     case heistStopped(path: String, stepCount: Int)
-    case heistPlayback(completedSteps: Int, failedIndex: Int?, totalTimingMs: Int, failure: PlaybackFailure? = nil)
+    case heistPlayback(completedSteps: Int, failedIndex: Int?, totalTimingMs: Int, failure: PlaybackFailure? = nil, report: HeistPlaybackReport? = nil)
 
     /// Extract the ActionResult if this response wraps one (for expectation checking).
     public var actionResult: ActionResult? {
@@ -115,7 +115,7 @@ public enum FenceResponse {
             return "Heist recording started"
         case .heistStopped(let path, let stepCount):
             return "Heist saved: \(path) (\(stepCount) steps)"
-        case .heistPlayback(let completedSteps, let failedIndex, let totalTimingMs, let failure):
+        case .heistPlayback(let completedSteps, let failedIndex, let totalTimingMs, let failure, _):
             var text = "Playback: \(completedSteps) step(s) completed in \(totalTimingMs)ms"
             if let index = failedIndex { text += " (failed at step \(index))" }
             if let failure {

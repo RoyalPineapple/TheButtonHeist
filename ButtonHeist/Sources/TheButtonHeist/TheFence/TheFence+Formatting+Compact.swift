@@ -72,7 +72,7 @@ extension FenceResponse {
             return "heist recording started"
         case .heistStopped(let path, let stepCount):
             return "saved: \(path) (\(stepCount) steps)"
-        case .heistPlayback(let completedSteps, let failedIndex, let totalTimingMs, let failure):
+        case .heistPlayback(let completedSteps, let failedIndex, let totalTimingMs, let failure, _):
             var text = "playback: \(completedSteps) steps in \(totalTimingMs)ms"
             if let index = failedIndex { text += " (failed at \(index))" }
             if let failure { text += " [\(failure.step.command): \(failure.errorMessage)]" }

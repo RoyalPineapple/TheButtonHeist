@@ -70,7 +70,7 @@ extension FenceResponse {
             return ["status": "ok", "recording": true]
         case .heistStopped(let path, let stepCount):
             return ["status": "ok", "path": path, "stepCount": stepCount]
-        case .heistPlayback(let completedSteps, let failedIndex, let totalTimingMs, let failure):
+        case .heistPlayback(let completedSteps, let failedIndex, let totalTimingMs, let failure, _):
             var dict: [String: Any] = [
                 "status": failedIndex == nil ? "ok" : "error",
                 "completedSteps": completedSteps,

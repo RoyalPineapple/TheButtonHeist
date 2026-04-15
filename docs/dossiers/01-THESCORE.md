@@ -35,6 +35,7 @@ TheScore is the shared playbook. It defines:
 | `Elements.swift` | `HeistElement`, `HeistTrait` (43 known cases + `unknown(String)`), `GroupType` (6 known cases + `unknown(String)`), `Interface`, `ElementNode`, `Group`, `ElementAction`, `HeistCustomContent`, `ElementTarget`, `ElementMatcher` |
 | `ClientMessages+WireCoding.swift` | Custom flat envelope encoding for client messages |
 | `ServerMessages+WireCoding.swift` | Custom flat envelope encoding for server messages |
+| `HeistPlaybackReport.swift` | `HeistPlaybackReport`, `StepResult`, `PlaybackErrorKind`, `Outcome`, `junitXML()` generation |
 | `ConnectionScope.swift` | `ConnectionScope` enum, `NetworkInterfaceNaming` protocol |
 
 ## Architecture Diagram

@@ -209,7 +209,10 @@ buttonheist start-heist --app com.example.app
 # ... perform actions ...
 buttonheist stop-heist --output recording.heist
 buttonheist play-heist --input recording.heist
+buttonheist play-heist --input recording.heist --junit report.xml
 ```
+
+The `--junit <path>` flag writes a JUnit XML report to disk. Each heist step becomes a `<testcase>` element; failed steps include a `<failure>` with the error message and typed error kind. The output is compatible with GitHub Actions, Jenkins, and other CI systems that consume JUnit XML.
 
 ### MCP
 
