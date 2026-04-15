@@ -10,11 +10,11 @@ There's a second interface running underneath every iOS app. Built for VoiceOver
 
 In practice, coverage varies. VoiceOver users notice the gaps.
 
-Button Heist lets AI agents in through those same pipes, and gives them the same full control. Link one framework into your debug build and the agent works the interface from the inside. No coordinate math, no screenshot parsing. Same APIs VoiceOver uses. It activates a login button by name, calls `increment` on a stepper, triggers a "Delete" custom action directly.
+Button Heist lets AI agents in through those pipes, and gives them full control. Link one framework into your debug build and the agent works the interface from the inside. No coordinate math, no screenshot parsing. The exact same APIs VoiceOver uses. It activates a login button by name, calls `increment` on a stepper, triggers a "Delete" custom action directly.
 
 Every interaction doubles as an accessibility audit: if the agent can't find a control, neither can VoiceOver.
 
-The heist works because the infrastructure was already in place. A language interface built for people to navigate apps by meaning. Turns out agents thrive in this same interface.
+The heist works because the infrastructure was already in place. A language interface built for people to navigate apps by meaning. Turns out agents thrive there too.
 
 ## Quick Start
 
@@ -82,8 +82,6 @@ Agent: "I need to log the user in"
 The agent stays focused on the task, not on driving the app.
 
 ### 3. Or drive it yourself
-
-The CLI is the canonical test client, and every feature is available from the command line.
 
 ```bash
 cd ButtonHeistCLI && swift build -c release && cd ..
@@ -175,11 +173,11 @@ Two actions, two assertions, one round trip. If the email field doesn't update, 
 
 Deltas, expectations, and batching, each one enabling the next. That's the compound advantage.
 
-But the deepest advantage isn't speed. The agent and a VoiceOver user are navigating the same interface: same labels, same traits, same actions. A coordinate-based tool can tap a button with broken accessibility and never notice. Button Heist can't. If a control is invisible to VoiceOver, it's invisible to the agent. Every session is an accessibility audit, whether you asked for one or not.
+But the deepest advantage isn't speed. The agent and a VoiceOver user navigate the same interface: labels, traits, actions. A coordinate-based tool can tap a button with broken accessibility and never notice. Button Heist can't. If VoiceOver can't see a control, neither can the agent. Every session is an accessibility audit, whether you asked for one or not.
 
 Accessibility bugs stick around because the people who report them rarely have the leverage to get them prioritized. When an agent hits the same bug, it blocks automation and gets fixed. VoiceOver users benefit.
 
-Agents already write our code. When they look at what they've built, they look through the accessibility layer. Make it good for them, and you've made it good for everyone.
+Agents already write our code. When they inspect what they've built, they see it through the accessibility layer. Make it good for them, and you've made it good for everyone.
 
 ## Benchmarks
 
