@@ -6,15 +6,15 @@
 
 # Interface out. Agents in. Clean escape.
 
-There's a second interface running underneath every iOS app. Built for VoiceOver and the millions of blind and low-vision people who depend on it daily, the accessibility layer is the plumbing beneath the UI: every control, every action, every state, described in a semantic map we keep up to date under the pixel polish.
+There's a second interface running underneath every iOS app. Built for VoiceOver and the millions who depend on it, the accessibility layer is the plumbing beneath the UI. Every control, every action, every state, described in a semantic map we keep up to date under the pixel polish.
 
 In practice, coverage varies. VoiceOver users notice the gaps.
 
-Button Heist lets AI agents in through those same pipes, and gives them the same full control. Link one framework into your debug build and the agent works the interface from the inside. No coordinate math, no screenshot parsing. Same APIs VoiceOver uses. It activates a login button by name, calls `increment` on a stepper, triggers a "Delete" custom action directly, because the accessibility layer already says what everything is and does.
+Button Heist lets AI agents in through those same pipes, and gives them the same full control. Link one framework into your debug build and the agent works the interface from the inside. No coordinate math, no screenshot parsing. Same APIs VoiceOver uses. It activates a login button by name, calls `increment` on a stepper, triggers a "Delete" custom action directly.
 
 Every interaction doubles as an accessibility audit: if the agent can't find a control, neither can VoiceOver.
 
-The heist works because the infrastructure was already in place. A language interface designed for intelligence, with decades of research behind it.
+The heist works because the infrastructure was already in place. A language interface built for people to navigate apps by meaning. Turns out agents thrive in this same interface.
 
 <!-- TODO: terminal GIF showing run_batch with delta response -->
 
@@ -147,7 +147,7 @@ Multiple paths in, one API out.
 
 The coordinate-based approach reads the accessibility tree, extracts element frames, and throws the rest away. The agent works with geometry, not meaning. Every action requires re-reading the full tree to know what happened.
 
-Button Heist works from the inside. The same position VoiceOver occupies. The framework lives in your app, tracking the live hierarchy and exposing to the agent only what it needs. We track the app state so the agent misses nothing. No coordinate math, no reconstruction, no re-reading.
+Button Heist works from the inside, the same position VoiceOver occupies. The framework lives in your app, tracking the live hierarchy. No coordinate math, no reconstruction, no re-reading.
 
 Three things follow from being inside:
 
@@ -216,6 +216,10 @@ Deltas, expectations, and batching, each one enabling the next. That's the compo
 
 But the deepest advantage isn't speed. The agent and a VoiceOver user are navigating the same interface: same labels, same traits, same actions. A coordinate-based tool can tap a button with broken accessibility and never notice. Button Heist can't. If a control is invisible to VoiceOver, it's invisible to the agent. Every session is an accessibility audit, whether you asked for one or not.
 
+Accessibility bugs stick around because the people who report them rarely have the leverage to get them prioritized. When an agent hits the same bug, it blocks automation and gets fixed. VoiceOver users benefit.
+
+Agents already write our code. Accessibility is how they see what they built.
+
 ## Benchmarks
 
 Tested against a coordinate-based MCP server using the same model, same app, same tasks. 96 trials across 16 UI automation tasks. Both tools ran against the same app using standard iOS design patterns: forms, navigation, lists, controls.
@@ -257,7 +261,7 @@ The same action through Button Heist:
 
 "Tapped successfully." That's the whole response. The agent has to re-read the entire screen to find out what happened. The delta reveals it all: which properties changed, which elements appeared and disappeared, the entirety of the new state. No follow-up needed.
 
-That difference compounds. Every action without a delta costs a full tree read. Over a 50-action workflow, that's 50 extra round trips filling the context window. On our longest benchmark, a multi-screen workflow touching settings, todos, calculator, notes, search, and more, Button Heist finished in under 8 minutes. The coordinate-based tool needed 20.
+That difference compounds. Every action without a delta costs a full tree read. Over a 50-action workflow, that's 50 extra round trips filling the context window. On our longest benchmark, Button Heist finished in under 8 minutes. The coordinate-based tool needed 20.
 
 Full methodology and per-task data: [docs/BENCHMARKS.md](docs/BENCHMARKS.md)
 
