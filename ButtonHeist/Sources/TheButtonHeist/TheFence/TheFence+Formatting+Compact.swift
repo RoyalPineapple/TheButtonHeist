@@ -256,15 +256,4 @@ extension FenceResponse {
         }
     }
 
-    /// Actions that aren't implied by the element's traits.
-    /// `activate` is implied by `.button`; `increment`/`decrement` by `.adjustable`.
-    private static func meaningfulActions(_ element: HeistElement) -> [ElementAction] {
-        element.actions.filter { action in
-            switch action {
-            case .activate: return !element.traits.contains(.button)
-            case .increment, .decrement: return !element.traits.contains(.adjustable)
-            case .custom: return true
-            }
-        }
-    }
 }

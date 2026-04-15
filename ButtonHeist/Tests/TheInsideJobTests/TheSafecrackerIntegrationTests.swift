@@ -153,7 +153,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         let keyboardReady = XCTestExpectation(description: "Keyboard ready")
         for _ in 0..<20 {
             if KeyboardBridge.shared() != nil { break }
-            try? await Task.sleep(for: .milliseconds(100))
+            try await Task.sleep(for: .milliseconds(100))
         }
         if KeyboardBridge.shared() != nil {
             keyboardReady.fulfill()
@@ -179,7 +179,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
 
         for _ in 0..<20 {
             if KeyboardBridge.shared() != nil { break }
-            try? await Task.sleep(for: .milliseconds(100))
+            try await Task.sleep(for: .milliseconds(100))
         }
         guard KeyboardBridge.shared() != nil else {
             XCTFail("Keyboard bridge not available")

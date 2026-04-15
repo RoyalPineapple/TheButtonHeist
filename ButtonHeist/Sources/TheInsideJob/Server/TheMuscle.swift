@@ -722,7 +722,7 @@ final class TheMuscle {
             respond(errorData)
         }
     }
-    /// Constant-time string comparison to prevent timing side-channel attacks on token validation.
+    /// Constant-time comparison for equal-length strings. Returns early on length mismatch (acceptable per AUTH.md threat model).
     private func constantTimeEqual(_ a: String, _ b: String) -> Bool {
         let aBytes = Array(a.utf8)
         let bBytes = Array(b.utf8)
