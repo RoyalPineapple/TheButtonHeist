@@ -11,7 +11,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../ButtonHeist"),
-        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0")
+        .package(url: "https://github.com/apple/swift-argument-parser", .upToNextMinor(from: "1.7.0"))
     ],
     targets: [
         .executableTarget(

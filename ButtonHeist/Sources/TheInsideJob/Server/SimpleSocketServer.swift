@@ -24,13 +24,13 @@ public actor SimpleSocketServer {
     }
 
     private enum ClientPhase {
-        case unauthenticated(connection: NWConnection, timestamps: [Date])
-        case authenticated(connection: NWConnection, timestamps: [Date])
+        case unauthenticated(connection: NWConnection, timestamps: [Date], rateLimitNotified: Bool)
+        case authenticated(connection: NWConnection, timestamps: [Date], rateLimitNotified: Bool)
 
         var connection: NWConnection {
             switch self {
-            case .unauthenticated(let connection, _),
-                 .authenticated(let connection, _):
+            case .unauthenticated(let connection, _, _),
+                 .authenticated(let connection, _, _):
                 return connection
             }
         }
@@ -38,17 +38,35 @@ public actor SimpleSocketServer {
         var timestamps: [Date] {
             get {
                 switch self {
-                case .unauthenticated(_, let timestamps),
-                     .authenticated(_, let timestamps):
+                case .unauthenticated(_, let timestamps, _),
+                     .authenticated(_, let timestamps, _):
                     return timestamps
                 }
             }
             set {
                 switch self {
-                case .unauthenticated(let connection, _):
-                    self = .unauthenticated(connection: connection, timestamps: newValue)
-                case .authenticated(let connection, _):
-                    self = .authenticated(connection: connection, timestamps: newValue)
+                case .unauthenticated(let connection, _, let notified):
+                    self = .unauthenticated(connection: connection, timestamps: newValue, rateLimitNotified: notified)
+                case .authenticated(let connection, _, let notified):
+                    self = .authenticated(connection: connection, timestamps: newValue, rateLimitNotified: notified)
+                }
+            }
+        }
+
+        var rateLimitNotified: Bool {
+            get {
+                switch self {
+                case .unauthenticated(_, _, let notified),
+                     .authenticated(_, _, let notified):
+                    return notified
+                }
+            }
+            set {
+                switch self {
+                case .unauthenticated(let connection, let timestamps, _):
+                    self = .unauthenticated(connection: connection, timestamps: timestamps, rateLimitNotified: newValue)
+                case .authenticated(let connection, let timestamps, _):
+                    self = .authenticated(connection: connection, timestamps: timestamps, rateLimitNotified: newValue)
                 }
             }
         }
@@ -81,17 +99,20 @@ public actor SimpleSocketServer {
         public var onClientDisconnected: (@Sendable (Int) -> Void)?
         public var onDataReceived: DataHandler?
         public var onUnauthenticatedData: (@Sendable (_ clientId: Int, _ data: Data, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
+        public var onRateLimited: (@Sendable (_ clientId: Int, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
 
         public init(
             onClientConnected: (@Sendable (_ clientId: Int, _ remoteAddress: String?) -> Void)? = nil,
             onClientDisconnected: (@Sendable (Int) -> Void)? = nil,
             onDataReceived: DataHandler? = nil,
-            onUnauthenticatedData: (@Sendable (_ clientId: Int, _ data: Data, _ respond: @escaping @Sendable (Data) -> Void) -> Void)? = nil
+            onUnauthenticatedData: (@Sendable (_ clientId: Int, _ data: Data, _ respond: @escaping @Sendable (Data) -> Void) -> Void)? = nil,
+            onRateLimited: (@Sendable (_ clientId: Int, _ respond: @escaping @Sendable (Data) -> Void) -> Void)? = nil
         ) {
             self.onClientConnected = onClientConnected
             self.onClientDisconnected = onClientDisconnected
             self.onDataReceived = onDataReceived
             self.onUnauthenticatedData = onUnauthenticatedData
+            self.onRateLimited = onRateLimited
         }
     }
 
@@ -225,8 +246,8 @@ public actor SimpleSocketServer {
 
     /// Mark a client as authenticated (actor-isolated).
     private func _markAuthenticated(_ clientId: Int) {
-        guard case .unauthenticated(let connection, let timestamps) = clients[clientId] else { return }
-        clients[clientId] = .authenticated(connection: connection, timestamps: timestamps)
+        guard case .unauthenticated(let connection, let timestamps, let notified) = clients[clientId] else { return }
+        clients[clientId] = .authenticated(connection: connection, timestamps: timestamps, rateLimitNotified: notified)
         authDeadlineTasks[clientId]?.cancel()
         authDeadlineTasks[clientId] = nil
     }
@@ -320,7 +341,7 @@ public actor SimpleSocketServer {
 
         clientCounter += 1
         let clientId = clientCounter
-        clients[clientId] = .unauthenticated(connection: connection, timestamps: [])
+        clients[clientId] = .unauthenticated(connection: connection, timestamps: [], rateLimitNotified: false)
         let scopeFilter = allowedScopes != ConnectionScope.all ? allowedScopes : nil
 
         connection.stateUpdateHandler = { [weak self] state in
@@ -402,10 +423,22 @@ public actor SimpleSocketServer {
         let limited = timestamps.count >= Self.maxMessagesPerSecond
         if !limited {
             timestamps.append(now)
+            phase.rateLimitNotified = false
         }
         phase.timestamps = timestamps
         clients[clientId] = phase
         return limited
+    }
+
+    /// Send a rate-limit error to the client on the first drop per window.
+    private func notifyRateLimitIfNeeded(_ clientId: Int) {
+        guard var phase = clients[clientId], !phase.rateLimitNotified else { return }
+        phase.rateLimitNotified = true
+        clients[clientId] = phase
+        callbacks.onRateLimited?(clientId) { [weak self] response in
+            guard let self else { return }
+            Task { await self._send(response, to: clientId) }
+        }
     }
 
     private func startReceiving(clientId: Int, connection: NWConnection) {
@@ -461,6 +494,7 @@ public actor SimpleSocketServer {
                 if _isAuthenticated(clientId) {
                     if isRateLimited(clientId) {
                         logger.warning("Client \(clientId) rate limited, dropping message")
+                        notifyRateLimitIfNeeded(clientId)
                     } else {
                         callbacks.onDataReceived?(clientId, messageData) { [weak self] response in
                             guard let self else { return }
@@ -470,6 +504,7 @@ public actor SimpleSocketServer {
                 } else {
                     if isRateLimited(clientId) {
                         logger.warning("Unauthenticated client \(clientId) rate limited, dropping message")
+                        notifyRateLimitIfNeeded(clientId)
                     } else {
                         callbacks.onUnauthenticatedData?(clientId, messageData) { [weak self] response in
                             guard let self else { return }

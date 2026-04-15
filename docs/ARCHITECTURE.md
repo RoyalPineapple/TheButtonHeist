@@ -67,7 +67,7 @@ graph TB
 **Design Decisions**:
 - All types are `Codable` and `Sendable` for JSON serialization and concurrency safety
 - No platform-specific imports (UIKit/AppKit)
-- Protocol version 6.7 with TLS transport metadata, envelope correlation, watch mode, session locking, action outcome signals, and composable element matching
+- Protocol version 6.8 with TLS transport metadata, envelope correlation, watch mode, session locking, action outcome signals, and composable element matching
 
 ### TheInsideJob
 
@@ -77,7 +77,9 @@ graph TB
 ```
 TheInsideJob (singleton, @MainActor) — coordinator split across extension files:
 │   TheInsideJob.swift              — core server lifecycle, client dispatch
-│   TheBagman.swift + 6 extensions  — parse→apply pipeline, element registry, resolution, actions, scroll, capture
+│   TheBurglar/                     — hierarchy parsing, parse→apply pipeline
+│   TheStash/                       — element registry, matching, resolution, capture, wire conversion
+│   TheBrains/                      — action dispatch, scroll orchestration, screen exploration
 │   TheTripwire.swift               — persistent pulse for UI settle, transitions, keyboard/focus state
 │   Extensions/AutoStart.swift      — ObjC +load auto-start bridge
 │   Extensions/Pulse.swift          — settle-driven interface updates, broadcasting
@@ -91,20 +93,28 @@ TheInsideJob (singleton, @MainActor) — coordinator split across extension file
 ├── TheTripwire (persistent ~10 Hz UI pulse and transition observer)
 │   ├── CADisplayLink pulse — one shared clock for settle checks and UI signal sampling
 │   ├── scanLayers() — single layer-tree walk for fingerprint, animations, pending layout, window count
-│   ├── getTraversableWindows() — shared window access for TheBagman
+│   ├── getTraversableWindows() — shared window access for TheStash and TheBurglar
 │   ├── topmostViewController() / currentFirstResponder() — sampled identity tracking
 │   ├── keyboardVisibleFlag / textInputActiveFlag — notification-driven input state
 │   ├── latestReading / onTransition — single-state pulse snapshot, transitions diffed against previous reading
 │   ├── allClear() — sync gate backed by the latest pulse reading when running
 │   └── waitForSettle(timeout:) / waitForAllClear(timeout:) — per-waiter quiet-frame settle tracking
-├── TheBagman (element registry, parse→apply pipeline, target resolution, action execution)
+├── TheBrains (action dispatch, scroll orchestration, screen exploration)
+│   ├── Owns TheStash and TheSafecracker (created in init)
+│   ├── Action execution: resolve target → perform action → build result with delta
+│   ├── Scroll orchestration: direction, edge, scroll-to-visible search
+│   └── exploreAndPrune() — scrolls all containers, discovers off-screen elements, restores positions
+├── TheStash (element registry, matching, resolution, capture, wire conversion)
+│   ├── Owns TheBurglar (created in init, private implementation detail)
+│   ├── refresh() — delegates parse→apply to TheBurglar, updates registry
+│   ├── resolveTarget(ElementTarget) → TargetResolution
+│   ├── selectElements() → element snapshot for wire conversion
+│   ├── toWire() → [HeistElement] — conversion at serialization boundary only
+│   └── ScreenManifest — exploration state: element-to-container map, stagnation detection
+├── TheBurglar (hierarchy parsing, parse→apply pipeline)
 │   ├── init(tripwire: TheTripwire) — delegates all timing/window/VC work to TheTripwire
 │   ├── parse() → ParseResult — read-only snapshot of live accessibility tree
-│   ├── apply(ParseResult) — mutates registry (screen change detected before apply)
-│   ├── snapshot(.visible/.all) → [ScreenElement] — gates presentedHeistIds
-│   ├── toWire([ScreenElement]) → [HeistElement] — conversion at serialization boundary only
-│   ├── ScreenManifest — exploration state: element-to-container map, stagnation detection
-│   └── exploreScreen(target:) — scrolls all containers, discovers off-screen elements, restores positions
+│   └── apply(ParseResult) — mutates registry (screen change detected before apply)
 ├── TheSafecracker (all interaction dispatch: actions, gestures, text entry)
 │   │   TheSafecracker.swift             — touch primitives, keyboard helpers
 │   │   TheSafecracker+Actions.swift     — execute* methods for actions and gestures
@@ -158,7 +168,7 @@ When the framework loads:
 - Connection scope filtering: rejects connections at `.ready` using typed host classification and interface detection (loopback = simulator, `anpi` interface = USB, other = network). Controlled by `INSIDEJOB_SCOPE` env var; defaults to simulator + USB only.
 - Newline-delimited JSON protocol (0x0A separator)
 - Max 5 concurrent connections, 30 messages/second rate limit, 10 MB buffer limit
-- Token-based authentication with session locking, envelope correlation, watch mode, and TLS transport metadata (v6.7)
+- Token-based authentication with session locking, envelope correlation, watch mode, and TLS transport metadata (v6.8)
 
 ### Connection Scope Filtering
 
@@ -304,7 +314,7 @@ TheFence (@ButtonHeistActor)
 ├── Device discovery + connection with configurable timeouts
 ├── Auto-reconnect (up to 60 attempts, 1s interval)
 ├── Command dispatch via execute(request:) → FenceResponse
-└── Command.allCases (38 supported commands)
+└── Command.allCases (42 supported commands)
 ```
 
 **Key Types**:
@@ -312,7 +322,7 @@ TheFence (@ButtonHeistActor)
 - `TheFence.Configuration` - Connection settings (device filter, timeout, token, auto-reconnect)
 - `FenceResponse` - Typed enum for all response kinds (ok, error, help, status, devices, interface, action, screenshot, screenshotData, recording, recordingData) with `humanFormatted()` and `jsonDict()` serialization
 - `FenceError` - Error enum with human-readable `LocalizedError` descriptions
-- `TheFence.Command` - `String`-backed `CaseIterable` enum, single source of truth for the 38 supported commands
+- `TheFence.Command` - `String`-backed `CaseIterable` enum, single source of truth for the 42 supported commands
 
 **Command Flow**:
 1. Consumer calls `execute(request:)` with a `[String: Any]` dictionary containing a `command` field
@@ -351,7 +361,7 @@ flowchart TD
 
 ### ButtonHeistMCP (MCP Server)
 
-**Purpose**: Standalone MCP server that exposes 28 purpose-built tools backed by TheFence. Allows AI agents to drive iOS apps via MCP tool calls.
+**Purpose**: Standalone MCP server that exposes 23 purpose-built tools backed by TheFence. Allows AI agents to drive iOS apps via MCP tool calls.
 
 **Location**: `ButtonHeistMCP/`
 
@@ -359,12 +369,12 @@ flowchart TD
 ```
 ButtonHeistMCP (Swift executable, macOS 14+)
 ├── main.swift — Server setup, tool handler, response rendering
-├── ToolDefinitions.swift — 28 tool schemas
+├── ToolDefinitions.swift — 23 tool schemas
 └── Package.swift — Dependencies: ButtonHeist + swift-sdk (MCP)
 ```
 
 **Key Behaviors**:
-- 28 tools dispatch through `fence.execute(request:)`
+- 23 tools dispatch through `fence.execute(request:)`
 - Screenshots are returned as inline MCP image content items
 - Recording video data is replaced with a size summary to keep responses readable
 - Environment variables: `BUTTONHEIST_DEVICE`, `BUTTONHEIST_TOKEN`, `BUTTONHEIST_SESSION_TIMEOUT`
@@ -639,7 +649,7 @@ sequenceDiagram
 See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 
 **Summary**:
-- Protocol version: 6.7
+- Protocol version: 6.8
 - Transport: TLS over TCP (Network framework NWListener/NWConnection with NWProtocolTLS)
 - Authentication: Token-based (required for driver connections), with optional on-device UI approval for auto-generated tokens. Watch (observer) connections require a token by default (`restrictWatchers` defaults to `true`).
 - Session locking: Single-driver exclusivity with release timer on disconnect. Observers do not claim sessions.

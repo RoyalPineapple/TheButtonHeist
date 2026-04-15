@@ -20,9 +20,9 @@ let packageSettings = PackageSettings(
 let package = Package(
     name: "Dependencies",
     dependencies: [
-        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
-        .package(url: "https://github.com/apple/swift-certificates", from: "1.0.0"),
-        .package(url: "https://github.com/apple/swift-crypto", from: "3.0.0"),
+        .package(url: "https://github.com/apple/swift-argument-parser", .upToNextMinor(from: "1.7.0")),
+        .package(url: "https://github.com/apple/swift-certificates", .upToNextMinor(from: "1.18.0")),
+        .package(url: "https://github.com/apple/swift-crypto", .upToNextMinor(from: "3.15.0")),
         .package(path: "../submodules/AccessibilitySnapshotBH"),
     ]
 )

@@ -40,6 +40,7 @@ public final class ServerTransport: NSObject {
     public var onClientDisconnected: (@Sendable (Int) -> Void)?
     public var onDataReceived: SimpleSocketServer.DataHandler?
     public var onUnauthenticatedData: (@Sendable (_ clientId: Int, _ data: Data, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
+    public var onRateLimited: (@Sendable (_ clientId: Int, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
 
     /// The port the server is listening on (0 if not started).
     public var listeningPort: UInt16 {
@@ -72,7 +73,8 @@ public final class ServerTransport: NSObject {
             onClientConnected: onClientConnected,
             onClientDisconnected: onClientDisconnected,
             onDataReceived: onDataReceived,
-            onUnauthenticatedData: onUnauthenticatedData
+            onUnauthenticatedData: onUnauthenticatedData,
+            onRateLimited: onRateLimited
         )
         return try await server.startAsync(port: port, bindToLoopback: bindToLoopback, tlsParameters: params, callbacks: callbacks)
     }

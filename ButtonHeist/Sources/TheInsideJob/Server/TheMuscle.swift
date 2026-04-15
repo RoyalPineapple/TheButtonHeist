@@ -328,7 +328,7 @@ final class TheMuscle {
             return
         }
 
-        guard payload.token == sessionToken else {
+        guard constantTimeEqual(payload.token, sessionToken) else {
             // Wrong token → reject with guidance to retry without a token
             let attempts = recordFailedAttempt(address: address)
             if attempts >= TheMuscle.maxFailedAttempts {
@@ -455,7 +455,7 @@ final class TheMuscle {
                 }
                 return
             }
-            guard payload.token == sessionToken else {
+            guard constantTimeEqual(payload.token, sessionToken) else {
                 let attempts = recordFailedAttempt(address: address)
                 if attempts >= TheMuscle.maxFailedAttempts {
                     logger.warning("Address \(address) locked out after \(attempts) failed watch attempts")
@@ -721,6 +721,17 @@ final class TheMuscle {
         } else if let errorData = encodeEnvelope(.error("Encoding failed")) {
             respond(errorData)
         }
+    }
+    /// Constant-time string comparison to prevent timing side-channel attacks on token validation.
+    private func constantTimeEqual(_ a: String, _ b: String) -> Bool {
+        let aBytes = Array(a.utf8)
+        let bBytes = Array(b.utf8)
+        guard aBytes.count == bBytes.count else { return false }
+        var result: UInt8 = 0
+        for (lhs, rhs) in zip(aBytes, bBytes) {
+            result |= lhs ^ rhs
+        }
+        return result == 0
     }
 }
 #endif // DEBUG
