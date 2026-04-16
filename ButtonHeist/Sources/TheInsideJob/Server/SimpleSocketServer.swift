@@ -16,6 +16,12 @@ public actor SimpleSocketServer {
     private static let maxConnections = 5
     static let maxMessagesPerSecond = 30
 
+    /// Maximum bytes queued for sending per client before new sends are dropped.
+    /// Prevents unbounded NWConnection buffer growth when a client reads slowly
+    /// or disconnects without the TCP stack noticing. 20 MB is roughly 4-5 screen
+    /// broadcasts — enough to absorb a burst without starving the client.
+    private static let maxPendingBytesPerClient = 20_000_000
+
     // MARK: - State Machines
 
     private enum ServerPhase {
@@ -23,58 +29,14 @@ public actor SimpleSocketServer {
         case listening(listener: NWListener, port: UInt16)
     }
 
-    private enum ClientPhase {
-        case unauthenticated(connection: NWConnection, timestamps: [Date], rateLimitNotified: Bool)
-        case authenticated(connection: NWConnection, timestamps: [Date], rateLimitNotified: Bool)
-
-        var connection: NWConnection {
-            switch self {
-            case .unauthenticated(let connection, _, _),
-                 .authenticated(let connection, _, _):
-                return connection
-            }
-        }
-
-        var timestamps: [Date] {
-            get {
-                switch self {
-                case .unauthenticated(_, let timestamps, _),
-                     .authenticated(_, let timestamps, _):
-                    return timestamps
-                }
-            }
-            set {
-                switch self {
-                case .unauthenticated(let connection, _, let notified):
-                    self = .unauthenticated(connection: connection, timestamps: newValue, rateLimitNotified: notified)
-                case .authenticated(let connection, _, let notified):
-                    self = .authenticated(connection: connection, timestamps: newValue, rateLimitNotified: notified)
-                }
-            }
-        }
-
-        var rateLimitNotified: Bool {
-            get {
-                switch self {
-                case .unauthenticated(_, _, let notified),
-                     .authenticated(_, _, let notified):
-                    return notified
-                }
-            }
-            set {
-                switch self {
-                case .unauthenticated(let connection, let timestamps, _):
-                    self = .unauthenticated(connection: connection, timestamps: timestamps, rateLimitNotified: newValue)
-                case .authenticated(let connection, let timestamps, _):
-                    self = .authenticated(connection: connection, timestamps: timestamps, rateLimitNotified: newValue)
-                }
-            }
-        }
-
-        var isAuthenticated: Bool {
-            if case .authenticated = self { return true }
-            return false
-        }
+    private struct ClientState {
+        let connection: NWConnection
+        var isAuthenticated: Bool
+        var timestamps: [Date]
+        var rateLimitNotified: Bool
+        /// Bytes currently queued in NWConnection send buffers.
+        /// Incremented on send, decremented on contentProcessed completion.
+        var pendingBytes: Int
     }
 
     // MARK: - Actor-isolated mutable state
@@ -82,7 +44,7 @@ public actor SimpleSocketServer {
     private static let authDeadlineSeconds: UInt64 = 10
 
     private var serverPhase: ServerPhase = .stopped
-    private var clients: [Int: ClientPhase] = [:]
+    private var clients: [Int: ClientState] = [:]
     private var clientCounter = 0
     private var authDeadlineTasks: [Int: Task<Void, Never>] = [:]
 
@@ -216,27 +178,49 @@ public actor SimpleSocketServer {
         serverPhase = .stopped
         _syncListeningPort.withLock { $0 = 0 }
 
-        for (_, phase) in allClients {
-            phase.connection.cancel()
+        for (_, state) in allClients {
+            state.connection.cancel()
         }
         listener.cancel()
         logger.info("Server stopped")
     }
 
     /// Send data to a specific client (actor-isolated).
+    ///
+    /// Enforces a per-client high-water mark on pending bytes. When a client's
+    /// NWConnection send buffer exceeds `maxPendingBytesPerClient`, new sends
+    /// are dropped to prevent unbounded memory growth from slow or stalled readers.
     private func _send(_ data: Data, to clientId: Int) {
-        guard let phase = clients[clientId] else { return }
+        guard var state = clients[clientId] else { return }
 
         var dataToSend = data
         if !dataToSend.hasSuffix(Data([0x0A])) {
             dataToSend.append(0x0A)
         }
 
-        phase.connection.send(content: dataToSend, completion: .contentProcessed { error in
+        let byteCount = dataToSend.count
+        if state.pendingBytes + byteCount > Self.maxPendingBytesPerClient {
+            logger.warning("Client \(clientId) send buffer full (\(state.pendingBytes) bytes pending), dropping \(byteCount) bytes")
+            return
+        }
+
+        state.pendingBytes += byteCount
+        clients[clientId] = state
+
+        state.connection.send(content: dataToSend, completion: .contentProcessed { [weak self] error in
             if let error {
                 logger.error("Send error to client \(clientId): \(error)")
             }
+            guard let self else { return }
+            Task { await self.completedSend(clientId: clientId, byteCount: byteCount) }
         })
+    }
+
+    /// Called when NWConnection finishes processing a send.
+    private func completedSend(clientId: Int, byteCount: Int) {
+        guard var state = clients[clientId] else { return }
+        state.pendingBytes = max(0, state.pendingBytes - byteCount)
+        clients[clientId] = state
     }
 
     /// Remove a client and clean up (actor-isolated).
@@ -246,20 +230,21 @@ public actor SimpleSocketServer {
 
     /// Mark a client as authenticated (actor-isolated).
     private func _markAuthenticated(_ clientId: Int) {
-        guard case .unauthenticated(let connection, let timestamps, let notified) = clients[clientId] else { return }
-        clients[clientId] = .authenticated(connection: connection, timestamps: timestamps, rateLimitNotified: notified)
+        guard var state = clients[clientId], !state.isAuthenticated else { return }
+        state.isAuthenticated = true
+        clients[clientId] = state
         authDeadlineTasks[clientId]?.cancel()
         authDeadlineTasks[clientId] = nil
     }
 
     /// Check if a client is authenticated (actor-isolated).
     private func _isAuthenticated(_ clientId: Int) -> Bool {
-        clients[clientId]?.isAuthenticated ?? false
+        clients[clientId]?.isAuthenticated == true
     }
 
     /// Broadcast data to all authenticated clients (actor-isolated).
     private func _broadcastToAll(_ data: Data) {
-        for (clientId, phase) in clients where phase.isAuthenticated {
+        for (clientId, state) in clients where state.isAuthenticated {
             _send(data, to: clientId)
         }
     }
@@ -341,7 +326,13 @@ public actor SimpleSocketServer {
 
         clientCounter += 1
         let clientId = clientCounter
-        clients[clientId] = .unauthenticated(connection: connection, timestamps: [], rateLimitNotified: false)
+        clients[clientId] = ClientState(
+            connection: connection,
+            isAuthenticated: false,
+            timestamps: [],
+            rateLimitNotified: false,
+            pendingBytes: 0
+        )
         let scopeFilter = allowedScopes != ConnectionScope.all ? allowedScopes : nil
 
         connection.stateUpdateHandler = { [weak self] state in
@@ -392,7 +383,7 @@ public actor SimpleSocketServer {
                 return
             }
             guard let self else { return }
-            if let phase = await self.clients[clientId], !phase.isAuthenticated {
+            if let state = await self.clients[clientId], !state.isAuthenticated {
                 logger.warning("Client \(clientId) did not authenticate within \(Self.authDeadlineSeconds)s deadline")
                 await self.removeClient(clientId)
             }
@@ -408,33 +399,33 @@ public actor SimpleSocketServer {
     }
 
     private func removeClient(_ clientId: Int) {
-        guard let phase = clients.removeValue(forKey: clientId) else { return }
+        guard let state = clients.removeValue(forKey: clientId) else { return }
         authDeadlineTasks[clientId]?.cancel()
         authDeadlineTasks[clientId] = nil
-        phase.connection.cancel()
+        state.connection.cancel()
         notifyClientDisconnected(clientId)
     }
 
-    // ClientPhase is a value type — copy, mutate timestamps, write back.
+    // ClientState is a value type — copy, mutate timestamps, write back.
     private func isRateLimited(_ clientId: Int) -> Bool {
-        guard var phase = clients[clientId] else { return true }
+        guard var state = clients[clientId] else { return true }
         let now = Date()
-        var timestamps = phase.timestamps.filter { now.timeIntervalSince($0) < 1.0 }
+        var timestamps = state.timestamps.filter { now.timeIntervalSince($0) < 1.0 }
         let limited = timestamps.count >= Self.maxMessagesPerSecond
         if !limited {
             timestamps.append(now)
-            phase.rateLimitNotified = false
+            state.rateLimitNotified = false
         }
-        phase.timestamps = timestamps
-        clients[clientId] = phase
+        state.timestamps = timestamps
+        clients[clientId] = state
         return limited
     }
 
     /// Send a rate-limit error to the client on the first drop per window.
     private func notifyRateLimitIfNeeded(_ clientId: Int) {
-        guard var phase = clients[clientId], !phase.rateLimitNotified else { return }
-        phase.rateLimitNotified = true
-        clients[clientId] = phase
+        guard var state = clients[clientId], !state.rateLimitNotified else { return }
+        state.rateLimitNotified = true
+        clients[clientId] = state
         callbacks.onRateLimited?(clientId) { [weak self] response in
             guard let self else { return }
             Task { await self._send(response, to: clientId) }
