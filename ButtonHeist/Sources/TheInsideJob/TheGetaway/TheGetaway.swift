@@ -39,6 +39,12 @@ final class TheGetaway {
     var recordingPhase: RecordingPhase = .idle
     var hierarchyInvalidated = false
 
+    /// Guards against queuing screen broadcasts faster than they can be sent.
+    /// Set before encoding, cleared after the broadcast call returns.
+    /// When true, `broadcastScreen()` skips the capture — the next settle
+    /// tick will pick up the current state.
+    var screenBroadcastInFlight = false
+
     /// Current transport — set by `wireTransport`, cleared on teardown.
     private(set) weak var transport: ServerTransport?
 
@@ -117,6 +123,7 @@ final class TheGetaway {
     func tearDown() {
         transport = nil
         hierarchyInvalidated = false
+        screenBroadcastInFlight = false
     }
 
     // MARK: - Message Dispatch
@@ -325,13 +332,18 @@ final class TheGetaway {
     // MARK: - Hierarchy Broadcast
 
     func broadcastIfChanged() {
+        guard muscle.hasSubscribers else {
+            // Still clear the invalidation flag — the hierarchy may have changed
+            // but no one is listening so skip the expensive refresh/wire work.
+            hierarchyInvalidated = false
+            return
+        }
+
         guard let payload = brains.broadcastInterfaceIfChanged() else {
             hierarchyInvalidated = false
             return
         }
         hierarchyInvalidated = false
-
-        guard muscle.hasSubscribers else { return }
 
         broadcastToSubscribed(.interface(payload))
         broadcastScreen()
@@ -384,14 +396,20 @@ final class TheGetaway {
 
     func broadcastScreen() {
         guard muscle.hasSubscribers else { return }
+        guard !screenBroadcastInFlight else {
+            insideJobLogger.debug("Screen broadcast coalesced — previous still in flight")
+            return
+        }
         guard let (image, bounds) = brains.captureScreen(),
               let pngData = image.pngData() else { return }
 
+        screenBroadcastInFlight = true
         broadcastToSubscribed(.screen(ScreenPayload(
             pngData: pngData.base64EncodedString(),
             width: bounds.width,
             height: bounds.height
         )))
+        screenBroadcastInFlight = false
     }
 
     // MARK: - Recording
