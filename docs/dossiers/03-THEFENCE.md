@@ -31,10 +31,10 @@ graph TD
     subgraph TheFence["TheFence (@ButtonHeistActor)"]
         Config["Configuration - deviceFilter, connectionTimeout, - token, autoReconnect"]
         Execute["execute(request:) - Main entry point"]
-        Dispatch["dispatch(command:args:) - 41-command switch"]
+        Dispatch["dispatch(command:args:) - 42-command switch"]
         Reconnect["Auto-Reconnect - via TheHandoff.setupAutoReconnect"]
 
-        subgraph Commands["Command Catalog (41)"]
+        subgraph Commands["Command Catalog (42)"]
             Conn["help, status, quit, exit, list_devices"]
             IF["get_interface (full mode for explore), get_screen, wait_for_idle"]
             Access["activate (with optional action param), - increment, decrement, - perform_custom_action"]
@@ -169,7 +169,7 @@ stateDiagram-v2
 - Well-tested: `FenceResponseTests` covers both human formatting and JSON serialization
 
 **`supportedCommands` derived from `Command` enum** (`TheFence+CommandCatalog.swift`)
-- `TheFence.Command` is a `String`-backed `CaseIterable` enum with 41 cases
+- `TheFence.Command` is a `String`-backed `CaseIterable` enum with 42 cases
 - Commands are matched by enum case in the dispatch switch (compile-time exhaustiveness)
 - `supportedCommands` is `Command.allCases.map(\.rawValue)` — no hand-maintained list
 
