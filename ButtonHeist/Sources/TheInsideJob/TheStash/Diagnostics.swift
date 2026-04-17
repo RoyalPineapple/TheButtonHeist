@@ -72,48 +72,53 @@ extension TheStash {
         for matcher: ElementMatcher,
         in hierarchy: [AccessibilityHierarchy]
     ) -> String? {
-        var relaxations: [(field: String, relaxed: ElementMatcher, actual: (AccessibilityElement) -> String)] = []
-
-        if matcher.value != nil {
-            relaxations.append((
-                field: "value",
-                relaxed: ElementMatcher(
-                    label: matcher.label, identifier: matcher.identifier,
-                    traits: matcher.traits, excludeTraits: matcher.excludeTraits                ),
-                actual: { $0.value ?? "(nil)" }
-            ))
-        }
-        if matcher.traits != nil {
-            relaxations.append((
-                field: "traits",
-                relaxed: ElementMatcher(
-                    label: matcher.label, identifier: matcher.identifier,
-                    value: matcher.value, excludeTraits: matcher.excludeTraits                ),
-                actual: { element in
-                    UIAccessibilityTraits.knownTraits
-                        .filter { element.traits.contains($0.trait) }
-                        .map(\.name).joined(separator: ", ")
-                }
-            ))
-        }
-        if matcher.label != nil {
-            relaxations.append((
-                field: "label",
-                relaxed: ElementMatcher(
-                    identifier: matcher.identifier, value: matcher.value,
-                    traits: matcher.traits, excludeTraits: matcher.excludeTraits                ),
-                actual: { $0.label ?? "(nil)" }
-            ))
-        }
-        if matcher.identifier != nil {
-            relaxations.append((
-                field: "identifier",
-                relaxed: ElementMatcher(
-                    label: matcher.label, value: matcher.value,
-                    traits: matcher.traits, excludeTraits: matcher.excludeTraits                ),
-                actual: { $0.identifier ?? "(nil)" }
-            ))
-        }
+        typealias Relaxation = (field: String, relaxed: ElementMatcher, actual: (AccessibilityElement) -> String)
+        let relaxations: [Relaxation] = [
+            matcher.value.map { _ in
+                Relaxation(
+                    field: "value",
+                    relaxed: ElementMatcher(
+                        label: matcher.label, identifier: matcher.identifier,
+                        traits: matcher.traits, excludeTraits: matcher.excludeTraits
+                    ),
+                    actual: { $0.value ?? "(nil)" }
+                )
+            },
+            matcher.traits.map { _ in
+                Relaxation(
+                    field: "traits",
+                    relaxed: ElementMatcher(
+                        label: matcher.label, identifier: matcher.identifier,
+                        value: matcher.value, excludeTraits: matcher.excludeTraits
+                    ),
+                    actual: { element in
+                        UIAccessibilityTraits.knownTraits
+                            .filter { element.traits.contains($0.trait) }
+                            .map(\.name).joined(separator: ", ")
+                    }
+                )
+            },
+            matcher.label.map { _ in
+                Relaxation(
+                    field: "label",
+                    relaxed: ElementMatcher(
+                        identifier: matcher.identifier, value: matcher.value,
+                        traits: matcher.traits, excludeTraits: matcher.excludeTraits
+                    ),
+                    actual: { $0.label ?? "(nil)" }
+                )
+            },
+            matcher.identifier.map { _ in
+                Relaxation(
+                    field: "identifier",
+                    relaxed: ElementMatcher(
+                        label: matcher.label, value: matcher.value,
+                        traits: matcher.traits, excludeTraits: matcher.excludeTraits
+                    ),
+                    actual: { $0.identifier ?? "(nil)" }
+                )
+            },
+        ].compactMap { $0 }
 
         for relaxation in relaxations {
             guard relaxation.relaxed.hasPredicates,

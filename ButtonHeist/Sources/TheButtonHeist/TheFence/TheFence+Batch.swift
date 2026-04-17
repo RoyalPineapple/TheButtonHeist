@@ -37,38 +37,25 @@ extension TheFence {
                 let response = try await execute(request: step)
                 results.append(response.jsonDict() ?? ["status": "ok"])
 
+                let outcome = stepOutcome(response: response)
+
                 // Count explicit tier expectations only — delivery failures have
                 // expectation.expectation == nil and should not inflate the count
-                var stepExpectationMet: Bool?
-                if case .action(_, let expectation) = response,
-                   let result = expectation,
-                   result.expectation != nil {
+                if outcome.expectationCounted {
                     expectationsChecked += 1
-                    if result.met { expectationsMet += 1 }
-                    stepExpectationMet = result.met
+                    if outcome.expectationMet == true { expectationsMet += 1 }
                 }
 
-                // Collect delta for net diff computation
-                if case .action(let actionResult, _) = response,
-                   let delta = actionResult.interfaceDelta {
+                if let delta = outcome.delta {
                     stepDeltas.append(delta)
                 }
 
-                // Build step summary from the typed response
                 stepSummaries.append(makeStepSummary(
-                    command: commandName, response: response, expectationMet: stepExpectationMet
+                    command: commandName, response: response,
+                    expectationMet: outcome.expectationCounted ? outcome.expectationMet : nil
                 ))
 
-                // Check for failure using the typed response, not serialized strings
-                let isFailed: Bool
-                if case .action(_, let expectation) = response, let result = expectation {
-                    isFailed = !result.met
-                } else if case .error = response {
-                    isFailed = true
-                } else {
-                    isFailed = false
-                }
-                if isFailed && policy == .stopOnError {
+                if outcome.isFailed, policy == .stopOnError {
                     failedIndex = index
                     break
                 }
@@ -101,6 +88,39 @@ extension TheFence {
             stepSummaries: stepSummaries,
             netDelta: netDelta
         )
+    }
+
+    // MARK: - Step Outcome
+
+    private struct StepOutcome {
+        let isFailed: Bool
+        let delta: InterfaceDelta?
+        /// Whether this step carried an explicit expectation tier that counts
+        /// toward the batch's expectations-met/checked totals.
+        let expectationCounted: Bool
+        /// Whether the explicit expectation was met. Only meaningful when
+        /// `expectationCounted` is true.
+        let expectationMet: Bool?
+    }
+
+    private func stepOutcome(response: FenceResponse) -> StepOutcome {
+        switch response {
+        case .action(let actionResult, let expectation):
+            let result = expectation
+            let counted = result?.expectation != nil
+            let met = counted ? result?.met : nil
+            let failed = result.map { !$0.met } ?? false
+            return StepOutcome(
+                isFailed: failed,
+                delta: actionResult.interfaceDelta,
+                expectationCounted: counted,
+                expectationMet: met
+            )
+        case .error:
+            return StepOutcome(isFailed: true, delta: nil, expectationCounted: false, expectationMet: nil)
+        default:
+            return StepOutcome(isFailed: false, delta: nil, expectationCounted: false, expectationMet: nil)
+        }
     }
 
     // MARK: - Step Summary

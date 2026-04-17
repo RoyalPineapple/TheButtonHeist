@@ -233,12 +233,12 @@ extension TheFence {
         guard let pointsArray = args["points"] as? [[String: Any]] else {
             return .error("points must be an array of {x, y} objects")
         }
-        var pathPoints: [PathPoint] = []
-        for point in pointsArray {
-            guard let x = point.number("x"), let y = point.number("y") else {
-                return .error("Each point must have numeric x and y fields")
-            }
-            pathPoints.append(PathPoint(x: x, y: y))
+        let pathPoints = pointsArray.compactMap { point -> PathPoint? in
+            guard let x = point.number("x"), let y = point.number("y") else { return nil }
+            return PathPoint(x: x, y: y)
+        }
+        guard pathPoints.count == pointsArray.count else {
+            return .error("Each point must have numeric x and y fields")
         }
         guard pathPoints.count >= 2 else {
             return .error("Path requires at least 2 points")
@@ -259,16 +259,16 @@ extension TheFence {
         guard let segmentsArray = args["segments"] as? [[String: Any]] else {
             return .error("segments array is required")
         }
-        var segments: [BezierSegment] = []
-        for segment in segmentsArray {
+        let segments = segmentsArray.compactMap { segment -> BezierSegment? in
             guard
                 let cp1X = segment.number("cp1X"), let cp1Y = segment.number("cp1Y"),
                 let cp2X = segment.number("cp2X"), let cp2Y = segment.number("cp2Y"),
                 let endX = segment.number("endX"), let endY = segment.number("endY")
-            else {
-                return .error("Each segment needs cp1X, cp1Y, cp2X, cp2Y, endX, endY")
-            }
-            segments.append(BezierSegment(cp1X: cp1X, cp1Y: cp1Y, cp2X: cp2X, cp2Y: cp2Y, endX: endX, endY: endY))
+            else { return nil }
+            return BezierSegment(cp1X: cp1X, cp1Y: cp1Y, cp2X: cp2X, cp2Y: cp2Y, endX: endX, endY: endY)
+        }
+        guard segments.count == segmentsArray.count else {
+            return .error("Each segment needs cp1X, cp1Y, cp2X, cp2Y, endX, endY")
         }
         guard !segments.isEmpty else {
             return .error("At least 1 bezier segment is required")
