@@ -4,7 +4,7 @@ import Network
 
 /// Tests for the auth flow using direct message injection.
 /// Exercises the auth paths without real TCP connections.
-final class AuthFlowIntegrationTests: XCTestCase {
+final class AuthFlowTests: XCTestCase {
 
     private func makeDummyDevice() -> DiscoveredDevice {
         DiscoveredDevice(

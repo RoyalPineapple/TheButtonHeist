@@ -244,7 +244,7 @@ public final class DeviceConnection: DeviceConnecting {
         }
     }
 
-    // Internal for testing (see AuthFlowIntegrationTests, AuthFailureTests)
+    // Internal for testing (see AuthFlowTests, AuthFailureTests)
     func handleMessage(_ data: Data) {
         logger.debug("Parsing message: \(data.count) bytes")
         guard let envelope = decodeEnvelope(from: data) else {
