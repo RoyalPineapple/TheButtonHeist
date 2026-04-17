@@ -58,7 +58,7 @@ The dossiers are numbered to be read in order. Start at the entry point a user a
 ```mermaid
 graph TD
     TheScore["TheScore — Shared Protocol"]
-    TheInsideJob["TheInsideJob — iOS Server + Transport<br/><i>includes TheStash, TheTripwire, TheStakeout,<br/>TheFingerprints, TheSafecracker, TheMuscle, ThePlant</i>"]
+    TheInsideJob["TheInsideJob — iOS Server + Transport<br/><i>includes TheGetaway, TheBrains, TheStash, TheBurglar,<br/>TheTripwire, TheStakeout, TheFingerprints,<br/>TheSafecracker, TheMuscle, ThePlant</i>"]
     ButtonHeist["ButtonHeist — macOS Client Framework"]
     CLI["ButtonHeistCLI — CLI"]
     MCP["ButtonHeistMCP — MCP Server"]

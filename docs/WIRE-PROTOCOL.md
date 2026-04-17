@@ -877,30 +877,30 @@ sequenceDiagram
     participant Agent
     participant TheFence
     participant TheInsideJob
-    participant TheBagman
+    participant TheBrains
 
-    Note over Agent,TheBagman: get_interface (visible only)
+    Note over Agent,TheBrains: get_interface (visible only)
     Agent->>TheFence: get_interface
     TheFence->>TheInsideJob: requestInterface
-    TheInsideJob->>TheBagman: snapshotElements()
-    TheBagman-->>Agent: interface (visible elements)
+    TheInsideJob->>TheBrains: snapshotElements()
+    TheBrains-->>Agent: interface (visible elements)
 
-    Note over Agent,TheBagman: get_interface --full (explore)
+    Note over Agent,TheBrains: get_interface --full (explore)
     Agent->>TheFence: get_interface(full: true)
     TheFence->>TheInsideJob: explore
-    TheInsideJob->>TheBagman: exploreScreen()
+    TheInsideJob->>TheBrains: exploreScreen()
 
     loop each scrollable container
-        TheBagman->>TheBagman: save scroll position
+        TheBrains->>TheBrains: save scroll position
         loop scroll forward until stagnation
-            TheBagman->>TheBagman: scrollByPage
-            TheBagman->>TheBagman: refreshAccessibilityData
-            TheBagman->>TheBagman: record new elements
+            TheBrains->>TheBrains: scrollByPage
+            TheBrains->>TheBrains: refreshAccessibilityData
+            TheBrains->>TheBrains: record new elements
         end
-        TheBagman->>TheBagman: restore scroll position
+        TheBrains->>TheBrains: restore scroll position
     end
 
-    TheBagman-->>Agent: interface (all elements + explore metadata)
+    TheBrains-->>Agent: interface (all elements + explore metadata)
 ```
 
 Three ways to find elements, each suited to a different situation:
