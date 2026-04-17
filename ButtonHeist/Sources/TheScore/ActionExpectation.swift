@@ -36,7 +36,20 @@ public enum ExpectationTier: String, CaseIterable, Sendable {
 /// Expecting `screen_changed` is only met by `screenChanged`.
 /// Screen change is detected by view controller identity — if the topmost VC changed,
 /// the screen changed.
-public enum ActionExpectation: Codable, Sendable, Equatable {
+///
+/// ## Wire format
+/// Every case is a JSON object with a `"type"` discriminator:
+/// ```
+/// {"type": "screen_changed"}
+/// {"type": "elements_changed"}
+/// {"type": "element_updated", "heistId": "...", "property": "value",
+///  "oldValue": "...", "newValue": "..."}   // all payload fields optional
+/// {"type": "element_appeared", "matcher": { ...ElementMatcher... }}
+/// {"type": "element_disappeared", "matcher": { ...ElementMatcher... }}
+/// {"type": "compound", "expectations": [ ...ActionExpectation... ]}
+/// ```
+/// See `docs/WIRE-PROTOCOL.md` for the full shape.
+public enum ActionExpectation: Sendable, Equatable {
     /// Expected a screen-level change (VC identity changed).
     case screenChanged
     /// Expected elements to be added, removed, updated, or the screen to change.
@@ -77,6 +90,106 @@ public enum ActionExpectation: Codable, Sendable, Equatable {
             return "element_disappeared(\(target))"
         case .compound(let expectations):
             return "compound(\(expectations.count) expectations)"
+        }
+    }
+}
+
+// MARK: - ActionExpectation Codable
+
+extension ActionExpectation: Codable {
+    private enum DiscriminatorKey: String, CodingKey {
+        case type
+    }
+
+    /// Discriminator strings for the `type` field on the wire. Kept distinct
+    /// from `ExpectationTier` because `ExpectationTier` covers only the two
+    /// string-literal short forms (`screen_changed`, `elements_changed`) for
+    /// backwards compatibility with the inline-string arg shape.
+    private enum WireType: String {
+        case screenChanged = "screen_changed"
+        case elementsChanged = "elements_changed"
+        case elementUpdated = "element_updated"
+        case elementAppeared = "element_appeared"
+        case elementDisappeared = "element_disappeared"
+        case compound
+    }
+
+    private enum ElementUpdatedKey: String, CodingKey {
+        case type, heistId, property, oldValue, newValue
+    }
+
+    private enum MatcherKey: String, CodingKey {
+        case type, matcher
+    }
+
+    private enum CompoundKey: String, CodingKey {
+        case type, expectations
+    }
+
+    public init(from decoder: Decoder) throws {
+        let typeContainer = try decoder.container(keyedBy: DiscriminatorKey.self)
+        let typeString = try typeContainer.decode(String.self, forKey: .type)
+        guard let wireType = WireType(rawValue: typeString) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .type, in: typeContainer,
+                debugDescription: "Unknown ActionExpectation type: \"\(typeString)\""
+            )
+        }
+        switch wireType {
+        case .screenChanged:
+            self = .screenChanged
+        case .elementsChanged:
+            self = .elementsChanged
+        case .elementUpdated:
+            let container = try decoder.container(keyedBy: ElementUpdatedKey.self)
+            self = .elementUpdated(
+                heistId: try container.decodeIfPresent(String.self, forKey: .heistId),
+                property: try container.decodeIfPresent(ElementProperty.self, forKey: .property),
+                oldValue: try container.decodeIfPresent(String.self, forKey: .oldValue),
+                newValue: try container.decodeIfPresent(String.self, forKey: .newValue)
+            )
+        case .elementAppeared:
+            let container = try decoder.container(keyedBy: MatcherKey.self)
+            let matcher = try container.decode(ElementMatcher.self, forKey: .matcher)
+            self = .elementAppeared(matcher)
+        case .elementDisappeared:
+            let container = try decoder.container(keyedBy: MatcherKey.self)
+            let matcher = try container.decode(ElementMatcher.self, forKey: .matcher)
+            self = .elementDisappeared(matcher)
+        case .compound:
+            let container = try decoder.container(keyedBy: CompoundKey.self)
+            let expectations = try container.decode([ActionExpectation].self, forKey: .expectations)
+            self = .compound(expectations)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        switch self {
+        case .screenChanged:
+            var container = encoder.container(keyedBy: DiscriminatorKey.self)
+            try container.encode(WireType.screenChanged.rawValue, forKey: .type)
+        case .elementsChanged:
+            var container = encoder.container(keyedBy: DiscriminatorKey.self)
+            try container.encode(WireType.elementsChanged.rawValue, forKey: .type)
+        case .elementUpdated(let heistId, let property, let oldValue, let newValue):
+            var container = encoder.container(keyedBy: ElementUpdatedKey.self)
+            try container.encode(WireType.elementUpdated.rawValue, forKey: .type)
+            try container.encodeIfPresent(heistId, forKey: .heistId)
+            try container.encodeIfPresent(property, forKey: .property)
+            try container.encodeIfPresent(oldValue, forKey: .oldValue)
+            try container.encodeIfPresent(newValue, forKey: .newValue)
+        case .elementAppeared(let matcher):
+            var container = encoder.container(keyedBy: MatcherKey.self)
+            try container.encode(WireType.elementAppeared.rawValue, forKey: .type)
+            try container.encode(matcher, forKey: .matcher)
+        case .elementDisappeared(let matcher):
+            var container = encoder.container(keyedBy: MatcherKey.self)
+            try container.encode(WireType.elementDisappeared.rawValue, forKey: .type)
+            try container.encode(matcher, forKey: .matcher)
+        case .compound(let expectations):
+            var container = encoder.container(keyedBy: CompoundKey.self)
+            try container.encode(WireType.compound.rawValue, forKey: .type)
+            try container.encode(expectations, forKey: .expectations)
         }
     }
 }

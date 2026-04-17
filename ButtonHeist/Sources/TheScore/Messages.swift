@@ -5,8 +5,15 @@ import Foundation
 /// Bonjour service type for discovery
 public let buttonHeistServiceType = "_buttonheist._tcp"
 
-/// Protocol version for compatibility checking
-public let protocolVersion = "6.8"
+/// Protocol version for compatibility checking.
+///
+/// SemVer — bump minor for additive changes, major for breaking changes.
+/// 7.0 (this release): ActionExpectation now uses an explicit `type`
+///   discriminator format (`{"type": "element_updated", …}`) in place of
+///   Swift's compiler-synthesized Codable shape. Breaks `wait_for_change`
+///   callers that send typed expectations; string forms (`"screen_changed"`,
+///   `"elements_changed"`) are unaffected. See `docs/WIRE-PROTOCOL.md`.
+public let protocolVersion = "7.0"
 
 /// Canonical product version shared by CLI, MCP, and the iOS server.
 /// Update this constant when cutting a new release. See VERSIONING.md in bh-infra.
