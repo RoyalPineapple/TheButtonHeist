@@ -511,6 +511,58 @@ public final class TheBookKeeper {
         return resolvedURL
     }
 
+    /// Metadata carried by an artifact being written — screenshot dimensions or
+    /// recording stats. Used to route to the correct typed write path.
+    public enum ArtifactMetadata: Sendable {
+        case screenshot(ScreenshotMetadata)
+        case recording(RecordingMetadata)
+    }
+
+    /// Write an artifact to whichever sink is available, or return `nil` if
+    /// neither a session is active nor an explicit outputPath was supplied.
+    ///
+    /// Resolution rules:
+    /// - `outputPath` supplied → write raw bytes to that path via
+    ///   `writeToPath` (no manifest update).
+    /// - No `outputPath`, session active → write via `writeScreenshot` /
+    ///   `writeRecording` into the session's artifact directory and append
+    ///   to the session manifest.
+    /// - No `outputPath`, no session → return `nil`; caller is expected to
+    ///   return the in-memory payload (e.g. `.screenshotData`).
+    ///
+    /// Throws `BookKeeperError.unsafePath` for a malformed `outputPath`,
+    /// `.base64DecodingFailed` for a malformed payload, or the underlying
+    /// filesystem error for I/O failures.
+    public func writeArtifactIfSinkAvailable(
+        base64Data: String,
+        outputPath: String?,
+        requestId: String,
+        command: TheFence.Command,
+        metadata: ArtifactMetadata
+    ) throws -> URL? {
+        if let outputPath {
+            guard let data = Data(base64Encoded: base64Data) else {
+                throw BookKeeperError.base64DecodingFailed
+            }
+            return try writeToPath(data, outputPath: outputPath)
+        }
+        guard case .active = phase else {
+            return nil
+        }
+        switch metadata {
+        case .screenshot(let screenshotMetadata):
+            return try writeScreenshot(
+                base64Data: base64Data, requestId: requestId,
+                command: command, metadata: screenshotMetadata
+            )
+        case .recording(let recordingMetadata):
+            return try writeRecording(
+                base64Data: base64Data, requestId: requestId,
+                command: command, metadata: recordingMetadata
+            )
+        }
+    }
+
     // MARK: - Heist Recording
 
     public var isRecordingHeist: Bool {
