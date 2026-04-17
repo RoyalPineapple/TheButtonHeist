@@ -545,7 +545,7 @@ public final class TheFence {
                 let validTiers = ExpectationTier.allCases.map(\.rawValue).joined(separator: ", ")
                 throw FenceError.invalidRequest(
                     "Unknown expectation tier: \"\(str)\". " +
-                    "Valid: \(validTiers), or {\"elementUpdated\": {…}}"
+                    "Valid: \(validTiers), or {\"type\": \"element_updated\", …}"
                 )
             }
             return tier.expectation
@@ -558,23 +558,68 @@ public final class TheFence {
         )
     }
 
+    /// Accepts two shapes for backwards compatibility:
+    ///   - Wire discriminator: `{"type": "element_updated", "heistId": …}` — matches
+    ///     `ActionExpectation`'s Codable encoding. Preferred; lets callers copy JSON
+    ///     straight from a wire log into a CLI arg.
+    ///   - Legacy nested-key: `{"elementUpdated": {…}}` — the original CLI shape.
     private func parseSingleExpectation(_ dict: [String: Any]) throws -> ActionExpectation {
-        if let eu = dict["elementUpdated"] as? [String: Any] {
-            let property: ElementProperty?
-            if let propStr = eu["property"] as? String {
-                guard let p = ElementProperty(rawValue: propStr) else {
-                    throw FenceError.invalidRequest(
-                        "Unknown element property: \"\(propStr)\". " +
-                        "Valid: \(ElementProperty.allCases.map(\.rawValue).joined(separator: ", "))"
-                    )
-                }
-                property = p
-            } else {
-                property = nil
+        if let typeString = dict["type"] as? String {
+            return try parseDiscriminatedExpectation(type: typeString, dict: dict)
+        }
+        return try parseLegacyExpectation(dict)
+    }
+
+    private func parseDiscriminatedExpectation(
+        type typeString: String, dict: [String: Any]
+    ) throws -> ActionExpectation {
+        if let tier = ExpectationTier(rawValue: typeString) {
+            return tier.expectation
+        }
+        switch typeString {
+        case "element_updated":
+            return .elementUpdated(
+                heistId: dict["heistId"] as? String,
+                property: try parseElementProperty(dict["property"] as? String),
+                oldValue: dict["oldValue"] as? String,
+                newValue: dict["newValue"] as? String
+            )
+        case "element_appeared":
+            guard let matcherDict = dict["matcher"] as? [String: Any] else {
+                throw FenceError.invalidRequest(
+                    "element_appeared requires a \"matcher\" object"
+                )
             }
+            return .elementAppeared(try parseMatcherFromDict(matcherDict))
+        case "element_disappeared":
+            guard let matcherDict = dict["matcher"] as? [String: Any] else {
+                throw FenceError.invalidRequest(
+                    "element_disappeared requires a \"matcher\" object"
+                )
+            }
+            return .elementDisappeared(try parseMatcherFromDict(matcherDict))
+        case "compound":
+            guard let expectationsArray = dict["expectations"] as? [Any] else {
+                throw FenceError.invalidRequest(
+                    "compound requires an \"expectations\" array"
+                )
+            }
+            let sub = try expectationsArray.map { try parseSingleExpectationValue($0) }
+            return .compound(sub)
+        default:
+            let validTypes = "screen_changed, elements_changed, element_updated, " +
+                "element_appeared, element_disappeared, compound"
+            throw FenceError.invalidRequest(
+                "Unknown expectation type: \"\(typeString)\". Valid: \(validTypes)"
+            )
+        }
+    }
+
+    private func parseLegacyExpectation(_ dict: [String: Any]) throws -> ActionExpectation {
+        if let eu = dict["elementUpdated"] as? [String: Any] {
             return .elementUpdated(
                 heistId: eu["heistId"] as? String,
-                property: property,
+                property: try parseElementProperty(eu["property"] as? String),
                 oldValue: eu["oldValue"] as? String,
                 newValue: eu["newValue"] as? String
             )
@@ -589,9 +634,22 @@ public final class TheFence {
             return .elementDisappeared(try parseMatcherFromDict(matcherDict))
         }
         throw FenceError.invalidRequest(
-            "Invalid expectation object: expected elementUpdated, elementAppeared, or elementDisappeared. " +
+            "Invalid expectation object: expected a \"type\" discriminator " +
+            "(e.g. {\"type\": \"element_updated\", …}) or legacy nested key " +
+            "(elementUpdated, elementAppeared, elementDisappeared). " +
             "Got keys: \(dict.keys.sorted())"
         )
+    }
+
+    private func parseElementProperty(_ string: String?) throws -> ElementProperty? {
+        guard let string else { return nil }
+        guard let property = ElementProperty(rawValue: string) else {
+            throw FenceError.invalidRequest(
+                "Unknown element property: \"\(string)\". " +
+                "Valid: \(ElementProperty.allCases.map(\.rawValue).joined(separator: ", "))"
+            )
+        }
+        return property
     }
 
     private func parseMatcherFromDict(_ dict: [String: Any]) throws -> ElementMatcher {

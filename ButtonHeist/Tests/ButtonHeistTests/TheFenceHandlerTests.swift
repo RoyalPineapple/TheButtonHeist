@@ -954,6 +954,106 @@ final class TheFenceHandlerTests: XCTestCase {
         }
     }
 
+    // MARK: - Parse Expectation: Discriminator Wire Shape
+
+    @ButtonHeistActor
+    func testParseExpectationDiscriminatorScreenChanged() async throws {
+        let (fence, _) = makeConnectedFence()
+        let result = try fence.parseExpectation([
+            "expect": ["type": "screen_changed"]
+        ])
+        XCTAssertEqual(result, .screenChanged)
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationDiscriminatorElementUpdatedFull() async throws {
+        let (fence, _) = makeConnectedFence()
+        let result = try fence.parseExpectation([
+            "expect": [
+                "type": "element_updated",
+                "heistId": "slider", "property": "value",
+                "oldValue": "0", "newValue": "50",
+            ] as [String: Any]
+        ])
+        XCTAssertEqual(
+            result,
+            .elementUpdated(heistId: "slider", property: .value, oldValue: "0", newValue: "50")
+        )
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationDiscriminatorElementUpdatedBare() async throws {
+        let (fence, _) = makeConnectedFence()
+        let result = try fence.parseExpectation([
+            "expect": ["type": "element_updated"]
+        ])
+        XCTAssertEqual(result, .elementUpdated())
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationDiscriminatorElementAppearedWithMatcher() async throws {
+        let (fence, _) = makeConnectedFence()
+        let result = try fence.parseExpectation([
+            "expect": [
+                "type": "element_appeared",
+                "matcher": ["label": "Cart", "identifier": "cart.button"],
+            ] as [String: Any]
+        ])
+        XCTAssertEqual(
+            result,
+            .elementAppeared(ElementMatcher(label: "Cart", identifier: "cart.button"))
+        )
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationDiscriminatorElementAppearedWithoutMatcherThrows() async {
+        let (fence, _) = makeConnectedFence()
+        XCTAssertThrowsError(try fence.parseExpectation([
+            "expect": ["type": "element_appeared"]
+        ])) { error in
+            guard case FenceError.invalidRequest(let msg) = error else {
+                XCTFail("Expected FenceError.invalidRequest, got \(error)")
+                return
+            }
+            XCTAssertTrue(msg.contains("matcher"))
+        }
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationDiscriminatorCompound() async throws {
+        let (fence, _) = makeConnectedFence()
+        let result = try fence.parseExpectation([
+            "expect": [
+                "type": "compound",
+                "expectations": [
+                    "screen_changed",
+                    ["type": "element_updated", "heistId": "counter"] as [String: Any],
+                ] as [Any],
+            ] as [String: Any]
+        ])
+        XCTAssertEqual(
+            result,
+            .compound([
+                .screenChanged,
+                .elementUpdated(heistId: "counter"),
+            ])
+        )
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationDiscriminatorUnknownTypeThrows() async {
+        let (fence, _) = makeConnectedFence()
+        XCTAssertThrowsError(try fence.parseExpectation([
+            "expect": ["type": "bogus_type"]
+        ])) { error in
+            guard case FenceError.invalidRequest(let msg) = error else {
+                XCTFail("Expected FenceError.invalidRequest, got \(error)")
+                return
+            }
+            XCTAssertTrue(msg.contains("Unknown expectation type"))
+        }
+    }
+
     // MARK: - Batch Expectation Counting
 
     @ButtonHeistActor

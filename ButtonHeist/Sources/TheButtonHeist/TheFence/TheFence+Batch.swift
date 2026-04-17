@@ -2,9 +2,9 @@ import Foundation
 
 import TheScore
 
-// MARK: - Batch Execution and Session State
-
 extension TheFence {
+
+    // MARK: - Batch Execution and Session State
 
     enum BatchPolicy: String, CaseIterable {
         case stopOnError = "stop_on_error"

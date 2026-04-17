@@ -4,9 +4,9 @@ import UIKit
 
 import TheScore
 
-// MARK: - Recording Lifecycle
-
 extension TheGetaway {
+
+    // MARK: - Recording Lifecycle
 
     enum RecordingPhase {
         case idle

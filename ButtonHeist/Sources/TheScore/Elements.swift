@@ -186,10 +186,17 @@ extension GroupType: RawRepresentable {
     }
 
     /// The string name for known cases. `.unknown` stores its own value.
+    /// Cases are spelled out explicitly to pin the wire contract — `String(describing:)`
+    /// is reflection, not a documented API, and changes here are wire-breaking.
     private var nameValue: String {
         switch self {
+        case .semanticGroup: return "semanticGroup"
+        case .list: return "list"
+        case .landmark: return "landmark"
+        case .dataTable: return "dataTable"
+        case .tabBar: return "tabBar"
+        case .scrollable: return "scrollable"
         case .unknown(let value): return value
-        default: return String(describing: self)
         }
     }
 

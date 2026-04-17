@@ -41,4 +41,15 @@ final class GroupTypeTests: XCTestCase {
     func testUnknownRawValueReturnsNil() {
         XCTAssertNil(GroupType(rawValue: "futureType"))
     }
+
+    /// Pin the literal wire strings — these are the contract with every client.
+    /// A failure here means a case was renamed without bumping the protocol.
+    func testKnownCaseWireStrings() {
+        XCTAssertEqual(GroupType.semanticGroup.rawValue, "semanticGroup")
+        XCTAssertEqual(GroupType.list.rawValue, "list")
+        XCTAssertEqual(GroupType.landmark.rawValue, "landmark")
+        XCTAssertEqual(GroupType.dataTable.rawValue, "dataTable")
+        XCTAssertEqual(GroupType.tabBar.rawValue, "tabBar")
+        XCTAssertEqual(GroupType.scrollable.rawValue, "scrollable")
+    }
 }
