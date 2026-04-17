@@ -128,7 +128,6 @@ public final class TheFence {
     var config: Configuration
     let handoff = TheHandoff()
     let bookKeeper = TheBookKeeper()
-    private var isStarted = false
     /// Playback phase — prevents re-entrant play_heist calls and tracks the active input path.
     enum PlaybackPhase {
         case idle
@@ -194,7 +193,7 @@ public final class TheFence {
 
     /// Connect to a device and optionally enable auto-reconnect.
     public func start() async throws {
-        if isStarted, handoff.isConnected {
+        if handoff.isConnected {
             return
         }
 
@@ -203,7 +202,6 @@ public final class TheFence {
             let filter = config.deviceFilter ?? EnvironmentKey.buttonheistDevice.value
             handoff.setupAutoReconnect(filter: filter)
         }
-        isStarted = true
     }
 
     /// Disconnect and cancel all pending requests.
@@ -211,7 +209,6 @@ public final class TheFence {
         cancelAllPendingRequests()
         handoff.disconnect()
         handoff.stopDiscovery()
-        isStarted = false
     }
 
     /// Execute a command from a dictionary request. Auto-connects if not already connected.
@@ -236,7 +233,7 @@ public final class TheFence {
             command != .connect && command != .listTargets &&
             command != .getSessionLog && command != .archiveSession &&
             command != .startHeist && command != .stopHeist &&
-            (!isStarted || !handoff.isConnected) {
+            !handoff.isConnected {
             try await start()
         }
 
