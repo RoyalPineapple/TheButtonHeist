@@ -1,6 +1,15 @@
 import ButtonHeist
 import MCP
 
+// NOTE: Grouped tool dispatch
+// The `gesture`, `scroll`, and `editAction` tools fan in multiple
+// TheFence.Command cases under a single MCP tool. Their `type`, `mode`, and
+// `action` enum values are the literal `TheFence.Command` rawValues — the
+// actual routing happens in main.swift, which reads the field and rewrites
+// the outgoing request's `"command"` key before dispatch. When a new
+// grouped command case is added to TheFence.Command, update both the tool's
+// enum values below and the switch in main.swift.
+
 enum ToolDefinitions {
     // NOTE: Video data handling
     // The MCP server intentionally omits raw base64 video data from responses.

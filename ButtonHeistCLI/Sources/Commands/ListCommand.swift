@@ -11,7 +11,7 @@ struct ListCommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Discovery timeout in seconds")
     var timeout: Double = 3.0
 
-    @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
+    @Option(name: .shortAndLong, help: "Output format: human, json, compact (default: human when interactive, json when piped)")
     var format: OutputFormat?
 
     @ButtonHeistActor

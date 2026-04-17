@@ -183,7 +183,7 @@ nonisolated extension ReplSession {
           rotate <id> angle=1.57      Rotate (radians)
           two_finger_tap <id>         Two-finger tap
           draw_path points=[...]      Draw path through waypoints (JSON)
-          draw_bezier curves=[...]    Draw bezier curves (JSON)
+          draw_bezier segments=[...]  Draw bezier curves (JSON)
 
         Scrolling:
           scroll down <id>            Scroll direction on element

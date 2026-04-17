@@ -10,7 +10,7 @@ struct GetInterfaceCommand: AsyncParsableCommand {
 
     @OptionGroup var connection: ConnectionOptions
 
-    @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
+    @Option(name: .shortAndLong, help: "Output format: human, json, compact (default: human when interactive, json when piped)")
     var format: OutputFormat?
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
