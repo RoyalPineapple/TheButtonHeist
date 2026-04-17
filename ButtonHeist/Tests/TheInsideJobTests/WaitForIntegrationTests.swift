@@ -36,9 +36,15 @@ final class WaitForIntegrationTests: XCTestCase {
             box.data = data
         }
         return (respond, {
-            guard let data = box.data,
-                  let envelope = try? JSONDecoder().decode(ResponseEnvelope.self, from: data),
-                  case .actionResult(let result) = envelope.message else { return nil }
+            guard let data = box.data else { return nil }
+            let envelope: ResponseEnvelope
+            do {
+                envelope = try JSONDecoder().decode(ResponseEnvelope.self, from: data)
+            } catch {
+                XCTFail("Failed to decode ResponseEnvelope: \(error)")
+                return nil
+            }
+            guard case .actionResult(let result) = envelope.message else { return nil }
             return result
         })
     }

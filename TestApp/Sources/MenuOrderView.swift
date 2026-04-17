@@ -231,7 +231,11 @@ struct MenuOrderView: View {
                         default:      10.0
                         }
                         NSLog("[Menu] Payment delay: %.1fs (roll: %d)", delay, roll)
-                        try? await Task.sleep(for: .seconds(delay))
+                        do {
+                            try await Task.sleep(for: .seconds(delay))
+                        } catch {
+                            return
+                        }
                         let orderNumber = "ORD-\(Int.random(in: 1000...9999))"
                         checkoutPhase = .confirmed(orderNumber: orderNumber)
                         NSLog("[Menu] Payment confirmed: %@ (%.1fs)", orderNumber, delay)

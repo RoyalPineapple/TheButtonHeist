@@ -53,7 +53,13 @@ final class TheMuscleTests: XCTestCase {
     }
 
     private func decodeServerMessage(_ data: Data) -> ServerMessage? {
-        (try? JSONDecoder().decode(ResponseEnvelope.self, from: data))?.message
+        do {
+            let envelope = try JSONDecoder().decode(ResponseEnvelope.self, from: data)
+            return envelope.message
+        } catch {
+            XCTFail("Failed to decode ResponseEnvelope: \(error)")
+            return nil
+        }
     }
 
     private func performHello(clientId: Int, respond: @escaping @Sendable (Data) -> Void) {

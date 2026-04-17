@@ -140,18 +140,18 @@ final class TripwireIntegrationTests: XCTestCase {
 
     // MARK: - Pulse produces readings
 
-    func testPulseProducesReadingAfterStart() async {
+    func testPulseProducesReadingAfterStart() async throws {
         tripwire.startPulse()
         // Give the pulse a few ticks to produce a reading
-        try? await Task.sleep(nanoseconds: 300_000_000)
+        try await Task.sleep(nanoseconds: 300_000_000)
         XCTAssertNotNil(tripwire.latestReading)
         XCTAssertGreaterThan(tripwire.latestReading?.tick ?? 0, 0)
     }
 
-    func testPulseReadingHasValidWindowCount() async {
+    func testPulseReadingHasValidWindowCount() async throws {
         tripwire.startPulse()
         // All signals sampled every tick — a few ticks is enough.
-        try? await Task.sleep(nanoseconds: 300_000_000)
+        try await Task.sleep(nanoseconds: 300_000_000)
         guard let reading = tripwire.latestReading else {
             XCTFail("No reading produced")
             return
@@ -159,10 +159,10 @@ final class TripwireIntegrationTests: XCTestCase {
         XCTAssertGreaterThan(reading.windowCount, 0)
     }
 
-    func testPulseReadingTracksVCIdentity() async {
+    func testPulseReadingTracksVCIdentity() async throws {
         tripwire.startPulse()
         // All signals sampled every tick — a few ticks is enough.
-        try? await Task.sleep(nanoseconds: 300_000_000)
+        try await Task.sleep(nanoseconds: 300_000_000)
         guard let reading = tripwire.latestReading else {
             XCTFail("No reading produced")
             return
