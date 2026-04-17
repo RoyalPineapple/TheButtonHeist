@@ -39,4 +39,4 @@ Element registry, target resolution, wire conversion, and screen capture.
 
 9. **`ArrayHelpers.swift`** — `screenName`/`screenId` computed properties on `[HeistElement]` and `[ScreenElement]` (first header element's label and its slug).
 
-> Full dossier: [`docs/dossiers/13-THESTASH.md`](../../../../docs/dossiers/13-THESTASH.md)
+> Full dossier: [`docs/dossiers/11-THESTASH.md`](../../../../docs/dossiers/11-THESTASH.md)

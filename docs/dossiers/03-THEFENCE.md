@@ -8,7 +8,7 @@
 
 TheFence is the brain of the outside operation:
 
-1. **Command dispatch** - routes 41 commands via TheHandoff
+1. **Command dispatch** - routes 42 commands via TheHandoff
 2. **Auto-discovery and connection** - finds and connects to devices automatically
 3. **Auto-reconnect** - retries connection on disconnect via TheHandoff
 4. **Session bookkeeping** - delegates session logs, artifact storage, and archival to TheBookKeeper
@@ -157,7 +157,7 @@ stateDiagram-v2
 ### MEDIUM PRIORITY
 
 **TheFence test coverage is improving but incomplete**
-- `TheFenceTests` covers command enum exhaustiveness (case count guard + wire-format verification for all 41 commands) and `FenceResponse` formatting
+- `TheFenceTests` covers command enum exhaustiveness (case count guard + wire-format verification for all 42 commands) and `FenceResponse` formatting
 - `TheFenceHandlerTests` covers command routing (`testAllCatalogCommandsAreRouted`) and handler-level argument validation
 - Timeout behavior and auto-reconnect logic remain untested
 

@@ -33,4 +33,4 @@ Command dispatch hub. Routes 42 commands between CLI/MCP callers and the iOS dev
 
 **TheBookKeeper** — owned directly (`let bookKeeper = TheBookKeeper()`). TheFence passes `command.rawValue` (String) at every call site — TheBookKeeper has no dependency on `TheFence.Command`. Session log entries are written with `logCommand`/`logResponse`, artifacts with `writeScreenshot`/`writeRecording`, heist evidence with `recordHeistEvidence(command:args:succeeded:)`.
 
-> Full dossier: [`docs/dossiers/10-THEFENCE.md`](../../../../docs/dossiers/10-THEFENCE.md)
+> Full dossier: [`docs/dossiers/03-THEFENCE.md`](../../../../docs/dossiers/03-THEFENCE.md)

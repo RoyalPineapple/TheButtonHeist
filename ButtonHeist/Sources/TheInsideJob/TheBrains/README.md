@@ -39,4 +39,4 @@ Command execution engine. Takes a `ClientMessage`, works it through refresh → 
 
 7. **`ActionResultBuilder.swift`** — Assembles `ActionResult` from method + snapshot. Two init paths (from `[ScreenElement]` or explicit screenName/Id). Two terminal methods: `success(elementLabel:elementValue:elementTraits:exploreResult:)` and `failure(errorKind:)`.
 
-> Full dossier: [`docs/dossiers/13b-THEBRAINS.md`](../../../../docs/dossiers/13b-THEBRAINS.md)
+> Full dossier: [`docs/dossiers/13-THEBRAINS.md`](../../../../docs/dossiers/13-THEBRAINS.md)

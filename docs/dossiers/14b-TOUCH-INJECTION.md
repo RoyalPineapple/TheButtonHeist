@@ -1,7 +1,7 @@
 # TheSafecracker Deep Dive: Touch Injection
 
 > **Source:** `ButtonHeist/Sources/TheInsideJob/TheSafecracker/` — `SyntheticTouch.swift`, `ObjCRuntime.swift`, `TheSafecracker+IOHIDEventBuilder.swift`, `TheSafecracker.swift`, `TheSafecracker+MultiTouch.swift`, `TheSafecracker+Bezier.swift`
-> **Parent dossier:** [04-THESAFECRACKER.md](04-THESAFECRACKER.md)
+> **Parent dossier:** [14-THESAFECRACKER.md](14-THESAFECRACKER.md)
 
 TheSafecracker injects synthetic touch events by constructing the same data structures the real hardware stack produces — IOHIDEvents from IOKit, UITouch objects mutated via private ObjC selectors, and UIEvents delivered through `UIApplication.sendEvent`. This is the same technique used by the KIF testing framework.
 

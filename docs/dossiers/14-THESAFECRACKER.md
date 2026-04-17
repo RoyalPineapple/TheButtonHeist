@@ -65,7 +65,7 @@ graph TD
     Core --> TouchPipeline
     TouchPipeline --> IOHID
     TouchPipeline --> ObjC
-    TextEntry --> KB
+    Actions --> KB
     KB --> ObjC
     Actions --> Tripwire
 ```
@@ -74,9 +74,9 @@ graph TD
 
 | Topic | File | Covers |
 |-------|------|--------|
-| [Scrolling](04a-SCROLLING.md) | `04a-SCROLLING.md` | Auto-scroll to visible, explicit scroll commands, ancestor walk, settle logic |
-| [Touch Injection](04b-TOUCH-INJECTION.md) | `04b-TOUCH-INJECTION.md` | 3-layer IOKit/UITouch/UIEvent pipeline, hit testing, gesture geometry, timing |
-| [Text Entry](04c-TEXT-ENTRY.md) | `04c-TEXT-ENTRY.md` | 5-step pipeline, UIKeyboardImpl injection, keyboard detection, edit actions |
+| [Scrolling](14a-SCROLLING.md) | `14a-SCROLLING.md` | Auto-scroll to visible, explicit scroll commands, ancestor walk, settle logic |
+| [Touch Injection](14b-TOUCH-INJECTION.md) | `14b-TOUCH-INJECTION.md` | 3-layer IOKit/UITouch/UIEvent pipeline, hit testing, gesture geometry, timing |
+| [Text Entry](14c-TEXT-ENTRY.md) | `14c-TEXT-ENTRY.md` | 5-step pipeline, UIKeyboardImpl injection, keyboard detection, edit actions |
 
 ## InteractionResult
 
@@ -197,9 +197,9 @@ Gesture step interval is 10ms for all continuous gestures. `clampDuration` clamp
 
 ## Scrolling & Auto-Scroll
 
-> **Deep dive:** [04a-SCROLLING.md](04a-SCROLLING.md) — full design, requirements, limitations, and implementation notes
+> **Deep dive:** [14a-SCROLLING.md](14a-SCROLLING.md) — full design, requirements, limitations, and implementation notes
 
-TheBrains owns all scroll orchestration (see [13b-THEBRAINS.md](13b-THEBRAINS.md)). TheSafecracker provides the scroll primitives: `scrollByPage`, `scrollToEdge`, `scrollToMakeVisible`, `scrollToOppositeEdge`, and `scrollBySwipe`.
+TheBrains owns all scroll orchestration (see [13-THEBRAINS.md](13-THEBRAINS.md)). TheSafecracker provides the scroll primitives: `scrollByPage`, `scrollToEdge`, `scrollToMakeVisible`, `scrollToOppositeEdge`, and `scrollBySwipe`.
 
 | Primitive | Input | Mechanism |
 |-----------|-------|-----------|
@@ -223,7 +223,7 @@ TheBrains owns all scroll orchestration (see [13b-THEBRAINS.md](13b-THEBRAINS.md
 
 ## Element Resolution Flow
 
-> Full targeting system documentation: [15-UNIFIED-TARGETING.md](../dossiers/15-UNIFIED-TARGETING.md)
+> Full targeting system documentation: [12-UNIFIED-TARGETING.md](12-UNIFIED-TARGETING.md)
 
 All action executors resolve elements via `TheStash.resolveTarget(_:)` which checks heistId → match and returns `ResolvedTarget` wrapping a `ScreenElement`. The live NSObject is accessed via `screenElement.object` (a weak reference).
 

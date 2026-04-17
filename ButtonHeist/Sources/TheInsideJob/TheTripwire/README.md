@@ -47,4 +47,4 @@ Each `waitForSettle(timeout:requiredQuietFrames:)` caller gets its own `SettleWa
 - `yieldRealFrames(_:intervalMs:)` — heavier: `Task.sleep` between frames. For animated scroll SPI.
 - `isScreenChange(before:after:)` — compares `ObjectIdentifier?` values.
 
-> Full dossier: [`docs/dossiers/14-THETRIPWIRE.md`](../../../../docs/dossiers/14-THETRIPWIRE.md)
+> Full dossier: [`docs/dossiers/15-THETRIPWIRE.md`](../../../../docs/dossiers/15-THETRIPWIRE.md)

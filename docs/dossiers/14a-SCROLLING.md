@@ -1,9 +1,9 @@
 # Scrolling Deep Dive
 
-> **Source:** `ButtonHeist/Sources/TheInsideJob/TheStash+Scroll.swift` (orchestration), `TheSafecracker+Scroll.swift` (scroll primitives)
-> **Parent dossiers:** [13b-THEBRAINS.md](13b-THEBRAINS.md), [04-THESAFECRACKER.md](04-THESAFECRACKER.md)
+> **Source:** `ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+Scroll.swift` (orchestration), `TheSafecracker/TheSafecracker+Scroll.swift` (scroll primitives)
+> **Parent dossiers:** [13-THEBRAINS.md](13-THEBRAINS.md), [14-THESAFECRACKER.md](14-THESAFECRACKER.md)
 
-TheStash owns all scroll orchestration — three explicit scroll commands for agents, and an automatic pre-interaction scroll that ensures every action is visible on screen. TheSafecracker provides the scroll primitives (`scrollByPage`, `scrollToEdge`, `scrollToMakeVisible`, `scrollBySwipe`) but never decides what to scroll or when.
+TheBrains owns all scroll orchestration — three explicit scroll commands for agents, and an automatic pre-interaction scroll that ensures every action is visible on screen. TheSafecracker provides the scroll primitives (`scrollByPage`, `scrollToEdge`, `scrollToMakeVisible`, `scrollBySwipe`) but never decides what to scroll or when.
 
 Two-tier dispatch: UIScrollView for direct offset manipulation, synthetic swipe for everything else.
 

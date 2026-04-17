@@ -58,4 +58,4 @@ Session recording, artifact storage, and heist playback. All filesystem I/O in t
 
 Screenshots and recordings share one sequence counter, so files sort in interleaved chronological order.
 
-> Full dossier: [`docs/dossiers/16-THEBOOKKEEPER.md`](../../../../docs/dossiers/16-THEBOOKKEEPER.md)
+> Full dossier: [`docs/dossiers/05-THEBOOKKEEPER.md`](../../../../docs/dossiers/05-THEBOOKKEEPER.md)
