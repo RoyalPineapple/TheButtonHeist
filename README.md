@@ -242,12 +242,6 @@ Full methodology and per-task data: [docs/BENCHMARKS.md](docs/BENCHMARKS.md)
 
 Every heist needs a team.
 
-### The Score
-
-| Name | Role |
-|------|------|
-| **TheScore** | The shared playbook. Wire protocol types, messages, and constants. The contract both sides speak |
-
 ### The Inside Team (iOS)
 
 | Name | Role |
