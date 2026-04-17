@@ -390,4 +390,128 @@ final class ActionExpectationTests: XCTestCase {
         )
         // Note: animating param omitted (defaults to nil)
     }
+
+    // MARK: - Wire Format: explicit `type` discriminator (protocol v7.0)
+
+    func testWireFormatScreenChanged() throws {
+        let data = try JSONEncoder().encode(ActionExpectation.screenChanged)
+        let dictionary = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        XCTAssertEqual(dictionary?["type"] as? String, "screen_changed")
+        XCTAssertEqual(dictionary?.count, 1, "screen_changed carries no payload fields")
+    }
+
+    func testWireFormatElementsChanged() throws {
+        let data = try JSONEncoder().encode(ActionExpectation.elementsChanged)
+        let dictionary = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        XCTAssertEqual(dictionary?["type"] as? String, "elements_changed")
+        XCTAssertEqual(dictionary?.count, 1)
+    }
+
+    func testWireFormatElementUpdated() throws {
+        let expectation = ActionExpectation.elementUpdated(
+            heistId: "btn-Submit", property: .value, oldValue: "old", newValue: "new"
+        )
+        let data = try JSONEncoder().encode(expectation)
+        let dictionary = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        XCTAssertEqual(dictionary?["type"] as? String, "element_updated")
+        XCTAssertEqual(dictionary?["heistId"] as? String, "btn-Submit")
+        XCTAssertEqual(dictionary?["property"] as? String, "value")
+        XCTAssertEqual(dictionary?["oldValue"] as? String, "old")
+        XCTAssertEqual(dictionary?["newValue"] as? String, "new")
+    }
+
+    func testWireFormatElementUpdatedOmitsMissingFields() throws {
+        let expectation = ActionExpectation.elementUpdated(newValue: "only")
+        let data = try JSONEncoder().encode(expectation)
+        let dictionary = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        XCTAssertEqual(dictionary?["type"] as? String, "element_updated")
+        XCTAssertEqual(dictionary?["newValue"] as? String, "only")
+        XCTAssertNil(dictionary?["heistId"])
+        XCTAssertNil(dictionary?["property"])
+        XCTAssertNil(dictionary?["oldValue"])
+    }
+
+    func testWireFormatElementAppeared() throws {
+        let matcher = ElementMatcher(label: "Sign In", traits: [.button])
+        let data = try JSONEncoder().encode(ActionExpectation.elementAppeared(matcher))
+        let dictionary = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        XCTAssertEqual(dictionary?["type"] as? String, "element_appeared")
+        XCTAssertNotNil(dictionary?["matcher"] as? [String: Any])
+    }
+
+    func testWireFormatElementDisappeared() throws {
+        let matcher = ElementMatcher(identifier: "loading-spinner")
+        let data = try JSONEncoder().encode(ActionExpectation.elementDisappeared(matcher))
+        let dictionary = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        XCTAssertEqual(dictionary?["type"] as? String, "element_disappeared")
+        XCTAssertNotNil(dictionary?["matcher"] as? [String: Any])
+    }
+
+    func testWireFormatCompound() throws {
+        let expectation = ActionExpectation.compound([.screenChanged, .elementsChanged])
+        let data = try JSONEncoder().encode(expectation)
+        let dictionary = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        XCTAssertEqual(dictionary?["type"] as? String, "compound")
+        let inner = dictionary?["expectations"] as? [[String: Any]]
+        XCTAssertEqual(inner?.count, 2)
+        XCTAssertEqual(inner?[0]["type"] as? String, "screen_changed")
+        XCTAssertEqual(inner?[1]["type"] as? String, "elements_changed")
+    }
+
+    // MARK: - Round-Trip: associated-value and recursive cases
+
+    func testElementAppearedRoundTrip() throws {
+        let matcher = ElementMatcher(label: "OK", identifier: "btn-ok", traits: [.button])
+        let expectation = ActionExpectation.elementAppeared(matcher)
+        let data = try JSONEncoder().encode(expectation)
+        let decoded = try JSONDecoder().decode(ActionExpectation.self, from: data)
+        XCTAssertEqual(decoded, expectation)
+    }
+
+    func testElementDisappearedRoundTrip() throws {
+        let matcher = ElementMatcher(value: "Loading…", excludeTraits: [.selected])
+        let expectation = ActionExpectation.elementDisappeared(matcher)
+        let data = try JSONEncoder().encode(expectation)
+        let decoded = try JSONDecoder().decode(ActionExpectation.self, from: data)
+        XCTAssertEqual(decoded, expectation)
+    }
+
+    func testCompoundRoundTrip() throws {
+        let expectation = ActionExpectation.compound([
+            .screenChanged,
+            .elementUpdated(heistId: "counter", property: .value, newValue: "5"),
+            .elementAppeared(ElementMatcher(label: "Success")),
+        ])
+        let data = try JSONEncoder().encode(expectation)
+        let decoded = try JSONDecoder().decode(ActionExpectation.self, from: data)
+        XCTAssertEqual(decoded, expectation)
+    }
+
+    func testNestedCompoundRoundTrip() throws {
+        let expectation = ActionExpectation.compound([
+            .compound([.screenChanged, .elementsChanged]),
+            .elementAppeared(ElementMatcher(identifier: "deep")),
+        ])
+        let data = try JSONEncoder().encode(expectation)
+        let decoded = try JSONDecoder().decode(ActionExpectation.self, from: data)
+        XCTAssertEqual(decoded, expectation)
+    }
+
+    // MARK: - Decode Errors
+
+    func testDecodeRejectsUnknownType() {
+        let json = Data(#"{"type": "rainbow"}"#.utf8)
+        XCTAssertThrowsError(try JSONDecoder().decode(ActionExpectation.self, from: json)) { error in
+            guard case DecodingError.dataCorrupted(let context) = error else {
+                XCTFail("Expected .dataCorrupted, got \(error)")
+                return
+            }
+            XCTAssertTrue(context.debugDescription.contains("rainbow"))
+        }
+    }
+
+    func testDecodeRejectsMissingType() {
+        let json = Data("{}".utf8)
+        XCTAssertThrowsError(try JSONDecoder().decode(ActionExpectation.self, from: json))
+    }
 }

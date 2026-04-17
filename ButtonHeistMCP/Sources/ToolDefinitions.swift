@@ -1,4 +1,21 @@
+import ButtonHeist
 import MCP
+
+// NOTE: Grouped tool dispatch
+// The `gesture`, `scroll`, and `editAction` tools fan in multiple
+// TheFence.Command cases under a single MCP tool. Their `type`, `mode`, and
+// `action` enum values are the literal `TheFence.Command` rawValues — the
+// actual routing happens in main.swift, which reads the field and rewrites
+// the outgoing request's `"command"` key before dispatch. When a new
+// grouped command case is added to TheFence.Command, update both the tool's
+// enum values below and the switch in main.swift.
+//
+// Note: `dismiss` is a keyboard action that lives inside the `editAction`
+// tool's `action` enum. main.swift rewrites it to the `dismiss_keyboard`
+// command, so on the wire it dispatches through the same TheFence handler
+// as the CLI's standalone `dismiss_keyboard` subcommand. Agents can reach
+// `dismiss_keyboard` via either `editAction(action: "dismiss")` or
+// `dismissKeyboard` — both paths land on the same backend.
 
 enum ToolDefinitions {
     // NOTE: Video data handling
@@ -43,17 +60,21 @@ enum ToolDefinitions {
         "identifier": ["type": "string", "description": "Filter by accessibilityIdentifier (escape hatch — prefer label/value/traits)"],
     ]
 
-    // Shared expect property for action tools — matches the batch step schema
+    // Shared expect property for action tools — matches the batch step schema.
+    // Wire shape uses a `type` discriminator that matches ActionExpectation's
+    // Codable encoding, so JSON from a wire log can be pasted into a tool call.
     static let expectProperty: Value = [
         "description": """
             Inline verification for this action — match the expectation to what the action does. \
             Navigation (tap a link, back button): "screen_changed". \
             Insertion or deletion (add item, delete row): "elements_changed". \
             State change (toggle, picker, text input): \
-            {"elementUpdated": {"heistId": "x", "property": "value", "newValue": "5"}} — \
+            {"type": "element_updated", "heistId": "x", "property": "value", "newValue": "5"} — \
             proves the specific property changed. All fields optional, omitted = wildcard. \
-            {"elementAppeared": {"label": "Success"}} — check that a matching element was added. \
-            {"elementDisappeared": {"label": "Loading"}} — check that a matching element was removed. \
+            {"type": "element_appeared", "matcher": {"label": "Success"}} — check a matching \
+            element was added. \
+            {"type": "element_disappeared", "matcher": {"label": "Loading"}} — check a matching \
+            element was removed. \
             Expectations are most valuable inside run_batch: each step declares what should happen, \
             and a failed expectation stops the batch at the exact step that diverged — the agent \
             knows immediately what went wrong instead of discovering it turns later.
@@ -65,24 +86,27 @@ enum ToolDefinitions {
             ],
             [
                 "type": "object",
+                "description": "Discriminated expectation. `type` selects the case; other fields depend on the case.",
+                "required": .array([.string("type")]),
                 "properties": [
-                    "elementUpdated": [
-                        "type": "object",
-                        "properties": [
-                            "heistId": ["type": "string", "description": "Match a specific element"],
-                            "property": [
-                                "type": "string",
-                                "description": "Match a specific property (label, value, traits, hint, actions, frame, activationPoint)",
-                                "enum": .array(["label", "value", "traits", "hint", "actions", "frame", "activationPoint"].map { .string($0) }),
-                            ],
-                            "oldValue": ["type": "string", "description": "Expected previous value"],
-                            "newValue": ["type": "string", "description": "Expected new value"],
-                        ],
-                        "additionalProperties": false,
+                    "type": [
+                        "type": "string",
+                        "enum": .array([
+                            "screen_changed", "elements_changed", "element_updated",
+                            "element_appeared", "element_disappeared", "compound",
+                        ].map { .string($0) }),
                     ],
-                    "elementAppeared": [
+                    "heistId": ["type": "string", "description": "element_updated: match a specific element"],
+                    "property": [
+                        "type": "string",
+                        "description": "element_updated: match a specific property",
+                        "enum": .array(["label", "value", "traits", "hint", "actions", "frame", "activationPoint"].map { .string($0) }),
+                    ],
+                    "oldValue": ["type": "string", "description": "element_updated: expected previous value"],
+                    "newValue": ["type": "string", "description": "element_updated: expected new value"],
+                    "matcher": [
                         "type": "object",
-                        "description": "Expect an element matching this predicate to appear in the delta's added list",
+                        "description": "element_appeared / element_disappeared: predicate identifying the element",
                         "properties": [
                             "label": ["type": "string"],
                             "identifier": ["type": "string"],
@@ -92,17 +116,9 @@ enum ToolDefinitions {
                         ],
                         "additionalProperties": false,
                     ],
-                    "elementDisappeared": [
-                        "type": "object",
-                        "description": "Expect an element matching this predicate to disappear from the delta's removed list",
-                        "properties": [
-                            "label": ["type": "string"],
-                            "identifier": ["type": "string"],
-                            "value": ["type": "string"],
-                            "traits": ["type": "array", "items": ["type": "string"]],
-                            "excludeTraits": ["type": "array", "items": ["type": "string"]],
-                        ],
-                        "additionalProperties": false,
+                    "expectations": [
+                        "type": "array",
+                        "description": "compound: array of sub-expectations (strings or objects)",
                     ],
                 ],
                 "additionalProperties": false,
@@ -687,7 +703,7 @@ enum ToolDefinitions {
             "properties": [
                 "app": [
                     "type": "string",
-                    "description": "Bundle ID of the app being recorded (default: com.buttonheist.testapp)",
+                    "description": "Bundle ID of the app being recorded (default: \(Defaults.demoAppBundleID))",
                 ],
                 "identifier": [
                     "type": "string",

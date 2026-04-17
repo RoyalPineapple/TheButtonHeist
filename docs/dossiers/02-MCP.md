@@ -103,7 +103,10 @@ graph TD
 ### Shared `expect` property
 Used on all action tools. Accepts either:
 - String: `"screen_changed"` or `"elements_changed"`
-- Object: `{"elementUpdated": {"heistId": "...", "property": "...", "oldValue": "...", "newValue": "..."}}` — all sub-fields optional wildcards; `property` is one of `label`, `value`, `traits`, `hint`, `actions`, `frame`, `activationPoint`
+- Object with a `type` discriminator that matches `ActionExpectation`'s Codable shape:
+  - `{"type": "element_updated", "heistId": "...", "property": "...", "oldValue": "...", "newValue": "..."}` — all non-`type` fields are optional wildcards; `property` is one of `label`, `value`, `traits`, `hint`, `actions`, `frame`, `activationPoint`
+  - `{"type": "element_appeared", "matcher": { ElementMatcher }}` / `{"type": "element_disappeared", "matcher": { ElementMatcher }}`
+  - `{"type": "compound", "expectations": [ ... ]}`
 
 ## Routing Rules
 

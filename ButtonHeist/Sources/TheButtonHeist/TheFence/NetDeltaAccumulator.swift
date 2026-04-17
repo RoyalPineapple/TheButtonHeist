@@ -7,7 +7,7 @@ import TheScore
 /// Merges per-step deltas into a single net delta (like git squash).
 /// If any step triggered a screen change, the net delta is screenChanged
 /// with the final interface. Otherwise, tracks net added/removed/updated.
-enum NetDeltaAccumulator {
+internal enum NetDeltaAccumulator {
     static func merge(deltas: [InterfaceDelta]) -> InterfaceDelta? {
         let meaningful = deltas.filter { $0.kind != .noChange }
         guard !meaningful.isEmpty else { return nil }

@@ -18,6 +18,15 @@ public struct DeviceResolver {
         self.getDiscoveredDevices = getDiscoveredDevices
     }
 
+    /// Wait for the discovery list to stabilize, then probe each device for
+    /// reachability; return the first reachable match for `filter`, or (if
+    /// `filter` is nil) the single device when exactly one is reachable.
+    ///
+    /// Throws `ConnectionError.noMatchingDevice` when no filter is supplied and
+    /// multiple reachable devices exist (ambiguous selection), or when a filter
+    /// is supplied with no matches. Throws `.noDeviceFound` if nothing appears
+    /// before `discoveryTimeout` elapses. A `127.0.0.1:PORT` filter bypasses
+    /// discovery entirely via `DiscoveredDevice.directConnectTarget`.
     public func resolve() async throws -> DiscoveredDevice {
         if let directDevice = DiscoveredDevice.directConnectTarget(from: filter) {
             return directDevice

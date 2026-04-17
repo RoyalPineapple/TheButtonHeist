@@ -68,27 +68,22 @@ extension TheFence {
         let screen: ScreenPayload = try await sendAndAwait(.requestScreen) { requestId in
             try await self.waitForScreen(requestId: requestId, timeout: 30)
         }
-        if let outputPath = args.string("output") {
-            guard let pngData = Data(base64Encoded: screen.pngData) else {
-                return .error("Failed to decode screenshot data")
-            }
-            do {
-                let resolvedURL = try bookKeeper.writeToPath(pngData, outputPath: outputPath)
-                return .screenshot(path: resolvedURL.path, width: screen.width, height: screen.height)
-            } catch BookKeeperError.unsafePath {
-                return .error("Invalid output path: must not contain '..' components")
-            }
-        }
-        if case .active = bookKeeper.phase {
-            let metadata = ScreenshotMetadata(width: screen.width, height: screen.height)
-            let artifactRequestId = (args["_requestId"] as? String) ?? UUID().uuidString
-            let fileURL = try bookKeeper.writeScreenshot(
+        let artifactRequestId = (args["_requestId"] as? String) ?? UUID().uuidString
+        let metadata = ScreenshotMetadata(width: screen.width, height: screen.height)
+        do {
+            if let url = try bookKeeper.writeArtifactIfSinkAvailable(
                 base64Data: screen.pngData,
+                outputPath: args.string("output"),
                 requestId: artifactRequestId,
                 command: .getScreen,
-                metadata: metadata
-            )
-            return .screenshot(path: fileURL.path, width: screen.width, height: screen.height)
+                metadata: .screenshot(metadata)
+            ) {
+                return .screenshot(path: url.path, width: screen.width, height: screen.height)
+            }
+        } catch BookKeeperError.unsafePath {
+            return .error("Invalid output path: must not contain '..' components")
+        } catch BookKeeperError.base64DecodingFailed {
+            return .error("Failed to decode screenshot data")
         }
         return .screenshotData(pngData: screen.pngData, width: screen.width, height: screen.height)
     }
@@ -233,12 +228,12 @@ extension TheFence {
         guard let pointsArray = args["points"] as? [[String: Any]] else {
             return .error("points must be an array of {x, y} objects")
         }
-        var pathPoints: [PathPoint] = []
-        for point in pointsArray {
-            guard let x = point.number("x"), let y = point.number("y") else {
-                return .error("Each point must have numeric x and y fields")
-            }
-            pathPoints.append(PathPoint(x: x, y: y))
+        let pathPoints = pointsArray.compactMap { point -> PathPoint? in
+            guard let x = point.number("x"), let y = point.number("y") else { return nil }
+            return PathPoint(x: x, y: y)
+        }
+        guard pathPoints.count == pointsArray.count else {
+            return .error("Each point must have numeric x and y fields")
         }
         guard pathPoints.count >= 2 else {
             return .error("Path requires at least 2 points")
@@ -259,16 +254,16 @@ extension TheFence {
         guard let segmentsArray = args["segments"] as? [[String: Any]] else {
             return .error("segments array is required")
         }
-        var segments: [BezierSegment] = []
-        for segment in segmentsArray {
+        let segments = segmentsArray.compactMap { segment -> BezierSegment? in
             guard
                 let cp1X = segment.number("cp1X"), let cp1Y = segment.number("cp1Y"),
                 let cp2X = segment.number("cp2X"), let cp2Y = segment.number("cp2Y"),
                 let endX = segment.number("endX"), let endY = segment.number("endY")
-            else {
-                return .error("Each segment needs cp1X, cp1Y, cp2X, cp2Y, endX, endY")
-            }
-            segments.append(BezierSegment(cp1X: cp1X, cp1Y: cp1Y, cp2X: cp2X, cp2Y: cp2Y, endX: endX, endY: endY))
+            else { return nil }
+            return BezierSegment(cp1X: cp1X, cp1Y: cp1Y, cp2X: cp2X, cp2Y: cp2Y, endX: endX, endY: endY)
+        }
+        guard segments.count == segmentsArray.count else {
+            return .error("Each segment needs cp1X, cp1Y, cp2X, cp2Y, endX, endY")
         }
         guard !segments.isEmpty else {
             return .error("At least 1 bezier segment is required")
@@ -579,33 +574,28 @@ extension TheFence {
         let recording: RecordingPayload = try await sendAndAwait(.stopRecording) { _ in
             try await self.waitForRecording(timeout: Timeouts.longActionSeconds)
         }
-        if let outputPath = args.string("output") {
-            guard let videoData = Data(base64Encoded: recording.videoData) else {
-                return .error("Failed to decode video data")
-            }
-            do {
-                let resolvedURL = try bookKeeper.writeToPath(videoData, outputPath: outputPath)
-                return .recording(path: resolvedURL.path, payload: recording)
-            } catch BookKeeperError.unsafePath {
-                return .error("Invalid output path: must not contain '..' components")
-            }
-        }
-        if case .active = bookKeeper.phase {
-            let metadata = RecordingMetadata(
-                width: recording.width,
-                height: recording.height,
-                duration: recording.duration,
-                fps: recording.fps,
-                frameCount: recording.frameCount
-            )
-            let artifactRequestId = (args["_requestId"] as? String) ?? UUID().uuidString
-            let fileURL = try bookKeeper.writeRecording(
+        let artifactRequestId = (args["_requestId"] as? String) ?? UUID().uuidString
+        let metadata = RecordingMetadata(
+            width: recording.width,
+            height: recording.height,
+            duration: recording.duration,
+            fps: recording.fps,
+            frameCount: recording.frameCount
+        )
+        do {
+            if let url = try bookKeeper.writeArtifactIfSinkAvailable(
                 base64Data: recording.videoData,
+                outputPath: args.string("output"),
                 requestId: artifactRequestId,
                 command: .stopRecording,
-                metadata: metadata
-            )
-            return .recording(path: fileURL.path, payload: recording)
+                metadata: .recording(metadata)
+            ) {
+                return .recording(path: url.path, payload: recording)
+            }
+        } catch BookKeeperError.unsafePath {
+            return .error("Invalid output path: must not contain '..' components")
+        } catch BookKeeperError.base64DecodingFailed {
+            return .error("Failed to decode video data")
         }
         return .recordingData(payload: recording)
     }

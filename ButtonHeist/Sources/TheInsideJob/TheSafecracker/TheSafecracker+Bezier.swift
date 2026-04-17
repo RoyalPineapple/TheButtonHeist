@@ -35,20 +35,18 @@ extension TheSafecracker {
                 return [PathPoint(x: startPoint.x, y: startPoint.y)]
             }
 
-            var result: [PathPoint] = []
-            var current = startPoint
-
-            for (i, seg) in segments.enumerated() {
+            // reduce(into:) carries the running `current` endpoint across segments
+            // and appends only the tail of each subsequent sample to avoid
+            // duplicating the seam between segments.
+            return segments.enumerated().reduce(into: (result: [PathPoint](), current: startPoint)) { state, item in
+                let (index, segment) = item
                 let samples = sampleCubicBezier(
-                    p0: current, p1: seg.cp1, p2: seg.cp2, p3: seg.end,
+                    p0: state.current, p1: segment.cp1, p2: segment.cp2, p3: segment.end,
                     sampleCount: samplesPerSegment
                 )
-                // Skip first point of subsequent segments to avoid duplicates
-                result.append(contentsOf: i == 0 ? samples : Array(samples.dropFirst()))
-                current = seg.end
-            }
-
-            return result
+                state.result.append(contentsOf: index == 0 ? samples : Array(samples.dropFirst()))
+                state.current = segment.end
+            }.result
         }
 
         // MARK: - Private

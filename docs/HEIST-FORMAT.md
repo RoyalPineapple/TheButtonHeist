@@ -36,8 +36,8 @@ Each step is a flat JSON object compatible with `TheFence.execute(request:)` —
   "label": "Review PR, High priority",
   "traits": ["button"],
   "expect": [
-    {"elementUpdated": {"property": "value", "newValue": "Completed"}},
-    {"elementAppeared": {"label": "8 items remaining", "traits": ["staticText"]}}
+    {"type": "element_updated", "property": "value", "newValue": "Completed"},
+    {"type": "element_appeared", "matcher": {"label": "8 items remaining", "traits": ["staticText"]}}
   ],
   "_recorded": {
     "heistId": "button_review_pr_high_priority",
@@ -52,7 +52,7 @@ Each step is a flat JSON object compatible with `TheFence.execute(request:)` —
 {
   "command": "type_text",
   "text": "Ship release",
-  "expect": {"elementUpdated": {"property": "traits", "newValue": "button"}}
+  "expect": {"type": "element_updated", "property": "traits", "newValue": "button"}
 }
 ```
 
@@ -130,37 +130,40 @@ The `expect` field uses the same format as `run_batch` expectations. On playback
 
 ### Object expectations
 
+Object expectations use a `type` discriminator that matches the wire Codable shape for `ActionExpectation`, so JSON from a wire log can be pasted straight into a heist file.
+
 ```json
-{"elementUpdated": {"property": "value", "newValue": "50%"}}
+{"type": "element_updated", "property": "value", "newValue": "50%"}
 ```
 
-Checks that some element's property changed to the specified value. All fields are optional filters — provide what you know, omit what you don't. `heistId` is intentionally omitted for portability.
+Checks that some element's property changed to the specified value. All non-`type` fields are optional filters — provide what you know, omit what you don't. `heistId` is intentionally omitted for portability.
 
 | Field | Type | Description |
 |-------|------|-------------|
+| `type` | `String` | `"element_updated"` |
 | `heistId` | `String?` | Filter by specific element (rarely used in heist files) |
 | `property` | `String?` | Filter by property: `label`, `value`, `traits`, `hint`, `actions` |
 | `oldValue` | `String?` | Expected previous value |
 | `newValue` | `String?` | Expected new value |
 
 ```json
-{"elementAppeared": {"label": "Buy groceries", "traits": ["button"]}}
+{"type": "element_appeared", "matcher": {"label": "Buy groceries", "traits": ["button"]}}
 ```
 
-Checks that an element matching this predicate appeared in the delta's added list. The inner object is an `ElementMatcher` — same flat format used for targeting, but **may include state** (value, state traits) when asserting the element's initial condition.
+Checks that an element matching the `matcher` predicate appeared in the delta's added list. The matcher is an `ElementMatcher` — same flat format used for targeting, but **may include state** (value, state traits) when asserting the element's initial condition.
 
 ```json
-{"elementDisappeared": {"label": "Old Item", "traits": ["button"]}}
+{"type": "element_disappeared", "matcher": {"label": "Old Item", "traits": ["button"]}}
 ```
 
-Checks that an element matching this predicate was in the delta's removed list. Requires a pre-action element cache to resolve removed heistIds.
+Checks that an element matching the `matcher` predicate was in the delta's removed list. Requires a pre-action element cache to resolve removed heistIds.
 
 ### Array expectations (compound)
 
 ```json
 "expect": [
-  {"elementUpdated": {"property": "value", "newValue": "Completed"}},
-  {"elementAppeared": {"label": "8 items remaining", "traits": ["staticText"]}}
+  {"type": "element_updated", "property": "value", "newValue": "Completed"},
+  {"type": "element_appeared", "matcher": {"label": "8 items remaining", "traits": ["staticText"]}}
 ]
 ```
 

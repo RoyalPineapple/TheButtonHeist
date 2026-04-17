@@ -181,14 +181,12 @@ final class TheBurglar {
         let afterContent = afterPartition.contentLabels
         guard !beforeContent.isEmpty, !afterContent.isEmpty else { return false }
 
-        // Count how many before-content labels can be matched in the after-content.
-        var afterBag = afterContent
-        var matchedCount = 0
-        for label in beforeContent {
-            if let index = afterBag.firstIndex(of: label) {
-                afterBag.remove(at: index)
-                matchedCount += 1
-            }
+        // Multiset intersection via per-label frequency: the overlap between
+        // the two lists is the sum over all labels of min(beforeCount, afterCount).
+        let beforeCounts = beforeContent.reduce(into: [:]) { counts, label in counts[label, default: 0] += 1 }
+        let afterCounts = afterContent.reduce(into: [:]) { counts, label in counts[label, default: 0] += 1 }
+        let matchedCount = beforeCounts.reduce(0) { running, pair in
+            running + min(pair.value, afterCounts[pair.key] ?? 0)
         }
 
         let maxCount = max(beforeContent.count, afterContent.count)
@@ -291,22 +289,20 @@ final class TheBurglar {
         }
     }
 
+    /// Walk the UIKit view controller tree from `root`, returning every leaf
+    /// (non-container) view controller reachable through nav topViewController,
+    /// tab selectedViewController, and modal presentedViewController edges.
     private static func allVisibleViewControllers(from root: UIViewController) -> [UIViewController] {
-        var result: [UIViewController] = []
-        var stack: [UIViewController] = [root]
-        while let viewController = stack.popLast() {
-            if let presented = viewController.presentedViewController {
-                stack.append(presented)
-            }
-            if let nav = viewController as? UINavigationController {
-                if let top = nav.topViewController { stack.append(top) }
-            } else if let tab = viewController as? UITabBarController {
-                if let selected = tab.selectedViewController { stack.append(selected) }
-            } else {
-                result.append(viewController)
-            }
+        let presentedChain = root.presentedViewController.map { allVisibleViewControllers(from: $0) } ?? []
+        if let nav = root as? UINavigationController {
+            let navChild = nav.topViewController.map { allVisibleViewControllers(from: $0) } ?? []
+            return navChild + presentedChain
         }
-        return result
+        if let tab = root as? UITabBarController {
+            let tabChild = tab.selectedViewController.map { allVisibleViewControllers(from: $0) } ?? []
+            return tabChild + presentedChain
+        }
+        return [root] + presentedChain
     }
 }
 

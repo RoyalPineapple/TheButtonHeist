@@ -173,19 +173,22 @@ extension GroupType: CaseIterable {
 }
 
 extension GroupType: RawRepresentable {
+    private static let nameToType: [String: GroupType] = {
+        var map: [String: GroupType] = [:]
+        for groupType in allCases { map[groupType.nameValue] = groupType }
+        return map
+    }()
+
+    /// Returns nil for unknown group-type strings. Use Codable for forward-compatible decoding.
     public init?(rawValue: String) {
-        switch rawValue {
-        case "semanticGroup": self = .semanticGroup
-        case "list": self = .list
-        case "landmark": self = .landmark
-        case "dataTable": self = .dataTable
-        case "tabBar": self = .tabBar
-        case "scrollable": self = .scrollable
-        default: return nil
-        }
+        guard let known = Self.nameToType[rawValue] else { return nil }
+        self = known
     }
 
-    public var rawValue: String {
+    /// The string name for known cases. `.unknown` stores its own value.
+    /// Cases are spelled out explicitly to pin the wire contract — `String(describing:)`
+    /// is reflection, not a documented API, and changes here are wire-breaking.
+    private var nameValue: String {
         switch self {
         case .semanticGroup: return "semanticGroup"
         case .list: return "list"
@@ -196,6 +199,8 @@ extension GroupType: RawRepresentable {
         case .unknown(let value): return value
         }
     }
+
+    public var rawValue: String { nameValue }
 }
 
 extension GroupType: Codable {
@@ -219,6 +224,8 @@ public struct Interface: Codable, Sendable {
     public let elements: [HeistElement]
     /// Optional tree structure for grouped display
     public let tree: [ElementNode]?
+
+    // MARK: - Computed Properties
 
     /// Deterministic one-line screen summary built from element metadata.
     /// Format: "{screen name} — {interactive element counts}"
@@ -403,7 +410,9 @@ public func isStableIdentifier(_ identifier: String) -> Bool {
                      options: .regularExpression) == nil
 }
 
-/// A container group in the element tree
+/// A container group in the element tree — a collection of siblings that share
+/// a semantic grouping (list, grid, scrollable region, etc.) or an explicit
+/// `accessibilityContainer`.
 public struct Group: Codable, Equatable, Hashable, Sendable {
     public let type: GroupType
     public let label: String?
@@ -435,11 +444,14 @@ public struct Group: Codable, Equatable, Hashable, Sendable {
     }
 }
 
-/// A node in the element tree
+/// A node in the element tree — either a leaf referencing an element by its
+/// `order` index into `Interface.elements`, or a container grouping children
+/// under a `Group`.
 public indirect enum ElementNode: Codable, Equatable, Sendable {
-    /// A leaf node representing an element by its order
+    /// A leaf node referencing an element by its zero-based position in the
+    /// parent `Interface.elements` array.
     case element(order: Int)
-    /// A container node grouping children
+    /// A container node grouping children under a shared `Group`.
     case container(Group, children: [ElementNode])
 }
 
@@ -452,7 +464,6 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
     /// Developer-provided `accessibilityIdentifier` if present, otherwise synthesized
     /// from traits + label (or value as fallback). Unique within a snapshot.
     public var heistId: String
-    /// Human-readable description of the element
     public var description: String
     public var label: String?
     public var value: String?
@@ -573,6 +584,9 @@ public struct ElementMatcher: Codable, Sendable, Equatable {
         label?.isEmpty == false || identifier?.isEmpty == false || value?.isEmpty == false || hasTraitPredicates
     }
 
+    /// Returns `self` when at least one predicate field is set, else `nil`.
+    /// Useful for chaining: an empty matcher shouldn't be sent over the wire,
+    /// so callers can drop it with `matcher.nonEmpty`.
     public var nonEmpty: Self? { hasPredicates ? self : nil }
 }
 

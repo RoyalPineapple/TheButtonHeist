@@ -84,10 +84,17 @@ public enum Timeouts {
 public final class TheFence {
     /// Connection and session configuration for TheFence.
     public struct Configuration {
+        /// Substring filter for Bonjour device names. `nil` matches any device.
         public var deviceFilter: String?
+        /// Seconds to wait for initial connection before failing `start()`.
         public var connectionTimeout: TimeInterval
+        /// Auth token sent with `client_hello`. Agents use the task slug; omit to
+        /// fall back to the `BUTTONHEIST_TOKEN` environment variable.
         public var token: String?
+        /// When true, TheHandoff re-establishes the connection on drop.
         public var autoReconnect: Bool
+        /// Resolved `.buttonheist.json` config (device filter, token, output paths).
+        /// Supplied by the CLI/MCP entry points from discovered config files.
         public var fileConfig: ButtonHeistFileConfig?
 
         public init(
@@ -107,15 +114,20 @@ public final class TheFence {
 
     public static let supportedCommands: [String] = Command.allCases.map(\.rawValue)
 
+    /// Fires on informational status strings (e.g. `BUTTONHEIST_TOKEN=<value>`
+    /// on server-generated token, connection events). Fires on `@ButtonHeistActor`.
     public var onStatus: ((String) -> Void)? {
         didSet { handoff.onStatus = onStatus }
     }
+
+    /// Fires when the server approves authentication. The parameter is the
+    /// approved token, or `nil` when the server accepted a previously-held
+    /// session. Fires on `@ButtonHeistActor`.
     public var onAuthApproved: ((String?) -> Void)?
 
     var config: Configuration
     let handoff = TheHandoff()
     let bookKeeper = TheBookKeeper()
-    private var isStarted = false
     /// Playback phase — prevents re-entrant play_heist calls and tracks the active input path.
     enum PlaybackPhase {
         case idle
@@ -181,7 +193,7 @@ public final class TheFence {
 
     /// Connect to a device and optionally enable auto-reconnect.
     public func start() async throws {
-        if isStarted, handoff.isConnected {
+        if handoff.isConnected {
             return
         }
 
@@ -190,7 +202,6 @@ public final class TheFence {
             let filter = config.deviceFilter ?? EnvironmentKey.buttonheistDevice.value
             handoff.setupAutoReconnect(filter: filter)
         }
-        isStarted = true
     }
 
     /// Disconnect and cancel all pending requests.
@@ -198,7 +209,6 @@ public final class TheFence {
         cancelAllPendingRequests()
         handoff.disconnect()
         handoff.stopDiscovery()
-        isStarted = false
     }
 
     /// Execute a command from a dictionary request. Auto-connects if not already connected.
@@ -223,7 +233,7 @@ public final class TheFence {
             command != .connect && command != .listTargets &&
             command != .getSessionLog && command != .archiveSession &&
             command != .startHeist && command != .stopHeist &&
-            (!isStarted || !handoff.isConnected) {
+            !handoff.isConnected {
             try await start()
         }
 
@@ -488,241 +498,42 @@ public final class TheFence {
     }
 
     func elementMatcher(_ dictionary: [String: Any]) throws -> ElementMatcher {
-        let traits: [HeistTrait]? = try (dictionary["traits"] as? [String])?.map { name in
-            guard let trait = HeistTrait(rawValue: name) else {
-                throw FenceError.invalidRequest(
-                    "Unknown trait '\(name)'. Valid: \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))"
-                )
-            }
-            return trait
-        }
-        let excludeTraits: [HeistTrait]? = try (dictionary["excludeTraits"] as? [String])?.map { name in
-            guard let trait = HeistTrait(rawValue: name) else {
-                throw FenceError.invalidRequest(
-                    "Unknown excludeTrait '\(name)'. Valid: \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))"
-                )
-            }
-            return trait
-        }
         return ElementMatcher(
             label: dictionary.string("label"),
             identifier: dictionary.string("identifier"),
             value: dictionary.string("value"),
-            traits: traits,
-            excludeTraits: excludeTraits
+            traits: try parseTraitNames(dictionary["traits"] as? [String], field: "trait"),
+            excludeTraits: try parseTraitNames(dictionary["excludeTraits"] as? [String], field: "excludeTrait")
         )
     }
 
-    // MARK: - Expectation Parsing
-
-    func parseExpectation(_ dictionary: [String: Any]) throws -> ActionExpectation? {
-        guard let expect = dictionary["expect"] else { return nil }
-        // Array of expectations → compound
-        if let array = expect as? [[String: Any]] {
-            let sub = try array.map { try parseSingleExpectation($0) }
-            return sub.count == 1 ? sub[0] : .compound(sub)
-        }
-        if let array = expect as? [Any] {
-            // Mixed array (strings and objects)
-            let sub = try array.map { try parseSingleExpectationValue($0) }
-            return sub.count == 1 ? sub[0] : .compound(sub)
-        }
-        return try parseSingleExpectationValue(expect)
-    }
-
-    private func parseSingleExpectationValue(_ expect: Any) throws -> ActionExpectation {
-        if let str = expect as? String {
-            switch str {
-            case "screen_changed":
-                return .screenChanged
-            case "elements_changed":
-                return .elementsChanged
-            default:
+    /// Parse an array of trait name strings into typed `HeistTrait` values.
+    /// Throws `FenceError.invalidRequest` with the list of valid names when an
+    /// unknown name is encountered. Returns `nil` when `names` is `nil` so
+    /// callers can pass a missing field through unchanged.
+    private func parseTraitNames(_ names: [String]?, field: String) throws -> [HeistTrait]? {
+        try names?.map { name in
+            guard let trait = HeistTrait(rawValue: name) else {
                 throw FenceError.invalidRequest(
-                    "Unknown expectation tier: \"\(str)\". " +
-                    "Valid: screen_changed, elements_changed, or {\"elementUpdated\": {…}}"
+                    "Unknown \(field) '\(name)'. Valid: \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))"
                 )
             }
+            return trait
         }
-        if let dict = expect as? [String: Any] {
-            return try parseSingleExpectation(dict)
-        }
-        throw FenceError.invalidRequest(
-            "Invalid expectation type: expected string, object, or array"
-        )
     }
 
-    private func parseSingleExpectation(_ dict: [String: Any]) throws -> ActionExpectation {
-        if let eu = dict["elementUpdated"] as? [String: Any] {
-            let property: ElementProperty?
-            if let propStr = eu["property"] as? String {
-                guard let p = ElementProperty(rawValue: propStr) else {
-                    throw FenceError.invalidRequest(
-                        "Unknown element property: \"\(propStr)\". " +
-                        "Valid: \(ElementProperty.allCases.map(\.rawValue).joined(separator: ", "))"
-                    )
-                }
-                property = p
-            } else {
-                property = nil
-            }
-            return .elementUpdated(
-                heistId: eu["heistId"] as? String,
-                property: property,
-                oldValue: eu["oldValue"] as? String,
-                newValue: eu["newValue"] as? String
-            )
-        }
-        if dict.keys.contains("elementUpdated") {
-            return .elementUpdated()
-        }
-        if let matcherDict = dict["elementAppeared"] as? [String: Any] {
-            return .elementAppeared(try parseMatcherFromDict(matcherDict))
-        }
-        if let matcherDict = dict["elementDisappeared"] as? [String: Any] {
-            return .elementDisappeared(try parseMatcherFromDict(matcherDict))
-        }
-        throw FenceError.invalidRequest(
-            "Invalid expectation object: expected elementUpdated, elementAppeared, or elementDisappeared. " +
-            "Got keys: \(dict.keys.sorted())"
-        )
-    }
-
-    private func parseMatcherFromDict(_ dict: [String: Any]) throws -> ElementMatcher {
-        let traits: [HeistTrait]?
-        if let traitNames = dict["traits"] as? [String] {
-            traits = try traitNames.map { name in
-                guard let trait = HeistTrait(rawValue: name) else {
-                    throw FenceError.invalidRequest("Unknown trait: \"\(name)\"")
-                }
-                return trait
-            }
-        } else {
-            traits = nil
-        }
-        let excludeTraits: [HeistTrait]?
-        if let excludeNames = dict["excludeTraits"] as? [String] {
-            excludeTraits = try excludeNames.map { name in
-                guard let trait = HeistTrait(rawValue: name) else {
-                    throw FenceError.invalidRequest("Unknown trait: \"\(name)\"")
-                }
-                return trait
-            }
-        } else {
-            excludeTraits = nil
-        }
-        return ElementMatcher(
-            label: dict["label"] as? String,
-            identifier: dict["identifier"] as? String,
-            value: dict["value"] as? String,
-            traits: traits,
-            excludeTraits: excludeTraits
-        )
-    }
+    // Expectation parsing (`parseExpectation` and its helpers) lives in
+    // TheFence+ExpectationParsing.swift.
 
     // MARK: - Last Action / Latency Tracking
 
     var lastActionResult: ActionResult?
+    /// Round-trip time in milliseconds for the last action command that
+    /// completed (request issued → response received).
     public private(set) var lastLatencyMs: Int = 0
 
-    // MARK: - Batch Execution
-
-    enum BatchPolicy: String, CaseIterable {
-        case stopOnError = "stop_on_error"
-        case continueOnError = "continue_on_error"
-    }
-
-    private func handleRunBatch(_ args: [String: Any]) async throws -> FenceResponse {
-        guard let steps = args["steps"] as? [[String: Any]], !steps.isEmpty else {
-            throw FenceError.invalidRequest("run_batch requires a non-empty 'steps' array")
-        }
-        let policyString = (args["policy"] as? String) ?? BatchPolicy.stopOnError.rawValue
-        guard let policy = BatchPolicy(rawValue: policyString) else {
-            throw FenceError.invalidRequest(
-                "Unknown batch policy: \"\(policyString)\". " +
-                "Valid: \(BatchPolicy.allCases.map(\.rawValue).joined(separator: ", "))"
-            )
-        }
-
-        var results: [[String: Any]] = []
-        var stepSummaries: [BatchStepSummary] = []
-        var stepDeltas: [InterfaceDelta] = []
-        var failedIndex: Int?
-        var expectationsMet = 0
-        var expectationsChecked = 0
-        let batchStart = CFAbsoluteTimeGetCurrent()
-
-        for (index, step) in steps.enumerated() {
-            let commandName = step["command"] as? String ?? "?"
-            do {
-                let response = try await execute(request: step)
-                results.append(response.jsonDict() ?? ["status": "ok"])
-
-                // Count explicit tier expectations only — delivery failures have
-                // expectation.expectation == nil and should not inflate the count
-                var stepExpectationMet: Bool?
-                if case .action(_, let expectation) = response,
-                   let result = expectation,
-                   result.expectation != nil {
-                    expectationsChecked += 1
-                    if result.met { expectationsMet += 1 }
-                    stepExpectationMet = result.met
-                }
-
-                // Collect delta for net diff computation
-                if case .action(let actionResult, _) = response,
-                   let delta = actionResult.interfaceDelta {
-                    stepDeltas.append(delta)
-                }
-
-                // Build step summary from the typed response
-                stepSummaries.append(makeStepSummary(
-                    command: commandName, response: response, expectationMet: stepExpectationMet
-                ))
-
-                // Check for failure using the typed response, not serialized strings
-                let isFailed: Bool
-                if case .action(_, let expectation) = response, let result = expectation {
-                    isFailed = !result.met
-                } else if case .error = response {
-                    isFailed = true
-                } else {
-                    isFailed = false
-                }
-                if isFailed && policy == .stopOnError {
-                    failedIndex = index
-                    break
-                }
-            } catch {
-                let errorDict: [String: Any] = [
-                    "status": "error",
-                    "message": error.localizedDescription,
-                ]
-                results.append(errorDict)
-                stepSummaries.append(BatchStepSummary(
-                    command: commandName, deltaKind: nil, screenName: nil, screenId: nil,
-                    expectationMet: nil, elementCount: nil, error: error.localizedDescription
-                ))
-                if policy == .stopOnError {
-                    failedIndex = index
-                    break
-                }
-            }
-        }
-
-        let totalMs = Int((CFAbsoluteTimeGetCurrent() - batchStart) * 1000)
-        let netDelta = NetDeltaAccumulator.merge(deltas: stepDeltas)
-        return .batch(
-            results: results,
-            completedSteps: results.count,
-            failedIndex: failedIndex,
-            totalTimingMs: totalMs,
-            expectationsChecked: expectationsChecked,
-            expectationsMet: expectationsMet,
-            stepSummaries: stepSummaries,
-            netDelta: netDelta
-        )
-    }
+    // Batch execution (`handleRunBatch`, `BatchPolicy`, step-summary building,
+    // and `currentSessionState`) lives in TheFence+Batch.swift.
 
     // MARK: - Config Target Conversion
 
@@ -731,69 +542,6 @@ public final class TheFence {
             guard let device = DiscoveredDevice.fromHostPort(target.device, id: "config-\(name)", name: name) else { return nil }
             return device
         }
-    }
-
-    // MARK: - Make Step Summary
-
-    private func makeStepSummary(
-        command: String, response: FenceResponse, expectationMet: Bool?
-    ) -> BatchStepSummary {
-        switch response {
-        case .action(let result, _):
-            return BatchStepSummary(
-                command: command,
-                deltaKind: result.interfaceDelta?.kind.rawValue,
-                screenName: result.screenName,
-                screenId: result.screenId,
-                expectationMet: expectationMet,
-                elementCount: nil,
-                error: result.success ? nil : result.message
-            )
-        case .interface(let iface, _, _, _):
-            return BatchStepSummary(
-                command: command, deltaKind: nil, screenName: nil, screenId: nil,
-                expectationMet: nil, elementCount: iface.elements.count, error: nil
-            )
-        case .error(let message):
-            return BatchStepSummary(
-                command: command, deltaKind: nil, screenName: nil, screenId: nil,
-                expectationMet: nil, elementCount: nil, error: message
-            )
-        default:
-            return BatchStepSummary(
-                command: command, deltaKind: nil, screenName: nil, screenId: nil,
-                expectationMet: nil, elementCount: nil, error: nil
-            )
-        }
-    }
-
-    // MARK: - Session State
-
-    func currentSessionState() -> [String: Any] {
-        let connected = handoff.isConnected
-        var payload: [String: Any] = [
-            "status": "ok",
-            "connected": connected,
-        ]
-        if let device = handoff.connectedDevice {
-            payload["deviceName"] = handoff.displayName(for: device)
-            payload["appName"] = device.appName
-            payload["connectionType"] = device.connectionType.rawValue
-            if let shortId = device.shortId { payload["shortId"] = shortId }
-        }
-        payload["isRecording"] = handoff.isRecording
-        payload["actionTimeoutSeconds"] = Timeouts.actionSeconds
-        payload["longActionTimeoutSeconds"] = Timeouts.longActionSeconds
-
-        if let last = lastActionResult {
-            payload["lastAction"] = [
-                "method": last.method.rawValue,
-                "success": last.success,
-                "message": last.message as Any,
-                "latency_ms": lastLatencyMs,
-            ]
-        }
-        return payload
     }
 
     // MARK: - Async Wait Methods

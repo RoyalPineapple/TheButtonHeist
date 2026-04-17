@@ -9,6 +9,9 @@ public struct HeistPlayback: Codable, Sendable, Equatable {
     /// Format version. Increment when the step schema changes.
     public static let currentVersion = 1
 
+    /// Version from the decoded file. Not enforced at decode time — a playback
+    /// with `version: 99` decodes cleanly; callers that care must compare
+    /// against `HeistPlayback.currentVersion` before replay.
     public let version: Int
     /// ISO 8601 timestamp of when the recording was made.
     public let recorded: Date
@@ -39,7 +42,10 @@ public struct HeistPlayback: Codable, Sendable, Equatable {
 /// TheFence.execute(request:) dictionary — matcher fields sit at the top level
 /// alongside command-specific args, exactly as TheFence expects.
 public struct HeistEvidence: Codable, Sendable, Equatable {
-    /// The TheFence.Command raw value (e.g. "activate", "type_text", "swipe").
+    /// The `TheFence.Command` raw value (e.g. `"activate"`, `"type_text"`,
+    /// `"swipe"`). Stored as a string rather than the enum because `Command`
+    /// lives in TheButtonHeist (iOS-only) and TheScore must be portable across
+    /// iOS + macOS.
     public let command: String
     /// Element matcher fields — nil means the command doesn't target an element.
     public let target: ElementMatcher?
@@ -179,6 +185,14 @@ public enum HeistValue: Codable, Sendable, Equatable {
     case object([String: HeistValue])
 
     public init(from decoder: Decoder) throws {
+        // Documented exception to the "no `try?` in production" rule:
+        // `HeistValue` is an any-JSON type and must probe six decoder
+        // shapes to discriminate between them. The discarded errors are
+        // always "wrong type, try the next one"; a semantic decode error
+        // fires as the `DecodingError.dataCorrupted` below. Every
+        // alternative (hand-rolled tokenizer, `JSONSerialization` round
+        // trip, nested keyed containers) is strictly worse for this
+        // shape.
         let container = try decoder.singleValueContainer()
         if let boolValue = try? container.decode(Bool.self) {
             self = .bool(boolValue)

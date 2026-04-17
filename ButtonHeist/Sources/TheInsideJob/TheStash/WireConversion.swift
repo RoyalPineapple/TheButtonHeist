@@ -63,18 +63,13 @@ extension TheStash {
     }
 
     static func buildActions(for element: AccessibilityElement) -> [ElementAction] {
-        var actions: [ElementAction] = []
-        if Interactivity.isInteractive(element: element) {
-            actions.append(.activate)
-        }
-        if element.traits.contains(.adjustable), Interactivity.isInteractive(element: element) {
-            actions.append(.increment)
-            actions.append(.decrement)
-        }
-        for action in element.customActions {
-            actions.append(.custom(action.name))
-        }
-        return actions
+        let isInteractive = Interactivity.isInteractive(element: element)
+        let activate: [ElementAction] = isInteractive ? [.activate] : []
+        let adjustable: [ElementAction] = (isInteractive && element.traits.contains(.adjustable))
+            ? [.increment, .decrement]
+            : []
+        let custom = element.customActions.map { ElementAction.custom($0.name) }
+        return activate + adjustable + custom
     }
 
     // MARK: - Wire Output

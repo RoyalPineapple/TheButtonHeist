@@ -2,6 +2,18 @@
 #if DEBUG
 import UIKit
 
+// This file bridges to IOKit's private HID event API via dlsym. The five
+// file-private `nonisolated(unsafe)` globals below hold C function pointers
+// that are written exactly once (inside `loadIOHIDFunctions`) on first use
+// and read thereafter. Swift has no structured way to express "write-once,
+// lazily-initialised C function pointer" — wrapping in an actor would be
+// incorrect (these are synchronous C entry points called from gesture
+// hot paths) and using a lock would add ceremony for a pattern that is
+// well-known to be safe in this exact shape. The escape hatch is narrowly
+// scoped to the IOKit bridge; do not introduce further
+// `nonisolated(unsafe)` declarations elsewhere without a comparable
+// justification.
+
 extension TheSafecracker {
 
     // MARK: - IOHIDEvent Construction

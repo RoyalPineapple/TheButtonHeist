@@ -119,10 +119,10 @@ struct ButtonHeistMCPServer {
 
         Expectations are as specific as you need — say what you know, omit what you don't: \
         `"elements_changed"` — something should change (broadest). \
-        `{"elementUpdated": {}}` — some element's property should change. \
-        `{"elementUpdated": {"heistId": "counter"}}` — this specific element should change. \
-        `{"elementUpdated": {"heistId": "counter", "property": "value"}}` — its value specifically. \
-        `{"elementUpdated": {"heistId": "counter", "newValue": "5"}}` — and it should become "5". \
+        `{"type": "element_updated"}` — some element's property should change. \
+        `{"type": "element_updated", "heistId": "counter"}` — this specific element should change. \
+        `{"type": "element_updated", "heistId": "counter", "property": "value"}` — its value specifically. \
+        `{"type": "element_updated", "heistId": "counter", "newValue": "5"}` — and it should become "5". \
         Each level narrows what counts as success. The more specific, the more a failure tells you.
 
         ## Recording Heists

@@ -45,6 +45,8 @@ struct ButtonHeistApp: AsyncParsableCommand {
             PinchSubcommand.self,
             RotateSubcommand.self,
             TwoFingerTapSubcommand.self,
+            DrawPathCommand.self,
+            DrawBezierCommand.self,
 
             // Pasteboard
             SetPasteboardCommand.self,
@@ -59,6 +61,9 @@ struct ButtonHeistApp: AsyncParsableCommand {
             // Session management
             SessionLogCommand.self,
             ArchiveSessionCommand.self,
+            GetSessionStateCommand.self,
+            ListTargetsCommand.self,
+            RunBatchCommand.self,
 
             // Heist recording & playback
             StartHeistCommand.self,

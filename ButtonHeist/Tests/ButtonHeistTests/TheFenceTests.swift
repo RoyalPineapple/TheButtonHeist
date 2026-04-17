@@ -584,7 +584,7 @@ final class TheFenceTests: XCTestCase {
         )
 
         Task { @ButtonHeistActor in
-            try? await Task.sleep(nanoseconds: 50_000_000)
+            do { try await Task.sleep(nanoseconds: 50_000_000) } catch { return }
             fence.handoff.onRecording?(expectedPayload)
         }
 
@@ -599,7 +599,7 @@ final class TheFenceTests: XCTestCase {
         let fence = TheFence()
 
         Task { @ButtonHeistActor in
-            try? await Task.sleep(nanoseconds: 50_000_000)
+            do { try await Task.sleep(nanoseconds: 50_000_000) } catch { return }
             fence.handoff.onRecordingError?("disk full")
         }
 
