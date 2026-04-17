@@ -66,7 +66,7 @@ graph TD
 | `TheInsideJob.swift` | Singleton, crew assembly, server lifecycle, polling, app lifecycle |
 | `AutoStart.swift` | `@_cdecl` bridge for ObjC auto-start (ThePlant calls this) |
 
-All message handling, encoding, broadcasting, and recording now live in [`TheGetaway/`](../../ButtonHeist/Sources/TheInsideJob/TheGetaway/). See [17-THEGETAWAY.md](17-THEGETAWAY.md).
+All message handling, encoding, broadcasting, and recording now live in [`TheGetaway/`](../../ButtonHeist/Sources/TheInsideJob/TheGetaway/). See [09-THEGETAWAY.md](09-THEGETAWAY.md).
 
 ## Ownership
 

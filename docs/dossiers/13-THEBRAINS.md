@@ -10,7 +10,7 @@ TheBrains takes a command and works it through to a result:
 
 1. **Command dispatch** — `executeCommand(_:)` routes `ClientMessage` to the appropriate handler: accessibility actions, touch gestures, text/scroll/search, or explore.
 2. **Action execution pipelines** — Two generic pipelines: `performElementAction` (element-targeted: ensureOnScreen → resolve → check interactivity → perform action) and `performPointAction` (coordinate-targeted gestures). Each `executeXxx` method is a thin closure that feeds the pipeline.
-3. **Scroll orchestration** — `executeScroll`, `executeScrollToEdge`, `executeScrollToVisible` (one-shot jump to known position), `executeElementSearch` (iterative page-by-page search for unseen elements). See [04a-SCROLLING.md](04a-SCROLLING.md).
+3. **Scroll orchestration** — `executeScroll`, `executeScrollToEdge`, `executeScrollToVisible` (one-shot jump to known position), `executeElementSearch` (iterative page-by-page search for unseen elements). See [14a-SCROLLING.md](14a-SCROLLING.md).
 4. **Screen exploration** — `exploreAndPrune()` scrolls every scrollable container to discover all elements, using `containerExploreStates` fingerprint caching to skip unchanged containers. Prunes elements no longer seen after a full explore cycle.
 5. **Delta cycle** — `captureBeforeState()` captures a `BeforeState` token; after the action, `actionResultWithDelta(before:)` settles via TheTripwire, parses via TheStash, detects screen changes, applies, explores, and computes the delta through a single codepath for both success and failure.
 6. **Refresh convenience** — `refresh()` delegates to `stash.refresh()` and accumulates heistIds into `exploreCycleIds`. TheBurglar is TheStash's private implementation detail — TheBrains never references it.

@@ -1,7 +1,7 @@
 # TheSafecracker Deep Dive: Text Entry
 
 > **Source:** `ButtonHeist/Sources/TheInsideJob/TheStash+Actions.swift` (`executeTypeText`), `TheSafecracker/TheSafecracker.swift` (raw keyboard methods), `TheSafecracker/KeyboardBridge.swift`
-> **Parent dossier:** [04-THESAFECRACKER.md](04-THESAFECRACKER.md)
+> **Parent dossier:** [14-THESAFECRACKER.md](14-THESAFECRACKER.md)
 
 Text entry bypasses the UIKit touch system entirely and speaks to `UIKeyboardImpl` through `KeyboardBridge` — a dedicated `@MainActor struct` that wraps all private API access via `ObjCRuntime`. This is the same technique used by the KIF testing framework. It works with both software and hardware keyboards.
 
@@ -45,7 +45,7 @@ flowchart TD
 
 ### Step 0: Ensure on screen
 
-If `elementTarget` is provided, `ensureOnScreen(for:)` scrolls the element into view before tapping. See [04a-SCROLLING.md](04a-SCROLLING.md).
+If `elementTarget` is provided, `ensureOnScreen(for:)` scrolls the element into view before tapping. See [14a-SCROLLING.md](14a-SCROLLING.md).
 
 ### Step 1: Focus
 
@@ -136,7 +136,7 @@ Two methods in TheSafecracker do multi-window walks via `UIApplication.shared.co
 
 `clearText` casts the result inline: `firstResponderView() as? (any UITextInput)`. Returns nil if the first responder doesn't conform (e.g., a button that somehow became first responder).
 
-**Note:** `ensureFirstResponderOnScreen()` (in TheStash, not TheSafecracker) uses `tripwire.currentFirstResponder()` to find the first responder, not `firstResponderView()`. See [04a-SCROLLING.md](04a-SCROLLING.md) for the auto-scroll entry points.
+**Note:** `ensureFirstResponderOnScreen()` (in TheStash, not TheSafecracker) uses `tripwire.currentFirstResponder()` to find the first responder, not `firstResponderView()`. See [14a-SCROLLING.md](14a-SCROLLING.md) for the auto-scroll entry points.
 
 ## Edit Actions
 

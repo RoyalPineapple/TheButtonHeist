@@ -8,7 +8,7 @@
 
 TheScore is the shared playbook. It defines:
 
-1. **All client-to-server messages** (`ClientMessage` — 35 cases)
+1. **All client-to-server messages** (`ClientMessage` — 37 cases)
 2. **All server-to-client messages** (`ServerMessage` — 18 cases, including `status(StatusPayload)`)
 3. **Request/response envelopes** (`RequestEnvelope`, `ResponseEnvelope`) for correlation
 4. **UI element types** (`HeistElement`, `Interface`, `ElementNode`, `ElementAction`, `Group`, `HeistCustomContent`)
@@ -30,7 +30,7 @@ TheScore is the shared playbook. It defines:
 | File | Contents |
 |------|----------|
 | `Messages.swift` | `buttonHeistServiceType`, `protocolVersion` ("6.7"), `WireMessageType` (51 cases), `ButtonHeistActor` |
-| `ClientMessages.swift` | `RequestEnvelope`, `ClientMessage` (35 cases), all action target structs, `UnitPoint`, `RecordingConfig` |
+| `ClientMessages.swift` | `RequestEnvelope`, `ClientMessage` (37 cases), all action target structs, `UnitPoint`, `RecordingConfig` |
 | `ServerMessages.swift` | `ResponseEnvelope`, `ServerMessage` (18 cases), `ActionResult`, `ErrorKind`, `InterfaceDelta`, `StatusPayload`, `ScreenPayload`, `RecordingPayload`, `InteractionEvent`, `ServerInfo` |
 | `Elements.swift` | `HeistElement`, `HeistTrait` (43 known cases + `unknown(String)`), `GroupType` (6 known cases + `unknown(String)`), `Interface`, `ElementNode`, `Group`, `ElementAction`, `HeistCustomContent`, `ElementTarget`, `ElementMatcher` |
 | `ClientMessages+WireCoding.swift` | Custom flat envelope encoding for client messages |
@@ -44,7 +44,7 @@ TheScore is the shared playbook. It defines:
 graph TD
     subgraph TheScore["TheScore (Cross-Platform)"]
         Messages["Messages.swift — serviceType, protocolVersion, WireMessageType (51 cases)"]
-        Client["ClientMessages.swift — RequestEnvelope, ClientMessage (35 cases), UnitPoint"]
+        Client["ClientMessages.swift — RequestEnvelope, ClientMessage (37 cases), UnitPoint"]
         Server["ServerMessages.swift — ResponseEnvelope, ServerMessage (18 cases), StatusPayload"]
         Elements["Elements.swift — HeistElement, Interface, ElementTarget, ElementMatcher"]
         ConnScope["ConnectionScope.swift — ConnectionScope, NetworkInterfaceNaming"]
@@ -63,7 +63,7 @@ graph TD
 
 ```mermaid
 graph TD
-    subgraph ClientMessages["ClientMessage (35 cases)"]
+    subgraph ClientMessages["ClientMessage (37 cases)"]
         Hello["clientHello"]
         Auth["authenticate(AuthenticatePayload)"]
         Sub["subscribe / unsubscribe"]
@@ -340,7 +340,7 @@ classDiagram
 
 ## Action Method Catalog
 
-`ActionMethod` (25 cases): `activate`, `increment`, `decrement`, `syntheticTap`, `syntheticLongPress`, `syntheticSwipe`, `syntheticDrag`, `syntheticPinch`, `syntheticRotate`, `syntheticTwoFingerTap`, `syntheticDrawPath`, `typeText`, `customAction`, `editAction`, `resignFirstResponder`, `setPasteboard`, `getPasteboard`, `waitForIdle`, `scroll`, `scrollToVisible`, `scrollToEdge`, `waitFor`, `explore`, `elementNotFound`, `elementDeallocated`
+`ActionMethod` (27 cases): `activate`, `increment`, `decrement`, `syntheticTap`, `syntheticLongPress`, `syntheticSwipe`, `syntheticDrag`, `syntheticPinch`, `syntheticRotate`, `syntheticTwoFingerTap`, `syntheticDrawPath`, `typeText`, `customAction`, `editAction`, `resignFirstResponder`, `setPasteboard`, `getPasteboard`, `waitForIdle`, `waitForChange`, `scroll`, `scrollToVisible`, `elementSearch`, `scrollToEdge`, `waitFor`, `explore`, `elementNotFound`, `elementDeallocated`
 
 ## Items Flagged for Review
 

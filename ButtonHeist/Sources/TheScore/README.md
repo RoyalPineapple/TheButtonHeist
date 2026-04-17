@@ -37,4 +37,4 @@ Shared wire protocol. Every type that crosses the TCP boundary lives here. No UI
 
 **Client decodes:** `ResponseEnvelope(from: data)` → reads `type`, `backgroundDelta`, payload decoder → `decodeStateMessage` matches `.actionResult` → synthesized Codable on `ActionResult`.
 
-> Full dossier: [`docs/dossiers/01-THESCORE.md`](../../../docs/dossiers/01-THESCORE.md)
+> Full dossier: [`docs/dossiers/18-THESCORE.md`](../../../docs/dossiers/18-THESCORE.md)

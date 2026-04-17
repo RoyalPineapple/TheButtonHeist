@@ -54,4 +54,4 @@ safecracker.tap(at: point)
     → TouchEvent → send()
 ```
 
-> Full dossiers: [`docs/dossiers/04-THESAFECRACKER.md`](../../../../docs/dossiers/04-THESAFECRACKER.md), [`docs/dossiers/03-THEFINGERPRINTS.md`](../../../../docs/dossiers/03-THEFINGERPRINTS.md)
+> Full dossiers: [`docs/dossiers/14-THESAFECRACKER.md`](../../../../docs/dossiers/14-THESAFECRACKER.md), [`docs/dossiers/17-THEFINGERPRINTS.md`](../../../../docs/dossiers/17-THEFINGERPRINTS.md)

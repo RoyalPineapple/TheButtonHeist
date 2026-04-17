@@ -37,4 +37,4 @@ TheInsideJob creates the stakeout on demand and wires two closures:
 
 TheStash holds `weak var stakeout` for `captureActionFrame()` — a bonus frame after each action to capture the visual effect.
 
-> Full dossier: [`docs/dossiers/05-THESTAKEOUT.md`](../../../../docs/dossiers/05-THESTAKEOUT.md)
+> Full dossier: [`docs/dossiers/16-THESTAKEOUT.md`](../../../../docs/dossiers/16-THESTAKEOUT.md)

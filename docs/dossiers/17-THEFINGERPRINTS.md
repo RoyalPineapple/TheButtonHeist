@@ -1,6 +1,6 @@
 # Fingerprints - The Evidence
 
-> **File:** `ButtonHeist/Sources/TheInsideJob/TheFingerprints.swift`
+> **File:** `ButtonHeist/Sources/TheInsideJob/TheSafecracker/TheFingerprints.swift`
 > **Platform:** iOS 17.0+ (UIKit)
 > **Role:** Visual touch indicators - shows where interactions happen, included in recordings
 

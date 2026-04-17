@@ -1,6 +1,6 @@
 # TheStash - The Score Handler
 
-> **Files:** `TheStash.swift`, `TheStash+Matching.swift`, `TheStash+Capture.swift`, `TheStash/WireConversion.swift`, `TheStash/IdAssignment.swift`, `TheStash/ElementRegistry.swift`, `TheStash/Diagnostics.swift`, `TheStash/Interactivity.swift`, `TheStash/ScreenManifest.swift`, `TheStash/ArrayHelpers.swift`
+> **Files:** `TheStash.swift`, `TheStash+Matching.swift`, `TheStash+Capture.swift`, `TheStash/WireConversion.swift`, `TheStash/IdAssignment.swift`, `TheStash/ElementRegistry.swift`, `TheStash/Diagnostics.swift`, `TheStash/Interactivity.swift`, `TheStash/ArrayHelpers.swift`
 > **Platform:** iOS 17.0+ (UIKit, DEBUG builds only)
 > **Role:** Element registry, target resolution, wire conversion, screen capture
 
@@ -9,7 +9,7 @@
 TheStash holds the goods — pure data, no side effects:
 
 1. **Screen-lifetime element registry** — maintains `screenElements: [String: ScreenElement]` keyed by heistId, persistent across refreshes within the same screen
-2. **Target resolution** — `resolveTarget(_:)` is the single entry point: `.heistId` → O(1) dictionary lookup in `registry.elements`, `.matcher` → `uniqueMatch` tree walk + O(1) reverse index lookup via `registry.reverseIndex`. Returns `TargetResolution` enum (`.resolved(ResolvedTarget)`, `.notFound(diagnostics:)`, `.ambiguous(candidates:diagnostics:)`). See [15-UNIFIED-TARGETING.md](15-UNIFIED-TARGETING.md) for the full targeting system.
+2. **Target resolution** — `resolveTarget(_:)` is the single entry point: `.heistId` → O(1) dictionary lookup in `registry.elements`, `.matcher` → `uniqueMatch` tree walk + O(1) reverse index lookup via `registry.reverseIndex`. Returns `TargetResolution` enum (`.resolved(ResolvedTarget)`, `.notFound(diagnostics:)`, `.ambiguous(candidates:diagnostics:)`). See [12-UNIFIED-TARGETING.md](12-UNIFIED-TARGETING.md) for the full targeting system.
 3. **Element matching** — `findMatch(_:)`, `hasMatch(_:)`, `resolveFirstMatch(_:)` search the canonical accessibility hierarchy using `ElementMatcher` predicates with AND semantics and case-insensitive substring matching.
 4. **HeistId synthesis** — `IdAssignment` assigns stable, deterministic `heistId` identifiers directly from `AccessibilityElement` (developer identifier preferred, else synthesized from traits+label; value excluded for stability), with suffix disambiguation for duplicates
 5. **Wire conversion at boundary** — `WireConversion.toWire()` converts `ScreenElement` → `HeistElement` only at serialization boundaries (Pulse broadcast, sendInterface, ExploreResult). All internal code operates on `AccessibilityElement`.
@@ -19,8 +19,8 @@ TheStash holds the goods — pure data, no side effects:
 9. **Resolution diagnostics** — near-miss suggestions, similar heistId hints, compact element summaries (`Diagnostics`)
 
 **Not TheStash's job** (moved to other crew members):
-- Parse pipeline (hierarchy parsing, element context building) → [TheBurglar](13a-THEBURGLAR.md)
-- Action execution pipelines, scroll orchestration, delta cycle, explore → [TheBrains](13b-THEBRAINS.md)
+- Parse pipeline (hierarchy parsing, element context building) → [TheBurglar](10-THEBURGLAR.md)
+- Action execution pipelines, scroll orchestration, delta cycle, explore → [TheBrains](13-THEBRAINS.md)
 
 ## Custody Contract
 
@@ -194,7 +194,6 @@ No store writes to another store. No circular dependencies.
 | `TheStash/ElementRegistry.swift` | Element registry storage: elements, viewportIds, reverseIndex |
 | `TheStash/Diagnostics.swift` | Caseless enum with static methods: resolution error formatting |
 | `TheStash/Interactivity.swift` | Interactivity predicates (shared by WireConversion and ActionExecution) |
-| `TheStash/ScreenManifest.swift` | Container exploration bookkeeping |
 | `TheStash/ArrayHelpers.swift` | [HeistElement] screen name/id helpers |
 
 ## Dependencies

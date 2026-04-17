@@ -31,4 +31,4 @@ Device lifecycle manager. Finds devices via Bonjour/USB, connects over TLS, main
 
 7. **`USBDeviceDiscovery.swift`** — macOS only. Polls `xcrun devicectl list devices` + `lsof -i -P -n` every 3s to find CoreDevice IPv6 tunnels. No TXT records, no fingerprints — USB devices use loopback TLS (accept any cert). Constructs `DiscoveredDevice` with `id: "usb-\(deviceName)"`.
 
-> Full dossier: [`docs/dossiers/02-THEHANDOFF.md`](../../../../docs/dossiers/02-THEHANDOFF.md)
+> Full dossier: [`docs/dossiers/04-THEHANDOFF.md`](../../../../docs/dossiers/04-THEHANDOFF.md)

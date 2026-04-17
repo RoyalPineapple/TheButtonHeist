@@ -397,7 +397,7 @@ public func slugify(_ text: String?) -> String? {
 /// Whether an accessibility identifier is stable (developer-assigned) vs runtime-generated.
 /// Returns false for identifiers containing UUIDs — these are SwiftUI runtime artifacts
 /// that change across app launches and should not be used for element identity.
-/// Shared by heistId synthesis (TheBagman) and heist matcher construction (TheBookKeeper).
+/// Shared by heistId synthesis (TheStash) and heist matcher construction (TheBookKeeper).
 public func isStableIdentifier(_ identifier: String) -> Bool {
     identifier.range(of: "[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}",
                      options: .regularExpression) == nil

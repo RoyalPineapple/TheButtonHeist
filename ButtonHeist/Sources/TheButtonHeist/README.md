@@ -30,4 +30,4 @@ CLI/MCP call
 
 All three types (`TheFence`, `TheHandoff`, `TheBookKeeper`) are `@ButtonHeistActor`-isolated, so cross-object calls are synchronous hops on the same actor — no `await` needed between them.
 
-> Full dossiers: [`docs/dossiers/`](../../../docs/dossiers/) — see `10-THEFENCE.md`, `02-THEHANDOFF.md`, `16-THEBOOKKEEPER.md`
+> Full dossiers: [`docs/dossiers/`](../../../docs/dossiers/) — see `03-THEFENCE.md`, `04-THEHANDOFF.md`, `05-THEBOOKKEEPER.md`

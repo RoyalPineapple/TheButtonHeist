@@ -41,4 +41,4 @@ Owns `RecordingPhase` state machine (`.idle` / `.recording(stakeout:)`). `handle
 
 Receives a `ServerIdentity` struct from TheInsideJob at init (sessionId, effectiveInstanceId, tlsActive). Used to populate `ServerInfo` responses.
 
-> Full dossier: [`docs/dossiers/17-THEGETAWAY.md`](../../../../docs/dossiers/17-THEGETAWAY.md)
+> Full dossier: [`docs/dossiers/09-THEGETAWAY.md`](../../../../docs/dossiers/09-THEGETAWAY.md)

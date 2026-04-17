@@ -147,7 +147,7 @@ Manually trigger a debounced hierarchy broadcast to connected clients. Uses a 30
 
 TheInsideJob follows an **activation-first** strategy for all element interactions:
 
-1. **Try `accessibilityActivate()` first** -- TheBagman calls the element's native accessibility activation method via the live object reference. This is the most reliable path because it mirrors how VoiceOver activates controls and respects custom activation behavior.
+1. **Try `accessibilityActivate()` first** -- TheBrains calls the element's native accessibility activation method via the live object reference held by TheStash's registry. This is the most reliable path because it mirrors how VoiceOver activates controls and respects custom activation behavior.
 
 2. **Fall back to synthetic tap** -- If activation returns `false` or the element does not support it, TheSafecracker injects a synthetic tap at the element's activation point. This is a low-level escape hatch that cannot confirm the gesture was actually handled by the target view.
 
@@ -162,7 +162,7 @@ When a synthetic tap fallback occurs, a debug log is emitted so the behavior is 
 
 ### Touch Gesture & Text Input System (TheSafecracker)
 
-TheInsideJob uses `TheSafecracker` internally for handling all touch gesture and text input commands. TheSafecracker is an **internal** type -- only TheInsideJob creates and holds the instance. It supports single-finger gestures, multi-touch gestures via synthetic UITouch/IOHIDEvent injection, and text entry via UIKeyboardImpl. TheSafecracker never holds live UIView pointers; it receives only screen coordinates and action outcomes from TheBagman.
+TheInsideJob uses `TheSafecracker` internally for handling all touch gesture and text input commands. TheSafecracker is an **internal** type -- only TheInsideJob creates and holds the instance. It supports single-finger gestures, multi-touch gestures via synthetic UITouch/IOHIDEvent injection, and text entry via UIKeyboardImpl. TheSafecracker never holds live UIView pointers; it receives only screen coordinates and action outcomes from TheBrains (which resolves targets via TheStash's registry).
 
 **Supported gestures:**
 - `one_finger_tap` - Single tap at a point (low-level escape hatch; prefer `activate` for element interactions)

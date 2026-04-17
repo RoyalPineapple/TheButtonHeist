@@ -35,4 +35,4 @@ TLS/TCP server infrastructure — listener, transport, authentication, and conne
 
 5. **`ConnectionScope+Classify.swift`** — Extends `ConnectionScope` (from TheScore) with `classify(host:interfaces:)`. IPv4/IPv6 loopback → `.simulator`. `anpi` interface name prefix → `.usb`. Everything else → `.network`.
 
-> Full dossiers: [`docs/dossiers/06-THEMUSCLE.md`](../../../../docs/dossiers/06-THEMUSCLE.md)
+> Full dossiers: [`docs/dossiers/08-THEMUSCLE.md`](../../../../docs/dossiers/08-THEMUSCLE.md)

@@ -28,4 +28,4 @@ Reads the live accessibility tree and populates TheStash's registry. Private imp
 
 **`refresh(into:)`** — convenience that calls `parse()` then `apply(_:to:)`.
 
-> Full dossier: [`docs/dossiers/13a-THEBURGLAR.md`](../../../../docs/dossiers/13a-THEBURGLAR.md)
+> Full dossier: [`docs/dossiers/10-THEBURGLAR.md`](../../../../docs/dossiers/10-THEBURGLAR.md)

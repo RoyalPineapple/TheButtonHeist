@@ -242,19 +242,16 @@ Full methodology and per-task data: [docs/BENCHMARKS.md](docs/BENCHMARKS.md)
 
 Every heist needs a team.
 
-### The Score
-
-| Name | Role |
-|------|------|
-| **TheScore** | The shared playbook. Wire protocol types, messages, and constants. The contract both sides speak |
-
 ### The Inside Team (iOS)
 
 | Name | Role |
 |------|------|
 | **TheInsideJob** | The whole operation. Runs in your app: TCP server, Bonjour, accessibility hierarchy, command dispatch to the crew |
 | **TheSafecracker** | Cracks the UI. Taps, swipes, drags, pinch, rotate, text entry, edit actions. Gets past any control via IOHIDEvent |
-| **TheBagman** | Handles the goods. Element cache, hierarchy capture, heistId assignment, delta computation. Live view pointers never leave TheBagman |
+| **TheStash** | Handles the goods. Element registry, target resolution, heistId assignment, wire conversion. Live view pointers never leave TheStash |
+| **TheBurglar** | Cases the joint. Hierarchy parsing, parse/apply pipeline, topology and scroll-container detection |
+| **TheBrains** | The mastermind. Action execution, scroll orchestration, delta cycle, wait handlers, exploration |
+| **TheGetaway** | The driver. Message dispatch, encode/decode, broadcast, transport wiring, interaction recording |
 | **TheMuscle** | Keeps the door. Token validation, Allow/Deny UI, session lock. Only one driver at a time |
 | **TheStakeout** | The lookout. H.264 screen recording with frame timing and inactivity detection |
 | **TheFingerprints** | Evidence. Touch indicators on screen during gestures, visible live and baked into TheStakeout's recordings |
