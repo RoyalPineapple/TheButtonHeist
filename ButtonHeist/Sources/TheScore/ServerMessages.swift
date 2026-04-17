@@ -184,7 +184,13 @@ public enum ErrorKind: String, Codable, Sendable, CaseIterable {
 
 /// The outcome of executing an action command, including post-action diagnostics.
 public struct ActionResult: Codable, Sendable {
+    /// Whether the action was delivered and completed normally. `false` means
+    /// the action reached the server but the handler reported failure — it is
+    /// not a transport-level error (those surface as thrown errors).
     public let success: Bool
+    /// Identifies which server-side handler produced this result (e.g.
+    /// `.synthesizedTouch`, `.accessibilityActivate`). Useful when diagnosing
+    /// why an action succeeded but had no visible effect.
     public let method: ActionMethod
     public let message: String?
     /// Typed error classification (nil on success)
@@ -321,7 +327,6 @@ public struct ExploreResult: Codable, Sendable {
     /// Wall-clock time spent exploring, in seconds
     public let explorationTime: Double
 
-    /// Total unique elements discovered
     public var elementCount: Int { elements.count }
 
     public init(
@@ -370,10 +375,8 @@ public struct InterfaceDelta: Codable, Sendable {
 
     // MARK: - Properties
 
-    /// What kind of change occurred
     public let kind: DeltaKind
 
-    /// Total element count after the action
     public let elementCount: Int
 
     /// Elements that were added (present for .elementsChanged)
@@ -696,13 +699,9 @@ extension ActionExpectation {
 
 /// Payload containing screen capture data
 public struct ScreenPayload: Codable, Sendable {
-    /// Base64-encoded PNG data
     public let pngData: String
-    /// Screen width in points
     public let width: Double
-    /// Screen height in points
     public let height: Double
-    /// Timestamp when screen was captured
     public let timestamp: Date
 
     public init(pngData: String, width: Double, height: Double, timestamp: Date = Date()) {

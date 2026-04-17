@@ -1,3 +1,6 @@
+// Mixed unit + integration: the certificate-generation tests are pure, but the
+// Keychain integration section (marked below) requires entitlements and is
+// hosted under BH Demo.
 import XCTest
 import Security
 import CryptoKit

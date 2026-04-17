@@ -155,6 +155,11 @@ public enum ClientMessage: Codable, Sendable {
     case watch(WatchPayload)
 
     /// Extract the element target from any action command, if present.
+    ///
+    /// Returns `nil` for commands that don't carry one directly — either because
+    /// the command targets coordinates instead (`.oneFingerTap` with pointX/pointY),
+    /// has no target at all (`.getInterface`, `.getScreen`), or wraps a multi-target
+    /// payload (`.drag`, `.pinch`, `.drawPath`).
     public var actionTarget: ElementTarget? {
         switch self {
         case .activate(let t), .increment(let t), .decrement(let t):
@@ -300,11 +305,10 @@ public struct CustomActionTarget: Codable, Sendable {
 
 // MARK: - Touch Gesture Targets
 
-/// Target for tap gesture
+/// Target for a tap gesture — either an `ElementTarget` (tap at its activation
+/// point) or explicit screen coordinates. Exactly one form should be set.
 public struct TouchTapTarget: Codable, Sendable {
-    /// Use element's interaction point
     public let elementTarget: ElementTarget?
-    /// Or specify exact screen coordinates
     public let pointX: Double?
     public let pointY: Double?
 
@@ -752,6 +756,9 @@ public struct RecordingConfig: Sendable {
 
 extension RecordingConfig: Codable {
     public init(from decoder: Decoder) throws {
+        // Decode into a throwaway bridge struct first so field validation can
+        // run before assignment — this avoids partially-mutating `self` on a
+        // range violation and keeps the error site with the offending field.
         let container = try decoder.singleValueContainer()
         let raw = try container.decode(RawRecordingConfig.self)
         if let fps = raw.fps, fps < 1 || fps > 15 {

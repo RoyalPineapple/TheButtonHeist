@@ -140,24 +140,43 @@ public final class TheHandoff {
 
     // MARK: - Discovery Callbacks
 
+    // All callbacks below fire on `@ButtonHeistActor`.
+
+    /// A device matching the filter appeared on the network.
     public var onDeviceFound: ((DiscoveredDevice) -> Void)?
+    /// A previously-known device is no longer advertising.
     public var onDeviceLost: ((DiscoveredDevice) -> Void)?
 
     // MARK: - Connection Callbacks
 
+    /// Handshake completed successfully; `ServerInfo` carries server version + capabilities.
     public var onConnected: ((ServerInfo) -> Void)?
+    /// The connection has dropped. `DisconnectReason` indicates whether this was local, remote, or error-driven.
     public var onDisconnected: ((DisconnectReason) -> Void)?
+    /// A `get_interface` response arrived. The trailing `String?` is the originating requestId (nil for unsolicited pushes).
     public var onInterface: ((Interface, String?) -> Void)?
+    /// An action command (tap, swipe, type, etc.) produced a result. Trailing `String?` is the originating requestId.
     public var onActionResult: ((ActionResult, String?) -> Void)?
+    /// A `get_screen` response arrived. Trailing `String?` is the originating requestId.
     public var onScreen: ((ScreenPayload, String?) -> Void)?
+    /// The server acknowledged that screen recording has begun.
     public var onRecordingStarted: (() -> Void)?
+    /// A completed recording is delivered (as base64 payload + metadata).
     public var onRecording: ((RecordingPayload) -> Void)?
+    /// Recording failed mid-capture; the string is the server-reported reason.
     public var onRecordingError: ((String) -> Void)?
+    /// General protocol/transport error reported by the server.
     public var onError: ((String) -> Void)?
+    /// Auth approved. The parameter is the approved token, or nil when reusing a persistent session.
     public var onAuthApproved: ((String?) -> Void)?
+    /// Another agent currently owns the session. Payload carries details for the operator to resolve.
     public var onSessionLocked: ((SessionLockedPayload) -> Void)?
+    /// Auth rejected by server; the string is the reason.
     public var onAuthFailed: ((String) -> Void)?
+    /// A user interaction event (tap, swipe) captured on the device.
     public var onInteraction: ((InteractionEvent) -> Void)?
+    /// The server pushed an interface delta between commands (the UI changed
+    /// without a direct action request). Drained by `TheFence` for session state.
     public var onBackgroundDelta: ((InterfaceDelta) -> Void)?
 
     // MARK: - Configuration
@@ -168,6 +187,9 @@ public final class TheHandoff {
     /// When nil, a persistent auto-generated ID is used instead.
     public var driverId: String?
     public var autoSubscribe: Bool = true
+
+    // MARK: - Internal Reconnect Settings
+
     /// Interval between auto-reconnect attempts. Default is 1 second.
     var reconnectInterval: TimeInterval = 1.0
 

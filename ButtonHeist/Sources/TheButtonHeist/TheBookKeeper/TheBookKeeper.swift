@@ -7,6 +7,10 @@ private let logger = Logger(subsystem: "com.buttonheist.bookkeeper", category: "
 
 // MARK: - Session Phase State Machine
 
+/// Lifecycle of a BookKeeper session from idle through archive.
+///
+/// Each non-idle case carries the phase-specific data that is valid only during that
+/// phase, making impossible states unrepresentable.
 @ButtonHeistActor
 public enum SessionPhase: Sendable {
     case idle
@@ -16,6 +20,11 @@ public enum SessionPhase: Sendable {
     case archived(ArchivedSession)
 }
 
+/// State for an open session that is accepting commands and artifacts.
+///
+/// Holds the open log file handle, mutable manifest, and optional heist recording.
+/// `FileHandle` is exposed as `public` so tests can inspect phase contents; do not
+/// close or mutate it from outside TheBookKeeper.
 @ButtonHeistActor
 public struct ActiveSession: Sendable {
     public let sessionId: String
@@ -25,25 +34,29 @@ public struct ActiveSession: Sendable {
     public let startTime: Date
     public var nextSequenceNumber: Int
 
-    // Heist recording state (nil when not recording a heist)
+    /// Non-nil while a heist recording is active inside this session.
     public var heistRecording: HeistRecording?
 }
 
+/// State for an in-progress heist recording nested inside an `ActiveSession`.
+///
+/// Appends one `HeistEvidence` JSON line per captured step. Not Sendable-checkable
+/// because `FileHandle` is not Sendable, but all access is isolated to
+/// `@ButtonHeistActor`.
 @ButtonHeistActor
 public struct HeistRecording: @unchecked Sendable {
     public let app: String
     public let startTime: Date
     public var evidenceCount: Int
     /// Append-only file handle for durable evidence storage.
-    /// Each HeistEvidence is written as a JSON line as it's recorded.
-    /// FileHandle is not Sendable, but access is isolated to @ButtonHeistActor.
     public let fileHandle: FileHandle
     public let filePath: URL
-    /// Cached interface snapshot from the most recent get_interface response.
-    /// Used to look up heistId → element properties for matcher construction.
+    /// Snapshot from the most recent `get_interface` response, used to look up
+    /// `heistId` → element properties when building matchers at recording time.
     public var interfaceCache: [String: HeistElement]
 }
 
+/// Transient state while a session's log is being flushed and compressed.
 @ButtonHeistActor
 public struct ClosingSession: Sendable {
     public let sessionId: String
@@ -53,6 +66,7 @@ public struct ClosingSession: Sendable {
     public let endTime: Date
 }
 
+/// State for a session whose log has been compressed but not yet archived.
 @ButtonHeistActor
 public struct ClosedSession: Sendable {
     public let sessionId: String
@@ -63,6 +77,7 @@ public struct ClosedSession: Sendable {
     public let endTime: Date
 }
 
+/// Terminal state for a session whose directory has been packaged into a single archive.
 @ButtonHeistActor
 public struct ArchivedSession: Sendable {
     public let archivePath: URL
@@ -73,6 +88,7 @@ public struct ArchivedSession: Sendable {
 
 // MARK: - BookKeeper Errors
 
+/// Errors thrown by TheBookKeeper during session and artifact operations.
 public enum BookKeeperError: Error, LocalizedError {
     case invalidPhase(expected: String, actual: String)
     case unsafePath(String)

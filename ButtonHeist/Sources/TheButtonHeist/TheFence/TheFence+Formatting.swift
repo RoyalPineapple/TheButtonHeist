@@ -9,6 +9,10 @@ public enum InterfaceDetail: String, CaseIterable, Sendable {
 }
 
 /// Summary of a single step within a batch execution.
+///
+/// Consumed by batch formatters to build per-step human/JSON rows. `deltaKind`
+/// is the string form of `DeltaKind`; `expectationMet` is nil when the step had
+/// no expectation attached.
 public struct BatchStepSummary: Sendable {
     public let command: String
     public let deltaKind: String?
@@ -20,6 +24,12 @@ public struct BatchStepSummary: Sendable {
 }
 
 /// Typed response from TheFence command execution.
+///
+/// Cases marked `…Data` carry the raw payload in memory (base64-encoded) and are
+/// returned when no session is active and no explicit `output:` path was given.
+/// Cases without the `Data` suffix carry a filesystem path where the artifact
+/// has been written and are returned when a session is active or `output:` was
+/// specified.
 public enum FenceResponse {
     case ok(message: String)
     case error(String)
@@ -28,9 +38,15 @@ public enum FenceResponse {
     case devices([DiscoveredDevice])
     case interface(Interface, detail: InterfaceDetail = .summary, filteredFrom: Int? = nil, explore: ExploreResult? = nil)
     case action(result: ActionResult, expectation: ExpectationResult? = nil)
+    /// Screenshot written to disk. `path` is the resolved filesystem location.
     case screenshot(path: String, width: Double, height: Double)
+    /// Screenshot held in memory as base64 PNG. Returned when no session is
+    /// active and no explicit output path was requested.
     case screenshotData(pngData: String, width: Double, height: Double)
+    /// Recording written to disk. `path` is the resolved filesystem location.
     case recording(path: String, payload: RecordingPayload)
+    /// Recording held in memory. Returned when no session is active and no
+    /// explicit output path was requested.
     case recordingData(payload: RecordingPayload)
     case batch(
         results: [[String: Any]], completedSteps: Int, failedIndex: Int?,

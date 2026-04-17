@@ -9,6 +9,9 @@ public struct HeistPlayback: Codable, Sendable, Equatable {
     /// Format version. Increment when the step schema changes.
     public static let currentVersion = 1
 
+    /// Version from the decoded file. Not enforced at decode time — a playback
+    /// with `version: 99` decodes cleanly; callers that care must compare
+    /// against `HeistPlayback.currentVersion` before replay.
     public let version: Int
     /// ISO 8601 timestamp of when the recording was made.
     public let recorded: Date
@@ -39,7 +42,10 @@ public struct HeistPlayback: Codable, Sendable, Equatable {
 /// TheFence.execute(request:) dictionary — matcher fields sit at the top level
 /// alongside command-specific args, exactly as TheFence expects.
 public struct HeistEvidence: Codable, Sendable, Equatable {
-    /// The TheFence.Command raw value (e.g. "activate", "type_text", "swipe").
+    /// The `TheFence.Command` raw value (e.g. `"activate"`, `"type_text"`,
+    /// `"swipe"`). Stored as a string rather than the enum because `Command`
+    /// lives in TheButtonHeist (iOS-only) and TheScore must be portable across
+    /// iOS + macOS.
     public let command: String
     /// Element matcher fields — nil means the command doesn't target an element.
     public let target: ElementMatcher?

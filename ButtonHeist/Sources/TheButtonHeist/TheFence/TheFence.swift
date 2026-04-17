@@ -84,10 +84,17 @@ public enum Timeouts {
 public final class TheFence {
     /// Connection and session configuration for TheFence.
     public struct Configuration {
+        /// Substring filter for Bonjour device names. `nil` matches any device.
         public var deviceFilter: String?
+        /// Seconds to wait for initial connection before failing `start()`.
         public var connectionTimeout: TimeInterval
+        /// Auth token sent with `client_hello`. Agents use the task slug; omit to
+        /// fall back to the `BUTTONHEIST_TOKEN` environment variable.
         public var token: String?
+        /// When true, TheHandoff re-establishes the connection on drop.
         public var autoReconnect: Bool
+        /// Resolved `.buttonheist.json` config (device filter, token, output paths).
+        /// Supplied by the CLI/MCP entry points from discovered config files.
         public var fileConfig: ButtonHeistFileConfig?
 
         public init(
@@ -107,9 +114,15 @@ public final class TheFence {
 
     public static let supportedCommands: [String] = Command.allCases.map(\.rawValue)
 
+    /// Fires on informational status strings (e.g. `BUTTONHEIST_TOKEN=<value>`
+    /// on server-generated token, connection events). Fires on `@ButtonHeistActor`.
     public var onStatus: ((String) -> Void)? {
         didSet { handoff.onStatus = onStatus }
     }
+
+    /// Fires when the server approves authentication. The parameter is the
+    /// approved token, or `nil` when the server accepted a previously-held
+    /// session. Fires on `@ButtonHeistActor`.
     public var onAuthApproved: ((String?) -> Void)?
 
     var config: Configuration
@@ -623,6 +636,8 @@ public final class TheFence {
     // MARK: - Last Action / Latency Tracking
 
     var lastActionResult: ActionResult?
+    /// Round-trip time in milliseconds for the last action command that
+    /// completed (request issued → response received).
     public private(set) var lastLatencyMs: Int = 0
 
     // MARK: - Batch Execution
