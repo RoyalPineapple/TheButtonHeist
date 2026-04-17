@@ -173,29 +173,27 @@ extension GroupType: CaseIterable {
 }
 
 extension GroupType: RawRepresentable {
+    private static let nameToType: [String: GroupType] = {
+        var map: [String: GroupType] = [:]
+        for groupType in allCases { map[groupType.nameValue] = groupType }
+        return map
+    }()
+
+    /// Returns nil for unknown group-type strings. Use Codable for forward-compatible decoding.
     public init?(rawValue: String) {
-        switch rawValue {
-        case "semanticGroup": self = .semanticGroup
-        case "list": self = .list
-        case "landmark": self = .landmark
-        case "dataTable": self = .dataTable
-        case "tabBar": self = .tabBar
-        case "scrollable": self = .scrollable
-        default: return nil
+        guard let known = Self.nameToType[rawValue] else { return nil }
+        self = known
+    }
+
+    /// The string name for known cases. `.unknown` stores its own value.
+    private var nameValue: String {
+        switch self {
+        case .unknown(let value): return value
+        default: return String(describing: self)
         }
     }
 
-    public var rawValue: String {
-        switch self {
-        case .semanticGroup: return "semanticGroup"
-        case .list: return "list"
-        case .landmark: return "landmark"
-        case .dataTable: return "dataTable"
-        case .tabBar: return "tabBar"
-        case .scrollable: return "scrollable"
-        case .unknown(let value): return value
-        }
-    }
+    public var rawValue: String { nameValue }
 }
 
 extension GroupType: Codable {

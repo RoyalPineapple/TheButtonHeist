@@ -544,17 +544,14 @@ public final class TheFence {
 
     private func parseSingleExpectationValue(_ expect: Any) throws -> ActionExpectation {
         if let str = expect as? String {
-            switch str {
-            case "screen_changed":
-                return .screenChanged
-            case "elements_changed":
-                return .elementsChanged
-            default:
+            guard let tier = ExpectationTier(rawValue: str) else {
+                let validTiers = ExpectationTier.allCases.map(\.rawValue).joined(separator: ", ")
                 throw FenceError.invalidRequest(
                     "Unknown expectation tier: \"\(str)\". " +
-                    "Valid: screen_changed, elements_changed, or {\"elementUpdated\": {…}}"
+                    "Valid: \(validTiers), or {\"elementUpdated\": {…}}"
                 )
             }
+            return tier.expectation
         }
         if let dict = expect as? [String: Any] {
             return try parseSingleExpectation(dict)

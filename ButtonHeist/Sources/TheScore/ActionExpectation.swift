@@ -2,6 +2,23 @@ import Foundation
 
 // MARK: - Action Expectations
 
+/// The two string-form expectation tiers accepted on the wire.
+/// Parsers translate the incoming string (`"screen_changed"` or
+/// `"elements_changed"`) into the structured `ActionExpectation` enum without
+/// comparing raw string literals deep in the stack.
+public enum ExpectationTier: String, CaseIterable, Sendable {
+    case screenChanged = "screen_changed"
+    case elementsChanged = "elements_changed"
+
+    /// The matching `ActionExpectation` case for this tier.
+    public var expectation: ActionExpectation {
+        switch self {
+        case .screenChanged: return .screenChanged
+        case .elementsChanged: return .elementsChanged
+        }
+    }
+}
+
 /// Outcome signal classifiers for actions.
 /// Attached to a request (not to a target type) so any action can opt in.
 ///
