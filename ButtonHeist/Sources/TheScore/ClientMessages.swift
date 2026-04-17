@@ -303,7 +303,6 @@ public struct CustomActionTarget: Codable, Sendable {
     }
 }
 
-
 /// Target for typing text character-by-character via keyboard key taps
 public struct TypeTextTarget: Codable, Sendable {
     /// Text to type (each character is tapped individually). Can be nil if only deleting.

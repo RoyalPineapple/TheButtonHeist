@@ -882,63 +882,14 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testParseExpectationElementUpdatedWithSubObject() async throws {
-        let (fence, _) = makeConnectedFence()
-        let result = try fence.parseExpectation([
-            "expect": ["elementUpdated": ["heistId": "counter", "newValue": "5"]]
-        ])
-        XCTAssertEqual(result, .elementUpdated(heistId: "counter", newValue: "5"))
-    }
-
-    @ButtonHeistActor
-    func testParseExpectationElementUpdatedAllFields() async throws {
-        let (fence, _) = makeConnectedFence()
-        let result = try fence.parseExpectation([
-            "expect": ["elementUpdated": ["heistId": "slider", "property": "value", "oldValue": "0", "newValue": "50"]]
-        ])
-        XCTAssertEqual(result, .elementUpdated(heistId: "slider", property: .value, oldValue: "0", newValue: "50"))
-    }
-
-    @ButtonHeistActor
-    func testParseExpectationElementUpdatedBareKey() async throws {
-        let (fence, _) = makeConnectedFence()
-        let result = try fence.parseExpectation(["expect": ["elementUpdated": true]])
-        XCTAssertEqual(result, .elementUpdated())
-    }
-
-    @ButtonHeistActor
-    func testParseExpectationElementUpdatedEmptyObject() async throws {
-        let (fence, _) = makeConnectedFence()
-        let result = try fence.parseExpectation([
-            "expect": ["elementUpdated": [String: Any]()]
-        ])
-        XCTAssertEqual(result, .elementUpdated())
-
-    }
-
-    @ButtonHeistActor
-    func testParseExpectationLegacyValueChangedThrows() async {
-        let (fence, _) = makeConnectedFence()
-        XCTAssertThrowsError(try fence.parseExpectation([
-            "expect": ["valueChanged": ["heistId": "counter", "newValue": "5"]]
-        ])) { error in
-            guard case FenceError.invalidRequest(let msg) = error else {
-                XCTFail("Expected FenceError.invalidRequest, got \(error)")
-                return
-            }
-            XCTAssertTrue(msg.contains("elementUpdated"))
-        }
-    }
-
-    @ButtonHeistActor
-    func testParseExpectationInvalidObjectThrows() async {
+    func testParseExpectationObjectWithoutTypeThrows() async {
         let (fence, _) = makeConnectedFence()
         XCTAssertThrowsError(try fence.parseExpectation(["expect": ["wrong": "key"]])) { error in
             guard case FenceError.invalidRequest(let msg) = error else {
                 XCTFail("Expected FenceError.invalidRequest, got \(error)")
                 return
             }
-            XCTAssertTrue(msg.contains("Invalid expectation object"))
+            XCTAssertTrue(msg.contains("\"type\" discriminator"))
         }
     }
 

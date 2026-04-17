@@ -8,8 +8,8 @@ extension TheFence {
 
     /// Parse the `"expect"` field off a CLI/MCP request dictionary into a typed
     /// `ActionExpectation`. Returns `nil` when no expectation is set. Supports a
-    /// single string tier, a single object (discriminator or legacy), or an array
-    /// (compound).
+    /// short string tier (`"screen_changed"` / `"elements_changed"`), a single
+    /// discriminator object (`{"type": "...", …}`), or an array (compound).
     func parseExpectation(_ dictionary: [String: Any]) throws -> ActionExpectation? {
         guard let expect = dictionary["expect"] else { return nil }
         if let array = expect as? [[String: Any]] {
@@ -42,21 +42,17 @@ extension TheFence {
         )
     }
 
-    /// Accepts two shapes for backwards compatibility:
-    ///   - Wire discriminator: `{"type": "element_updated", "heistId": …}` — matches
-    ///     `ActionExpectation`'s Codable encoding. Preferred; lets callers copy JSON
-    ///     straight from a wire log into a CLI arg.
-    ///   - Legacy nested-key: `{"elementUpdated": {…}}` — the original CLI shape.
+    /// Expects the wire discriminator shape (`{"type": "...", …}`) — matches
+    /// `ActionExpectation`'s Codable encoding, so callers can paste JSON straight
+    /// from a wire log into a CLI arg.
     private func parseSingleExpectation(_ dict: [String: Any]) throws -> ActionExpectation {
-        if let typeString = dict["type"] as? String {
-            return try parseDiscriminatedExpectation(type: typeString, dict: dict)
+        guard let typeString = dict["type"] as? String else {
+            throw FenceError.invalidRequest(
+                "Expectation object requires a \"type\" discriminator " +
+                "(e.g. {\"type\": \"element_updated\", …}). " +
+                "Got keys: \(dict.keys.sorted())"
+            )
         }
-        return try parseLegacyExpectation(dict)
-    }
-
-    private func parseDiscriminatedExpectation(
-        type typeString: String, dict: [String: Any]
-    ) throws -> ActionExpectation {
         if let tier = ExpectationTier(rawValue: typeString) {
             return tier.expectation
         }
@@ -97,32 +93,6 @@ extension TheFence {
                 "Unknown expectation type: \"\(typeString)\". Valid: \(validTypes)"
             )
         }
-    }
-
-    private func parseLegacyExpectation(_ dict: [String: Any]) throws -> ActionExpectation {
-        if let eu = dict["elementUpdated"] as? [String: Any] {
-            return .elementUpdated(
-                heistId: eu["heistId"] as? String,
-                property: try parseElementProperty(eu["property"] as? String),
-                oldValue: eu["oldValue"] as? String,
-                newValue: eu["newValue"] as? String
-            )
-        }
-        if dict.keys.contains("elementUpdated") {
-            return .elementUpdated()
-        }
-        if let matcherDict = dict["elementAppeared"] as? [String: Any] {
-            return .elementAppeared(try elementMatcher(matcherDict))
-        }
-        if let matcherDict = dict["elementDisappeared"] as? [String: Any] {
-            return .elementDisappeared(try elementMatcher(matcherDict))
-        }
-        throw FenceError.invalidRequest(
-            "Invalid expectation object: expected a \"type\" discriminator " +
-            "(e.g. {\"type\": \"element_updated\", …}) or legacy nested key " +
-            "(elementUpdated, elementAppeared, elementDisappeared). " +
-            "Got keys: \(dict.keys.sorted())"
-        )
     }
 
     private func parseElementProperty(_ string: String?) throws -> ElementProperty? {

@@ -451,7 +451,6 @@ public struct ElementUpdate: Codable, Sendable, Equatable {
     }
 }
 
-
 /// Payload containing screen capture data
 public struct ScreenPayload: Codable, Sendable {
     public let pngData: String

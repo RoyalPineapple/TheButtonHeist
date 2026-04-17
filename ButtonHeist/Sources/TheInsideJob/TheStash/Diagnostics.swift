@@ -12,6 +12,15 @@ import AccessibilitySnapshotParser
 // similar heistId hints, and compact element summaries for total misses.
 // All methods take the data they need as parameters — no mutable state.
 
+/// One relaxation candidate: the field that was dropped, the relaxed matcher,
+/// and a closure that reads the actual value from a matched element so the
+/// diagnostic can show what the original predicate diverged from.
+private struct Relaxation {
+    let field: String
+    let relaxed: ElementMatcher
+    let actual: (AccessibilityElement) -> String
+}
+
 extension TheStash {
 
     enum Diagnostics {
@@ -72,7 +81,6 @@ extension TheStash {
         for matcher: ElementMatcher,
         in hierarchy: [AccessibilityHierarchy]
     ) -> String? {
-        typealias Relaxation = (field: String, relaxed: ElementMatcher, actual: (AccessibilityElement) -> String)
         let relaxations: [Relaxation] = [
             matcher.value.map { _ in
                 Relaxation(

@@ -500,7 +500,7 @@ final class ActionExpectationTests: XCTestCase {
     // MARK: - Decode Errors
 
     func testDecodeRejectsUnknownType() {
-        let json = #"{"type": "rainbow"}"#.data(using: .utf8)!
+        let json = Data(#"{"type": "rainbow"}"#.utf8)
         XCTAssertThrowsError(try JSONDecoder().decode(ActionExpectation.self, from: json)) { error in
             guard case DecodingError.dataCorrupted(let context) = error else {
                 XCTFail("Expected .dataCorrupted, got \(error)")
@@ -511,7 +511,7 @@ final class ActionExpectationTests: XCTestCase {
     }
 
     func testDecodeRejectsMissingType() {
-        let json = "{}".data(using: .utf8)!
+        let json = Data("{}".utf8)
         XCTAssertThrowsError(try JSONDecoder().decode(ActionExpectation.self, from: json))
     }
 }
