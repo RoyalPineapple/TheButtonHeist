@@ -185,6 +185,14 @@ public enum HeistValue: Codable, Sendable, Equatable {
     case object([String: HeistValue])
 
     public init(from decoder: Decoder) throws {
+        // Documented exception to the "no `try?` in production" rule:
+        // `HeistValue` is an any-JSON type and must probe six decoder
+        // shapes to discriminate between them. The discarded errors are
+        // always "wrong type, try the next one"; a semantic decode error
+        // fires as the `DecodingError.dataCorrupted` below. Every
+        // alternative (hand-rolled tokenizer, `JSONSerialization` round
+        // trip, nested keyed containers) is strictly worse for this
+        // shape.
         let container = try decoder.singleValueContainer()
         if let boolValue = try? container.decode(Bool.self) {
             self = .bool(boolValue)

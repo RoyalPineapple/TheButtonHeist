@@ -9,6 +9,13 @@ import MCP
 // the outgoing request's `"command"` key before dispatch. When a new
 // grouped command case is added to TheFence.Command, update both the tool's
 // enum values below and the switch in main.swift.
+//
+// Note: `dismiss` is a keyboard action that lives inside the `editAction`
+// tool's `action` enum. main.swift rewrites it to the `dismiss_keyboard`
+// command, so on the wire it dispatches through the same TheFence handler
+// as the CLI's standalone `dismiss_keyboard` subcommand. Agents can reach
+// `dismiss_keyboard` via either `editAction(action: "dismiss")` or
+// `dismissKeyboard` — both paths land on the same backend.
 
 enum ToolDefinitions {
     // NOTE: Video data handling

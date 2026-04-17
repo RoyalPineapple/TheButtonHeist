@@ -268,6 +268,10 @@ Before pushing any commit, verify the following:
 - Use `--no-selective-testing` when you need to force the full suite instead of Tuist's default selective run.
 - Treat `swift test` as a package-debugging tool, not as the source of truth for CI-style verification.
 
+### Test Framework
+
+`TheScore` value-type tests and MCP sync tests use Swift Testing (`@Test` / `#expect`); everything else uses `XCTestCase`. Keep the split consistent — don't port across frameworks opportunistically.
+
 ### Determinism First
 
 All unit tests must be fully deterministic — no dependency on running apps, Bonjour discovery, network state, or wall-clock timing. Tests that touch real network or Keychain are **integration tests** and must be clearly labeled as such.
