@@ -1,3 +1,4 @@
+import ButtonHeist
 import MCP
 
 enum ToolDefinitions {
@@ -687,7 +688,7 @@ enum ToolDefinitions {
             "properties": [
                 "app": [
                     "type": "string",
-                    "description": "Bundle ID of the app being recorded (default: com.buttonheist.testapp)",
+                    "description": "Bundle ID of the app being recorded (default: \(Defaults.demoAppBundleID))",
                 ],
                 "identifier": [
                     "type": "string",

@@ -11,74 +11,7 @@ import TheScore
 
 final class TheFenceHandlerTests: XCTestCase {
 
-    private static let testDevice = DiscoveredDevice(
-        id: "mock-device",
-        name: "MockApp#test",
-        endpoint: NWEndpoint.hostPort(host: .ipv6(.loopback), port: 1),
-        certFingerprint: "sha256:mock"
-    )
-
-    private static let testServerInfo = ServerInfo(
-        protocolVersion: "5.0",
-        appName: "MockApp",
-        bundleIdentifier: "com.test.mock",
-        deviceName: "MockDevice",
-        systemVersion: "18.0",
-        screenWidth: 393,
-        screenHeight: 852
-    )
-
     // MARK: - Helpers
-
-    @ButtonHeistActor
-    private func makeConnectedFence() -> (TheFence, MockConnection) {
-        let mockConn = MockConnection()
-        mockConn.serverInfo = Self.testServerInfo
-        mockConn.autoResponse = { message in
-            switch message {
-            case .requestInterface:
-                return .interface(Interface(timestamp: Date(), elements: []))
-            case .requestScreen:
-                return .screen(ScreenPayload(pngData: "", width: 393, height: 852))
-            case .stopRecording:
-                return .recording(RecordingPayload(
-                    videoData: "", width: 390, height: 844, duration: 1,
-                    frameCount: 8, fps: 8, startTime: Date(), endTime: Date(),
-                    stopReason: .manual
-                ))
-            default:
-                return .actionResult(ActionResult(success: true, method: .activate))
-            }
-        }
-
-        let mockDisc = MockDiscovery()
-        mockDisc.discoveredDevices = [Self.testDevice]
-
-        let fence = TheFence()
-        fence.handoff.makeDiscovery = { mockDisc }
-        fence.handoff.makeConnection = { _, _, _ in mockConn }
-
-        makeReachabilityConnection = { _ in
-            let probe = MockConnection()
-            probe.emitTransportReadyOnConnect = true
-            probe.autoResponse = { message in
-                if case .status = message {
-                    return .status(StatusPayload(
-                        identity: StatusIdentity(
-                            appName: "Mock", bundleIdentifier: "com.test",
-                            appBuild: "1", deviceName: "Mock",
-                            systemVersion: "18.0", buttonHeistVersion: "0.0.1"
-                        ),
-                        session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
-                    ))
-                }
-                return .actionResult(ActionResult(success: true, method: .activate))
-            }
-            return probe
-        }
-
-        return (fence, mockConn)
-    }
 
     /// Assert that executing a request returns a `.error(...)` response containing the substring.
     @ButtonHeistActor

@@ -9,7 +9,7 @@ struct StartHeistCommand: AsyncParsableCommand {
     )
 
     @Option(name: .long, help: "Bundle ID of the app being recorded")
-    var app: String = "com.buttonheist.testapp"
+    var app: String = Defaults.demoAppBundleID
 
     @OptionGroup var connection: ConnectionOptions
 

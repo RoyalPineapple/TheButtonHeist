@@ -501,29 +501,28 @@ public final class TheFence {
     }
 
     func elementMatcher(_ dictionary: [String: Any]) throws -> ElementMatcher {
-        let traits: [HeistTrait]? = try (dictionary["traits"] as? [String])?.map { name in
-            guard let trait = HeistTrait(rawValue: name) else {
-                throw FenceError.invalidRequest(
-                    "Unknown trait '\(name)'. Valid: \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))"
-                )
-            }
-            return trait
-        }
-        let excludeTraits: [HeistTrait]? = try (dictionary["excludeTraits"] as? [String])?.map { name in
-            guard let trait = HeistTrait(rawValue: name) else {
-                throw FenceError.invalidRequest(
-                    "Unknown excludeTrait '\(name)'. Valid: \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))"
-                )
-            }
-            return trait
-        }
         return ElementMatcher(
             label: dictionary.string("label"),
             identifier: dictionary.string("identifier"),
             value: dictionary.string("value"),
-            traits: traits,
-            excludeTraits: excludeTraits
+            traits: try parseTraitNames(dictionary["traits"] as? [String], field: "trait"),
+            excludeTraits: try parseTraitNames(dictionary["excludeTraits"] as? [String], field: "excludeTrait")
         )
+    }
+
+    /// Parse an array of trait name strings into typed `HeistTrait` values.
+    /// Throws `FenceError.invalidRequest` with the list of valid names when an
+    /// unknown name is encountered. Returns `nil` when `names` is `nil` so
+    /// callers can pass a missing field through unchanged.
+    private func parseTraitNames(_ names: [String]?, field: String) throws -> [HeistTrait]? {
+        try names?.map { name in
+            guard let trait = HeistTrait(rawValue: name) else {
+                throw FenceError.invalidRequest(
+                    "Unknown \(field) '\(name)'. Valid: \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))"
+                )
+            }
+            return trait
+        }
     }
 
     // MARK: - Expectation Parsing
@@ -602,34 +601,12 @@ public final class TheFence {
     }
 
     private func parseMatcherFromDict(_ dict: [String: Any]) throws -> ElementMatcher {
-        let traits: [HeistTrait]?
-        if let traitNames = dict["traits"] as? [String] {
-            traits = try traitNames.map { name in
-                guard let trait = HeistTrait(rawValue: name) else {
-                    throw FenceError.invalidRequest("Unknown trait: \"\(name)\"")
-                }
-                return trait
-            }
-        } else {
-            traits = nil
-        }
-        let excludeTraits: [HeistTrait]?
-        if let excludeNames = dict["excludeTraits"] as? [String] {
-            excludeTraits = try excludeNames.map { name in
-                guard let trait = HeistTrait(rawValue: name) else {
-                    throw FenceError.invalidRequest("Unknown trait: \"\(name)\"")
-                }
-                return trait
-            }
-        } else {
-            excludeTraits = nil
-        }
-        return ElementMatcher(
+        ElementMatcher(
             label: dict["label"] as? String,
             identifier: dict["identifier"] as? String,
             value: dict["value"] as? String,
-            traits: traits,
-            excludeTraits: excludeTraits
+            traits: try parseTraitNames(dict["traits"] as? [String], field: "trait"),
+            excludeTraits: try parseTraitNames(dict["excludeTraits"] as? [String], field: "trait")
         )
     }
 
