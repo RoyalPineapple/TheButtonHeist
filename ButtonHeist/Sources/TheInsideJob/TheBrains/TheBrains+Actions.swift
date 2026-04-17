@@ -392,8 +392,8 @@ extension TheBrains {
         if let resolvedDuration = duration {
             result = resolvedDuration
         } else if let velocity = velocity, velocity > 0 {
-            let totalLength = zip(points, points.dropFirst()).reduce(0.0) { acc, pair in
-                acc + hypot(pair.1.x - pair.0.x, pair.1.y - pair.0.y)
+            let totalLength = zip(points, points.dropFirst()).reduce(0.0) { runningTotal, pair in
+                runningTotal + hypot(pair.1.x - pair.0.x, pair.1.y - pair.0.y)
             }
             result = totalLength / velocity
         } else {

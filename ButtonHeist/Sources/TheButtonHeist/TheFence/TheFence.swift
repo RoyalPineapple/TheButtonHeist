@@ -600,7 +600,7 @@ public final class TheFence {
             identifier: dict["identifier"] as? String,
             value: dict["value"] as? String,
             traits: try parseTraitNames(dict["traits"] as? [String], field: "trait"),
-            excludeTraits: try parseTraitNames(dict["excludeTraits"] as? [String], field: "trait")
+            excludeTraits: try parseTraitNames(dict["excludeTraits"] as? [String], field: "excludeTrait")
         )
     }
 
