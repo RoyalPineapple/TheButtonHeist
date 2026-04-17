@@ -597,7 +597,7 @@ final class TheMuscle {
         }
     }
 
-    // MARK: - Private
+    // MARK: - Client Subscription State
 
     /// Toggle the subscribed flag on an authenticated or observer client.
     private func setSubscribed(_ subscribed: Bool, for clientId: Int) {
