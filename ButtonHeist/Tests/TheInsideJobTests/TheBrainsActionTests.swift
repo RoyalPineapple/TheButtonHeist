@@ -210,6 +210,44 @@ final class TheBrainsActionTests: XCTestCase {
                       "formUnion should union viewport IDs into exploreCycleIds when active")
     }
 
+    // MARK: - Accessibility Tree Availability
+
+    func testExecuteWaitForIdleFailsWhenAccessibilityTreeUnavailable() async {
+        let result = await withNoTraversableWindows {
+            await brains.executeWaitForIdle(timeout: 0.1)
+        }
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .waitForIdle)
+        XCTAssertEqual(result.errorKind, .actionFailed)
+        XCTAssertEqual(result.message, "Could not access accessibility tree")
+    }
+
+    func testExecuteCommandExploreFailsWhenAccessibilityTreeUnavailable() async {
+        let result = await withNoTraversableWindows {
+            await brains.executeCommand(.explore)
+        }
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .explore)
+        XCTAssertEqual(result.errorKind, .actionFailed)
+        XCTAssertEqual(result.message, "Could not access accessibility tree")
+    }
+
+    func testExecuteCommandWaitForFailsWhenAccessibilityTreeUnavailable() async {
+        let target = WaitForTarget(
+            elementTarget: .matcher(ElementMatcher(label: "never"))
+        )
+        let result = await withNoTraversableWindows {
+            await brains.executeCommand(.waitFor(target))
+        }
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .waitFor)
+        XCTAssertEqual(result.errorKind, .actionFailed)
+        XCTAssertEqual(result.message, "Could not access accessibility tree")
+    }
+
     // MARK: - Helpers
 
     private func makeElement(
@@ -233,6 +271,22 @@ final class TheBrainsActionTests: XCTestCase {
             accessibilityLanguage: nil,
             respondsToUserInteraction: false
         )
+    }
+
+    private func withNoTraversableWindows<T>(
+        _ operation: () async -> T
+    ) async -> T {
+        let windows = brains.tripwire.getTraversableWindows().map(\.window)
+        let originalHiddenStates = windows.map(\.isHidden)
+        for window in windows {
+            window.isHidden = true
+        }
+        defer {
+            for (window, originalIsHidden) in zip(windows, originalHiddenStates) {
+                window.isHidden = originalIsHidden
+            }
+        }
+        return await operation()
     }
 }
 

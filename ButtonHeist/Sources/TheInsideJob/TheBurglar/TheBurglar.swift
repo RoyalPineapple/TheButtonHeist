@@ -12,11 +12,19 @@ import AccessibilitySnapshotParser
 /// screen changes, and populates TheStash's registry. He owns the parse
 /// pipeline — the work of acquisition. TheStash owns the registry and
 /// answers questions about it.
+///
+/// Intentionally module-internal so TheInsideJob unit tests can validate parse/apply behavior.
+/// Production call sites should always go through TheStash facades.
 @MainActor
 final class TheBurglar {
 
     private let parser = AccessibilityHierarchyParser()
     private let tripwire: TheTripwire
+
+    /// Persistence ratio below which a tab bar content swap counts as a tab switch.
+    /// If fewer than this fraction of non-tab-bar labels persist between snapshots,
+    /// we treat it as a screen change rather than a scroll.
+    private static let tabSwitchPersistThreshold = 0.4
 
     init(tripwire: TheTripwire) {
         self.tripwire = tripwire
@@ -40,7 +48,10 @@ final class TheBurglar {
     /// before deciding whether to apply it.
     func parse() -> ParseResult? {
         let windows = tripwire.getAccessibleWindows()
-        guard !windows.isEmpty else { return nil }
+        guard !windows.isEmpty else {
+            insideJobLogger.debug("TheBurglar.parse(): no accessible windows — returning nil")
+            return nil
+        }
 
         let revealedSearchBars = Self.revealHiddenSearchBars()
         defer { Self.restoreSearchBarHiding(revealedSearchBars) }
@@ -191,7 +202,7 @@ final class TheBurglar {
 
         let maxCount = max(beforeContent.count, afterContent.count)
         let persistRatio = Double(matchedCount) / Double(maxCount)
-        return persistRatio < 0.4
+        return persistRatio < Self.tabSwitchPersistThreshold
     }
 
     private struct TabBarPartition {

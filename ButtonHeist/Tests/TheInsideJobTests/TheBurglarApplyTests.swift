@@ -28,7 +28,7 @@ final class TheBurglarApplyTests: XCTestCase {
             .element(elementA, traversalIndex: 0),
             .element(elementB, traversalIndex: 1),
         ]
-        let result = TheBurglar.ParseResult(
+        let result = TheStash.ParseResult(
             elements: [elementA, elementB],
             hierarchy: hierarchy,
             objects: [:],
@@ -51,7 +51,7 @@ final class TheBurglarApplyTests: XCTestCase {
         let hierarchy: [AccessibilityHierarchy] = [
             .element(element, traversalIndex: 0),
         ]
-        let result = TheBurglar.ParseResult(
+        let result = TheStash.ParseResult(
             elements: [element],
             hierarchy: hierarchy,
             objects: [:],
@@ -69,7 +69,7 @@ final class TheBurglarApplyTests: XCTestCase {
         let hierarchy: [AccessibilityHierarchy] = [
             .element(element, traversalIndex: 0),
         ]
-        let result = TheBurglar.ParseResult(
+        let result = TheStash.ParseResult(
             elements: [element],
             hierarchy: hierarchy,
             objects: [:],
@@ -91,7 +91,7 @@ final class TheBurglarApplyTests: XCTestCase {
         let hierarchy: [AccessibilityHierarchy] = [
             .element(element, traversalIndex: 0),
         ]
-        let result = TheBurglar.ParseResult(
+        let result = TheStash.ParseResult(
             elements: [element],
             hierarchy: hierarchy,
             objects: [:],
@@ -113,7 +113,7 @@ final class TheBurglarApplyTests: XCTestCase {
             .element(header, traversalIndex: 0),
             .element(button, traversalIndex: 1),
         ]
-        let result = TheBurglar.ParseResult(
+        let result = TheStash.ParseResult(
             elements: [header, button],
             hierarchy: hierarchy,
             objects: [:],
@@ -131,7 +131,7 @@ final class TheBurglarApplyTests: XCTestCase {
         let hierarchy: [AccessibilityHierarchy] = [
             .element(header, traversalIndex: 0),
         ]
-        let result = TheBurglar.ParseResult(
+        let result = TheStash.ParseResult(
             elements: [header],
             hierarchy: hierarchy,
             objects: [:],
@@ -150,7 +150,7 @@ final class TheBurglarApplyTests: XCTestCase {
         let hierarchy: [AccessibilityHierarchy] = [
             .element(button, traversalIndex: 0),
         ]
-        let result = TheBurglar.ParseResult(
+        let result = TheStash.ParseResult(
             elements: [button],
             hierarchy: hierarchy,
             objects: [:],
@@ -171,7 +171,7 @@ final class TheBurglarApplyTests: XCTestCase {
             .element(headerNoLabel, traversalIndex: 0),
             .element(button, traversalIndex: 1),
         ]
-        let result = TheBurglar.ParseResult(
+        let result = TheStash.ParseResult(
             elements: [headerNoLabel, button],
             hierarchy: hierarchy,
             objects: [:],
@@ -197,7 +197,7 @@ final class TheBurglarApplyTests: XCTestCase {
         let hierarchy: [AccessibilityHierarchy] = [
             .element(element, traversalIndex: 0),
         ]
-        let result = TheBurglar.ParseResult(
+        let result = TheStash.ParseResult(
             elements: [element],
             hierarchy: hierarchy,
             objects: [element: textField],
@@ -219,7 +219,7 @@ final class TheBurglarApplyTests: XCTestCase {
         let hierarchy: [AccessibilityHierarchy] = [
             .element(element, traversalIndex: 0),
         ]
-        let result = TheBurglar.ParseResult(
+        let result = TheStash.ParseResult(
             elements: [element],
             hierarchy: hierarchy,
             objects: [element: label],
@@ -242,7 +242,7 @@ final class TheBurglarApplyTests: XCTestCase {
         ]
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 375, height: 667))
         scrollView.contentSize = CGSize(width: 375, height: 5000)
-        let resultV1 = TheBurglar.ParseResult(
+        let resultV1 = TheStash.ParseResult(
             elements: [elementV1],
             hierarchy: hierarchyV1,
             objects: [:],
@@ -260,7 +260,7 @@ final class TheBurglarApplyTests: XCTestCase {
         let hierarchyV2: [AccessibilityHierarchy] = [
             .element(elementV2, traversalIndex: 0),
         ]
-        let resultV2 = TheBurglar.ParseResult(
+        let resultV2 = TheStash.ParseResult(
             elements: [elementV2],
             hierarchy: hierarchyV2,
             objects: [:],
@@ -282,7 +282,7 @@ final class TheBurglarApplyTests: XCTestCase {
         let hierarchy: [AccessibilityHierarchy] = [
             .element(button, traversalIndex: 0),
         ]
-        let result = TheBurglar.ParseResult(
+        let result = TheStash.ParseResult(
             elements: [button],
             hierarchy: hierarchy,
             objects: [:],
@@ -304,7 +304,7 @@ final class TheBurglarApplyTests: XCTestCase {
             .element(buttonA, traversalIndex: 0),
             .element(buttonB, traversalIndex: 1),
         ]
-        let result = TheBurglar.ParseResult(
+        let result = TheStash.ParseResult(
             elements: [buttonA, buttonB],
             hierarchy: hierarchy,
             objects: [:],
@@ -316,6 +316,62 @@ final class TheBurglarApplyTests: XCTestCase {
         XCTAssertEqual(heistIds.count, 2)
         XCTAssertNotEqual(heistIds[0], heistIds[1],
                           "Duplicate labels should produce disambiguated heistIds")
+    }
+
+    // MARK: - buildElementContexts (contentSpaceOrigin via scroll view)
+
+    func testApplyPropagatesContentSpaceOriginForScrollableContainerChild() {
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 100, width: 320, height: 500))
+        scrollView.contentSize = CGSize(width: 320, height: 2000)
+
+        let scrollableContainer = AccessibilityContainer(
+            type: .scrollable(contentSize: scrollView.contentSize),
+            frame: scrollView.frame
+        )
+        let childFrame = CGRect(x: 10, y: 150, width: 50, height: 30)
+        let child = makeElement(label: "Cell", traits: .button, frame: childFrame)
+
+        let hierarchy: [AccessibilityHierarchy] = [
+            .container(scrollableContainer, children: [.element(child, traversalIndex: 0)]),
+        ]
+        let result = TheStash.ParseResult(
+            elements: [child],
+            hierarchy: hierarchy,
+            objects: [:],
+            scrollViews: [scrollableContainer: scrollView]
+        )
+
+        let heistIds = stash.apply(result)
+        guard let heistId = heistIds.first else {
+            XCTFail("Expected one heistId")
+            return
+        }
+
+        XCTAssertNotNil(stash.registry.elements[heistId]?.contentSpaceOrigin,
+                        "Element inside a scrollable container should receive a contentSpaceOrigin")
+    }
+
+    func testApplyLeavesContentSpaceOriginNilOutsideScrollableContainer() {
+        let element = makeElement(label: "Plain",
+                                  frame: CGRect(x: 0, y: 0, width: 10, height: 10))
+        let hierarchy: [AccessibilityHierarchy] = [
+            .element(element, traversalIndex: 0),
+        ]
+        let result = TheStash.ParseResult(
+            elements: [element],
+            hierarchy: hierarchy,
+            objects: [:],
+            scrollViews: [:]
+        )
+
+        let heistIds = stash.apply(result)
+        guard let heistId = heistIds.first else {
+            XCTFail("Expected one heistId")
+            return
+        }
+
+        XCTAssertNil(stash.registry.elements[heistId]?.contentSpaceOrigin,
+                     "Element with no enclosing scroll view should have nil contentSpaceOrigin")
     }
 
     // MARK: - isTopologyChanged (via burglar)
@@ -344,7 +400,8 @@ final class TheBurglarApplyTests: XCTestCase {
     private func makeElement(
         label: String? = nil,
         value: String? = nil,
-        traits: UIAccessibilityTraits = .none
+        traits: UIAccessibilityTraits = .none,
+        frame: CGRect = .zero
     ) -> AccessibilityElement {
         AccessibilityElement(
             description: label ?? "",
@@ -354,7 +411,7 @@ final class TheBurglarApplyTests: XCTestCase {
             identifier: nil,
             hint: nil,
             userInputLabels: nil,
-            shape: .frame(.zero),
+            shape: .frame(frame),
             activationPoint: .zero,
             usesDefaultActivationPoint: true,
             customActions: [],

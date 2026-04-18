@@ -166,6 +166,29 @@ final class TheStashTopologyTests: XCTestCase {
         ))
     }
 
+    func testTabBarOnlyInBeforeSnapshotDoesNotTriggerTabSwitch() {
+        // Tab bar present only in `before`. The tab-switch signal requires both
+        // snapshots to have a tab bar; this case must fall through to the
+        // back-button/header signals (both absent here), so the result is false.
+        let tabElements = ["Home", "Search"].map { makeElement(label: $0, traits: .button) }
+        let tabBarContainer = AccessibilityContainer(type: .tabBar, frame: .zero)
+        let beforeContent = (1...8).map { makeElement(label: "Row \($0)") }
+        let afterContent = (1...8).map { makeElement(label: "Other \($0)") }
+
+        let beforeHierarchy: [AccessibilityHierarchy] = [
+            .container(tabBarContainer, children: tabElements.enumerated().map { .element($1, traversalIndex: $0) }),
+        ] + beforeContent.enumerated().map { .element($1, traversalIndex: 100 + $0) }
+
+        let afterHierarchy: [AccessibilityHierarchy] = afterContent.enumerated().map {
+            AccessibilityHierarchy.element($1, traversalIndex: 100 + $0)
+        }
+
+        XCTAssertFalse(bagman.isTopologyChanged(
+            before: beforeHierarchy.sortedElements, after: afterHierarchy.sortedElements,
+            beforeHierarchy: beforeHierarchy, afterHierarchy: afterHierarchy
+        ))
+    }
+
     func testScrollWithTabBarIsNotTopologyChange() {
         // Tab bar present, but only a few content elements replaced (scroll).
         let tabElements = ["Home", "Search"].map { makeElement(label: $0, traits: .button) }
@@ -181,6 +204,32 @@ final class TheStashTopologyTests: XCTestCase {
             AccessibilityHierarchy.element($1, traversalIndex: 100 + $0)
         }
         let afterHierarchy = tabNodes + (persistent + scrolledIn).enumerated().map {
+            AccessibilityHierarchy.element($1, traversalIndex: 100 + $0)
+        }
+
+        XCTAssertFalse(bagman.isTopologyChanged(
+            before: beforeHierarchy.sortedElements, after: afterHierarchy.sortedElements,
+            beforeHierarchy: beforeHierarchy, afterHierarchy: afterHierarchy
+        ))
+    }
+
+    func testTabSwitchThresholdAtPointFourIsNotTopologyChange() {
+        // Boundary case: persist ratio is exactly 0.4, and topology change
+        // requires strictly less than 0.4.
+        let tabElements = ["Home", "Search"].map { makeElement(label: $0, traits: .button) }
+        let tabBarContainer = AccessibilityContainer(type: .tabBar, frame: .zero)
+
+        let beforeContent = (1...10).map { makeElement(label: "Row \($0)") }
+        let afterContent = (1...4).map { makeElement(label: "Row \($0)") }
+            + (11...16).map { makeElement(label: "Row \($0)") }
+
+        let tabNodes: [AccessibilityHierarchy] = [
+            .container(tabBarContainer, children: tabElements.enumerated().map { .element($1, traversalIndex: $0) }),
+        ]
+        let beforeHierarchy = tabNodes + beforeContent.enumerated().map {
+            AccessibilityHierarchy.element($1, traversalIndex: 100 + $0)
+        }
+        let afterHierarchy = tabNodes + afterContent.enumerated().map {
             AccessibilityHierarchy.element($1, traversalIndex: 100 + $0)
         }
 

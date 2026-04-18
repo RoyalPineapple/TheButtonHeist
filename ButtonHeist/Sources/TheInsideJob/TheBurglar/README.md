@@ -1,10 +1,10 @@
 # TheBurglar
 
-Reads the live accessibility tree and populates TheStash's registry. Private implementation detail of TheStash — no external code references TheBurglar directly.
+Reads the live accessibility tree and populates TheStash's registry. Implementation detail of TheStash in production code; kept module-internal for targeted unit tests.
 
 ## The one file
 
-**`TheBurglar.swift`** — `@MainActor final class` with no mutable instance state (only the `AccessibilityHierarchyParser`).
+**`TheBurglar.swift`** — `@MainActor final class` with no mutable instance state (stored deps: `AccessibilityHierarchyParser` + `TheTripwire`).
 
 **`parse()`** — the read-only path:
 1. `tripwire.getAccessibleWindows()` — modal-aware window list

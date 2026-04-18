@@ -16,6 +16,8 @@ import AccessibilitySnapshotParser
 @MainActor
 final class TheBrains {
 
+    private static let treeUnavailableMessage = "Could not access accessibility tree"
+
     let stash: TheStash
     let safecracker: TheSafecracker
     let tripwire: TheTripwire
@@ -42,6 +44,12 @@ final class TheBrains {
         guard let result = stash.refresh() else { return nil }
         exploreCycleIds?.formUnion(stash.registry.viewportIds)
         return result
+    }
+
+    func treeUnavailableResult(method: ActionMethod) -> ActionResult {
+        var builder = ActionResultBuilder(method: method, screenName: stash.lastScreenName, screenId: stash.lastScreenId)
+        builder.message = Self.treeUnavailableMessage
+        return builder.failure(errorKind: .actionFailed)
     }
 
     // MARK: - Before/After State
@@ -254,7 +262,7 @@ final class TheBrains {
     /// Returns nil if unchanged or no prior response was sent.
     func computeBackgroundDelta() -> InterfaceDelta? {
         guard let sent = lastSentState, sent.treeHash != 0 else { return nil }
-        refresh()
+        guard refresh() != nil else { return nil }
         let snapshot = stash.selectElements()
         let wireElements = stash.toWire(snapshot)
         let currentHash = wireElements.hashValue
@@ -279,7 +287,9 @@ final class TheBrains {
 
     /// Run the wait-for-idle pipeline: refresh → before → settle → delta → result.
     func executeWaitForIdle(timeout: TimeInterval) async -> ActionResult {
-        refresh()
+        guard refresh() != nil else {
+            return treeUnavailableResult(method: .waitForIdle)
+        }
         let before = captureBeforeState()
         let settled = await tripwire.waitForAllClear(timeout: timeout)
 
@@ -303,9 +313,7 @@ final class TheBrains {
         let before = captureBeforeState()
 
         guard let initial = refreshAndSnapshot() else {
-            var builder = ActionResultBuilder(method: .waitForChange, screenName: stash.lastScreenName, screenId: stash.lastScreenId)
-            builder.message = "Could not access root view"
-            return builder.failure(errorKind: .actionFailed)
+            return treeUnavailableResult(method: .waitForChange)
         }
 
         // Fast path: tree already changed since the last response

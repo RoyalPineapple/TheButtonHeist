@@ -92,6 +92,7 @@
 		70645F302E2187171D64E958 /* TheMuscleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 594A7F8340C7B335C8033319 /* TheMuscleTests.swift */; };
 		71D803CC09A6B351F9EE95F4 /* ButtonHeistActor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48C0A7E7B525AB54B71D0EC5 /* ButtonHeistActor.swift */; };
 		72B63867F39709CBEC77B303 /* HierarchyPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FEBFC658B72A791C1BFEF2B /* HierarchyPayloadTests.swift */; };
+		75784BEDD12A767343FDACC7 /* TheBurglarParseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEF358739DC27BF19F7C58C7 /* TheBurglarParseTests.swift */; };
 		778C5650B71031770160D6BF /* SimpleSocketServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC9A012737B11E7628103EAA /* SimpleSocketServer.swift */; };
 		7C171E0C9479C3EAD5757469 /* TheSafecrackerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 424717FB3ECFCCEA52B1971B /* TheSafecrackerTests.swift */; };
 		7C9D2F12AC93C715BE94D816 /* ThePlantAutoStart.m in Sources */ = {isa = PBXBuildFile; fileRef = 376587F2D81DC81C4DE344CD /* ThePlantAutoStart.m */; };
@@ -490,6 +491,7 @@
 		FD96D09CD68F61CCD6902F18 /* ConnectionScopeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionScopeTests.swift; sourceTree = "<group>"; };
 		FEC9D64E860D2FC24B8BD256 /* TheInsideJobTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TheInsideJobTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FEEFEEE99B850E0AD80B6397 /* TheFence+CommandCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+CommandCatalog.swift"; sourceTree = "<group>"; };
+		FEF358739DC27BF19F7C58C7 /* TheBurglarParseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheBurglarParseTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -857,6 +859,7 @@
 				4ED50A9A94649523608BDE72 /* TheBrainsActionTests.swift */,
 				BD414D07E60258326145755A /* TheBrainsScrollTests.swift */,
 				1BE3551882C8F9FF740EA26B /* TheBurglarApplyTests.swift */,
+				FEF358739DC27BF19F7C58C7 /* TheBurglarParseTests.swift */,
 				8704DBF79498D0AAA0EDF20B /* TheInsideJobStateTests.swift */,
 				594A7F8340C7B335C8033319 /* TheMuscleTests.swift */,
 				853859C605E256FDB5707237 /* TheSafecrackerIntegrationTests.swift */,
@@ -1381,6 +1384,7 @@
 				6CACA04A2302C8A94F77B362 /* TheBrainsActionTests.swift in Sources */,
 				2FC3CAAB5ABC9EC51DDF3246 /* TheBrainsScrollTests.swift in Sources */,
 				37A3E33799F2C13AF5F9D355 /* TheBurglarApplyTests.swift in Sources */,
+				75784BEDD12A767343FDACC7 /* TheBurglarParseTests.swift in Sources */,
 				036A97225C8E6C36CC730DA1 /* TheInsideJobStateTests.swift in Sources */,
 				70645F302E2187171D64E958 /* TheMuscleTests.swift in Sources */,
 				63694CF61DB981B3C4BB0212 /* TheSafecrackerIntegrationTests.swift in Sources */,
