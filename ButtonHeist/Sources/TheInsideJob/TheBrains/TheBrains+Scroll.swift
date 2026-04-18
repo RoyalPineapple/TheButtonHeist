@@ -466,7 +466,7 @@ extension TheBrains {
         contentSize: CGSize
     ) -> ScrollableTarget {
         if let view = stash.scrollableContainerViews[container], view.window != nil {
-            if let scrollView = view as? UIScrollView {
+            if let scrollView = view as? UIScrollView, !forceSwipeScrolling {
                 return .uiScrollView(scrollView)
             }
             let screenFrame = Self.safeSwipeFrame(from: view.convert(view.bounds, to: nil))
@@ -579,7 +579,13 @@ extension TheBrains {
         axis: ScrollAxis? = nil
     ) -> ScrollableTarget? {
         if let sv = screenElement.scrollView {
-            let target = ScrollableTarget.uiScrollView(sv)
+            let target: ScrollableTarget
+            if forceSwipeScrolling {
+                let screenFrame = Self.safeSwipeFrame(from: sv.convert(sv.bounds, to: nil))
+                target = .swipeable(frame: screenFrame, contentSize: sv.contentSize)
+            } else {
+                target = .uiScrollView(sv)
+            }
             if let axis, !Self.scrollableAxis(of: target).contains(axis) {
                 if let (axisTarget, _) = findScrollTarget(axis: axis) {
                     return axisTarget

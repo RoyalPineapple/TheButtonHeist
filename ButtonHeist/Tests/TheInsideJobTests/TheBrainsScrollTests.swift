@@ -380,6 +380,32 @@ final class TheBrainsScrollTests: XCTestCase {
         }
     }
 
+    func testResolveScrollTargetReturnsSwipeableWhenForceSwipeEnabled() {
+        let forcedBrains = TheBrains(
+            tripwire: TheTripwire(),
+            forceSwipeScrolling: true
+        )
+        let scrollView = UIScrollView(frame: CGRect(x: 10, y: 20, width: 400, height: 200))
+        scrollView.contentSize = CGSize(width: 400, height: 1200)
+
+        let screenElement = TheStash.ScreenElement(
+            heistId: "item",
+            contentSpaceOrigin: nil,
+            element: makeElement(),
+            object: nil,
+            scrollView: scrollView
+        )
+
+        let target = forcedBrains.resolveScrollTarget(
+            screenElement: screenElement, axis: .vertical
+        )
+        if case .swipeable = target {
+            XCTAssertTrue(true, "Forced swipe mode should convert UIScrollView targets to .swipeable")
+        } else {
+            XCTFail("Expected .swipeable in force mode, got \(String(describing: target))")
+        }
+    }
+
     // MARK: - Helpers
 
     private func makeElement(

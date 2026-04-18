@@ -21,6 +21,7 @@ final class TheBrains {
     let stash: TheStash
     let safecracker: TheSafecracker
     let tripwire: TheTripwire
+    let forceSwipeScrolling: Bool
 
     /// Last dispatched swipe direction per swipeable target key.
     var lastSwipeDirectionByTarget: [String: UIAccessibilityScrollDirection] = [:]
@@ -60,8 +61,9 @@ final class TheBrains {
         return seen
     }
 
-    init(tripwire: TheTripwire) {
+    init(tripwire: TheTripwire, forceSwipeScrolling: Bool = false) {
         self.tripwire = tripwire
+        self.forceSwipeScrolling = forceSwipeScrolling
         self.stash = TheStash(tripwire: tripwire)
         self.safecracker = TheSafecracker()
     }
