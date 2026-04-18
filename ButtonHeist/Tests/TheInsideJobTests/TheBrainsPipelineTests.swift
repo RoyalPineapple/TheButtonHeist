@@ -262,75 +262,150 @@ final class TheBrainsPipelineTests: XCTestCase {
     // MARK: - Temporary Swipe Diagnostics (Watch Mode)
 
     func testTempWatchSwipeParseDuringAnimation() async throws {
-        guard brains.refresh() != nil else {
-            throw XCTSkip("No live hierarchy available for swipe timing diagnostics")
-        }
+        try await navigateToLongListView()
         guard let scenario = swipeScenario() else {
             throw XCTSkip("No overflowing scrollable container available")
         }
 
-        // Keep this short enough to run quickly, but slow enough to watch in Simulator.
-        let durations: [TimeInterval] = [0.12, 0.08, 0.06]
-        let iterations = 4
+        let iterations = 70
+        var swipeMs: [Double] = []
+        var movedCount = 0
+        var blockedCount = 0
+        var downMoves = 0
+        var upMoves = 0
+        var bottomHits = 0
+        var topHits = 0
+        var reverseChecks = 0
+        var reverseRecovered = 0
+        var pendingReverseCheck = false
+        var direction = await calibratedStartDirection(for: scenario)
 
-        for duration in durations {
-            var detectedDuringCount = 0
-            var detectedAfterCount = 0
-            var parseMs: [Double] = []
+        print(String(
+            format: "[Diagnostics][Temp][Watch] starting iterations=%d start_direction=%@",
+            iterations,
+            directionName(direction)
+        ))
 
-            print(String(format: "[Diagnostics][Temp][Watch] starting duration=%.2fs", duration))
+        for _ in 0..<iterations {
+            guard brains.refresh() != nil else { continue }
+            let swipeDirection = direction
+            let beforeOffset = scenario.observedScrollView?.contentOffset
+            let start = CACurrentMediaTime()
+            let (moved, before) = await brains.scrollOnePageAndSettle(
+                scenario.target,
+                direction: swipeDirection,
+                animated: false
+            )
+            let end = CACurrentMediaTime()
+            swipeMs.append((end - start) * 1000)
 
-            for i in 0..<iterations {
-                let direction = i.isMultiple(of: 2) ? scenario.primaryDirection : scenario.reverseDirection
-                guard brains.refresh() != nil else { continue }
-                let before = brains.stash.registry.viewportIds
-                let t0 = CACurrentMediaTime()
-
-                let swipeTask = Task {
-                    await self.brains.safecracker.scrollBySwipe(
-                        frame: scenario.frame,
-                        direction: direction,
-                        duration: duration
-                    )
+            let movedThisSwipe: Bool
+            if let scrollView = scenario.observedScrollView, let beforeOffset {
+                let afterOffset = scrollView.contentOffset
+                movedThisSwipe = abs(afterOffset.x - beforeOffset.x) > 0.5
+                    || abs(afterOffset.y - beforeOffset.y) > 0.5
+            } else {
+                movedThisSwipe = moved && (brains.stash.registry.viewportIds != before || moved)
+            }
+            if movedThisSwipe {
+                movedCount += 1
+                if swipeDirection == .down {
+                    downMoves += 1
+                } else if swipeDirection == .up {
+                    upMoves += 1
                 }
-
-                var sawDuring = false
-                while CACurrentMediaTime() - t0 < duration {
-                    let parseStart = CACurrentMediaTime()
-                    brains.refresh()
-                    let parseEnd = CACurrentMediaTime()
-                    parseMs.append((parseEnd - parseStart) * 1000)
-
-                    if brains.stash.registry.viewportIds != before {
-                        detectedDuringCount += 1
-                        sawDuring = true
-                        break
-                    }
-                    await brains.tripwire.yieldFrames(1)
-                }
-
-                _ = await swipeTask.value
-                brains.refresh()
-                if !sawDuring, brains.stash.registry.viewportIds != before {
-                    detectedAfterCount += 1
-                }
-
-                // Give humans time to visually follow each swipe in Simulator.
-                try? await Task.sleep(for: .milliseconds(450))
+            } else {
+                blockedCount += 1
             }
 
-            let meanParse = parseMs.reduce(0, +) / Double(max(parseMs.count, 1))
-            print(String(
-                format: "[Diagnostics][Temp][Watch] duration=%.2fs detected_during=%d/%d detected_only_after=%d/%d parse_mean=%.2fms",
-                duration, detectedDuringCount, iterations, detectedAfterCount, iterations, meanParse
-            ))
+            if let scrollView = scenario.observedScrollView {
+                let insets = scrollView.adjustedContentInset
+                let minY = -insets.top
+                let maxY = scrollView.contentSize.height + insets.bottom - scrollView.frame.height
+                let y = scrollView.contentOffset.y
+                if swipeDirection == .down, y >= maxY - 1 {
+                    direction = .up
+                    bottomHits += 1
+                } else if swipeDirection == .up, y <= minY + 1 {
+                    direction = .down
+                    topHits += 1
+                }
+            } else {
+                if pendingReverseCheck {
+                    reverseChecks += 1
+                    if movedThisSwipe { reverseRecovered += 1 }
+                    pendingReverseCheck = false
+                }
+                if !movedThisSwipe {
+                    pendingReverseCheck = true
+                    direction = oppositeDirection(of: direction)
+                }
+            }
+
+            try? await Task.sleep(for: .milliseconds(movedThisSwipe ? 130 : 380))
         }
+
+        let meanSwipeMs = swipeMs.reduce(0, +) / Double(max(swipeMs.count, 1))
+        print(String(
+            format: "[Diagnostics][Temp][Watch] moved=%d blocked=%d down_moves=%d up_moves=%d bottom_hits=%d top_hits=%d reverse_recovered=%d/%d swipe_call_mean=%.2fms",
+            movedCount,
+            blockedCount,
+            downMoves,
+            upMoves,
+            bottomHits,
+            topHits,
+            reverseRecovered,
+            reverseChecks,
+            meanSwipeMs
+        ))
     }
 
     // MARK: - Helpers
 
+    private func navigateToLongListView() async throws {
+        guard brains.refresh() != nil else {
+            throw XCTSkip("No live hierarchy available for swipe timing diagnostics")
+        }
+
+        let longListHeader = ElementTarget.matcher(ElementMatcher(label: "Long List", traits: [.header]))
+        if brains.stash.resolveFirstMatch(longListHeader) != nil {
+            return
+        }
+
+        let longListLink = ElementTarget.matcher(ElementMatcher(label: "Long List", traits: [.button]))
+        if brains.stash.resolveFirstMatch(longListLink) == nil {
+            for _ in 0..<16 {
+                guard let container = brains.stash.currentHierarchy.scrollableContainers.first,
+                      case .scrollable(let contentSize) = container.type else { break }
+                let target = brains.scrollableTarget(for: container, contentSize: contentSize)
+                _ = await brains.scrollOnePageAndSettle(target, direction: .down, animated: false)
+                if brains.stash.resolveFirstMatch(longListLink) != nil {
+                    break
+                }
+            }
+        }
+
+        let activateResult = await brains.executeActivate(longListLink)
+        if !activateResult.success {
+            let tapResult = await brains.executeTap(TouchTapTarget(elementTarget: longListLink))
+            guard tapResult.success else {
+                let reason = tapResult.message ?? activateResult.message ?? "activate/tap failed"
+                throw XCTSkip("Could not open Long List demo (\(reason))")
+            }
+        }
+
+        _ = await brains.tripwire.waitForAllClear(timeout: 1.2)
+        guard brains.refresh() != nil else {
+            throw XCTSkip("Hierarchy unavailable after opening Long List")
+        }
+        guard brains.stash.resolveFirstMatch(longListHeader) != nil else {
+            throw XCTSkip("Long List view did not become visible")
+        }
+    }
+
     private struct SwipeScenario {
-        let frame: CGRect
+        let target: TheBrains.ScrollableTarget
+        let observedScrollView: UIScrollView?
         let primaryDirection: UIAccessibilityScrollDirection
         let reverseDirection: UIAccessibilityScrollDirection
     }
@@ -361,15 +436,84 @@ final class TheBrainsPipelineTests: XCTestCase {
             return nil
         }
 
-        let frame: CGRect
+        let baseFrame: CGRect
         if let view = brains.stash.scrollableContainerViews[container], view.window != nil {
-            frame = view.convert(view.bounds, to: nil)
+            baseFrame = view.convert(view.bounds, to: nil)
         } else {
-            frame = container.frame
+            baseFrame = container.frame
         }
-
+        let frame = swipeOnlyFrame(from: baseFrame)
         guard !frame.isEmpty else { return nil }
-        return SwipeScenario(frame: frame, primaryDirection: primaryDirection, reverseDirection: reverseDirection)
+        let target = TheBrains.ScrollableTarget.swipeable(frame: frame, contentSize: contentSize)
+        let observedScrollView = brains.stash.scrollableContainerViews[container] as? UIScrollView
+        return SwipeScenario(
+            target: target,
+            observedScrollView: observedScrollView,
+            primaryDirection: primaryDirection,
+            reverseDirection: reverseDirection
+        )
+    }
+
+    private func calibratedStartDirection(
+        for scenario: SwipeScenario
+    ) async -> UIAccessibilityScrollDirection {
+        if await swipeChangesViewport(target: scenario.target, direction: scenario.primaryDirection) {
+            return scenario.primaryDirection
+        }
+        if await swipeChangesViewport(target: scenario.target, direction: scenario.reverseDirection) {
+            return scenario.reverseDirection
+        }
+        return scenario.primaryDirection
+    }
+
+    private func swipeChangesViewport(
+        target: TheBrains.ScrollableTarget,
+        direction: UIAccessibilityScrollDirection
+    ) async -> Bool {
+        guard brains.refresh() != nil else { return false }
+        let before = brains.stash.registry.viewportIds
+        let (moved, _) = await brains.scrollOnePageAndSettle(target, direction: direction, animated: false)
+        return moved && brains.stash.registry.viewportIds != before
+    }
+
+    private func oppositeDirection(of direction: UIAccessibilityScrollDirection) -> UIAccessibilityScrollDirection {
+        switch direction {
+        case .down: return .up
+        case .up: return .down
+        case .left: return .right
+        case .right: return .left
+        case .next: return .previous
+        case .previous: return .next
+        @unknown default: return direction
+        }
+    }
+
+    private func directionName(_ direction: UIAccessibilityScrollDirection) -> String {
+        switch direction {
+        case .down: return "down"
+        case .up: return "up"
+        case .left: return "left"
+        case .right: return "right"
+        case .next: return "next"
+        case .previous: return "previous"
+        @unknown default: return "unknown"
+        }
+    }
+
+    private func swipeOnlyFrame(from frame: CGRect) -> CGRect {
+        let safeArea = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)?
+            .safeAreaInsets ?? .zero
+        let clamped = frame.inset(by: UIEdgeInsets(
+            top: safeArea.top + 56,
+            left: 16,
+            bottom: safeArea.bottom + 20,
+            right: 16
+        ))
+        if !clamped.isEmpty { return clamped }
+        return frame.insetBy(dx: min(20, frame.width * 0.1), dy: min(60, frame.height * 0.2))
     }
 
     private func seedRegistry(

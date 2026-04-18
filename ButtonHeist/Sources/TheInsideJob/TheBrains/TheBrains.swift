@@ -22,6 +22,9 @@ final class TheBrains {
     let safecracker: TheSafecracker
     let tripwire: TheTripwire
 
+    /// Last dispatched swipe direction per swipeable target key.
+    var lastSwipeDirectionByTarget: [String: UIAccessibilityScrollDirection] = [:]
+
     /// Cached state from the last explore of each scrollable container.
     var containerExploreStates: [AccessibilityContainer: ContainerExploreState] = [:]
 
@@ -222,6 +225,7 @@ final class TheBrains {
         containerExploreStates.removeAll()
         explorePhase = .idle
         lastSentState = nil
+        lastSwipeDirectionByTarget.removeAll()
     }
 
     // MARK: - Response State Tracking

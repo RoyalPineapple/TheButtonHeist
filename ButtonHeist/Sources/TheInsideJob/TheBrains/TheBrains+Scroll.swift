@@ -18,7 +18,20 @@ extension TheBrains {
 
     /// Fast-path duration for synthetic swipe scrolling. Chosen to minimize
     /// wall-clock time while remaining reliable in simulator testing.
-    private static let swipeScrollDuration: TimeInterval = 0.12
+    private static let swipeScrollDuration: TimeInterval = 0.001
+    /// End swipe settle after this many consecutive frames with no newly
+    /// discovered elements.
+    private static let swipeSettleIdleFrames = 2
+    /// Require viewport stability for a few consecutive frames.
+    private static let swipeSettleStableViewportFrames = 3
+    /// Minimum post-swipe cooldown frames before allowing another gesture.
+    private static let swipeSettleMinFrames = 6
+    /// Hard cap on settle polling to avoid long stalls on spring animations.
+    private static let swipeSettleMaxFrames = 24
+    /// Quick settle defaults when continuing in the same direction.
+    private static let swipeQuickSettleIdleFrames = 1
+    private static let swipeQuickSettleStableViewportFrames = 1
+    private static let swipeQuickSettleMaxFrames = 3
 
     /// A scrollable container discovered from the accessibility hierarchy.
     @MainActor enum ScrollableTarget {
@@ -84,6 +97,7 @@ extension TheBrains {
         animated: Bool = true
     ) async -> (moved: Bool, previousOnScreen: Set<String>) {
         let before = stash.registry.viewportIds
+        let beforeAnchor = viewportAnchorSignature()
 
         switch target {
         case .uiScrollView(let sv):
@@ -99,25 +113,141 @@ extension TheBrains {
             }
             refresh()
             return (true, before)
-        case .swipeable(let frame, _):
+        case .swipeable(let frame, let contentSize):
+            let targetKey = swipeTargetKey(frame: frame, contentSize: contentSize)
+            let isDirectionChange = lastSwipeDirectionByTarget[targetKey].map { $0 != direction } ?? false
             let dispatched = await safecracker.scrollBySwipe(
                 frame: frame,
                 direction: direction,
                 duration: Self.swipeScrollDuration
             )
             guard dispatched else { return (false, before) }
+            let moved = await settleSwipeMotion(
+                previousOnScreen: before,
+                previousAnchor: beforeAnchor,
+                requireDirectionChangeSettle: isDirectionChange
+            )
+            lastSwipeDirectionByTarget[targetKey] = direction
+            return (moved, before)
+        }
+    }
 
-            // Optimistic parse immediately after finger-up; if the viewport has not
-            // advanced yet, do one short settle wait and parse again.
+    /// Parse through post-gesture spring/inertia and consider the swipe settled
+    /// when no new elements are discovered for a short consecutive frame window.
+    private func settleSwipeMotion(
+        previousOnScreen: Set<String>,
+        previousAnchor: Int?,
+        requireDirectionChangeSettle: Bool
+    ) async -> Bool {
+        let requiredIdleFrames = requireDirectionChangeSettle
+            ? Self.swipeSettleIdleFrames
+            : Self.swipeQuickSettleIdleFrames
+        let requiredStableViewportFrames = requireDirectionChangeSettle
+            ? Self.swipeSettleStableViewportFrames
+            : Self.swipeQuickSettleStableViewportFrames
+        let minFrames = requireDirectionChangeSettle ? Self.swipeSettleMinFrames : 0
+        let maxFrames = requireDirectionChangeSettle
+            ? Self.swipeSettleMaxFrames
+            : Self.swipeQuickSettleMaxFrames
+
+        var moved = false
+        var knownHeistIds = Set(stash.registry.elements.keys)
+        var idleFramesWithoutNew = 0
+        var stableViewportFrames = 0
+        var lastViewport = stash.registry.viewportIds
+
+        for frame in 0..<maxFrames {
             refresh()
-            if stash.registry.viewportIds != before {
-                return (true, before)
+            let currentViewport = stash.registry.viewportIds
+            let currentAnchor = viewportAnchorSignature()
+            if let previousAnchor, let currentAnchor {
+                if currentAnchor != previousAnchor {
+                    moved = true
+                }
+            } else if currentViewport != previousOnScreen {
+                moved = true
+            }
+            if currentViewport == lastViewport {
+                stableViewportFrames += 1
+            } else {
+                lastViewport = currentViewport
+                stableViewportFrames = 0
             }
 
-            await tripwire.yieldFrames(2)
-            refresh()
-            return (stash.registry.viewportIds != before, before)
+            let currentHeistIds = Set(stash.registry.elements.keys)
+            let newHeistIds = currentHeistIds.subtracting(knownHeistIds)
+            if newHeistIds.isEmpty {
+                idleFramesWithoutNew += 1
+            } else {
+                knownHeistIds.formUnion(newHeistIds)
+                idleFramesWithoutNew = 0
+            }
+
+            if frame + 1 >= minFrames,
+               idleFramesWithoutNew >= requiredIdleFrames,
+               stableViewportFrames >= requiredStableViewportFrames {
+                break
+            }
+            if frame + 1 < maxFrames {
+                await tripwire.yieldFrames(1)
+            }
         }
+        return moved
+    }
+
+    /// Stable signature for the top of the viewport based on content-space
+    /// origins. This avoids treating edge bounces/re-parses as true movement.
+    private func viewportAnchorSignature() -> Int? {
+        let anchors = stash.registry.viewportIds.compactMap { heistId -> String? in
+            guard let entry = stash.registry.elements[heistId],
+                  let origin = entry.contentSpaceOrigin else { return nil }
+            return "\(heistId):\(Int(origin.x.rounded())):\(Int(origin.y.rounded()))"
+        }.sorted()
+        guard !anchors.isEmpty else { return nil }
+        return anchors.prefix(12).joined(separator: "|").hashValue
+    }
+
+    private func swipeTargetKey(frame: CGRect, contentSize: CGSize) -> String {
+        let values = [
+            Int(frame.minX.rounded()),
+            Int(frame.minY.rounded()),
+            Int(frame.width.rounded()),
+            Int(frame.height.rounded()),
+            Int(contentSize.width.rounded()),
+            Int(contentSize.height.rounded())
+        ]
+        return values.map(String.init).joined(separator: ":")
+    }
+
+    private static func safeSwipeFrame(from frame: CGRect) -> CGRect {
+        let safeTopInset = windowSafeAreaInsets.top + 56
+        let safeBottomInset = windowSafeAreaInsets.bottom + 20
+        let safeBounds = UIScreen.main.bounds.inset(by: UIEdgeInsets(
+            top: safeTopInset,
+            left: 16,
+            bottom: safeBottomInset,
+            right: 16
+        ))
+        let intersected = frame.intersection(safeBounds)
+        if !intersected.isNull, !intersected.isEmpty,
+           intersected.width >= 44, intersected.height >= 44 {
+            return intersected
+        }
+
+        let fallback = frame.insetBy(
+            dx: min(20, frame.width * 0.1),
+            dy: min(60, frame.height * 0.2)
+        )
+        if !fallback.isEmpty { return fallback }
+        return frame
+    }
+
+    private static var windowSafeAreaInsets: UIEdgeInsets {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)?
+            .safeAreaInsets ?? .zero
     }
 
     // MARK: - Scroll Command Execution
@@ -335,10 +465,10 @@ extension TheBrains {
             if let scrollView = view as? UIScrollView {
                 return .uiScrollView(scrollView)
             }
-            let screenFrame = view.convert(view.bounds, to: nil)
+            let screenFrame = Self.safeSwipeFrame(from: view.convert(view.bounds, to: nil))
             return .swipeable(frame: screenFrame, contentSize: contentSize)
         }
-        return .swipeable(frame: container.frame, contentSize: contentSize)
+        return .swipeable(frame: Self.safeSwipeFrame(from: container.frame), contentSize: contentSize)
     }
 
     private func searchNotFoundResult(scrollCount: Int) -> TheSafecracker.InteractionResult {
