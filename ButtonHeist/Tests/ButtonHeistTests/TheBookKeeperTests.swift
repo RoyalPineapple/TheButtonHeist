@@ -289,6 +289,69 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testNestedLongStringIsTruncatedInLog() async throws {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        try bookKeeper.beginSession(identifier: "test-nested-truncate")
+        let longString = String(repeating: "x", count: 1500)
+
+        try bookKeeper.logCommand(
+            requestId: "r1",
+            command: .activate,
+            arguments: [
+                "command": "activate",
+                "payload": [
+                    "nested": longString,
+                ],
+            ]
+        )
+
+        guard case .active(let session) = bookKeeper.phase else {
+            return XCTFail("Expected active phase")
+        }
+        let logPath = session.directory.appendingPathComponent("session.jsonl")
+        let content = try String(contentsOf: logPath, encoding: .utf8)
+        let lines = content.split(separator: "\n")
+        let json = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
+        let args = json?["args"] as? [String: Any]
+        let payload = args?["payload"] as? [String: Any]
+
+        XCTAssertEqual(payload?["nested"] as? String, "<1500 chars>")
+    }
+
+    @ButtonHeistActor
+    func testNestedBinaryDataExcludedFromLog() async throws {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        try bookKeeper.beginSession(identifier: "test-nested-binary")
+
+        try bookKeeper.logCommand(
+            requestId: "r1",
+            command: .activate,
+            arguments: [
+                "command": "activate",
+                "payload": [
+                    "pngData": "AAAA",
+                    "videoData": "BBBB",
+                    "label": "Submit",
+                ],
+            ]
+        )
+
+        guard case .active(let session) = bookKeeper.phase else {
+            return XCTFail("Expected active phase")
+        }
+        let logPath = session.directory.appendingPathComponent("session.jsonl")
+        let content = try String(contentsOf: logPath, encoding: .utf8)
+        let lines = content.split(separator: "\n")
+        let json = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
+        let args = json?["args"] as? [String: Any]
+        let payload = args?["payload"] as? [String: Any]
+
+        XCTAssertNil(payload?["pngData"])
+        XCTAssertNil(payload?["videoData"])
+        XCTAssertEqual(payload?["label"] as? String, "Submit")
+    }
+
+    @ButtonHeistActor
     func testLogCommandSilentWhenIdle() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         // Should not throw — just silently does nothing
@@ -585,5 +648,102 @@ final class TheBookKeeperTests: XCTestCase {
         XCTAssertTrue(recording.lastPathComponent.hasPrefix("002-"))
         XCTAssertTrue(screenshot2.lastPathComponent.hasPrefix("003-"))
         XCTAssertEqual(bookKeeper.manifest?.artifacts.count, 3)
+    }
+
+    // MARK: - Archive Deletion
+
+    @ButtonHeistActor
+    func testArchiveSessionDeleteSourceRemovesDirectory() async throws {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        try bookKeeper.beginSession(identifier: "test-archive-delete")
+        try bookKeeper.logCommand(requestId: "r1", command: .status, arguments: [:])
+        guard case .active(let activeSession) = bookKeeper.phase else {
+            return XCTFail("Expected active phase")
+        }
+        let sessionDirectory = activeSession.directory
+        try await bookKeeper.closeSession()
+        let (archivePath, _) = try await bookKeeper.archiveSession(deleteSource: true)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: archivePath.path))
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: sessionDirectory.path),
+            "Source directory should be removed when deleteSource is true"
+        )
+        try? FileManager.default.removeItem(at: archivePath)
+    }
+
+    // MARK: - Artifact Orchestration
+
+    @ButtonHeistActor
+    func testWriteArtifactIfSinkAvailableExplicitPath() async throws {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        let pngData = Data([0x89, 0x50, 0x4E, 0x47]).base64EncodedString()
+        let outputPath = tempDirectory.appendingPathComponent("explicit.png").path
+
+        let result = try bookKeeper.writeArtifactIfSinkAvailable(
+            base64Data: pngData,
+            outputPath: outputPath,
+            requestId: "r1",
+            command: .getScreen,
+            metadata: .screenshot(ScreenshotMetadata(width: 390, height: 844))
+        )
+
+        XCTAssertEqual(result?.path, outputPath)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: outputPath))
+        XCTAssertNil(bookKeeper.manifest, "Explicit path should not create a session")
+    }
+
+    @ButtonHeistActor
+    func testWriteArtifactIfSinkAvailableActiveSession() async throws {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        try bookKeeper.beginSession(identifier: "orchestrate-session")
+        let pngData = Data([0x89, 0x50, 0x4E, 0x47]).base64EncodedString()
+
+        let result = try bookKeeper.writeArtifactIfSinkAvailable(
+            base64Data: pngData,
+            outputPath: nil,
+            requestId: "r1",
+            command: .getScreen,
+            metadata: .screenshot(ScreenshotMetadata(width: 390, height: 844))
+        )
+
+        XCTAssertNotNil(result)
+        XCTAssertTrue(result?.lastPathComponent.hasPrefix("001-") == true)
+        XCTAssertEqual(bookKeeper.manifest?.artifacts.count, 1)
+    }
+
+    @ButtonHeistActor
+    func testWriteArtifactIfSinkAvailableNoSinkReturnsNil() async throws {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        let pngData = Data([0x89, 0x50, 0x4E, 0x47]).base64EncodedString()
+
+        let result = try bookKeeper.writeArtifactIfSinkAvailable(
+            base64Data: pngData,
+            outputPath: nil,
+            requestId: "r1",
+            command: .getScreen,
+            metadata: .screenshot(ScreenshotMetadata(width: 390, height: 844))
+        )
+
+        XCTAssertNil(result, "With no session and no output path, should return nil")
+    }
+
+    @ButtonHeistActor
+    func testWriteArtifactIfSinkAvailableRoutesRecording() async throws {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        try bookKeeper.beginSession(identifier: "orchestrate-recording")
+        let mp4Data = Data([0x00, 0x00, 0x00, 0x1C]).base64EncodedString()
+
+        let result = try bookKeeper.writeArtifactIfSinkAvailable(
+            base64Data: mp4Data,
+            outputPath: nil,
+            requestId: "r1",
+            command: .stopRecording,
+            metadata: .recording(RecordingMetadata(width: 390, height: 844, duration: 5.0, fps: 8, frameCount: 40))
+        )
+
+        XCTAssertTrue(result?.lastPathComponent.hasSuffix(".mp4") == true)
+        XCTAssertTrue(result?.path.contains("recordings/") == true)
+        XCTAssertEqual(bookKeeper.manifest?.artifacts.first?.type, .recording)
     }
 }

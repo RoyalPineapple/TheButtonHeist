@@ -1,8 +1,8 @@
 # TheBookKeeper - The Accountant
 
-> **File:** `ButtonHeist/Sources/TheButtonHeist/TheBookKeeper.swift`
+> **Directory:** `ButtonHeist/Sources/TheButtonHeist/TheBookKeeper/`
 > **Platform:** macOS 14.0+
-> **Role:** Centralized file operations — session logs, artifact storage, compression, path safety, heist recording
+> **Role:** Centralized file operations — session logs, artifact storage, compression, path safety, heist recording, abandoned-session recovery
 
 ## Responsibilities
 
@@ -14,8 +14,10 @@ TheBookKeeper owns all filesystem I/O on the macOS side:
 4. **Manifest tracking** — maintains a `manifest.json` listing every artifact written during the session, with type, size, timestamp, and the command that produced it
 5. **Compression** — gzips session logs on close via `/usr/bin/gzip`; bundles a completed session directory into a `.tar.gz` archive on demand via `/usr/bin/tar`
 6. **Lifecycle** — creates session directory on `beginSession`, closes and compresses on `closeSession`, archives on `archiveSession`
-7. **Heist recording** — records agent sessions as replayable `.heist` scripts. Builds minimal `ElementMatcher` for each targeted element (smallest matcher that uniquely identifies it), filters out state traits and UUID-containing identifiers, falls back to ordinal when no unique matcher exists. Manages `HeistRecording` state within `ActiveSession`, writes `HeistPlayback` (envelope) and `HeistEvidence` (individual steps) to disk
+7. **Heist recording** — records agent sessions as replayable `.heist` scripts. Builds minimal `ElementMatcher` for each targeted element (smallest matcher that uniquely identifies it), filters out state traits and UUID-containing identifiers, falls back to ordinal when no unique matcher exists. Manages `HeistRecording` state within `ActiveSession`, writes `HeistPlayback` (envelope) and `HeistEvidence` (individual steps) to disk. Malformed evidence lines are logged and skipped on stop, not allowed to destroy the whole recording
 8. **Heist file I/O** — static `writeHeist(_:to:)` and `readHeist(from:)` for `.heist` file serialization (pretty-printed JSON with sorted keys)
+9. **Artifact orchestration** — `writeArtifactIfSinkAvailable(...)` picks the right sink (explicit output path → `writeToPath`; active session → typed `writeScreenshot`/`writeRecording`; idle with no path → nil so the caller returns base64 over the wire)
+10. **Abandoned-session recovery** — `recoverAbandonedSessions()` scans the base directory for sessions with an uncompressed `session.jsonl` (indicating the process exited before `closeSession`), writes a recovery manifest, compresses the log, and surfaces any abandoned heist evidence. Module-internal today; not wired into a production flow yet
 
 ## Architecture Diagram
 
@@ -101,6 +103,19 @@ Transitioning from `.active` to `.closing` flushes the manifest and closes the F
 
 Invalid transitions throw `BookKeeperError.invalidPhase` — you cannot close an idle session, archive an active session, or begin a second session while one is active.
 
+## Recovery of abandoned sessions
+
+`recoverAbandonedSessions()` is the out-of-band recovery path for sessions where the process died before `closeSession` ran. An "abandoned" session is any directory under the base that has a raw `session.jsonl` but no `session.jsonl.gz`. For each such session, TheBookKeeper:
+
+1. Reads or regenerates the manifest, stamping `endTime` if it's missing.
+2. Writes the manifest back atomically.
+3. Shells out to `/usr/bin/gzip` to compress the raw log.
+4. Surfaces any abandoned `heist.jsonl` evidence (line-count + path) so the caller can salvage a partial recording.
+
+This API is module-internal: it's not yet wired into TheFence, the CLI, or MCP. Tests exercise it via `@testable import`. Promote to public when a production consumer lands.
+
+An in-progress heist recording whose `session.jsonl` is still open will never be corrupted by a crash mid-step: `recordHeistEvidence` writes each `HeistEvidence` JSON line durably before updating in-memory state, and `stopHeistRecording` reads entries back using `compactMap` so a single malformed line is logged and skipped rather than destroying the rest of the recording.
+
 ## Error Handling
 
 ```swift
@@ -110,6 +125,8 @@ enum BookKeeperError: Error, LocalizedError {
     case base64DecodingFailed
     case compressionFailed(String)
     case archiveFailed(String)
+    case noStepsRecorded
+    case notRecordingHeist
 }
 ```
 
@@ -242,15 +259,15 @@ let bookKeeper = TheBookKeeper()
 
 ### Commands
 
-Five local-only commands dispatch to TheBookKeeper without sending anything to the iOS device:
+Four local-only commands dispatch to TheBookKeeper without sending anything to the iOS device. `play_heist` is local-file driven, but executes recorded steps against the connected iOS app:
 
 | Command | Enum case | Behavior |
 |---------|-----------|----------|
 | `get_session_log` | `.getSessionLog` | Returns the current `SessionManifest` as a `.sessionLog` response |
-| `archive_session` | `.archiveSession` | Closes and archives the session, returns `.archiveResult` with the archive path |
+| `archive_session` | `.archiveSession` | Auto-closes an active session (if needed), then archives it and returns `.archiveResult` with the archive path |
 | `start_heist` | `.startHeist` | Begins heist recording for the current session (auto-starts a session if needed) |
 | `stop_heist` | `.stopHeist` | Stops heist recording and writes the `.heist` file to the specified output path |
-| `play_heist` | `.playHeist` | Reads a `.heist` file and replays steps sequentially via `execute(request:)`. CLI supports `--junit <path>` to write a JUnit XML report |
+| `play_heist` | `.playHeist` | Reads a `.heist` file, then replays steps sequentially via `execute(request:)` against the connected app. CLI supports `--junit <path>` to write a JUnit XML report |
 
 All are in the no-connection-required guard alongside `get_session_state`, `list_devices`, `connect`, and `list_targets`.
 
@@ -268,16 +285,18 @@ All implement `humanFormatted()`, `compactFormatted()`, and `jsonDict()`.
 
 ### Logging integration
 
-TheBookKeeper's API accepts `String` command names at the boundary — it has no dependency on `TheFence.Command` or `FenceResponse`. TheFence passes `command.rawValue` when calling `logCommand`, `writeScreenshot`, `writeRecording`, and `recordHeistEvidence`. This keeps TheBookKeeper independently testable.
+TheBookKeeper's logging and artifact APIs take `TheFence.Command` directly at the boundary (not a raw string), and convert to `command.rawValue` internally when constructing artifact filenames and JSONL entries. That keeps the typed command surface the dominant currency inside the process while still writing stable string identifiers on disk. TheBookKeeper does not depend on `FenceResponse` — TheFence is the only type that translates responses into the status/artifact/error fields passed to `logResponse`.
 
 TheFence's `execute(request:)` wraps every dispatch with `logCommand` (before) and `logResponse` (after), including timing in milliseconds. Errors that throw from dispatch are also logged before re-throwing. Both calls use `do/catch` with `os.log` warnings so logging failures never break command execution. The `requestId` generated in `execute()` is threaded into handlers via `_requestId` in the args dict, ensuring session log entries and artifact writes share the same correlation ID. When no session is active (`.idle` phase), both calls silently no-op.
 
 ### File write delegation
 
-TheFence handlers `handleGetScreen` and `handleStopRecording` delegate file writes to TheBookKeeper:
-- **Explicit `--output` path**: delegates to `bookKeeper.writeToPath`, which validates path safety (rejects `..` components). `BookKeeperError.unsafePath` is caught and converted to `.error()` for the caller.
-- **Active session, no explicit path**: auto-persists to the session directory via `bookKeeper.writeScreenshot`/`writeRecording`, which tracks the artifact in the manifest with sequence-numbered filenames and metadata. Returns a `.screenshot`/`.recording` response with the file path.
-- **No session, no explicit path**: returns raw base64 data over the wire (unchanged behavior).
+TheFence handlers `handleGetScreen` and `handleStopRecording` delegate file writes to TheBookKeeper via the single orchestration entry point `writeArtifactIfSinkAvailable(base64Data:outputPath:requestId:command:metadata:)`:
+- **Explicit `--output` path**: routes to `writeToPath`, which validates path safety (rejects `..` components). `BookKeeperError.unsafePath` is caught and converted to `.error()` for the caller.
+- **Active session, no explicit path**: auto-persists to the session directory via `writeScreenshot`/`writeRecording`, which tracks the artifact in the manifest with sequence-numbered filenames and metadata. Returns a `.screenshot`/`.recording` response with the file path.
+- **No session, no explicit path**: `writeArtifactIfSinkAvailable` returns `nil`, and the caller returns raw base64 data over the wire (unchanged behavior).
+
+The `ArtifactMetadata` enum (`.screenshot(ScreenshotMetadata) | .recording(RecordingMetadata)`) routes the request to the correct typed write path.
 
 ## CLI Commands
 
@@ -356,26 +375,35 @@ MP4 (H.264) is already compressed. Gzipping an MP4 saves <1%.
 
 ## Tests
 
-34 tests in `TheBookKeeperTests.swift` plus additional heist-specific tests in `BookKeeperHeistTests.swift`, using real filesystem I/O against a temp directory that is created in `setUp` and deleted in `tearDown`.
+Real filesystem I/O against a temp directory created in `setUp` and deleted in `tearDown`. Split across two files:
 
-| Group | Tests | What they verify |
-|-------|-------|-----------------|
-| Session phase | 14 | idle→active→closing→closed→archived transitions, invalid transitions throw, new session from closed/archived, directory/log file creation, path traversal/slash rejection in identifiers |
-| Session log | 6 | JSONL line format, command/response fields, error count, command count, binary data exclusion, silent no-op when idle |
-| Manifest | 2 | Starts empty with zero counts, Codable round-trip equality |
-| Path validation | 5 | `..` rejection, empty path, simple relative, absolute, embedded traversal |
-| Artifact storage | 7 | Screenshot/recording file creation, manifest updates, sequence numbering, base64 failure, `writeToPath` traversal guard, `writeToPath` success |
+- `TheBookKeeperTests.swift` — session lifecycle, logging, manifest, path validation, artifact storage, orchestration via `writeArtifactIfSinkAvailable`.
+- `BookKeeperHeistTests.swift` — heist recording/playback, minimal matcher construction, heist file I/O, abandoned-session recovery.
 
-TheFenceTests also updated: command count assertion (36→38), new raw value entries for `get_session_log` and `archive_session`.
+| Group | What they verify |
+|-------|-----------------|
+| Session phase | idle→active→closing→closed→archived transitions, invalid transitions throw, new session from closed/archived, directory/log file creation, path traversal/slash rejection in identifiers |
+| Session log | JSONL line format, command/response fields, error/command count, binary data exclusion, silent no-op when idle |
+| Manifest | starts empty with zero counts, Codable round-trip equality |
+| Path validation | `..` rejection, empty path, simple relative, absolute, embedded traversal |
+| Artifact storage | screenshot/recording file creation, manifest updates, sequence numbering, base64 failure, `writeToPath` traversal guard, `writeToPath` success, `archiveSession(deleteSource: true)` deletes the source directory, orchestration routes for all three sinks |
+| Heist recording | start/stop lifecycle, excluded commands, error skipping, coordinate-only flagging, binary stripping, interface cache resolution |
+| Minimal matcher | identifier-first, label+traits fallback, value never used, state traits filtered, ambiguity → ordinal |
+| Heist file I/O | round-trip write/read preserves version, app, steps; malformed JSONL line is logged and skipped, not fatal |
+| Recovery | abandoned session compressed with recovery manifest, clean sessions skipped, heist evidence preserved, corrupt manifest regenerated, empty base directory no-op |
 
 ## File Inventory
 
 | File | Purpose |
 |------|---------|
-| `ButtonHeist/Sources/TheButtonHeist/TheBookKeeper.swift` | State machine, session lifecycle, artifact storage, path validation, public API |
-| `ButtonHeist/Sources/TheButtonHeist/TheBookKeeper+Logging.swift` | JSONL log writing, binary data exclusion, command/response serialization |
-| `ButtonHeist/Sources/TheButtonHeist/TheBookKeeper+Compression.swift` | `/usr/bin/gzip` for logs, `/usr/bin/tar czf` for archives |
-| `ButtonHeist/Sources/TheButtonHeist/SessionManifest.swift` | `SessionManifest`, `ArtifactEntry`, `ArtifactType`, `ScreenshotMetadata`, `RecordingMetadata`, `ResponseStatus` |
-| `ButtonHeist/Tests/ButtonHeistTests/TheBookKeeperTests.swift` | 34 unit tests |
+| `ButtonHeist/Sources/TheButtonHeist/TheBookKeeper/TheBookKeeper.swift` | State machine, session lifecycle, artifact storage, path validation, heist recording, recovery, public API |
+| `ButtonHeist/Sources/TheButtonHeist/TheBookKeeper/TheBookKeeper+Logging.swift` | JSONL log writing, binary data exclusion, command/response serialization |
+| `ButtonHeist/Sources/TheButtonHeist/TheBookKeeper/TheBookKeeper+Compression.swift` | `/usr/bin/gzip` for logs, `/usr/bin/tar czf` for archives |
+| `ButtonHeist/Sources/TheButtonHeist/TheBookKeeper/SessionManifest.swift` | `SessionManifest`, `ArtifactEntry`, `ArtifactType`, `ScreenshotMetadata`, `RecordingMetadata`, `ResponseStatus`, `SessionFormatVersion` |
+| `ButtonHeist/Sources/TheButtonHeist/TheBookKeeper/PlaybackFailure.swift` | `PlaybackFailure` enum with `.fenceError`, `.actionFailed`, `.thrown` cases for heist playback diagnostics |
+| `ButtonHeist/Sources/TheButtonHeist/TheBookKeeper/README.md` | In-module reading-order guide |
+| `ButtonHeist/Sources/TheButtonHeist/Support/String+PathValidation.swift` | `validatedOutputURL()` — the single path-safety check consumed by `validateOutputPath` |
+| `ButtonHeist/Tests/ButtonHeistTests/TheBookKeeperTests.swift` | Session lifecycle, logging, manifest, path, artifact storage tests |
+| `ButtonHeist/Tests/ButtonHeistTests/BookKeeperHeistTests.swift` | Heist recording/playback, minimal matcher, recovery tests |
 | `ButtonHeistCLI/Sources/Commands/SessionLogCommand.swift` | CLI: `buttonheist session-log` |
 | `ButtonHeistCLI/Sources/Commands/ArchiveSessionCommand.swift` | CLI: `buttonheist archive-session` |

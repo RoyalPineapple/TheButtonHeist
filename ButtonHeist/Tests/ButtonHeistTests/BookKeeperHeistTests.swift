@@ -313,6 +313,21 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testMinimalMatcherSkipsUUIDIdentifiers() async {
+        let bookKeeper = makeBookKeeper()
+        let uuidIdentifier = "SwiftUI.550E8400-E29B-41D4-A716-446655440000.42"
+        let target = makeElement(heistId: "el1", label: "Proceed", identifier: uuidIdentifier, traits: [.button])
+        let other = makeElement(heistId: "el2", label: "Cancel", traits: [.button])
+
+        let (matcher, ordinal) = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, other])
+
+        XCTAssertNil(matcher.identifier, "Runtime UUID identifiers should be ignored for playback stability")
+        XCTAssertEqual(matcher.label, "Proceed")
+        XCTAssertEqual(matcher.traits, [.button])
+        XCTAssertNil(ordinal)
+    }
+
+    @ButtonHeistActor
     func testMinimalMatcherNeverUsesValue() async {
         let bookKeeper = makeBookKeeper()
         let target = makeElement(heistId: "el1", label: "Slider", value: "50%", traits: [.adjustable])
@@ -454,6 +469,127 @@ final class BookKeeperHeistTests: XCTestCase {
         let bookKeeper = makeBookKeeper()
         let recovered = bookKeeper.recoverAbandonedSessions()
         XCTAssertTrue(recovered.isEmpty)
+    }
+
+    @ButtonHeistActor
+    func testRecoverWithCorruptManifestRegeneratesIt() async throws {
+        let sessionDir = tempDirectory.appendingPathComponent("corrupt-manifest-2026-04-03-120000")
+        try FileManager.default.createDirectory(at: sessionDir, withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: sessionDir.appendingPathComponent("session.jsonl"))
+        // Write a manifest that's not valid JSON for SessionManifest
+        try Data("not a valid manifest".utf8).write(to: sessionDir.appendingPathComponent("manifest.json"))
+
+        let bookKeeper = makeBookKeeper()
+        let recovered = bookKeeper.recoverAbandonedSessions()
+
+        XCTAssertEqual(recovered.count, 1)
+        XCTAssertEqual(recovered[0].sessionId, "corrupt-manifest-2026-04-03-120000")
+
+        // Recovery should have written a fresh, parseable manifest with endTime
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let manifestData = try Data(contentsOf: sessionDir.appendingPathComponent("manifest.json"))
+        let manifest = try decoder.decode(SessionManifest.self, from: manifestData)
+        XCTAssertNotNil(manifest.endTime)
+        XCTAssertEqual(manifest.sessionId, "corrupt-manifest-2026-04-03-120000")
+    }
+
+    @ButtonHeistActor
+    func testRecoverSkipsSessionWhenCompressionFails() async throws {
+        // `chmod 555` is a no-op for uid 0; gzip would succeed under root and the
+        // test would assert against the wrong branch.
+        try XCTSkipIf(getuid() == 0, "chmod write-deny only takes effect for non-root users")
+
+        let sessionDir = tempDirectory.appendingPathComponent("gzip-fail-2026-04-03-120000")
+        try FileManager.default.createDirectory(at: sessionDir, withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: sessionDir.appendingPathComponent("session.jsonl"))
+
+        // Remove write permissions so gzip cannot create session.jsonl.gz.
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: Int16(0o555))],
+            ofItemAtPath: sessionDir.path
+        )
+        defer {
+            try? FileManager.default.setAttributes(
+                [.posixPermissions: NSNumber(value: Int16(0o755))],
+                ofItemAtPath: sessionDir.path
+            )
+        }
+
+        let bookKeeper = makeBookKeeper()
+        let recovered = bookKeeper.recoverAbandonedSessions()
+
+        XCTAssertTrue(recovered.isEmpty)
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: sessionDir.appendingPathComponent("session.jsonl").path
+        ))
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: sessionDir.appendingPathComponent("session.jsonl.gz").path
+        ))
+    }
+
+    // MARK: - Malformed evidence resilience
+
+    @ButtonHeistActor
+    func testStopHeistSkipsMalformedEvidenceLines() async throws {
+        let bookKeeper = makeBookKeeper()
+        try bookKeeper.beginSession(identifier: "malformed-evidence")
+        try bookKeeper.startHeistRecording(app: "com.example.app")
+
+        // Write a good step through the normal path
+        bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Go"])
+
+        // Inject a malformed line through the BookKeeper's own file handle. A second
+        // FileHandle would track its own offset, and the next recorded step would
+        // overwrite the malformed bytes — then there'd be nothing for the skip path
+        // to exercise.
+        guard case .active(let session) = bookKeeper.phase,
+              let recording = session.heistRecording else {
+            return XCTFail("Expected active heist recording")
+        }
+        recording.fileHandle.write(Data("this-is-not-json\n".utf8))
+
+        // Record another good step via the book-keeper handle
+        bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Done"])
+
+        // Sanity-check that the malformed bytes survived to disk, so the skip path
+        // is actually exercised when stopHeistRecording reads the file.
+        let onDisk = try String(contentsOf: recording.filePath, encoding: .utf8)
+        XCTAssertTrue(
+            onDisk.contains("this-is-not-json"),
+            "Malformed line must still be present when stopHeistRecording reads the file"
+        )
+
+        let heist = try bookKeeper.stopHeistRecording()
+        XCTAssertEqual(heist.steps.count, 2, "Malformed line should be skipped, not fail the whole stop")
+        XCTAssertEqual(heist.steps[0].target?.label, "Go")
+        XCTAssertEqual(heist.steps[1].target?.label, "Done")
+    }
+
+    // MARK: - Close session with open heist recording
+
+    @ButtonHeistActor
+    func testCloseSessionWithActiveHeistClosesHandle() async throws {
+        let bookKeeper = makeBookKeeper()
+        try bookKeeper.beginSession(identifier: "close-with-heist")
+        try bookKeeper.startHeistRecording(app: "com.example.app")
+        bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Go"])
+
+        // Locate the heist file before the phase advances
+        guard case .active(let activeSession) = bookKeeper.phase else {
+            return XCTFail("Expected active phase")
+        }
+        let heistPath = activeSession.directory.appendingPathComponent("heist.jsonl")
+
+        // closeSession should not throw even though the heist is still "recording"
+        try await bookKeeper.closeSession()
+
+        // heist.jsonl must still exist on disk — its evidence is preserved
+        XCTAssertTrue(FileManager.default.fileExists(atPath: heistPath.path))
+        // Phase must advance past active — file handle is closed as part of closeSession
+        if case .active = bookKeeper.phase {
+            XCTFail("closeSession should transition out of active even with an open heist recording")
+        }
     }
 
     // MARK: - Helpers

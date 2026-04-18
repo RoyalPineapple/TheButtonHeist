@@ -611,6 +611,9 @@ extension TheFence {
             return .sessionLog(manifest: manifest)
         case .archiveSession:
             let deleteSource = args.boolean("delete_source") ?? false
+            if case .active = bookKeeper.phase {
+                try await bookKeeper.closeSession()
+            }
             let (archiveURL, manifest) = try await bookKeeper.archiveSession(deleteSource: deleteSource)
             return .archiveResult(path: archiveURL.path, manifest: manifest)
         case .startHeist, .stopHeist, .playHeist:
