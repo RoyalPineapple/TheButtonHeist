@@ -91,13 +91,11 @@ extension TheBookKeeper {
             return array.compactMap { jsonSafeValue($0) }
         }
         if let dict = value as? [String: Any] {
-            var sanitized: [String: Any] = [:]
-            for (nestedKey, nestedValue) in dict {
-                if let nested = jsonSafeValue(nestedValue, key: nestedKey) {
-                    sanitized[nestedKey] = nested
+            return dict.reduce(into: [String: Any]()) { result, pair in
+                if let nested = jsonSafeValue(pair.value, key: pair.key) {
+                    result[pair.key] = nested
                 }
             }
-            return sanitized
         }
         let fallback = String(describing: value)
         if fallback.count > maxLoggedStringLength {
