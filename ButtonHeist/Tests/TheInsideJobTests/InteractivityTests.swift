@@ -99,7 +99,7 @@ final class InteractivityTests: XCTestCase {
         switch result {
         case .blocked(let reason):
             XCTAssertTrue(reason.contains("disabled"))
-        case .interactive(_):
+        case .interactive:
             XCTFail("Expected blocked for notEnabled trait")
         }
     }
@@ -108,7 +108,7 @@ final class InteractivityTests: XCTestCase {
         let element = makeElement(traits: .button)
         let result = TheStash.Interactivity.checkInteractivity(element)
         switch result {
-        case .interactive(_):
+        case .interactive:
             break
         case .blocked(let reason):
             XCTFail("Expected interactive, got blocked: \(reason)")
@@ -144,7 +144,7 @@ final class InteractivityTests: XCTestCase {
         switch result {
         case .blocked:
             break
-        case .interactive(_):
+        case .interactive:
             XCTFail("Expected blocked — notEnabled should override button trait")
         }
     }
