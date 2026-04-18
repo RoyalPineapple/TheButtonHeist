@@ -259,15 +259,15 @@ let bookKeeper = TheBookKeeper()
 
 ### Commands
 
-Five local-only commands dispatch to TheBookKeeper without sending anything to the iOS device:
+Four local-only commands dispatch to TheBookKeeper without sending anything to the iOS device. `play_heist` is local-file driven, but executes recorded steps against the connected iOS app:
 
 | Command | Enum case | Behavior |
 |---------|-----------|----------|
 | `get_session_log` | `.getSessionLog` | Returns the current `SessionManifest` as a `.sessionLog` response |
-| `archive_session` | `.archiveSession` | Closes and archives the session, returns `.archiveResult` with the archive path |
+| `archive_session` | `.archiveSession` | Auto-closes an active session (if needed), then archives it and returns `.archiveResult` with the archive path |
 | `start_heist` | `.startHeist` | Begins heist recording for the current session (auto-starts a session if needed) |
 | `stop_heist` | `.stopHeist` | Stops heist recording and writes the `.heist` file to the specified output path |
-| `play_heist` | `.playHeist` | Reads a `.heist` file and replays steps sequentially via `execute(request:)`. CLI supports `--junit <path>` to write a JUnit XML report |
+| `play_heist` | `.playHeist` | Reads a `.heist` file, then replays steps sequentially via `execute(request:)` against the connected app. CLI supports `--junit <path>` to write a JUnit XML report |
 
 All are in the no-connection-required guard alongside `get_session_state`, `list_devices`, `connect`, and `list_targets`.
 

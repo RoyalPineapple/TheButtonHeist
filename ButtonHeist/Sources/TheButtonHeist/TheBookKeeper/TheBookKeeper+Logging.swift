@@ -6,6 +6,7 @@ extension TheBookKeeper {
 
     /// Keys that carry binary data and should be excluded from session logs.
     private static let binaryKeys: Set<String> = ["pngData", "videoData"]
+    private static let maxLoggedStringLength = 1000
 
     /// Build a sanitized log entry for an incoming command.
     func buildCommandLogEntry(
@@ -15,14 +16,10 @@ extension TheBookKeeper {
     ) -> [String: Any] {
         var sanitizedArgs: [String: Any] = [:]
         for (key, value) in arguments where key != "command" && !key.hasPrefix("_") {
-            if Self.binaryKeys.contains(key) {
+            guard let sanitized = Self.jsonSafeValue(value, key: key) else {
                 continue
             }
-            if let stringValue = value as? String, stringValue.count > 1000 {
-                sanitizedArgs[key] = "<\(stringValue.count) chars>"
-                continue
-            }
-            sanitizedArgs[key] = Self.jsonSafeValue(value)
+            sanitizedArgs[key] = sanitized
         }
 
         var entry: [String: Any] = [
@@ -77,16 +74,35 @@ extension TheBookKeeper {
         return formatter.string(from: Date())
     }
 
-    private static func jsonSafeValue(_ value: Any) -> Any {
-        if value is String || value is Int || value is Double || value is Bool {
+    private static func jsonSafeValue(_ value: Any, key: String? = nil) -> Any? {
+        if let key, binaryKeys.contains(key) {
+            return nil
+        }
+        if let string = value as? String {
+            if string.count > maxLoggedStringLength {
+                return "<\(string.count) chars>"
+            }
+            return string
+        }
+        if value is Int || value is Double || value is Bool {
             return value
         }
         if let array = value as? [Any] {
-            return array.map { jsonSafeValue($0) }
+            return array.compactMap { jsonSafeValue($0) }
         }
         if let dict = value as? [String: Any] {
-            return dict.mapValues { jsonSafeValue($0) }
+            var sanitized: [String: Any] = [:]
+            for (nestedKey, nestedValue) in dict {
+                if let nested = jsonSafeValue(nestedValue, key: nestedKey) {
+                    sanitized[nestedKey] = nested
+                }
+            }
+            return sanitized
         }
-        return String(describing: value)
+        let fallback = String(describing: value)
+        if fallback.count > maxLoggedStringLength {
+            return "<\(fallback.count) chars>"
+        }
+        return fallback
     }
 }

@@ -572,6 +572,28 @@ final class TheFenceTests: XCTestCase {
         }
     }
 
+    @ButtonHeistActor
+    func testExecuteArchiveSessionAutoClosesActiveSession() async throws {
+        let fence = TheFence()
+        try fence.bookKeeper.beginSession(identifier: "archive-auto-close")
+        try fence.bookKeeper.logCommand(requestId: "r1", command: .status, arguments: [:])
+
+        let response = try await fence.execute(request: ["command": "archive_session"])
+
+        guard case .archiveResult(let path, let manifest) = response else {
+            return XCTFail("Expected archiveResult response, got \(response)")
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: path))
+        XCTAssertEqual(manifest.commandCount, 1)
+        if case .archived = fence.bookKeeper.phase {
+            // expected
+        } else {
+            XCTFail("Expected archived phase after archive_session, got \(fence.bookKeeper.phase)")
+        }
+
+        try? FileManager.default.removeItem(atPath: path)
+    }
+
     // MARK: - Wait Method Tests
 
     @ButtonHeistActor

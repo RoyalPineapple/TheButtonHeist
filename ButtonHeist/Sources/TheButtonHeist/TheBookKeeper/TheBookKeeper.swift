@@ -199,7 +199,9 @@ public final class TheBookKeeper {
                   !fileManager.fileExists(atPath: compressedLog.path) else { return nil }
 
             let sessionId = directoryURL.lastPathComponent
-            let heistInfo = recoverSession(directory: directoryURL, sessionId: sessionId)
+            guard let heistInfo = recoverSession(directory: directoryURL, sessionId: sessionId) else {
+                return nil
+            }
             return RecoveredSession(
                 sessionId: sessionId,
                 directory: directoryURL,
@@ -212,7 +214,7 @@ public final class TheBookKeeper {
     private func recoverSession(
         directory: URL,
         sessionId: String
-    ) -> (evidenceCount: Int?, filePath: URL?) {
+    ) -> (evidenceCount: Int?, filePath: URL?)? {
         let fileManager = FileManager.default
         let manifestPath = directory.appendingPathComponent("manifest.json")
 
@@ -246,6 +248,7 @@ public final class TheBookKeeper {
 
         // Compress the raw log
         let rawLog = directory.appendingPathComponent("session.jsonl")
+        let compressedLog = directory.appendingPathComponent("session.jsonl.gz")
         let gzipProcess = Process()
         gzipProcess.executableURL = URL(fileURLWithPath: "/usr/bin/gzip")
         gzipProcess.arguments = [rawLog.path]
@@ -255,8 +258,21 @@ public final class TheBookKeeper {
             try gzipProcess.run()
         } catch {
             logger.warning("Failed to compress session log for \(sessionId): \(error.localizedDescription)")
+            return nil
         }
         gzipProcess.waitUntilExit()
+        guard gzipProcess.terminationStatus == 0 else {
+            logger.warning(
+                "Failed to recover abandoned session \(sessionId): gzip exited with status \(gzipProcess.terminationStatus)"
+            )
+            return nil
+        }
+        guard fileManager.fileExists(atPath: compressedLog.path) else {
+            logger.warning(
+                "Failed to recover abandoned session \(sessionId): expected compressed log missing at \(compressedLog.path)"
+            )
+            return nil
+        }
 
         // Check for abandoned heist evidence
         let heistLog = directory.appendingPathComponent("heist.jsonl")

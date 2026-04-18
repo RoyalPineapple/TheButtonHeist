@@ -289,6 +289,69 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testNestedLongStringIsTruncatedInLog() async throws {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        try bookKeeper.beginSession(identifier: "test-nested-truncate")
+        let longString = String(repeating: "x", count: 1500)
+
+        try bookKeeper.logCommand(
+            requestId: "r1",
+            command: .activate,
+            arguments: [
+                "command": "activate",
+                "payload": [
+                    "nested": longString,
+                ],
+            ]
+        )
+
+        guard case .active(let session) = bookKeeper.phase else {
+            return XCTFail("Expected active phase")
+        }
+        let logPath = session.directory.appendingPathComponent("session.jsonl")
+        let content = try String(contentsOf: logPath, encoding: .utf8)
+        let lines = content.split(separator: "\n")
+        let json = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
+        let args = json?["args"] as? [String: Any]
+        let payload = args?["payload"] as? [String: Any]
+
+        XCTAssertEqual(payload?["nested"] as? String, "<1500 chars>")
+    }
+
+    @ButtonHeistActor
+    func testNestedBinaryDataExcludedFromLog() async throws {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        try bookKeeper.beginSession(identifier: "test-nested-binary")
+
+        try bookKeeper.logCommand(
+            requestId: "r1",
+            command: .activate,
+            arguments: [
+                "command": "activate",
+                "payload": [
+                    "pngData": "AAAA",
+                    "videoData": "BBBB",
+                    "label": "Submit",
+                ],
+            ]
+        )
+
+        guard case .active(let session) = bookKeeper.phase else {
+            return XCTFail("Expected active phase")
+        }
+        let logPath = session.directory.appendingPathComponent("session.jsonl")
+        let content = try String(contentsOf: logPath, encoding: .utf8)
+        let lines = content.split(separator: "\n")
+        let json = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
+        let args = json?["args"] as? [String: Any]
+        let payload = args?["payload"] as? [String: Any]
+
+        XCTAssertNil(payload?["pngData"])
+        XCTAssertNil(payload?["videoData"])
+        XCTAssertEqual(payload?["label"] as? String, "Submit")
+    }
+
+    @ButtonHeistActor
     func testLogCommandSilentWhenIdle() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         // Should not throw — just silently does nothing

@@ -313,6 +313,21 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testMinimalMatcherSkipsUUIDIdentifiers() async {
+        let bookKeeper = makeBookKeeper()
+        let uuidIdentifier = "SwiftUI.550E8400-E29B-41D4-A716-446655440000.42"
+        let target = makeElement(heistId: "el1", label: "Proceed", identifier: uuidIdentifier, traits: [.button])
+        let other = makeElement(heistId: "el2", label: "Cancel", traits: [.button])
+
+        let (matcher, ordinal) = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, other])
+
+        XCTAssertNil(matcher.identifier, "Runtime UUID identifiers should be ignored for playback stability")
+        XCTAssertEqual(matcher.label, "Proceed")
+        XCTAssertEqual(matcher.traits, [.button])
+        XCTAssertNil(ordinal)
+    }
+
+    @ButtonHeistActor
     func testMinimalMatcherNeverUsesValue() async {
         let bookKeeper = makeBookKeeper()
         let target = makeElement(heistId: "el1", label: "Slider", value: "50%", traits: [.adjustable])
@@ -477,6 +492,36 @@ final class BookKeeperHeistTests: XCTestCase {
         let manifest = try decoder.decode(SessionManifest.self, from: manifestData)
         XCTAssertNotNil(manifest.endTime)
         XCTAssertEqual(manifest.sessionId, "corrupt-manifest-2026-04-03-120000")
+    }
+
+    @ButtonHeistActor
+    func testRecoverSkipsSessionWhenCompressionFails() async throws {
+        let sessionDir = tempDirectory.appendingPathComponent("gzip-fail-2026-04-03-120000")
+        try FileManager.default.createDirectory(at: sessionDir, withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: sessionDir.appendingPathComponent("session.jsonl"))
+
+        // Remove write permissions so gzip cannot create session.jsonl.gz.
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: Int16(0o555))],
+            ofItemAtPath: sessionDir.path
+        )
+        defer {
+            try? FileManager.default.setAttributes(
+                [.posixPermissions: NSNumber(value: Int16(0o755))],
+                ofItemAtPath: sessionDir.path
+            )
+        }
+
+        let bookKeeper = makeBookKeeper()
+        let recovered = bookKeeper.recoverAbandonedSessions()
+
+        XCTAssertTrue(recovered.isEmpty)
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: sessionDir.appendingPathComponent("session.jsonl").path
+        ))
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: sessionDir.appendingPathComponent("session.jsonl.gz").path
+        ))
     }
 
     // MARK: - Malformed evidence resilience
