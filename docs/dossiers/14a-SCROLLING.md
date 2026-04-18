@@ -62,15 +62,13 @@ A sequential coarse-then-fine flow:
 
 **Step 1 — Coarse jump (off-screen heistId only).** If the target is a `.heistId` that is not in `onScreen` but was discovered by a prior full scan (`presentedHeistIds` + `contentSpaceOrigin` + live `scrollView`):
 
-1. Calls `scrollTargetOffset(for:in:)` to compute a clamped content offset that centers the element in the viewport
-2. Sets `scrollView.setContentOffset(targetOffset, animated: false)` directly
-3. Waits for settle via `yieldFrames(3)`, then `refresh()`
+1. Calls `stash.jumpToRecordedPosition(_:)` — the stash internally computes the clamped, centered content offset via `TheStash.scrollTargetOffset(for:in:)` and sets it on the owning scroll view. Returns the previous offset so callers can revert.
+2. Waits for settle via `yieldFrames(3)`, then `refresh()`
 
-**Step 2 — Fine-tune (any target).** Resolves the target to a live `NSObject` and checks whether the frame needs adjustment:
+**Step 2 — Fine-tune (any target).** Asks the stash for live geometry via `stash.liveGeometry(for:)`, which promotes the weak NSObject ref to strong internally and returns a value-typed `(frame, activationPoint, scrollView)` snapshot:
 
-1. Reads `object.accessibilityFrame` and checks `UIScreen.main.bounds.contains(frame)`
-2. Uses `screenElement.scrollView` to find the nearest `UIScrollView`
-3. Calls `scrollToMakeVisible(_:in:)` — adjusts `contentOffset` by the minimum amount needed to bring the element fully within the scroll view's visible rect
+1. Checks `UIScreen.main.bounds.contains(frame)` and comfort-zone containment
+2. Calls `scrollToMakeVisible(_:in:)` — adjusts `contentOffset` by the minimum amount needed to bring the element fully within the scroll view's visible rect
 4. Waits for the scroll to settle via `yieldFrames(3)` — CATransaction flush + Task.yield per frame
 5. Refreshes the element cache via `refresh()` so subsequent reads reflect post-scroll positions
 
@@ -81,7 +79,7 @@ flowchart TD
     HasTarget -->|no| Execute["Execute interaction"]
     HasTarget -->|yes| Coarse{"heistId off-screen<br/>+ contentSpaceOrigin<br/>+ scrollView alive?"}
 
-    Coarse -->|yes| Jump["scrollTargetOffset(for:in:)<br/>→ setContentOffset (centered, clamped)"]
+    Coarse -->|yes| Jump["stash.jumpToRecordedPosition(_:)<br/>→ setContentOffset (centered, clamped)"]
     Jump --> Settle1["yieldFrames(3) + refresh()"]
     Settle1 --> Fine
 

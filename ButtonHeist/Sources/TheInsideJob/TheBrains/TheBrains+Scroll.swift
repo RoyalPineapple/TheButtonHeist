@@ -200,10 +200,7 @@ extension TheBrains {
         // Known element with recorded position — one-shot jump
         if case .heistId(let heistId) = elementTarget,
            let entry = stash.registry.elements[heistId],
-           let origin = entry.contentSpaceOrigin,
-           let scrollView = entry.scrollView {
-            let targetOffset = Self.scrollTargetOffset(for: origin, in: scrollView)
-            scrollView.setContentOffset(targetOffset, animated: true)
+           stash.jumpToRecordedPosition(entry) != nil {
             await tripwire.yieldRealFrames(20)
             refresh()
             if let found = stash.resolveFirstMatch(elementTarget) {
@@ -241,18 +238,14 @@ extension TheBrains {
         // If we have a recorded position, try the one-shot path first
         if case .heistId(let heistId) = searchTarget,
            let entry = stash.registry.elements[heistId],
-           let origin = entry.contentSpaceOrigin,
-           let scrollView = entry.scrollView {
-            let savedOffset = scrollView.contentOffset
-            let targetOffset = Self.scrollTargetOffset(for: origin, in: scrollView)
-            scrollView.setContentOffset(targetOffset, animated: true)
+           let savedOffset = stash.jumpToRecordedPosition(entry) {
             await tripwire.yieldRealFrames(20)
             refresh()
             if let found = stash.resolveFirstMatch(searchTarget),
                let result = await searchFineTuneAndResolve(found, searchTarget: searchTarget, scrollCount: 1) {
                 return result
             }
-            scrollView.setContentOffset(savedOffset, animated: true)
+            stash.restoreScrollPosition(entry, to: savedOffset)
             await tripwire.yieldRealFrames(20)
             refresh()
         }
@@ -360,23 +353,16 @@ extension TheBrains {
 
     func ensureOnScreen(for target: ElementTarget) async {
         if let entry = offViewportRegistryEntry(for: target),
-           let origin = entry.contentSpaceOrigin,
-           let scrollView = entry.scrollView {
-            let targetOffset = Self.scrollTargetOffset(for: origin, in: scrollView)
-            scrollView.setContentOffset(targetOffset, animated: true)
+           stash.jumpToRecordedPosition(entry) != nil {
             _ = await tripwire.waitForAllClear(timeout: 1.0)
             refresh()
         }
 
         guard let resolved = stash.resolveTarget(target).resolved,
-              let object = resolved.screenElement.object else { return }
-        let frame = object.accessibilityFrame
-        let activationPoint = object.accessibilityActivationPoint
-        guard !frame.isNull, !frame.isEmpty,
-              !Self.interactionComfortZone.contains(activationPoint),
-              let scrollView = resolved.screenElement.scrollView else { return }
+              let geometry = stash.liveGeometry(for: resolved.screenElement),
+              !Self.interactionComfortZone.contains(geometry.activationPoint) else { return }
         if safecracker.scrollToMakeVisible(
-            frame, in: scrollView,
+            geometry.frame, in: geometry.scrollView,
             comfortMarginFraction: Self.comfortMarginFraction
         ) {
             await tripwire.yieldFrames(3)
@@ -387,15 +373,11 @@ extension TheBrains {
     func ensureFirstResponderOnScreen() async {
         guard let heistId = stash.registry.firstResponderHeistId,
               let entry = stash.registry.elements[heistId],
-              let object = entry.object else { return }
-        let frame = object.accessibilityFrame
-        guard !frame.isNull, !frame.isEmpty else { return }
-        guard !UIScreen.main.bounds.contains(frame) else { return }
-        let activationPoint = object.accessibilityActivationPoint
-        guard !Self.interactionComfortZone.contains(activationPoint) else { return }
-        guard let scrollView = entry.scrollView else { return }
+              let geometry = stash.liveGeometry(for: entry),
+              !UIScreen.main.bounds.contains(geometry.frame),
+              !Self.interactionComfortZone.contains(geometry.activationPoint) else { return }
         if safecracker.scrollToMakeVisible(
-            frame, in: scrollView,
+            geometry.frame, in: geometry.scrollView,
             comfortMarginFraction: Self.comfortMarginFraction
         ) {
             await tripwire.yieldFrames(3)
@@ -404,15 +386,11 @@ extension TheBrains {
     }
 
     private func ensureOnScreenSync(_ resolved: TheStash.ResolvedTarget, animated: Bool = true) {
-        guard let object = resolved.screenElement.object else { return }
-        let frame = object.accessibilityFrame
-        let activationPoint = object.accessibilityActivationPoint
-        guard !frame.isNull, !frame.isEmpty else { return }
-        guard !UIScreen.main.bounds.contains(frame) else { return }
-        guard !Self.interactionComfortZone.contains(activationPoint) else { return }
-        guard let scrollView = resolved.screenElement.scrollView else { return }
+        guard let geometry = stash.liveGeometry(for: resolved.screenElement),
+              !UIScreen.main.bounds.contains(geometry.frame),
+              !Self.interactionComfortZone.contains(geometry.activationPoint) else { return }
         _ = safecracker.scrollToMakeVisible(
-            frame, in: scrollView, animated: animated,
+            geometry.frame, in: geometry.scrollView, animated: animated,
             comfortMarginFraction: Self.comfortMarginFraction
         )
     }
@@ -492,21 +470,6 @@ extension TheBrains {
         return uiScrollDirection(for: direction)
     }
 
-    // MARK: - Content-Space Scroll Offset
-
-    static func scrollTargetOffset(for contentOrigin: CGPoint, in scrollView: UIScrollView) -> CGPoint {
-        let visibleSize = scrollView.bounds.size
-        let insets = scrollView.adjustedContentInset
-        let contentSize = scrollView.contentSize
-
-        let maxX = max(contentSize.width + insets.right - visibleSize.width, -insets.left)
-        let maxY = max(contentSize.height + insets.bottom - visibleSize.height, -insets.top)
-
-        let targetX = min(max(contentOrigin.x - visibleSize.width / 2, -insets.left), maxX)
-        let targetY = min(max(contentOrigin.y - visibleSize.height / 2, -insets.top), maxY)
-
-        return CGPoint(x: targetX, y: targetY)
-    }
 }
 
 #endif // DEBUG

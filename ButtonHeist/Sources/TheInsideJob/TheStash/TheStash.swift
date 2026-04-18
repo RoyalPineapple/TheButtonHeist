@@ -153,20 +153,104 @@ final class TheStash {
         return true
     }
 
-    /// Perform a named custom action.
-    func performCustomAction(named name: String, on screenElement: ScreenElement) -> Bool {
-        guard let actions = screenElement.object?.accessibilityCustomActions,
-              let action = actions.first(where: { $0.name == name }) else {
-            return false
+    /// Outcome of a custom-action dispatch.
+    ///
+    /// Lets callers distinguish "view deallocated before dispatch" from
+    /// "view is alive but has no action by that name" without exposing the
+    /// underlying NSObject.
+    enum CustomActionOutcome {
+        case succeeded
+        case deallocated
+        case noSuchAction
+    }
+
+    /// Live geometry derived from the element's backing NSObject.
+    ///
+    /// Value-typed snapshot so callers can make scroll/viewport decisions
+    /// without touching the underlying NSObject. Returned by `liveGeometry(for:)`,
+    /// which promotes the weak ref internally.
+    struct LiveGeometry {
+        let frame: CGRect
+        let activationPoint: CGPoint
+        let scrollView: UIScrollView
+    }
+
+    /// Jump a recorded element into view by setting its owning scroll view's
+    /// content offset to the clamped, centered target derived from the
+    /// recorded `contentSpaceOrigin`.
+    ///
+    /// Returns the scroll view's previous content offset so the caller can
+    /// revert the jump if the recorded position doesn't produce a usable
+    /// match. Returns `nil` if the element has no recorded position, no
+    /// owning scroll view, or the scroll view has deallocated.
+    @discardableResult
+    func jumpToRecordedPosition(_ screenElement: ScreenElement, animated: Bool = true) -> CGPoint? {
+        guard let origin = screenElement.contentSpaceOrigin,
+              let scrollView = screenElement.scrollView else { return nil }
+        let savedOffset = scrollView.contentOffset
+        let targetOffset = Self.scrollTargetOffset(for: origin, in: scrollView)
+        scrollView.setContentOffset(targetOffset, animated: animated)
+        return savedOffset
+    }
+
+    /// Restore the element's owning scroll view to a previously saved offset.
+    /// No-op if the scroll view has deallocated.
+    func restoreScrollPosition(_ screenElement: ScreenElement, to offset: CGPoint, animated: Bool = true) {
+        screenElement.scrollView?.setContentOffset(offset, animated: animated)
+    }
+
+    /// Clamped, centered content offset for a point in scroll-view content space.
+    /// Pure math — exposed for testability, used by `jumpToRecordedPosition`.
+    static func scrollTargetOffset(for contentOrigin: CGPoint, in scrollView: UIScrollView) -> CGPoint {
+        let visibleSize = scrollView.bounds.size
+        let insets = scrollView.adjustedContentInset
+        let contentSize = scrollView.contentSize
+        let maxX = max(contentSize.width + insets.right - visibleSize.width, -insets.left)
+        let maxY = max(contentSize.height + insets.bottom - visibleSize.height, -insets.top)
+        let targetX = min(max(contentOrigin.x - visibleSize.width / 2, -insets.left), maxX)
+        let targetY = min(max(contentOrigin.y - visibleSize.height / 2, -insets.top), maxY)
+        return CGPoint(x: targetX, y: targetY)
+    }
+
+    /// Promote the element's weak object ref to strong, read live geometry,
+    /// and pair it with the owning scroll view.
+    ///
+    /// Returns `nil` if the underlying NSObject has deallocated, the element
+    /// has no owning scroll view, or the accessibility frame is null/empty.
+    /// Keeps all weak→strong handling inside the stash so callers never touch
+    /// the raw NSObject.
+    func liveGeometry(for screenElement: ScreenElement) -> LiveGeometry? {
+        guard let object = screenElement.object,
+              let scrollView = screenElement.scrollView else { return nil }
+        let frame = object.accessibilityFrame
+        guard !frame.isNull, !frame.isEmpty else { return nil }
+        return LiveGeometry(
+            frame: frame,
+            activationPoint: object.accessibilityActivationPoint,
+            scrollView: scrollView
+        )
+    }
+
+    /// Perform a named custom action on the element's live object.
+    ///
+    /// Promotes the weak ref to a local strong ref for the duration of dispatch
+    /// so the view cannot deallocate mid-call. Returns `.deallocated` if the
+    /// view was already gone, `.noSuchAction` if no matching action exists or
+    /// the handler declined, and `.succeeded` otherwise.
+    func performCustomAction(named name: String, on screenElement: ScreenElement) -> CustomActionOutcome {
+        guard let object = screenElement.object else { return .deallocated }
+        guard let action = object.accessibilityCustomActions?
+            .first(where: { $0.name == name }) else {
+            return .noSuchAction
         }
         if let handler = action.actionHandler {
-            return handler(action)
+            return handler(action) ? .succeeded : .noSuchAction
         }
         if let target = action.target {
             _ = (target as AnyObject).perform(action.selector, with: action)
-            return true
+            return .succeeded
         }
-        return false
+        return .noSuchAction
     }
 
     /// Resolve a target to a unique element. Returns `.resolved` on success,

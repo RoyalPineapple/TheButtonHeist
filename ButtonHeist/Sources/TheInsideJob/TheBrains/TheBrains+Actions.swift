@@ -104,15 +104,16 @@ extension TheBrains {
 
     func executeCustomAction(_ target: CustomActionTarget) async -> TheSafecracker.InteractionResult {
         await performElementAction(target: target.elementTarget, method: .customAction) { resolved in
-            guard resolved.screenElement.object != nil else {
+            switch stash.performCustomAction(named: target.actionName, on: resolved.screenElement) {
+            case .deallocated:
                 return .failure(.elementDeallocated, message: "Element deallocated before custom action")
+            case .noSuchAction:
+                return .failure(.customAction, message: "Action '\(target.actionName)' not found")
+            case .succeeded:
+                return TheSafecracker.InteractionResult(
+                    success: true, method: .customAction, message: nil, value: nil
+                )
             }
-            let success = stash.performCustomAction(named: target.actionName, on: resolved.screenElement)
-            return TheSafecracker.InteractionResult(
-                success: success, method: .customAction,
-                message: success ? nil : "Action '\(target.actionName)' not found",
-                value: nil
-            )
         }
     }
 
