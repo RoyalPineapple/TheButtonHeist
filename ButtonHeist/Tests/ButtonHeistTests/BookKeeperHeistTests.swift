@@ -496,6 +496,10 @@ final class BookKeeperHeistTests: XCTestCase {
 
     @ButtonHeistActor
     func testRecoverSkipsSessionWhenCompressionFails() async throws {
+        // `chmod 555` is a no-op for uid 0; gzip would succeed under root and the
+        // test would assert against the wrong branch.
+        try XCTSkipIf(getuid() == 0, "chmod write-deny only takes effect for non-root users")
+
         let sessionDir = tempDirectory.appendingPathComponent("gzip-fail-2026-04-03-120000")
         try FileManager.default.createDirectory(at: sessionDir, withIntermediateDirectories: true)
         try Data("{}".utf8).write(to: sessionDir.appendingPathComponent("session.jsonl"))
@@ -535,18 +539,26 @@ final class BookKeeperHeistTests: XCTestCase {
         // Write a good step through the normal path
         bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Go"])
 
-        // Inject a malformed line directly into the heist.jsonl file
-        guard case .active(let session) = bookKeeper.phase else {
-            return XCTFail("Expected active phase")
+        // Inject a malformed line through the BookKeeper's own file handle. A second
+        // FileHandle would track its own offset, and the next recorded step would
+        // overwrite the malformed bytes — then there'd be nothing for the skip path
+        // to exercise.
+        guard case .active(let session) = bookKeeper.phase,
+              let recording = session.heistRecording else {
+            return XCTFail("Expected active heist recording")
         }
-        let heistPath = session.directory.appendingPathComponent("heist.jsonl")
-        let handle = try FileHandle(forWritingTo: heistPath)
-        handle.seekToEndOfFile()
-        handle.write(Data("this-is-not-json\n".utf8))
-        handle.closeFile()
+        recording.fileHandle.write(Data("this-is-not-json\n".utf8))
 
         // Record another good step via the book-keeper handle
         bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Done"])
+
+        // Sanity-check that the malformed bytes survived to disk, so the skip path
+        // is actually exercised when stopHeistRecording reads the file.
+        let onDisk = try String(contentsOf: recording.filePath, encoding: .utf8)
+        XCTAssertTrue(
+            onDisk.contains("this-is-not-json"),
+            "Malformed line must still be present when stopHeistRecording reads the file"
+        )
 
         let heist = try bookKeeper.stopHeistRecording()
         XCTAssertEqual(heist.steps.count, 2, "Malformed line should be skipped, not fail the whole stop")

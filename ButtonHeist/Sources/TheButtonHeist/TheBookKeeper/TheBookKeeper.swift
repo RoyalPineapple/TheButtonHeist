@@ -218,35 +218,10 @@ public final class TheBookKeeper {
         let fileManager = FileManager.default
         let manifestPath = directory.appendingPathComponent("manifest.json")
 
-        // Read existing manifest or create a minimal one
-        var manifest: SessionManifest
-        let jsonDecoder = JSONDecoder()
-        jsonDecoder.dateDecodingStrategy = .iso8601
-        do {
-            let manifestData = try Data(contentsOf: manifestPath)
-            manifest = try jsonDecoder.decode(SessionManifest.self, from: manifestData)
-        } catch {
-            logger.warning("Could not read manifest for \(sessionId): \(error.localizedDescription)")
-            manifest = SessionManifest(sessionId: sessionId, startTime: Date())
-        }
-
-        // Mark as recovered with an endTime if missing
-        if manifest.endTime == nil {
-            manifest.endTime = Date()
-        }
-
-        // Write updated manifest
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        do {
-            let manifestData = try encoder.encode(manifest)
-            try manifestData.write(to: manifestPath, options: .atomic)
-        } catch {
-            logger.warning("Failed to write manifest for \(sessionId): \(error.localizedDescription)")
-        }
-
-        // Compress the raw log
+        // Compress the raw log before mutating the manifest. If compression fails,
+        // the session directory stays byte-for-byte as we found it so the next
+        // recovery attempt has clean inputs — no stale endTime recording the time
+        // of a failed attempt.
         let rawLog = directory.appendingPathComponent("session.jsonl")
         let compressedLog = directory.appendingPathComponent("session.jsonl.gz")
         let gzipProcess = Process()
@@ -272,6 +247,34 @@ public final class TheBookKeeper {
                 "Failed to recover abandoned session \(sessionId): expected compressed log missing at \(compressedLog.path)"
             )
             return nil
+        }
+
+        // Compression succeeded — read existing manifest or create a minimal one
+        var manifest: SessionManifest
+        let jsonDecoder = JSONDecoder()
+        jsonDecoder.dateDecodingStrategy = .iso8601
+        do {
+            let manifestData = try Data(contentsOf: manifestPath)
+            manifest = try jsonDecoder.decode(SessionManifest.self, from: manifestData)
+        } catch {
+            logger.warning("Could not read manifest for \(sessionId): \(error.localizedDescription)")
+            manifest = SessionManifest(sessionId: sessionId, startTime: Date())
+        }
+
+        // Mark as recovered with an endTime if missing
+        if manifest.endTime == nil {
+            manifest.endTime = Date()
+        }
+
+        // Write updated manifest
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        do {
+            let manifestData = try encoder.encode(manifest)
+            try manifestData.write(to: manifestPath, options: .atomic)
+        } catch {
+            logger.warning("Failed to write manifest for \(sessionId): \(error.localizedDescription)")
         }
 
         // Check for abandoned heist evidence
