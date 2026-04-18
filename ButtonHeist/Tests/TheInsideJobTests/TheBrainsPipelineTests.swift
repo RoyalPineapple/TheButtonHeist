@@ -342,7 +342,7 @@ final class TheBrainsPipelineTests: XCTestCase {
                 }
             }
 
-            try? await Task.sleep(for: .milliseconds(movedThisSwipe ? 130 : 380))
+            await brains.tripwire.yieldFrames(movedThisSwipe ? 1 : 3)
         }
 
         let meanSwipeMs = swipeMs.reduce(0, +) / Double(max(swipeMs.count, 1))

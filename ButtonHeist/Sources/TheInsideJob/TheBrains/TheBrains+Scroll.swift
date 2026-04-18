@@ -16,16 +16,18 @@ import AccessibilitySnapshotParser
 
 extension TheBrains {
 
-    /// Fast-path duration for synthetic swipe scrolling. Chosen to minimize
-    /// wall-clock time while remaining reliable in simulator testing.
-    private static let swipeScrollDuration: TimeInterval = 0.001
+    /// Keep swipe gesture timing stable; scrolling cadence is frame-driven.
+    private static let swipeGestureDuration: TimeInterval = 0.12
     /// End swipe settle after this many consecutive frames with no newly
     /// discovered elements.
     private static let swipeSettleIdleFrames = 2
     /// Require viewport stability for a few consecutive frames.
     private static let swipeSettleStableViewportFrames = 3
     /// Minimum post-swipe cooldown frames before allowing another gesture.
-    private static let swipeSettleMinFrames = 6
+    /// Direction reversals need additional frames for spring/inertia to settle.
+    private static let swipeDirectionChangeMinSettleFrames = 6
+    /// Continuing in the same direction can be dispatched aggressively.
+    private static let swipeSameDirectionMinSettleFrames = 1
     /// Hard cap on settle polling to avoid long stalls on spring animations.
     private static let swipeSettleMaxFrames = 24
     /// Quick settle defaults when continuing in the same direction.
@@ -119,7 +121,7 @@ extension TheBrains {
             let dispatched = await safecracker.scrollBySwipe(
                 frame: frame,
                 direction: direction,
-                duration: Self.swipeScrollDuration
+                duration: Self.swipeGestureDuration
             )
             guard dispatched else { return (false, before) }
             let moved = await settleSwipeMotion(
@@ -145,7 +147,9 @@ extension TheBrains {
         let requiredStableViewportFrames = requireDirectionChangeSettle
             ? Self.swipeSettleStableViewportFrames
             : Self.swipeQuickSettleStableViewportFrames
-        let minFrames = requireDirectionChangeSettle ? Self.swipeSettleMinFrames : 0
+        let minFrames = requireDirectionChangeSettle
+            ? Self.swipeDirectionChangeMinSettleFrames
+            : Self.swipeSameDirectionMinSettleFrames
         let maxFrames = requireDirectionChangeSettle
             ? Self.swipeSettleMaxFrames
             : Self.swipeQuickSettleMaxFrames
