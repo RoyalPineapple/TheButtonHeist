@@ -358,9 +358,8 @@ final class TheGetaway {
 
         let manifest = await brains.exploreAndPrune()
         let time = String(format: "%.2f", manifest.explorationTime)
-        insideJobLogger.info("Explore: \(manifest.elementCount) elements (\(manifest.scrollCount) scrolls, \(time)s)")
-
         let payload = brains.currentInterface()
+        insideJobLogger.info("Explore: \(payload.elements.count) elements (\(manifest.scrollCount) scrolls, \(time)s)")
         sendMessage(.interface(payload), requestId: requestId, respond: respond)
         brains.recordSentState(treeHash: payload.elements.hashValue)
     }

@@ -7,64 +7,46 @@ extension TheBrains {
 
     // MARK: - Screen Manifest
 
-    /// Complete element map for a screen, including off-screen content.
+    /// Bookkeeping for a single exploration pass.
+    ///
+    /// Only fields that are actually consumed downstream (by `ExploreResult` or
+    /// explore-loop control flow) live here. Anything that was "tracked for future
+    /// use" was removed — add fields back when they have a real consumer.
     struct ScreenManifest {
 
-    /// Every heistId discovered, mapped to the container it was found in.
-    var elementContainers: [String: AccessibilityContainer?] = [:]
+        /// Containers that have been fully explored.
+        var exploredContainers = Set<AccessibilityContainer>()
 
-    /// Containers that have been fully explored.
-    var exploredContainers = Set<AccessibilityContainer>()
+        /// Containers discovered but not yet explored.
+        var pendingContainers = Set<AccessibilityContainer>()
 
-    /// Total scrollByPage calls during exploration.
-    var scrollCount = 0
+        /// Total scrollByPage calls during exploration. Surfaced as `ExploreResult.scrollCount`.
+        var scrollCount = 0
 
-    /// Containers skipped because their accessibility fingerprint matched the cached value.
-    var skippedContainers = 0
+        /// Containers skipped because their accessibility fingerprint matched the cached value.
+        /// Not surfaced on the wire today; kept for logging and diagnostics inside the server.
+        var skippedContainers = 0
 
-    /// Containers skipped because they are behind a presented view controller.
-    var skippedObscuredContainers = 0
+        /// Containers skipped because they are behind a presented view controller.
+        /// Surfaced as `ExploreResult.containersSkippedObscured`.
+        var skippedObscuredContainers = 0
 
-    /// Wall-clock time spent exploring, in seconds.
-    var explorationTime: TimeInterval = 0
+        /// Wall-clock time spent exploring, in seconds. Surfaced as `ExploreResult.explorationTime`.
+        var explorationTime: TimeInterval = 0
 
-    /// Total unique heistIds discovered.
-    var elementCount: Int { elementContainers.count }
+        /// Safety cap on per-container scroll iterations.
+        static let maxScrollsPerContainer = 200
 
-    /// Whether all known scrollable containers have been explored.
-    var isComplete: Bool { pendingContainers.isEmpty }
+        // MARK: - Building
 
-    /// Containers discovered but not yet explored.
-    var pendingContainers = Set<AccessibilityContainer>()
-
-    /// Safety cap on per-container scroll iterations.
-    static let maxScrollsPerContainer = 200
-
-    // MARK: - Queries
-
-    func contains(_ heistId: String) -> Bool {
-        elementContainers.keys.contains(heistId)
-    }
-
-    // MARK: - Building
-
-    mutating func recordVisibleElements(
-        _ viewportHeistIds: Set<String>,
-        container: AccessibilityContainer? = nil
-    ) {
-        for heistId in viewportHeistIds where !elementContainers.keys.contains(heistId) {
-            elementContainers.updateValue(container, forKey: heistId)
+        mutating func markExplored(_ container: AccessibilityContainer) {
+            exploredContainers.insert(container)
+            pendingContainers.remove(container)
         }
-    }
 
-    mutating func markExplored(_ container: AccessibilityContainer) {
-        exploredContainers.insert(container)
-        pendingContainers.remove(container)
-    }
-
-    mutating func addPendingContainers(_ containers: [AccessibilityContainer]) {
-        pendingContainers.formUnion(containers.filter { !exploredContainers.contains($0) })
-    }
+        mutating func addPendingContainers(_ containers: [AccessibilityContainer]) {
+            pendingContainers.formUnion(containers.filter { !exploredContainers.contains($0) })
+        }
     }
 } // extension TheBrains
 

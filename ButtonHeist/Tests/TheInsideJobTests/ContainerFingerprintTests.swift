@@ -385,31 +385,6 @@ final class ContainerFingerprintTests: XCTestCase {
 
     // MARK: - ScreenManifest
 
-    func testRecordVisibleElementsAddsNewEntries() {
-        var manifest = TheBrains.ScreenManifest()
-        manifest.recordVisibleElements(["a", "b", "c"])
-
-        XCTAssertEqual(manifest.elementCount, 3)
-        XCTAssertTrue(manifest.contains("a"))
-        XCTAssertTrue(manifest.contains("b"))
-        XCTAssertTrue(manifest.contains("c"))
-    }
-
-    func testRecordVisibleElementsDoesNotOverwrite() {
-        let container = AccessibilityContainer(
-            type: .scrollable(contentSize: CGSize(width: 320, height: 1000)),
-            frame: .zero
-        )
-
-        var manifest = TheBrains.ScreenManifest()
-        manifest.recordVisibleElements(["a"], container: container)
-        manifest.recordVisibleElements(["a"], container: nil)
-
-        // The first recording should win — "a" should still be associated with the container
-        XCTAssertEqual(manifest.elementCount, 1)
-        XCTAssertEqual(manifest.elementContainers["a"] as? AccessibilityContainer, container)
-    }
-
     func testMarkExploredMovesFromPending() {
         let container = AccessibilityContainer(
             type: .scrollable(contentSize: CGSize(width: 320, height: 1000)),
@@ -419,12 +394,11 @@ final class ContainerFingerprintTests: XCTestCase {
         var manifest = TheBrains.ScreenManifest()
         manifest.addPendingContainers([container])
         XCTAssertTrue(manifest.pendingContainers.contains(container))
-        XCTAssertFalse(manifest.isComplete)
 
         manifest.markExplored(container)
         XCTAssertFalse(manifest.pendingContainers.contains(container))
         XCTAssertTrue(manifest.exploredContainers.contains(container))
-        XCTAssertTrue(manifest.isComplete)
+        XCTAssertTrue(manifest.pendingContainers.isEmpty)
     }
 
     func testAddPendingSkipsExplored() {

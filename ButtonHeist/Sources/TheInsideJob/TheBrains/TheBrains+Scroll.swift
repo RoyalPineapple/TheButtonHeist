@@ -74,7 +74,7 @@ extension TheBrains {
 
     // MARK: - Unified Scroll Dispatch
 
-    private func scrollOnePageAndSettle(
+    func scrollOnePageAndSettle(
         _ target: ScrollableTarget,
         direction: UIAccessibilityScrollDirection,
         animated: Bool = true
@@ -96,7 +96,8 @@ extension TheBrains {
             refresh()
             return (true, before)
         case .swipeable(let frame, _):
-            _ = await safecracker.scrollBySwipe(frame: frame, direction: direction)
+            let dispatched = await safecracker.scrollBySwipe(frame: frame, direction: direction)
+            guard dispatched else { return (false, before) }
             await tripwire.yieldFrames(3)
             refresh()
             return (stash.registry.viewportIds != before, before)
@@ -169,7 +170,7 @@ extension TheBrains {
         )
     }
 
-    private static func edgeDirection(for edge: ScrollEdge) -> UIAccessibilityScrollDirection {
+    static func edgeDirection(for edge: ScrollEdge) -> UIAccessibilityScrollDirection {
         switch edge {
         case .top: return .up
         case .bottom: return .down
@@ -303,26 +304,32 @@ extension TheBrains {
         axis: ScrollAxis? = nil,
         excluding exhausted: Set<AccessibilityContainer> = []
     ) -> (target: ScrollableTarget, container: AccessibilityContainer)? {
-        let candidates = stash.currentHierarchy.scrollableContainers
-            .filter { !exhausted.contains($0) }
-
-        for container in candidates {
-            guard case .scrollable(let contentSize) = container.type else { continue }
-            let target: ScrollableTarget
-            if let view = stash.scrollableContainerViews[container], view.window != nil {
-                if let scrollView = view as? UIScrollView {
-                    target = .uiScrollView(scrollView)
-                } else {
-                    let screenFrame = view.convert(view.bounds, to: nil)
-                    target = .swipeable(frame: screenFrame, contentSize: contentSize)
-                }
-            } else {
-                target = .swipeable(frame: container.frame, contentSize: contentSize)
+        stash.currentHierarchy.scrollableContainers
+            .lazy
+            .compactMap { container -> (target: ScrollableTarget, container: AccessibilityContainer)? in
+                guard !exhausted.contains(container),
+                      case .scrollable(let contentSize) = container.type else { return nil }
+                let target = self.scrollableTarget(for: container, contentSize: contentSize)
+                if let axis, !Self.scrollableAxis(of: target).contains(axis) { return nil }
+                return (target, container)
             }
-            if let axis, !Self.scrollableAxis(of: target).contains(axis) { continue }
-            return (target, container)
+            .first
+    }
+
+    /// Build a ScrollableTarget for a container, preferring the live UIView when attached
+    /// to a window so that frames reflect the current screen position.
+    func scrollableTarget(
+        for container: AccessibilityContainer,
+        contentSize: CGSize
+    ) -> ScrollableTarget {
+        if let view = stash.scrollableContainerViews[container], view.window != nil {
+            if let scrollView = view as? UIScrollView {
+                return .uiScrollView(scrollView)
+            }
+            let screenFrame = view.convert(view.bounds, to: nil)
+            return .swipeable(frame: screenFrame, contentSize: contentSize)
         }
-        return nil
+        return .swipeable(frame: container.frame, contentSize: contentSize)
     }
 
     private func searchNotFoundResult(scrollCount: Int) -> TheSafecracker.InteractionResult {

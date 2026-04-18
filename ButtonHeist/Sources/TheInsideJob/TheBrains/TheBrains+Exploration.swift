@@ -21,18 +21,16 @@ extension TheBrains {
     /// Cached state from the last explore of each scrollable container.
     struct ContainerExploreState {
         let visibleSubtreeFingerprint: Int
-        let accumulatedFingerprint: Int
         let discoveredHeistIds: Set<String>
     }
 
     /// Explore and prune: track heistIds across all apply() calls, then remove unseen.
     func exploreAndPrune(target: ElementTarget? = nil) async -> ScreenManifest {
-        exploreCycleIds = stash.registry.viewportIds
+        beginExploreCycle()
         let manifest = await exploreScreen(target: target)
-        if let seen = exploreCycleIds {
+        if let seen = endExploreCycle() {
             stash.registry.prune(keeping: seen)
         }
-        exploreCycleIds = nil
         return manifest
     }
 
@@ -41,8 +39,7 @@ extension TheBrains {
         let startTime = CACurrentMediaTime()
         var manifest = ScreenManifest()
 
-        stash.refresh()
-        manifest.recordVisibleElements(stash.registry.viewportIds)
+        refresh()
 
         if let target, stash.resolveFirstMatch(target) != nil {
             manifest.explorationTime = CACurrentMediaTime() - startTime
@@ -53,24 +50,20 @@ extension TheBrains {
         var containerFingerprints = stash.currentHierarchy.containerFingerprints
 
         while !manifest.pendingContainers.isEmpty {
-            let batch = manifest.pendingContainers.sorted { first, second in
-                guard case .scrollable(let contentSizeA) = first.type,
-                      case .scrollable(let contentSizeB) = second.type else { return false }
-                let overflowA = max(0, contentSizeA.width - first.frame.width) + max(0, contentSizeA.height - first.frame.height)
-                let overflowB = max(0, contentSizeB.width - second.frame.width) + max(0, contentSizeB.height - second.frame.height)
-                return overflowA > overflowB
-            }
+            let batch = manifest.pendingContainers
+                .map { (container: $0, overflow: Self.totalOverflow(of: $0)) }
+                .sorted { $0.overflow > $1.overflow }
+                .map(\.container)
 
             for container in batch {
-                guard case .scrollable = container.type,
-                      let view = stash.scrollableContainerViews[container],
-                      let scrollView = view as? UIScrollView,
-                      view.window != nil else {
+                guard case .scrollable(let contentSize) = container.type else {
                     manifest.markExplored(container)
                     continue
                 }
 
-                if Self.isObscuredByPresentation(view: view) {
+                if let view = stash.scrollableContainerViews[container],
+                   view.window != nil,
+                   Self.isObscuredByPresentation(view: view) {
                     manifest.markExplored(container)
                     manifest.skippedObscuredContainers += 1
                     continue
@@ -80,16 +73,12 @@ extension TheBrains {
                 if let cached = containerExploreStates[container],
                    cached.visibleSubtreeFingerprint == currentFingerprint,
                    target == nil {
-                    exploreCycleIds?.formUnion(cached.discoveredHeistIds)
+                    recordDuringExplore(cached.discoveredHeistIds)
                     manifest.markExplored(container)
                     manifest.skippedContainers += 1
                     continue
                 }
 
-                guard case .scrollable(let contentSize) = container.type else {
-                    manifest.markExplored(container)
-                    continue
-                }
                 let hasHOverflow = contentSize.width > container.frame.width + 1
                 let hasVOverflow = contentSize.height > container.frame.height + 1
                 guard hasHOverflow || hasVOverflow else {
@@ -97,8 +86,9 @@ extension TheBrains {
                     continue
                 }
 
+                let scrollTarget = scrollableTarget(for: container, contentSize: contentSize)
                 let found = await exploreContainer(
-                    container: container, scrollView: scrollView,
+                    container: container, scrollTarget: scrollTarget,
                     hasHOverflow: hasHOverflow, hasVOverflow: hasVOverflow,
                     target: target, manifest: &manifest,
                     containerFingerprints: &containerFingerprints
@@ -118,24 +108,37 @@ extension TheBrains {
     /// target was found during exploration (caller should return early).
     private func exploreContainer(
         container: AccessibilityContainer,
-        scrollView: UIScrollView,
+        scrollTarget: ScrollableTarget,
         hasHOverflow: Bool,
         hasVOverflow: Bool,
         target: ElementTarget?,
         manifest: inout ScreenManifest,
         containerFingerprints: inout [AccessibilityContainer: Int]
     ) async -> Bool {
-        let savedVisualOrigin = CGPoint(
-            x: scrollView.contentOffset.x + scrollView.adjustedContentInset.left,
-            y: scrollView.contentOffset.y + scrollView.adjustedContentInset.top
-        )
+        let savedVisualOrigin: CGPoint? = {
+            guard case .uiScrollView(let scrollView) = scrollTarget else { return nil }
+            return CGPoint(
+                x: scrollView.contentOffset.x + scrollView.adjustedContentInset.left,
+                y: scrollView.contentOffset.y + scrollView.adjustedContentInset.top
+            )
+        }()
         let direction: UIAccessibilityScrollDirection = hasHOverflow ? .right : .down
 
         let leadingEdge: ScrollEdge = hasHOverflow ? .left : .top
-        if safecracker.scrollToEdge(scrollView, edge: leadingEdge, animated: false) {
-            await tripwire.yieldFrames(2)
-            refresh()
-            manifest.recordVisibleElements(stash.registry.viewportIds, container: container)
+        switch scrollTarget {
+        case .uiScrollView(let scrollView):
+            if safecracker.scrollToEdge(scrollView, edge: leadingEdge, animated: false) {
+                await tripwire.yieldFrames(2)
+                refresh()
+            }
+        case .swipeable:
+            let toLeading = Self.edgeDirection(for: leadingEdge)
+            for _ in 0..<50 {
+                let (moved, before) = await scrollOnePageAndSettle(
+                    scrollTarget, direction: toLeading, animated: false
+                )
+                if !moved || stash.registry.viewportIds == before { break }
+            }
         }
 
         var originByElement = buildOriginIndex()
@@ -145,13 +148,12 @@ extension TheBrains {
         var accumulatedOrigins = initialPage.origins
 
         for _ in 0..<ScreenManifest.maxScrollsPerContainer {
-            let moved = safecracker.scrollByPage(scrollView, direction: direction, animated: false)
+            let (moved, _) = await scrollOnePageAndSettle(
+                scrollTarget, direction: direction, animated: false
+            )
             guard moved else { break }
             manifest.scrollCount += 1
-            await tripwire.yieldFrames(2)
-            refresh()
             originByElement = buildOriginIndex()
-            manifest.recordVisibleElements(stash.registry.viewportIds, container: container)
 
             let page = visibleElementsInContainer(container)
             let result = stitchPage(
@@ -167,8 +169,9 @@ extension TheBrains {
 
             if let target, stash.resolveFirstMatch(target) != nil {
                 await restoreAndCache(
-                    scrollView: scrollView, savedVisualOrigin: savedVisualOrigin,
-                    container: container, accumulated: accumulated, accumulatedOrigins: accumulatedOrigins,
+                    scrollTarget: scrollTarget, savedVisualOrigin: savedVisualOrigin,
+                    container: container,
+                    discoveredElements: accumulated,
                     manifest: &manifest, containerFingerprints: &containerFingerprints
                 )
                 return true
@@ -176,8 +179,9 @@ extension TheBrains {
         }
 
         await restoreAndCache(
-            scrollView: scrollView, savedVisualOrigin: savedVisualOrigin,
-            container: container, accumulated: accumulated, accumulatedOrigins: accumulatedOrigins,
+            scrollTarget: scrollTarget, savedVisualOrigin: savedVisualOrigin,
+            container: container,
+            discoveredElements: accumulated,
             manifest: &manifest, containerFingerprints: &containerFingerprints
         )
 
@@ -190,38 +194,42 @@ extension TheBrains {
     // MARK: - Exploration Helpers
 
     private func restoreAndCache(
-        scrollView: UIScrollView,
-        savedVisualOrigin: CGPoint,
+        scrollTarget: ScrollableTarget,
+        savedVisualOrigin: CGPoint?,
         container: AccessibilityContainer,
-        accumulated: [AccessibilityElement],
-        accumulatedOrigins: [CGPoint?],
+        discoveredElements: [AccessibilityElement],
         manifest: inout ScreenManifest,
         containerFingerprints: inout [AccessibilityContainer: Int]
     ) async {
-        Self.restoreVisualOrigin(savedVisualOrigin, in: scrollView)
-        await tripwire.yieldFrames(2)
-        stash.refresh()
+        if case .uiScrollView(let scrollView) = scrollTarget,
+           let savedVisualOrigin {
+            Self.restoreVisualOrigin(savedVisualOrigin, in: scrollView)
+            await tripwire.yieldFrames(2)
+            refresh()
+        }
         containerFingerprints = stash.currentHierarchy.containerFingerprints
         manifest.markExplored(container)
         let fingerprint = containerFingerprints[container] ?? 0
-        updateContainerExploreCache(container, fingerprint: fingerprint, accumulated: accumulated, accumulatedOrigins: accumulatedOrigins)
+        updateContainerExploreCache(
+            container,
+            fingerprint: fingerprint,
+            discoveredHeistIds: resolveHeistIds(for: discoveredElements)
+        )
     }
 
     private func visibleElementsInContainer(_ container: AccessibilityContainer) -> ContainerPage {
-        let pairs = stash.currentHierarchy.elements.compactMap { element, _ -> (element: AccessibilityElement, origin: CGPoint?)? in
-            guard let heistId = stash.registry.reverseIndex[element],
-                  stash.registry.viewportIds.contains(heistId),
-                  let entry = stash.registry.elements[heistId],
-                  isElementInContainer(entry, container: container) else { return nil }
-            return (element: entry.element, origin: entry.contentSpaceOrigin)
-        }
+        let pairs = stash.currentHierarchy.compactMap(
+            context: false,
+            container: { isInside, current in isInside || current == container },
+            element: { element, _, isInside -> (element: AccessibilityElement, origin: CGPoint?)? in
+                guard isInside,
+                      let heistId = self.stash.registry.reverseIndex[element],
+                      self.stash.registry.viewportIds.contains(heistId),
+                      let entry = self.stash.registry.elements[heistId] else { return nil }
+                return (element: entry.element, origin: entry.contentSpaceOrigin)
+            }
+        )
         return ContainerPage(elements: pairs.map(\.element), origins: pairs.map(\.origin))
-    }
-
-    private func isElementInContainer(_ element: TheStash.ScreenElement, container: AccessibilityContainer) -> Bool {
-        guard let containerView = stash.scrollableContainerViews[container] as? UIScrollView,
-              let elementScrollView = element.scrollView else { return false }
-        return containerView === elementScrollView
     }
 
     private func buildOriginIndex() -> [AccessibilityElement: CGPoint?] {
@@ -229,6 +237,14 @@ extension TheBrains {
             stash.registry.elements.values.map { ($0.element, $0.contentSpaceOrigin) },
             uniquingKeysWith: { first, _ in first }
         )
+    }
+
+    private func resolveHeistIds(for elements: [AccessibilityElement]) -> Set<String> {
+        let heistIdByElement = Dictionary(
+            stash.registry.elements.map { ($0.value.element, $0.key) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        return Set(elements.compactMap { heistIdByElement[$0] })
     }
 
     private static func restoreVisualOrigin(_ visualOrigin: CGPoint, in scrollView: UIScrollView) {
@@ -249,18 +265,22 @@ extension TheBrains {
     private func updateContainerExploreCache(
         _ container: AccessibilityContainer,
         fingerprint: Int,
-        accumulated: [AccessibilityElement],
-        accumulatedOrigins: [CGPoint?]
+        discoveredHeistIds: Set<String>
     ) {
-        let accFingerprint = accumulatedContentFingerprint(
-            elements: accumulated, origins: accumulatedOrigins
-        )
-        let heistIds = Set(stash.registry.elements.filter { isElementInContainer($0.value, container: container) }.keys)
         containerExploreStates[container] = ContainerExploreState(
             visibleSubtreeFingerprint: fingerprint,
-            accumulatedFingerprint: accFingerprint,
-            discoveredHeistIds: heistIds
+            discoveredHeistIds: discoveredHeistIds
         )
+    }
+
+    // MARK: - Container Overflow
+
+    /// Sum of horizontal and vertical content overflow for a container.
+    /// Zero for containers that don't overflow their frame (or aren't `.scrollable`).
+    static func totalOverflow(of container: AccessibilityContainer) -> CGFloat {
+        guard case .scrollable(let contentSize) = container.type else { return 0 }
+        return max(0, contentSize.width - container.frame.width)
+            + max(0, contentSize.height - container.frame.height)
     }
 
     // MARK: - Presentation Obscuring
