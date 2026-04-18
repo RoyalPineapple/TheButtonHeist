@@ -346,8 +346,11 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
 
         let meanSwipeMs = swipeMs.reduce(0, +) / Double(max(swipeMs.count, 1))
+        let diagnosticsFormat =
+            "[Diagnostics][Temp][Watch] moved=%d blocked=%d down_moves=%d up_moves=%d "
+            + "bottom_hits=%d top_hits=%d reverse_recovered=%d/%d swipe_call_mean=%.2fms"
         print(String(
-            format: "[Diagnostics][Temp][Watch] moved=%d blocked=%d down_moves=%d up_moves=%d bottom_hits=%d top_hits=%d reverse_recovered=%d/%d swipe_call_mean=%.2fms",
+            format: diagnosticsFormat,
             movedCount,
             blockedCount,
             downMoves,
