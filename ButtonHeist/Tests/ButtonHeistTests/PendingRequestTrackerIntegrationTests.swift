@@ -1,6 +1,6 @@
 // Wall-clock timing tests for PendingRequestTracker.
 // These depend on real elapsed time (Task.sleep-based timeouts) and belong
-// in an integration test file per CLAUDE.md naming conventions.
+// in an integration test file per AGENTS.md naming conventions.
 
 import XCTest
 @testable import ButtonHeist
