@@ -16,6 +16,10 @@ import AccessibilitySnapshotParser
 
 extension TheBrains {
 
+    /// Fast-path duration for synthetic swipe scrolling. Chosen to minimize
+    /// wall-clock time while remaining reliable in simulator testing.
+    private static let swipeScrollDuration: TimeInterval = 0.12
+
     /// A scrollable container discovered from the accessibility hierarchy.
     @MainActor enum ScrollableTarget {
         case uiScrollView(UIScrollView)
@@ -96,9 +100,21 @@ extension TheBrains {
             refresh()
             return (true, before)
         case .swipeable(let frame, _):
-            let dispatched = await safecracker.scrollBySwipe(frame: frame, direction: direction)
+            let dispatched = await safecracker.scrollBySwipe(
+                frame: frame,
+                direction: direction,
+                duration: Self.swipeScrollDuration
+            )
             guard dispatched else { return (false, before) }
-            await tripwire.yieldFrames(3)
+
+            // Optimistic parse immediately after finger-up; if the viewport has not
+            // advanced yet, do one short settle wait and parse again.
+            refresh()
+            if stash.registry.viewportIds != before {
+                return (true, before)
+            }
+
+            await tripwire.yieldFrames(2)
             refresh()
             return (stash.registry.viewportIds != before, before)
         }
