@@ -226,7 +226,7 @@ extension TheBrains {
     private static func safeSwipeFrame(from frame: CGRect) -> CGRect {
         let safeTopInset = windowSafeAreaInsets.top + 56
         let safeBottomInset = windowSafeAreaInsets.bottom + 20
-        let safeBounds = UIScreen.main.bounds.inset(by: UIEdgeInsets(
+        let safeBounds = ScreenMetrics.current.bounds.inset(by: UIEdgeInsets(
             top: safeTopInset,
             left: 16,
             bottom: safeBottomInset,
@@ -502,9 +502,10 @@ extension TheBrains {
     private static let comfortMarginFraction: CGFloat = 1.0 / 6.0
 
     private static var interactionComfortZone: CGRect {
-        UIScreen.main.bounds.insetBy(
-            dx: UIScreen.main.bounds.width * comfortMarginFraction,
-            dy: UIScreen.main.bounds.height * comfortMarginFraction
+        let bounds = ScreenMetrics.current.bounds
+        return bounds.insetBy(
+            dx: bounds.width * comfortMarginFraction,
+            dy: bounds.height * comfortMarginFraction
         )
     }
 
@@ -531,7 +532,7 @@ extension TheBrains {
         guard let heistId = stash.registry.firstResponderHeistId,
               let entry = stash.registry.elements[heistId],
               let geometry = stash.liveGeometry(for: entry),
-              !UIScreen.main.bounds.contains(geometry.frame),
+              !ScreenMetrics.current.bounds.contains(geometry.frame),
               !Self.interactionComfortZone.contains(geometry.activationPoint) else { return }
         if safecracker.scrollToMakeVisible(
             geometry.frame, in: geometry.scrollView,
@@ -544,7 +545,7 @@ extension TheBrains {
 
     private func ensureOnScreenSync(_ resolved: TheStash.ResolvedTarget, animated: Bool = true) {
         guard let geometry = stash.liveGeometry(for: resolved.screenElement),
-              !UIScreen.main.bounds.contains(geometry.frame),
+              !ScreenMetrics.current.bounds.contains(geometry.frame),
               !Self.interactionComfortZone.contains(geometry.activationPoint) else { return }
         _ = safecracker.scrollToMakeVisible(
             geometry.frame, in: geometry.scrollView, animated: animated,

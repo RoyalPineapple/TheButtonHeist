@@ -254,7 +254,7 @@ final class TheGetaway {
     }
 
     private func sendServerInfo(respond: @escaping (Data) -> Void) {
-        let screenBounds = UIScreen.main.bounds
+        let screenBounds = ScreenMetrics.current.bounds
         let info = ServerInfo(
             protocolVersion: protocolVersion,
             appName: Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "App",
