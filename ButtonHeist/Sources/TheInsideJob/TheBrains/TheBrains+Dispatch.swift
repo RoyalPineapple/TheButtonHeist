@@ -95,7 +95,7 @@ extension TheBrains {
         let result = await executeWaitFor(target)
         let errorKind: ErrorKind? = result.success
             ? nil
-            : (result.message == "Could not access accessibility tree" ? .actionFailed : .timeout)
+            : (result.message == TheBrains.treeUnavailableMessage ? .actionFailed : .timeout)
 
         return await actionResultWithDelta(
             success: result.success,
@@ -113,7 +113,7 @@ extension TheBrains {
         let start = CFAbsoluteTimeGetCurrent()
 
         guard stash.refresh() != nil else {
-            return .failure(.waitFor, message: "Could not access accessibility tree")
+            return .failure(.waitFor, message: TheBrains.treeUnavailableMessage)
         }
         if target.resolvedAbsent {
             if !stash.hasTarget(elementTarget) {
@@ -128,7 +128,7 @@ extension TheBrains {
         while ContinuousClock.now < deadline {
             _ = await tripwire.waitForAllClear(timeout: 1.0)
             guard stash.refresh() != nil else {
-                return .failure(.waitFor, message: "Could not access accessibility tree")
+                return .failure(.waitFor, message: TheBrains.treeUnavailableMessage)
             }
             let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
             if target.resolvedAbsent {
@@ -238,6 +238,15 @@ extension TheBrains {
     }
 
     private static func commandName(for message: ClientMessage) -> String {
+        if let name = handshakeCommandName(for: message) { return name }
+        if let name = accessibilityCommandName(for: message) { return name }
+        if let name = touchCommandName(for: message) { return name }
+        if let name = utilityCommandName(for: message) { return name }
+        if let name = recordingCommandName(for: message) { return name }
+        return "unknown"
+    }
+
+    private static func handshakeCommandName(for message: ClientMessage) -> String? {
         switch message {
         case .clientHello: return "client_hello"
         case .authenticate: return "authenticate"
@@ -246,6 +255,13 @@ extension TheBrains {
         case .unsubscribe: return "unsubscribe"
         case .ping: return "ping"
         case .status: return "status"
+        case .requestScreen: return "request_screen"
+        default: return nil
+        }
+    }
+
+    private static func accessibilityCommandName(for message: ClientMessage) -> String? {
+        switch message {
         case .activate: return "activate"
         case .increment: return "increment"
         case .decrement: return "decrement"
@@ -254,6 +270,12 @@ extension TheBrains {
         case .setPasteboard: return "set_pasteboard"
         case .getPasteboard: return "get_pasteboard"
         case .resignFirstResponder: return "resign_first_responder"
+        default: return nil
+        }
+    }
+
+    private static func touchCommandName(for message: ClientMessage) -> String? {
+        switch message {
         case .touchTap: return "touch_tap"
         case .touchLongPress: return "touch_long_press"
         case .touchSwipe: return "touch_swipe"
@@ -263,6 +285,12 @@ extension TheBrains {
         case .touchTwoFingerTap: return "touch_two_finger_tap"
         case .touchDrawPath: return "touch_draw_path"
         case .touchDrawBezier: return "touch_draw_bezier"
+        default: return nil
+        }
+    }
+
+    private static func utilityCommandName(for message: ClientMessage) -> String? {
+        switch message {
         case .typeText: return "type_text"
         case .scroll: return "scroll"
         case .scrollToVisible: return "scroll_to_visible"
@@ -271,15 +299,28 @@ extension TheBrains {
         case .waitForIdle: return "wait_for_idle"
         case .waitFor: return "wait_for"
         case .waitForChange: return "wait_for_change"
-        case .requestScreen: return "request_screen"
         case .explore: return "explore"
+        default: return nil
+        }
+    }
+
+    private static func recordingCommandName(for message: ClientMessage) -> String? {
+        switch message {
         case .startRecording: return "start_recording"
         case .stopRecording: return "stop_recording"
         case .watch: return "watch"
+        default: return nil
         }
     }
 
     private static func diagnosticMethod(for message: ClientMessage) -> ActionMethod {
+        if let method = diagnosticAccessibilityMethod(for: message) { return method }
+        if let method = diagnosticTouchMethod(for: message) { return method }
+        if let method = diagnosticUtilityMethod(for: message) { return method }
+        return .activate
+    }
+
+    private static func diagnosticAccessibilityMethod(for message: ClientMessage) -> ActionMethod? {
         switch message {
         case .activate: return .activate
         case .increment: return .increment
@@ -289,6 +330,12 @@ extension TheBrains {
         case .setPasteboard: return .setPasteboard
         case .getPasteboard: return .getPasteboard
         case .resignFirstResponder: return .resignFirstResponder
+        default: return nil
+        }
+    }
+
+    private static func diagnosticTouchMethod(for message: ClientMessage) -> ActionMethod? {
+        switch message {
         case .touchTap: return .syntheticTap
         case .touchLongPress: return .syntheticLongPress
         case .touchSwipe: return .syntheticSwipe
@@ -297,6 +344,12 @@ extension TheBrains {
         case .touchRotate: return .syntheticRotate
         case .touchTwoFingerTap: return .syntheticTwoFingerTap
         case .touchDrawPath, .touchDrawBezier: return .syntheticDrawPath
+        default: return nil
+        }
+    }
+
+    private static func diagnosticUtilityMethod(for message: ClientMessage) -> ActionMethod? {
+        switch message {
         case .typeText: return .typeText
         case .scroll: return .scroll
         case .scrollToVisible: return .scrollToVisible
@@ -306,10 +359,7 @@ extension TheBrains {
         case .waitFor: return .waitFor
         case .waitForChange: return .waitForChange
         case .explore: return .explore
-        case .clientHello, .authenticate, .requestInterface, .subscribe,
-             .unsubscribe, .ping, .status, .requestScreen, .startRecording,
-             .stopRecording, .watch:
-            return .activate
+        default: return nil
         }
     }
 
