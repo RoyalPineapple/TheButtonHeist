@@ -27,7 +27,7 @@ final class TheBrainsScrollTests: XCTestCase {
         scrollView.contentInset = .zero
 
         let origin = CGPoint(x: 100, y: 2500)
-        let offset = TheBrains.scrollTargetOffset(for: origin, in: scrollView)
+        let offset = TheStash.scrollTargetOffset(for: origin, in: scrollView)
 
         XCTAssertEqual(offset.x, max(origin.x - 375.0 / 2, 0), accuracy: 0.01,
                        "X offset should center on origin horizontally")
@@ -40,7 +40,7 @@ final class TheBrainsScrollTests: XCTestCase {
         scrollView.contentSize = CGSize(width: 375, height: 5000)
 
         let origin = CGPoint(x: 100, y: 100)
-        let offset = TheBrains.scrollTargetOffset(for: origin, in: scrollView)
+        let offset = TheStash.scrollTargetOffset(for: origin, in: scrollView)
 
         XCTAssertGreaterThanOrEqual(offset.y, 0,
                                     "Offset should not go above content start")
@@ -51,7 +51,7 @@ final class TheBrainsScrollTests: XCTestCase {
         scrollView.contentSize = CGSize(width: 375, height: 5000)
 
         let origin = CGPoint(x: 100, y: 4900)
-        let offset = TheBrains.scrollTargetOffset(for: origin, in: scrollView)
+        let offset = TheStash.scrollTargetOffset(for: origin, in: scrollView)
 
         let maxY = scrollView.contentSize.height - scrollView.bounds.height
         XCTAssertLessThanOrEqual(offset.y, maxY + 0.01,
@@ -64,7 +64,7 @@ final class TheBrainsScrollTests: XCTestCase {
         scrollView.contentInset = UIEdgeInsets(top: 100, left: 0, bottom: 50, right: 0)
 
         let origin = CGPoint(x: 100, y: 10)
-        let offset = TheBrains.scrollTargetOffset(for: origin, in: scrollView)
+        let offset = TheStash.scrollTargetOffset(for: origin, in: scrollView)
 
         let minY = -scrollView.adjustedContentInset.top
         XCTAssertGreaterThanOrEqual(offset.y, minY,
@@ -76,11 +76,11 @@ final class TheBrainsScrollTests: XCTestCase {
         scrollView.contentSize = CGSize(width: 2000, height: 667)
 
         let originNearStart = CGPoint(x: 50, y: 300)
-        let offsetStart = TheBrains.scrollTargetOffset(for: originNearStart, in: scrollView)
+        let offsetStart = TheStash.scrollTargetOffset(for: originNearStart, in: scrollView)
         XCTAssertGreaterThanOrEqual(offsetStart.x, 0, "Should clamp to left edge")
 
         let originNearEnd = CGPoint(x: 1950, y: 300)
-        let offsetEnd = TheBrains.scrollTargetOffset(for: originNearEnd, in: scrollView)
+        let offsetEnd = TheStash.scrollTargetOffset(for: originNearEnd, in: scrollView)
         let maxX = scrollView.contentSize.width - scrollView.bounds.width
         XCTAssertLessThanOrEqual(offsetEnd.x, maxX + 0.01, "Should clamp to right edge")
     }

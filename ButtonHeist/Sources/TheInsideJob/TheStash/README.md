@@ -33,7 +33,7 @@ Element registry, target resolution, wire conversion, and screen capture.
 
 6. **`Diagnostics.swift`** — Pure static namespace. `heistIdNotFound` finds similar IDs by bidirectional substring check. `matcherNotFound` tries relaxations in order (drop value → traits → label → identifier), checking each against the hierarchy. Falls back to a compact element summary (up to 20 on-screen elements).
 
-7. **`Interactivity.swift`** — `isInteractive(element:)` checks three conditions: `respondsToUserInteraction`, interactive trait bitmask (button/link/adjustable/searchField/keyboardKey/backButton/switchButton), or has custom actions. `checkInteractivity` also checks `.notEnabled` for blocking.
+7. **`Interactivity.swift`** — `isInteractive(element:)` checks three conditions: `respondsToUserInteraction`, interactive trait bitmask (button/link/adjustable/searchField/keyboardKey/backButton/switchButton), or has custom actions. `checkInteractivity` also checks `.notEnabled` for blocking and surfaces an advisory `warning` on `.interactive` when an element has only static traits — the caller decides whether to log it.
 
 8. **`TheStash+Capture.swift`** — `captureScreen()` composites all traversable windows via `UIGraphicsImageRenderer` (bottom-to-top, `afterScreenUpdates: true`). `captureScreenForRecording()` includes all windows including TheFingerprints overlay (`afterScreenUpdates: false`).
 
