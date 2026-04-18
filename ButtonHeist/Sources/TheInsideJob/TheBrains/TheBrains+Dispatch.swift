@@ -234,11 +234,28 @@ extension TheBrains {
     }
 
     private func fallbackMethod(for command: ClientMessage) -> ActionMethod {
+        if let method = fallbackAccessibilityMethod(for: command) { return method }
+        if let method = fallbackTouchMethod(for: command) { return method }
+        if let method = fallbackUtilityMethod(for: command) { return method }
+        return .activate
+    }
+
+    private func fallbackAccessibilityMethod(for command: ClientMessage) -> ActionMethod? {
         switch command {
         case .activate: return .activate
         case .increment: return .increment
         case .decrement: return .decrement
         case .performCustomAction: return .customAction
+        case .editAction: return .editAction
+        case .resignFirstResponder: return .resignFirstResponder
+        case .setPasteboard: return .setPasteboard
+        case .getPasteboard: return .getPasteboard
+        default: return nil
+        }
+    }
+
+    private func fallbackTouchMethod(for command: ClientMessage) -> ActionMethod? {
+        switch command {
         case .touchTap: return .syntheticTap
         case .touchLongPress: return .syntheticLongPress
         case .touchSwipe: return .syntheticSwipe
@@ -247,18 +264,20 @@ extension TheBrains {
         case .touchRotate: return .syntheticRotate
         case .touchTwoFingerTap: return .syntheticTwoFingerTap
         case .touchDrawPath, .touchDrawBezier: return .syntheticDrawPath
+        default: return nil
+        }
+    }
+
+    private func fallbackUtilityMethod(for command: ClientMessage) -> ActionMethod? {
+        switch command {
         case .typeText: return .typeText
-        case .editAction: return .editAction
         case .scroll: return .scroll
         case .scrollToVisible: return .scrollToVisible
         case .elementSearch: return .elementSearch
         case .scrollToEdge: return .scrollToEdge
         case .waitFor: return .waitFor
-        case .resignFirstResponder: return .resignFirstResponder
-        case .setPasteboard: return .setPasteboard
-        case .getPasteboard: return .getPasteboard
         case .explore: return .explore
-        default: return .activate
+        default: return nil
         }
     }
 }
