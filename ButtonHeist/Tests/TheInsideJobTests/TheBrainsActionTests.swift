@@ -155,6 +155,70 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(before.elements.count, 1)
     }
 
+    // MARK: - Deallocated Element Fail-Closed
+
+    func testExecuteIncrementFailsWhenElementObjectIsDeallocated() async {
+        let heistId = "volume_slider"
+        registerScreenElement(
+            heistId: heistId,
+            element: makeElement(label: "Volume", traits: .adjustable),
+            object: nil
+        )
+
+        let result = await brains.executeIncrement(.heistId(heistId))
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .elementDeallocated)
+        XCTAssertTrue(result.message?.contains("deallocated") ?? false)
+    }
+
+    func testExecuteDecrementFailsWhenElementObjectIsDeallocated() async {
+        let heistId = "brightness_slider"
+        registerScreenElement(
+            heistId: heistId,
+            element: makeElement(label: "Brightness", traits: .adjustable),
+            object: nil
+        )
+
+        let result = await brains.executeDecrement(.heistId(heistId))
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .elementDeallocated)
+        XCTAssertTrue(result.message?.contains("deallocated") ?? false)
+    }
+
+    func testExecuteCustomActionFailsWhenElementObjectIsDeallocated() async {
+        let heistId = "options_button"
+        registerScreenElement(
+            heistId: heistId,
+            element: makeElement(label: "Options", traits: .button),
+            object: nil
+        )
+
+        let result = await brains.executeCustomAction(
+            CustomActionTarget(elementTarget: .heistId(heistId), actionName: "Delete")
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .elementDeallocated)
+        XCTAssertTrue(result.message?.contains("deallocated") ?? false)
+    }
+
+    func testExecuteIncrementSucceedsWhenElementObjectIsLive() async {
+        let heistId = "live_slider"
+        let liveObject = UISlider()
+        registerScreenElement(
+            heistId: heistId,
+            element: makeElement(label: "Live", traits: .adjustable),
+            object: liveObject
+        )
+
+        let result = await brains.executeIncrement(.heistId(heistId))
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(result.method, .increment)
+    }
+
     // MARK: - clearCache
 
     func testClearCacheResetsStashAndExploreState() {
@@ -211,6 +275,21 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     // MARK: - Helpers
+
+    private func registerScreenElement(
+        heistId: String,
+        element: AccessibilityElement,
+        object: NSObject?
+    ) {
+        brains.stash.registry.elements[heistId] = TheStash.ScreenElement(
+            heistId: heistId,
+            contentSpaceOrigin: nil,
+            element: element,
+            object: object,
+            scrollView: nil
+        )
+        brains.stash.registry.viewportIds.insert(heistId)
+    }
 
     private func makeElement(
         label: String? = nil,

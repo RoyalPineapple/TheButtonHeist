@@ -172,6 +172,7 @@ struct ScreenElement {
 | `registry.elements` | Screen | The registry — all resolution paths read from here |
 | `registry.viewportIds` | Refresh | HeistIds visible in the device viewport |
 | `registry.reverseIndex` | Refresh | O(1) reverse index: AccessibilityElement → heistId |
+| `registry.firstResponderHeistId` | Refresh | HeistId of the element whose live object is first responder (set by TheBurglar in `apply`, consumed by scroll) |
 | `lastHierarchyHash` | Screen | Pulse polling dedup memo |
 | `lastScreenName` | Screen | First header element label, computed once in `apply()` |
 | `lastScreenId` | Screen | Slugified `lastScreenName` (e.g. "controls_demo"), computed alongside it |
@@ -204,4 +205,4 @@ No store writes to another store. No circular dependencies.
 
 ## Architectural Rule
 
-TheStash is pure data — it holds elements, resolves targets, and converts to wire format. It does not orchestrate actions, drive scrolling, or manage the delta cycle. Those responsibilities belong to TheBrains, which coordinates TheStash, TheBurglar, TheSafecracker, and TheTripwire. Wire conversion and ID assignment are static methods on caseless enums (`TheStash.WireConversion`, `TheStash.IdAssignment`) — call them directly, not through instance forwarding.
+TheStash is pure data — it holds elements, resolves targets, and converts to wire format. It does not orchestrate actions, drive scrolling, or manage the delta cycle. Those responsibilities belong to TheBrains, which coordinates TheStash, TheBurglar, TheSafecracker, and TheTripwire. Wire conversion and ID assignment are static methods on caseless enums (`TheStash.WireConversion`, `TheStash.IdAssignment`); TheStash exposes thin instance facades (`toWire`, `convertTree`, `computeDelta`, `traitNames`) for ergonomics — both forms are valid, the statics are the source of truth.

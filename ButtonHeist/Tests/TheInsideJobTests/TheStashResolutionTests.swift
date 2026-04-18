@@ -427,6 +427,19 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertNotNil(result.resolved, "Should resolve off-screen element with ordinal 0")
     }
 
+    func testMatcherRegistryFallbackOrdinalUsesDeterministicHeistIdOrder() {
+        let offScreenB = element(label: "Item", value: "b")
+        let offScreenA = element(label: "Item", value: "a")
+        registerOffScreen(offScreenB, heistId: "item_b")
+        registerOffScreen(offScreenA, heistId: "item_a")
+
+        let first = bagman.resolveTarget(.matcher(ElementMatcher(label: "Item"), ordinal: 0)).resolved
+        let second = bagman.resolveTarget(.matcher(ElementMatcher(label: "Item"), ordinal: 1)).resolved
+
+        XCTAssertEqual(first?.screenElement.heistId, "item_a")
+        XCTAssertEqual(second?.screenElement.heistId, "item_b")
+    }
+
     func testMatcherRegistryFallbackOrdinalOutOfBounds() {
         let offScreen = element(label: "Item", value: "only")
         registerOffScreen(offScreen, heistId: "item_1")

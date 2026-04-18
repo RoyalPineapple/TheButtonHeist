@@ -140,6 +140,8 @@ extension TheStash {
     /// matching ScreenElements. Checks the hierarchy first (preserves traversal
     /// order for on-screen elements), falls back to the full registry (explored
     /// off-screen elements) when the hierarchy has zero matches.
+    ///
+    /// Registry fallback is sorted by heistId for deterministic ordinal selection.
     func matchScreenElements(_ matcher: ElementMatcher, limit: Int) -> [ScreenElement] {
         guard limit > 0 else { return [] }
         let hierarchyHits = currentHierarchy.matches(matcher, limit: limit)
@@ -149,12 +151,12 @@ extension TheStash {
                 return registry.elements[heistId]
             }
         }
-        var results: [ScreenElement] = []
-        for screenElement in registry.elements.values where screenElement.element.matches(matcher) {
-            results.append(screenElement)
-            if results.count >= limit { break }
-        }
-        return results
+        return registry.elements.values
+            .sorted { $0.heistId < $1.heistId }
+            .lazy
+            .filter { $0.element.matches(matcher) }
+            .prefix(limit)
+            .map { $0 }
     }
 
     /// Search for the first matching element.

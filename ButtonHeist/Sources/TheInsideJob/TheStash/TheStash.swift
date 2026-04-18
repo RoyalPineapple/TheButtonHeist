@@ -138,13 +138,19 @@ final class TheStash {
     }
 
     /// Perform accessibilityIncrement.
-    func increment(_ screenElement: ScreenElement) {
-        screenElement.object?.accessibilityIncrement()
+    @discardableResult
+    func increment(_ screenElement: ScreenElement) -> Bool {
+        guard let object = screenElement.object else { return false }
+        object.accessibilityIncrement()
+        return true
     }
 
     /// Perform accessibilityDecrement.
-    func decrement(_ screenElement: ScreenElement) {
-        screenElement.object?.accessibilityDecrement()
+    @discardableResult
+    func decrement(_ screenElement: ScreenElement) -> Bool {
+        guard let object = screenElement.object else { return false }
+        object.accessibilityDecrement()
+        return true
     }
 
     /// Perform a named custom action.
@@ -405,26 +411,6 @@ final class TheStash {
         WireConversion.traitNames(traits)
     }
 
-}
-
-// MARK: - Hosting View for Single-Object Parsing
-
-/// Lightweight UIView that presents a single NSObject to the accessibility
-/// hierarchy parser. Follows the same pattern as SwiftUI's hosting view —
-/// the parser takes a UIView root, so this bridges arbitrary NSObjects
-/// (accessibility elements, SwiftUI nodes, etc.) into the parser's pipeline.
-final class ButtonHeistHostingView: UIView {
-    private let target: NSObject
-
-    init(target: NSObject) {
-        self.target = target
-        super.init(frame: .zero)
-        isAccessibilityElement = false
-        accessibilityElements = [target]
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError() }
 }
 
 #endif // DEBUG

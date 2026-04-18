@@ -30,8 +30,11 @@ extension TheBrains {
             return .failure(.elementNotFound, message: resolution.diagnostics)
         }
         if requireInteractive {
-            if case .blocked(let reason) = stash.checkElementInteractivity(resolved.element) {
+            switch stash.checkElementInteractivity(resolved.element) {
+            case .blocked(let reason):
                 return .failure(method, message: reason)
+            case .interactive(let warning):
+                if let warning { insideJobLogger.warning("\(warning)") }
             }
             guard stash.hasInteractiveObject(resolved.screenElement) else {
                 return .failure(method, message: "Element does not support \(method.rawValue)")
@@ -81,7 +84,9 @@ extension TheBrains {
 
     func executeIncrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
         await performElementAction(target: target, method: .increment) { resolved in
-            stash.increment(resolved.screenElement)
+            guard stash.increment(resolved.screenElement) else {
+                return .failure(.elementDeallocated, message: "Element deallocated before increment")
+            }
             self.safecracker.showFingerprint(at: resolved.element.activationPoint)
             return TheSafecracker.InteractionResult(success: true, method: .increment, message: nil, value: nil)
         }
@@ -89,7 +94,9 @@ extension TheBrains {
 
     func executeDecrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
         await performElementAction(target: target, method: .decrement) { resolved in
-            stash.decrement(resolved.screenElement)
+            guard stash.decrement(resolved.screenElement) else {
+                return .failure(.elementDeallocated, message: "Element deallocated before decrement")
+            }
             self.safecracker.showFingerprint(at: resolved.element.activationPoint)
             return TheSafecracker.InteractionResult(success: true, method: .decrement, message: nil, value: nil)
         }
@@ -97,6 +104,9 @@ extension TheBrains {
 
     func executeCustomAction(_ target: CustomActionTarget) async -> TheSafecracker.InteractionResult {
         await performElementAction(target: target.elementTarget, method: .customAction) { resolved in
+            guard resolved.screenElement.object != nil else {
+                return .failure(.elementDeallocated, message: "Element deallocated before custom action")
+            }
             let success = stash.performCustomAction(named: target.actionName, on: resolved.screenElement)
             return TheSafecracker.InteractionResult(
                 success: success, method: .customAction,

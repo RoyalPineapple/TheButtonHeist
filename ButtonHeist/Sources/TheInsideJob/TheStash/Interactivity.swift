@@ -14,7 +14,7 @@ extension TheStash {
     /// Used by WireConverter (to build action lists) and ActionExecutor
     /// (to gate interaction attempts).
     enum InteractivityCheck {
-        case interactive
+        case interactive(warning: String?)
         case blocked(reason: String)
     }
 
@@ -40,18 +40,19 @@ extension TheStash {
     }
 
     /// Validate whether an element can receive interaction based on its traits.
+    /// Pure — any advisory warning travels with `.interactive`; the caller decides
+    /// whether to log it.
     static func checkInteractivity(_ element: AccessibilityElement) -> InteractivityCheck {
         if element.traits.contains(.notEnabled) {
             return .blocked(reason: "Element is disabled (has 'notEnabled' trait)")
         }
 
         let staticTraitsOnly = element.traits.isSubset(of: [.staticText, .image, .header])
+        let warning: String? = (staticTraitsOnly && !hasInteractiveTraits(element) && element.customActions.isEmpty)
+            ? "Element '\(element.description)' has only static traits, tap may not work"
+            : nil
 
-        if staticTraitsOnly && !hasInteractiveTraits(element) && element.customActions.isEmpty {
-            insideJobLogger.warning("Element '\(element.description)' has only static traits, tap may not work")
-        }
-
-        return .interactive
+        return .interactive(warning: warning)
     }
 
     }
