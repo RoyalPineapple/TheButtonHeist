@@ -584,7 +584,9 @@ final class TheFenceTests: XCTestCase {
             return XCTFail("Expected archiveResult response, got \(response)")
         }
         XCTAssertTrue(FileManager.default.fileExists(atPath: path))
-        XCTAssertEqual(manifest.commandCount, 1)
+        // 2 = the explicit status call above + the archive_session request,
+        // which execute() logs before dispatching to the handler.
+        XCTAssertEqual(manifest.commandCount, 2)
         if case .archived = fence.bookKeeper.phase {
             // expected
         } else {
