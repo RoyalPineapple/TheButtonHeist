@@ -166,7 +166,7 @@ final class TheBrainsActionTests: XCTestCase {
             object: nil,
             scrollView: nil
         )
-        brains.exploreCycleIds = ["test"]
+        brains.beginExploreCycle()
         brains.containerExploreStates[
             AccessibilityContainer(
                 type: .scrollable(contentSize: CGSize(width: 375, height: 2000)),
@@ -174,40 +174,68 @@ final class TheBrainsActionTests: XCTestCase {
             )
         ] = TheBrains.ContainerExploreState(
             visibleSubtreeFingerprint: 1,
-            accumulatedFingerprint: 2,
             discoveredHeistIds: ["x"]
         )
 
         brains.clearCache()
 
-        XCTAssertNil(brains.exploreCycleIds)
+        XCTAssertEqual(brains.explorePhase, .idle)
         XCTAssertTrue(brains.containerExploreStates.isEmpty)
     }
 
-    // MARK: - refresh accumulates into exploreCycleIds
+    // MARK: - ExplorePhase state machine
 
-    func testRefreshDoesNotAccumulateWhenExploreCycleIdsNil() {
-        XCTAssertNil(brains.exploreCycleIds)
-        brains.refresh()
-        XCTAssertNil(brains.exploreCycleIds,
-                     "refresh should not create exploreCycleIds when nil")
+    func testExplorePhaseStartsIdle() {
+        XCTAssertEqual(brains.explorePhase, .idle)
     }
 
-    func testRefreshAccumulatesViewportIdsWhenExploreCycleActive() {
-        // Simulate what happens after a successful parse+apply cycle:
-        // refresh() calls burglar.refresh(into:) which needs a real window,
-        // so test the accumulation logic directly by seeding viewport IDs
-        // and calling the union path manually.
-        let heistId = "statictext_test"
-        brains.stash.registry.viewportIds = [heistId]
-        brains.exploreCycleIds = Set<String>()
+    func testRecordDuringExploreIsNoOpWhenIdle() {
+        brains.recordDuringExplore(["abc"])
+        XCTAssertEqual(brains.explorePhase, .idle,
+                       "recordDuringExplore must not transition out of .idle")
+    }
 
-        // Simulate what refresh() does after a successful parse:
-        // exploreCycleIds?.formUnion(stash.registry.viewportIds)
-        brains.exploreCycleIds?.formUnion(brains.stash.registry.viewportIds)
+    func testBeginExploreCycleSeedsWithViewport() {
+        brains.stash.registry.viewportIds = ["viewport_a", "viewport_b"]
+        brains.beginExploreCycle()
+        guard case .active(let seen) = brains.explorePhase else {
+            XCTFail("Expected .active phase after beginExploreCycle")
+            return
+        }
+        XCTAssertEqual(seen, ["viewport_a", "viewport_b"])
+    }
 
-        XCTAssertTrue(brains.exploreCycleIds?.contains(heistId) ?? false,
-                      "formUnion should union viewport IDs into exploreCycleIds when active")
+    func testRecordDuringExploreAccumulatesWhenActive() {
+        brains.stash.registry.viewportIds = ["seed"]
+        brains.beginExploreCycle()
+        brains.recordDuringExplore(["discovered_a", "discovered_b"])
+        guard case .active(let seen) = brains.explorePhase else {
+            XCTFail("Expected .active phase")
+            return
+        }
+        XCTAssertEqual(seen, ["seed", "discovered_a", "discovered_b"])
+    }
+
+    func testEndExploreCycleReturnsAccumulatedAndTransitionsToIdle() {
+        brains.stash.registry.viewportIds = ["seed"]
+        brains.beginExploreCycle()
+        brains.recordDuringExplore(["extra"])
+        let result = brains.endExploreCycle()
+        XCTAssertEqual(result, ["seed", "extra"])
+        XCTAssertEqual(brains.explorePhase, .idle)
+    }
+
+    func testEndExploreCycleReturnsNilWhenIdle() {
+        XCTAssertNil(brains.endExploreCycle())
+    }
+
+    // MARK: - refresh integrates with ExplorePhase
+
+    func testRefreshDoesNotAccumulateWhenIdle() {
+        XCTAssertEqual(brains.explorePhase, .idle)
+        brains.refresh()
+        XCTAssertEqual(brains.explorePhase, .idle,
+                       "refresh() must not transition the phase")
     }
 
     // MARK: - Accessibility Tree Availability

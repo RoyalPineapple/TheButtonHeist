@@ -16,7 +16,7 @@ Command execution engine. Takes a `ClientMessage`, works it through refresh → 
 2. **`TheBrains.swift`** — Core class. Key types:
 
    - `BeforeState` — frozen snapshot (sorted elements, raw parsed elements, hierarchy, VC identity) taken before every action.
-   - **`refresh()`** — delegates to `stash.refresh()`, accumulates heistIds into `exploreCycleIds` when an explore cycle is active.
+   - **`refresh()`** — delegates to `stash.refresh()`, then calls `recordDuringExplore(_:)` which accumulates viewport heistIds into `explorePhase` when it is `.active`.
    - **`actionResultWithDelta(before:)`** — the convergence point. On failure: immediate return from before-snapshot. On success: settle via `tripwire.waitForAllClear(1s)` → `stash.parse()` → screen-change detection (VC identity OR topology) → `stash.apply()` → `exploreAndPrune()` → snapshot → `stash.computeDelta()` → re-resolve target for post-action element metadata → `ActionResultBuilder.success()`.
 
    **Response state** — `SentState` struct (treeHash, beforeState, screenId) tracks the last response sent to the driver. `recordSentState()` snapshots current state; `computeBackgroundDelta()` compares against it. TheGetaway calls `recordSentState()` after every send.
@@ -33,10 +33,16 @@ Command execution engine. Takes a `ClientMessage`, works it through refresh → 
 
 4. **`TheBrains+Scroll.swift`** — `ScrollableTarget` enum (`.uiScrollView` for direct setContentOffset, `.swipeable` for synthetic swipe fallback). `executeScroll` does one page. `executeScrollToVisible` tries three strategies: already visible → content-space one-shot jump → failure. `executeElementSearch` tries four: visible → one-shot → page-by-page loop (up to 200 scrolls) → not found. `ensureOnScreen` pre-scrolls off-viewport elements and nudges into the comfort zone (frame inset by 1/6).
 
-5. **`TheBrains+Exploration.swift`** — `exploreAndPrune()` seeds `exploreCycleIds`, calls `exploreScreen()`, then `registry.prune(keeping:)`. Per container: checks fingerprint cache (skip if unchanged) → scrolls to leading edge → pages through accumulating elements via `stitchPage` → restores visual origin → caches state. `ContainerExploreState` holds the fingerprint + discovered heistIds. Containers behind a presented VC are detected via BFS and skipped.
+5. **`TheBrains+Exploration.swift`** — `exploreAndPrune()` calls `beginExploreCycle()`, runs `exploreScreen()`, then `endExploreCycle()` and `registry.prune(keeping:)`. Per container: checks fingerprint cache (skip if unchanged) → scrolls to leading edge → pages through accumulating elements via `stitchPage` → restores visual origin for `UIScrollView` targets → caches state. Exploration uses `ScrollableTarget` so non-`UIScrollView` containers use swipe fallback.
 
 6. **`TheBrains+Exploration+Manifest.swift`** — `ScreenManifest` bookkeeping struct. Tracks pending/explored containers, scroll count, skip counts, timing. `maxScrollsPerContainer = 200`.
 
 7. **`ActionResultBuilder.swift`** — Assembles `ActionResult` from method + snapshot. Two init paths (from `[ScreenElement]` or explicit screenName/Id). Two terminal methods: `success(elementLabel:elementValue:elementTraits:exploreResult:)` and `failure(errorKind:)`.
 
 > Full dossier: [`docs/dossiers/13-THEBRAINS.md`](../../../../docs/dossiers/13-THEBRAINS.md)
+
+## Audit Acceptance Criteria
+
+- Unsupported commands include stable command identity and current screen context.
+- Explore pruning relies on explicit `explorePhase` (`.idle`/`.active`) and always resets to `.idle`.
+- `exploreAndPrune()` explores scrollable containers through both direct `UIScrollView` and swipe fallback paths before pruning.

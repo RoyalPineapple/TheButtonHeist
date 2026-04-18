@@ -312,22 +312,6 @@ public func stitchPage(
     )
 }
 
-// MARK: - Accumulated Fingerprint
-
-/// Hash all accumulated elements into a single fingerprint using content-space origins.
-/// Used to verify that a container skip was valid — if the accumulated fingerprint matches
-/// the cached value, the container's full content hasn't changed.
-public func accumulatedContentFingerprint(
-    elements: [AccessibilityElement],
-    origins: [CGPoint?]
-) -> Int {
-    var hasher = Hasher()
-    for (element, origin) in zip(elements, origins) {
-        hasher.combine(element.fingerprint(contentSpaceOrigin: origin))
-    }
-    return hasher.finalize()
-}
-
 // MARK: - Hierarchy Stitching
 
 extension Array where Element == AccessibilityHierarchy {

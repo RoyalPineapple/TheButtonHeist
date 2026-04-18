@@ -38,9 +38,7 @@ extension TheBrains {
 
         default:
             insideJobLogger.error("Unhandled message type in executeCommand")
-            var builder = ActionResultBuilder(method: .activate, screenName: stash.lastScreenName, screenId: stash.lastScreenId)
-            builder.message = "Unhandled command"
-            return builder.failure(errorKind: .unsupported)
+            return unsupportedCommandResult(for: message, context: "executeCommand")
         }
     }
 
@@ -200,9 +198,7 @@ extension TheBrains {
         case .resignFirstResponder:
             return await performInteraction(command: message) { await self.executeResignFirstResponder() }
         default:
-            var builder = ActionResultBuilder(method: .activate, screenName: nil, screenId: nil)
-            builder.message = "Unhandled"
-            return builder.failure(errorKind: .unsupported)
+            return unsupportedCommandResult(for: message, context: "executeAccessibilityAction")
         }
     }
 
@@ -227,9 +223,93 @@ extension TheBrains {
         case .touchDrawBezier(let target):
             return await performInteraction(command: message) { await self.executeDrawBezier(target) }
         default:
-            var builder = ActionResultBuilder(method: .activate, screenName: nil, screenId: nil)
-            builder.message = "Unhandled"
-            return builder.failure(errorKind: .unsupported)
+            return unsupportedCommandResult(for: message, context: "executeTouchGesture")
+        }
+    }
+
+    private func unsupportedCommandResult(for message: ClientMessage, context: String) -> ActionResult {
+        var builder = ActionResultBuilder(
+            method: Self.diagnosticMethod(for: message),
+            screenName: stash.lastScreenName,
+            screenId: stash.lastScreenId
+        )
+        builder.message = "Unsupported command '\(Self.commandName(for: message))' in \(context)"
+        return builder.failure(errorKind: .unsupported)
+    }
+
+    private static func commandName(for message: ClientMessage) -> String {
+        switch message {
+        case .clientHello: return "client_hello"
+        case .authenticate: return "authenticate"
+        case .requestInterface: return "request_interface"
+        case .subscribe: return "subscribe"
+        case .unsubscribe: return "unsubscribe"
+        case .ping: return "ping"
+        case .status: return "status"
+        case .activate: return "activate"
+        case .increment: return "increment"
+        case .decrement: return "decrement"
+        case .performCustomAction: return "perform_custom_action"
+        case .editAction: return "edit_action"
+        case .setPasteboard: return "set_pasteboard"
+        case .getPasteboard: return "get_pasteboard"
+        case .resignFirstResponder: return "resign_first_responder"
+        case .touchTap: return "touch_tap"
+        case .touchLongPress: return "touch_long_press"
+        case .touchSwipe: return "touch_swipe"
+        case .touchDrag: return "touch_drag"
+        case .touchPinch: return "touch_pinch"
+        case .touchRotate: return "touch_rotate"
+        case .touchTwoFingerTap: return "touch_two_finger_tap"
+        case .touchDrawPath: return "touch_draw_path"
+        case .touchDrawBezier: return "touch_draw_bezier"
+        case .typeText: return "type_text"
+        case .scroll: return "scroll"
+        case .scrollToVisible: return "scroll_to_visible"
+        case .elementSearch: return "element_search"
+        case .scrollToEdge: return "scroll_to_edge"
+        case .waitForIdle: return "wait_for_idle"
+        case .waitFor: return "wait_for"
+        case .waitForChange: return "wait_for_change"
+        case .requestScreen: return "request_screen"
+        case .explore: return "explore"
+        case .startRecording: return "start_recording"
+        case .stopRecording: return "stop_recording"
+        case .watch: return "watch"
+        }
+    }
+
+    private static func diagnosticMethod(for message: ClientMessage) -> ActionMethod {
+        switch message {
+        case .activate: return .activate
+        case .increment: return .increment
+        case .decrement: return .decrement
+        case .performCustomAction: return .customAction
+        case .editAction: return .editAction
+        case .setPasteboard: return .setPasteboard
+        case .getPasteboard: return .getPasteboard
+        case .resignFirstResponder: return .resignFirstResponder
+        case .touchTap: return .syntheticTap
+        case .touchLongPress: return .syntheticLongPress
+        case .touchSwipe: return .syntheticSwipe
+        case .touchDrag: return .syntheticDrag
+        case .touchPinch: return .syntheticPinch
+        case .touchRotate: return .syntheticRotate
+        case .touchTwoFingerTap: return .syntheticTwoFingerTap
+        case .touchDrawPath, .touchDrawBezier: return .syntheticDrawPath
+        case .typeText: return .typeText
+        case .scroll: return .scroll
+        case .scrollToVisible: return .scrollToVisible
+        case .elementSearch: return .elementSearch
+        case .scrollToEdge: return .scrollToEdge
+        case .waitForIdle: return .waitForIdle
+        case .waitFor: return .waitFor
+        case .waitForChange: return .waitForChange
+        case .explore: return .explore
+        case .clientHello, .authenticate, .requestInterface, .subscribe,
+             .unsubscribe, .ping, .status, .requestScreen, .startRecording,
+             .stopRecording, .watch:
+            return .activate
         }
     }
 

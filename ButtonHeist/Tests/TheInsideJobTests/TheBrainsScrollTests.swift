@@ -319,20 +319,18 @@ final class TheBrainsScrollTests: XCTestCase {
     func testContainerExploreStateStoresValues() {
         let state = TheBrains.ContainerExploreState(
             visibleSubtreeFingerprint: 12345,
-            accumulatedFingerprint: 67890,
             discoveredHeistIds: ["id_a", "id_b", "id_c"]
         )
         XCTAssertEqual(state.visibleSubtreeFingerprint, 12345)
-        XCTAssertEqual(state.accumulatedFingerprint, 67890)
         XCTAssertEqual(state.discoveredHeistIds.count, 3)
         XCTAssertTrue(state.discoveredHeistIds.contains("id_a"))
     }
 
-    // MARK: - exploreCycleIds lifecycle
+    // MARK: - ExplorePhase lifecycle
 
-    func testExploreCycleIdsNilOutsideExplore() {
-        XCTAssertNil(brains.exploreCycleIds,
-                     "exploreCycleIds should be nil when no explore cycle is active")
+    func testExplorePhaseIdleOutsideExplore() {
+        XCTAssertEqual(brains.explorePhase, .idle,
+                       "explorePhase should be .idle when no explore cycle is active")
     }
 
     func testClearCacheResetsExploreState() {
@@ -343,17 +341,16 @@ final class TheBrainsScrollTests: XCTestCase {
             )
         ] = TheBrains.ContainerExploreState(
             visibleSubtreeFingerprint: 1,
-            accumulatedFingerprint: 2,
             discoveredHeistIds: ["x"]
         )
-        brains.exploreCycleIds = ["test"]
+        brains.beginExploreCycle()
 
         brains.clearCache()
 
         XCTAssertTrue(brains.containerExploreStates.isEmpty,
                       "clearCache should empty containerExploreStates")
-        XCTAssertNil(brains.exploreCycleIds,
-                     "clearCache should nil out exploreCycleIds")
+        XCTAssertEqual(brains.explorePhase, .idle,
+                       "clearCache should reset explorePhase to .idle")
     }
 
     // MARK: - resolveScrollTarget

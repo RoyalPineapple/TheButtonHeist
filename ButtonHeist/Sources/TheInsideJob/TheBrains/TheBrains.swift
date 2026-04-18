@@ -25,10 +25,37 @@ final class TheBrains {
     /// Cached state from the last explore of each scrollable container.
     var containerExploreStates: [AccessibilityContainer: ContainerExploreState] = [:]
 
-    /// Accumulates every heistId seen during an explore cycle.
-    /// Populated by `apply()` when non-nil, pruned by `pruneAfterExplore()`.
-    /// nil outside of an explore cycle — `apply()` only accumulates when this is set.
-    var exploreCycleIds: Set<String>?
+    /// Explicit state for the explore cycle. `.idle` outside of `exploreAndPrune()`;
+    /// `.active(seen:)` while a cycle is running. Accumulators only record into `seen`
+    /// when the phase is active, which is checked at compile time by the pattern match
+    /// in `recordDuringExplore(_:)` — callers cannot accidentally accumulate while idle.
+    enum ExplorePhase: Equatable {
+        case idle
+        case active(seen: Set<String>)
+    }
+
+    private(set) var explorePhase: ExplorePhase = .idle
+
+    /// Record heistIds into the active explore cycle. No-op when idle.
+    func recordDuringExplore(_ ids: some Sequence<String>) {
+        guard case .active(var seen) = explorePhase else { return }
+        seen.formUnion(ids)
+        explorePhase = .active(seen: seen)
+    }
+
+    /// Begin an explore cycle seeded with the current viewport ids. Returns the
+    /// previous phase so nested calls can restore it (nested calls are not expected
+    /// but the cycle is not re-entrant safe if we overwrite blindly).
+    func beginExploreCycle() {
+        explorePhase = .active(seen: stash.registry.viewportIds)
+    }
+
+    /// End the explore cycle and return the accumulated ids, or nil if not active.
+    func endExploreCycle() -> Set<String>? {
+        guard case .active(let seen) = explorePhase else { return nil }
+        explorePhase = .idle
+        return seen
+    }
 
     init(tripwire: TheTripwire) {
         self.tripwire = tripwire
@@ -42,7 +69,7 @@ final class TheBrains {
     @discardableResult
     func refresh() -> TheStash.ParseResult? {
         guard let result = stash.refresh() else { return nil }
-        exploreCycleIds?.formUnion(stash.registry.viewportIds)
+        recordDuringExplore(stash.registry.viewportIds)
         return result
     }
 
@@ -132,7 +159,7 @@ final class TheBrains {
 
         if let afterResult {
             let heistIds = stash.apply(afterResult)
-            exploreCycleIds?.formUnion(heistIds)
+            recordDuringExplore(heistIds)
         }
 
         let manifest = await exploreAndPrune()
@@ -193,7 +220,7 @@ final class TheBrains {
     func clearCache() {
         stash.clearCache()
         containerExploreStates.removeAll()
-        exploreCycleIds = nil
+        explorePhase = .idle
         lastSentState = nil
     }
 
