@@ -16,7 +16,7 @@ import AccessibilitySnapshotParser
 @MainActor
 final class TheBrains {
 
-    private static let treeUnavailableMessage = "Could not access accessibility tree"
+    static let treeUnavailableMessage = "Could not access accessibility tree"
 
     let stash: TheStash
     let safecracker: TheSafecracker
@@ -75,7 +75,7 @@ final class TheBrains {
 
     func treeUnavailableResult(method: ActionMethod) -> ActionResult {
         var builder = ActionResultBuilder(method: method, screenName: stash.lastScreenName, screenId: stash.lastScreenId)
-        builder.message = Self.treeUnavailableMessage
+        builder.message = TheBrains.treeUnavailableMessage
         return builder.failure(errorKind: .actionFailed)
     }
 
