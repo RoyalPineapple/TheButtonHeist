@@ -1,7 +1,5 @@
 import SwiftUI
 import UIKit
-import MapKit
-import WebKit
 
 // MARK: - Trait Validation Screen
 
@@ -9,7 +7,6 @@ import WebKit
 /// Tap "Scan All" to walk the full accessibility tree and dump raw trait bitmasks.
 struct TraitValidationView: View {
     @State private var results: [TraitScanResult] = []
-    @State private var scanning = false
     @State private var filterUnknownOnly = false
 
     var body: some View {
@@ -76,18 +73,9 @@ struct TraitValidationView: View {
     // provoke the trait so the scanner can read the raw bitmask.
 
     @State private var toggleVal = false
-    @State private var segVal = "A"
-    @State private var menuVal = "X"
     @State private var sliderVal = 0.5
-    @State private var stepperVal = 3
-    @State private var dateVal = Date()
     @State private var textVal = ""
     @State private var secureVal = ""
-    @State private var bioText = "Editable text area for textArea trait"
-    @State private var searchText = ""
-    @State private var showAlert = false
-    @State private var showSheet = false
-    @State private var disclosureOpen = true
 
     private var controlSurface: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -118,29 +106,17 @@ struct TraitValidationView: View {
         .padding(.horizontal, 12)
     }
 
-    @ViewBuilder
-    private func traitSection(_ title: String, @ViewBuilder content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.system(.caption2, design: .monospaced))
-                .foregroundStyle(.tertiary)
-            content()
-        }
-    }
-
     // MARK: - Scanner
 
     private func runScan() {
         results.removeAll()
         nodeVisited.removeAll()
-        scanning = true
         guard let window = UIApplication.shared
             .connectedScenes
             .compactMap({ $0 as? UIWindowScene })
-            .first?.windows.first else { scanning = false; return }
+            .first?.windows.first else { return }
 
         walkAllViews(window, depth: 0)
-        scanning = false
 
         // Write results to tmp file for easy reading
         let lines = results.map { r in
@@ -278,66 +254,9 @@ struct TraitValidationView: View {
         results.append(TraitScanResult(
             label: "\(prefix)\(source)| \(label)\(idStr)",
             bitString: bits.joined(separator: " "),
-            unknownBits: unknowns.joined(separator: " "),
-            rawValue: traits
+            unknownBits: unknowns.joined(separator: " ")
         ))
     }
-}
-
-// MARK: - Helper Views
-
-/// UISearchBar wrapper — the only reliable way to get the searchField trait.
-struct SearchFieldWrapper: UIViewRepresentable {
-    @Binding var text: String
-
-    func makeUIView(context: Context) -> UISearchBar {
-        let bar = UISearchBar()
-        bar.placeholder = "Search..."
-        bar.searchBarStyle = .minimal
-        return bar
-    }
-
-    func updateUIView(_ uiView: UISearchBar, context: Context) {
-        uiView.text = text
-    }
-}
-
-/// UITabBar wrapper — avoids TabView/NavigationStack conflict.
-struct UITabBarProbe: UIViewRepresentable {
-    func makeUIView(context: Context) -> UITabBar {
-        let bar = UITabBar()
-        bar.items = [
-            UITabBarItem(title: "First", image: UIImage(systemName: "1.circle"), tag: 0),
-            UITabBarItem(title: "Second", image: UIImage(systemName: "2.circle"), tag: 1),
-        ]
-        bar.selectedItem = bar.items?.first
-        return bar
-    }
-
-    func updateUIView(_ uiView: UITabBar, context: Context) {}
-}
-
-/// MKMapView wrapper — lighter than SwiftUI Map inside a ScrollView.
-struct MapProbe: UIViewRepresentable {
-    func makeUIView(context: Context) -> MKMapView {
-        let mv = MKMapView()
-        mv.isScrollEnabled = false
-        mv.isZoomEnabled = false
-        return mv
-    }
-
-    func updateUIView(_ uiView: MKMapView, context: Context) {}
-}
-
-/// WKWebView wrapper to surface webContent trait.
-struct WebViewProbe: UIViewRepresentable {
-    func makeUIView(context: Context) -> WKWebView {
-        let wv = WKWebView()
-        wv.loadHTMLString("<p>Web content for trait probe</p>", baseURL: nil)
-        return wv
-    }
-
-    func updateUIView(_ uiView: WKWebView, context: Context) {}
 }
 
 struct TraitScanResult: Identifiable {
@@ -345,5 +264,4 @@ struct TraitScanResult: Identifiable {
     let label: String
     let bitString: String
     let unknownBits: String
-    let rawValue: UInt64
 }

@@ -249,40 +249,6 @@ public actor SimpleSocketServer {
         }
     }
 
-    // MARK: - Synchronous start bridge
-
-    /// Start the server on the specified port (synchronous version).
-    /// Bridges to async start using a semaphore (acceptable for one-time startup).
-    /// - Parameters:
-    ///   - port: Port to listen on (0 = any available)
-    ///   - bindToLoopback: If true, bind to loopback only (simulator builds)
-    /// - Returns: Actual port number bound
-    nonisolated public func start(port: UInt16 = 0, bindToLoopback: Bool = false, tlsParameters: NWParameters? = nil) throws -> UInt16 {
-        let semaphore = DispatchSemaphore(value: 0)
-        let resultBox = OSAllocatedUnfairLock<Result<UInt16, Error>?>(initialState: nil)
-        let server = self
-        let portValue = port
-        let loopback = bindToLoopback
-        let params = tlsParameters
-        Task.detached { @Sendable in
-            do {
-                let port = try await server.startAsync(port: portValue, bindToLoopback: loopback, tlsParameters: params)
-                resultBox.withLock { $0 = .success(port) }
-            } catch {
-                resultBox.withLock { $0 = .failure(error) }
-            }
-            semaphore.signal()
-        }
-        semaphore.wait()
-        guard let result = resultBox.withLock({ $0 }) else {
-            throw ServerError.failedToBindPort
-        }
-        switch result {
-        case .success(let port): return port
-        case .failure(let error): throw error
-        }
-    }
-
     /// Stop the server.
     public func stop() {
         _stop()

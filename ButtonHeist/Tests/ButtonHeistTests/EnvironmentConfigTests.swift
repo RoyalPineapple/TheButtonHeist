@@ -7,7 +7,6 @@ final class EnvironmentConfigTests: XCTestCase {
         let config = EnvironmentConfig.resolve(env: [:])
         XCTAssertNil(config.deviceFilter)
         XCTAssertNil(config.token)
-        XCTAssertNil(config.driverId)
         XCTAssertEqual(config.sessionTimeout, 60.0)
         XCTAssertEqual(config.connectionTimeout, 30.0)
         XCTAssertTrue(config.autoReconnect)
@@ -59,12 +58,6 @@ final class EnvironmentConfigTests: XCTestCase {
         let env = ["BUTTONHEIST_SESSION_TIMEOUT": "0"]
         let config = EnvironmentConfig.resolve(env: env)
         XCTAssertEqual(config.sessionTimeout, 60.0)
-    }
-
-    func testDriverIdFromEnv() {
-        let env = ["BUTTONHEIST_DRIVER_ID": "agent-42"]
-        let config = EnvironmentConfig.resolve(env: env)
-        XCTAssertEqual(config.driverId, "agent-42")
     }
 
     func testFenceConfigurationProducesMatchingValues() {
