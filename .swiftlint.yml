@@ -52,6 +52,8 @@ type_name:
 cyclomatic_complexity:
   warning: 20
   error: 35
+  # Large switch statements over enum cases are lookup tables, not complexity.
+  ignores_case_statements: true
 
 blanket_disable_command:
   allowed_rules:
