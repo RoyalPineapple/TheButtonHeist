@@ -22,20 +22,20 @@ public enum SessionPhase: Sendable {
 
 /// State for an open session that is accepting commands and artifacts.
 ///
-/// Holds the open log file handle, mutable manifest, and optional heist recording.
-/// `FileHandle` is exposed as `public` so tests can inspect phase contents; do not
-/// close or mutate it from outside TheBookKeeper.
+/// The manifest, start time, and directory are public for test inspection.
+/// File handles and mutable bookkeeping are module-internal so they can't be
+/// reached or mutated from outside TheBookKeeper.
 @ButtonHeistActor
 public struct ActiveSession: Sendable {
     public let sessionId: String
     public let directory: URL
-    public let logHandle: FileHandle
+    let logHandle: FileHandle
     public var manifest: SessionManifest
     public let startTime: Date
-    public var nextSequenceNumber: Int
+    var nextSequenceNumber: Int
 
     /// Non-nil while a heist recording is active inside this session.
-    public var heistRecording: HeistRecording?
+    var heistRecording: HeistRecording?
 }
 
 /// State for an in-progress heist recording nested inside an `ActiveSession`.
@@ -44,16 +44,16 @@ public struct ActiveSession: Sendable {
 /// because `FileHandle` is not Sendable, but all access is isolated to
 /// `@ButtonHeistActor`.
 @ButtonHeistActor
-public struct HeistRecording: @unchecked Sendable {
-    public let app: String
-    public let startTime: Date
-    public var evidenceCount: Int
+struct HeistRecording: @unchecked Sendable {
+    let app: String
+    let startTime: Date
+    var evidenceCount: Int
     /// Append-only file handle for durable evidence storage.
-    public let fileHandle: FileHandle
-    public let filePath: URL
+    let fileHandle: FileHandle
+    let filePath: URL
     /// Snapshot from the most recent `get_interface` response, used to look up
     /// `heistId` → element properties when building matchers at recording time.
-    public var interfaceCache: [String: HeistElement]
+    var interfaceCache: [String: HeistElement]
 }
 
 /// Transient state while a session's log is being flushed and compressed.
@@ -149,21 +149,24 @@ public final class TheBookKeeper {
     // MARK: - Recovery
 
     /// A session that was recovered from an abandoned state.
-    public struct RecoveredSession: Sendable {
-        public let sessionId: String
-        public let directory: URL
+    struct RecoveredSession: Sendable {
+        let sessionId: String
+        let directory: URL
         /// Number of heist evidence entries found, or nil if no heist was in progress.
-        public let heistEvidenceCount: Int?
+        let heistEvidenceCount: Int?
         /// Path to the heist evidence file, if one exists.
-        public let heistFilePath: URL?
+        let heistFilePath: URL?
     }
 
     /// Scan for abandoned sessions and recover them.
     /// An abandoned session has `session.jsonl` (uncompressed) — meaning it was
     /// never properly closed. Recovery: write a recovery manifest, compress the log.
     /// Abandoned heist evidence (heist.jsonl) is preserved and surfaced in the result.
+    ///
+    /// Internal: not yet wired into a production flow. Exposed via `@testable import`
+    /// only. Promote to public when TheFence (or a CLI command) consumes the result.
     @discardableResult
-    public func recoverAbandonedSessions() -> [RecoveredSession] {
+    func recoverAbandonedSessions() -> [RecoveredSession] {
         let fileManager = FileManager.default
         guard fileManager.fileExists(atPath: baseDirectory.path) else { return [] }
 
@@ -179,34 +182,31 @@ public final class TheBookKeeper {
             return []
         }
 
-        var recovered: [RecoveredSession] = []
-        for directoryURL in contents {
+        return contents.compactMap { directoryURL in
             let isDirectory: Bool
             do {
                 isDirectory = try directoryURL.resourceValues(forKeys: [.isDirectoryKey]).isDirectory ?? false
             } catch {
                 logger.warning("Failed to read resource values for \(directoryURL.lastPathComponent): \(error.localizedDescription)")
-                continue
+                return nil
             }
-            guard isDirectory else { continue }
-            let rawLog = directoryURL.appendingPathComponent("session.jsonl")
-            let compressedLog = directoryURL.appendingPathComponent("session.jsonl.gz")
+            guard isDirectory else { return nil }
 
             // Abandoned = has raw log but no compressed log
-            let hasRawLog = fileManager.fileExists(atPath: rawLog.path)
-            let hasCompressedLog = fileManager.fileExists(atPath: compressedLog.path)
-            guard hasRawLog, !hasCompressedLog else { continue }
+            let rawLog = directoryURL.appendingPathComponent("session.jsonl")
+            let compressedLog = directoryURL.appendingPathComponent("session.jsonl.gz")
+            guard fileManager.fileExists(atPath: rawLog.path),
+                  !fileManager.fileExists(atPath: compressedLog.path) else { return nil }
 
             let sessionId = directoryURL.lastPathComponent
             let heistInfo = recoverSession(directory: directoryURL, sessionId: sessionId)
-            recovered.append(RecoveredSession(
+            return RecoveredSession(
                 sessionId: sessionId,
                 directory: directoryURL,
                 heistEvidenceCount: heistInfo.evidenceCount,
                 heistFilePath: heistInfo.filePath
-            ))
+            )
         }
-        return recovered
     }
 
     private func recoverSession(
@@ -623,13 +623,24 @@ public final class TheBookKeeper {
     }
 
     /// Read HeistEvidence entries from a JSONL file.
+    ///
+    /// Malformed lines are logged and skipped rather than discarding the whole
+    /// recording. A single corrupt entry shouldn't destroy the other N-1 steps
+    /// captured during the heist.
     private func readEvidenceFromFile(_ path: URL) throws -> [HeistEvidence] {
         let data = try Data(contentsOf: path)
         let lines = data.split(separator: 0x0A)
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return try lines.map { lineData in
-            try decoder.decode(HeistEvidence.self, from: Data(lineData))
+        return lines.enumerated().compactMap { index, lineData in
+            do {
+                return try decoder.decode(HeistEvidence.self, from: Data(lineData))
+            } catch {
+                logger.warning(
+                    "Skipping malformed heist line \(index) in \(path.lastPathComponent): \(error.localizedDescription)"
+                )
+                return nil
+            }
         }
     }
 
@@ -643,15 +654,17 @@ public final class TheBookKeeper {
     }
 
     /// Update the cached interface snapshot for heist recording.
+    ///
+    /// Merges rather than replaces — after a screen change, the activated element
+    /// from the old screen must remain in the cache for the recording step that
+    /// triggered the transition. New elements take priority on heistId collision.
     public func updateInterfaceCache(_ elements: [HeistElement]) {
         guard case .active(var session) = phase,
               var recording = session.heistRecording else { return }
-        // Merge rather than replace — after a screen change, the activated element
-        // from the old screen must remain in the cache for the recording step that
-        // triggered the transition. New elements take priority on heistId collision.
-        for element in elements {
-            recording.interfaceCache[element.heistId] = element
-        }
+        recording.interfaceCache.merge(
+            elements.map { ($0.heistId, $0) },
+            uniquingKeysWith: { _, new in new }
+        )
         session.heistRecording = recording
         phase = .active(session)
     }
@@ -801,7 +814,9 @@ public final class TheBookKeeper {
     /// When no combination of fields yields a unique match, returns the best
     /// matcher alongside the element's 0-based ordinal among all matches
     /// (traversal order in the allElements array).
-    public func buildMinimalMatcher(
+    ///
+    /// Internal: consumed by `buildStep` and verified directly in tests.
+    func buildMinimalMatcher(
         element: HeistElement,
         allElements: [HeistElement]
     ) -> (matcher: ElementMatcher, ordinal: Int?) {

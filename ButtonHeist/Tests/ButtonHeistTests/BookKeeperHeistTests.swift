@@ -456,6 +456,85 @@ final class BookKeeperHeistTests: XCTestCase {
         XCTAssertTrue(recovered.isEmpty)
     }
 
+    @ButtonHeistActor
+    func testRecoverWithCorruptManifestRegeneratesIt() async throws {
+        let sessionDir = tempDirectory.appendingPathComponent("corrupt-manifest-2026-04-03-120000")
+        try FileManager.default.createDirectory(at: sessionDir, withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: sessionDir.appendingPathComponent("session.jsonl"))
+        // Write a manifest that's not valid JSON for SessionManifest
+        try Data("not a valid manifest".utf8).write(to: sessionDir.appendingPathComponent("manifest.json"))
+
+        let bookKeeper = makeBookKeeper()
+        let recovered = bookKeeper.recoverAbandonedSessions()
+
+        XCTAssertEqual(recovered.count, 1)
+        XCTAssertEqual(recovered[0].sessionId, "corrupt-manifest-2026-04-03-120000")
+
+        // Recovery should have written a fresh, parseable manifest with endTime
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let manifestData = try Data(contentsOf: sessionDir.appendingPathComponent("manifest.json"))
+        let manifest = try decoder.decode(SessionManifest.self, from: manifestData)
+        XCTAssertNotNil(manifest.endTime)
+        XCTAssertEqual(manifest.sessionId, "corrupt-manifest-2026-04-03-120000")
+    }
+
+    // MARK: - Malformed evidence resilience
+
+    @ButtonHeistActor
+    func testStopHeistSkipsMalformedEvidenceLines() async throws {
+        let bookKeeper = makeBookKeeper()
+        try bookKeeper.beginSession(identifier: "malformed-evidence")
+        try bookKeeper.startHeistRecording(app: "com.example.app")
+
+        // Write a good step through the normal path
+        bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Go"])
+
+        // Inject a malformed line directly into the heist.jsonl file
+        guard case .active(let session) = bookKeeper.phase else {
+            return XCTFail("Expected active phase")
+        }
+        let heistPath = session.directory.appendingPathComponent("heist.jsonl")
+        let handle = try FileHandle(forWritingTo: heistPath)
+        handle.seekToEndOfFile()
+        handle.write(Data("this-is-not-json\n".utf8))
+        handle.closeFile()
+
+        // Record another good step via the book-keeper handle
+        bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Done"])
+
+        let heist = try bookKeeper.stopHeistRecording()
+        XCTAssertEqual(heist.steps.count, 2, "Malformed line should be skipped, not fail the whole stop")
+        XCTAssertEqual(heist.steps[0].target?.label, "Go")
+        XCTAssertEqual(heist.steps[1].target?.label, "Done")
+    }
+
+    // MARK: - Close session with open heist recording
+
+    @ButtonHeistActor
+    func testCloseSessionWithActiveHeistClosesHandle() async throws {
+        let bookKeeper = makeBookKeeper()
+        try bookKeeper.beginSession(identifier: "close-with-heist")
+        try bookKeeper.startHeistRecording(app: "com.example.app")
+        bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Go"])
+
+        // Locate the heist file before the phase advances
+        guard case .active(let activeSession) = bookKeeper.phase else {
+            return XCTFail("Expected active phase")
+        }
+        let heistPath = activeSession.directory.appendingPathComponent("heist.jsonl")
+
+        // closeSession should not throw even though the heist is still "recording"
+        try await bookKeeper.closeSession()
+
+        // heist.jsonl must still exist on disk — its evidence is preserved
+        XCTAssertTrue(FileManager.default.fileExists(atPath: heistPath.path))
+        // Phase must advance past active — file handle is closed as part of closeSession
+        if case .active = bookKeeper.phase {
+            XCTFail("closeSession should transition out of active even with an open heist recording")
+        }
+    }
+
     // MARK: - Helpers
 
     @ButtonHeistActor
