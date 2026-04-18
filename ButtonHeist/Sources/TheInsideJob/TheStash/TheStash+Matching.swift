@@ -151,12 +151,8 @@ extension TheStash {
                 return registry.elements[heistId]
             }
         }
-        return registry.elements.values
-            .sorted { $0.heistId < $1.heistId }
-            .lazy
-            .filter { $0.element.matches(matcher) }
-            .prefix(limit)
-            .map { $0 }
+        let sorted = registry.elements.values.sorted { $0.heistId < $1.heistId }
+        return Array(sorted.lazy.filter { $0.element.matches(matcher) }.prefix(limit))
     }
 
     /// Search for the first matching element.
