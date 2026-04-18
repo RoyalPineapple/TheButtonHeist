@@ -259,7 +259,118 @@ final class TheBrainsPipelineTests: XCTestCase {
                         "Swipeable containers should be explored and cached")
     }
 
+    // MARK: - Temporary Swipe Diagnostics (Watch Mode)
+
+    func testTempWatchSwipeParseDuringAnimation() async throws {
+        guard brains.refresh() != nil else {
+            throw XCTSkip("No live hierarchy available for swipe timing diagnostics")
+        }
+        guard let scenario = swipeScenario() else {
+            throw XCTSkip("No overflowing scrollable container available")
+        }
+
+        // Keep this short enough to run quickly, but slow enough to watch in Simulator.
+        let durations: [TimeInterval] = [0.12, 0.08, 0.06]
+        let iterations = 4
+
+        for duration in durations {
+            var detectedDuringCount = 0
+            var detectedAfterCount = 0
+            var parseMs: [Double] = []
+
+            print(String(format: "[Diagnostics][Temp][Watch] starting duration=%.2fs", duration))
+
+            for i in 0..<iterations {
+                let direction = i.isMultiple(of: 2) ? scenario.primaryDirection : scenario.reverseDirection
+                guard brains.refresh() != nil else { continue }
+                let before = brains.stash.registry.viewportIds
+                let t0 = CACurrentMediaTime()
+
+                let swipeTask = Task {
+                    await self.brains.safecracker.scrollBySwipe(
+                        frame: scenario.frame,
+                        direction: direction,
+                        duration: duration
+                    )
+                }
+
+                var sawDuring = false
+                while CACurrentMediaTime() - t0 < duration {
+                    let parseStart = CACurrentMediaTime()
+                    brains.refresh()
+                    let parseEnd = CACurrentMediaTime()
+                    parseMs.append((parseEnd - parseStart) * 1000)
+
+                    if brains.stash.registry.viewportIds != before {
+                        detectedDuringCount += 1
+                        sawDuring = true
+                        break
+                    }
+                    await brains.tripwire.yieldFrames(1)
+                }
+
+                _ = await swipeTask.value
+                brains.refresh()
+                if !sawDuring, brains.stash.registry.viewportIds != before {
+                    detectedAfterCount += 1
+                }
+
+                // Give humans time to visually follow each swipe in Simulator.
+                try? await Task.sleep(for: .milliseconds(450))
+            }
+
+            let meanParse = parseMs.reduce(0, +) / Double(max(parseMs.count, 1))
+            print(String(
+                format: "[Diagnostics][Temp][Watch] duration=%.2fs detected_during=%d/%d detected_only_after=%d/%d parse_mean=%.2fms",
+                duration, detectedDuringCount, iterations, detectedAfterCount, iterations, meanParse
+            ))
+        }
+    }
+
     // MARK: - Helpers
+
+    private struct SwipeScenario {
+        let frame: CGRect
+        let primaryDirection: UIAccessibilityScrollDirection
+        let reverseDirection: UIAccessibilityScrollDirection
+    }
+
+    private func swipeScenario() -> SwipeScenario? {
+        guard let container = brains.stash.currentHierarchy.scrollableContainers.first(where: {
+            guard case .scrollable(let contentSize) = $0.type else { return false }
+            let hasHOverflow = contentSize.width > $0.frame.width + 1
+            let hasVOverflow = contentSize.height > $0.frame.height + 1
+            return hasHOverflow || hasVOverflow
+        }),
+        case .scrollable(let contentSize) = container.type else {
+            return nil
+        }
+
+        let hasHOverflow = contentSize.width > container.frame.width + 1
+        let hasVOverflow = contentSize.height > container.frame.height + 1
+
+        let primaryDirection: UIAccessibilityScrollDirection
+        let reverseDirection: UIAccessibilityScrollDirection
+        if hasVOverflow {
+            primaryDirection = .down
+            reverseDirection = .up
+        } else if hasHOverflow {
+            primaryDirection = .right
+            reverseDirection = .left
+        } else {
+            return nil
+        }
+
+        let frame: CGRect
+        if let view = brains.stash.scrollableContainerViews[container], view.window != nil {
+            frame = view.convert(view.bounds, to: nil)
+        } else {
+            frame = container.frame
+        }
+
+        guard !frame.isEmpty else { return nil }
+        return SwipeScenario(frame: frame, primaryDirection: primaryDirection, reverseDirection: reverseDirection)
+    }
 
     private func seedRegistry(
         heistId: String,
