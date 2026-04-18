@@ -6,7 +6,7 @@
 
 ## Responsibilities
 
-TheStash holds the goods — pure data, no side effects:
+TheStash holds the goods — sole custodian of the live UIKit/accessibility object boundary. Value semantics at the API edge; all weak→strong promotion and NSObject touching happens inside:
 
 1. **Screen-lifetime element registry** — maintains `screenElements: [String: ScreenElement]` keyed by heistId, persistent across refreshes within the same screen
 2. **Target resolution** — `resolveTarget(_:)` is the single entry point: `.heistId` → O(1) dictionary lookup in `registry.elements`, `.matcher` → `uniqueMatch` tree walk + O(1) reverse index lookup via `registry.reverseIndex`. Returns `TargetResolution` enum (`.resolved(ResolvedTarget)`, `.notFound(diagnostics:)`, `.ambiguous(candidates:diagnostics:)`). See [12-UNIFIED-TARGETING.md](12-UNIFIED-TARGETING.md) for the full targeting system.
@@ -14,9 +14,11 @@ TheStash holds the goods — pure data, no side effects:
 4. **HeistId synthesis** — `IdAssignment` assigns stable, deterministic `heistId` identifiers directly from `AccessibilityElement` (developer identifier preferred, else synthesized from traits+label; value excluded for stability), with suffix disambiguation for duplicates
 5. **Wire conversion at boundary** — `WireConversion.toWire()` converts `ScreenElement` → `HeistElement` only at serialization boundaries (Pulse broadcast, sendInterface, ExploreResult). All internal code operates on `AccessibilityElement`.
 6. **Delta computation** — `WireConversion.computeDelta()` computes interface deltas from before/after snapshots
-7. **Element actions** — thin wrappers over `accessibilityActivate()`, `accessibilityIncrement()`, `accessibilityDecrement()`, `accessibilityCustomActions` on the live UIKit object
-8. **Screen capture** — renders traversable windows via `UIGraphicsImageRenderer` (TheStash+Capture.swift)
-9. **Resolution diagnostics** — near-miss suggestions, similar heistId hints, compact element summaries (`Diagnostics`)
+7. **Element actions** — thin wrappers over `accessibilityActivate()`, `accessibilityIncrement()`, `accessibilityDecrement()`, `accessibilityCustomActions` on the live UIKit object. `performCustomAction` returns a `CustomActionOutcome` enum so callers can distinguish "view deallocated" from "no such action" without a raw NSObject check.
+8. **Scroll-position primitives** — `jumpToRecordedPosition(_:)`, `restoreScrollPosition(_:to:)`, and `scrollTargetOffset(for:in:)` set `contentOffset` on an element's owning scroll view from a recorded `contentSpaceOrigin`. The stash decides nothing (callers still orchestrate when to jump); it just encapsulates the UIScrollView write so the scroll view handle doesn't leak.
+9. **Live geometry readout** — `liveGeometry(for:)` promotes the weak NSObject ref internally and returns a value-typed `(frame, activationPoint, scrollView)` snapshot for callers that need to make viewport decisions.
+10. **Screen capture** — renders traversable windows via `UIGraphicsImageRenderer` (TheStash+Capture.swift)
+11. **Resolution diagnostics** — near-miss suggestions, similar heistId hints, compact element summaries (`Diagnostics`)
 
 **Not TheStash's job** (moved to other crew members):
 - Parse pipeline (hierarchy parsing, element context building) → [TheBurglar](10-THEBURGLAR.md)
@@ -205,4 +207,4 @@ No store writes to another store. No circular dependencies.
 
 ## Architectural Rule
 
-TheStash is pure data — it holds elements, resolves targets, and converts to wire format. It does not orchestrate actions, drive scrolling, or manage the delta cycle. Those responsibilities belong to TheBrains, which coordinates TheStash, TheBurglar, TheSafecracker, and TheTripwire. Wire conversion and ID assignment are static methods on caseless enums (`TheStash.WireConversion`, `TheStash.IdAssignment`); TheStash exposes thin instance facades (`toWire`, `convertTree`, `computeDelta`, `traitNames`) for ergonomics — both forms are valid, the statics are the source of truth.
+TheStash owns the NSObject boundary — value semantics at its API edge. It holds elements, resolves targets, converts to wire format, and exposes primitive single-op actions and scroll writes against the stored weak refs it alone holds. It does not *orchestrate* — it does not decide when to scroll, when to refresh, or when to dispatch an action. Those decisions belong to TheBrains, which coordinates TheStash, TheBurglar, TheSafecracker, and TheTripwire. No NSObject escapes the stash after TheBurglar deposits it: callers pass `ScreenElement` tokens and receive CGRects, CGPoints, Bools, and typed outcome enums. Wire conversion and ID assignment are static methods on caseless enums (`TheStash.WireConversion`, `TheStash.IdAssignment`); TheStash exposes thin instance facades (`toWire`, `convertTree`, `computeDelta`, `traitNames`) for ergonomics — both forms are valid, the statics are the source of truth.
