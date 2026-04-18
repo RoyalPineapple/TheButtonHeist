@@ -51,7 +51,9 @@ extension TheBrains {
         command: ClientMessage,
         interaction: () async -> TheSafecracker.InteractionResult
     ) async -> ActionResult {
-        refresh()
+        guard refresh() != nil else {
+            return treeUnavailableResult(method: fallbackMethod(for: command))
+        }
         let before = captureBeforeState()
         let result = await interaction()
 
@@ -70,7 +72,9 @@ extension TheBrains {
         target: ElementSearchTarget,
         command: ClientMessage
     ) async -> ActionResult {
-        refresh()
+        guard refresh() != nil else {
+            return treeUnavailableResult(method: fallbackMethod(for: command))
+        }
         let before = captureBeforeState()
         let result = await executeElementSearch(target)
 
@@ -86,15 +90,20 @@ extension TheBrains {
 
     /// Wait for an element to appear or disappear.
     func performWaitFor(target: WaitForTarget) async -> ActionResult {
-        refresh()
+        guard refresh() != nil else {
+            return treeUnavailableResult(method: .waitFor)
+        }
         let before = captureBeforeState()
         let result = await executeWaitFor(target)
+        let errorKind: ErrorKind? = result.success
+            ? nil
+            : (result.message == "Could not access accessibility tree" ? .actionFailed : .timeout)
 
         return await actionResultWithDelta(
             success: result.success,
             method: .waitFor,
             message: result.message,
-            errorKind: result.success ? nil : .timeout,
+            errorKind: errorKind,
             before: before
         )
     }
@@ -105,7 +114,9 @@ extension TheBrains {
         let deadline = ContinuousClock.now + .seconds(target.resolvedTimeout)
         let start = CFAbsoluteTimeGetCurrent()
 
-        stash.refresh()
+        guard stash.refresh() != nil else {
+            return .failure(.waitFor, message: "Could not access accessibility tree")
+        }
         if target.resolvedAbsent {
             if !stash.hasTarget(elementTarget) {
                 return .init(success: true, method: .waitFor, message: "absent confirmed after 0.0s", value: nil)
@@ -118,7 +129,9 @@ extension TheBrains {
 
         while ContinuousClock.now < deadline {
             _ = await tripwire.waitForAllClear(timeout: 1.0)
-            stash.refresh()
+            guard stash.refresh() != nil else {
+                return .failure(.waitFor, message: "Could not access accessibility tree")
+            }
             let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
             if target.resolvedAbsent {
                 if !stash.hasTarget(elementTarget) {
@@ -138,7 +151,9 @@ extension TheBrains {
 
     /// Full screen exploration.
     func performExplore() async -> ActionResult {
-        refresh()
+        guard refresh() != nil else {
+            return treeUnavailableResult(method: .explore)
+        }
         let before = captureBeforeState()
 
         let manifest = await exploreAndPrune()
@@ -215,6 +230,35 @@ extension TheBrains {
             var builder = ActionResultBuilder(method: .activate, screenName: nil, screenId: nil)
             builder.message = "Unhandled"
             return builder.failure(errorKind: .unsupported)
+        }
+    }
+
+    private func fallbackMethod(for command: ClientMessage) -> ActionMethod {
+        switch command {
+        case .activate: return .activate
+        case .increment: return .increment
+        case .decrement: return .decrement
+        case .performCustomAction: return .customAction
+        case .touchTap: return .syntheticTap
+        case .touchLongPress: return .syntheticLongPress
+        case .touchSwipe: return .syntheticSwipe
+        case .touchDrag: return .syntheticDrag
+        case .touchPinch: return .syntheticPinch
+        case .touchRotate: return .syntheticRotate
+        case .touchTwoFingerTap: return .syntheticTwoFingerTap
+        case .touchDrawPath, .touchDrawBezier: return .syntheticDrawPath
+        case .typeText: return .typeText
+        case .editAction: return .editAction
+        case .scroll: return .scroll
+        case .scrollToVisible: return .scrollToVisible
+        case .elementSearch: return .elementSearch
+        case .scrollToEdge: return .scrollToEdge
+        case .waitFor: return .waitFor
+        case .resignFirstResponder: return .resignFirstResponder
+        case .setPasteboard: return .setPasteboard
+        case .getPasteboard: return .getPasteboard
+        case .explore: return .explore
+        default: return .activate
         }
     }
 }
