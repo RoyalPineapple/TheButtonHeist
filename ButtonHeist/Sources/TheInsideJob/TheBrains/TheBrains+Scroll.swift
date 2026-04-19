@@ -274,10 +274,18 @@ extension TheBrains {
     }
 
     /// Clamp a swipe rectangle to the screen region outside accessibility-level
-    /// chrome: below any page-level `.header`-trait element, above any
-    /// `.tabBar` container, inset horizontally by the key window's layout
-    /// margins. Returns the intersection when it's non-empty; otherwise the
-    /// frame clipped to the screen so swipes at least stay on-screen.
+    /// chrome: above any `.tabBar` container, below the key window's top safe
+    /// area, inset horizontally by the window's layout margins. Returns the
+    /// intersection when it's non-empty; otherwise the frame clipped to the
+    /// screen so swipes at least stay on-screen.
+    ///
+    /// Nav bar detection is not yet honest: UIKit doesn't expose a trait for
+    /// `UINavigationBar` (see `trait-system-overview.md` in the research repo),
+    /// and `.header` trait conflates section headers with page chrome. The
+    /// proper fix is reading AXRuntime attribute 2015 in the parser, which
+    /// every element carries as a back-reference to its owning nav bar. Until
+    /// that lands, apps whose scrollable frame extends under a translucent
+    /// nav bar will surface the bug (swipe misfires or doesn't scroll).
     func safeSwipeFrame(from frame: CGRect) -> CGRect {
         let safeIntersection = frame.intersection(currentSwipeSafeBounds())
         if !safeIntersection.isNull, !safeIntersection.isEmpty {
@@ -290,16 +298,13 @@ extension TheBrains {
         return frame
     }
 
-    /// Region of the screen safe for synthetic swipes. Top edge is the bottom
-    /// of any page-level `.header` element (headers inside scrollable
-    /// containers — e.g. list section headers — are ignored). Bottom edge is
-    /// the top of any `.tabBar` container. With no chrome detected, degrades
-    /// to the key window's `safeAreaInsets`.
+    /// Region of the screen safe for synthetic swipes. Bottom edge is the top
+    /// of any `.tabBar` container in the accessibility hierarchy. Top edge is
+    /// the window's `safeAreaInsets.top` — covers the status bar / notch but
+    /// not nav bars (see `safeSwipeFrame`).
     private func currentSwipeSafeBounds() -> CGRect {
         let screen = ScreenMetrics.current.bounds
-        let hierarchy = stash.currentHierarchy
-
-        let tabBarTop = hierarchy
+        let tabBarTop = stash.currentHierarchy
             .flattenToContainers()
             .compactMap { container -> CGFloat? in
                 guard case .tabBar = container.type else { return nil }
@@ -307,15 +312,10 @@ extension TheBrains {
             }
             .min()
 
-        let navBarBottom = hierarchy
-            .flatMap(Self.pageLevelHeaders(in:))
-            .map { $0.shape.frame.maxY }
-            .max()
-
         let window = Self.keyWindow
         let horizontalInset = window?.directionalLayoutMargins.leading ?? 0
         let insets = window?.safeAreaInsets ?? .zero
-        let top = navBarBottom ?? insets.top
+        let top = insets.top
         let bottom = tabBarTop ?? (screen.height - insets.bottom)
 
         return CGRect(
@@ -324,21 +324,6 @@ extension TheBrains {
             width: max(0, screen.width - horizontalInset * 2),
             height: max(0, bottom - top)
         )
-    }
-
-    /// Elements with `.header` trait that are NOT nested inside a scrollable
-    /// container. Page-level nav bar titles qualify; list section headers do
-    /// not, because they ride with the scroll content rather than sit on top.
-    private static func pageLevelHeaders(
-        in node: AccessibilityHierarchy
-    ) -> [AccessibilityElement] {
-        switch node {
-        case .element(let element, _):
-            return element.traits.contains(.header) ? [element] : []
-        case .container(let container, let children):
-            if case .scrollable = container.type { return [] }
-            return children.flatMap(pageLevelHeaders(in:))
-        }
     }
 
     private static var keyWindow: UIWindow? {

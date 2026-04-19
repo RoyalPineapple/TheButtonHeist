@@ -581,45 +581,6 @@ final class TheBrainsScrollTests: XCTestCase {
         )
     }
 
-    func testSafeSwipeFrameClampsBelowPageLevelHeader() {
-        // A .header-trait element NOT inside a scrollable container defines
-        // the top clear line.
-        let headerFrame = CGRect(x: 0, y: 40, width: 400, height: 50)
-        let header = makeElement(traits: .header, shape: .frame(headerFrame))
-        brains.stash.currentHierarchy = [.element(header, traversalIndex: 0)]
-        let result = brains.safeSwipeFrame(from: CGRect(x: 100, y: 0, width: 200, height: 500))
-        XCTAssertEqual(
-            result.minY, headerFrame.maxY,
-            "Swipe area must start at the header's bottom edge"
-        )
-    }
-
-    func testSafeSwipeFrameIgnoresHeadersInsideScrollableContainers() {
-        // A .header element inside a .scrollable container is a section
-        // header, not page-level chrome — it must NOT constrain the swipe
-        // safe region.
-        let headerFrame = CGRect(x: 0, y: 200, width: 400, height: 50)
-        let header = makeElement(traits: .header, shape: .frame(headerFrame))
-        brains.stash.currentHierarchy = [
-            .container(
-                AccessibilityContainer(
-                    type: .scrollable(contentSize: CGSize(width: 400, height: 2000)),
-                    frame: CGRect(x: 0, y: 100, width: 400, height: 600)
-                ),
-                children: [.element(header, traversalIndex: 0)]
-            )
-        ]
-        let input = CGRect(x: 100, y: 100, width: 200, height: 400)
-        let result = brains.safeSwipeFrame(from: input)
-        XCTAssertGreaterThan(
-            result.minY, 0,
-            "Should still be clamped by window safe area, but not by the section header"
-        )
-        XCTAssertLessThan(
-            result.minY, headerFrame.minY,
-            "Section header inside a scrollable must not push the top clear line down"
-        )
-    }
 
     // MARK: - Clear Cache
 
