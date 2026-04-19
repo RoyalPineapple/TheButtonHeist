@@ -16,9 +16,101 @@ import AccessibilitySnapshotParser
 
 extension TheBrains {
 
-    /// Fast-path duration for synthetic swipe scrolling. Chosen to minimize
-    /// wall-clock time while remaining reliable in simulator testing.
-    private static let swipeScrollDuration: TimeInterval = 0.12
+    /// Keep swipe gesture timing stable; scrolling cadence is frame-driven.
+    private static let swipeGestureDuration: TimeInterval = 0.12
+
+    /// Settle-loop pacing parameters. Two canned profiles: `.directionChange`
+    /// is the conservative budget for reversals (spring/inertia takes longer);
+    /// `.sameDirection` is the aggressive budget for continuing scrolls.
+    struct SettleSwipeProfile: Sendable, Equatable {
+        /// Earliest frame at which exit conditions can be evaluated.
+        var minFrames: Int
+        /// Hard cap on settle polling to avoid long stalls on spring animations.
+        var maxFrames: Int
+        /// Consecutive frames with no newly-discovered elements needed to exit.
+        var requiredIdleFrames: Int
+        /// Consecutive frames with an unchanged viewport set needed to exit.
+        var requiredStableViewportFrames: Int
+
+        static let directionChange = SettleSwipeProfile(
+            minFrames: 6, maxFrames: 24,
+            requiredIdleFrames: 2, requiredStableViewportFrames: 3
+        )
+        static let sameDirection = SettleSwipeProfile(
+            minFrames: 1, maxFrames: 3,
+            requiredIdleFrames: 1, requiredStableViewportFrames: 1
+        )
+    }
+
+    /// Return value from `SettleSwipeLoopState.advance(...)` — whether the
+    /// caller should feed another frame or treat the swipe as settled.
+    enum SettleSwipeStep: Equatable { case `continue`, done }
+
+    /// Pure stepwise driver for the swipe-settle loop. Tracks motion-detected
+    /// state, idle/stable counters, and exit conditions given a sequence of
+    /// per-frame observations. `moved` only latches from false to true.
+    struct SettleSwipeLoopState: Equatable {
+        let profile: SettleSwipeProfile
+        let previousViewport: Set<String>
+        let previousAnchor: Int?
+
+        private(set) var moved = false
+        private(set) var frame = 0
+        private var lastViewport: Set<String>
+        private var idleFramesWithoutNew = 0
+        private var stableViewportFrames = 0
+
+        init(
+            profile: SettleSwipeProfile,
+            previousViewport: Set<String>,
+            previousAnchor: Int?
+        ) {
+            self.profile = profile
+            self.previousViewport = previousViewport
+            self.previousAnchor = previousAnchor
+            self.lastViewport = previousViewport
+        }
+
+        /// Advance one frame. Pass the current viewport id set, the current
+        /// anchor signature (nil if content-space origins unavailable), and
+        /// the heistIds newly discovered this frame.
+        mutating func advance(
+            viewportIds: Set<String>,
+            anchorSignature: Int?,
+            newHeistIds: Set<String>
+        ) -> SettleSwipeStep {
+            if let previousAnchor, let anchorSignature {
+                if anchorSignature != previousAnchor { moved = true }
+            } else if viewportIds != previousViewport {
+                moved = true
+            }
+
+            if viewportIds == lastViewport {
+                stableViewportFrames += 1
+            } else {
+                lastViewport = viewportIds
+                stableViewportFrames = 0
+            }
+
+            if newHeistIds.isEmpty {
+                idleFramesWithoutNew += 1
+            } else {
+                idleFramesWithoutNew = 0
+            }
+
+            frame += 1
+
+            if frame >= profile.minFrames,
+               idleFramesWithoutNew >= profile.requiredIdleFrames,
+               stableViewportFrames >= profile.requiredStableViewportFrames {
+                return .done
+            }
+            if frame >= profile.maxFrames {
+                return .done
+            }
+            return .continue
+        }
+    }
 
     /// A scrollable container discovered from the accessibility hierarchy.
     @MainActor enum ScrollableTarget {
@@ -84,6 +176,7 @@ extension TheBrains {
         animated: Bool = true
     ) async -> (moved: Bool, previousOnScreen: Set<String>) {
         let before = stash.registry.viewportIds
+        let beforeAnchor = viewportAnchorSignature()
 
         switch target {
         case .uiScrollView(let sv):
@@ -99,25 +192,146 @@ extension TheBrains {
             }
             refresh()
             return (true, before)
-        case .swipeable(let frame, _):
+        case .swipeable(let frame, let contentSize):
+            let targetKey = swipeTargetKey(frame: frame, contentSize: contentSize)
+            let isDirectionChange = lastSwipeDirectionByTarget[targetKey].map { $0 != direction } ?? false
             let dispatched = await safecracker.scrollBySwipe(
                 frame: frame,
                 direction: direction,
-                duration: Self.swipeScrollDuration
+                duration: Self.swipeGestureDuration
             )
             guard dispatched else { return (false, before) }
-
-            // Optimistic parse immediately after finger-up; if the viewport has not
-            // advanced yet, do one short settle wait and parse again.
-            refresh()
-            if stash.registry.viewportIds != before {
-                return (true, before)
-            }
-
-            await tripwire.yieldFrames(2)
-            refresh()
-            return (stash.registry.viewportIds != before, before)
+            let moved = await settleSwipeMotion(
+                previousOnScreen: before,
+                previousAnchor: beforeAnchor,
+                requireDirectionChangeSettle: isDirectionChange
+            )
+            lastSwipeDirectionByTarget[targetKey] = direction
+            return (moved, before)
         }
+    }
+
+    /// Parse through post-gesture spring/inertia and consider the swipe settled
+    /// when no new elements are discovered for a short consecutive frame window.
+    private func settleSwipeMotion(
+        previousOnScreen: Set<String>,
+        previousAnchor: Int?,
+        requireDirectionChangeSettle: Bool
+    ) async -> Bool {
+        let profile: SettleSwipeProfile = requireDirectionChangeSettle
+            ? .directionChange
+            : .sameDirection
+        var state = SettleSwipeLoopState(
+            profile: profile,
+            previousViewport: previousOnScreen,
+            previousAnchor: previousAnchor
+        )
+        var knownHeistIds = Set(stash.registry.elements.keys)
+
+        while true {
+            refresh()
+            let currentHeistIds = Set(stash.registry.elements.keys)
+            let newHeistIds = currentHeistIds.subtracting(knownHeistIds)
+            knownHeistIds.formUnion(newHeistIds)
+
+            let step = state.advance(
+                viewportIds: stash.registry.viewportIds,
+                anchorSignature: viewportAnchorSignature(),
+                newHeistIds: newHeistIds
+            )
+            if case .done = step { break }
+            await tripwire.yieldFrames(1)
+        }
+        return state.moved
+    }
+
+    /// Stable signature for the viewport based on content-space origins.
+    /// Avoids treating edge bounces/re-parses as true movement.
+    ///
+    /// The returned hash is **in-process only** — Swift's hash seed is
+    /// randomized per launch, so never persist, log, or compare these values
+    /// across processes.
+    private func viewportAnchorSignature() -> Int? {
+        let anchors = stash.registry.viewportIds.compactMap { heistId -> String? in
+            guard let entry = stash.registry.elements[heistId],
+                  let origin = entry.contentSpaceOrigin else { return nil }
+            return "\(heistId):\(Int(origin.x.rounded())):\(Int(origin.y.rounded()))"
+        }.sorted()
+        guard !anchors.isEmpty else { return nil }
+        return anchors.joined(separator: "|").hashValue
+    }
+
+    private func swipeTargetKey(frame: CGRect, contentSize: CGSize) -> String {
+        let values = [
+            Int(frame.minX.rounded()),
+            Int(frame.minY.rounded()),
+            Int(frame.width.rounded()),
+            Int(frame.height.rounded()),
+            Int(contentSize.width.rounded()),
+            Int(contentSize.height.rounded())
+        ]
+        return values.map(String.init).joined(separator: ":")
+    }
+
+    /// Clamp a swipe rectangle to the screen region outside accessibility-level
+    /// chrome: above any `.tabBar` container, inset horizontally by the key
+    /// window's layout margins. Returns the intersection when it's non-empty;
+    /// otherwise the frame clipped to the screen so swipes at least stay
+    /// on-screen.
+    ///
+    /// Nav bar detection is deliberately absent: UIKit does not expose an
+    /// accessibility signal for `UINavigationBar`, and we refuse to walk the
+    /// UIView hierarchy to infer one. Apps whose scrollable frame extends
+    /// under a translucent nav bar will surface the bug (swipe misfires or
+    /// doesn't scroll) — the honest failure mode per BH's thesis. The proper
+    /// fix will come from AXRuntime attribute 2015 (`_accessibilityValueForAttribute:`),
+    /// which every element carries as a back-reference to its owning nav bar;
+    /// that path needs LLDB validation across OS versions before shipping.
+    func safeSwipeFrame(from frame: CGRect) -> CGRect {
+        let safeIntersection = frame.intersection(currentSwipeSafeBounds())
+        if !safeIntersection.isNull, !safeIntersection.isEmpty {
+            return safeIntersection
+        }
+        let screenIntersection = frame.intersection(ScreenMetrics.current.bounds)
+        if !screenIntersection.isNull, !screenIntersection.isEmpty {
+            return screenIntersection
+        }
+        return frame
+    }
+
+    /// Region of the screen safe for synthetic swipes. Bottom edge is the top
+    /// of any `.tabBar` container in the accessibility hierarchy. Top edge is
+    /// the window's `safeAreaInsets.top` — covers the status bar / notch but
+    /// not nav bars (see `safeSwipeFrame`).
+    private func currentSwipeSafeBounds() -> CGRect {
+        let screen = ScreenMetrics.current.bounds
+        let tabBarTop = stash.currentHierarchy
+            .flattenToContainers()
+            .compactMap { container -> CGFloat? in
+                guard case .tabBar = container.type else { return nil }
+                return container.frame.minY
+            }
+            .min()
+
+        let window = Self.keyWindow
+        let horizontalInset = window?.directionalLayoutMargins.leading ?? 0
+        let insets = window?.safeAreaInsets ?? .zero
+        let top = insets.top
+        let bottom = tabBarTop ?? (screen.height - insets.bottom)
+
+        return CGRect(
+            x: screen.minX + horizontalInset,
+            y: top,
+            width: max(0, screen.width - horizontalInset * 2),
+            height: max(0, bottom - top)
+        )
+    }
+
+    private static var keyWindow: UIWindow? {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)
     }
 
     // MARK: - Scroll Command Execution
@@ -332,13 +546,13 @@ extension TheBrains {
         contentSize: CGSize
     ) -> ScrollableTarget {
         if let view = stash.scrollableContainerViews[container], view.window != nil {
-            if let scrollView = view as? UIScrollView {
+            if let scrollView = view as? UIScrollView, !forceSwipeScrolling {
                 return .uiScrollView(scrollView)
             }
-            let screenFrame = view.convert(view.bounds, to: nil)
+            let screenFrame = safeSwipeFrame(from: view.convert(view.bounds, to: nil))
             return .swipeable(frame: screenFrame, contentSize: contentSize)
         }
-        return .swipeable(frame: container.frame, contentSize: contentSize)
+        return .swipeable(frame: safeSwipeFrame(from: container.frame), contentSize: contentSize)
     }
 
     private func searchNotFoundResult(scrollCount: Int) -> TheSafecracker.InteractionResult {
@@ -368,9 +582,10 @@ extension TheBrains {
     private static let comfortMarginFraction: CGFloat = 1.0 / 6.0
 
     private static var interactionComfortZone: CGRect {
-        UIScreen.main.bounds.insetBy(
-            dx: UIScreen.main.bounds.width * comfortMarginFraction,
-            dy: UIScreen.main.bounds.height * comfortMarginFraction
+        let bounds = ScreenMetrics.current.bounds
+        return bounds.insetBy(
+            dx: bounds.width * comfortMarginFraction,
+            dy: bounds.height * comfortMarginFraction
         )
     }
 
@@ -397,7 +612,7 @@ extension TheBrains {
         guard let heistId = stash.registry.firstResponderHeistId,
               let entry = stash.registry.elements[heistId],
               let geometry = stash.liveGeometry(for: entry),
-              !UIScreen.main.bounds.contains(geometry.frame),
+              !ScreenMetrics.current.bounds.contains(geometry.frame),
               !Self.interactionComfortZone.contains(geometry.activationPoint) else { return }
         if safecracker.scrollToMakeVisible(
             geometry.frame, in: geometry.scrollView,
@@ -410,7 +625,7 @@ extension TheBrains {
 
     private func ensureOnScreenSync(_ resolved: TheStash.ResolvedTarget, animated: Bool = true) {
         guard let geometry = stash.liveGeometry(for: resolved.screenElement),
-              !UIScreen.main.bounds.contains(geometry.frame),
+              !ScreenMetrics.current.bounds.contains(geometry.frame),
               !Self.interactionComfortZone.contains(geometry.activationPoint) else { return }
         _ = safecracker.scrollToMakeVisible(
             geometry.frame, in: geometry.scrollView, animated: animated,
@@ -445,7 +660,13 @@ extension TheBrains {
         axis: ScrollAxis? = nil
     ) -> ScrollableTarget? {
         if let sv = screenElement.scrollView {
-            let target = ScrollableTarget.uiScrollView(sv)
+            let target: ScrollableTarget
+            if forceSwipeScrolling {
+                let screenFrame = safeSwipeFrame(from: sv.convert(sv.bounds, to: nil))
+                target = .swipeable(frame: screenFrame, contentSize: sv.contentSize)
+            } else {
+                target = .uiScrollView(sv)
+            }
             if let axis, !Self.scrollableAxis(of: target).contains(axis) {
                 if let (axisTarget, _) = findScrollTarget(axis: axis) {
                     return axisTarget

@@ -101,7 +101,7 @@ final class TheStakeout {
         // Determine output dimensions from screen.
         // Default: 1x point resolution (native pixels / screen scale).
         // If caller provides scale, use that fraction of native resolution.
-        let screen = UIScreen.main
+        let screen = ScreenMetrics.current
         let nativeWidth = screen.bounds.width * screen.scale
         let nativeHeight = screen.bounds.height * screen.scale
         let effectiveScale: CGFloat = if let requestedScale = config.scale {

@@ -2,6 +2,7 @@
 .build/
 build/
 DerivedData/
+Derived/
 
 # Tuist-generated artifacts (nested project)
 ButtonHeist/ButtonHeist.xcodeproj/
