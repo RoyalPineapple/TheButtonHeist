@@ -536,24 +536,24 @@ final class TheBrainsScrollTests: XCTestCase {
 
     // MARK: - safeSwipeFrame
 
-    func testSafeSwipeFrameTinyFrameUsesInsetFallback() {
-        // A 40×40 frame is below the 44×44 minimum swipe rect, so the
-        // safe-bounds intersection path is skipped. The fallback insets by
-        // dx = min(20, width * 0.1) = 4 and dy = min(60, height * 0.2) = 8.
-        let result = TheBrains.safeSwipeFrame(from: CGRect(x: 0, y: 0, width: 40, height: 40))
-        XCTAssertEqual(result, CGRect(x: 4, y: 8, width: 32, height: 24))
+    func testSafeSwipeFrameFullyInSafeBoundsIsUnchanged() {
+        // A frame sitting comfortably inside the safe area must pass through
+        // intersected with itself, which is the frame.
+        let screen = UIScreen.main.bounds
+        let inner = screen.insetBy(dx: 80, dy: 120)
+        XCTAssertEqual(TheBrains.safeSwipeFrame(from: inner), inner)
     }
 
     func testSafeSwipeFrameZeroWidthReturnsOriginal() {
-        // Degenerate input: intersection is empty and the inset fallback
-        // stays empty, so safeSwipeFrame returns the original frame.
+        // Degenerate input has no intersection with anything, so the function
+        // returns the original frame.
         let input = CGRect(x: 0, y: 0, width: 0, height: 100)
         XCTAssertEqual(TheBrains.safeSwipeFrame(from: input), input)
     }
 
-    func testSafeSwipeFrameOversizedFrameClampsToSafeBounds() {
+    func testSafeSwipeFrameOversizedFrameClampsWithinScreen() {
         // A frame larger than any iPhone screen must clamp to the safe
-        // bounds: stays within the current screen and above the 44×44 minimum.
+        // region and stay within the current screen bounds.
         let huge = CGRect(x: -1000, y: -1000, width: 10000, height: 10000)
         let result = TheBrains.safeSwipeFrame(from: huge)
         let screenBounds = UIScreen.main.bounds
@@ -561,8 +561,6 @@ final class TheBrainsScrollTests: XCTestCase {
             screenBounds.contains(result),
             "Result \(result) must fit within the screen \(screenBounds)"
         )
-        XCTAssertGreaterThanOrEqual(result.width, 44)
-        XCTAssertGreaterThanOrEqual(result.height, 44)
     }
 
     // MARK: - Clear Cache

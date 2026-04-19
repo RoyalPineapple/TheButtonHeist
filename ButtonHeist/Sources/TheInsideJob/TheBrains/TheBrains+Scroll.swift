@@ -19,20 +19,6 @@ extension TheBrains {
     /// Keep swipe gesture timing stable; scrolling cadence is frame-driven.
     private static let swipeGestureDuration: TimeInterval = 0.12
 
-    /// Minimum swipe rectangle dimension — Apple HIG minimum hit target.
-    /// UIKit does not expose this as a public constant.
-    private static let minSwipeRectDimension: CGFloat = 44
-    /// Horizontal inset default when no key window is available to query
-    /// its layout margins. Matches UIKit's iPhone default.
-    private static let fallbackHorizontalMargin: CGFloat = 16
-    /// Cap on fallback inset when the safe-bounds intersection is unusable.
-    private static let swipeFallbackMaxDx: CGFloat = 20
-    private static let swipeFallbackMaxDy: CGFloat = 60
-    /// Cap on anchors hashed into `viewportAnchorSignature`. A dozen
-    /// top-of-viewport origins is enough to detect scroll motion without
-    /// paying O(n log n) per settle frame on element-heavy screens.
-    private static let anchorSignatureMaxElements: Int = 12
-
     /// Settle-loop pacing parameters. Two canned profiles: `.directionChange`
     /// is the conservative budget for reversals (spring/inertia takes longer);
     /// `.sameDirection` is the aggressive budget for continuing scrolls.
@@ -259,8 +245,8 @@ extension TheBrains {
         return state.moved
     }
 
-    /// Stable signature for the top of the viewport based on content-space
-    /// origins. This avoids treating edge bounces/re-parses as true movement.
+    /// Stable signature for the viewport based on content-space origins.
+    /// Avoids treating edge bounces/re-parses as true movement.
     ///
     /// The returned hash is **in-process only** — Swift's hash seed is
     /// randomized per launch, so never persist, log, or compare these values
@@ -272,7 +258,7 @@ extension TheBrains {
             return "\(heistId):\(Int(origin.x.rounded())):\(Int(origin.y.rounded()))"
         }.sorted()
         guard !anchors.isEmpty else { return nil }
-        return anchors.prefix(Self.anchorSignatureMaxElements).joined(separator: "|").hashValue
+        return anchors.joined(separator: "|").hashValue
     }
 
     private func swipeTargetKey(frame: CGRect, contentSize: CGSize) -> String {
@@ -287,33 +273,32 @@ extension TheBrains {
         return values.map(String.init).joined(separator: ":")
     }
 
+    /// Clamp a swipe rectangle to the screen region that isn't occupied by
+    /// visible navigation bars, tab bars, or the window's layout margins.
+    /// Returns the intersection when it's non-empty; otherwise returns the
+    /// frame clipped to the screen so swipes at least stay on-screen.
     static func safeSwipeFrame(from frame: CGRect) -> CGRect {
-        let safeBounds = currentSwipeSafeBounds()
-        let intersected = frame.intersection(safeBounds)
-        if !intersected.isNull, !intersected.isEmpty,
-           intersected.width >= minSwipeRectDimension,
-           intersected.height >= minSwipeRectDimension {
-            return intersected
+        let safeIntersection = frame.intersection(currentSwipeSafeBounds())
+        if !safeIntersection.isNull, !safeIntersection.isEmpty {
+            return safeIntersection
         }
-
-        let fallback = frame.insetBy(
-            dx: min(swipeFallbackMaxDx, frame.width * 0.1),
-            dy: min(swipeFallbackMaxDy, frame.height * 0.2)
-        )
-        if !fallback.isEmpty { return fallback }
+        let screenIntersection = frame.intersection(ScreenMetrics.current.bounds)
+        if !screenIntersection.isNull, !screenIntersection.isEmpty {
+            return screenIntersection
+        }
         return frame
     }
 
     /// Region of the screen safe for synthetic swipes: below any visible
-    /// `UINavigationBar`, above any visible `UITabBar`/`UIToolbar`, and inset
-    /// horizontally by the key window's layout margins. Falls back to the
-    /// window safe area when no chrome is present.
+    /// `UINavigationBar`, above any visible `UITabBar`/`UIToolbar`, inset
+    /// horizontally by the key window's layout margins. With no window or
+    /// chrome, degrades to the screen bounds inset by `safeAreaInsets`.
     private static func currentSwipeSafeBounds() -> CGRect {
         let screen = ScreenMetrics.current.bounds
-        let window = keyWindow
+        guard let window = keyWindow else { return screen }
         let chrome = visibleChromeEdges(in: window)
-        let insets = window?.safeAreaInsets ?? .zero
-        let horizontalInset = window?.directionalLayoutMargins.leading ?? fallbackHorizontalMargin
+        let insets = window.safeAreaInsets
+        let horizontalInset = window.directionalLayoutMargins.leading
         let top = chrome.navBarBottom ?? insets.top
         let bottom = chrome.tabBarTop ?? (screen.height - insets.bottom)
         return CGRect(
