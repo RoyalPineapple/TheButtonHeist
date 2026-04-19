@@ -19,6 +19,25 @@ extension TheBrains {
     /// Keep swipe gesture timing stable; scrolling cadence is frame-driven.
     private static let swipeGestureDuration: TimeInterval = 0.12
 
+    /// Extra top inset beyond the window safe area — clears nav bars and
+    /// large-title headers so synthetic swipes don't trigger edge gestures.
+    private static let swipeSafeTopPad: CGFloat = 56
+    /// Extra bottom inset beyond the window safe area — clears home indicator
+    /// and tab bar hit zones.
+    private static let swipeSafeBottomPad: CGFloat = 20
+    /// Horizontal inset from screen edges to avoid triggering system edge
+    /// gestures (back swipe, control center).
+    private static let swipeSafeHorizontalInset: CGFloat = 16
+    /// Minimum swipe rectangle dimension (Apple's HIG tap target).
+    private static let minSwipeRectDimension: CGFloat = 44
+    /// Cap on fallback inset when the safe-bounds intersection is unusable.
+    private static let swipeFallbackMaxDx: CGFloat = 20
+    private static let swipeFallbackMaxDy: CGFloat = 60
+    /// Cap on anchors hashed into `viewportAnchorSignature`. A dozen
+    /// top-of-viewport origins is enough to detect scroll motion without
+    /// paying O(n log n) per settle frame on element-heavy screens.
+    private static let anchorSignatureMaxElements: Int = 12
+
     /// Settle-loop pacing parameters. Two canned profiles: `.directionChange`
     /// is the conservative budget for reversals (spring/inertia takes longer);
     /// `.sameDirection` is the aggressive budget for continuing scrolls.
@@ -247,6 +266,10 @@ extension TheBrains {
 
     /// Stable signature for the top of the viewport based on content-space
     /// origins. This avoids treating edge bounces/re-parses as true movement.
+    ///
+    /// The returned hash is **in-process only** — Swift's hash seed is
+    /// randomized per launch, so never persist, log, or compare these values
+    /// across processes.
     private func viewportAnchorSignature() -> Int? {
         let anchors = stash.registry.viewportIds.compactMap { heistId -> String? in
             guard let entry = stash.registry.elements[heistId],
@@ -254,7 +277,7 @@ extension TheBrains {
             return "\(heistId):\(Int(origin.x.rounded())):\(Int(origin.y.rounded()))"
         }.sorted()
         guard !anchors.isEmpty else { return nil }
-        return anchors.prefix(12).joined(separator: "|").hashValue
+        return anchors.prefix(Self.anchorSignatureMaxElements).joined(separator: "|").hashValue
     }
 
     private func swipeTargetKey(frame: CGRect, contentSize: CGSize) -> String {
@@ -269,24 +292,25 @@ extension TheBrains {
         return values.map(String.init).joined(separator: ":")
     }
 
-    private static func safeSwipeFrame(from frame: CGRect) -> CGRect {
-        let safeTopInset = windowSafeAreaInsets.top + 56
-        let safeBottomInset = windowSafeAreaInsets.bottom + 20
+    static func safeSwipeFrame(from frame: CGRect) -> CGRect {
+        let safeTopInset = windowSafeAreaInsets.top + swipeSafeTopPad
+        let safeBottomInset = windowSafeAreaInsets.bottom + swipeSafeBottomPad
         let safeBounds = ScreenMetrics.current.bounds.inset(by: UIEdgeInsets(
             top: safeTopInset,
-            left: 16,
+            left: swipeSafeHorizontalInset,
             bottom: safeBottomInset,
-            right: 16
+            right: swipeSafeHorizontalInset
         ))
         let intersected = frame.intersection(safeBounds)
         if !intersected.isNull, !intersected.isEmpty,
-           intersected.width >= 44, intersected.height >= 44 {
+           intersected.width >= minSwipeRectDimension,
+           intersected.height >= minSwipeRectDimension {
             return intersected
         }
 
         let fallback = frame.insetBy(
-            dx: min(20, frame.width * 0.1),
-            dy: min(60, frame.height * 0.2)
+            dx: min(swipeFallbackMaxDx, frame.width * 0.1),
+            dy: min(swipeFallbackMaxDy, frame.height * 0.2)
         )
         if !fallback.isEmpty { return fallback }
         return frame

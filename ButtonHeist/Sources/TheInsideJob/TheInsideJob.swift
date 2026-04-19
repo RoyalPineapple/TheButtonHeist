@@ -159,9 +159,8 @@ public final class TheInsideJob {
 
     private static func resolveForceSwipeScrolling(explicit: Bool?) -> Bool {
         if let explicit { return explicit }
-        if EnvironmentKey.insideJobForceSwipeScrolling.value != nil {
-            return EnvironmentKey.insideJobForceSwipeScrolling.boolValue
-        }
+        let envKey = EnvironmentKey.insideJobForceSwipeScrolling
+        if envKey.value != nil { return envKey.boolValue }
         if let plist = Bundle.main.object(
             forInfoDictionaryKey: "InsideJobForceSwipeScrolling"
         ) as? Bool {

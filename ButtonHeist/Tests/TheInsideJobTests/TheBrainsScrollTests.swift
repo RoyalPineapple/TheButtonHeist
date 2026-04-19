@@ -399,10 +399,9 @@ final class TheBrainsScrollTests: XCTestCase {
         let target = forcedBrains.resolveScrollTarget(
             screenElement: screenElement, axis: .vertical
         )
-        if case .swipeable = target {
-            XCTAssertTrue(true, "Forced swipe mode should convert UIScrollView targets to .swipeable")
-        } else {
+        guard case .swipeable = target else {
             XCTFail("Expected .swipeable in force mode, got \(String(describing: target))")
+            return
         }
     }
 
@@ -532,6 +531,47 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertFalse(
             state.moved,
             "Matching anchor must suppress viewport-set differences as motion signal"
+        )
+    }
+
+    // MARK: - safeSwipeFrame
+
+    func testSafeSwipeFrameTinyFrameUsesInsetFallback() {
+        // A 40×40 frame is below the 44×44 minimum swipe rect, so the
+        // safe-bounds intersection path is skipped. The fallback insets by
+        // dx = min(20, width * 0.1) = 4 and dy = min(60, height * 0.2) = 8.
+        let result = TheBrains.safeSwipeFrame(from: CGRect(x: 0, y: 0, width: 40, height: 40))
+        XCTAssertEqual(result, CGRect(x: 4, y: 8, width: 32, height: 24))
+    }
+
+    func testSafeSwipeFrameZeroWidthReturnsOriginal() {
+        // Degenerate input: intersection is empty and the inset fallback
+        // stays empty, so safeSwipeFrame returns the original frame.
+        let input = CGRect(x: 0, y: 0, width: 0, height: 100)
+        XCTAssertEqual(TheBrains.safeSwipeFrame(from: input), input)
+    }
+
+    func testSafeSwipeFrameOversizedFrameClampsToSafeBounds() {
+        // A frame larger than any iPhone screen must clamp to the safe
+        // bounds: respects the horizontal inset, top and bottom pads, and
+        // stays at least 44×44.
+        let huge = CGRect(x: -1000, y: -1000, width: 10000, height: 10000)
+        let result = TheBrains.safeSwipeFrame(from: huge)
+        XCTAssertGreaterThanOrEqual(result.minX, 16)
+        XCTAssertGreaterThanOrEqual(result.minY, 56)
+        XCTAssertGreaterThanOrEqual(result.width, 44)
+        XCTAssertGreaterThanOrEqual(result.height, 44)
+    }
+
+    // MARK: - Clear Cache
+
+    func testClearCacheClearsLastSwipeDirectionCache() {
+        brains.lastSwipeDirectionByTarget["key"] = .down
+        XCTAssertFalse(brains.lastSwipeDirectionByTarget.isEmpty)
+        brains.clearCache()
+        XCTAssertTrue(
+            brains.lastSwipeDirectionByTarget.isEmpty,
+            "clearCache must drop the swipe direction cache so a new session starts fresh"
         )
     }
 
