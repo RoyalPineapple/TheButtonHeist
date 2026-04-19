@@ -525,4 +525,66 @@ final class DiscoveredDeviceTests: XCTestCase {
             XCTFail("Reachability should send exactly one status probe")
         }
     }
+
+    @ButtonHeistActor
+    func testReachableReleasesProbeConnectionAfterCompletion() async {
+        let device = DiscoveredDevice(
+            id: "test",
+            name: "ReachableApp#abc123",
+            endpoint: NWEndpoint.hostPort(host: .ipv6(.loopback), port: 1),
+            certFingerprint: "sha256:mock"
+        )
+
+        let previousFactory = makeReachabilityConnection
+        defer { makeReachabilityConnection = previousFactory }
+
+        weak var weakProbe: ReachabilityProbeConnection?
+        do {
+            let probe = ReachabilityProbeConnection()
+            weakProbe = probe
+            makeReachabilityConnection = { _ in probe }
+
+            let reachable = await [device].reachable(timeout: 0.2)
+            XCTAssertEqual(reachable, [device])
+        }
+
+        makeReachabilityConnection = previousFactory
+        for _ in 0..<10 {
+            if weakProbe == nil { break }
+            await Task.yield()
+        }
+        XCTAssertNil(weakProbe, "Reachability probe connection should deallocate after completion")
+    }
+}
+
+@ButtonHeistActor
+private final class ReachabilityProbeConnection: DeviceConnecting {
+    var isConnected = false
+    var observeMode = false
+    var onEvent: ((ConnectionEvent) -> Void)?
+
+    func connect() {
+        isConnected = true
+        onEvent?(.transportReady)
+    }
+
+    func disconnect() {
+        isConnected = false
+    }
+
+    func send(_ message: ClientMessage, requestId: String?) {
+        guard case .status = message else { return }
+        let payload = StatusPayload(
+            identity: StatusIdentity(
+                appName: "ReachableApp",
+                bundleIdentifier: "com.test.reachable",
+                appBuild: "1",
+                deviceName: "Simulator",
+                systemVersion: "18.5",
+                buttonHeistVersion: "5.0"
+            ),
+            session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
+        )
+        onEvent?(.message(.status(payload), requestId: requestId, backgroundDelta: nil))
+    }
 }
