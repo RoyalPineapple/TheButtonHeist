@@ -289,6 +289,16 @@ extension TheBrains {
         return frame
     }
 
+    /// Edges of screen chrome that a synthetic swipe must avoid.
+    private struct ChromeEdges {
+        /// Bottom of the lowest visible navigation bar, in window coords.
+        var navBarBottom: CGFloat?
+        /// Top of the highest visible tab bar / toolbar, in window coords.
+        var tabBarTop: CGFloat?
+
+        static let none = ChromeEdges(navBarBottom: nil, tabBarTop: nil)
+    }
+
     /// Region of the screen safe for synthetic swipes: below any visible
     /// `UINavigationBar`, above any visible `UITabBar`/`UIToolbar`, inset
     /// horizontally by the key window's layout margins. With no window or
@@ -309,28 +319,23 @@ extension TheBrains {
         )
     }
 
-    /// Bottom of the lowest visible navigation bar and top of the highest
-    /// visible tab bar / toolbar, both in window coordinates. `nil` entries
-    /// signal absence of that chrome in the key window's hierarchy.
-    private static func visibleChromeEdges(
-        in window: UIWindow?
-    ) -> (navBarBottom: CGFloat?, tabBarTop: CGFloat?) {
-        guard let window else { return (nil, nil) }
-        var navBarBottom: CGFloat?
-        var tabBarTop: CGFloat?
-        var stack: [UIView] = [window]
-        while let view = stack.popLast() {
-            guard !view.isHidden, view.alpha > 0 else { continue }
-            if let nav = view as? UINavigationBar {
-                let frame = nav.convert(nav.bounds, to: nil)
-                navBarBottom = max(navBarBottom ?? -.greatestFiniteMagnitude, frame.maxY)
-            } else if view is UITabBar || view is UIToolbar {
-                let frame = view.convert(view.bounds, to: nil)
-                tabBarTop = min(tabBarTop ?? .greatestFiniteMagnitude, frame.minY)
-            }
-            stack.append(contentsOf: view.subviews)
-        }
-        return (navBarBottom, tabBarTop == .greatestFiniteMagnitude ? nil : tabBarTop)
+    private static func visibleChromeEdges(in window: UIWindow?) -> ChromeEdges {
+        guard let window else { return .none }
+        let visible = descendants(of: window).filter(\.isVisibleInLayout)
+        return ChromeEdges(
+            navBarBottom: visible
+                .compactMap { $0 as? UINavigationBar }
+                .map { $0.convert($0.bounds, to: nil).maxY }
+                .max(),
+            tabBarTop: visible
+                .filter(\.isBottomChromeBar)
+                .map { $0.convert($0.bounds, to: nil).minY }
+                .min()
+        )
+    }
+
+    private static func descendants(of view: UIView) -> [UIView] {
+        [view] + view.subviews.flatMap(descendants(of:))
     }
 
     private static var keyWindow: UIWindow? {
@@ -720,6 +725,13 @@ extension TheBrains {
         return uiScrollDirection(for: direction)
     }
 
+}
+
+// MARK: - UIView Helpers
+
+extension UIView {
+    fileprivate var isVisibleInLayout: Bool { !isHidden && alpha > 0 }
+    fileprivate var isBottomChromeBar: Bool { self is UITabBar || self is UIToolbar }
 }
 
 #endif // DEBUG
