@@ -156,8 +156,23 @@ nonisolated extension USBDeviceDiscovery {
         process.executableURL = URL(fileURLWithPath: path)
         process.arguments = arguments
 
-        let pipe = Pipe()
-        process.standardOutput = pipe
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("buttonheist-usb-discovery-\(UUID().uuidString)")
+        guard FileManager.default.createFile(atPath: outputURL.path, contents: nil) else {
+            logger.debug("Failed to create temporary output file for \(path)")
+            return nil
+        }
+        guard let outputHandle = FileHandle(forWritingAtPath: outputURL.path) else {
+            logger.debug("Failed to open temporary output file for \(path)")
+            try? FileManager.default.removeItem(at: outputURL)
+            return nil
+        }
+        defer {
+            outputHandle.closeFile()
+            try? FileManager.default.removeItem(at: outputURL)
+        }
+
+        process.standardOutput = outputHandle
         process.standardError = FileHandle.nullDevice
 
         do {
@@ -167,10 +182,22 @@ nonisolated extension USBDeviceDiscovery {
             return nil
         }
 
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
+        let deadline = Date().addingTimeInterval(timeout)
+        while process.isRunning, Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.01)
+        }
+
+        guard !process.isRunning else {
+            logger.debug("Timed out running \(path) after \(timeout)s")
+            process.terminate()
+            return nil
+        }
 
         guard process.terminationStatus == 0 else {
+            return nil
+        }
+
+        guard let data = try? Data(contentsOf: outputURL) else {
             return nil
         }
 
