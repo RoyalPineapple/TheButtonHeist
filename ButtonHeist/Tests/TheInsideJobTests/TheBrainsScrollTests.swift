@@ -537,29 +537,87 @@ final class TheBrainsScrollTests: XCTestCase {
     // MARK: - safeSwipeFrame
 
     func testSafeSwipeFrameFullyInSafeBoundsIsUnchanged() {
-        // A frame sitting comfortably inside the safe area must pass through
+        // A frame sitting comfortably inside the safe area passes through
         // intersected with itself, which is the frame.
         let screen = UIScreen.main.bounds
         let inner = screen.insetBy(dx: 80, dy: 120)
-        XCTAssertEqual(TheBrains.safeSwipeFrame(from: inner), inner)
+        XCTAssertEqual(brains.safeSwipeFrame(from: inner), inner)
     }
 
     func testSafeSwipeFrameZeroWidthReturnsOriginal() {
         // Degenerate input has no intersection with anything, so the function
         // returns the original frame.
         let input = CGRect(x: 0, y: 0, width: 0, height: 100)
-        XCTAssertEqual(TheBrains.safeSwipeFrame(from: input), input)
+        XCTAssertEqual(brains.safeSwipeFrame(from: input), input)
     }
 
     func testSafeSwipeFrameOversizedFrameClampsWithinScreen() {
         // A frame larger than any iPhone screen must clamp to the safe
         // region and stay within the current screen bounds.
         let huge = CGRect(x: -1000, y: -1000, width: 10000, height: 10000)
-        let result = TheBrains.safeSwipeFrame(from: huge)
+        let result = brains.safeSwipeFrame(from: huge)
         let screenBounds = UIScreen.main.bounds
         XCTAssertTrue(
             screenBounds.contains(result),
             "Result \(result) must fit within the screen \(screenBounds)"
+        )
+    }
+
+    func testSafeSwipeFrameClampsAboveTabBarContainer() {
+        // A .tabBar container in the accessibility hierarchy defines the
+        // bottom clear line. A swipe rectangle that overlaps the tab bar
+        // must be clipped to end at its top edge.
+        let tabBarFrame = CGRect(x: 0, y: 700, width: 400, height: 80)
+        brains.stash.currentHierarchy = [
+            .container(
+                AccessibilityContainer(type: .tabBar, frame: tabBarFrame),
+                children: []
+            )
+        ]
+        let result = brains.safeSwipeFrame(from: CGRect(x: 100, y: 400, width: 200, height: 500))
+        XCTAssertEqual(
+            result.maxY, tabBarFrame.minY,
+            "Swipe area must end at the tab bar's top edge"
+        )
+    }
+
+    func testSafeSwipeFrameClampsBelowPageLevelHeader() {
+        // A .header-trait element NOT inside a scrollable container defines
+        // the top clear line.
+        let headerFrame = CGRect(x: 0, y: 40, width: 400, height: 50)
+        let header = makeElement(traits: .header, shape: .frame(headerFrame))
+        brains.stash.currentHierarchy = [.element(header, traversalIndex: 0)]
+        let result = brains.safeSwipeFrame(from: CGRect(x: 100, y: 0, width: 200, height: 500))
+        XCTAssertEqual(
+            result.minY, headerFrame.maxY,
+            "Swipe area must start at the header's bottom edge"
+        )
+    }
+
+    func testSafeSwipeFrameIgnoresHeadersInsideScrollableContainers() {
+        // A .header element inside a .scrollable container is a section
+        // header, not page-level chrome — it must NOT constrain the swipe
+        // safe region.
+        let headerFrame = CGRect(x: 0, y: 200, width: 400, height: 50)
+        let header = makeElement(traits: .header, shape: .frame(headerFrame))
+        brains.stash.currentHierarchy = [
+            .container(
+                AccessibilityContainer(
+                    type: .scrollable(contentSize: CGSize(width: 400, height: 2000)),
+                    frame: CGRect(x: 0, y: 100, width: 400, height: 600)
+                ),
+                children: [.element(header, traversalIndex: 0)]
+            )
+        ]
+        let input = CGRect(x: 100, y: 100, width: 200, height: 400)
+        let result = brains.safeSwipeFrame(from: input)
+        XCTAssertGreaterThan(
+            result.minY, 0,
+            "Should still be clamped by window safe area, but not by the section header"
+        )
+        XCTAssertLessThan(
+            result.minY, headerFrame.minY,
+            "Section header inside a scrollable must not push the top clear line down"
         )
     }
 
@@ -579,7 +637,8 @@ final class TheBrainsScrollTests: XCTestCase {
 
     private func makeElement(
         label: String? = nil,
-        traits: UIAccessibilityTraits = .none
+        traits: UIAccessibilityTraits = .none,
+        shape: AccessibilityElement.Shape = .frame(.zero)
     ) -> AccessibilityElement {
         AccessibilityElement(
             description: label ?? "",
@@ -589,7 +648,7 @@ final class TheBrainsScrollTests: XCTestCase {
             identifier: nil,
             hint: nil,
             userInputLabels: nil,
-            shape: .frame(.zero),
+            shape: shape,
             activationPoint: .zero,
             usesDefaultActivationPoint: true,
             customActions: [],

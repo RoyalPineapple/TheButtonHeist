@@ -273,11 +273,12 @@ extension TheBrains {
         return values.map(String.init).joined(separator: ":")
     }
 
-    /// Clamp a swipe rectangle to the screen region that isn't occupied by
-    /// visible navigation bars, tab bars, or the window's layout margins.
-    /// Returns the intersection when it's non-empty; otherwise returns the
+    /// Clamp a swipe rectangle to the screen region outside accessibility-level
+    /// chrome: below any page-level `.header`-trait element, above any
+    /// `.tabBar` container, inset horizontally by the key window's layout
+    /// margins. Returns the intersection when it's non-empty; otherwise the
     /// frame clipped to the screen so swipes at least stay on-screen.
-    static func safeSwipeFrame(from frame: CGRect) -> CGRect {
+    func safeSwipeFrame(from frame: CGRect) -> CGRect {
         let safeIntersection = frame.intersection(currentSwipeSafeBounds())
         if !safeIntersection.isNull, !safeIntersection.isEmpty {
             return safeIntersection
@@ -289,28 +290,34 @@ extension TheBrains {
         return frame
     }
 
-    /// Edges of screen chrome that a synthetic swipe must avoid.
-    private struct ChromeEdges {
-        /// Bottom of the lowest visible navigation bar, in window coords.
-        var navBarBottom: CGFloat?
-        /// Top of the highest visible tab bar / toolbar, in window coords.
-        var tabBarTop: CGFloat?
-
-        static let none = ChromeEdges(navBarBottom: nil, tabBarTop: nil)
-    }
-
-    /// Region of the screen safe for synthetic swipes: below any visible
-    /// `UINavigationBar`, above any visible `UITabBar`/`UIToolbar`, inset
-    /// horizontally by the key window's layout margins. With no window or
-    /// chrome, degrades to the screen bounds inset by `safeAreaInsets`.
-    private static func currentSwipeSafeBounds() -> CGRect {
+    /// Region of the screen safe for synthetic swipes. Top edge is the bottom
+    /// of any page-level `.header` element (headers inside scrollable
+    /// containers — e.g. list section headers — are ignored). Bottom edge is
+    /// the top of any `.tabBar` container. With no chrome detected, degrades
+    /// to the key window's `safeAreaInsets`.
+    private func currentSwipeSafeBounds() -> CGRect {
         let screen = ScreenMetrics.current.bounds
-        guard let window = keyWindow else { return screen }
-        let chrome = visibleChromeEdges(in: window)
-        let insets = window.safeAreaInsets
-        let horizontalInset = window.directionalLayoutMargins.leading
-        let top = chrome.navBarBottom ?? insets.top
-        let bottom = chrome.tabBarTop ?? (screen.height - insets.bottom)
+        let hierarchy = stash.currentHierarchy
+
+        let tabBarTop = hierarchy
+            .flattenToContainers()
+            .compactMap { container -> CGFloat? in
+                guard case .tabBar = container.type else { return nil }
+                return container.frame.minY
+            }
+            .min()
+
+        let navBarBottom = hierarchy
+            .flatMap(Self.pageLevelHeaders(in:))
+            .map { $0.shape.frame.maxY }
+            .max()
+
+        let window = Self.keyWindow
+        let horizontalInset = window?.directionalLayoutMargins.leading ?? 0
+        let insets = window?.safeAreaInsets ?? .zero
+        let top = navBarBottom ?? insets.top
+        let bottom = tabBarTop ?? (screen.height - insets.bottom)
+
         return CGRect(
             x: screen.minX + horizontalInset,
             y: top,
@@ -319,23 +326,19 @@ extension TheBrains {
         )
     }
 
-    private static func visibleChromeEdges(in window: UIWindow?) -> ChromeEdges {
-        guard let window else { return .none }
-        let visible = descendants(of: window).filter(\.isVisibleInLayout)
-        return ChromeEdges(
-            navBarBottom: visible
-                .compactMap { $0 as? UINavigationBar }
-                .map { $0.convert($0.bounds, to: nil).maxY }
-                .max(),
-            tabBarTop: visible
-                .filter(\.isBottomChromeBar)
-                .map { $0.convert($0.bounds, to: nil).minY }
-                .min()
-        )
-    }
-
-    private static func descendants(of view: UIView) -> [UIView] {
-        [view] + view.subviews.flatMap(descendants(of:))
+    /// Elements with `.header` trait that are NOT nested inside a scrollable
+    /// container. Page-level nav bar titles qualify; list section headers do
+    /// not, because they ride with the scroll content rather than sit on top.
+    private static func pageLevelHeaders(
+        in node: AccessibilityHierarchy
+    ) -> [AccessibilityElement] {
+        switch node {
+        case .element(let element, _):
+            return element.traits.contains(.header) ? [element] : []
+        case .container(let container, let children):
+            if case .scrollable = container.type { return [] }
+            return children.flatMap(pageLevelHeaders(in:))
+        }
     }
 
     private static var keyWindow: UIWindow? {
@@ -560,10 +563,10 @@ extension TheBrains {
             if let scrollView = view as? UIScrollView, !forceSwipeScrolling {
                 return .uiScrollView(scrollView)
             }
-            let screenFrame = Self.safeSwipeFrame(from: view.convert(view.bounds, to: nil))
+            let screenFrame = safeSwipeFrame(from: view.convert(view.bounds, to: nil))
             return .swipeable(frame: screenFrame, contentSize: contentSize)
         }
-        return .swipeable(frame: Self.safeSwipeFrame(from: container.frame), contentSize: contentSize)
+        return .swipeable(frame: safeSwipeFrame(from: container.frame), contentSize: contentSize)
     }
 
     private func searchNotFoundResult(scrollCount: Int) -> TheSafecracker.InteractionResult {
@@ -673,7 +676,7 @@ extension TheBrains {
         if let sv = screenElement.scrollView {
             let target: ScrollableTarget
             if forceSwipeScrolling {
-                let screenFrame = Self.safeSwipeFrame(from: sv.convert(sv.bounds, to: nil))
+                let screenFrame = safeSwipeFrame(from: sv.convert(sv.bounds, to: nil))
                 target = .swipeable(frame: screenFrame, contentSize: sv.contentSize)
             } else {
                 target = .uiScrollView(sv)
@@ -725,13 +728,6 @@ extension TheBrains {
         return uiScrollDirection(for: direction)
     }
 
-}
-
-// MARK: - UIView Helpers
-
-extension UIView {
-    fileprivate var isVisibleInLayout: Bool { !isHidden && alpha > 0 }
-    fileprivate var isBottomChromeBar: Bool { self is UITabBar || self is UIToolbar }
 }
 
 #endif // DEBUG
