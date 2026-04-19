@@ -406,6 +406,135 @@ final class TheBrainsScrollTests: XCTestCase {
         }
     }
 
+    // MARK: - SettleSwipeLoopState (Pure Decision Logic)
+
+    func testSettleLoopSameDirectionExitsAfterOneStableFrame() {
+        var state = TheBrains.SettleSwipeLoopState(
+            profile: .sameDirection,
+            previousViewport: ["a"],
+            previousAnchor: 100
+        )
+        let step1 = state.advance(
+            viewportIds: ["b"],
+            anchorSignature: 200,
+            newHeistIds: []
+        )
+        XCTAssertEqual(step1, .continue, "Viewport change resets stable counter")
+        XCTAssertTrue(state.moved, "Anchor differs, motion detected")
+
+        let step2 = state.advance(
+            viewportIds: ["b"],
+            anchorSignature: 200,
+            newHeistIds: []
+        )
+        XCTAssertEqual(step2, .done, "Same-direction profile exits once stable frame count hits 1")
+        XCTAssertTrue(state.moved)
+    }
+
+    func testSettleLoopDirectionChangeHonorsMinFrames() {
+        var state = TheBrains.SettleSwipeLoopState(
+            profile: .directionChange,
+            previousViewport: ["a"],
+            previousAnchor: 100
+        )
+        for frameIndex in 0..<5 {
+            let step = state.advance(
+                viewportIds: ["a"],
+                anchorSignature: 100,
+                newHeistIds: []
+            )
+            XCTAssertEqual(step, .continue, "Frame \(frameIndex + 1) must not exit before minFrames=6")
+        }
+        let finalStep = state.advance(
+            viewportIds: ["a"],
+            anchorSignature: 100,
+            newHeistIds: []
+        )
+        XCTAssertEqual(finalStep, .done, "Direction-change profile exits at frame 6")
+        XCTAssertEqual(state.frame, 6)
+    }
+
+    func testSettleLoopExitsAtMaxFramesWhenConditionsNeverSettle() {
+        var state = TheBrains.SettleSwipeLoopState(
+            profile: .directionChange,
+            previousViewport: ["a"],
+            previousAnchor: 100
+        )
+        for frameIndex in 0..<23 {
+            let step = state.advance(
+                viewportIds: ["id-\(frameIndex)"],
+                anchorSignature: 200 + frameIndex,
+                newHeistIds: ["id-\(frameIndex)"]
+            )
+            XCTAssertEqual(step, .continue, "Frame \(frameIndex + 1) churns, should continue")
+        }
+        let finalStep = state.advance(
+            viewportIds: ["id-final"],
+            anchorSignature: 999,
+            newHeistIds: ["id-final"]
+        )
+        XCTAssertEqual(finalStep, .done, "Must exit at maxFrames=24 even if never settles")
+        XCTAssertEqual(state.frame, 24)
+    }
+
+    func testSettleLoopMovedLatchesAndNeverClears() {
+        var state = TheBrains.SettleSwipeLoopState(
+            profile: .directionChange,
+            previousViewport: ["a"],
+            previousAnchor: 100
+        )
+        XCTAssertFalse(state.moved)
+
+        _ = state.advance(
+            viewportIds: ["a"],
+            anchorSignature: 200,
+            newHeistIds: []
+        )
+        XCTAssertTrue(state.moved, "Differing anchor flags motion")
+
+        _ = state.advance(
+            viewportIds: ["a"],
+            anchorSignature: 100,
+            newHeistIds: []
+        )
+        XCTAssertTrue(state.moved, "moved only latches true, never clears back to false")
+    }
+
+    func testSettleLoopFallsBackToViewportDiffWhenAnchorsUnavailable() {
+        var state = TheBrains.SettleSwipeLoopState(
+            profile: .directionChange,
+            previousViewport: ["a"],
+            previousAnchor: nil
+        )
+        _ = state.advance(
+            viewportIds: ["b"],
+            anchorSignature: nil,
+            newHeistIds: []
+        )
+        XCTAssertTrue(state.moved, "Without anchors, viewport set difference signals motion")
+    }
+
+    func testSettleLoopEdgeBounceDoesNotReportMotion() {
+        // Regression guard for the claim that viewportAnchorSignature
+        // filters out edge-bounce false positives. When content-space
+        // anchors are unchanged across frames, viewport id shuffles
+        // (element reorder, reparse flicker) must NOT count as motion.
+        var state = TheBrains.SettleSwipeLoopState(
+            profile: .directionChange,
+            previousViewport: ["a", "b"],
+            previousAnchor: 500
+        )
+        _ = state.advance(
+            viewportIds: ["a", "c"],
+            anchorSignature: 500,
+            newHeistIds: ["c"]
+        )
+        XCTAssertFalse(
+            state.moved,
+            "Matching anchor must suppress viewport-set differences as motion signal"
+        )
+    }
+
     // MARK: - Helpers
 
     private func makeElement(

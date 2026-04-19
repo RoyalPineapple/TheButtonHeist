@@ -18,22 +18,97 @@ extension TheBrains {
 
     /// Keep swipe gesture timing stable; scrolling cadence is frame-driven.
     private static let swipeGestureDuration: TimeInterval = 0.12
-    /// End swipe settle after this many consecutive frames with no newly
-    /// discovered elements.
-    private static let swipeSettleIdleFrames = 2
-    /// Require viewport stability for a few consecutive frames.
-    private static let swipeSettleStableViewportFrames = 3
-    /// Minimum post-swipe cooldown frames before allowing another gesture.
-    /// Direction reversals need additional frames for spring/inertia to settle.
-    private static let swipeDirectionChangeMinSettleFrames = 6
-    /// Continuing in the same direction can be dispatched aggressively.
-    private static let swipeSameDirectionMinSettleFrames = 1
-    /// Hard cap on settle polling to avoid long stalls on spring animations.
-    private static let swipeSettleMaxFrames = 24
-    /// Quick settle defaults when continuing in the same direction.
-    private static let swipeQuickSettleIdleFrames = 1
-    private static let swipeQuickSettleStableViewportFrames = 1
-    private static let swipeQuickSettleMaxFrames = 3
+
+    /// Settle-loop pacing parameters. Two canned profiles: `.directionChange`
+    /// is the conservative budget for reversals (spring/inertia takes longer);
+    /// `.sameDirection` is the aggressive budget for continuing scrolls.
+    struct SettleSwipeProfile: Sendable, Equatable {
+        /// Earliest frame at which exit conditions can be evaluated.
+        var minFrames: Int
+        /// Hard cap on settle polling to avoid long stalls on spring animations.
+        var maxFrames: Int
+        /// Consecutive frames with no newly-discovered elements needed to exit.
+        var requiredIdleFrames: Int
+        /// Consecutive frames with an unchanged viewport set needed to exit.
+        var requiredStableViewportFrames: Int
+
+        static let directionChange = SettleSwipeProfile(
+            minFrames: 6, maxFrames: 24,
+            requiredIdleFrames: 2, requiredStableViewportFrames: 3
+        )
+        static let sameDirection = SettleSwipeProfile(
+            minFrames: 1, maxFrames: 3,
+            requiredIdleFrames: 1, requiredStableViewportFrames: 1
+        )
+    }
+
+    /// Pure stepwise driver for the swipe-settle loop. Tracks motion-detected
+    /// state, idle/stable counters, and exit conditions given a sequence of
+    /// per-frame observations. `moved` only latches from false to true.
+    struct SettleSwipeLoopState: Equatable {
+        enum Step: Equatable { case `continue`, done }
+
+        let profile: SettleSwipeProfile
+        let previousViewport: Set<String>
+        let previousAnchor: Int?
+
+        private(set) var moved = false
+        private(set) var frame = 0
+        private var lastViewport: Set<String>
+        private var idleFramesWithoutNew = 0
+        private var stableViewportFrames = 0
+
+        init(
+            profile: SettleSwipeProfile,
+            previousViewport: Set<String>,
+            previousAnchor: Int?
+        ) {
+            self.profile = profile
+            self.previousViewport = previousViewport
+            self.previousAnchor = previousAnchor
+            self.lastViewport = previousViewport
+        }
+
+        /// Advance one frame. Pass the current viewport id set, the current
+        /// anchor signature (nil if content-space origins unavailable), and
+        /// the heistIds newly discovered this frame.
+        mutating func advance(
+            viewportIds: Set<String>,
+            anchorSignature: Int?,
+            newHeistIds: Set<String>
+        ) -> Step {
+            if let previousAnchor, let anchorSignature {
+                if anchorSignature != previousAnchor { moved = true }
+            } else if viewportIds != previousViewport {
+                moved = true
+            }
+
+            if viewportIds == lastViewport {
+                stableViewportFrames += 1
+            } else {
+                lastViewport = viewportIds
+                stableViewportFrames = 0
+            }
+
+            if newHeistIds.isEmpty {
+                idleFramesWithoutNew += 1
+            } else {
+                idleFramesWithoutNew = 0
+            }
+
+            frame += 1
+
+            if frame >= profile.minFrames,
+               idleFramesWithoutNew >= profile.requiredIdleFrames,
+               stableViewportFrames >= profile.requiredStableViewportFrames {
+                return .done
+            }
+            if frame >= profile.maxFrames {
+                return .done
+            }
+            return .continue
+        }
+    }
 
     /// A scrollable container discovered from the accessibility hierarchy.
     @MainActor enum ScrollableTarget {
@@ -141,62 +216,31 @@ extension TheBrains {
         previousAnchor: Int?,
         requireDirectionChangeSettle: Bool
     ) async -> Bool {
-        let requiredIdleFrames = requireDirectionChangeSettle
-            ? Self.swipeSettleIdleFrames
-            : Self.swipeQuickSettleIdleFrames
-        let requiredStableViewportFrames = requireDirectionChangeSettle
-            ? Self.swipeSettleStableViewportFrames
-            : Self.swipeQuickSettleStableViewportFrames
-        let minFrames = requireDirectionChangeSettle
-            ? Self.swipeDirectionChangeMinSettleFrames
-            : Self.swipeSameDirectionMinSettleFrames
-        let maxFrames = requireDirectionChangeSettle
-            ? Self.swipeSettleMaxFrames
-            : Self.swipeQuickSettleMaxFrames
-
-        var moved = false
+        let profile: SettleSwipeProfile = requireDirectionChangeSettle
+            ? .directionChange
+            : .sameDirection
+        var state = SettleSwipeLoopState(
+            profile: profile,
+            previousViewport: previousOnScreen,
+            previousAnchor: previousAnchor
+        )
         var knownHeistIds = Set(stash.registry.elements.keys)
-        var idleFramesWithoutNew = 0
-        var stableViewportFrames = 0
-        var lastViewport = stash.registry.viewportIds
 
-        for frame in 0..<maxFrames {
+        while true {
             refresh()
-            let currentViewport = stash.registry.viewportIds
-            let currentAnchor = viewportAnchorSignature()
-            if let previousAnchor, let currentAnchor {
-                if currentAnchor != previousAnchor {
-                    moved = true
-                }
-            } else if currentViewport != previousOnScreen {
-                moved = true
-            }
-            if currentViewport == lastViewport {
-                stableViewportFrames += 1
-            } else {
-                lastViewport = currentViewport
-                stableViewportFrames = 0
-            }
-
             let currentHeistIds = Set(stash.registry.elements.keys)
             let newHeistIds = currentHeistIds.subtracting(knownHeistIds)
-            if newHeistIds.isEmpty {
-                idleFramesWithoutNew += 1
-            } else {
-                knownHeistIds.formUnion(newHeistIds)
-                idleFramesWithoutNew = 0
-            }
+            knownHeistIds.formUnion(newHeistIds)
 
-            if frame + 1 >= minFrames,
-               idleFramesWithoutNew >= requiredIdleFrames,
-               stableViewportFrames >= requiredStableViewportFrames {
-                break
-            }
-            if frame + 1 < maxFrames {
-                await tripwire.yieldFrames(1)
-            }
+            let step = state.advance(
+                viewportIds: stash.registry.viewportIds,
+                anchorSignature: viewportAnchorSignature(),
+                newHeistIds: newHeistIds
+            )
+            if case .done = step { break }
+            await tripwire.yieldFrames(1)
         }
-        return moved
+        return state.moved
     }
 
     /// Stable signature for the top of the viewport based on content-space
