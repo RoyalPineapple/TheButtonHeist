@@ -192,12 +192,19 @@ public final class DeviceConnection: DeviceConnecting {
         }
     }
 
-    private func handleReceive(
+    // Internal for testing stale-callback handling.
+    func handleReceive(
         content: Data?,
         isComplete: Bool,
         error: NWError?,
         connection: NWConnection
     ) {
+        guard case .connected(var active) = connectionState,
+              active.connection === connection else {
+            // Ignore callbacks from stale/cancelled sockets after reconnect.
+            return
+        }
+
         if let error {
             logger.error("Receive error: \(error)")
             connectionState = .disconnected
@@ -206,7 +213,6 @@ public final class DeviceConnection: DeviceConnecting {
         }
 
         if let content {
-            guard case .connected(var active) = connectionState else { return }
             active.receiveBuffer.append(content)
 
             if active.receiveBuffer.count > Self.maxBufferSize {
@@ -225,8 +231,9 @@ public final class DeviceConnection: DeviceConnecting {
             connectionState = .disconnected
             onEvent?(.disconnected(.serverClosed))
         } else {
-            guard case .connected(let active) = connectionState else { return }
-            receiveNext(connection: active.connection)
+            guard case .connected(let latest) = connectionState,
+                  latest.connection === connection else { return }
+            receiveNext(connection: connection)
         }
     }
 
