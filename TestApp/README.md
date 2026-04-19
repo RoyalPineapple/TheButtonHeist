@@ -98,5 +98,5 @@ You should see an `Add` entry with the app name. ButtonHeist MCP tools and CLI c
 ## See Also
 
 - [Project Overview](../README.md) — Architecture and quick start
-- [CLAUDE.md](../CLAUDE.md) — Full simulator setup with troubleshooting
+- [AGENTS.md](../AGENTS.md) — Full simulator setup with troubleshooting
 - [CLI Reference](../ButtonHeistCLI/) — Test the app via command line

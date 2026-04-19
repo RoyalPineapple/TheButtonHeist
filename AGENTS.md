@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 ## README.md is protected
 
@@ -494,7 +494,7 @@ Two type families are the currency for referring to UI elements. Use them everyw
 
 ## Benchmark and Validation Harness
 
-The `bh-infra` repo (`.context/bh-infra/`, clone via `/setup-context bh-infra`) contains an agent-driven benchmark and validation harness. It launches Claude with the BH MCP server against the BH Demo app and scores results against expected values across 15 tasks.
+The `bh-infra` repo (`.context/bh-infra/`, clone via `/setup-context bh-infra`) contains an agent-driven benchmark and validation harness. It launches an LLM agent with the BH MCP server against the BH Demo app and scores results against expected values across 15 tasks.
 
 ### Quick validation after code changes
 
