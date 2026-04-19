@@ -563,24 +563,6 @@ final class TheBrainsScrollTests: XCTestCase {
         )
     }
 
-    func testSafeSwipeFrameClampsBelowNavigationBarContainer() {
-        // A .navigationBar container in the accessibility hierarchy defines
-        // the top clear line. A swipe rectangle that overlaps the nav bar
-        // must be clipped to start at its bottom edge.
-        let navBarFrame = CGRect(x: 0, y: 0, width: 400, height: 91)
-        brains.stash.currentHierarchy = [
-            .container(
-                AccessibilityContainer(type: .navigationBar, frame: navBarFrame),
-                children: []
-            )
-        ]
-        let result = brains.safeSwipeFrame(from: CGRect(x: 100, y: 0, width: 200, height: 400))
-        XCTAssertEqual(
-            result.minY, navBarFrame.maxY,
-            "Swipe area must start at the navigation bar's bottom edge"
-        )
-    }
-
     func testSafeSwipeFrameClampsAboveTabBarContainer() {
         // A .tabBar container in the accessibility hierarchy defines the
         // bottom clear line. A swipe rectangle that overlaps the tab bar

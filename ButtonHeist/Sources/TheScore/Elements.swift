@@ -162,13 +162,13 @@ extension HeistTrait: Codable {
 
 /// Container group classification in the element tree.
 public enum GroupType: Equatable, Hashable, Sendable {
-    case semanticGroup, list, landmark, dataTable, tabBar, navigationBar, scrollable
+    case semanticGroup, list, landmark, dataTable, tabBar, scrollable
     case unknown(String)
 }
 
 extension GroupType: CaseIterable {
     public static var allCases: [GroupType] {
-        [.semanticGroup, .list, .landmark, .dataTable, .tabBar, .navigationBar, .scrollable]
+        [.semanticGroup, .list, .landmark, .dataTable, .tabBar, .scrollable]
     }
 }
 
@@ -195,7 +195,6 @@ extension GroupType: RawRepresentable {
         case .landmark: return "landmark"
         case .dataTable: return "dataTable"
         case .tabBar: return "tabBar"
-        case .navigationBar: return "navigationBar"
         case .scrollable: return "scrollable"
         case .unknown(let value): return value
         }

@@ -117,9 +117,6 @@ extension TheStash {
         case .tabBar:
             groupType = .tabBar
             label = nil; value = nil; identifier = nil
-        case .navigationBar:
-            groupType = .navigationBar
-            label = nil; value = nil; identifier = nil
         case .scrollable(let contentSize):
             groupType = .scrollable
             label = nil; value = "\(Int(contentSize.width))x\(Int(contentSize.height))"; identifier = nil

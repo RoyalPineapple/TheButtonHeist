@@ -105,39 +105,6 @@ final class TheBurglarParseTests: XCTestCase {
         return values
     }
 
-    func testParseEmitsNavigationBarContainerForUINavigationBar() throws {
-        let windowScene = try requireForegroundWindowScene()
-
-        let contentVC = UIViewController()
-        contentVC.title = "Nav Bar Detection Test"
-        let nav = UINavigationController(rootViewController: contentVC)
-        let window = UIWindow(windowScene: windowScene)
-        window.windowLevel = .alert + 20
-        window.rootViewController = nav
-        window.frame = UIScreen.main.bounds
-        window.isHidden = false
-        defer { window.isHidden = true }
-
-        let result = try XCTUnwrap(stash.parse())
-        stash.apply(result)
-
-        let containers = stash.currentHierarchy.flattenToContainers()
-        let navBarContainers = containers.filter { container in
-            if case .navigationBar = container.type { return true }
-            return false
-        }
-        XCTAssertFalse(
-            navBarContainers.isEmpty,
-            "Parser must emit a ContainerType.navigationBar for a live UINavigationBar. Got containers: \(containers.map { "\($0.type)" })"
-        )
-        if let navBar = navBarContainers.first {
-            XCTAssertGreaterThan(
-                navBar.frame.height, 0,
-                "Nav bar container must carry a non-empty frame"
-            )
-        }
-    }
-
     private func withNoTraversableWindows<T>(
         _ operation: () -> T
     ) -> T {

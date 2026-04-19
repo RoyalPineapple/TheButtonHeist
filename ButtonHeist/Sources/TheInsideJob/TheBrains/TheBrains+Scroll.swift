@@ -274,10 +274,19 @@ extension TheBrains {
     }
 
     /// Clamp a swipe rectangle to the screen region outside accessibility-level
-    /// chrome: above any `.tabBar` container, below any `.navigationBar`
-    /// container, inset horizontally by the key window's layout margins.
-    /// Returns the intersection when it's non-empty; otherwise the frame
-    /// clipped to the screen so swipes at least stay on-screen.
+    /// chrome: above any `.tabBar` container, inset horizontally by the key
+    /// window's layout margins. Returns the intersection when it's non-empty;
+    /// otherwise the frame clipped to the screen so swipes at least stay
+    /// on-screen.
+    ///
+    /// Nav bar detection is deliberately absent: UIKit does not expose an
+    /// accessibility signal for `UINavigationBar`, and we refuse to walk the
+    /// UIView hierarchy to infer one. Apps whose scrollable frame extends
+    /// under a translucent nav bar will surface the bug (swipe misfires or
+    /// doesn't scroll) — the honest failure mode per BH's thesis. The proper
+    /// fix will come from AXRuntime attribute 2015 (`_accessibilityValueForAttribute:`),
+    /// which every element carries as a back-reference to its owning nav bar;
+    /// that path needs LLDB validation across OS versions before shipping.
     func safeSwipeFrame(from frame: CGRect) -> CGRect {
         let safeIntersection = frame.intersection(currentSwipeSafeBounds())
         if !safeIntersection.isNull, !safeIntersection.isEmpty {
@@ -291,21 +300,13 @@ extension TheBrains {
     }
 
     /// Region of the screen safe for synthetic swipes. Bottom edge is the top
-    /// of any `.tabBar` container, top edge is the bottom of any
-    /// `.navigationBar` container. Falls back to `window.safeAreaInsets` when
-    /// either container is absent from the accessibility hierarchy.
+    /// of any `.tabBar` container in the accessibility hierarchy. Top edge is
+    /// the window's `safeAreaInsets.top` — covers the status bar / notch but
+    /// not nav bars (see `safeSwipeFrame`).
     private func currentSwipeSafeBounds() -> CGRect {
         let screen = ScreenMetrics.current.bounds
-        let containers = stash.currentHierarchy.flattenToContainers()
-
-        let navBarBottom = containers
-            .compactMap { container -> CGFloat? in
-                guard case .navigationBar = container.type else { return nil }
-                return container.frame.maxY
-            }
-            .max()
-
-        let tabBarTop = containers
+        let tabBarTop = stash.currentHierarchy
+            .flattenToContainers()
             .compactMap { container -> CGFloat? in
                 guard case .tabBar = container.type else { return nil }
                 return container.frame.minY
@@ -315,7 +316,7 @@ extension TheBrains {
         let window = Self.keyWindow
         let horizontalInset = window?.directionalLayoutMargins.leading ?? 0
         let insets = window?.safeAreaInsets ?? .zero
-        let top = navBarBottom ?? insets.top
+        let top = insets.top
         let bottom = tabBarTop ?? (screen.height - insets.bottom)
 
         return CGRect(
