@@ -452,19 +452,13 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertTrue(diagnostics.contains("ordinal 5 requested"))
     }
 
-    func testHasMatchFindsOffScreenElement() {
+    func testOffScreenMatcherResolvesViaRegistryFallback() {
         let offScreen = element(label: "Hidden Button", traits: .button)
         registerOffScreen(offScreen, heistId: "hidden_button")
 
-        XCTAssertTrue(bagman.hasMatch(ElementMatcher(label: "Hidden Button")))
-    }
-
-    func testFindMatchFindsOffScreenElement() {
-        let offScreen = element(label: "Hidden Button", traits: .button)
-        registerOffScreen(offScreen, heistId: "hidden_button")
-
-        let found = bagman.findMatch(ElementMatcher(label: "Hidden Button"))
-        XCTAssertEqual(found?.label, "Hidden Button")
+        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Hidden Button")))
+        XCTAssertEqual(result.resolved?.element.label, "Hidden Button")
+        XCTAssertEqual(result.resolved?.screenElement.heistId, "hidden_button")
     }
 
     func testHasTargetIgnoresOffScreenMatcherInRegistry() {

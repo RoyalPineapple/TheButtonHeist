@@ -196,26 +196,6 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         XCTAssertFalse(textField.isFirstResponder)
     }
 
-    // MARK: - Duration Helpers
-
-    func testClampDurationDefaults() {
-        XCTAssertEqual(safecracker.clampDuration(nil), 0.5)
-        XCTAssertEqual(safecracker.clampDuration(0.001), 0.01)
-        XCTAssertEqual(safecracker.clampDuration(100.0), 60.0)
-        XCTAssertEqual(safecracker.clampDuration(1.0), 1.0)
-    }
-
-    func testResolveDurationPrefersExplicit() {
-        let duration = safecracker.resolveDuration(2.0, velocity: nil, points: [])
-        XCTAssertEqual(duration, 2.0)
-    }
-
-    func testResolveDurationFallsBackToVelocity() {
-        let points = [CGPoint(x: 0, y: 0), CGPoint(x: 100, y: 0)]
-        let duration = safecracker.resolveDuration(nil, velocity: 200, points: points)
-        XCTAssertEqual(duration, 0.5, accuracy: 0.01)
-    }
-
     // MARK: - Private Helpers
 
     private func waitForKeyboardBridge() async throws {

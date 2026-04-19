@@ -354,10 +354,6 @@ final class TheStash {
 
     // MARK: - Diagnostics Forwarding
 
-    func heistIdNotFoundMessage(_ heistId: String) -> String {
-        Diagnostics.heistIdNotFound(heistId, knownIds: registry.elements.keys, viewportCount: registry.viewportIds.count)
-    }
-
     func matcherNotFoundMessage(_ matcher: ElementMatcher) -> String {
         Diagnostics.matcherNotFound(
             matcher, hierarchy: currentHierarchy,

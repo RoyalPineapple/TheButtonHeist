@@ -6,7 +6,6 @@ import Foundation
 public struct EnvironmentConfig: Sendable {
     public let deviceFilter: String?
     public let token: String?
-    public let driverId: String?
     public let sessionTimeout: TimeInterval
     public let connectionTimeout: TimeInterval
     public let fileConfig: ButtonHeistFileConfig?
@@ -31,7 +30,6 @@ public struct EnvironmentConfig: Sendable {
     public static func resolve(
         deviceFilter: String? = nil,
         token: String? = nil,
-        driverId: String? = nil,
         sessionTimeout: TimeInterval? = nil,
         connectionTimeout: TimeInterval? = nil,
         autoReconnect: Bool = true,
@@ -42,7 +40,6 @@ public struct EnvironmentConfig: Sendable {
 
         let resolvedDevice = deviceFilter ?? env["BUTTONHEIST_DEVICE"]
         let resolvedToken = token ?? env["BUTTONHEIST_TOKEN"]
-        let resolvedDriverId = driverId ?? env["BUTTONHEIST_DRIVER_ID"]
 
         let resolvedSessionTimeout: TimeInterval
         if let explicit = sessionTimeout, explicit > 0 {
@@ -59,7 +56,6 @@ public struct EnvironmentConfig: Sendable {
         return EnvironmentConfig(
             deviceFilter: resolvedDevice,
             token: resolvedToken,
-            driverId: resolvedDriverId,
             sessionTimeout: resolvedSessionTimeout,
             connectionTimeout: resolvedConnectionTimeout,
             fileConfig: fileConfig,

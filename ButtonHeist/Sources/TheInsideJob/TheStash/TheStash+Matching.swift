@@ -155,15 +155,6 @@ extension TheStash {
         return Array(sorted.lazy.filter { $0.element.matches(matcher) }.prefix(limit))
     }
 
-    /// Search for the first matching element.
-    func findMatch(_ matcher: ElementMatcher) -> AccessibilityElement? {
-        matchScreenElements(matcher, limit: 1).first?.element
-    }
-
-    /// Whether any element matches the predicate.
-    func hasMatch(_ matcher: ElementMatcher) -> Bool {
-        !matchScreenElements(matcher, limit: 1).isEmpty
-    }
 }
 
 #endif // DEBUG

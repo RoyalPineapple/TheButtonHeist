@@ -1,35 +1,6 @@
 import ArgumentParser
 import ButtonHeist
 
-struct TouchCommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(
-        commandName: "touch",
-        abstract: "Simulate touch gestures on the connected iOS device",
-        discussion: """
-            Low-level touch gestures. For tapping buttons and controls, prefer \
-            `buttonheist activate` which uses accessibility-first interaction.
-
-            Examples:
-              buttonheist touch one_finger_tap --x 100 --y 200
-              buttonheist touch long_press --identifier "myButton" --duration 1.0
-              buttonheist touch swipe --identifier "list" --direction up
-              buttonheist touch drag --from-x 100 --from-y 200 --to-x 300 --to-y 200
-              buttonheist touch pinch --identifier "mapView" --scale 2.0
-              buttonheist touch rotate --x 200 --y 300 --angle 1.57
-              buttonheist touch two_finger_tap --identifier "zoomControl"
-            """,
-        subcommands: [
-            TapSubcommand.self,
-            LongPressSubcommand.self,
-            SwipeSubcommand.self,
-            DragSubcommand.self,
-            PinchSubcommand.self,
-            RotateSubcommand.self,
-            TwoFingerTapSubcommand.self,
-        ]
-    )
-}
-
 // MARK: - Tap
 
 struct TapSubcommand: AsyncParsableCommand {

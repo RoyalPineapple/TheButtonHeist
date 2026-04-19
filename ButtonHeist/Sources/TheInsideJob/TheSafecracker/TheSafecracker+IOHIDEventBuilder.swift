@@ -85,11 +85,6 @@ extension TheSafecracker {
 
             return handEvent
         }
-
-        static func createEvent(for touches: [(touch: UITouch, location: CGPoint)], phase: UITouch.Phase) -> UnsafeMutableRawPointer? {
-            let fingers = touches.map { FingerTouchData(touch: $0.touch, location: $0.location, phase: phase) }
-            return createEvent(for: fingers)
-        }
     }
 }
 

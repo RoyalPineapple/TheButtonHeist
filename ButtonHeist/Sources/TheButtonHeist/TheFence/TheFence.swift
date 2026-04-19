@@ -128,10 +128,10 @@ public final class TheFence {
     var config: Configuration
     let handoff = TheHandoff()
     let bookKeeper = TheBookKeeper()
-    /// Playback phase — prevents re-entrant play_heist calls and tracks the active input path.
+    /// Playback phase — prevents re-entrant play_heist calls.
     enum PlaybackPhase {
         case idle
-        case playing(inputPath: String)
+        case playing
     }
     var playbackPhase: PlaybackPhase = .idle
 

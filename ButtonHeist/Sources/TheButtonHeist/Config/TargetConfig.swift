@@ -82,14 +82,6 @@ public enum TargetConfigResolver {
         return nil
     }
 
-    /// Resolve a named target from the config file.
-    public static func resolve(
-        targetName: String,
-        config: ButtonHeistFileConfig
-    ) -> TargetConfig? {
-        config.targets[targetName]
-    }
-
     /// Resolve connection parameters with full precedence:
     /// 1. Env vars (BUTTONHEIST_DEVICE / BUTTONHEIST_TOKEN) override everything
     /// 2. Named target from config file
