@@ -113,17 +113,32 @@ nonisolated extension USBDeviceDiscovery {
             return []
         }
 
+        return parseConnectedDeviceNames(from: output)
+    }
+
+    static func parseConnectedDeviceNames(from output: String) -> [String] {
         var devices: [String] = []
+
         for line in output.components(separatedBy: "\n") {
-            guard line.contains("connected") else { continue }
-            guard !line.contains("Identifier") && !line.contains("---") else { continue }
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard !trimmed.isEmpty else { continue }
-            let columns = trimmed.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
-            if let name = columns.first, !name.isEmpty {
-                devices.append(name)
-            }
+            guard !trimmed.contains("Identifier"), !trimmed.hasPrefix("---") else { continue }
+
+            // devicectl table columns are separated by 2+ spaces; this preserves
+            // device names that contain single spaces.
+            let columns = trimmed
+                .replacingOccurrences(of: #"\s{2,}"#, with: "\t", options: .regularExpression)
+                .components(separatedBy: "\t")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+
+            guard let name = columns.first, !name.isEmpty else { continue }
+            let hasConnectedState = columns.contains { $0.caseInsensitiveCompare("connected") == .orderedSame }
+            guard hasConnectedState else { continue }
+
+            devices.append(name)
         }
+
         return devices
     }
 
