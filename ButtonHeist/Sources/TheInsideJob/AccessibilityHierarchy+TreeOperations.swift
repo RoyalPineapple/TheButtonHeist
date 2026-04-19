@@ -1,3 +1,4 @@
+#if canImport(UIKit) && canImport(AccessibilitySnapshotParser)
 import AccessibilitySnapshotParser
 
 // MARK: - Container Convenience
@@ -219,3 +220,4 @@ extension Array where Element == AccessibilityHierarchy {
         return result
     }
 }
+#endif // canImport(UIKit) && canImport(AccessibilitySnapshotParser)

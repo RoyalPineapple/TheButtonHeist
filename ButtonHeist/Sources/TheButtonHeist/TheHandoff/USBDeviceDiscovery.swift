@@ -54,11 +54,10 @@ public final class USBDeviceDiscovery: DeviceDiscovering {
     }
 
     private func poll() async {
-        let (connectedDevices, ipv6Address) = await Task.detached { () -> ([String], String?) in
-            let devices = Self.discoverConnectedDevices()
-            let address = Self.findIPv6Tunnel()
-            return (devices, address)
-        }.value
+        async let connectedDevicesTask = Self.discoverConnectedDevices()
+        async let ipv6AddressTask = Self.findIPv6Tunnel()
+        let connectedDevices = await connectedDevicesTask
+        let ipv6Address = await ipv6AddressTask
 
         guard let ipv6Address else {
             for (id, device) in knownDevices {
@@ -108,28 +107,51 @@ public final class USBDeviceDiscovery: DeviceDiscovering {
 nonisolated extension USBDeviceDiscovery {
 
     /// Run `xcrun devicectl list devices` and return names of connected devices.
-    private static func discoverConnectedDevices() -> [String] {
-        guard let output = runProcess("/usr/bin/xcrun", arguments: ["devicectl", "list", "devices"], timeout: 10) else {
+    private static func discoverConnectedDevices() async -> [String] {
+        guard let output = await runProcess(
+            "/usr/bin/xcrun",
+            arguments: ["devicectl", "list", "devices"],
+            timeout: 10
+        ) else {
             return []
         }
 
+        return parseConnectedDeviceNames(from: output)
+    }
+
+    static func parseConnectedDeviceNames(from output: String) -> [String] {
         var devices: [String] = []
+
         for line in output.components(separatedBy: "\n") {
-            guard line.contains("connected") else { continue }
-            guard !line.contains("Identifier") && !line.contains("---") else { continue }
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard !trimmed.isEmpty else { continue }
-            let columns = trimmed.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
-            if let name = columns.first, !name.isEmpty {
-                devices.append(name)
-            }
+            guard !trimmed.contains("Identifier"), !trimmed.hasPrefix("---") else { continue }
+
+            // devicectl table columns are separated by 2+ spaces; this preserves
+            // device names that contain single spaces.
+            let columns = trimmed
+                .replacingOccurrences(of: #"\s{2,}"#, with: "\t", options: .regularExpression)
+                .components(separatedBy: "\t")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+
+            guard let name = columns.first, !name.isEmpty else { continue }
+            let hasConnectedState = columns.contains { $0.caseInsensitiveCompare("connected") == .orderedSame }
+            guard hasConnectedState else { continue }
+
+            devices.append(name)
         }
+
         return devices
     }
 
     /// Run `lsof -i -P -n` and extract the CoreDevice IPv6 tunnel address.
-    private static func findIPv6Tunnel() -> String? {
-        guard let output = runProcess("/usr/sbin/lsof", arguments: ["-i", "-P", "-n"], timeout: 5) else {
+    private static func findIPv6Tunnel() async -> String? {
+        guard let output = await runProcess(
+            "/usr/sbin/lsof",
+            arguments: ["-i", "-P", "-n"],
+            timeout: 5
+        ) else {
             return nil
         }
 
@@ -151,26 +173,68 @@ nonisolated extension USBDeviceDiscovery {
         return "\(prefix)::1"
     }
 
-    private static func runProcess(_ path: String, arguments: [String], timeout: TimeInterval) -> String? {
+    private static func runProcess(
+        _ path: String,
+        arguments: [String],
+        timeout: TimeInterval
+    ) async -> String? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: path)
         process.arguments = arguments
 
-        let pipe = Pipe()
-        process.standardOutput = pipe
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("buttonheist-usb-discovery-\(UUID().uuidString)")
+        guard FileManager.default.createFile(atPath: outputURL.path, contents: nil) else {
+            logger.debug("Failed to create temporary output file for \(path)")
+            return nil
+        }
+        guard let outputHandle = FileHandle(forWritingAtPath: outputURL.path) else {
+            logger.debug("Failed to open temporary output file for \(path)")
+            try? FileManager.default.removeItem(at: outputURL)
+            return nil
+        }
+        defer {
+            outputHandle.closeFile()
+            try? FileManager.default.removeItem(at: outputURL)
+        }
+
+        process.standardOutput = outputHandle
         process.standardError = FileHandle.nullDevice
 
+        // Schedule a terminate after `timeout`. If the process exits first, cancel.
+        // When process exits naturally OR via terminate, the terminationHandler
+        // fires exactly once and resumes the continuation below.
+        let timeoutTask = Task {
+            try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+            if process.isRunning {
+                logger.debug("Timed out running \(path) after \(timeout)s")
+                process.terminate()
+            }
+        }
+        defer { timeoutTask.cancel() }
+
         do {
-            try process.run()
+            try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+                process.terminationHandler = { _ in cont.resume() }
+                do {
+                    try process.run()
+                } catch {
+                    cont.resume(throwing: error)
+                }
+            }
         } catch {
             logger.debug("Failed to run \(path): \(error.localizedDescription)")
             return nil
         }
 
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-
         guard process.terminationStatus == 0 else {
+            return nil
+        }
+
+        // Safe to read before `outputHandle.closeFile()` runs in the defer: the
+        // child has exited and flushed its dup'd fd, and the kernel page cache
+        // serves reads from the same file regardless of open write handles.
+        guard let data = try? Data(contentsOf: outputURL) else {
             return nil
         }
 

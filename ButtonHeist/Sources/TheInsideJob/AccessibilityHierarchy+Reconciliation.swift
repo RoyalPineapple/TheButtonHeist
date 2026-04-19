@@ -1,3 +1,4 @@
+#if canImport(UIKit) && canImport(AccessibilitySnapshotParser)
 import AccessibilitySnapshotParser
 import CoreGraphics
 
@@ -334,3 +335,4 @@ private func buttonHeistStitchPage(
 ) -> StitchResult {
     stitchPage(accumulated: accumulated, page: page)
 }
+#endif // canImport(UIKit) && canImport(AccessibilitySnapshotParser)

@@ -229,7 +229,8 @@ extension DiscoveredDevice {
         var reachable = false
         var finished = false
 
-        connection.onEvent = { [name] event in
+        connection.onEvent = { [weak connection, name] event in
+            guard let connection else { return }
             switch event {
             case .transportReady:
                 connection.send(.status)
