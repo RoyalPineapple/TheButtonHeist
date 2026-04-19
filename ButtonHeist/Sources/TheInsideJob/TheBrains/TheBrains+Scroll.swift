@@ -42,12 +42,14 @@ extension TheBrains {
         )
     }
 
+    /// Return value from `SettleSwipeLoopState.advance(...)` — whether the
+    /// caller should feed another frame or treat the swipe as settled.
+    enum SettleSwipeStep: Equatable { case `continue`, done }
+
     /// Pure stepwise driver for the swipe-settle loop. Tracks motion-detected
     /// state, idle/stable counters, and exit conditions given a sequence of
     /// per-frame observations. `moved` only latches from false to true.
     struct SettleSwipeLoopState: Equatable {
-        enum Step: Equatable { case `continue`, done }
-
         let profile: SettleSwipeProfile
         let previousViewport: Set<String>
         let previousAnchor: Int?
@@ -76,7 +78,7 @@ extension TheBrains {
             viewportIds: Set<String>,
             anchorSignature: Int?,
             newHeistIds: Set<String>
-        ) -> Step {
+        ) -> SettleSwipeStep {
             if let previousAnchor, let anchorSignature {
                 if anchorSignature != previousAnchor { moved = true }
             } else if viewportIds != previousViewport {
