@@ -4,6 +4,9 @@ import Network
 
 final class DeviceConnectionReceiveTests: XCTestCase {
 
+    // The NWConnections here are intentionally never started. handleReceive
+    // only uses them for identity comparison (`===`), so no real I/O is needed.
+
     @ButtonHeistActor
     func testHandleReceiveIgnoresIsCompleteFromStaleConnection() async {
         let activeConnection = NWConnection(host: "127.0.0.1", port: 1111, using: .tcp)
