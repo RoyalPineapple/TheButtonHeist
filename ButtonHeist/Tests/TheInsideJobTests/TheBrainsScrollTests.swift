@@ -553,12 +553,14 @@ final class TheBrainsScrollTests: XCTestCase {
 
     func testSafeSwipeFrameOversizedFrameClampsToSafeBounds() {
         // A frame larger than any iPhone screen must clamp to the safe
-        // bounds: respects the horizontal inset, top and bottom pads, and
-        // stays at least 44×44.
+        // bounds: stays within the current screen and above the 44×44 minimum.
         let huge = CGRect(x: -1000, y: -1000, width: 10000, height: 10000)
         let result = TheBrains.safeSwipeFrame(from: huge)
-        XCTAssertGreaterThanOrEqual(result.minX, 16)
-        XCTAssertGreaterThanOrEqual(result.minY, 56)
+        let screenBounds = UIScreen.main.bounds
+        XCTAssertTrue(
+            screenBounds.contains(result),
+            "Result \(result) must fit within the screen \(screenBounds)"
+        )
         XCTAssertGreaterThanOrEqual(result.width, 44)
         XCTAssertGreaterThanOrEqual(result.height, 44)
     }

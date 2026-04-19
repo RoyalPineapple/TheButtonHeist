@@ -19,17 +19,12 @@ extension TheBrains {
     /// Keep swipe gesture timing stable; scrolling cadence is frame-driven.
     private static let swipeGestureDuration: TimeInterval = 0.12
 
-    /// Extra top inset beyond the window safe area — clears nav bars and
-    /// large-title headers so synthetic swipes don't trigger edge gestures.
-    private static let swipeSafeTopPad: CGFloat = 56
-    /// Extra bottom inset beyond the window safe area — clears home indicator
-    /// and tab bar hit zones.
-    private static let swipeSafeBottomPad: CGFloat = 20
-    /// Horizontal inset from screen edges to avoid triggering system edge
-    /// gestures (back swipe, control center).
-    private static let swipeSafeHorizontalInset: CGFloat = 16
-    /// Minimum swipe rectangle dimension (Apple's HIG tap target).
+    /// Minimum swipe rectangle dimension — Apple HIG minimum hit target.
+    /// UIKit does not expose this as a public constant.
     private static let minSwipeRectDimension: CGFloat = 44
+    /// Horizontal inset default when no key window is available to query
+    /// its layout margins. Matches UIKit's iPhone default.
+    private static let fallbackHorizontalMargin: CGFloat = 16
     /// Cap on fallback inset when the safe-bounds intersection is unusable.
     private static let swipeFallbackMaxDx: CGFloat = 20
     private static let swipeFallbackMaxDy: CGFloat = 60
@@ -293,14 +288,7 @@ extension TheBrains {
     }
 
     static func safeSwipeFrame(from frame: CGRect) -> CGRect {
-        let safeTopInset = windowSafeAreaInsets.top + swipeSafeTopPad
-        let safeBottomInset = windowSafeAreaInsets.bottom + swipeSafeBottomPad
-        let safeBounds = ScreenMetrics.current.bounds.inset(by: UIEdgeInsets(
-            top: safeTopInset,
-            left: swipeSafeHorizontalInset,
-            bottom: safeBottomInset,
-            right: swipeSafeHorizontalInset
-        ))
+        let safeBounds = currentSwipeSafeBounds()
         let intersected = frame.intersection(safeBounds)
         if !intersected.isNull, !intersected.isEmpty,
            intersected.width >= minSwipeRectDimension,
@@ -316,12 +304,55 @@ extension TheBrains {
         return frame
     }
 
-    private static var windowSafeAreaInsets: UIEdgeInsets {
+    /// Region of the screen safe for synthetic swipes: below any visible
+    /// `UINavigationBar`, above any visible `UITabBar`/`UIToolbar`, and inset
+    /// horizontally by the key window's layout margins. Falls back to the
+    /// window safe area when no chrome is present.
+    private static func currentSwipeSafeBounds() -> CGRect {
+        let screen = ScreenMetrics.current.bounds
+        let window = keyWindow
+        let chrome = visibleChromeEdges(in: window)
+        let insets = window?.safeAreaInsets ?? .zero
+        let horizontalInset = window?.directionalLayoutMargins.leading ?? fallbackHorizontalMargin
+        let top = chrome.navBarBottom ?? insets.top
+        let bottom = chrome.tabBarTop ?? (screen.height - insets.bottom)
+        return CGRect(
+            x: screen.minX + horizontalInset,
+            y: top,
+            width: max(0, screen.width - horizontalInset * 2),
+            height: max(0, bottom - top)
+        )
+    }
+
+    /// Bottom of the lowest visible navigation bar and top of the highest
+    /// visible tab bar / toolbar, both in window coordinates. `nil` entries
+    /// signal absence of that chrome in the key window's hierarchy.
+    private static func visibleChromeEdges(
+        in window: UIWindow?
+    ) -> (navBarBottom: CGFloat?, tabBarTop: CGFloat?) {
+        guard let window else { return (nil, nil) }
+        var navBarBottom: CGFloat?
+        var tabBarTop: CGFloat?
+        var stack: [UIView] = [window]
+        while let view = stack.popLast() {
+            guard !view.isHidden, view.alpha > 0 else { continue }
+            if let nav = view as? UINavigationBar {
+                let frame = nav.convert(nav.bounds, to: nil)
+                navBarBottom = max(navBarBottom ?? -.greatestFiniteMagnitude, frame.maxY)
+            } else if view is UITabBar || view is UIToolbar {
+                let frame = view.convert(view.bounds, to: nil)
+                tabBarTop = min(tabBarTop ?? .greatestFiniteMagnitude, frame.minY)
+            }
+            stack.append(contentsOf: view.subviews)
+        }
+        return (navBarBottom, tabBarTop == .greatestFiniteMagnitude ? nil : tabBarTop)
+    }
+
+    private static var keyWindow: UIWindow? {
         UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .flatMap(\.windows)
-            .first(where: \.isKeyWindow)?
-            .safeAreaInsets ?? .zero
+            .first(where: \.isKeyWindow)
     }
 
     // MARK: - Scroll Command Execution
