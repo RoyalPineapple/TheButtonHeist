@@ -29,6 +29,12 @@ struct ResearchApp: App {
                             TraitValidationView()
                         }
                     }
+
+                    Section("Representable") {
+                        NavigationLink("Representable Stitching Probe") {
+                            RepresentableStitchingProbeView()
+                        }
+                    }
                 }
                 .navigationTitle("Research")
             }
