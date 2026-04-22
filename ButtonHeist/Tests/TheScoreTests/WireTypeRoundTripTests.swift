@@ -704,6 +704,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(EnvironmentKey.buttonheistToken.rawValue, "BUTTONHEIST_TOKEN")
         XCTAssertEqual(EnvironmentKey.insideJobToken.rawValue, "INSIDEJOB_TOKEN")
         XCTAssertEqual(EnvironmentKey.insideJobPort.rawValue, "INSIDEJOB_PORT")
+        XCTAssertEqual(EnvironmentKey.insideJobForceSwipeScrolling.rawValue, "INSIDEJOB_FORCE_SWIPE_SCROLLING")
     }
 
     // MARK: - ScrollSearchDirection

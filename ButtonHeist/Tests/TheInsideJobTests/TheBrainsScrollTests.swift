@@ -380,11 +380,225 @@ final class TheBrainsScrollTests: XCTestCase {
         }
     }
 
+    func testResolveScrollTargetReturnsSwipeableWhenForceSwipeEnabled() {
+        let forcedBrains = TheBrains(
+            tripwire: TheTripwire(),
+            forceSwipeScrolling: true
+        )
+        let scrollView = UIScrollView(frame: CGRect(x: 10, y: 20, width: 400, height: 200))
+        scrollView.contentSize = CGSize(width: 400, height: 1200)
+
+        let screenElement = TheStash.ScreenElement(
+            heistId: "item",
+            contentSpaceOrigin: nil,
+            element: makeElement(),
+            object: nil,
+            scrollView: scrollView
+        )
+
+        let target = forcedBrains.resolveScrollTarget(
+            screenElement: screenElement, axis: .vertical
+        )
+        guard case .swipeable = target else {
+            XCTFail("Expected .swipeable in force mode, got \(String(describing: target))")
+            return
+        }
+    }
+
+    // MARK: - SettleSwipeLoopState (Pure Decision Logic)
+
+    func testSettleLoopSameDirectionExitsAfterOneStableFrame() {
+        var state = TheBrains.SettleSwipeLoopState(
+            profile: .sameDirection,
+            previousViewport: ["a"],
+            previousAnchor: 100
+        )
+        let step1 = state.advance(
+            viewportIds: ["b"],
+            anchorSignature: 200,
+            newHeistIds: []
+        )
+        XCTAssertEqual(step1, .continue, "Viewport change resets stable counter")
+        XCTAssertTrue(state.moved, "Anchor differs, motion detected")
+
+        let step2 = state.advance(
+            viewportIds: ["b"],
+            anchorSignature: 200,
+            newHeistIds: []
+        )
+        XCTAssertEqual(step2, .done, "Same-direction profile exits once stable frame count hits 1")
+        XCTAssertTrue(state.moved)
+    }
+
+    func testSettleLoopDirectionChangeHonorsMinFrames() {
+        var state = TheBrains.SettleSwipeLoopState(
+            profile: .directionChange,
+            previousViewport: ["a"],
+            previousAnchor: 100
+        )
+        for frameIndex in 0..<5 {
+            let step = state.advance(
+                viewportIds: ["a"],
+                anchorSignature: 100,
+                newHeistIds: []
+            )
+            XCTAssertEqual(step, .continue, "Frame \(frameIndex + 1) must not exit before minFrames=6")
+        }
+        let finalStep = state.advance(
+            viewportIds: ["a"],
+            anchorSignature: 100,
+            newHeistIds: []
+        )
+        XCTAssertEqual(finalStep, .done, "Direction-change profile exits at frame 6")
+        XCTAssertEqual(state.frame, 6)
+    }
+
+    func testSettleLoopExitsAtMaxFramesWhenConditionsNeverSettle() {
+        var state = TheBrains.SettleSwipeLoopState(
+            profile: .directionChange,
+            previousViewport: ["a"],
+            previousAnchor: 100
+        )
+        for frameIndex in 0..<23 {
+            let step = state.advance(
+                viewportIds: ["id-\(frameIndex)"],
+                anchorSignature: 200 + frameIndex,
+                newHeistIds: ["id-\(frameIndex)"]
+            )
+            XCTAssertEqual(step, .continue, "Frame \(frameIndex + 1) churns, should continue")
+        }
+        let finalStep = state.advance(
+            viewportIds: ["id-final"],
+            anchorSignature: 999,
+            newHeistIds: ["id-final"]
+        )
+        XCTAssertEqual(finalStep, .done, "Must exit at maxFrames=24 even if never settles")
+        XCTAssertEqual(state.frame, 24)
+    }
+
+    func testSettleLoopMovedLatchesAndNeverClears() {
+        var state = TheBrains.SettleSwipeLoopState(
+            profile: .directionChange,
+            previousViewport: ["a"],
+            previousAnchor: 100
+        )
+        XCTAssertFalse(state.moved)
+
+        _ = state.advance(
+            viewportIds: ["a"],
+            anchorSignature: 200,
+            newHeistIds: []
+        )
+        XCTAssertTrue(state.moved, "Differing anchor flags motion")
+
+        _ = state.advance(
+            viewportIds: ["a"],
+            anchorSignature: 100,
+            newHeistIds: []
+        )
+        XCTAssertTrue(state.moved, "moved only latches true, never clears back to false")
+    }
+
+    func testSettleLoopFallsBackToViewportDiffWhenAnchorsUnavailable() {
+        var state = TheBrains.SettleSwipeLoopState(
+            profile: .directionChange,
+            previousViewport: ["a"],
+            previousAnchor: nil
+        )
+        _ = state.advance(
+            viewportIds: ["b"],
+            anchorSignature: nil,
+            newHeistIds: []
+        )
+        XCTAssertTrue(state.moved, "Without anchors, viewport set difference signals motion")
+    }
+
+    func testSettleLoopEdgeBounceDoesNotReportMotion() {
+        // Regression guard for the claim that viewportAnchorSignature
+        // filters out edge-bounce false positives. When content-space
+        // anchors are unchanged across frames, viewport id shuffles
+        // (element reorder, reparse flicker) must NOT count as motion.
+        var state = TheBrains.SettleSwipeLoopState(
+            profile: .directionChange,
+            previousViewport: ["a", "b"],
+            previousAnchor: 500
+        )
+        _ = state.advance(
+            viewportIds: ["a", "c"],
+            anchorSignature: 500,
+            newHeistIds: ["c"]
+        )
+        XCTAssertFalse(
+            state.moved,
+            "Matching anchor must suppress viewport-set differences as motion signal"
+        )
+    }
+
+    // MARK: - safeSwipeFrame
+
+    func testSafeSwipeFrameFullyInSafeBoundsIsUnchanged() {
+        // A frame sitting comfortably inside the safe area passes through
+        // intersected with itself, which is the frame.
+        let screen = UIScreen.main.bounds
+        let inner = screen.insetBy(dx: 80, dy: 120)
+        XCTAssertEqual(brains.safeSwipeFrame(from: inner), inner)
+    }
+
+    func testSafeSwipeFrameZeroWidthReturnsOriginal() {
+        // Degenerate input has no intersection with anything, so the function
+        // returns the original frame.
+        let input = CGRect(x: 0, y: 0, width: 0, height: 100)
+        XCTAssertEqual(brains.safeSwipeFrame(from: input), input)
+    }
+
+    func testSafeSwipeFrameOversizedFrameClampsWithinScreen() {
+        // A frame larger than any iPhone screen must clamp to the safe
+        // region and stay within the current screen bounds.
+        let huge = CGRect(x: -1000, y: -1000, width: 10000, height: 10000)
+        let result = brains.safeSwipeFrame(from: huge)
+        let screenBounds = UIScreen.main.bounds
+        XCTAssertTrue(
+            screenBounds.contains(result),
+            "Result \(result) must fit within the screen \(screenBounds)"
+        )
+    }
+
+    func testSafeSwipeFrameClampsAboveTabBarContainer() {
+        // A .tabBar container in the accessibility hierarchy defines the
+        // bottom clear line. A swipe rectangle that overlaps the tab bar
+        // must be clipped to end at its top edge.
+        let tabBarFrame = CGRect(x: 0, y: 700, width: 400, height: 80)
+        brains.stash.currentHierarchy = [
+            .container(
+                AccessibilityContainer(type: .tabBar, frame: tabBarFrame),
+                children: []
+            )
+        ]
+        let result = brains.safeSwipeFrame(from: CGRect(x: 100, y: 400, width: 200, height: 500))
+        XCTAssertEqual(
+            result.maxY, tabBarFrame.minY,
+            "Swipe area must end at the tab bar's top edge"
+        )
+    }
+
+    // MARK: - Clear Cache
+
+    func testClearCacheClearsLastSwipeDirectionCache() {
+        brains.lastSwipeDirectionByTarget["key"] = .down
+        XCTAssertFalse(brains.lastSwipeDirectionByTarget.isEmpty)
+        brains.clearCache()
+        XCTAssertTrue(
+            brains.lastSwipeDirectionByTarget.isEmpty,
+            "clearCache must drop the swipe direction cache so a new session starts fresh"
+        )
+    }
+
     // MARK: - Helpers
 
     private func makeElement(
         label: String? = nil,
-        traits: UIAccessibilityTraits = .none
+        traits: UIAccessibilityTraits = .none,
+        shape: AccessibilityElement.Shape = .frame(.zero)
     ) -> AccessibilityElement {
         AccessibilityElement(
             description: label ?? "",
@@ -394,7 +608,7 @@ final class TheBrainsScrollTests: XCTestCase {
             identifier: nil,
             hint: nil,
             userInputLabels: nil,
-            shape: .frame(.zero),
+            shape: shape,
             activationPoint: .zero,
             usesDefaultActivationPoint: true,
             customActions: [],

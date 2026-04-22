@@ -28,12 +28,24 @@ public final class TheInsideJob {
         return instance
     }
 
-    public static func configure(token: String? = nil, instanceId: String? = nil, allowedScopes: Set<ConnectionScope>? = nil, port: UInt16 = 0) {
+    public static func configure(
+        token: String? = nil,
+        instanceId: String? = nil,
+        allowedScopes: Set<ConnectionScope>? = nil,
+        port: UInt16 = 0,
+        forceSwipeScrolling: Bool? = nil
+    ) {
         if _shared != nil {
             insideJobLogger.warning("TheInsideJob.configure() called after already created — ignoring")
             return
         }
-        _shared = TheInsideJob(token: token, instanceId: instanceId, allowedScopes: allowedScopes, port: port)
+        _shared = TheInsideJob(
+            token: token,
+            instanceId: instanceId,
+            allowedScopes: allowedScopes,
+            port: port,
+            forceSwipeScrolling: forceSwipeScrolling
+        )
     }
 
     // MARK: - State Machines
@@ -68,6 +80,7 @@ public final class TheInsideJob {
     private let installationId: String
     private let sessionId = UUID()
     private let allowedScopes: Set<ConnectionScope>
+    private let forceSwipeScrolling: Bool
 
     // MARK: - Computed State
 
@@ -109,12 +122,22 @@ public final class TheInsideJob {
 
     // MARK: - Initialization
 
-    public init(token: String? = nil, instanceId: String? = nil, allowedScopes: Set<ConnectionScope>? = nil, port: UInt16 = 0) {
+    public init(
+        token: String? = nil,
+        instanceId: String? = nil,
+        allowedScopes: Set<ConnectionScope>? = nil,
+        port: UInt16 = 0,
+        forceSwipeScrolling: Bool? = nil
+    ) {
         self.muscle = TheMuscle(explicitToken: token)
         self.instanceId = instanceId
         self.preferredPort = port
         self.installationId = Self.loadInstallationId()
-        self.brains = TheBrains(tripwire: self.tripwire)
+        self.forceSwipeScrolling = Self.resolveForceSwipeScrolling(explicit: forceSwipeScrolling)
+        self.brains = TheBrains(
+            tripwire: self.tripwire,
+            forceSwipeScrolling: self.forceSwipeScrolling
+        )
         self.getaway = TheGetaway(
             muscle: self.muscle, brains: self.brains, tripwire: self.tripwire,
             identity: TheGetaway.ServerIdentity(
@@ -132,6 +155,18 @@ public final class TheInsideJob {
         } else {
             self.allowedScopes = ConnectionScope.default
         }
+    }
+
+    private static func resolveForceSwipeScrolling(explicit: Bool?) -> Bool {
+        if let explicit { return explicit }
+        let envKey = EnvironmentKey.insideJobForceSwipeScrolling
+        if envKey.value != nil { return envKey.boolValue }
+        if let plist = Bundle.main.object(
+            forInfoDictionaryKey: "InsideJobForceSwipeScrolling"
+        ) as? Bool {
+            return plist
+        }
+        return false
     }
 
     // MARK: - Public API
@@ -163,6 +198,9 @@ public final class TheInsideJob {
 
         let scopeNames = allowedScopes.map(\.rawValue).sorted().joined(separator: ", ")
         insideJobLogger.info("Connection scopes: \(scopeNames)")
+        if forceSwipeScrolling {
+            insideJobLogger.info("Scroll strategy override: force swipe scrolling")
+        }
         insideJobLogger.info("Server listening on port \(actualPort)")
         insideJobLogger.info("Connect with session token: \(self.muscle.sessionToken, privacy: .public)")
         insideJobLogger.info("Instance ID: \(self.effectiveInstanceId)")
