@@ -581,7 +581,6 @@ final class TheBrainsScrollTests: XCTestCase {
         )
     }
 
-
     // MARK: - Clear Cache
 
     func testClearCacheClearsLastSwipeDirectionCache() {
