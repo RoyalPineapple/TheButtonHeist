@@ -37,20 +37,23 @@ final class PendingRequestTrackerIntegrationTests: XCTestCase {
             try await tracker.wait(requestId: "expired", timeout: 0.05)
         }
 
-        // Wait for timeout to fire
-        try await Task.sleep(for: .milliseconds(150))
-
-        // Resolve after timeout — should be a no-op (double-resume guard)
-        tracker.resolve(requestId: "expired", result: .success("late"))
-
+        // Drain the task first — it must complete with .actionTimeout. Awaiting
+        // its value establishes a happens-before with the timeout callback, which
+        // has already removed the pending entry by the time we return.
         do {
             _ = try await task.value
-            XCTFail("Expected timeout")
+            XCTFail("Expected FenceError.actionTimeout")
+            return
         } catch {
             guard case FenceError.actionTimeout = error else {
                 XCTFail("Expected FenceError.actionTimeout, got \(error)")
                 return
             }
         }
+
+        // Resolve after the task has completed — with no pending entry, this is
+        // structurally a no-op. No wall-clock sleep means no race.
+        tracker.resolve(requestId: "expired", result: .success("late"))
+        XCTAssertEqual(tracker.pendingCount, 0, "Resolve after timeout must not add entries")
     }
 }

@@ -22,32 +22,46 @@ final class PendingRequestTracker<T: Sendable> {
     /// with a matching `requestId`, or `timeout` seconds elapse. Double-resume is
     /// prevented by an `OSAllocatedUnfairLock<Bool>` guard.
     func wait(requestId: String, timeout: TimeInterval) async throws -> T {
-        try await withCheckedThrowingContinuation { continuation in
-            let didResume = OSAllocatedUnfairLock(initialState: false)
-
-            let timeoutTask = Task {
-                try await Task.sleep(for: .seconds(timeout))
-                let shouldResume = didResume.withLock { flag -> Bool in
-                    guard !flag else { return false }
-                    flag = true
-                    return true
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                if Task.isCancelled {
+                    continuation.resume(throwing: CancellationError())
+                    return
                 }
-                if shouldResume {
-                    self.pending.removeValue(forKey: requestId)
-                    continuation.resume(throwing: FenceError.actionTimeout)
+
+                let didResume = OSAllocatedUnfairLock(initialState: false)
+
+                let timeoutTask = Task {
+                    guard await Task.cancellableSleep(for: .seconds(timeout)) else { return }
+                    let shouldResume = didResume.withLock { flag -> Bool in
+                        guard !flag else { return false }
+                        flag = true
+                        return true
+                    }
+                    if shouldResume {
+                        self.pending.removeValue(forKey: requestId)
+                        continuation.resume(throwing: FenceError.actionTimeout)
+                    }
+                }
+
+                pending[requestId] = { result in
+                    let shouldResume = didResume.withLock { flag -> Bool in
+                        guard !flag else { return false }
+                        flag = true
+                        return true
+                    }
+                    if shouldResume {
+                        timeoutTask.cancel()
+                        continuation.resume(with: result)
+                    }
                 }
             }
-
-            pending[requestId] = { result in
-                let shouldResume = didResume.withLock { flag -> Bool in
-                    guard !flag else { return false }
-                    flag = true
-                    return true
-                }
-                if shouldResume {
-                    timeoutTask.cancel()
-                    continuation.resume(with: result)
-                }
+        } onCancel: {
+            // Safe in every ordering: if the entry was never registered (early
+            // Task.isCancelled path) or was already removed by a normal resolve/timeout,
+            // `resolve` below finds no match and no-ops.
+            Task { @ButtonHeistActor [weak self] in
+                self?.resolve(requestId: requestId, result: .failure(CancellationError()))
             }
         }
     }

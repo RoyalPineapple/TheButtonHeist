@@ -110,4 +110,30 @@ final class PendingRequestTrackerTests: XCTestCase {
             XCTAssertEqual(message, "bad")
         }
     }
+
+    @ButtonHeistActor
+    func testWaitCancellationRemovesPendingAndThrowsCancellationError() async {
+        let tracker = PendingRequestTracker<String>()
+
+        let task = Task { @ButtonHeistActor in
+            try await tracker.wait(requestId: "cancel-me", timeout: 10)
+        }
+
+        await yieldUntilPendingCount(1, in: tracker)
+        XCTAssertEqual(tracker.pendingCount, 1)
+
+        task.cancel()
+
+        do {
+            _ = try await task.value
+            XCTFail("Expected CancellationError")
+        } catch is CancellationError {
+            // expected
+        } catch {
+            XCTFail("Expected CancellationError, got \(error)")
+        }
+
+        await yieldUntilPendingCount(0, in: tracker)
+        XCTAssertEqual(tracker.pendingCount, 0)
+    }
 }
