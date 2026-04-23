@@ -188,7 +188,7 @@ struct ButtonHeistMCPServer {
             // Grouped gesture tool — "type" field becomes the command
             case "gesture":
                 guard let type = request.removeValue(forKey: "type") as? String else {
-                    return .init(content: [.text("Missing required parameter: type")], isError: true)
+                    return .init(content: [.text(text: "Missing required parameter: type", annotations: nil, _meta: nil)], isError: true)
                 }
                 request["command"] = type
 
@@ -206,7 +206,7 @@ struct ButtonHeistMCPServer {
                     request["command"] = "scroll_to_edge"
                 default:
                     let message = "Unknown scroll mode: \(mode). Valid: page, to_visible, search, to_edge"
-                    return .init(content: [.text(message)], isError: true)
+                    return .init(content: [.text(text: message, annotations: nil, _meta: nil)], isError: true)
                 }
 
             // edit_action routes "dismiss" to dismiss_keyboard
@@ -219,7 +219,7 @@ struct ButtonHeistMCPServer {
                 }
 
             default:
-                return .init(content: [.text("Unknown tool: \(params.name)")], isError: true)
+                return .init(content: [.text(text: "Unknown tool: \(params.name)", annotations: nil, _meta: nil)], isError: true)
             }
 
             let response = try await fence.execute(request: request)
@@ -228,7 +228,7 @@ struct ButtonHeistMCPServer {
             return try renderResponse(response, backgroundDelta: backgroundDelta)
         } catch {
             idleMonitor.resetTimer()
-            return .init(content: [.text(error.displayMessage)], isError: true)
+            return .init(content: [.text(text: error.displayMessage, annotations: nil, _meta: nil)], isError: true)
         }
     }
 
@@ -300,13 +300,13 @@ struct ButtonHeistMCPServer {
                 break
             }
             if !lines.isEmpty {
-                content.append(.text(lines.joined(separator: "\n")))
+                content.append(.text(text: lines.joined(separator: "\n"), annotations: nil, _meta: nil))
             }
         }
 
         // Screenshots: embed as image content
         if case .screenshotData(let pngData, _, _) = response {
-            content.append(.image(data: pngData, mimeType: "image/png", metadata: nil))
+            content.append(.image(data: pngData, mimeType: "image/png", annotations: nil, _meta: nil))
         } else if case .screenshot = response {
             // File-based screenshot — handled by compact text below
         }
@@ -320,7 +320,7 @@ struct ButtonHeistMCPServer {
             isError = false
         }
 
-        content.append(.text(response.compactFormatted()))
+        content.append(.text(text: response.compactFormatted(), annotations: nil, _meta: nil))
         return .init(content: content, isError: isError)
     }
 
