@@ -173,7 +173,16 @@ public final class DeviceConnection: DeviceConnecting {
             onEvent?(.disconnected(.networkError(error)))
         case .cancelled:
             logger.info("Connection cancelled")
+            let wasActive = switch connectionState {
+            case .connecting, .connected:
+                true
+            case .disconnected:
+                false
+            }
             connectionState = .disconnected
+            if wasActive {
+                onEvent?(.disconnected(.serverClosed))
+            }
         default:
             break
         }

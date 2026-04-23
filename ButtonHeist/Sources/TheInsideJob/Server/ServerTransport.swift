@@ -31,6 +31,9 @@ public final class ServerTransport: NSObject {
     /// The Bonjour service, if advertising.
     private var netService: NetService?
 
+    /// In-flight stop task for deterministic lifecycle transitions.
+    private var stopTask: Task<Void, Never>?
+
     /// Current TXT record entries (preserved across updates).
     private var currentTXT: [String: Data] = [:]
 
@@ -68,6 +71,11 @@ public final class ServerTransport: NSObject {
     /// - Returns: Actual port number bound
     @discardableResult
     public func start(port: UInt16 = 0, bindToLoopback: Bool = false) async throws -> UInt16 {
+        if let stopTask {
+            await stopTask.value
+            self.stopTask = nil
+        }
+
         let params = await tlsIdentity?.makeTLSParameters()
         let callbacks = SimpleSocketServer.Callbacks(
             onClientConnected: onClientConnected,
@@ -80,9 +88,22 @@ public final class ServerTransport: NSObject {
     }
 
     /// Stop the TCP server and any Bonjour advertisement.
-    public func stop() {
+    @discardableResult
+    public func stop() -> Task<Void, Never> {
         stopAdvertising()
-        Task { [server] in await server.stop() }
+        let task = Task { [server] in
+            await server.stop()
+        }
+        stopTask = task
+        return task
+    }
+
+    /// Await completion of any in-flight stop operation.
+    public func waitForStopped() async {
+        if let stopTask {
+            await stopTask.value
+            self.stopTask = nil
+        }
     }
 
     // MARK: - Bonjour Advertisement

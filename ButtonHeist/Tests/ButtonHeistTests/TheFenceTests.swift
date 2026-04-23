@@ -670,6 +670,41 @@ final class TheFenceTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testWaitForRecordingRejectsConcurrentWaiters() async {
+        let fence = TheFence()
+
+        let firstWait = Task { @ButtonHeistActor in
+            try await fence.waitForRecording(timeout: 5.0)
+        }
+        await Task.yield()
+
+        do {
+            _ = try await fence.waitForRecording(timeout: 0.1)
+            XCTFail("Expected invalidRequest for concurrent waitForRecording")
+        } catch let error as FenceError {
+            guard case .invalidRequest(let message) = error else {
+                return XCTFail("Expected invalidRequest, got \(error)")
+            }
+            XCTAssertTrue(
+                message.contains("already waiting for completion"),
+                "Expected concurrent wait message, got: \(message)"
+            )
+        } catch {
+            XCTFail("Expected FenceError.invalidRequest, got \(error)")
+        }
+
+        firstWait.cancel()
+        do {
+            _ = try await firstWait.value
+            XCTFail("Expected first waiter cancellation")
+        } catch is CancellationError {
+            // expected
+        } catch {
+            XCTFail("Expected CancellationError, got \(error)")
+        }
+    }
+
+    @ButtonHeistActor
     func testListDevicesFiltersOutUnreachableDevicesWithoutConnecting() async throws {
         let reachableDevice = DiscoveredDevice(
             id: "reachable-device",
@@ -780,9 +815,6 @@ final class TheFenceTests: XCTestCase {
         fence.handoff.makeDiscovery = { mockDiscovery }
         fence.handoff.makeConnection = { _, _, _ in mockConnection }
 
-        // Connect first so we have a live session
-        try await fence.start()
-
         // Simulate a screen-changed background delta
         let element = HeistElement(
             description: "Button", label: "New Order", value: nil, identifier: nil,
@@ -807,6 +839,8 @@ final class TheFenceTests: XCTestCase {
             XCTAssertEqual(result.message, "expectation already met by background change")
             XCTAssertNotNil(expectation)
             XCTAssertEqual(expectation?.met, true)
+            XCTAssertEqual(mockDiscovery.startCount, 0, "Short-circuit should avoid discovery")
+            XCTAssertEqual(mockConnection.connectCount, 0, "Short-circuit should avoid connection")
         } else {
             XCTFail("Expected action response, got \(response)")
         }

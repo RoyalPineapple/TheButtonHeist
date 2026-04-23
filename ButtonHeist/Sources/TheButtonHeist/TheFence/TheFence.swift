@@ -144,6 +144,7 @@ public final class TheFence {
     private let actionTracker = PendingRequestTracker<ActionResult>()
     private let interfaceTracker = PendingRequestTracker<Interface>()
     private let screenTracker = PendingRequestTracker<ScreenPayload>()
+    private var recordingWaitInFlight = false
 
     public init(configuration: Configuration = .init()) {
         self.config = configuration
@@ -229,14 +230,6 @@ public final class TheFence {
             return .ok(message: "bye")
         }
 
-        if command != .getSessionState && command != .listDevices &&
-            command != .connect && command != .listTargets &&
-            command != .getSessionLog && command != .archiveSession &&
-            command != .startHeist && command != .stopHeist &&
-            !handoff.isConnected {
-            try await start()
-        }
-
         let requestId = (request["requestId"] as? String) ?? UUID().uuidString
         do {
             try bookKeeper.logCommand(requestId: requestId, command: command, arguments: request)
@@ -244,13 +237,12 @@ public final class TheFence {
             logger.warning("Failed to log command \(command.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
 
-        var dispatchArgs = request
-        dispatchArgs["_requestId"] = requestId
+        let parsedExpectation = try parseExpectation(request)
 
         // Fast path: if an expectation is attached and a background delta already
         // satisfies it, skip the action entirely. The screen changed while the agent
         // was thinking — the intent is already fulfilled.
-        if let expectation = try parseExpectation(request),
+        if let expectation = parsedExpectation,
            let backgroundDelta = drainBackgroundDelta() {
             let syntheticResult = ActionResult(
                 success: true,
@@ -265,6 +257,17 @@ public final class TheFence {
             }
             // Expectation not met by the background delta — continue with the action.
         }
+
+        if command != .getSessionState && command != .listDevices &&
+            command != .connect && command != .listTargets &&
+            command != .getSessionLog && command != .archiveSession &&
+            command != .startHeist && command != .stopHeist &&
+            !handoff.isConnected {
+            try await start()
+        }
+
+        var dispatchArgs = request
+        dispatchArgs["_requestId"] = requestId
 
         let start = CFAbsoluteTimeGetCurrent()
         let response: FenceResponse
@@ -328,7 +331,7 @@ public final class TheFence {
             if !delivery.met {
                 return .action(result: actionResult, expectation: delivery)
             }
-            if let expectation = try parseExpectation(request) {
+            if let expectation = parsedExpectation {
                 let validation = expectation.validate(
                     against: actionResult, preActionElements: preActionCache
                 )
@@ -473,6 +476,8 @@ public final class TheFence {
         handoff.send(message, requestId: requestId)
         do {
             return try await response(requestId)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             let mapped = mapCaughtError(error)
             if case .actionTimeout = mapped {
@@ -566,9 +571,14 @@ public final class TheFence {
     // require either synthesizing a fake requestId or changing the TheHandoff callback
     // signatures, neither of which is warranted for a single call site.
     public func waitForRecording(timeout: TimeInterval = 120.0) async throws -> RecordingPayload {
+        guard !recordingWaitInFlight else {
+            throw FenceError.invalidRequest("stop_recording already waiting for completion")
+        }
+        recordingWaitInFlight = true
         let previousOnRecording = handoff.onRecording
         let previousOnRecordingError = handoff.onRecordingError
         defer {
+            recordingWaitInFlight = false
             handoff.onRecording = previousOnRecording
             handoff.onRecordingError = previousOnRecordingError
         }

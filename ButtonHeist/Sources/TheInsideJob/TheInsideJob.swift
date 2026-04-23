@@ -81,6 +81,8 @@ public final class TheInsideJob {
     private let sessionId = UUID()
     private let allowedScopes: Set<ConnectionScope>
     private let forceSwipeScrolling: Bool
+    private var pendingTransportStopTask: Task<Void, Never>?
+    private var idleTimerBaseline: Bool?
 
     // MARK: - Computed State
 
@@ -177,6 +179,11 @@ public final class TheInsideJob {
             return
         }
 
+        if let pendingTransportStopTask {
+            await pendingTransportStopTask.value
+            self.pendingTransportStopTask = nil
+        }
+
         insideJobLogger.info("Starting TheInsideJob with ServerTransport...")
 
         let identity: TLSIdentity
@@ -206,7 +213,7 @@ public final class TheInsideJob {
         insideJobLogger.info("Instance ID: \(self.effectiveInstanceId)")
         advertiseService(port: actualPort)
 
-        UIApplication.shared.isIdleTimerDisabled = true
+        engageIdleTimerProtection()
 
         startAccessibilityObservation()
         startLifecycleObservation()
@@ -226,8 +233,7 @@ public final class TheInsideJob {
         }
 
         if case .running(let activeTransport) = serverPhase {
-            activeTransport.stopAdvertising()
-            activeTransport.stop()
+            pendingTransportStopTask = activeTransport.stop()
         }
 
         serverPhase = .stopped
@@ -242,6 +248,7 @@ public final class TheInsideJob {
 
         stopAccessibilityObservation()
         stopLifecycleObservation()
+        restoreIdleTimerProtection(clearBaseline: true)
 
         insideJobLogger.info("Server stopped")
     }
@@ -392,8 +399,7 @@ public final class TheInsideJob {
     func suspend() {
         switch serverPhase {
         case .running(let activeTransport):
-            activeTransport.stopAdvertising()
-            activeTransport.stop()
+            pendingTransportStopTask = activeTransport.stop()
         case .resuming(let task):
             task.cancel()
         case .stopped, .suspended:
@@ -414,6 +420,7 @@ public final class TheInsideJob {
         stopAccessibilityObservation()
 
         brains.clearCache()
+        restoreIdleTimerProtection(clearBaseline: false)
 
         serverPhase = .suspended
 
@@ -430,6 +437,11 @@ public final class TheInsideJob {
             var startedTransport: ServerTransport?
             do {
                 try Task.checkCancellation()
+
+                if let pendingTransportStopTask {
+                    await pendingTransportStopTask.value
+                    self.pendingTransportStopTask = nil
+                }
 
                 let identity: TLSIdentity
                 do {
@@ -460,6 +472,7 @@ public final class TheInsideJob {
                 self.advertiseService(port: actualPort)
 
                 self.startAccessibilityObservation()
+                self.engageIdleTimerProtection()
 
                 self.tripwire.onTransition = { [weak self] transition in
                     self?.handlePulseTransition(transition)
@@ -474,10 +487,14 @@ public final class TheInsideJob {
 
                 insideJobLogger.info("Server resume complete")
             } catch is CancellationError {
-                startedTransport?.stop()
+                if let startedTransport {
+                    self.pendingTransportStopTask = startedTransport.stop()
+                }
                 insideJobLogger.info("Server resume cancelled")
             } catch {
-                startedTransport?.stop()
+                if let startedTransport {
+                    self.pendingTransportStopTask = startedTransport.stop()
+                }
                 insideJobLogger.error("Failed to resume server: \(error)")
                 if case .resuming = self.serverPhase {
                     self.serverPhase = .suspended
@@ -485,6 +502,21 @@ public final class TheInsideJob {
             }
         }
         serverPhase = .resuming(task: task)
+    }
+
+    private func engageIdleTimerProtection() {
+        if idleTimerBaseline == nil {
+            idleTimerBaseline = UIApplication.shared.isIdleTimerDisabled
+        }
+        UIApplication.shared.isIdleTimerDisabled = true
+    }
+
+    private func restoreIdleTimerProtection(clearBaseline: Bool) {
+        guard let idleTimerBaseline else { return }
+        UIApplication.shared.isIdleTimerDisabled = idleTimerBaseline
+        if clearBaseline {
+            self.idleTimerBaseline = nil
+        }
     }
 }
 

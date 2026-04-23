@@ -18,11 +18,6 @@ private let autoStartLogger = Logger(subsystem: "com.buttonheist.theinsidejob", 
 public func theInsideJobAutoStartFromLoad() {
     autoStartLogger.info("========== AUTO-START BEGIN ==========")
     autoStartLogger.info("Bundle ID: \(Bundle.main.bundleIdentifier ?? "unknown")")
-    let deviceName = MainActor.assumeIsolated { UIDevice.current.name }
-    let systemName = MainActor.assumeIsolated { UIDevice.current.systemName }
-    let systemVersion = MainActor.assumeIsolated { UIDevice.current.systemVersion }
-    autoStartLogger.info("Device: \(deviceName)")
-    autoStartLogger.info("System: \(systemName) \(systemVersion)")
 
     // Check INSIDEJOB_DISABLE environment variable
     if EnvironmentKey.insideJobDisable.boolValue {
@@ -75,6 +70,8 @@ public func theInsideJobAutoStartFromLoad() {
 
     Task { @MainActor in
         autoStartLogger.debug("MainActor task executing...")
+        autoStartLogger.info("Device: \(UIDevice.current.name)")
+        autoStartLogger.info("System: \(UIDevice.current.systemName) \(UIDevice.current.systemVersion)")
         do {
             TheInsideJob.configure(token: token, instanceId: instanceId, port: port)
             try await TheInsideJob.shared.start()
