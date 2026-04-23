@@ -173,6 +173,11 @@ public final class DeviceConnection: DeviceConnecting {
             onEvent?(.disconnected(.networkError(error)))
         case .cancelled:
             logger.info("Connection cancelled")
+            // Client-initiated teardown paths (disconnect(), .failed, buffer overflow,
+            // protocol/auth rejection) all set connectionState = .disconnected before
+            // the cancel callback reaches the actor, so wasActive is false and we stay
+            // silent. A true wasActive means NWConnection cancelled while we still
+            // believed we were live — treat that as an unsolicited server-side close.
             let wasActive = switch connectionState {
             case .connecting, .connected:
                 true

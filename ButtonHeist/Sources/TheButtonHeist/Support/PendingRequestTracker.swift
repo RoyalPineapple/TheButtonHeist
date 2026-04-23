@@ -57,6 +57,9 @@ final class PendingRequestTracker<T: Sendable> {
                 }
             }
         } onCancel: {
+            // Safe in every ordering: if the entry was never registered (early
+            // Task.isCancelled path) or was already removed by a normal resolve/timeout,
+            // `resolve` below finds no match and no-ops.
             Task { @ButtonHeistActor [weak self] in
                 self?.resolve(requestId: requestId, result: .failure(CancellationError()))
             }
