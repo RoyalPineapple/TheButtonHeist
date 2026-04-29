@@ -56,20 +56,29 @@ extension AccessibilityHierarchy {
     }
 }
 
+/// String-comparison strategy for matcher fields (label/identifier/value).
+/// Trait predicates ignore this — they always compare bitmasks exactly.
+enum MatchMode {
+    /// Case-insensitive equality. Used as the primary pass; matches must be exact.
+    case exact
+    /// Case-insensitive substring. Used as the fallback pass when no exact match exists.
+    case substring
+}
+
 extension AccessibilityHierarchy {
     /// Match a single node against a matcher. For leaf elements, returns the match
     /// if the element satisfies the predicate. For containers, returns the first
     /// matching leaf descendant.
-    func matches(_ matcher: ElementMatcher) -> MatchResult? {
-        [self].firstMatch(matcher)
+    func matches(_ matcher: ElementMatcher, mode: MatchMode) -> MatchResult? {
+        [self].firstMatch(matcher, mode: mode)
     }
 }
 
 extension Array where Element == AccessibilityHierarchy {
 
     /// First leaf element in the tree that satisfies all property predicates.
-    func firstMatch(_ matcher: ElementMatcher) -> AccessibilityHierarchy.MatchResult? {
-        matches(matcher, limit: 1).first
+    func firstMatch(_ matcher: ElementMatcher, mode: MatchMode) -> AccessibilityHierarchy.MatchResult? {
+        matches(matcher, mode: mode, limit: 1).first
     }
 
     /// Leaf elements matching the predicate, stopping after `limit` results.
@@ -77,17 +86,18 @@ extension Array where Element == AccessibilityHierarchy {
     /// limit 1 for first-match, limit 2 for unique-match, limit N+1 for ordinal N.
     func matches(
         _ matcher: ElementMatcher,
+        mode: MatchMode,
         limit: Int
     ) -> [AccessibilityHierarchy.MatchResult] {
         guard limit > 0 else { return [] }
         return compactMap(first: limit, context: (), container: { _, _ in () }, element: { element, _, _ in
-            element.matches(matcher) ? AccessibilityHierarchy.MatchResult(element: element) : nil
+            element.matches(matcher, mode: mode) ? AccessibilityHierarchy.MatchResult(element: element) : nil
         })
     }
 
     /// Whether any leaf element in the tree satisfies the property predicates.
-    func hasMatch(_ matcher: ElementMatcher) -> Bool {
-        !matches(matcher, limit: 1).isEmpty
+    func hasMatch(_ matcher: ElementMatcher, mode: MatchMode) -> Bool {
+        !matches(matcher, mode: mode, limit: 1).isEmpty
     }
 }
 
@@ -99,20 +109,22 @@ extension AccessibilityElement {
     private static let knownTraitNames = UIAccessibilityTraits.knownTraitNames
 
     /// Does this element satisfy all property predicates in the matcher?
-    /// String fields (label, identifier, value) use case-insensitive substring matching.
-    /// Trait name strings are resolved to bitmasks via the parser's `fromNames`.
-    func matches(_ matcher: ElementMatcher) -> Bool {
+    /// String fields (label, identifier, value) use case-insensitive comparison; whether
+    /// the comparison is exact equality or substring is controlled by `mode`. Trait name
+    /// strings are resolved to bitmasks via the parser's `fromNames` and always compare
+    /// exactly regardless of mode.
+    func matches(_ matcher: ElementMatcher, mode: MatchMode) -> Bool {
         if let matchLabel = matcher.label {
             if matchLabel.isEmpty { return false }
-            guard let label, label.localizedCaseInsensitiveContains(matchLabel) else { return false }
+            guard let label, Self.stringMatches(label, matchLabel, mode: mode) else { return false }
         }
         if let matchIdentifier = matcher.identifier {
             if matchIdentifier.isEmpty { return false }
-            guard let identifier, identifier.localizedCaseInsensitiveContains(matchIdentifier) else { return false }
+            guard let identifier, Self.stringMatches(identifier, matchIdentifier, mode: mode) else { return false }
         }
         if let matchValue = matcher.value {
             if matchValue.isEmpty { return false }
-            guard let value, value.localizedCaseInsensitiveContains(matchValue) else { return false }
+            guard let value, Self.stringMatches(value, matchValue, mode: mode) else { return false }
         }
         if let requiredTraits = matcher.traits, !requiredTraits.isEmpty {
             // Unknown trait names must cause a miss — fromNames drops them silently
@@ -130,6 +142,15 @@ extension AccessibilityElement {
         }
         return true
     }
+
+    private static func stringMatches(_ candidate: String, _ pattern: String, mode: MatchMode) -> Bool {
+        switch mode {
+        case .exact:
+            return candidate.localizedCaseInsensitiveCompare(pattern) == .orderedSame
+        case .substring:
+            return candidate.localizedCaseInsensitiveContains(pattern)
+        }
+    }
 }
 
 // MARK: - TheStash Match Pipeline
@@ -137,22 +158,53 @@ extension AccessibilityElement {
 extension TheStash {
 
     /// Single entry point for matcher-based element lookup. Returns up to `limit`
-    /// matching ScreenElements. Checks the hierarchy first (preserves traversal
-    /// order for on-screen elements), falls back to the full registry (explored
-    /// off-screen elements) when the hierarchy has zero matches.
-    ///
-    /// Registry fallback is sorted by heistId for deterministic ordinal selection.
+    /// matching ScreenElements. Runs an exact (case-insensitive) match pass across
+    /// hierarchy and registry first; if any element matches exactly, those win.
+    /// Otherwise falls back to substring matching. Within either pass the hierarchy
+    /// (visible) elements come first in traversal order, then off-screen registry
+    /// elements in content-space order.
     func matchScreenElements(_ matcher: ElementMatcher, limit: Int) -> [ScreenElement] {
         guard limit > 0 else { return [] }
-        let hierarchyHits = currentHierarchy.matches(matcher, limit: limit)
-        if !hierarchyHits.isEmpty {
-            return hierarchyHits.compactMap { match in
-                guard let heistId = registry.reverseIndex[match.element] else { return nil }
-                return registry.elements[heistId]
-            }
+        let exact = matchScreenElements(matcher, mode: .exact, limit: limit)
+        if !exact.isEmpty { return exact }
+        return matchScreenElements(matcher, mode: .substring, limit: limit)
+    }
+
+    private func matchScreenElements(
+        _ matcher: ElementMatcher,
+        mode: MatchMode,
+        limit: Int
+    ) -> [ScreenElement] {
+        let hierarchyHits = currentHierarchy.matches(matcher, mode: mode, limit: limit)
+        var seenIds = Set<String>()
+        var matches = hierarchyHits.compactMap { match -> ScreenElement? in
+            guard let heistId = registry.reverseIndex[match.element],
+                  let element = registry.elements[heistId],
+                  seenIds.insert(heistId).inserted else { return nil }
+            return element
         }
-        let sorted = registry.elements.values.sorted { $0.heistId < $1.heistId }
-        return Array(sorted.lazy.filter { $0.element.matches(matcher) }.prefix(limit))
+        if matches.count >= limit { return Array(matches.prefix(limit)) }
+
+        let offscreen = registry.elements.values
+            .filter { !seenIds.contains($0.heistId) && $0.element.matches(matcher, mode: mode) }
+            .sorted(by: registryOrder)
+        matches.append(contentsOf: offscreen.prefix(limit - matches.count))
+        return matches
+    }
+
+    private func registryOrder(_ lhs: ScreenElement, _ rhs: ScreenElement) -> Bool {
+        switch (lhs.contentSpaceOrigin, rhs.contentSpaceOrigin) {
+        case let (left?, right?):
+            if abs(left.y - right.y) >= 0.5 { return left.y < right.y }
+            if abs(left.x - right.x) >= 0.5 { return left.x < right.x }
+            return lhs.heistId < rhs.heistId
+        case (_?, nil):
+            return true
+        case (nil, _?):
+            return false
+        case (nil, nil):
+            return lhs.heistId < rhs.heistId
+        }
     }
 
 }

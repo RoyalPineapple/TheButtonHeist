@@ -9,6 +9,7 @@ public struct EnvironmentConfig: Sendable {
     public let sessionTimeout: TimeInterval
     public let connectionTimeout: TimeInterval
     public let fileConfig: ButtonHeistFileConfig?
+    public let directDevice: DiscoveredDevice?
     public let autoReconnect: Bool
 
     /// Build a `TheFence.Configuration` from this resolved config.
@@ -18,7 +19,8 @@ public struct EnvironmentConfig: Sendable {
             connectionTimeout: connectionTimeout,
             token: token,
             autoReconnect: autoReconnect,
-            fileConfig: fileConfig
+            fileConfig: fileConfig,
+            directDevice: directDevice
         )
     }
 
@@ -38,8 +40,31 @@ public struct EnvironmentConfig: Sendable {
     ) -> EnvironmentConfig {
         let fileConfig = TargetConfigResolver.loadConfig(from: configPath)
 
-        let resolvedDevice = deviceFilter ?? env["BUTTONHEIST_DEVICE"]
-        let resolvedToken = token ?? env["BUTTONHEIST_TOKEN"]
+        let envDevice = env[EnvironmentKey.buttonheistDevice.rawValue]
+        let envToken = env[EnvironmentKey.buttonheistToken.rawValue]
+        let configTarget = TargetConfigResolver.resolveEffective(config: fileConfig, env: env)
+
+        let resolvedDevice: String?
+        let resolvedToken: String?
+        let directDevice: DiscoveredDevice?
+        if let explicitOrEnvDevice = deviceFilter ?? envDevice {
+            resolvedDevice = explicitOrEnvDevice
+            resolvedToken = token ?? envToken
+            directDevice = nil
+        } else if let configTarget {
+            resolvedDevice = configTarget.device
+            resolvedToken = token ?? configTarget.token
+            directDevice = DiscoveredDevice.fromHostPort(
+                configTarget.device,
+                id: "config-\(fileConfig?.defaultTarget ?? configTarget.device)",
+                name: fileConfig?.defaultTarget,
+                certFingerprint: configTarget.certFingerprint
+            )
+        } else {
+            resolvedDevice = nil
+            resolvedToken = token ?? envToken
+            directDevice = nil
+        }
 
         let resolvedSessionTimeout: TimeInterval
         if let explicit = sessionTimeout, explicit > 0 {
@@ -59,6 +84,7 @@ public struct EnvironmentConfig: Sendable {
             sessionTimeout: resolvedSessionTimeout,
             connectionTimeout: resolvedConnectionTimeout,
             fileConfig: fileConfig,
+            directDevice: directDevice,
             autoReconnect: autoReconnect
         )
     }

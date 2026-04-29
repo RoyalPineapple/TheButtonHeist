@@ -232,6 +232,7 @@ public final class TheHandoff {
             existingValue = nil
         }
         if let existing = existingValue, !existing.isEmpty {
+            repairDriverIdPermissions(fileURL)
             return existing
         }
         let generated = UUID().uuidString.lowercased()
@@ -250,6 +251,21 @@ public final class TheHandoff {
         }
         return generated
     }()
+
+    private static func repairDriverIdPermissions(_ fileURL: URL) {
+        let fileManager = FileManager.default
+        let dir = fileURL.deletingLastPathComponent()
+        do {
+            try fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dir.path)
+        } catch {
+            logger.warning("Failed to repair driver-id directory permissions: \(error.localizedDescription)")
+        }
+        do {
+            try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
+        } catch {
+            logger.warning("Failed to repair driver-id file permissions: \(error.localizedDescription)")
+        }
+    }
 
     // MARK: - Init
 
@@ -378,6 +394,10 @@ public final class TheHandoff {
                 let keepaliveTask = self.makeKeepaliveTask()
                 self.transitionToConnected(device: device, keepaliveTask: keepaliveTask)
             case .disconnected(let reason):
+                if case .failed = self.connectionPhase {
+                    self.onDisconnected?(reason)
+                    return
+                }
                 self.transitionToDisconnected()
                 self.onDisconnected?(reason)
                 if case .enabled(let filter, let existingReconnectTask) = self.reconnectPolicy {
@@ -445,7 +465,9 @@ public final class TheHandoff {
         case .status(let payload):
             logger.info("Received status payload: appName=\(payload.identity.appName, privacy: .public)")
         case .protocolMismatch(let payload):
-            onError?("Protocol mismatch: expected \(payload.expectedProtocolVersion), got \(payload.receivedProtocolVersion)")
+            let message = "Protocol mismatch: expected \(payload.expectedProtocolVersion), got \(payload.receivedProtocolVersion)"
+            transitionToFailed(.error(message))
+            onError?(message)
         case .pong:
             missedPongCount = 0
         case .recordingStopped:

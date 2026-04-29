@@ -119,7 +119,9 @@ extension TheStash {
             label = nil; value = nil; identifier = nil
         case .scrollable(let contentSize):
             groupType = .scrollable
-            label = nil; value = "\(Int(contentSize.width))x\(Int(contentSize.height))"; identifier = nil
+            let width = Int(contentSize.width.sanitizedForJSON)
+            let height = Int(contentSize.height.sanitizedForJSON)
+            label = nil; value = "\(width)x\(height)"; identifier = nil
         }
         return Group(
             type: groupType,

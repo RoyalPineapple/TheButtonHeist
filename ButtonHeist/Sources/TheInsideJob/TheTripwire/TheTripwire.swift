@@ -328,13 +328,15 @@ final class TheTripwire {
 
     // MARK: - Window Access
 
-    /// All visible, non-fingerprint windows across every connected scene, sorted
+    /// All visible, non-fingerprint windows in foreground-active scenes, sorted
     /// by window level (front to back). Collects from all `UIWindowScene`s — not
-    /// just the foreground-active one — so system-managed windows (popup menus,
-    /// action sheets, alerts presented in their own UIWindow) are included.
+    /// just key windows — so system-managed windows (popup menus, action sheets,
+    /// alerts presented in their own UIWindow) are included without leaking
+    /// inactive multi-window scenes into the accessibility tree.
     func getTraversableWindows() -> [(window: UIWindow, rootView: UIView)] {
         UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
+            .filter { $0.activationState == .foregroundActive }
             .flatMap { $0.windows }
             .filter { window in
                 !(window is any ButtonHeistOverlayWindow)

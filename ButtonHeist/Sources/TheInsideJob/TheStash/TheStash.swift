@@ -42,7 +42,7 @@ final class TheStash {
     struct ScreenElement {
         let heistId: String
         /// Content-space position within nearest scrollable container (nil if not scrollable).
-        let contentSpaceOrigin: CGPoint?
+        var contentSpaceOrigin: CGPoint?
         /// Parsed accessibility element (updated each refresh if element is visible).
         var element: AccessibilityElement
         /// Live UIKit object for action dispatch. Weak — nils on cell reuse.
@@ -320,7 +320,9 @@ final class TheStash {
         case .heistId(let heistId):
             return registry.elements[heistId] != nil
         case .matcher(let matcher, _):
-            return currentHierarchy.hasMatch(matcher)
+            // Exact matches are a subset of substring matches, so a single substring
+            // pass answers "does any element match" for the exact-then-substring fallback.
+            return currentHierarchy.hasMatch(matcher, mode: .substring)
         }
     }
 

@@ -15,9 +15,7 @@ extension TheFence {
 
         // Full mode (default): explore the screen, return all discovered elements
         if full {
-            let result: ActionResult = try await sendAndAwait(.explore) { requestId in
-                try await self.waitForActionResult(requestId: requestId, timeout: Timeouts.exploreSeconds)
-            }
+            let result = try await sendAndAwaitAction(.explore, timeout: Timeouts.exploreSeconds)
             lastActionResult = result
             guard let exploreResult = result.exploreResult else {
                 return .error("Explore failed: \(result.message ?? "unknown error")")
@@ -31,9 +29,7 @@ extension TheFence {
             return .interface(interface, detail: detail, explore: exploreResult)
         }
 
-        let interface: Interface = try await sendAndAwait(.requestInterface) { requestId in
-            try await self.waitForInterface(requestId: requestId, timeout: Timeouts.actionSeconds)
-        }
+        let interface = try await sendAndAwaitInterface(.requestInterface, timeout: Timeouts.actionSeconds)
         let detail = (args["detail"] as? String).flatMap(InterfaceDetail.init) ?? .summary
 
         // Matcher-based filtering takes precedence over heistId list
@@ -65,9 +61,7 @@ extension TheFence {
     // MARK: - Handler: Screen
 
     func handleGetScreen(_ args: [String: Any]) async throws -> FenceResponse {
-        let screen: ScreenPayload = try await sendAndAwait(.requestScreen) { requestId in
-            try await self.waitForScreen(requestId: requestId, timeout: 30)
-        }
+        let screen = try await sendAndAwaitScreen(.requestScreen, timeout: 30)
         let artifactRequestId = (args["_requestId"] as? String) ?? UUID().uuidString
         let metadata = ScreenshotMetadata(width: screen.width, height: screen.height)
         do {
@@ -299,9 +293,7 @@ extension TheFence {
                 return .error("Must specify heistId or at least one match field for scroll_to_visible")
             }
             let scrollToVisibleTarget = ScrollToVisibleTarget(elementTarget: target)
-            let result: ActionResult = try await sendAndAwait(.scrollToVisible(scrollToVisibleTarget)) { requestId in
-                try await self.waitForActionResult(requestId: requestId, timeout: Timeouts.actionSeconds)
-            }
+            let result = try await sendAndAwaitAction(.scrollToVisible(scrollToVisibleTarget), timeout: Timeouts.actionSeconds)
             lastActionResult = result
             return .action(result: result)
         case .elementSearch:
@@ -320,9 +312,7 @@ extension TheFence {
                 elementTarget: target,
                 direction: direction
             )
-            let result: ActionResult = try await sendAndAwait(.elementSearch(searchTarget)) { requestId in
-                try await self.waitForActionResult(requestId: requestId, timeout: Timeouts.longActionSeconds)
-            }
+            let result = try await sendAndAwaitAction(.elementSearch(searchTarget), timeout: Timeouts.longActionSeconds)
             lastActionResult = result
             return .action(result: result)
         case .scrollToEdge:
@@ -397,11 +387,9 @@ extension TheFence {
         guard text != nil || deleteCount != nil || clearFirst == true else {
             return .error("Must specify text, deleteCount, clearFirst, or a combination")
         }
-        let result: ActionResult = try await sendAndAwait(.typeText(TypeTextTarget(
+        let result = try await sendAndAwaitAction(.typeText(TypeTextTarget(
             text: text, deleteCount: deleteCount, clearFirst: clearFirst, elementTarget: try elementTarget(args)
-        ))) { requestId in
-            try await self.waitForActionResult(requestId: requestId, timeout: Timeouts.longActionSeconds)
-        }
+        )), timeout: Timeouts.longActionSeconds)
         lastActionResult = result
         return .action(result: result)
     }
@@ -451,9 +439,7 @@ extension TheFence {
             absent: args.boolean("absent"),
             timeout: args.number("timeout")
         )
-        let result: ActionResult = try await sendAndAwait(.waitFor(waitForTarget)) { requestId in
-            try await self.waitForActionResult(requestId: requestId, timeout: waitForTarget.resolvedTimeout + 5)
-        }
+        let result = try await sendAndAwaitAction(.waitFor(waitForTarget), timeout: waitForTarget.resolvedTimeout + 5)
         lastActionResult = result
         return .action(result: result)
     }
@@ -464,9 +450,7 @@ extension TheFence {
         let expectation = try parseExpectation(args)
         let timeout = args.number("timeout")
         let target = WaitForChangeTarget(expect: expectation, timeout: timeout)
-        let result: ActionResult = try await sendAndAwait(.waitForChange(target)) { requestId in
-            try await self.waitForActionResult(requestId: requestId, timeout: target.resolvedTimeout + 5)
-        }
+        let result = try await sendAndAwaitAction(.waitForChange(target), timeout: target.resolvedTimeout + 5)
         lastActionResult = result
         return .action(result: result)
     }
@@ -511,10 +495,12 @@ extension TheFence {
 
         let resolvedDevice: String
         let resolvedToken: String?
+        let resolvedDirectDevice: DiscoveredDevice?
 
         if let device {
             resolvedDevice = device
             resolvedToken = token
+            resolvedDirectDevice = nil
         } else if let targetName {
             guard let fileConfig = config.fileConfig else {
                 return .error("No config file loaded. Create .buttonheist.json or ~/.config/buttonheist/config.json")
@@ -525,6 +511,12 @@ extension TheFence {
             }
             resolvedDevice = target.device
             resolvedToken = token ?? target.token
+            resolvedDirectDevice = DiscoveredDevice.fromHostPort(
+                target.device,
+                id: "config-\(targetName)",
+                name: targetName,
+                certFingerprint: target.certFingerprint
+            )
         } else {
             return .error("Must specify 'target' (named config target) or 'device' (host:port)")
         }
@@ -540,7 +532,8 @@ extension TheFence {
             connectionTimeout: config.connectionTimeout,
             token: resolvedToken,
             autoReconnect: config.autoReconnect,
-            fileConfig: config.fileConfig
+            fileConfig: config.fileConfig,
+            directDevice: resolvedDirectDevice
         )
         config = newConfig
 
@@ -568,9 +561,10 @@ extension TheFence {
     }
 
     func handleStopRecording(_ args: [String: Any]) async throws -> FenceResponse {
-        let recording: RecordingPayload = try await sendAndAwait(.stopRecording) { _ in
-            try await self.waitForRecording(timeout: Timeouts.longActionSeconds)
+        guard handoff.isRecording else {
+            return .error("No recording in progress — use start_recording first")
         }
+        let recording: RecordingPayload = try await stopRecordingAndWait(timeout: Timeouts.longActionSeconds)
         let artifactRequestId = (args["_requestId"] as? String) ?? UUID().uuidString
         let metadata = RecordingMetadata(
             width: recording.width,
@@ -794,7 +788,7 @@ extension TheFence {
         switch response {
         case .error(let message):
             return .fenceError(step: failedStep, message: message, interface: nil)
-        case .action(let result, let expectation) where !result.success:
+        case .action(let result, let expectation) where !result.success || expectation?.met == false:
             return .actionFailed(step: failedStep, result: result, expectation: expectation, interface: nil)
         default:
             return nil

@@ -112,10 +112,10 @@ enum CLIRunner {
         return fence
     }
 
-    /// Exit with code 1 if the response wraps a failed action.
+    /// Exit with code 1 if the command failed, including unmet expectations.
     @ButtonHeistActor
     private static func exitOnActionFailure(_ response: FenceResponse) {
-        if let result = response.actionResult, !result.success {
+        if response.isFailure {
             Darwin.exit(1)
         }
     }

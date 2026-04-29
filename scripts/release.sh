@@ -162,9 +162,9 @@ sed -i '' "s/buttonHeistVersion = \"$CURRENT_ESC\"/buttonHeistVersion = \"$NEW_E
     ButtonHeist/Sources/TheScore/Messages.swift
 echo "  ✓ Messages.swift"
 
-# 2. VERSION file
-echo "$NEW_VERSION" > VERSION
-echo "  ✓ VERSION"
+# 2. RELEASE_VERSION file
+echo "$NEW_VERSION" > RELEASE_VERSION
+echo "  ✓ RELEASE_VERSION"
 
 # 3. docs/API.md
 sed -i '' "s/\*\*Version\*\*: $CURRENT_ESC/**Version**: $NEW_ESC/" docs/API.md
@@ -273,7 +273,7 @@ tuist generate --no-open
 
 git add \
     ButtonHeist/Sources/TheScore/Messages.swift \
-    VERSION \
+    RELEASE_VERSION \
     docs/API.md \
     TestApp/Sources/DisclosureGroupingDemo.swift \
     Formula/buttonheist.rb \

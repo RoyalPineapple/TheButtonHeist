@@ -532,6 +532,11 @@ extension TheBrains {
             .compactMap { container -> (target: ScrollableTarget, container: AccessibilityContainer)? in
                 guard !exhausted.contains(container),
                       case .scrollable(let contentSize) = container.type else { return nil }
+                if let view = self.stash.scrollableContainerViews[container],
+                   view.window != nil,
+                   Self.isObscuredByPresentation(view: view) {
+                    return nil
+                }
                 let target = self.scrollableTarget(for: container, contentSize: contentSize)
                 if let axis, !Self.scrollableAxis(of: target).contains(axis) { return nil }
                 return (target, container)
@@ -646,7 +651,7 @@ extension TheBrains {
             return stash.registry.elements[heistId]
         case .matcher(let matcher, _):
             for (heistId, entry) in stash.registry.elements
-            where !stash.registry.viewportIds.contains(heistId) && entry.element.matches(matcher) {
+            where !stash.registry.viewportIds.contains(heistId) && entry.element.matches(matcher, mode: .substring) {
                 return entry
             }
             return nil

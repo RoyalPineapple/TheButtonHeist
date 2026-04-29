@@ -64,6 +64,26 @@ public enum FenceError: Error, LocalizedError {
     }
 }
 
+private extension TheFence.Command {
+    var requiresConnectionBeforeDispatch: Bool {
+        switch self {
+        case .getSessionState, .listDevices, .connect, .listTargets,
+             .getSessionLog, .archiveSession, .startHeist, .stopHeist:
+            return false
+        default:
+            return true
+        }
+    }
+}
+
+private extension FenceResponse {
+    var succeededForHeistRecording: Bool {
+        if case .error = self { return false }
+        if let actionResult, !actionResult.success { return false }
+        return true
+    }
+}
+
 extension FenceError {
     init(_ connectionError: TheHandoff.ConnectionError) {
         switch connectionError {
@@ -104,19 +124,23 @@ public final class TheFence {
         /// Resolved `.buttonheist.json` config (device filter, token, output paths).
         /// Supplied by the CLI/MCP entry points from discovered config files.
         public var fileConfig: ButtonHeistFileConfig?
+        /// Direct host:port target with optional TLS fingerprint from config.
+        public var directDevice: DiscoveredDevice?
 
         public init(
             deviceFilter: String? = nil,
             connectionTimeout: TimeInterval = 30,
             token: String? = nil,
             autoReconnect: Bool = true,
-            fileConfig: ButtonHeistFileConfig? = nil
+            fileConfig: ButtonHeistFileConfig? = nil,
+            directDevice: DiscoveredDevice? = nil
         ) {
             self.deviceFilter = deviceFilter
             self.connectionTimeout = connectionTimeout
             self.token = token
             self.autoReconnect = autoReconnect
             self.fileConfig = fileConfig
+            self.directDevice = directDevice
         }
     }
 
@@ -235,118 +259,199 @@ public final class TheFence {
         guard let command = Command(rawValue: commandString) else {
             return .error("Unknown command: \(commandString). Use 'help' for available commands.")
         }
+        if let immediateResponse = handleImmediateCommand(command) { return immediateResponse }
+        let requestId = (request["requestId"] as? String) ?? UUID().uuidString
+        logCommand(requestId: requestId, command: command, request: request)
+        let parsedExpectation = try parseExpectation(request)
 
-        if command == .help {
-            return .help(commands: Self.supportedCommands)
+        if let backgroundResponse = responseIfBackgroundExpectationMet(parsedExpectation, requestId: requestId) {
+            return backgroundResponse
         }
 
-        if command == .quit || command == .exit {
+        try await ensureConnectedIfNeeded(for: command)
+
+        var dispatchArgs = request
+        dispatchArgs["_requestId"] = requestId
+
+        let dispatched = try await dispatchWithErrorLogging(
+            command: command,
+            args: dispatchArgs,
+            requestId: requestId
+        )
+        lastLatencyMs = dispatched.durationMs
+
+        logResponse(requestId: requestId, response: dispatched.response, durationMs: lastLatencyMs)
+
+        // Snapshot pre-action elements before updating the cache — elementDisappeared
+        // expectations need to resolve removed heistIds against the pre-action state.
+        let preActionCache = lastInterfaceCache
+        let cacheUpdate = updateInterfaceCache(for: dispatched.response, preActionCache: preActionCache)
+        recordHeistEvidence(command: command, request: request, response: dispatched.response, cacheUpdate: cacheUpdate)
+        applyPostRecordCacheUpdate(cacheUpdate)
+        return validateActionResponse(dispatched.response, expectation: parsedExpectation, preActionCache: preActionCache)
+    }
+
+    private struct DispatchResult {
+        let response: FenceResponse
+        let durationMs: Int
+    }
+
+    private struct ResponseCacheUpdate {
+        let evidenceElements: [HeistElement]?
+        let postRecordBookKeeperElements: [HeistElement]?
+    }
+
+    private func handleImmediateCommand(_ command: Command) -> FenceResponse? {
+        switch command {
+        case .help:
+            return .help(commands: Self.supportedCommands)
+        case .quit, .exit:
             stop()
             return .ok(message: "bye")
+        default:
+            return nil
         }
+    }
 
-        let requestId = (request["requestId"] as? String) ?? UUID().uuidString
+    private func logCommand(requestId: String, command: Command, request: [String: Any]) {
         do {
             try bookKeeper.logCommand(requestId: requestId, command: command, arguments: request)
         } catch {
             logger.warning("Failed to log command \(command.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
+    }
 
-        let parsedExpectation = try parseExpectation(request)
+    private func responseIfBackgroundExpectationMet(
+        _ expectation: ActionExpectation?,
+        requestId: String
+    ) -> FenceResponse? {
+        guard let expectation, let backgroundDelta = drainBackgroundDelta() else { return nil }
+        let syntheticResult = ActionResult(
+            success: true,
+            method: .waitForChange,
+            message: "expectation already met by background change",
+            interfaceDelta: backgroundDelta
+        )
+        let validation = expectation.validate(against: syntheticResult)
+        guard validation.met else { return nil }
+        let response = FenceResponse.action(result: syntheticResult, expectation: validation)
+        logResponse(requestId: requestId, response: response, durationMs: 0)
+        return response
+    }
 
-        // Fast path: if an expectation is attached and a background delta already
-        // satisfies it, skip the action entirely. The screen changed while the agent
-        // was thinking — the intent is already fulfilled.
-        if let expectation = parsedExpectation,
-           let backgroundDelta = drainBackgroundDelta() {
-            let syntheticResult = ActionResult(
-                success: true,
-                method: .waitForChange,
-                message: "expectation already met by background change",
-                interfaceDelta: backgroundDelta
-            )
-            let validation = expectation.validate(against: syntheticResult)
-            if validation.met {
-                logResponse(requestId: requestId, response: .action(result: syntheticResult, expectation: validation), durationMs: 0)
-                return .action(result: syntheticResult, expectation: validation)
-            }
-            // Expectation not met by the background delta — continue with the action.
-        }
+    private func ensureConnectedIfNeeded(for command: Command) async throws {
+        guard !handoff.isConnected, command.requiresConnectionBeforeDispatch else { return }
+        try await start()
+    }
 
-        if command != .getSessionState && command != .listDevices &&
-            command != .connect && command != .listTargets &&
-            command != .getSessionLog && command != .archiveSession &&
-            command != .startHeist && command != .stopHeist &&
-            !handoff.isConnected {
-            try await start()
-        }
-
-        var dispatchArgs = request
-        dispatchArgs["_requestId"] = requestId
-
+    private func dispatchWithErrorLogging(
+        command: Command,
+        args: [String: Any],
+        requestId: String
+    ) async throws -> DispatchResult {
         let start = CFAbsoluteTimeGetCurrent()
-        let response: FenceResponse
         do {
-            response = try await dispatch(command: command, args: dispatchArgs)
+            let response = try await dispatch(command: command, args: args)
+            return DispatchResult(response: response, durationMs: elapsedMilliseconds(since: start))
         } catch {
-            let durationMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
-            do {
-                try bookKeeper.logResponse(
-                    requestId: requestId,
-                    status: .error,
-                    durationMilliseconds: durationMs,
-                    error: error.localizedDescription
-                )
-            } catch let logError {
-                logger.warning("Failed to log error response for \(requestId, privacy: .public): \(logError.localizedDescription, privacy: .public)")
-            }
+            let durationMs = elapsedMilliseconds(since: start)
+            logErrorResponse(requestId: requestId, error: error, durationMs: durationMs)
             throw error
         }
-        lastLatencyMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
+    }
 
-        logResponse(requestId: requestId, response: response, durationMs: lastLatencyMs)
+    private func elapsedMilliseconds(since start: CFAbsoluteTime) -> Int {
+        Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
+    }
 
-        // Snapshot pre-action elements before updating the cache — elementDisappeared
-        // expectations need to resolve removed heistIds against the pre-action state.
-        let preActionCache = lastInterfaceCache
+    private func logErrorResponse(requestId: String, error: Error, durationMs: Int) {
+        do {
+            try bookKeeper.logResponse(
+                requestId: requestId,
+                status: .error,
+                durationMilliseconds: durationMs,
+                error: error.localizedDescription
+            )
+        } catch let logError {
+            logger.warning("Failed to log error response for \(requestId, privacy: .public): \(logError.localizedDescription, privacy: .public)")
+        }
+    }
 
-        // Update interface cache for heist recording from any response that carries elements:
-        // get_interface returns them directly; actions with screen-change deltas carry newInterface.
-        // On screen changes, clear the cache first so it doesn't grow without bound across screens.
-        // The activated element from the old screen is already captured in preActionCache above.
+    private func updateInterfaceCache(
+        for response: FenceResponse,
+        preActionCache: [String: HeistElement]
+    ) -> ResponseCacheUpdate {
         if case .interface(let iface, _, _, _) = response {
             updateInterfaceCache(iface.elements)
-        } else if let actionResult = response.actionResult,
-                  let newInterface = actionResult.interfaceDelta?.newInterface {
-            if actionResult.interfaceDelta?.kind == .screenChanged {
-                lastInterfaceCache.removeAll()
-                bookKeeper.clearInterfaceCache()
-            }
-            updateInterfaceCache(newInterface.elements)
-        }
-
-        // Record the command for heist playback (skip during playback; no-ops when not recording)
-        if case .idle = playbackPhase {
-            let responseSucceeded: Bool = {
-                if case .error = response { return false }
-                if let actionResult = response.actionResult, !actionResult.success { return false }
-                return true
-            }()
-            bookKeeper.recordHeistEvidence(
-                command: command,
-                args: request,
-                succeeded: responseSucceeded,
-                interfaceElements: lastInterfaceCache.isEmpty ? nil : Array(lastInterfaceCache.values)
+            return ResponseCacheUpdate(
+                evidenceElements: lastInterfaceCache.isEmpty ? nil : Array(lastInterfaceCache.values),
+                postRecordBookKeeperElements: nil
             )
         }
+        guard let actionResult = response.actionResult,
+              let newInterface = actionResult.interfaceDelta?.newInterface else {
+            return ResponseCacheUpdate(
+                evidenceElements: lastInterfaceCache.isEmpty ? nil : Array(lastInterfaceCache.values),
+                postRecordBookKeeperElements: nil
+            )
+        }
+        return updateInterfaceCache(for: actionResult, newInterface: newInterface, preActionCache: preActionCache)
+    }
 
-        // Every action gets implicit delivery validation; higher tiers are additive
+    private func updateInterfaceCache(
+        for actionResult: ActionResult,
+        newInterface: Interface,
+        preActionCache: [String: HeistElement]
+    ) -> ResponseCacheUpdate {
+        guard actionResult.interfaceDelta?.kind == .screenChanged else {
+            updateInterfaceCache(newInterface.elements)
+            return ResponseCacheUpdate(
+                evidenceElements: lastInterfaceCache.isEmpty ? nil : Array(lastInterfaceCache.values),
+                postRecordBookKeeperElements: nil
+            )
+        }
+        lastInterfaceCache.removeAll()
+        for element in newInterface.elements {
+            lastInterfaceCache[element.heistId] = element
+        }
+        return ResponseCacheUpdate(
+            evidenceElements: Array(preActionCache.values) + newInterface.elements,
+            postRecordBookKeeperElements: newInterface.elements
+        )
+    }
+
+    private func recordHeistEvidence(
+        command: Command,
+        request: [String: Any],
+        response: FenceResponse,
+        cacheUpdate: ResponseCacheUpdate
+    ) {
+        guard case .idle = playbackPhase else { return }
+        bookKeeper.recordHeistEvidence(
+            command: command,
+            args: request,
+            succeeded: response.succeededForHeistRecording,
+            interfaceElements: cacheUpdate.evidenceElements
+        )
+    }
+
+    private func applyPostRecordCacheUpdate(_ cacheUpdate: ResponseCacheUpdate) {
+        guard let elements = cacheUpdate.postRecordBookKeeperElements else { return }
+        bookKeeper.clearInterfaceCache()
+        bookKeeper.updateInterfaceCache(elements)
+    }
+
+    private func validateActionResponse(
+        _ response: FenceResponse,
+        expectation: ActionExpectation?,
+        preActionCache: [String: HeistElement]
+    ) -> FenceResponse {
         if let actionResult = response.actionResult {
             let delivery = ActionExpectation.validateDelivery(actionResult)
             if !delivery.met {
                 return .action(result: actionResult, expectation: delivery)
             }
-            if let expectation = parsedExpectation {
+            if let expectation {
                 let validation = expectation.validate(
                     against: actionResult, preActionElements: preActionCache
                 )
@@ -358,6 +463,10 @@ public final class TheFence {
     }
 
     private func connect() async throws {
+        if let directDevice = config.directDevice {
+            try await connectDirect(to: directDevice)
+            return
+        }
         let filter = config.deviceFilter ?? EnvironmentKey.buttonheistDevice.value
         do {
             try await handoff.connectWithDiscovery(
@@ -366,6 +475,30 @@ public final class TheFence {
             )
         } catch let error as TheHandoff.ConnectionError {
             throw FenceError(error)
+        }
+    }
+
+    private func connectDirect(to device: DiscoveredDevice) async throws {
+        handoff.onStatus?("Connecting to \(device.name)...")
+        handoff.connect(to: device)
+        let start = DispatchTime.now().uptimeNanoseconds
+        let timeout = UInt64(max(config.connectionTimeout, 5) * 1_000_000_000)
+        while true {
+            switch handoff.connectionPhase {
+            case .connected:
+                handoff.onStatus?("Connected to \(device.name)")
+                return
+            case .failed(let failure):
+                throw FenceError(failure.asConnectionError)
+            case .disconnected:
+                throw FenceError(TheHandoff.ConnectionError.connectionFailed("Disconnected during connection attempt"))
+            case .connecting:
+                break
+            }
+            if DispatchTime.now().uptimeNanoseconds - start > timeout {
+                throw FenceError(TheHandoff.ConnectionError.timeout)
+            }
+            try await Task.sleep(for: .milliseconds(100))
         }
     }
 
@@ -478,19 +611,34 @@ public final class TheFence {
     // MARK: - Send Action (shared)
 
     func sendAction(_ message: ClientMessage) async throws -> FenceResponse {
-        let result: ActionResult = try await sendAndAwait(message) { requestId in
-            try await self.waitForActionResult(requestId: requestId, timeout: Timeouts.actionSeconds)
-        }
+        let result = try await sendAndAwaitAction(message, timeout: Timeouts.actionSeconds)
         lastActionResult = result
         return .action(result: result)
     }
 
-    func sendAndAwait<T: Sendable>(_ message: ClientMessage, response: (_ requestId: String) async throws -> T) async throws -> T {
+    func sendAndAwaitAction(_ message: ClientMessage, timeout: TimeInterval) async throws -> ActionResult {
+        try await sendAndAwait(message, tracker: actionTracker, timeout: timeout)
+    }
+
+    func sendAndAwaitInterface(_ message: ClientMessage, timeout: TimeInterval) async throws -> Interface {
+        try await sendAndAwait(message, tracker: interfaceTracker, timeout: timeout)
+    }
+
+    func sendAndAwaitScreen(_ message: ClientMessage, timeout: TimeInterval) async throws -> ScreenPayload {
+        try await sendAndAwait(message, tracker: screenTracker, timeout: timeout)
+    }
+
+    private func sendAndAwait<T: Sendable>(
+        _ message: ClientMessage,
+        tracker: PendingRequestTracker<T>,
+        timeout: TimeInterval
+    ) async throws -> T {
         guard handoff.isConnected else { throw FenceError.notConnected }
         let requestId = UUID().uuidString
-        handoff.send(message, requestId: requestId)
         do {
-            return try await response(requestId)
+            return try await tracker.wait(requestId: requestId, timeout: timeout) {
+                self.handoff.send(message, requestId: requestId)
+            }
         } catch is CancellationError {
             throw CancellationError()
         } catch {
@@ -559,7 +707,12 @@ public final class TheFence {
 
     static func configTargetsAsDevices(_ config: ButtonHeistFileConfig) -> [DiscoveredDevice] {
         config.targets.compactMap { name, target in
-            guard let device = DiscoveredDevice.fromHostPort(target.device, id: "config-\(name)", name: name) else { return nil }
+            guard let device = DiscoveredDevice.fromHostPort(
+                target.device,
+                id: "config-\(name)",
+                name: name,
+                certFingerprint: target.certFingerprint
+            ) else { return nil }
             return device
         }
     }
@@ -582,6 +735,20 @@ public final class TheFence {
     // while a stop_recording wait is in flight. Keeping the tracker on TheFence
     // lets disconnect handling fail the wait immediately instead of timing out.
     public func waitForRecording(timeout: TimeInterval = 120.0) async throws -> RecordingPayload {
+        try await waitForRecording(timeout: timeout, afterRegister: nil)
+    }
+
+    func stopRecordingAndWait(timeout: TimeInterval = 120.0) async throws -> RecordingPayload {
+        guard handoff.isConnected else { throw FenceError.notConnected }
+        return try await waitForRecording(timeout: timeout) {
+            self.handoff.send(.stopRecording, requestId: UUID().uuidString)
+        }
+    }
+
+    private func waitForRecording(
+        timeout: TimeInterval,
+        afterRegister: (() -> Void)?
+    ) async throws -> RecordingPayload {
         guard !recordingWaitInFlight else {
             throw FenceError.invalidRequest("stop_recording already waiting for completion")
         }
@@ -601,7 +768,7 @@ public final class TheFence {
         handoff.onRecordingError = { [weak self] message in
             self?.recordingTracker.resolve(requestId: syntheticId, result: .failure(FenceError.actionFailed("Recording failed: \(message)")))
         }
-        return try await recordingTracker.wait(requestId: syntheticId, timeout: timeout)
+        return try await recordingTracker.wait(requestId: syntheticId, timeout: timeout, afterRegister: afterRegister)
     }
 
     private func cancelAllPendingRequests(error: Error = FenceError.actionTimeout) {

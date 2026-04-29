@@ -36,15 +36,108 @@ internal enum NetDeltaAccumulator {
         }
         // Merge the post-screen element changes into one
         guard let postMerge = mergeElementDeltas(postDeltas) else { return screenChange }
-        // Return screenChanged but with the merged updates appended
+        let finalInterface = screenChange.newInterface.map {
+            apply(postMerge, to: $0)
+        }
         return InterfaceDelta(
             kind: .screenChanged,
-            elementCount: postMerge.elementCount,
+            elementCount: finalInterface?.elements.count ?? postMerge.elementCount,
             added: postMerge.added,
             removed: postMerge.removed,
             updated: postMerge.updated,
-            newInterface: screenChange.newInterface
+            newInterface: finalInterface
         )
+    }
+
+    private static func apply(_ delta: InterfaceDelta, to interface: Interface) -> Interface {
+        var elementsById = Dictionary(uniqueKeysWithValues: interface.elements.map { ($0.heistId, $0) })
+        for heistId in delta.removed ?? [] {
+            elementsById.removeValue(forKey: heistId)
+        }
+        for element in delta.added ?? [] {
+            elementsById[element.heistId] = element
+        }
+        for update in delta.updated ?? [] {
+            guard var element = elementsById[update.heistId] else { continue }
+            var fullyApplied = true
+            for change in update.changes where !apply(change, to: &element) {
+                fullyApplied = false
+            }
+            if fullyApplied {
+                elementsById[update.heistId] = element
+            } else {
+                // We couldn't apply every property delta in-place (e.g. actions/customContent
+                // are lossy strings on the wire). Drop the element from `newInterface` so the
+                // snapshot stays internally consistent — callers should read `delta.updated`
+                // for the authoritative change list.
+                elementsById.removeValue(forKey: update.heistId)
+            }
+        }
+        let elements = interface.elements
+            .filter { elementsById[$0.heistId] != nil }
+            .map { elementsById[$0.heistId] ?? $0 }
+            + (delta.added ?? []).filter { original in
+                !interface.elements.contains { $0.heistId == original.heistId }
+            }
+        return Interface(timestamp: interface.timestamp, elements: elements, tree: interface.tree)
+    }
+
+    /// Apply a property change to `element`. Returns `false` when the property cannot be
+    /// reconstructed from the wire string (the caller should drop the element from
+    /// `newInterface` to avoid leaving stale fields behind).
+    private static func apply(_ change: PropertyChange, to element: inout HeistElement) -> Bool {
+        switch change.property {
+        case .label:
+            element.label = change.new
+            return true
+        case .value:
+            element.value = change.new
+            return true
+        case .hint:
+            element.hint = change.new
+            return true
+        case .traits:
+            guard let traits = parseTraits(change.new) else { return false }
+            element.traits = traits
+            return true
+        case .frame:
+            guard let frame = parseFrame(change.new) else { return false }
+            element.frameX = frame.x
+            element.frameY = frame.y
+            element.frameWidth = frame.width
+            element.frameHeight = frame.height
+            return true
+        case .activationPoint:
+            guard let point = parsePoint(change.new) else { return false }
+            element.activationPointX = point.x
+            element.activationPointY = point.y
+            return true
+        case .actions, .customContent:
+            return false
+        }
+    }
+
+    private static func parseTraits(_ value: String?) -> [HeistTrait]? {
+        guard let value, !value.isEmpty else { return [] }
+        let names = value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        return names.compactMap { name -> HeistTrait? in
+            guard !name.isEmpty else { return nil }
+            return HeistTrait(rawValue: name) ?? .unknown(name)
+        }
+    }
+
+    private static func parseFrame(_ value: String?) -> (x: Double, y: Double, width: Double, height: Double)? {
+        guard let value else { return nil }
+        let parts = value.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+        guard parts.count == 4 else { return nil }
+        return (parts[0], parts[1], parts[2], parts[3])
+    }
+
+    private static func parsePoint(_ value: String?) -> (x: Double, y: Double)? {
+        guard let value else { return nil }
+        let parts = value.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+        guard parts.count == 2 else { return nil }
+        return (parts[0], parts[1])
     }
 
     private static func mergeElementDeltas(_ deltas: [InterfaceDelta]) -> InterfaceDelta? {
