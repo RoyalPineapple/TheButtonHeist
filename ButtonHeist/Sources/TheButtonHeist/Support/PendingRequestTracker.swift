@@ -21,7 +21,11 @@ final class PendingRequestTracker<T: Sendable> {
     /// The caller is suspended until either `resolve(requestId:result:)` is called
     /// with a matching `requestId`, or `timeout` seconds elapse. Double-resume is
     /// prevented by an `OSAllocatedUnfairLock<Bool>` guard.
-    func wait(requestId: String, timeout: TimeInterval) async throws -> T {
+    func wait(
+        requestId: String,
+        timeout: TimeInterval,
+        afterRegister: (() -> Void)? = nil
+    ) async throws -> T {
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 if Task.isCancelled {
@@ -55,6 +59,7 @@ final class PendingRequestTracker<T: Sendable> {
                         continuation.resume(with: result)
                     }
                 }
+                afterRegister?()
             }
         } onCancel: {
             // Safe in every ordering: if the entry was never registered (early

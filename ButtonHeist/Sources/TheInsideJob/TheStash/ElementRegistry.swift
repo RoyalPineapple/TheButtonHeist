@@ -37,17 +37,17 @@ extension TheStash {
         heistIds: [String],
         contexts: [AccessibilityElement: ElementContext]
     ) {
-        reverseIndex = Dictionary(
-            zip(parsedElements, heistIds).map { ($0, $1) },
-            uniquingKeysWith: { _, latest in latest }
-        )
+        var resolvedPairs: [(AccessibilityElement, String)] = []
 
-        for (parsedElement, heistId) in zip(parsedElements, heistIds) {
+        for (parsedElement, baseHeistId) in zip(parsedElements, heistIds) {
             let context = contexts[parsedElement]
+            let heistId = resolveHeistId(baseHeistId, contentSpaceOrigin: context?.contentSpaceOrigin)
+            resolvedPairs.append((parsedElement, heistId))
             if var existing = elements[heistId] {
                 existing.element = parsedElement
                 existing.object = context?.object
                 existing.scrollView = context?.scrollView
+                existing.contentSpaceOrigin = context?.contentSpaceOrigin ?? existing.contentSpaceOrigin
                 elements[heistId] = existing
             } else {
                 elements[heistId] = ScreenElement(
@@ -60,7 +60,26 @@ extension TheStash {
             }
         }
 
-        viewportIds = Set(heistIds)
+        reverseIndex = Dictionary(
+            resolvedPairs.map { ($0.0, $0.1) },
+            uniquingKeysWith: { _, latest in latest }
+        )
+
+        viewportIds = Set(resolvedPairs.map(\.1))
+    }
+
+    private func resolveHeistId(_ baseHeistId: String, contentSpaceOrigin: CGPoint?) -> String {
+        guard let contentSpaceOrigin,
+              let existing = elements[baseHeistId],
+              let existingOrigin = existing.contentSpaceOrigin,
+              !Self.sameOrigin(existingOrigin, contentSpaceOrigin) else {
+            return baseHeistId
+        }
+        return "\(baseHeistId)_at_\(Int(contentSpaceOrigin.x.rounded()))_\(Int(contentSpaceOrigin.y.rounded()))"
+    }
+
+    private static func sameOrigin(_ lhs: CGPoint, _ rhs: CGPoint) -> Bool {
+        abs(lhs.x - rhs.x) < 0.5 && abs(lhs.y - rhs.y) < 0.5
     }
 
     /// Clear everything — suspend or full reset.

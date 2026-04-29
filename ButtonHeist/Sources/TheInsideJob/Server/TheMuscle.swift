@@ -54,14 +54,14 @@ final class TheMuscle {
     private enum ClientPhase {
         case connected(address: String)
         case helloValidated(address: String)
-        case pendingApproval(address: String, respond: @Sendable (Data) -> Void, isObserver: Bool)
+        case pendingApproval(address: String, respond: @Sendable (Data) -> Void, isObserver: Bool, driverId: String?)
         case authenticated(address: String, driverIdentity: String, subscribed: Bool)
         case observer(address: String, subscribed: Bool)
 
         var address: String {
             switch self {
             case .connected(let address), .helloValidated(let address),
-                 .pendingApproval(let address, _, _),
+                 .pendingApproval(let address, _, _, _),
                  .authenticated(let address, _, _), .observer(let address, _):
                 return address
             }
@@ -319,7 +319,7 @@ final class TheMuscle {
         if payload.token.isEmpty {
             // No token → request UI approval (Allow/Deny prompt on device)
             logger.info("Client \(clientId) requesting UI approval (no token)")
-            clients[clientId] = .pendingApproval(address: address, respond: respond, isObserver: false)
+            clients[clientId] = .pendingApproval(address: address, respond: respond, isObserver: false, driverId: payload.driverId)
             showApprovalAlert(
                 clientId: clientId,
                 onAllow: { [weak self] in self?.approveClient(clientId) },
@@ -365,10 +365,9 @@ final class TheMuscle {
     }
 
     func approveClient(_ clientId: Int) {
-        guard case .pendingApproval(let address, let respond, _) = clients[clientId] else { return }
+        guard case .pendingApproval(let address, let respond, _, let driverId) = clients[clientId] else { return }
 
-        // UI-approved clients use the server's sessionToken — session check with that token
-        let driverIdentity = effectiveDriverId(driverId: nil, token: sessionToken)
+        let driverIdentity = effectiveDriverId(driverId: driverId, token: sessionToken)
         if !acquireSession(driverIdentity: driverIdentity, clientId: clientId, respond: respond) {
             return
         }
@@ -381,7 +380,7 @@ final class TheMuscle {
     }
 
     func denyClient(_ clientId: Int) {
-        guard case .pendingApproval(let address, let respond, _) = clients[clientId] else { return }
+        guard case .pendingApproval(let address, let respond, _, _) = clients[clientId] else { return }
         clients[clientId] = .helloValidated(address: address)
         sendMessage(.authFailed("Connection denied by user"), respond: respond)
         logger.info("Client \(clientId) denied via UI")

@@ -137,22 +137,40 @@ extension AccessibilityElement {
 extension TheStash {
 
     /// Single entry point for matcher-based element lookup. Returns up to `limit`
-    /// matching ScreenElements. Checks the hierarchy first (preserves traversal
-    /// order for on-screen elements), falls back to the full registry (explored
-    /// off-screen elements) when the hierarchy has zero matches.
-    ///
-    /// Registry fallback is sorted by heistId for deterministic ordinal selection.
+    /// matching ScreenElements. Visible matches keep hierarchy traversal order,
+    /// then explored off-screen registry matches are appended in content order.
     func matchScreenElements(_ matcher: ElementMatcher, limit: Int) -> [ScreenElement] {
         guard limit > 0 else { return [] }
         let hierarchyHits = currentHierarchy.matches(matcher, limit: limit)
-        if !hierarchyHits.isEmpty {
-            return hierarchyHits.compactMap { match in
-                guard let heistId = registry.reverseIndex[match.element] else { return nil }
-                return registry.elements[heistId]
-            }
+        var seenIds = Set<String>()
+        var matches = hierarchyHits.compactMap { match -> ScreenElement? in
+            guard let heistId = registry.reverseIndex[match.element],
+                  let element = registry.elements[heistId],
+                  seenIds.insert(heistId).inserted else { return nil }
+            return element
         }
-        let sorted = registry.elements.values.sorted { $0.heistId < $1.heistId }
-        return Array(sorted.lazy.filter { $0.element.matches(matcher) }.prefix(limit))
+        if matches.count >= limit { return Array(matches.prefix(limit)) }
+
+        let offscreen = registry.elements.values
+            .filter { !seenIds.contains($0.heistId) && $0.element.matches(matcher) }
+            .sorted(by: registryOrder)
+        matches.append(contentsOf: offscreen.prefix(limit - matches.count))
+        return matches
+    }
+
+    private func registryOrder(_ lhs: ScreenElement, _ rhs: ScreenElement) -> Bool {
+        switch (lhs.contentSpaceOrigin, rhs.contentSpaceOrigin) {
+        case let (left?, right?):
+            if abs(left.y - right.y) >= 0.5 { return left.y < right.y }
+            if abs(left.x - right.x) >= 0.5 { return left.x < right.x }
+            return lhs.heistId < rhs.heistId
+        case (_?, nil):
+            return true
+        case (nil, _?):
+            return false
+        case (nil, nil):
+            return lhs.heistId < rhs.heistId
+        }
     }
 
 }

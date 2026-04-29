@@ -36,15 +36,54 @@ internal enum NetDeltaAccumulator {
         }
         // Merge the post-screen element changes into one
         guard let postMerge = mergeElementDeltas(postDeltas) else { return screenChange }
-        // Return screenChanged but with the merged updates appended
+        let finalInterface = screenChange.newInterface.map {
+            apply(postMerge, to: $0)
+        }
         return InterfaceDelta(
             kind: .screenChanged,
-            elementCount: postMerge.elementCount,
+            elementCount: finalInterface?.elements.count ?? postMerge.elementCount,
             added: postMerge.added,
             removed: postMerge.removed,
             updated: postMerge.updated,
-            newInterface: screenChange.newInterface
+            newInterface: finalInterface
         )
+    }
+
+    private static func apply(_ delta: InterfaceDelta, to interface: Interface) -> Interface {
+        var elementsById = Dictionary(uniqueKeysWithValues: interface.elements.map { ($0.heistId, $0) })
+        for heistId in delta.removed ?? [] {
+            elementsById.removeValue(forKey: heistId)
+        }
+        for element in delta.added ?? [] {
+            elementsById[element.heistId] = element
+        }
+        for update in delta.updated ?? [] {
+            guard var element = elementsById[update.heistId] else { continue }
+            for change in update.changes {
+                apply(change, to: &element)
+            }
+            elementsById[update.heistId] = element
+        }
+        let elements = interface.elements
+            .filter { elementsById[$0.heistId] != nil }
+            .map { elementsById[$0.heistId] ?? $0 }
+            + (delta.added ?? []).filter { original in
+                !interface.elements.contains { $0.heistId == original.heistId }
+            }
+        return Interface(timestamp: interface.timestamp, elements: elements, tree: interface.tree)
+    }
+
+    private static func apply(_ change: PropertyChange, to element: inout HeistElement) {
+        switch change.property {
+        case .label:
+            element.label = change.new
+        case .value:
+            element.value = change.new
+        case .hint:
+            element.hint = change.new
+        default:
+            break
+        }
     }
 
     private static func mergeElementDeltas(_ deltas: [InterfaceDelta]) -> InterfaceDelta? {

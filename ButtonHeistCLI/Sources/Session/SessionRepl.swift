@@ -322,7 +322,7 @@ nonisolated extension ReplSession {
             if let first = positional.first {
                 applyElementTarget([first], into: &result)
                 if positional.count > 1 {
-                    result["actionName"] = positional.dropFirst().joined(separator: " ")
+                    result["action"] = positional.dropFirst().joined(separator: " ")
                 }
             }
 

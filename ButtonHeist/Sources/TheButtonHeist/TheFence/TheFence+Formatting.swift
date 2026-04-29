@@ -67,6 +67,22 @@ public enum FenceResponse {
         return nil
     }
 
+    /// Whether callers should treat this response as a failed command.
+    public var isFailure: Bool {
+        switch self {
+        case .error:
+            return true
+        case .action(let result, let expectation):
+            return !result.success || expectation?.met == false
+        case .batch(_, _, let failedIndex, _, _, _, _, _):
+            return failedIndex != nil
+        case .heistPlayback(_, let failedIndex, _, _, _):
+            return failedIndex != nil
+        default:
+            return false
+        }
+    }
+
     // MARK: - Human Formatting
 
     public func humanFormatted() -> String {

@@ -199,6 +199,22 @@ public actor SimpleSocketServer {
         }
 
         let byteCount = dataToSend.count
+        if byteCount > Self.maxPendingBytesPerClient {
+            logger.warning("Client \(clientId) send payload exceeds cap (\(byteCount) bytes), sending explicit error")
+            if var errorData = try? ResponseEnvelope(
+                message: .recordingError("Response too large to send over the socket (\(byteCount) bytes)")
+            ).encoded() {
+                if !errorData.hasSuffix(Data([0x0A])) {
+                    errorData.append(0x0A)
+                }
+                state.connection.send(content: errorData, completion: .contentProcessed { error in
+                    if let error {
+                        logger.error("Send error to client \(clientId): \(error)")
+                    }
+                })
+            }
+            return
+        }
         if state.pendingBytes + byteCount > Self.maxPendingBytesPerClient {
             logger.warning("Client \(clientId) send buffer full (\(state.pendingBytes) bytes pending), dropping \(byteCount) bytes")
             return

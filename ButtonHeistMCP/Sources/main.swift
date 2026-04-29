@@ -311,17 +311,8 @@ struct ButtonHeistMCPServer {
             // File-based screenshot — handled by compact text below
         }
 
-        let isError: Bool
-        if case .error = response {
-            isError = true
-        } else if case .action(let result, _) = response, !result.success {
-            isError = true
-        } else {
-            isError = false
-        }
-
         content.append(.text(text: response.compactFormatted(), annotations: nil, _meta: nil))
-        return .init(content: content, isError: isError)
+        return .init(content: content, isError: response.isFailure)
     }
 
     private static func compactBackgroundElement(_ element: HeistElement) -> String {

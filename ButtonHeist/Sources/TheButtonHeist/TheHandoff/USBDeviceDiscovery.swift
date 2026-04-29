@@ -67,6 +67,17 @@ public final class USBDeviceDiscovery: DeviceDiscovering {
             return
         }
 
+        guard connectedDevices.count == 1 else {
+            if connectedDevices.count > 1 {
+                logger.warning("Multiple USB devices are connected; CoreDevice tunnel correlation is ambiguous, so USB discovery is disabled")
+            }
+            for (id, device) in knownDevices {
+                knownDevices.removeValue(forKey: id)
+                onEvent?(.lost(device))
+            }
+            return
+        }
+
         var currentIDs = Set<String>()
 
         for deviceName in connectedDevices {

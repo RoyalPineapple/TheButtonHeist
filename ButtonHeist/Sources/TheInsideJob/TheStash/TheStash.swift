@@ -42,7 +42,7 @@ final class TheStash {
     struct ScreenElement {
         let heistId: String
         /// Content-space position within nearest scrollable container (nil if not scrollable).
-        let contentSpaceOrigin: CGPoint?
+        var contentSpaceOrigin: CGPoint?
         /// Parsed accessibility element (updated each refresh if element is visible).
         var element: AccessibilityElement
         /// Live UIKit object for action dispatch. Weak — nils on cell reuse.
