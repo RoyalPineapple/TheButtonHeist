@@ -651,7 +651,7 @@ extension TheBrains {
             return stash.registry.elements[heistId]
         case .matcher(let matcher, _):
             for (heistId, entry) in stash.registry.elements
-            where !stash.registry.viewportIds.contains(heistId) && entry.element.matches(matcher) {
+            where !stash.registry.viewportIds.contains(heistId) && entry.element.matches(matcher, mode: .substring) {
                 return entry
             }
             return nil

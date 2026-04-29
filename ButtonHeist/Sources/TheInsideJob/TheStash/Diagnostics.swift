@@ -130,7 +130,7 @@ extension TheStash {
 
         for relaxation in relaxations {
             guard relaxation.relaxed.hasPredicates,
-                  let found = hierarchy.firstMatch(relaxation.relaxed)?.element else { continue }
+                  let found = hierarchy.firstMatch(relaxation.relaxed, mode: .substring)?.element else { continue }
             let actualValue = relaxation.actual(found)
             return "near miss: matched all fields except \(relaxation.field) — actual \(relaxation.field)=\(actualValue)"
         }

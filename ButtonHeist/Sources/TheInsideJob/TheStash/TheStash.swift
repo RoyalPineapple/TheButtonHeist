@@ -320,7 +320,9 @@ final class TheStash {
         case .heistId(let heistId):
             return registry.elements[heistId] != nil
         case .matcher(let matcher, _):
-            return currentHierarchy.hasMatch(matcher)
+            // Exact matches are a subset of substring matches, so a single substring
+            // pass answers "does any element match" for the exact-then-substring fallback.
+            return currentHierarchy.hasMatch(matcher, mode: .substring)
         }
     }
 
