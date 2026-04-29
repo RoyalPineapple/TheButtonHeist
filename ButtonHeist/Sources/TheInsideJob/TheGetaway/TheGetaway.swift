@@ -34,8 +34,8 @@ final class TheGetaway {
     // `RecordingPhase` and its handlers live in TheGetaway+Recording.swift.
     var recordingPhase: RecordingPhase = .idle
     var hierarchyInvalidated = false
-    private var completedRecording: Result<RecordingPayload, Error>?
-    private var pendingRecordingResponse: (requestId: String?, respond: (Data) -> Void)?
+    var completedRecording: Result<RecordingPayload, Error>?
+    var pendingRecordingResponse: (requestId: String?, respond: (Data) -> Void)?
 
     /// Current transport — set by `wireTransport`, cleared on teardown.
     private(set) weak var transport: ServerTransport?
