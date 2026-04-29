@@ -249,9 +249,7 @@ if [[ "$SKIP_TESTS" == true ]]; then
 else
     echo "==> Phase 4: Running tests"
 
-    # Clean only stale Info.plist caches — not the entire DerivedData.
-    # tuist generate in Phase 2 can leave xcodebuild pointing at old plist paths.
-    find ~/Library/Developer/Xcode/DerivedData/ButtonHeist-*/Build -name '*-Info.plist' -delete 2>/dev/null || true
+    rm -rf ~/Library/Developer/Xcode/DerivedData/ButtonHeist-*
 
     echo "  Running TheScoreTests..."
     tuist test TheScoreTests --no-selective-testing
