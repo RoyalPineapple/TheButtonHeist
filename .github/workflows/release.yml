@@ -36,7 +36,7 @@ jobs:
       - name: Verify version consistency
         run: |
           TAG_VERSION="${{ steps.version.outputs.version }}"
-          FILE_VERSION=$(cat VERSION)
+          FILE_VERSION=$(cat RELEASE_VERSION)
           CODE_VERSION=$(grep -o 'buttonHeistVersion = "[^"]*"' \
             ButtonHeist/Sources/TheScore/Messages.swift | cut -d'"' -f2)
 
