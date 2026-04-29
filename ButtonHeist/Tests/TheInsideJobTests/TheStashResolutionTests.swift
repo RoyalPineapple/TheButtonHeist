@@ -320,7 +320,7 @@ final class TheStashResolutionTests: XCTestCase {
             register(element, heistId: "item_\(index)", index: index)
         }
 
-        let limit3 = bagman.currentHierarchy.matches(ElementMatcher(label: "Item"), limit: 3)
+        let limit3 = bagman.currentHierarchy.matches(ElementMatcher(label: "Item"), mode: .substring, limit: 3)
         XCTAssertEqual(limit3.count, 3)
         XCTAssertEqual(limit3[0].element.value, "0")
         XCTAssertEqual(limit3[1].element.value, "1")
@@ -333,7 +333,7 @@ final class TheStashResolutionTests: XCTestCase {
         register(element1, heistId: "save_1", index: 0)
         register(element2, heistId: "save_2", index: 1)
 
-        let results = bagman.currentHierarchy.matches(ElementMatcher(label: "Save"), limit: 10)
+        let results = bagman.currentHierarchy.matches(ElementMatcher(label: "Save"), mode: .substring, limit: 10)
         XCTAssertEqual(results.count, 2)
     }
 
@@ -341,7 +341,7 @@ final class TheStashResolutionTests: XCTestCase {
         let element = element(label: "Save", traits: .button)
         register(element, heistId: "button_save", index: 0)
 
-        let results = bagman.currentHierarchy.matches(ElementMatcher(label: "Save"), limit: 0)
+        let results = bagman.currentHierarchy.matches(ElementMatcher(label: "Save"), mode: .substring, limit: 0)
         XCTAssertTrue(results.isEmpty)
     }
 
