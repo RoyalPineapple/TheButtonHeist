@@ -16,7 +16,7 @@ Button Heist turns that contract into an inside route for agents: a control surf
 
 Link one framework into a debug build, connect over MCP or CLI, and the agent operates the app by meaning. No coordinate math. No screenshot parsing loops. No blind taps.
 
-Every job leaves evidence: deltas, expectations, recordings, replay.
+Every job leaves evidence: deltas, expectations, recordings, and a replayable test trail.
 
 ## The difference
 
@@ -47,9 +47,7 @@ Button Heist brings back evidence. The agent starts the next step from the new s
 
 ### 1. Add TheInsideJob
 
-Link `TheInsideJob` to your debug target. It starts a local TCP server via ObjC `+load`; no app setup code is required. Release builds do not include the server.
-
-It is development-only: present in debug builds, absent from release builds.
+Link `TheInsideJob` to your debug target. It starts a local TCP server via ObjC `+load`; no app setup code is required. Release builds leave the server behind.
 
 ```swift
 import SwiftUI
@@ -200,7 +198,7 @@ Two actions, two assertions, one round trip. If the email field does not update,
 
 ### 4. Replay: the contract in CI
 
-Button Heist can record an agent session as a replayable `.heist` file. Each step is stored as a semantic matcher: label, traits, identifier, and value, rather than coordinates or ephemeral IDs.
+Button Heist can record an agent session as a replayable `.heist` file. Each step is stored as a semantic matcher: label, traits, and stable identifiers. No coordinates. No ephemeral IDs.
 
 Replay uses the same action path as live automation. If a label changes, a trait disappears, or a custom action is removed, the replay fails and surfaces the broken contract. JUnit XML output (`--junit`) puts those failures into CI.
 
