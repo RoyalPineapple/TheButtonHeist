@@ -137,25 +137,28 @@ extension AccessibilityElement {
 extension TheStash {
 
     /// Single entry point for matcher-based element lookup. Returns up to `limit`
-    /// matching ScreenElements. Visible matches keep hierarchy traversal order,
-    /// then explored off-screen registry matches are appended in content order.
+    /// matching ScreenElements. The on-screen hierarchy is checked first (preserving
+    /// traversal order); if the hierarchy yields any matches the registry is not
+    /// consulted — visible elements always win. Off-screen registry matches are only
+    /// surfaced when the hierarchy has zero matches, sorted by content position.
     func matchScreenElements(_ matcher: ElementMatcher, limit: Int) -> [ScreenElement] {
         guard limit > 0 else { return [] }
         let hierarchyHits = currentHierarchy.matches(matcher, limit: limit)
-        var seenIds = Set<String>()
-        var matches = hierarchyHits.compactMap { match -> ScreenElement? in
-            guard let heistId = registry.reverseIndex[match.element],
-                  let element = registry.elements[heistId],
-                  seenIds.insert(heistId).inserted else { return nil }
-            return element
+        if !hierarchyHits.isEmpty {
+            var seenIds = Set<String>()
+            return hierarchyHits.compactMap { match -> ScreenElement? in
+                guard let heistId = registry.reverseIndex[match.element],
+                      let element = registry.elements[heistId],
+                      seenIds.insert(heistId).inserted else { return nil }
+                return element
+            }
         }
-        if matches.count >= limit { return Array(matches.prefix(limit)) }
-
-        let offscreen = registry.elements.values
-            .filter { !seenIds.contains($0.heistId) && $0.element.matches(matcher) }
-            .sorted(by: registryOrder)
-        matches.append(contentsOf: offscreen.prefix(limit - matches.count))
-        return matches
+        return Array(
+            registry.elements.values
+                .filter { $0.element.matches(matcher) }
+                .sorted(by: registryOrder)
+                .prefix(limit)
+        )
     }
 
     private func registryOrder(_ lhs: ScreenElement, _ rhs: ScreenElement) -> Bool {
