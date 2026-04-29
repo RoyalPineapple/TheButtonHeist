@@ -485,6 +485,27 @@ final class TheFenceTests: XCTestCase {
         }
     }
 
+    @ButtonHeistActor
+    func testDisconnectCancelsPendingRecordingWaitWithReason() async {
+        let fence = TheFence()
+
+        let waitTask = Task { @ButtonHeistActor in
+            try await fence.waitForRecording(timeout: 10)
+        }
+        await Task.yield()
+
+        fence.handoff.onDisconnected?(.serverClosed)
+
+        do {
+            _ = try await waitTask.value
+            XCTFail("Expected pending recording wait to fail")
+        } catch FenceError.connectionFailed(let message) {
+            XCTAssertTrue(message.contains("Connection closed by server"))
+        } catch {
+            XCTFail("Expected connectionFailed, got \(error)")
+        }
+    }
+
     func testNoMatchingDeviceError() {
         let error = FenceError.noMatchingDevice(filter: "MyApp", available: ["OtherApp"])
         XCTAssertTrue(error.errorDescription?.contains("MyApp") ?? false)

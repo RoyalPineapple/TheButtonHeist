@@ -152,6 +152,7 @@ public final class TheFence {
     private let actionTracker = PendingRequestTracker<ActionResult>()
     private let interfaceTracker = PendingRequestTracker<Interface>()
     private let screenTracker = PendingRequestTracker<ScreenPayload>()
+    private let recordingTracker = PendingRequestTracker<RecordingPayload>()
     private var recordingWaitInFlight = false
 
     public init(configuration: Configuration = .init()) {
@@ -577,13 +578,9 @@ public final class TheFence {
         try await screenTracker.wait(requestId: requestId, timeout: timeout)
     }
 
-    // Recording uses a fundamentally different pattern from the request-id-based trackers:
-    // it temporarily swaps TheHandoff's onRecording/onRecordingError callbacks and restores
-    // them in a defer block. There is no requestId — the server sends exactly one recording
-    // response per stop_recording command, and the callback identity (not a dictionary key)
-    // is what correlates request to response. A PendingRequestTracker<RecordingPayload> would
-    // require either synthesizing a fake requestId or changing the TheHandoff callback
-    // signatures, neither of which is warranted for a single call site.
+    // Recording responses do not carry request IDs, so synthesize a single key
+    // while a stop_recording wait is in flight. Keeping the tracker on TheFence
+    // lets disconnect handling fail the wait immediately instead of timing out.
     public func waitForRecording(timeout: TimeInterval = 120.0) async throws -> RecordingPayload {
         guard !recordingWaitInFlight else {
             throw FenceError.invalidRequest("stop_recording already waiting for completion")
@@ -597,13 +594,12 @@ public final class TheFence {
             handoff.onRecordingError = previousOnRecordingError
         }
 
-        let recordingTracker = PendingRequestTracker<RecordingPayload>()
         let syntheticId = "recording"
-        handoff.onRecording = { payload in
-            recordingTracker.resolve(requestId: syntheticId, result: .success(payload))
+        handoff.onRecording = { [weak self] payload in
+            self?.recordingTracker.resolve(requestId: syntheticId, result: .success(payload))
         }
-        handoff.onRecordingError = { message in
-            recordingTracker.resolve(requestId: syntheticId, result: .failure(FenceError.actionFailed("Recording failed: \(message)")))
+        handoff.onRecordingError = { [weak self] message in
+            self?.recordingTracker.resolve(requestId: syntheticId, result: .failure(FenceError.actionFailed("Recording failed: \(message)")))
         }
         return try await recordingTracker.wait(requestId: syntheticId, timeout: timeout)
     }
@@ -612,6 +608,7 @@ public final class TheFence {
         actionTracker.cancelAll(error: error)
         interfaceTracker.cancelAll(error: error)
         screenTracker.cancelAll(error: error)
+        recordingTracker.cancelAll(error: error)
     }
 
 }

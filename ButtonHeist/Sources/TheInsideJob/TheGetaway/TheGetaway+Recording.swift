@@ -28,6 +28,7 @@ extension TheGetaway {
             guard let self else { return }
             self.recordingPhase = .idle
             self.brains.stakeout = nil
+            self.completedRecording = result
 
             if let pending = self.pendingRecordingResponse {
                 self.pendingRecordingResponse = nil
@@ -40,7 +41,6 @@ extension TheGetaway {
                 return
             }
 
-            self.completedRecording = result
             switch result {
             case .success:
                 self.broadcastToAll(.recordingStopped)
