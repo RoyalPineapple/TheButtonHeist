@@ -47,9 +47,17 @@ public enum FenceError: Error, LocalizedError {
                   Retry without --token to request a fresh session.
                 """
         case .notConnected:
-            return "Not connected to device. Is the app running? Check 'buttonheist list' to see available devices."
+            return """
+                Not connected to device.
+                  The previous connection may have closed or timed out.
+                  Hint: Check that the app is running, then retry the command. Use 'buttonheist list' to see available devices.
+                """
         case .actionTimeout:
-            return "Action timed out — connection lost, reconnecting..."
+            return """
+                Command timed out waiting for a response from the app.
+                  The app may be busy on its main thread, processing a long-running UI update, or sending a large response.
+                  The client closed the stale socket; the next command will reconnect automatically when possible.
+                """
         case .actionFailed(let message):
             return "Action failed: \(message)"
         }
@@ -178,6 +186,12 @@ public final class TheFence {
 
         handoff.onBackgroundDelta = { [weak self] delta in
             self?.lastBackgroundDelta = delta
+        }
+
+        handoff.onDisconnected = { [weak self] reason in
+            self?.cancelAllPendingRequests(
+                error: FenceError.connectionFailed(reason.displayMessage)
+            )
         }
     }
 
@@ -594,10 +608,10 @@ public final class TheFence {
         return try await recordingTracker.wait(requestId: syntheticId, timeout: timeout)
     }
 
-    private func cancelAllPendingRequests() {
-        actionTracker.cancelAll(error: FenceError.actionTimeout)
-        interfaceTracker.cancelAll(error: FenceError.actionTimeout)
-        screenTracker.cancelAll(error: FenceError.actionTimeout)
+    private func cancelAllPendingRequests(error: Error = FenceError.actionTimeout) {
+        actionTracker.cancelAll(error: error)
+        interfaceTracker.cancelAll(error: error)
+        screenTracker.cancelAll(error: error)
     }
 
 }

@@ -192,6 +192,8 @@ public final class TheHandoff {
 
     /// Interval between auto-reconnect attempts. Default is 1 second.
     var reconnectInterval: TimeInterval = 1.0
+    private static let keepaliveInterval: Duration = .seconds(5)
+    private static let maxMissedPongs = 6
 
     // MARK: - Injectable Closures
 
@@ -403,7 +405,6 @@ public final class TheHandoff {
             if autoSubscribe {
                 connection?.send(.subscribe)
                 connection?.send(.requestInterface)
-                connection?.send(.requestScreen)
             }
             onConnected?(info)
         case .interface(let payload):
@@ -447,7 +448,9 @@ public final class TheHandoff {
             onError?("Protocol mismatch: expected \(payload.expectedProtocolVersion), got \(payload.receivedProtocolVersion)")
         case .pong:
             missedPongCount = 0
-        case .serverHello, .authRequired, .recordingStopped:
+        case .recordingStopped:
+            transitionRecordingTo(.idle)
+        case .serverHello, .authRequired:
             break
         }
     }
@@ -490,11 +493,11 @@ public final class TheHandoff {
     private func makeKeepaliveTask() -> Task<Void, Never> {
         Task { [weak self] in
             while !Task.isCancelled {
-                guard await Task.cancellableSleep(for: .seconds(3)) else { break }
+                guard await Task.cancellableSleep(for: Self.keepaliveInterval) else { break }
                 guard !Task.isCancelled else { break }
                 self?.connection?.send(.ping)
                 self?.missedPongCount += 1
-                if let count = self?.missedPongCount, count >= 3 {
+                if let count = self?.missedPongCount, count >= Self.maxMissedPongs {
                     logger.warning("No pong received for \(count) consecutive pings — forcing disconnect")
                     self?.forceDisconnect()
                     break
@@ -541,7 +544,9 @@ public final class TheHandoff {
             case .failed(let failure):
                 throw failure.asConnectionError
             case .disconnected:
-                throw ConnectionError.connectionFailed("Disconnected during connection attempt")
+                throw ConnectionError.connectionFailed(
+                    "Disconnected during connection attempt. The app may have been busy, suspended, or restarted before the handshake completed."
+                )
             case .connecting:
                 break
             }

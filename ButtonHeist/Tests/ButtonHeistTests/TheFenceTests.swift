@@ -456,6 +456,35 @@ final class TheFenceTests: XCTestCase {
         XCTAssertNotNil(FenceError.authFailed("denied").errorDescription)
     }
 
+    func testActionTimeoutErrorDescriptionExplainsLikelyBusyApp() {
+        let description = FenceError.actionTimeout.errorDescription ?? ""
+
+        XCTAssertTrue(description.contains("waiting for a response"))
+        XCTAssertTrue(description.contains("main thread"))
+        XCTAssertTrue(description.contains("reconnect automatically"))
+    }
+
+    @ButtonHeistActor
+    func testDisconnectCancelsPendingActionWaitWithReason() async {
+        let fence = TheFence()
+
+        let waitTask = Task { @ButtonHeistActor in
+            try await fence.waitForActionResult(requestId: "pending", timeout: 10)
+        }
+        await Task.yield()
+
+        fence.handoff.onDisconnected?(.serverClosed)
+
+        do {
+            _ = try await waitTask.value
+            XCTFail("Expected pending wait to fail")
+        } catch FenceError.connectionFailed(let message) {
+            XCTAssertTrue(message.contains("Connection closed by server"))
+        } catch {
+            XCTFail("Expected connectionFailed, got \(error)")
+        }
+    }
+
     func testNoMatchingDeviceError() {
         let error = FenceError.noMatchingDevice(filter: "MyApp", available: ["OtherApp"])
         XCTAssertTrue(error.errorDescription?.contains("MyApp") ?? false)

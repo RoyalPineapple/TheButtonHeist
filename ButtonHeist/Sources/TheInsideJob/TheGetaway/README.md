@@ -29,11 +29,11 @@ Before dispatching actions, checks `brains.computeBackgroundDelta()` — if the 
 
 ### Recording
 
-Owns `RecordingPhase` state machine (`.idle` / `.recording(stakeout:)`). `handleStartRecording` creates a `TheStakeout`, wires `captureFrame` to `brains.captureScreenForRecording()` and `onRecordingComplete` to broadcast the result. `handleStopRecording` calls `stakeout.stopRecording(reason: .manual)`.
+Owns `RecordingPhase` state machine (`.idle` / `.recording(stakeout:)`). `handleStartRecording` creates a `TheStakeout`, wires `captureFrame` to `brains.captureScreenForRecording()`, and stores completed recordings until `stop_recording` retrieves them. `handleStopRecording` calls `stakeout.stopRecording(reason: .manual)` and returns the final payload to that caller.
 
 ### Hierarchy broadcast
 
-`broadcastIfChanged()` calls `brains.broadcastInterfaceIfChanged()` — if the tree changed, broadcasts the `Interface` to subscribers and captures a screen for recording. Called by TheInsideJob's pulse handler and polling task.
+`broadcastIfChanged()` calls `brains.broadcastInterfaceIfChanged()` — if the tree changed, broadcasts the `Interface` to subscribers. Called by TheInsideJob's pulse handler and polling task.
 
 `sendInterface(requestId:respond:)` settles, refreshes, explores, builds the full `Interface` payload via `brains.currentInterface()`, sends it, and records the sent state.
 

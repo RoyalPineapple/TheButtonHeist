@@ -33,7 +33,7 @@ Screen recording engine. Captures frames at configurable FPS, encodes H.264/MP4 
 
 TheInsideJob creates the stakeout on demand and wires two closures:
 - `captureFrame = { brains.captureScreenForRecording() }` — captures all windows including TheFingerprints overlay
-- `onRecordingComplete = { ... }` — broadcasts result and cleans up `recordingPhase`
+- `onRecordingComplete = { ... }` — stores the result for `stop_recording` and cleans up `recordingPhase`
 
 TheStash holds `weak var stakeout` for `captureActionFrame()` — a bonus frame after each action to capture the visual effect.
 

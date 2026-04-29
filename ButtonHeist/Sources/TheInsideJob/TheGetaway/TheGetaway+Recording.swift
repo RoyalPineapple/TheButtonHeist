@@ -19,19 +19,34 @@ extension TheGetaway {
             return
         }
 
+        completedRecording = nil
         let recorder = TheStakeout()
         recorder.captureFrame = { [weak self] in
             self?.brains.captureScreenForRecording()
         }
         recorder.onRecordingComplete = { [weak self] result in
-            switch result {
-            case .success(let payload):
-                self?.broadcastToAll(.recording(payload))
-            case .failure(let error):
-                self?.broadcastToAll(.recordingError(error.localizedDescription))
+            guard let self else { return }
+            self.recordingPhase = .idle
+            self.brains.stakeout = nil
+
+            if let pending = self.pendingRecordingResponse {
+                self.pendingRecordingResponse = nil
+                switch result {
+                case .success(let payload):
+                    self.sendMessage(.recording(payload), requestId: pending.requestId, respond: pending.respond)
+                case .failure(let error):
+                    self.sendMessage(.recordingError(error.localizedDescription), requestId: pending.requestId, respond: pending.respond)
+                }
+                return
             }
-            self?.recordingPhase = .idle
-            self?.brains.stakeout = nil
+
+            self.completedRecording = result
+            switch result {
+            case .success:
+                self.broadcastToAll(.recordingStopped)
+            case .failure(let error):
+                self.broadcastToAll(.recordingError(error.localizedDescription))
+            }
         }
 
         do {
@@ -45,14 +60,31 @@ extension TheGetaway {
     }
 
     func handleStopRecording(requestId: String? = nil, respond: @escaping (Data) -> Void) {
+        if let completedRecording {
+            self.completedRecording = nil
+            switch completedRecording {
+            case .success(let payload):
+                sendMessage(.recording(payload), requestId: requestId, respond: respond)
+            case .failure(let error):
+                sendMessage(.recordingError(error.localizedDescription), requestId: requestId, respond: respond)
+            }
+            return
+        }
+
         guard let stakeout else {
             sendMessage(.recordingError("No recording in progress"), requestId: requestId, respond: respond)
             return
         }
+
+        guard pendingRecordingResponse == nil else {
+            sendMessage(.recordingError("Recording stop already in progress"), requestId: requestId, respond: respond)
+            return
+        }
+
+        pendingRecordingResponse = (requestId: requestId, respond: respond)
         if stakeout.isRecording {
             stakeout.stopRecording(reason: .manual)
         }
-        sendMessage(.recordingStopped, requestId: requestId, respond: respond)
     }
 }
 

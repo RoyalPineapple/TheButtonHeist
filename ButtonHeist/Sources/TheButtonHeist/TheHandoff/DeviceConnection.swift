@@ -55,7 +55,7 @@ public enum DisconnectReason: Error, LocalizedError {
 @ButtonHeistActor
 public final class DeviceConnection: DeviceConnecting {
 
-    private static let maxBufferSize = 10_000_000 // 10 MB
+    private static let maxBufferSize = 64 * 1024 * 1024
 
     struct ActiveConnection {
         let connection: NWConnection

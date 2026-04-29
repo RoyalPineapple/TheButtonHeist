@@ -220,7 +220,7 @@ sequenceDiagram
     Note right of TheInsideJob: TheMuscle validates token
     TheInsideJob->>Observer: info
     Note over Observer: Auto-subscribed to broadcasts
-    TheInsideJob-->>Observer: interface, screen, interaction
+    TheInsideJob-->>Observer: interface, interaction
 ```
 
 ### Open Access (Unrestricted)

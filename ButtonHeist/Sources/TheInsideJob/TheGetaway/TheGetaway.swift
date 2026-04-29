@@ -34,12 +34,8 @@ final class TheGetaway {
     // `RecordingPhase` and its handlers live in TheGetaway+Recording.swift.
     var recordingPhase: RecordingPhase = .idle
     var hierarchyInvalidated = false
-
-    /// Guards against queuing screen broadcasts faster than they can be sent.
-    /// Set before encoding, cleared after the broadcast call returns.
-    /// When true, `broadcastScreen()` skips the capture — the next settle
-    /// tick will pick up the current state.
-    var screenBroadcastInFlight = false
+    private var completedRecording: Result<RecordingPayload, Error>?
+    private var pendingRecordingResponse: (requestId: String?, respond: (Data) -> Void)?
 
     /// Current transport — set by `wireTransport`, cleared on teardown.
     private(set) weak var transport: ServerTransport?
@@ -119,7 +115,8 @@ final class TheGetaway {
     func tearDown() {
         transport = nil
         hierarchyInvalidated = false
-        screenBroadcastInFlight = false
+        completedRecording = nil
+        pendingRecordingResponse = nil
     }
 
     // MARK: - Message Dispatch
@@ -238,11 +235,19 @@ final class TheGetaway {
     }
 
     func broadcastToSubscribed(_ message: ServerMessage) {
+        guard !message.isScreenshot else {
+            insideJobLogger.error("Refusing to broadcast screenshot payload; screenshots must be requested explicitly")
+            return
+        }
         guard let data = encodeEnvelope(message) else { return }
         muscle.broadcastToSubscribed(data)
     }
 
     func broadcastToAll(_ message: ServerMessage) {
+        guard !message.isScreenshot else {
+            insideJobLogger.error("Refusing to broadcast screenshot payload; screenshots must be requested explicitly")
+            return
+        }
         guard let data = encodeEnvelope(message) else { return }
         transport?.broadcastToAll(data)
     }
@@ -342,7 +347,6 @@ final class TheGetaway {
         hierarchyInvalidated = false
 
         broadcastToSubscribed(.interface(payload))
-        broadcastScreen()
         stakeout?.noteScreenChange()
 
         insideJobLogger.debug("Broadcast hierarchy update to \(self.muscle.subscribedClients.count) subscriber(s)")
@@ -388,25 +392,13 @@ final class TheGetaway {
         sendMessage(.screen(payload), requestId: requestId, respond: respond)
         insideJobLogger.debug("Screen sent: \(pngData.count) bytes")
     }
+}
 
-    func broadcastScreen() {
-        guard muscle.hasSubscribers else { return }
-        guard !screenBroadcastInFlight else {
-            insideJobLogger.debug("Screen broadcast coalesced — previous still in flight")
-            return
-        }
-        guard let (image, bounds) = brains.captureScreen(),
-              let pngData = image.pngData() else { return }
-
-        screenBroadcastInFlight = true
-        broadcastToSubscribed(.screen(ScreenPayload(
-            pngData: pngData.base64EncodedString(),
-            width: bounds.width,
-            height: bounds.height
-        )))
-        screenBroadcastInFlight = false
+private extension ServerMessage {
+    var isScreenshot: Bool {
+        if case .screen = self { return true }
+        return false
     }
-
 }
 
 #endif // DEBUG

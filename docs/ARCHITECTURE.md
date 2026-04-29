@@ -407,7 +407,7 @@ TheFence (@ButtonHeistActor) — command dispatch + request-response correlation
 2. **Async/Await**: TheFence provides `waitForActionResult(timeout:)`, `waitForScreen(timeout:)`, etc. for command scripting
 3. **Command dispatch**: `TheFence.execute(request:)` is the single entry point for CLI and MCP
 
-**Auto-Subscribe on Connect**: When `autoSubscribe` is enabled, `TheHandoff` sends `subscribe`, `requestInterface`, and `requestScreen` after connecting.
+**Auto-Subscribe on Connect**: When `autoSubscribe` is enabled, `TheHandoff` sends `subscribe` and `requestInterface` after connecting. Screen snapshots are requested explicitly.
 
 **Observe Mode**: When `observeMode` is enabled on `TheHandoff`, the underlying `DeviceConnection` completes the `serverHello` / `clientHello` handshake, waits for `authRequired`, then sends `watch(WatchPayload)` instead of `authenticate`. This establishes a read-only observer connection that receives broadcasts without claiming a session lock.
 
@@ -522,7 +522,6 @@ sequenceDiagram
     Note over HC: connectionPhase = .connected
     HC->>IJ: subscribe
     HC->>IJ: requestInterface
-    HC->>IJ: requestScreen
 ```
 
 ### Watch (Observer) Connection Flow
@@ -557,11 +556,10 @@ sequenceDiagram
 
     Note over WC: Auto-subscribed to broadcasts
     IJ-->>WC: interface (pushed on change)
-    IJ-->>WC: screen (pushed on change)
     IJ-->>WC: interaction (when driver acts)
 ```
 
-Observers never claim a session lock and cannot send commands. They receive the same `interface`, `screen`, and `interaction` broadcasts as subscribed drivers.
+Observers never claim a session lock and cannot send commands. They receive the same `interface` and `interaction` broadcasts as subscribed drivers. Screenshots are never broadcast; they require an explicit `requestScreen`.
 
 ### Interface Update Flow
 
@@ -578,8 +576,7 @@ flowchart TD
     H -->|No| A
     H -->|Yes| I["Create Interface(timestamp, elements, tree)"]
     I --> J["Broadcast interface to all clients"]
-    J --> K["Capture & broadcast screen"]
-    K --> A
+    J --> A
 ```
 
 ### Action Flow (accessibility actions)

@@ -19,7 +19,7 @@ Device lifecycle manager. Finds devices via Bonjour/USB, connects over TLS, main
 
    **`connect(to:)`** creates a connection via the `makeConnection` closure, installs the `onEvent` handler (which drives phase transitions), and calls `connection.connect()`.
 
-   **Keepalive**: `.ping` every 3 seconds. After 3 missed pongs (9s silence), forces disconnect.
+   **Keepalive**: `.ping` every 5 seconds. After 6 missed pongs (roughly 30s silence), forces disconnect.
 
    **Auto-reconnect** (`runAutoReconnect`): up to 60 attempts, exponential backoff (1s base, capped at 30s, ±20% jitter). Checks `discoveredDevices.first(matching: filter)` each iteration — no re-resolve, just reads the live list.
 

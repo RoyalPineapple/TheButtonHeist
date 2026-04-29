@@ -568,9 +568,6 @@ extension TheFence {
     }
 
     func handleStopRecording(_ args: [String: Any]) async throws -> FenceResponse {
-        guard handoff.isRecording else {
-            return .error("No recording in progress — use start_recording first")
-        }
         let recording: RecordingPayload = try await sendAndAwait(.stopRecording) { _ in
             try await self.waitForRecording(timeout: Timeouts.longActionSeconds)
         }

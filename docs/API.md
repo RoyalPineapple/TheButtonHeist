@@ -246,7 +246,7 @@ public final class TheHandoff
 | `recordingPhase` | `RecordingPhase` | Recording lifecycle state machine (idle/recording) |
 | `serverInfo` | `ServerInfo?` | Server info received after connecting |
 | `currentInterface` | `Interface?` | Most recent UI hierarchy from push broadcasts |
-| `currentScreen` | `ScreenPayload?` | Most recent screenshot from push broadcasts |
+| `currentScreen` | `ScreenPayload?` | Most recent unsolicited screenshot payload, retained for protocol compatibility. Normal screenshots are explicit `requestScreen` responses. |
 | `isConnected` | `Bool` | Whether transport is connected |
 | `isDiscovering` | `Bool` | Whether Bonjour discovery is active |
 | `isRecording` | `Bool` | Whether screen recording is in progress |
@@ -280,7 +280,7 @@ public final class TheHandoff
 |----------|------|-------------|
 | `token` | `String?` | Auth token for connections |
 | `driverId` | `String?` | Driver identity for session locking |
-| `autoSubscribe` | `Bool` | Auto-send subscribe/requestInterface/requestScreen on connect (default: true) |
+| `autoSubscribe` | `Bool` | Auto-send subscribe/requestInterface on connect (default: true) |
 | `observeMode` | `Bool` | Send `watch` instead of `authenticate` (default: false) |
 
 #### Injectable Closures (Test Boundary)
