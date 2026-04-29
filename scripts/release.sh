@@ -233,6 +233,10 @@ if [[ "$SKIP_TESTS" == true ]]; then
 else
     echo "==> Phase 4: Running tests"
 
+    # Clean stale DerivedData to avoid Info.plist deserialization failures
+    # after tuist regenerates the project during the version bump phase.
+    rm -rf ~/Library/Developer/Xcode/DerivedData/ButtonHeist-*
+
     echo "  Running TheScoreTests..."
     tuist test TheScoreTests --no-selective-testing
     echo "  ✓ TheScoreTests"
