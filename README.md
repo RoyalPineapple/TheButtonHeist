@@ -6,21 +6,50 @@
 
 # Interface out. Agents in. Clean escape.
 
-There's a second interface running underneath every iOS app. Built for VoiceOver and the millions who depend on it, the accessibility layer is the plumbing beneath the UI. Every control, every action, every state, described in a semantic map we keep up to date under the pixel polish.
+Every iOS app has a second interface.
 
-In practice, coverage varies. VoiceOver users notice the gaps.
+Not the one you see. The one VoiceOver uses.
 
-Button Heist lets AI agents in through those pipes, and gives them full control. Link one framework into your debug build and the agent works the interface from the inside. No coordinate math, no screenshot parsing. The exact same APIs VoiceOver uses. It activates a login button by name, calls `increment` on a stepper, triggers a "Delete" custom action directly.
+It describes the app in the language users depend on: labels, roles, values, states, actions. That interface is a contract: if users can do something visually, the app should expose it semantically.
 
-Every interaction doubles as an accessibility audit: if the agent can't find a control, neither can VoiceOver.
+Button Heist turns that contract into an inside route for agents: a control surface built from meaning, not pixels.
 
-The heist works because the infrastructure was already in place. A language interface built for people to navigate apps by meaning. Turns out agents thrive there too.
+Link one framework into a debug build, connect over MCP or CLI, and the agent operates the app by meaning. No coordinate math. No screenshot parsing loops. No blind taps.
+
+Every job leaves evidence: deltas, expectations, recordings, replay.
+
+## The difference
+
+A coordinate-based tool can tell the agent that a tap landed:
+
+```
+→ tap(x: 201, y: 456)
+← "Tapped successfully"
+```
+
+Button Heist tells the agent what the tap did:
+
+```
+→ activate(label: "Login", traits: ["button"])
+← screen changed
+  - textfield_email
+  - textfield_password
+  - button_login
+  + header_dashboard "Dashboard" [header]
+  + button_settings "Settings" [button]
+```
+
+The first tool says the tap landed.
+
+Button Heist brings back evidence. The agent starts the next step from the new state, not from another full-screen read.
 
 ## Quick Start
 
-### 1. Get the crew inside
+### 1. Add TheInsideJob
 
-Link TheInsideJob to your debug target. It starts a local TCP server via ObjC `+load`. No setup code. DEBUG only, stripped from release builds.
+Link `TheInsideJob` to your debug target. It starts a local TCP server via ObjC `+load`; no app setup code is required. Release builds do not include the server.
+
+It is development-only: present in debug builds, absent from release builds.
 
 ```swift
 import SwiftUI
@@ -34,7 +63,7 @@ struct MyApp: App {
 }
 ```
 
-Same embed pattern as [Reveal](https://revealapp.com) or [FLEX](https://github.com/FLEXTool/FLEX). Add the Info.plist entries so Bonjour can advertise:
+Add the Info.plist entries so Bonjour can advertise the app:
 
 ```xml
 <key>NSLocalNetworkUsageDescription</key>
@@ -45,7 +74,7 @@ Same embed pattern as [Reveal](https://revealapp.com) or [FLEX](https://github.c
 </array>
 ```
 
-### 2. Give the agent eyes and hands
+### 2. Install the agent tools
 
 Install the CLI and MCP server:
 
@@ -53,7 +82,7 @@ Install the CLI and MCP server:
 brew install RoyalPineapple/tap/buttonheist
 ```
 
-Then add the MCP server to your project's `.mcp.json`:
+Add the MCP server to your project's `.mcp.json`:
 
 ```json
 {
@@ -66,7 +95,7 @@ Then add the MCP server to your project's `.mcp.json`:
 }
 ```
 
-This exposes 23 tools to your agent: `get_interface`, `activate`, `type_text`, `run_batch`, `get_screen`, and more. The agent discovers your app via Bonjour automatically:
+This exposes 23 tools, including `get_interface`, `activate`, `type_text`, `run_batch`, and `get_screen`. The agent discovers instrumented apps through Bonjour:
 
 ```
 Agent: "I need to log the user in"
@@ -79,9 +108,9 @@ Agent: "I need to log the user in"
   step 2: screen changed: login gone, dashboard appeared ✓
 ```
 
-The agent stays focused on the task, not on driving the app.
+The agent can work in terms of UI intent instead of coordinates.
 
-### 3. Or drive it yourself
+### 3. Use the CLI directly
 
 ```bash
 cd ButtonHeistCLI && swift build -c release && cd ..
@@ -98,21 +127,21 @@ $BH screenshot --output screen.png                        # Capture screenshot
 $BH record --output demo.mp4 --fps 8 --scale 0.5         # Record with touch overlay
 ```
 
-The session REPL accepts both JSON and shorthand: `tap loginButton`, `type "hello"`, `scroll down list`, `screen`.
+The session REPL accepts JSON and shorthand commands: `tap loginButton`, `type "hello"`, `scroll down list`, `screen`.
 
-But wait, there's more: gestures, recording, pasteboard, scroll modes, multi-device. See the [API Reference](docs/API.md).
+For gestures, recording, pasteboard, scroll modes, and multi-device support, see the [API Reference](docs/API.md).
 
-## How It Works
+## How the Job Runs
 
-The coordinate-based approach reads the accessibility tree, extracts element frames, and throws the rest away. The agent works with geometry, not meaning. Every action requires re-reading the full tree to know what happened.
+Coordinate-based tools turn intent into geometry: read the tree, extract frames, tap a point, read again.
 
-Button Heist works from the inside, the same position VoiceOver occupies. The framework lives in your app. It doesn't snapshot the hierarchy and discard it. It holds the live tree and sees every change as it happens.
+Button Heist keeps the live accessibility hierarchy in reach. It resolves semantic targets, performs actions, and returns the UI change that followed.
 
-Three things follow from being inside:
+That changes the loop. Every action goes through the contract. Every result comes back as evidence.
 
-### 1. Every action tells the agent what changed
+### 1. Deltas: evidence after every action
 
-After every command, Button Heist diffs the accessibility hierarchy and returns what moved: an **interface delta**. Tap "Login" and the response carries exactly which elements disappeared and which appeared:
+After every command, Button Heist diffs the accessibility hierarchy and returns an **interface delta**. Tap "Login" and the response shows what left and what arrived:
 
 ```json
 {
@@ -130,15 +159,13 @@ After every command, Button Heist diffs the accessibility hierarchy and returns 
 }
 ```
 
-Login screen gone, dashboard appeared, new elements ready to target. Value updates carry the property change inline: old value, new value, which element. When nothing changes, the delta says `"noChange"` and the agent pivots immediately.
+The agent does not need to re-read the screen to understand the result. Value updates include the element, property, old value, and new value. When nothing changes, the delta says `"noChange"`.
 
-The agent doesn't need to re-read the screen. The next decision starts from where the last one landed.
+Every response can also include a **background delta**: changes that happened while the agent was thinking, such as loaded content, a dialog appearing, or an animation settling.
 
-The crew inside keeps watch between jobs too. Every response carries a **background delta**: what changed in the UI while the agent was thinking. Content loaded, a dialog appeared, an animation settled. No stale intel.
+### 2. Expectations: assertions on the contract
 
-### 2. Every action can verify itself
-
-Each command can carry an `expect`, a declaration of what *should* happen. The framework checks the delta against the expectation and reports pass/fail inline:
+Each command can declare what should happen with `expect`. Button Heist checks the delta against that expectation and reports pass/fail inline:
 
 ```json
 {
@@ -150,13 +177,13 @@ Each command can carry an `expect`, a declaration of what *should* happen. The f
 
 Response: `{"expectation": {"met": true, "expectation": "screenChanged"}}`.
 
-Three tiers: `screen_changed` (new view controller), `elements_changed` (anything in the hierarchy shifted), or `element_updated` with specific property checks. When an expectation fails, the response carries what *actually* happened.
+Expectations can check for `screen_changed`, `elements_changed`, or a specific `element_updated` result. When an expectation fails, the response still includes what actually happened.
 
-The agent says what it expects. The framework says whether that happened.
+The agent says what it expects. Button Heist says whether it happened.
 
-### 3. Confidence unlocks batching
+### 3. Batching: fewer round trips
 
-An agent that trusts its feedback loop can commit to a whole sequence at once. `run_batch` sends ordered steps in a single round trip. Each one gets its own delta and expectation check. If a step fails, the batch stops. The agent never pushes forward with bad state:
+`run_batch` sends ordered steps in one round trip. Each step gets its own delta and expectation check. If a step fails, the batch stops at that point:
 
 ```json
 {
@@ -169,27 +196,31 @@ An agent that trusts its feedback loop can commit to a whole sequence at once. `
 }
 ```
 
-Two actions, two assertions, one round trip. If the email field doesn't update, the batch stops there.
+Two actions, two assertions, one round trip. If the email field does not update, the submit step never runs.
 
-Deltas, expectations, and batching, each one enabling the next. That's the compound advantage.
+### 4. Replay: the contract in CI
 
-### 4. Every workflow writes its own regression test
+Button Heist can record an agent session as a replayable `.heist` file. Each step is stored as a semantic matcher: label, traits, identifier, and value, rather than coordinates or ephemeral IDs.
 
-Because every action carries a semantic target and a structured result, Button Heist can record an agent's session as a replayable `.heist` file. Each step is captured as a semantic matcher — label, traits, identifier — not coordinates or ephemeral IDs. The matcher targets the accessibility contract, not transient UI state, so it stays stable across runs.
+Replay uses the same action path as live automation. If a label changes, a trait disappears, or a custom action is removed, the replay fails and surfaces the broken contract. JUnit XML output (`--junit`) puts those failures into CI.
 
-Replay re-executes each step through the same dispatch path. If an element can no longer be found by its accessibility properties, the test fails. That failure means one thing: an accessibility contract broke. The label changed, a trait disappeared, a custom action was removed. JUnit XML output (`--junit`) puts these into CI.
+Because recordings are semantic, the same flow can run across device sizes and orientations. Coordinate recordings break when layout moves. Semantic recordings fail when the app's accessible interface changes, which is exactly the contract agents and VoiceOver users depend on.
 
-The agent did its job. The test suite wrote itself. And because matchers are semantic, the same recording works on any device, any screen size, any orientation. A coordinate-based recording breaks the moment the layout shifts. A semantic recording breaks only when the accessibility interface breaks.
+The job does not disappear into tool-call history. It comes back as a replayable test.
 
-But the deepest advantage isn't speed. The agent and a VoiceOver user navigate the same hierarchy, interacting with the exact same elements. A coordinate-based tool can tap a button with broken accessibility and never notice. Button Heist can't. If VoiceOver can't see a control, neither can the agent. Every session is an accessibility audit, whether you asked for one or not.
+## The Accessibility Contract
 
-Accessibility bugs stick around because the people who report them rarely have the leverage to get them prioritized. When an agent hits the same bug, it blocks automation and gets fixed. VoiceOver users benefit.
+Button Heist does not treat accessibility as metadata to scrape and discard. It makes the Accessibility Contract the control surface.
 
-Agents already write our code. When they inspect what they've built, they see it through the accessibility layer. Make it good for them, and you've made it good for everyone.
+That matters. A coordinate tool can tap a button with no label and report success. Button Heist cannot pretend the app is accessible when the semantic interface is missing or wrong. If an agent cannot find the control by label, trait, value, or action, that is signal.
+
+One contract. Three payoffs: agents move faster, tests get stronger, VoiceOver users get the interface they were promised.
 
 ## Benchmarks
 
-Tested against a coordinate-based MCP server using the same model, same app, same tasks. 96 trials across 16 UI automation tasks. Both tools ran against the same app using standard iOS design patterns: forms, navigation, lists, controls.
+That contract shows up in the numbers. Button Heist was tested against a coordinate-based MCP server using the same model, app, tasks, and hardware. The suite covers 96 trials across 16 UI automation tasks: forms, navigation, lists, settings, custom actions, and long workflows.
+
+Agents spend less time casing the screen, less time doing geometry, and more time acting through the contract.
 
 |  | Button Heist | Coordinate-based |
 |---|---|---|
@@ -198,7 +229,7 @@ Tested against a coordinate-based MCP server using the same model, same app, sam
 | **Avg cost** | $0.46 | $1.42 |
 | **Tasks completed** | 16/16 | 16/16 |
 
-**2.4x faster, 3.1x fewer turns, 3.1x cheaper.** The gap scales with complexity:
+Average result: **2.4x faster, 3.1x fewer turns, 3.1x lower cost.** The gap grows as workflows get longer:
 
 | Task type | Advantage | Why |
 |---|---|---|
@@ -208,70 +239,44 @@ Tested against a coordinate-based MCP server using the same model, same app, sam
 | Scale (50+ actions) | **2.6x** | Per-action overhead compounds with task length |
 | Simple taps | ~1x | Both approaches handle simple buttons well |
 
-The difference is in what the agent gets back. A coordinate-based tap:
+The gap comes from the loop shape. Every action without a delta often means another full tree read. Over a 50-action workflow, that becomes 50 extra round trips and a lot of context spent on observation instead of progress. In the longest benchmark, Button Heist finished in under 8 minutes; the coordinate-based tool needed 20.
 
-```
-→ tap(x: 201, y: 456)
-← "Tapped successfully"
-```
-
-The same action through Button Heist:
-
-```
-→ activate(heistId: "large_button")
-← elements changed
-  + text_size_large_staticText "Text Size, Large"
-  - text_size_medium_staticText
-  ~ large_button: traits "button" → "button, selected"
-  ~ medium_button: traits "button, selected" → "button"
-```
-
-"Tapped successfully." That's the whole response. The agent has to re-read the entire screen to find out what happened. The delta reveals it all: which properties changed, which elements appeared and disappeared, the entirety of the new state. No follow-up needed.
-
-That difference compounds. Every action without a delta costs a full tree read. Over a 50-action workflow, that's 50 extra round trips filling the context window. On our longest benchmark, Button Heist finished in under 8 minutes. The coordinate-based tool needed 20.
-
-Full methodology and per-task data: [docs/BENCHMARKS.md](docs/BENCHMARKS.md)
-
----
-
-*That's the job. What follows is the crew, the blueprints, and the fine print.*
-
----
+Full methodology and per-task data: [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
 ## Meet the Crew
 
-Every heist needs a team.
+Button Heist is a distributed system: an iOS framework inside the app, a macOS client outside it, and CLI/MCP fronts for humans and agents.
 
 ### The Inside Team (iOS)
 
 | Name | Role |
 |------|------|
-| **TheInsideJob** | The whole operation. Runs in your app: TCP server, Bonjour, accessibility hierarchy, command dispatch to the crew |
-| **TheSafecracker** | Cracks the UI. Taps, swipes, drags, pinch, rotate, text entry, edit actions. Gets past any control via IOHIDEvent |
-| **TheStash** | Handles the goods. Element registry, target resolution, heistId assignment, wire conversion. Live view pointers never leave TheStash |
-| **TheBurglar** | Cases the joint. Hierarchy parsing, parse/apply pipeline, topology and scroll-container detection |
-| **TheBrains** | The mastermind. Action execution, scroll orchestration, delta cycle, wait handlers, exploration |
-| **TheGetaway** | The driver. Message dispatch, encode/decode, broadcast, transport wiring, interaction recording |
-| **TheMuscle** | Keeps the door. Token validation, Allow/Deny UI, session lock. Only one driver at a time |
-| **TheStakeout** | The lookout. H.264 screen recording with frame timing and inactivity detection |
-| **TheFingerprints** | Evidence. Touch indicators on screen during gestures, visible live and baked into TheStakeout's recordings |
-| **TheTripwire** | Timing coordinator. Gates all "is the UI ready?" decisions: animation detection, presentation layer fingerprinting, settle waits |
-| **ThePlant** | Runs the advance. ObjC `+load` hook boots TheInsideJob before any Swift runs. Link the framework, no app code |
+| **TheInsideJob** | iOS framework embedded in the app. Hosts the TCP server, Bonjour advertisement, accessibility hierarchy, and command dispatch |
+| **TheSafecracker** | Touch, gesture, text-entry, and edit-action execution through synthetic events |
+| **TheStash** | Element registry, target resolution, `heistId` assignment, and wire conversion. Live view pointers stay inside |
+| **TheBurglar** | Accessibility hierarchy parsing, topology detection, and scroll-container discovery |
+| **TheBrains** | Action execution, scroll orchestration, delta generation, waits, and exploration |
+| **TheGetaway** | Message dispatch, encoding/decoding, broadcasts, transport wiring, and interaction recording |
+| **TheMuscle** | Token validation, approval UI, and session locking |
+| **TheStakeout** | H.264 screen recording with frame timing and inactivity detection |
+| **TheFingerprints** | Touch indicators for live interaction and recorded output |
+| **TheTripwire** | UI readiness checks: animation detection, presentation-layer fingerprints, and settle waits |
+| **ThePlant** | ObjC `+load` hook that starts TheInsideJob when the framework loads |
 
 ### The Outside Team (macOS)
 
 | Name | Role |
 |------|------|
-| **TheFence** | Runs the show. 42 commands dispatched from CLI and MCP, request-response correlation, async waits |
-| **TheHandoff** | Gets everyone in position. Bonjour + USB discovery, TLS 1.3 connection, session state, injectable closures for testing |
-| **TheBookKeeper** | The accountant. Session logs, artifact storage, heist recording and replay. Turns agent sessions into portable `.heist` files with semantic matchers |
+| **TheFence** | Command dispatch for CLI and MCP, request-response correlation, and async waits |
+| **TheHandoff** | Bonjour and USB discovery, TLS connection handling, session state, and testable connection hooks |
+| **TheBookKeeper** | Session logs, artifact storage, heist recording, and replay |
 
-### The Legitimate Front
+### Interfaces
 
 | Name | Role |
 |------|------|
-| **ButtonHeistCLI** | Your orders. `list`, `session`, `activate`, `touch`, `type`, `screenshot`, `record`, and more |
-| **ButtonHeistMCP** | Agent interface. 23 tools that call through TheFence so AI agents can run the job natively |
+| **ButtonHeistCLI** | Command-line interface for `list`, `session`, `activate`, `touch`, `type`, `screenshot`, `record`, and more |
+| **ButtonHeistMCP** | MCP server exposing 23 agent tools backed by TheFence |
 
 ## Development
 
@@ -326,11 +331,17 @@ ButtonHeist/
 
 ## Documentation
 
-**Integrating into your app?** Start with the [API Reference](docs/API.md) and [Quick Start above](#quick-start).
+| Path | Start here |
+|---|---|
+| **iOS engineer** (instrument app + run locally) | [Quick Start](#quick-start) + [API](docs/API.md) |
+| **QA / automation engineer** (record + replay in CI) | [Benchmarks](docs/BENCHMARKS.md) + [Heist Format](docs/HEIST-FORMAT.md) |
+| **Agent builder** (MCP tools for Codex/Claude/Cursor) | [ButtonHeistMCP](ButtonHeistMCP/) + [Wire Protocol](docs/WIRE-PROTOCOL.md) |
 
-**Connecting an agent?** See the [Wire Protocol](docs/WIRE-PROTOCOL.md) and [MCP Server](ButtonHeistMCP/).
+**Integrating into an app?** Start with the [Quick Start](#quick-start) and [API Reference](docs/API.md).
 
-**Understanding the architecture?** Read [Architecture](docs/ARCHITECTURE.md) and [Crew Dossiers](docs/dossiers/).
+**Connecting an agent?** See [ButtonHeistMCP](ButtonHeistMCP/) and the [Wire Protocol](docs/WIRE-PROTOCOL.md).
+
+**Understanding the internals?** Read [Architecture](docs/ARCHITECTURE.md) and [Crew Dossiers](docs/dossiers/).
 
 All docs: [API](docs/API.md) ・ [Architecture](docs/ARCHITECTURE.md) ・ [Wire Protocol](docs/WIRE-PROTOCOL.md) ・ [Auth](docs/AUTH.md) ・ [USB](docs/USB_DEVICE_CONNECTIVITY.md) ・ [Bonjour Troubleshooting](docs/BONJOUR_TROUBLESHOOTING.md) ・ [Reviewer's Guide](docs/REVIEWERS-GUIDE.md) ・ [Crew Dossiers](docs/dossiers/)
 
