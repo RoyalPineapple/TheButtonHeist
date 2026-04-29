@@ -47,9 +47,17 @@ public enum FenceError: Error, LocalizedError {
                   Retry without --token to request a fresh session.
                 """
         case .notConnected:
-            return "Not connected to device. Is the app running? Check 'buttonheist list' to see available devices."
+            return """
+                Not connected to device.
+                  The previous connection may have closed or timed out.
+                  Hint: Check that the app is running, then retry the command. Use 'buttonheist list' to see available devices.
+                """
         case .actionTimeout:
-            return "Action timed out — connection lost, reconnecting..."
+            return """
+                Command timed out waiting for a response from the app.
+                  The app may be busy on its main thread, processing a long-running UI update, or sending a large response.
+                  The client closed the stale socket; the next command will reconnect automatically when possible.
+                """
         case .actionFailed(let message):
             return "Action failed: \(message)"
         }
@@ -144,6 +152,7 @@ public final class TheFence {
     private let actionTracker = PendingRequestTracker<ActionResult>()
     private let interfaceTracker = PendingRequestTracker<Interface>()
     private let screenTracker = PendingRequestTracker<ScreenPayload>()
+    private let recordingTracker = PendingRequestTracker<RecordingPayload>()
     private var recordingWaitInFlight = false
 
     public init(configuration: Configuration = .init()) {
@@ -178,6 +187,12 @@ public final class TheFence {
 
         handoff.onBackgroundDelta = { [weak self] delta in
             self?.lastBackgroundDelta = delta
+        }
+
+        handoff.onDisconnected = { [weak self] reason in
+            self?.cancelAllPendingRequests(
+                error: FenceError.connectionFailed(reason.displayMessage)
+            )
         }
     }
 
@@ -563,13 +578,9 @@ public final class TheFence {
         try await screenTracker.wait(requestId: requestId, timeout: timeout)
     }
 
-    // Recording uses a fundamentally different pattern from the request-id-based trackers:
-    // it temporarily swaps TheHandoff's onRecording/onRecordingError callbacks and restores
-    // them in a defer block. There is no requestId — the server sends exactly one recording
-    // response per stop_recording command, and the callback identity (not a dictionary key)
-    // is what correlates request to response. A PendingRequestTracker<RecordingPayload> would
-    // require either synthesizing a fake requestId or changing the TheHandoff callback
-    // signatures, neither of which is warranted for a single call site.
+    // Recording responses do not carry request IDs, so synthesize a single key
+    // while a stop_recording wait is in flight. Keeping the tracker on TheFence
+    // lets disconnect handling fail the wait immediately instead of timing out.
     public func waitForRecording(timeout: TimeInterval = 120.0) async throws -> RecordingPayload {
         guard !recordingWaitInFlight else {
             throw FenceError.invalidRequest("stop_recording already waiting for completion")
@@ -583,21 +594,21 @@ public final class TheFence {
             handoff.onRecordingError = previousOnRecordingError
         }
 
-        let recordingTracker = PendingRequestTracker<RecordingPayload>()
         let syntheticId = "recording"
-        handoff.onRecording = { payload in
-            recordingTracker.resolve(requestId: syntheticId, result: .success(payload))
+        handoff.onRecording = { [weak self] payload in
+            self?.recordingTracker.resolve(requestId: syntheticId, result: .success(payload))
         }
-        handoff.onRecordingError = { message in
-            recordingTracker.resolve(requestId: syntheticId, result: .failure(FenceError.actionFailed("Recording failed: \(message)")))
+        handoff.onRecordingError = { [weak self] message in
+            self?.recordingTracker.resolve(requestId: syntheticId, result: .failure(FenceError.actionFailed("Recording failed: \(message)")))
         }
         return try await recordingTracker.wait(requestId: syntheticId, timeout: timeout)
     }
 
-    private func cancelAllPendingRequests() {
-        actionTracker.cancelAll(error: FenceError.actionTimeout)
-        interfaceTracker.cancelAll(error: FenceError.actionTimeout)
-        screenTracker.cancelAll(error: FenceError.actionTimeout)
+    private func cancelAllPendingRequests(error: Error = FenceError.actionTimeout) {
+        actionTracker.cancelAll(error: error)
+        interfaceTracker.cancelAll(error: error)
+        screenTracker.cancelAll(error: error)
+        recordingTracker.cancelAll(error: error)
     }
 
 }

@@ -125,10 +125,10 @@ if fileSize > 7_000_000  // 7MB raw = ~9.3MB base64, under 10MB buffer limit
 - This is correct for H.264 but could produce unexpected recording dimensions
 - Users specifying `scale: 0.75` on a non-standard resolution might get slightly different output
 
-**Recording delivered to ALL connected clients** (`TheInsideJob+Screen.swift`)
-- `broadcastToAll` sends the video payload to every client, not just the one that started recording
-- This means multiple connected clients all receive the (potentially large) video data
-- Could be bandwidth-intensive in multi-client scenarios
+**Recording payload delivered on demand**
+- Completed video data is returned to the `stop_recording` caller
+- Automatic stops broadcast only a lightweight `recordingStopped` notification and cache the payload for later retrieval
+- This avoids sending large base64 MP4 payloads to every connected client
 
 ### LOW PRIORITY
 

@@ -11,7 +11,7 @@ TheHandoff owns the full lifecycle of communicating with a remote iOS device run
 1. **Device discovery** — starts and stops Bonjour (`DeviceDiscovery`) and USB (`USBDeviceDiscovery`) discovery sessions; maintains `discoveredDevices`
 2. **Connection management** — creates `DeviceConnection` instances, routes `ConnectionEvent`s from the transport layer to named callbacks, and manages `connectionPhase` (an explicit state machine carrying the device in `.connecting` and `.connected` phases)
 3. **Session state tracking** — maintains `connectionPhase` (disconnected/connecting(device)/connected(device)/failed(ConnectionFailure)), `currentInterface`, `currentScreen`, `recordingPhase` (idle/recording)
-4. **Keepalive** — sends `.ping` every 3 seconds over an active connection to keep the channel alive
+4. **Keepalive** — sends `.ping` every 5 seconds over an active connection to keep the channel alive
 5. **Session management** — `connectWithDiscovery(filter:timeout:)` orchestrates discovery → device resolution → connection with timeout tracking
 6. **Reachability probing** — `discoverReachableDevices(timeout:)` discovers and validates each device advertisement via parallel TCP status probes
 7. **Auto-reconnect** — `setupAutoReconnect(filter:)` sets `reconnectPolicy = .enabled(filter:)`; the disconnect event handler checks the policy directly instead of wrapping callbacks
@@ -34,7 +34,7 @@ graph TD
             MakeConn["makeConnection: (device, token, driverId) → DeviceConnecting"]
         end
 
-        Keepalive["Keepalive Task\n.ping every 3s"]
+        Keepalive["Keepalive Task\n.ping every 5s"]
         DriverId["effectiveDriverId\n~/.buttonheist/driver-id"]
     end
 
@@ -204,7 +204,7 @@ Default values create `DeviceDiscovery()` and `DeviceConnection(device:token:dri
 
 ## Keepalive
 
-On receiving a `ConnectionEvent.connected`, `startKeepalive()` launches a `Task` that loops with a 3-second sleep, sending `.ping` to the active connection. The task is stored in `keepaliveTask` and cancelled in `disconnect()` and `forceDisconnect()`.
+On receiving a `ConnectionEvent.connected`, `startKeepalive()` launches a `Task` that loops with a 5-second sleep, sending `.ping` to the active connection. After 6 missed pongs (roughly 30 seconds of silence), it forces a disconnect. The task is stored in `keepaliveTask` and cancelled in `disconnect()` and `forceDisconnect()`.
 
 ## Driver ID Persistence
 
@@ -244,11 +244,12 @@ Sets `reconnectPolicy = .enabled(filter:)`. The disconnect event handler in `con
 
 ## Auto-Subscribe Behavior
 
-When `autoSubscribe` is `true` (the default), TheHandoff sends three messages immediately upon receiving the `info` server message:
+When `autoSubscribe` is `true` (the default), TheHandoff sends two messages immediately upon receiving the `info` server message:
 
 1. `.subscribe` — registers for push notifications
 2. `.requestInterface` — fetches the current accessibility hierarchy
-3. `.requestScreen` — fetches the current screen snapshot
+
+Screen snapshots are requested only through explicit `.requestScreen` calls.
 
 ## Connection Lifecycle
 
@@ -268,7 +269,7 @@ stateDiagram-v2
     Handshaking --> Connected: serverHello → clientHello → authRequired → authenticate → info
     Handshaking --> Idle: authFailed / sessionLocked / protocolMismatch
 
-    Connected --> Keepalive: ping every 3s
+    Connected --> Keepalive: ping every 5s
     Keepalive --> Connected: pong (implicit)
 
     Connected --> Idle: disconnect()

@@ -20,7 +20,7 @@ final class TheHandoffMessageTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testInfoAutoSubscribeSendsMessages() async {
+    func testInfoAutoSubscribeSendsSubscriptionAndInitialInterfaceRequest() async {
         let handoff = TheHandoff()
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
         let mockConn = MockConnection()
@@ -40,7 +40,7 @@ final class TheHandoffMessageTests: XCTestCase {
             if case .requestInterface = $0 { return true }
             return false
         }))
-        XCTAssertTrue(sentTypes.contains(where: {
+        XCTAssertFalse(sentTypes.contains(where: {
             if case .requestScreen = $0 { return true }
             return false
         }))
@@ -255,6 +255,16 @@ final class TheHandoffMessageTests: XCTestCase {
         let handoff = TheHandoff()
         handoff.handleServerMessage(.recordingStopped, requestId: nil)
         XCTAssertEqual(handoff.connectionPhase, .disconnected)
+        XCTAssertEqual(handoff.recordingPhase, .idle)
+    }
+
+    @ButtonHeistActor
+    func testRecordingStoppedTransitionsRecordingToIdle() async {
+        let handoff = TheHandoff()
+        handoff.handleServerMessage(.recordingStarted, requestId: nil)
+
+        handoff.handleServerMessage(.recordingStopped, requestId: nil)
+
         XCTAssertEqual(handoff.recordingPhase, .idle)
     }
 

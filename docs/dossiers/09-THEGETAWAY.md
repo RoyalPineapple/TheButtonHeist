@@ -15,7 +15,7 @@ TheGetaway is the communication backbone of the inside operation:
 5. **Send/broadcast** — `sendMessage` handles single-client responses with error fallback. `broadcastToSubscribed`/`broadcastToAll` encode once, send to many.
 6. **Hierarchy broadcast** — `broadcastIfChanged()` calls `brains.broadcastInterfaceIfChanged()` and broadcasts to subscribers. Called by TheInsideJob's pulse handler and polling task.
 7. **Interface sending** — `sendInterface` settles, refreshes, explores, builds the full payload, sends, and records the sent state.
-8. **Screen capture** — `handleScreen` captures via `brains.captureScreen()`, PNG-encodes, and sends. `broadcastScreen` sends to subscribers.
+8. **Screen capture** — `handleScreen` captures via `brains.captureScreen()`, PNG-encodes, and sends explicit screen responses.
 9. **Recording lifecycle** — owns `RecordingPhase` (`.idle`/`.recording(stakeout:)`). Creates TheStakeout on demand, wires capture/completion closures, manages phase transitions.
 
 ## Architecture

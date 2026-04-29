@@ -76,9 +76,11 @@ sequenceDiagram
 
         Client->>Server: subscribe (enable auto-updates)
         Client->>Server: requestInterface
-        Client->>Server: requestScreen
+        opt explicit screen capture
+            Client->>Server: requestScreen
+            Server-->>Client: screen
+        end
         Server-->>Client: interface
-        Server-->>Client: screen
 
         Client->>Server: activate / touchTap / touchDrag ...
         Server-->>Client: actionResult
@@ -92,7 +94,6 @@ sequenceDiagram
     end
 
     Server-->>Client: interface (auto-pushed on change)
-    Server-->>Client: screen (auto-pushed on change)
     Server-->>Client: interaction (broadcast after driver actions)
 
     Client->>Server: ping
@@ -119,7 +120,7 @@ All messages are wrapped in envelope types for request-response correlation. Exa
 {"protocolVersion":"7.0","requestId":"abc-123","type":"actionResult","payload":{"success":true,"method":"syntheticTap"}}
 ```
 
-When `requestId` is present, the server echoes it in the corresponding response so the client can match request-response pairs. Push broadcasts (interface updates, screen captures, interaction events) have `requestId: null`.
+When `requestId` is present, the server echoes it in the corresponding response so the client can match request-response pairs. Push broadcasts such as interface updates and interaction events have `requestId: null`. Screenshots are never broadcast; `screen` is only returned for explicit `requestScreen` requests.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -164,7 +165,7 @@ Request current UI element interface. Returns only elements currently visible on
 
 ### subscribe
 
-Subscribe to automatic interface and screen updates.
+Subscribe to automatic interface and interaction updates. Screenshots are never broadcast; request them explicitly with `requestScreen`.
 
 ```json
 {"protocolVersion":"7.0","type":"subscribe"}
@@ -554,7 +555,7 @@ Lightweight status probe. Unlike normal driver commands, this message may be sen
 
 ### watch
 
-Connect as a read-only observer. Sent instead of `authenticate` after receiving `authRequired`. Observers receive all broadcasts (interface, screen, interaction events) but cannot send commands or claim a session.
+Connect as a read-only observer. Sent instead of `authenticate` after receiving `authRequired`. Observers receive interface and interaction broadcasts but cannot send commands or claim a session.
 
 ```json
 {"protocolVersion":"7.0","type":"watch","payload":{"token":""}}
@@ -805,7 +806,7 @@ Acknowledgement that recording has begun.
 
 ### recordingStopped
 
-Acknowledgement that the `stopRecording` command was received. The actual video payload will follow as a `recording` broadcast. Also sent if recording was already auto-stopping (inactivity or max duration).
+Lightweight notification that recording stopped without including the video payload. This is sent for automatic stops such as inactivity, max duration, or file size limit. The completed video is cached server-side and returned by the next `stopRecording` request.
 
 ```json
 {"protocolVersion":"7.0","type":"recordingStopped"}
@@ -813,7 +814,7 @@ Acknowledgement that the `stopRecording` command was received. The actual video 
 
 ### recording
 
-Completed screen recording. Contains the H.264/MP4 video as base64-encoded data.
+Completed screen recording. Contains the H.264/MP4 video as base64-encoded data. Sent as the response to `stopRecording`, not as an unsolicited broadcast.
 
 ```json
 {"protocolVersion":"7.0","type":"recording","payload":{
@@ -1498,7 +1499,7 @@ A single recorded interaction event captured during a Stakeout recording.
 # Server acknowledges stop command
 {"protocolVersion":"7.0","type":"recordingStopped"}
 
-# Server sends completed recording
+# Server responds with completed recording
 {"protocolVersion":"7.0","type":"recording","payload":{"videoData":"AAAAIGZ0eXBpc29t...","width":390,"height":844,"duration":5.2,"frameCount":42,"fps":8,"startTime":"2026-02-24T10:30:00.000Z","endTime":"2026-02-24T10:30:05.200Z","stopReason":"manual"}}
 
 # Client sends keepalive
@@ -1675,7 +1676,7 @@ The server binds to `::` (IPv6 any) on physical devices or `::1` (loopback) on s
 
 ### Keepalive
 
-Clients should send `ping` messages periodically (recommended: every 3 seconds) to detect connection loss. The 3-second interval is appropriate given the 30-second session lease timeout.
+Clients should send `ping` messages periodically (recommended: every 5 seconds) to detect connection loss. Treat several missed pongs as a failure rather than closing on the first delayed response; app main-thread stalls can delay pong handling.
 
 ### Error Recovery
 

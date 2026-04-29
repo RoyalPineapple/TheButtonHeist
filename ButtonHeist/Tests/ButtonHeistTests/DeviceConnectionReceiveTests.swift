@@ -1,6 +1,7 @@
 import XCTest
 import Network
 @testable import ButtonHeist
+import TheScore
 
 final class DeviceConnectionReceiveTests: XCTestCase {
 
@@ -42,6 +43,31 @@ final class DeviceConnectionReceiveTests: XCTestCase {
             return
         }
         XCTAssertTrue(active.connection === activeConnection)
+    }
+
+    @ButtonHeistActor
+    func testHandleReceiveAcceptsLargeScreenResponse() async throws {
+        let activeConnection = NWConnection(host: "127.0.0.1", port: 1111, using: .tcp)
+        let connection = DeviceConnection(device: makeDummyDevice())
+        connection.connectionState = .connected(.init(connection: activeConnection))
+
+        let oversizedForOldLimit = String(repeating: "A", count: 10_100_000)
+        let screen = ScreenPayload(pngData: oversizedForOldLimit, width: 1366, height: 1024)
+        var envelope = try ResponseEnvelope(requestId: "screen-1", message: .screen(screen)).encoded()
+        envelope.append(0x0A)
+
+        var receivedScreen: ScreenPayload?
+        connection.onEvent = { event in
+            if case .message(.screen(let payload), _, _) = event {
+                receivedScreen = payload
+            }
+        }
+
+        connection.handleReceive(content: envelope, isComplete: false, error: nil, connection: activeConnection)
+
+        XCTAssertEqual(receivedScreen?.width, 1366)
+        XCTAssertEqual(receivedScreen?.pngData.count, oversizedForOldLimit.count)
+        XCTAssertTrue(connection.isConnected)
     }
 
     private func makeDummyDevice() -> DiscoveredDevice {
