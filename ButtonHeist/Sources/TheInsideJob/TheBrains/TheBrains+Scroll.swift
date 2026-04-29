@@ -532,7 +532,7 @@ extension TheBrains {
             .compactMap { container -> (target: ScrollableTarget, container: AccessibilityContainer)? in
                 guard !exhausted.contains(container),
                       case .scrollable(let contentSize) = container.type else { return nil }
-                if let view = stash.scrollableContainerViews[container],
+                if let view = self.stash.scrollableContainerViews[container],
                    view.window != nil,
                    Self.isObscuredByPresentation(view: view) {
                     return nil

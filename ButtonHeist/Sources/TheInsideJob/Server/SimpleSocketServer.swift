@@ -200,19 +200,8 @@ public actor SimpleSocketServer {
 
         let byteCount = dataToSend.count
         if byteCount > Self.maxPendingBytesPerClient {
-            logger.warning("Client \(clientId) send payload exceeds cap (\(byteCount) bytes), sending explicit error")
-            if var errorData = try? ResponseEnvelope(
-                message: .recordingError("Response too large to send over the socket (\(byteCount) bytes)")
-            ).encoded() {
-                if !errorData.hasSuffix(Data([0x0A])) {
-                    errorData.append(0x0A)
-                }
-                state.connection.send(content: errorData, completion: .contentProcessed { error in
-                    if let error {
-                        logger.error("Send error to client \(clientId): \(error)")
-                    }
-                })
-            }
+            logger.warning("Client \(clientId) send payload exceeds cap (\(byteCount) bytes), failing the originating request")
+            sendOversizedResponseError(clientId: clientId, originalData: data, byteCount: byteCount, state: state)
             return
         }
         if state.pendingBytes + byteCount > Self.maxPendingBytesPerClient {
@@ -229,6 +218,56 @@ public actor SimpleSocketServer {
             }
             guard let self else { return }
             Task { await self.completedSend(clientId: clientId, byteCount: byteCount) }
+        })
+    }
+
+    /// Try to fail the originating request explicitly when a response exceeds the send cap.
+    /// Recording responses (the typical cause of oversize, since video data is large) get a
+    /// `.recordingError` keyed to the original requestId so the recording tracker resolves
+    /// promptly. Other oversize cases are logged and dropped — the pending request will time
+    /// out, which is preferable to misclassifying the failure or tearing down the connection.
+    private func sendOversizedResponseError(
+        clientId: Int,
+        originalData: Data,
+        byteCount: Int,
+        state: ClientState
+    ) {
+        let envelope: ResponseEnvelope
+        do {
+            envelope = try JSONDecoder().decode(ResponseEnvelope.self, from: originalData)
+        } catch {
+            logger.error("Failed to decode oversized response envelope for client \(clientId): \(error.localizedDescription); dropping")
+            return
+        }
+        let message = "Response too large to send over the socket (\(byteCount) bytes)"
+        switch envelope.message {
+        case .recording, .recordingStarted, .recordingStopped, .recordingError:
+            sendErrorEnvelope(
+                clientId: clientId,
+                envelope: ResponseEnvelope(requestId: envelope.requestId, message: .recordingError(message)),
+                state: state
+            )
+        default:
+            logger.warning("Oversized non-recording response for client \(clientId) — dropping; the pending request will time out")
+        }
+    }
+
+    private func sendErrorEnvelope(clientId: Int, envelope: ResponseEnvelope, state: ClientState) {
+        let response: Data
+        do {
+            response = try envelope.encoded()
+        } catch {
+            logger.error("Failed to encode oversized-response error for client \(clientId): \(error.localizedDescription)")
+            return
+        }
+        var errorData = response
+        if !errorData.hasSuffix(Data([0x0A])) {
+            errorData.append(0x0A)
+        }
+        state.connection.send(content: errorData, completion: .contentProcessed { error in
+            if let error {
+                logger.error("Send error to client \(clientId): \(error)")
+            }
         })
     }
 
