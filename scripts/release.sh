@@ -4,9 +4,9 @@
 # Performs the full release pipeline from a clean main branch:
 #   1. Validate: must be on main, in sync with origin, clean worktree
 #   2. Bump version across 5 files + regenerate Xcode projects
-#   3. Build all targets (TheScore, ButtonHeist, TheInsideJob, CLI, MCP)
+#   3. Build CLI + MCP (in parallel)
 #   4. Run all tests (TheScoreTests, ButtonHeistTests, TheInsideJobTests)
-#   5. Commit, tag, push
+#   5. Rebase onto latest origin, commit, tag, push
 #   6. Wait for CI release workflow; upgrade Homebrew on success, rollback on failure
 #
 # Versioning: SemVer (MAJOR.MINOR.PATCH). Default bump is patch.
@@ -118,13 +118,13 @@ if [[ "$DRY_RUN" == true ]]; then
     echo ""
     echo "Would perform:"
     echo "  1. Bump version in 5 files + regenerate Xcode projects"
-    echo "  2. Build TheScore, ButtonHeist, TheInsideJob, CLI, MCP"
+    echo "  2. Build CLI + MCP (parallel)"
     if [[ "$SKIP_TESTS" == true ]]; then
         echo "  3. (tests skipped)"
     else
         echo "  3. Run TheScoreTests, ButtonHeistTests, TheInsideJobTests"
     fi
-    echo "  4. Commit 'Release $NEW_VERSION', tag v$NEW_VERSION, push"
+    echo "  4. Rebase, commit 'Release $NEW_VERSION', tag v$NEW_VERSION, push"
     echo "  5. Wait for CI release workflow"
     echo "  6. On success: upgrade Homebrew. On failure: rollback tag + commit"
     exit 0
@@ -186,38 +186,54 @@ echo "  ✓ Xcode projects"
 echo ""
 
 # --------------------------------------------------------------------------
-# Phase 3: Build
+# Phase 3: Build CLI + MCP (parallel)
 # --------------------------------------------------------------------------
 
-echo "==> Phase 3: Building all targets"
+echo "==> Phase 3: Building CLI + MCP"
 
-echo "  Building TheScore..."
-xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheScore build -quiet
-echo "  ✓ TheScore"
+CLI_LOG=$(mktemp)
+MCP_LOG=$(mktemp)
 
-echo "  Building ButtonHeist..."
-xcodebuild -workspace ButtonHeist.xcworkspace -scheme ButtonHeist build -quiet
-echo "  ✓ ButtonHeist"
+(cd ButtonHeistCLI && swift build -c release --quiet 2>&1) > "$CLI_LOG" 2>&1 &
+CLI_PID=$!
 
-echo "  Building TheInsideJob..."
-xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheInsideJob \
-    -destination 'generic/platform=iOS' build -quiet
-echo "  ✓ TheInsideJob"
+(cd ButtonHeistMCP && swift build -c release --quiet 2>&1) > "$MCP_LOG" 2>&1 &
+MCP_PID=$!
 
-echo "  Building CLI..."
-(cd ButtonHeistCLI && swift build -c release --quiet)
-echo "  ✓ CLI"
+CLI_OK=true
+MCP_OK=true
 
-echo "  Building MCP..."
-(cd ButtonHeistMCP && swift build -c release --quiet)
-echo "  ✓ MCP"
+if ! wait "$CLI_PID"; then
+    CLI_OK=false
+fi
+if ! wait "$MCP_PID"; then
+    MCP_OK=false
+fi
+
+if [[ "$CLI_OK" == true ]]; then
+    echo "  ✓ CLI"
+else
+    echo "  ✗ CLI build failed:"
+    cat "$CLI_LOG"
+    rm -f "$CLI_LOG" "$MCP_LOG"
+    exit 1
+fi
+
+if [[ "$MCP_OK" == true ]]; then
+    echo "  ✓ MCP"
+else
+    echo "  ✗ MCP build failed:"
+    cat "$MCP_LOG"
+    rm -f "$CLI_LOG" "$MCP_LOG"
+    exit 1
+fi
+
+rm -f "$CLI_LOG" "$MCP_LOG"
 
 # Verify CLI version
 CLI_VERSION=$(ButtonHeistCLI/.build/release/buttonheist --version)
 if [[ "$CLI_VERSION" != "$NEW_VERSION" ]]; then
     echo "Error: CLI reports '$CLI_VERSION', expected '$NEW_VERSION'"
-    echo "  Reverting version changes..."
-    git checkout -- .
     exit 1
 fi
 echo "  ✓ CLI --version reports $NEW_VERSION"
@@ -233,9 +249,9 @@ if [[ "$SKIP_TESTS" == true ]]; then
 else
     echo "==> Phase 4: Running tests"
 
-    # Clean stale DerivedData to avoid Info.plist deserialization failures
-    # after tuist regenerates the project during the version bump phase.
-    rm -rf ~/Library/Developer/Xcode/DerivedData/ButtonHeist-*
+    # Clean only stale Info.plist caches — not the entire DerivedData.
+    # tuist generate in Phase 2 can leave xcodebuild pointing at old plist paths.
+    find ~/Library/Developer/Xcode/DerivedData/ButtonHeist-*/Build -name '*-Info.plist' -delete 2>/dev/null || true
 
     echo "  Running TheScoreTests..."
     tuist test TheScoreTests --no-selective-testing
@@ -245,23 +261,31 @@ else
     tuist test ButtonHeistTests --no-selective-testing
     echo "  ✓ ButtonHeistTests"
 
-    # Find or create a simulator for iOS tests
-    SIM_NAME="release-test-$$"
-    SIM_RUNTIME=$(xcrun simctl list runtimes | grep "iOS 26" | tail -1 | sed 's/.*- //')
-    if [[ -z "$SIM_RUNTIME" ]]; then
-        echo "  Warning: no iOS 26 runtime found, trying latest available..."
-        SIM_RUNTIME=$(xcrun simctl list runtimes | grep "iOS" | tail -1 | sed 's/.*- //')
+    # Reuse a persistent release-test simulator instead of create/boot/delete
+    SIM_NAME="release-test"
+    SIM_UDID=$(xcrun simctl list devices | grep "$SIM_NAME" | grep -oE '[0-9A-F-]{36}' | head -1 || true)
+
+    if [[ -z "$SIM_UDID" ]]; then
+        SIM_RUNTIME=$(xcrun simctl list runtimes | grep "iOS 26" | tail -1 | sed 's/.*- //')
+        if [[ -z "$SIM_RUNTIME" ]]; then
+            SIM_RUNTIME=$(xcrun simctl list runtimes | grep "iOS" | tail -1 | sed 's/.*- //')
+        fi
+        SIM_UDID=$(xcrun simctl create "$SIM_NAME" "com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro" "$SIM_RUNTIME")
+        echo "  Created simulator $SIM_NAME ($SIM_UDID)"
     fi
-    SIM_UDID=$(xcrun simctl create "$SIM_NAME" "com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro" "$SIM_RUNTIME")
-    xcrun simctl boot "$SIM_UDID" 2>/dev/null || true
+
+    # Boot only if not already booted
+    SIM_STATE=$(xcrun simctl list devices | grep "$SIM_UDID" | grep -o '(Booted)' || true)
+    if [[ -z "$SIM_STATE" ]]; then
+        xcrun simctl boot "$SIM_UDID" 2>/dev/null || true
+        echo "  Booted $SIM_NAME"
+    else
+        echo "  Reusing booted $SIM_NAME"
+    fi
 
     echo "  Running TheInsideJobTests on $SIM_NAME..."
     tuist test TheInsideJobTests --platform ios --device "$SIM_NAME" --no-selective-testing
     echo "  ✓ TheInsideJobTests"
-
-    # Clean up test simulator
-    xcrun simctl shutdown "$SIM_UDID" 2>/dev/null || true
-    xcrun simctl delete "$SIM_UDID" 2>/dev/null || true
     echo ""
 fi
 
@@ -281,10 +305,21 @@ git add \
     docs/API.md \
     TestApp/Sources/DisclosureGroupingDemo.swift \
     Formula/buttonheist.rb \
-    -- '*.pbxproj' '*.xcworkspacedata'
+    -- '*.pbxproj' '*.xcworkspacedata' '*.xcscheme'
 
 git commit -m "Release $NEW_VERSION"
 git tag "v$NEW_VERSION"
+
+# Rebase onto latest origin to avoid push rejection if main moved
+git fetch origin main --quiet
+if [[ "$(git rev-parse origin/main)" != "$(git rev-parse HEAD~1)" ]]; then
+    echo "  Origin moved during release — rebasing..."
+    git tag -d "v$NEW_VERSION"
+    git rebase origin/main
+    git tag "v$NEW_VERSION"
+    echo "  ✓ Rebased onto latest origin/main"
+fi
+
 git push origin HEAD:main
 git push origin "v$NEW_VERSION"
 
