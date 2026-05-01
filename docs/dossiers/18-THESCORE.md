@@ -354,10 +354,10 @@ classDiagram
 
 ### LOW PRIORITY
 
-**Nested tree encoding still exposes Swift synthesized shape**
+**Nested tree encoding is now formatter-owned**
 - Top-level request/response envelopes are now explicit `type` / `payload`
-- `ElementNode.container` still encodes as `{"container":{"_0":Group,"children":[...]}}`
-- Accurate, but awkward compared to the rest of the wire model
+- Public interface JSON renders container fields and nested child elements directly
+- The internal `ElementNode` enum still uses Codable for in-process round trips
 
 **No formal schema validation**
 - Messages rely entirely on `Codable` for validation

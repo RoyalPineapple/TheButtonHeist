@@ -346,15 +346,19 @@ extension FenceResponse {
         let formatter = ISO8601DateFormatter()
         var payload: [String: Any] = [
             "timestamp": formatter.string(from: interface.timestamp),
-            "elements": interface.elements.map { elementDictionary($0, detail: detail) }
+            "tree": interfaceTreeDictionaries(interface, detail: detail)
         ]
-        if detail == .full, let tree = interface.tree {
-            payload["tree"] = tree.map(elementNodeDictionary)
-        }
         payload["screenDescription"] = interface.screenDescription
         if let screenId = interface.screenId { payload["screenId"] = screenId }
         payload["navigation"] = navigationDictionary(interface.navigation)
         return payload
+    }
+
+    private func interfaceTreeDictionaries(_ interface: Interface, detail: InterfaceDetail) -> [[String: Any]] {
+        let tree = interface.tree ?? interface.elements.indices.map { ElementNode.element(order: $0) }
+        return tree.map {
+            elementNodeDictionary($0, elements: interface.elements, detail: detail)
+        }
     }
 
     private func navigationDictionary(_ navigation: NavigationContext) -> [String: Any] {
@@ -392,6 +396,8 @@ extension FenceResponse {
         if let value = element.value { payload["value"] = value }
         if let identifier = element.identifier { payload["identifier"] = identifier }
 
+        if let hint = element.hint { payload["hint"] = hint }
+
         if let customContent = element.customContent {
             let important = customContent.filter(\.isImportant)
             let defaultContent = customContent.filter { !$0.isImportant }
@@ -405,7 +411,7 @@ extension FenceResponse {
             payload["customContent"] = content
         }
 
-        // Geometry and extended fields only in full detail
+        // Geometry only in full detail
         if detail == .full {
             payload["frameX"] = element.frameX
             payload["frameY"] = element.frameY
@@ -413,7 +419,6 @@ extension FenceResponse {
             payload["frameHeight"] = element.frameHeight
             payload["activationPointX"] = element.activationPointX
             payload["activationPointY"] = element.activationPointY
-            if let hint = element.hint { payload["hint"] = hint }
         }
         return payload
     }
@@ -425,31 +430,41 @@ extension FenceResponse {
         return entry
     }
 
-    private func elementNodeDictionary(_ node: ElementNode) -> [String: Any] {
+    private func elementNodeDictionary(
+        _ node: ElementNode,
+        elements: [HeistElement],
+        detail: InterfaceDetail
+    ) -> [String: Any] {
         switch node {
         case .element(let order):
-            return ["element": ["order": order]]
+            guard elements.indices.contains(order) else {
+                return ["element": ["order": order]]
+            }
+            var payload = elementDictionary(elements[order], detail: detail)
+            payload["order"] = order
+            return ["element": payload]
         case .container(let group, let children):
-            return [
-                "container": [
-                    "_0": groupDictionary(group),
-                    "children": children.map(elementNodeDictionary)
-                ]
-            ]
+            var payload = groupDictionary(group, detail: detail)
+            payload["children"] = children.map {
+                elementNodeDictionary($0, elements: elements, detail: detail)
+            }
+            return ["container": payload]
         }
     }
 
-    private func groupDictionary(_ group: Group) -> [String: Any] {
+    private func groupDictionary(_ group: Group, detail: InterfaceDetail) -> [String: Any] {
         var payload: [String: Any] = [
-            "type": group.type.rawValue,
-            "frameX": group.frameX,
-            "frameY": group.frameY,
-            "frameWidth": group.frameWidth,
-            "frameHeight": group.frameHeight
+            "type": group.type.rawValue
         ]
         if let label = group.label { payload["label"] = label }
         if let value = group.value { payload["value"] = value }
         if let identifier = group.identifier { payload["identifier"] = identifier }
+        if detail == .full {
+            payload["frameX"] = group.frameX
+            payload["frameY"] = group.frameY
+            payload["frameWidth"] = group.frameWidth
+            payload["frameHeight"] = group.frameHeight
+        }
         return payload
     }
 

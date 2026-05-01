@@ -175,6 +175,203 @@ final class TheFenceTests: XCTestCase {
         XCTAssertEqual(json?["height"] as? Double, 844)
     }
 
+    func testFullInterfaceJSONNestsElementsInContainers() {
+        let title = HeistElement(
+            heistId: "settings_title",
+            description: "Settings",
+            label: "Settings",
+            value: nil,
+            identifier: nil,
+            traits: [.header],
+            frameX: 0,
+            frameY: 0,
+            frameWidth: 390,
+            frameHeight: 44,
+            actions: []
+        )
+        let wifi = HeistElement(
+            heistId: "wifi_toggle",
+            description: "Wi-Fi",
+            label: "Wi-Fi",
+            value: "On",
+            identifier: nil,
+            hint: "Double tap to toggle",
+            traits: [.button],
+            frameX: 0,
+            frameY: 44,
+            frameWidth: 390,
+            frameHeight: 44,
+            actions: [.activate]
+        )
+        let group = Group(
+            type: .list,
+            label: "Settings list",
+            value: nil,
+            identifier: nil,
+            frameX: 0,
+            frameY: 44,
+            frameWidth: 390,
+            frameHeight: 600
+        )
+        let interface = Interface(
+            timestamp: Date(),
+            elements: [title, wifi],
+            tree: [
+                .element(order: 0),
+                .container(group, children: [.element(order: 1)]),
+            ]
+        )
+
+        let response = FenceResponse.interface(interface, detail: .full)
+        let json = response.jsonDict()!
+        let interfaceDict = json["interface"] as! [String: Any]
+        let tree = interfaceDict["tree"] as! [[String: Any]]
+        XCTAssertNil(interfaceDict["elements"])
+
+        let titleElement = tree[0]["element"] as! [String: Any]
+        XCTAssertEqual(titleElement["order"] as? Int, 0)
+        XCTAssertEqual(titleElement["heistId"] as? String, "settings_title")
+
+        let container = tree[1]["container"] as! [String: Any]
+        XCTAssertEqual(container["type"] as? String, "list")
+        XCTAssertEqual(container["frameY"] as? Double, 44)
+        XCTAssertNil(container["_0"])
+
+        let children = container["children"] as! [[String: Any]]
+        let nestedElement = children[0]["element"] as! [String: Any]
+        XCTAssertEqual(nestedElement["order"] as? Int, 1)
+        XCTAssertEqual(nestedElement["heistId"] as? String, "wifi_toggle")
+        XCTAssertEqual(nestedElement["hint"] as? String, "Double tap to toggle")
+        XCTAssertEqual(nestedElement["frameY"] as? Double, 44)
+    }
+
+    func testSummaryInterfaceJSONKeepsSemanticsAndOmitsGeometry() {
+        let element = HeistElement(
+            heistId: "wifi_toggle",
+            description: "Wi-Fi",
+            label: "Wi-Fi",
+            value: "On",
+            identifier: "wifi",
+            hint: "Double tap to toggle",
+            traits: [.button],
+            frameX: 0,
+            frameY: 44,
+            frameWidth: 390,
+            frameHeight: 44,
+            actions: [.activate]
+        )
+        let group = Group(
+            type: .scrollable,
+            label: nil,
+            value: "390x1200",
+            identifier: nil,
+            frameX: 0,
+            frameY: 44,
+            frameWidth: 390,
+            frameHeight: 600
+        )
+        let interface = Interface(
+            timestamp: Date(),
+            elements: [element],
+            tree: [.container(group, children: [.element(order: 0)])]
+        )
+
+        let response = FenceResponse.interface(interface, detail: .summary)
+        let json = response.jsonDict()!
+        let interfaceDict = json["interface"] as! [String: Any]
+        XCTAssertNil(interfaceDict["elements"])
+
+        let tree = interfaceDict["tree"] as! [[String: Any]]
+        let container = tree[0]["container"] as! [String: Any]
+        XCTAssertEqual(container["type"] as? String, "scrollable")
+        XCTAssertEqual(container["value"] as? String, "390x1200")
+        XCTAssertNil(container["frameY"])
+
+        let children = container["children"] as! [[String: Any]]
+        let nestedElement = children[0]["element"] as! [String: Any]
+        XCTAssertEqual(nestedElement["heistId"] as? String, "wifi_toggle")
+        XCTAssertEqual(nestedElement["identifier"] as? String, "wifi")
+        XCTAssertEqual(nestedElement["hint"] as? String, "Double tap to toggle")
+        XCTAssertNil(nestedElement["frameY"])
+        XCTAssertNil(nestedElement["activationPointY"])
+    }
+
+    func testCompactInterfaceUsesTreeAndSemanticFields() {
+        let element = HeistElement(
+            heistId: "wifi_toggle",
+            description: "Wi-Fi",
+            label: "Wi-Fi",
+            value: "On",
+            identifier: "wifi",
+            hint: "Double tap to toggle",
+            traits: [.button],
+            frameX: 0,
+            frameY: 44,
+            frameWidth: 390,
+            frameHeight: 44,
+            actions: [.activate]
+        )
+        let group = Group(
+            type: .scrollable,
+            label: nil,
+            value: "390x1200",
+            identifier: nil,
+            frameX: 0,
+            frameY: 44,
+            frameWidth: 390,
+            frameHeight: 600
+        )
+        let interface = Interface(
+            timestamp: Date(),
+            elements: [element],
+            tree: [.container(group, children: [.element(order: 0)])]
+        )
+
+        let text = FenceResponse.interface(interface, detail: .summary).compactFormatted()
+        XCTAssertTrue(text.contains("<scrollable = \"390x1200\">"))
+        XCTAssertTrue(text.contains("  [0] wifi_toggle id=\"wifi\" \"Wi-Fi\" = \"On\" [button] hint=\"Double tap to toggle\""))
+        XCTAssertFalse(text.contains("frame"))
+    }
+
+    func testFullCompactInterfaceIncludesGeometry() {
+        let element = HeistElement(
+            heistId: "wifi_toggle",
+            description: "Wi-Fi",
+            label: "Wi-Fi",
+            value: "On",
+            identifier: "wifi",
+            hint: "Double tap to toggle",
+            traits: [.button],
+            frameX: 0,
+            frameY: 44,
+            frameWidth: 390,
+            frameHeight: 44,
+            activationPointX: 195,
+            activationPointY: 66,
+            actions: [.activate]
+        )
+        let group = Group(
+            type: .scrollable,
+            label: nil,
+            value: "390x1200",
+            identifier: nil,
+            frameX: 0,
+            frameY: 44,
+            frameWidth: 390,
+            frameHeight: 600
+        )
+        let interface = Interface(
+            timestamp: Date(),
+            elements: [element],
+            tree: [.container(group, children: [.element(order: 0)])]
+        )
+
+        let text = FenceResponse.interface(interface, detail: .full).compactFormatted()
+        XCTAssertTrue(text.contains("<scrollable = \"390x1200\" frame=(0,44,390,600)>"))
+        XCTAssertTrue(text.contains("frame=(0,44,390,44)"))
+        XCTAssertTrue(text.contains("activation=(195,66)"))
+    }
+
     // MARK: - FenceResponse: Action with Expectation (Human Formatting)
 
     func testActionWithExpectationMetFormatting() {
