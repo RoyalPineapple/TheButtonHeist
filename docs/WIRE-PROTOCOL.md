@@ -670,14 +670,15 @@ Sent in response to a `status` probe. This response is valid before authenticati
 
 ### interface
 
-UI element interface. Contains a flat element list and an optional tree structure.
+UI element interface. Public JSON output uses a tree structure. Summary detail includes the semantic accessibility surface; full detail adds geometry.
 
 ```json
 {"protocolVersion":"7.0","type":"interface","payload":{
   "screenDescription":"Welcome — 1 button",
   "timestamp":"2026-02-03T10:30:45.123Z",
-  "elements":[
-    {
+  "tree":[
+    {"element":{
+      "order":0,
       "heistId":"staticText_welcome",
       "label":"Welcome",
       "traits":["staticText"],
@@ -687,32 +688,33 @@ UI element interface. Contains a flat element list and an optional tree structur
       "frameHeight":24.0,
       "activationPointX":196.5,
       "activationPointY":112.0
-    },
-    {
-      "heistId":"button_sign_in",
-      "label":"Sign In",
-      "identifier":"signInButton",
-      "traits":["button"],
-      "frameX":16.0,
-      "frameY":140.0,
-      "frameWidth":361.0,
-      "frameHeight":44.0,
-      "activationPointX":196.5,
-      "activationPointY":162.0
-    }
-  ],
-  "tree":[
-    {"element":{"order":0}},
+    }},
     {"container":{
-      "_0":{"type":"semanticGroup","label":"Form","value":null,"identifier":null,
-       "frameX":0.0,"frameY":88.0,"frameWidth":393.0,"frameHeight":600.0},
-      "children":[{"element":{"order":1}}]
+      "type":"semanticGroup",
+      "label":"Form",
+      "frameX":0.0,
+      "frameY":88.0,
+      "frameWidth":393.0,
+      "frameHeight":600.0,
+      "children":[{"element":{
+        "order":1,
+        "heistId":"button_sign_in",
+        "label":"Sign In",
+        "identifier":"signInButton",
+        "traits":["button"],
+        "frameX":16.0,
+        "frameY":140.0,
+        "frameWidth":361.0,
+        "frameHeight":44.0,
+        "activationPointX":196.5,
+        "activationPointY":162.0
+      }}]
     }}
   ]
 }}
 ```
 
-The `tree` field is optional. When present, it provides the hierarchical container structure that the flat `elements` list does not capture.
+Public interface output always includes `tree`. If no container hierarchy is available, the tree falls back to element leaves.
 
 ### actionResult
 
@@ -968,8 +970,7 @@ Use `get_interface --full` when the screen has deep scrollable content and you n
 |-------|------|-------------|
 | `screenDescription` | `String` | Deterministic one-line screen summary (e.g. `"Sign In — 1 text field, 1 password field, 3 buttons"`) |
 | `timestamp` | `ISO8601 Date` | When interface was captured |
-| `elements` | `[HeistElement]` | Flat list of all UI elements |
-| `tree` | `[ElementNode]?` | Optional tree structure with containers |
+| `tree` | `[ElementNode]` | Tree structure with containers and nested elements |
 
 ### HeistElement
 
@@ -979,7 +980,7 @@ Use `get_interface --full` when the screen has deep scrollable content and you n
 | `label` | `String?` | Label |
 | `value` | `String?` | Current value (for controls) |
 | `identifier` | `String?` | Identifier |
-| `hint` | `String?` | Accessibility hint (full detail only) |
+| `hint` | `String?` | Accessibility hint |
 | `traits` | `[String]` | Trait names (e.g., `"button"`, `"adjustable"`, `"staticText"`, `"backButton"`) |
 | `frameX` | `Double` | Frame origin X in points (full detail only) |
 | `frameY` | `Double` | Frame origin Y in points (full detail only) |
@@ -987,15 +988,15 @@ Use `get_interface --full` when the screen has deep scrollable content and you n
 | `frameHeight` | `Double` | Frame height in points (full detail only) |
 | `activationPointX` | `Double` | Activation point X (full detail only) |
 | `activationPointY` | `Double` | Activation point Y (full detail only) |
-| `customContent` | `[HeistCustomContent]?` | Custom accessibility content (full detail only) |
+| `customContent` | `[HeistCustomContent]?` | Custom accessibility content |
 | `actions` | `[ElementAction]?` | Non-obvious actions only. Omitted when all actions are implied by traits (`activate` for buttons, `increment`/`decrement` for adjustable). Custom actions always included. |
 
 ### ElementNode
 
-Recursive enum representing the tree structure. The current synthesized JSON encoding is:
+Recursive structure representing the grouped interface hierarchy:
 
-- `{"element":{"order":Int}}` - Leaf node referencing an element by its index in the flat `elements` array
-- `{"container":{"_0":Group,"children":[ElementNode]}}` - Container node with metadata and children
+- `{"element":{...HeistElement,"order":Int}}` - Leaf node with an expanded element payload and a stable order for display/cross-reference.
+- `{"container":{...Group,"children":[ElementNode]}}` - Container node with metadata and nested child nodes.
 
 ### Group
 
@@ -1444,8 +1445,8 @@ A single recorded interaction event captured during a Stakeout recording.
 # Client requests interface
 {"protocolVersion":"7.0","type":"requestInterface"}
 
-# Server responds with interface (flat + tree)
-{"protocolVersion":"7.0","type":"interface","payload":{"timestamp":"2026-02-03T14:08:14.123Z","elements":[...],"tree":[...]}}
+# Server responds with interface tree
+{"protocolVersion":"7.0","type":"interface","payload":{"timestamp":"2026-02-03T14:08:14.123Z","tree":[...]}}
 
 # Client requests screen capture
 {"protocolVersion":"7.0","type":"requestScreen"}

@@ -185,7 +185,7 @@ enum ToolDefinitions {
                 "detail": [
                     "type": "string",
                     "enum": .array(["summary", "full"].map { .string($0) }),
-                    "description": "Level of detail: summary (default, no geometry) or full (includes frame, activation point, hints)",
+                    "description": "Level of detail: summary (default, no geometry) or full (includes frame and activation point)",
                 ],
                 "full": [
                     "type": "boolean",

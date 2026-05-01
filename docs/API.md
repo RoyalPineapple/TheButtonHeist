@@ -1102,8 +1102,8 @@ Container for UI element interface data.
 #### Properties
 
 - `timestamp: Date` - When the hierarchy was captured
-- `elements: [HeistElement]` - Flat list of UI elements
-- `tree: [ElementNode]?` - Optional tree structure with containers
+- `elements: [HeistElement]` - Internal flat list of UI elements used for targeting and deltas
+- `tree: [ElementNode]?` - Optional grouped structure with containers; public JSON output always presents an interface tree and falls back to element leaves when no container tree is available
 - `screenDescription: String` - Deterministic one-line screen summary (e.g. `"Sign In — 1 text field, 1 password field, 3 buttons"`)
 - `screenId: String?` - Slugified screen name for machine use (e.g. `"controls_demo"`), derived from the first header element's label
 
@@ -1113,7 +1113,7 @@ Container for UI element interface data.
 public indirect enum ElementNode: Codable, Equatable, Sendable
 ```
 
-Recursive tree structure for UI element snapshot.
+Recursive tree structure for UI element snapshot. In public JSON output, element leaves are expanded to an element payload with an added `order` field for cross-reference.
 
 #### Cases
 

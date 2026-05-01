@@ -6,7 +6,7 @@ extension FenceResponse {
 
     // MARK: - Compact Text Format
 
-    /// Token-efficient output for LLM agents. One line per element, no geometry.
+    /// Token-efficient tree output for LLM agents. Omits geometry.
     public func compactFormatted() -> String {
         switch self {
         case .ok(let message):
@@ -22,13 +22,11 @@ extension FenceResponse {
             if devices.isEmpty { return "no devices" }
             return devices.map { "\($0.appName) (\($0.deviceName)) [\($0.connectionType.rawValue)]" }
                 .joined(separator: "\n")
-        case .interface(let interface, _, let filteredFrom, _):
+        case .interface(let interface, let detail, let filteredFrom, _):
             var header = "\(interface.elements.count) elements"
             if let filteredFrom { header += " (filtered from \(filteredFrom))" }
             var lines: [String] = [interface.screenDescription, header]
-            for (i, element) in interface.elements.enumerated() {
-                lines.append(Self.compactElementLine(element, displayIndex: i))
-            }
+            lines.append(contentsOf: Self.compactTreeLines(interface, detail: detail))
             return lines.joined(separator: "\n")
         case .action(let result, let expectation):
             return compactActionResult(result, expectation: expectation)
@@ -184,13 +182,19 @@ extension FenceResponse {
         return text
     }
 
-    /// Compact one-line-per-element format for LLM agents.
-    /// Geometry is omitted by default — agents can request it via `get_interface --detail full`.
-    public static func compactElementLine(_ element: HeistElement, displayIndex: Int? = nil) -> String {
+    /// Compact one-line element format for LLM agents. Geometry is omitted.
+    public static func compactElementLine(
+        _ element: HeistElement,
+        displayIndex: Int? = nil,
+        detail: InterfaceDetail = .summary
+    ) -> String {
         var parts: [String] = []
         if let displayIndex { parts.append("[\(displayIndex)]") }
         parts.append(element.heistId)
 
+        if let identifier = element.identifier, !identifier.isEmpty {
+            parts.append("id=\"\(identifier)\"")
+        }
         if let label = element.label {
             parts.append("\"\(label)\"")
         }
@@ -207,16 +211,83 @@ extension FenceResponse {
         if !actions.isEmpty {
             parts.append("{\(actions.map(\.description).joined(separator: ", "))}")
         }
+        if let hint = element.hint, !hint.isEmpty {
+            parts.append("hint=\"\(hint)\"")
+        }
+        if let customContent = element.customContent {
+            let content = customContent.compactMap { item -> String? in
+                switch (item.label.isEmpty, item.value.isEmpty) {
+                case (false, false): return "\(item.label): \(item.value)"
+                case (false, true): return item.label
+                case (true, false): return item.value
+                case (true, true): return nil
+                }
+            }
+            if !content.isEmpty {
+                parts.append("content=\"\(content.joined(separator: "; "))\"")
+            }
+        }
+        if detail == .full {
+            parts.append("frame=(\(Int(element.frameX)),\(Int(element.frameY)),\(Int(element.frameWidth)),\(Int(element.frameHeight)))")
+            parts.append("activation=(\(Int(element.activationPointX)),\(Int(element.activationPointY)))")
+        }
 
         return parts.joined(separator: " ")
     }
 
     public static func compactInterface(_ interface: Interface) -> String {
         var lines: [String] = ["\(interface.elements.count) elements"]
-        for (i, element) in interface.elements.enumerated() {
-            lines.append(compactElementLine(element, displayIndex: i))
-        }
+        lines.append(contentsOf: compactTreeLines(interface, detail: .summary))
         return lines.joined(separator: "\n")
+    }
+
+    private static func compactTreeLines(
+        _ interface: Interface,
+        detail: InterfaceDetail
+    ) -> [String] {
+        let tree = interface.tree ?? interface.elements.indices.map { ElementNode.element(order: $0) }
+        return tree.flatMap {
+            compactTreeLines($0, elements: interface.elements, detail: detail, depth: 0)
+        }
+    }
+
+    private static func compactTreeLines(
+        _ node: ElementNode,
+        elements: [HeistElement],
+        detail: InterfaceDetail,
+        depth: Int
+    ) -> [String] {
+        let indent = String(repeating: "  ", count: depth)
+        switch node {
+        case .element(let order):
+            guard elements.indices.contains(order) else {
+                return ["\(indent)[\(order)] <missing element>"]
+            }
+            return ["\(indent)\(compactElementLine(elements[order], displayIndex: order, detail: detail))"]
+        case .container(let group, let children):
+            let header = "\(indent)<\(compactGroupLine(group, detail: detail))>"
+            let childLines = children.flatMap {
+                compactTreeLines($0, elements: elements, detail: detail, depth: depth + 1)
+            }
+            return [header] + childLines
+        }
+    }
+
+    private static func compactGroupLine(_ group: Group, detail: InterfaceDetail) -> String {
+        var parts = [group.type.rawValue]
+        if let identifier = group.identifier, !identifier.isEmpty {
+            parts.append("id=\"\(identifier)\"")
+        }
+        if let label = group.label, !label.isEmpty {
+            parts.append("\"\(label)\"")
+        }
+        if let value = group.value, !value.isEmpty {
+            parts.append("= \"\(value)\"")
+        }
+        if detail == .full {
+            parts.append("frame=(\(Int(group.frameX)),\(Int(group.frameY)),\(Int(group.frameWidth)),\(Int(group.frameHeight)))")
+        }
+        return parts.joined(separator: " ")
     }
 
     public static func compactDelta(_ delta: InterfaceDelta, method: String) -> String {

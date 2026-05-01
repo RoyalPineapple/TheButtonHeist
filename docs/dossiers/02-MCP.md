@@ -95,9 +95,9 @@ graph TD
 ## Key Tool Schemas
 
 ### `get_interface`
-- `detail`: `"summary"` (default — no geometry) or `"full"` (adds frame, activation point, hints)
+- `detail`: `"summary"` (default — no geometry) or `"full"` (adds frame and activation point)
 - `full`: `true` to explore the full screen including off-screen content in scroll views (returns all elements, restores scroll positions)
-- `elements`: optional `[String]` — heistIds to filter; omit for full tree
+- `elements`: optional `[String]` — heistIds to filter; omit for full interface tree
 - `readOnlyHint: true`, `idempotentHint: true`
 
 ### Shared `expect` property

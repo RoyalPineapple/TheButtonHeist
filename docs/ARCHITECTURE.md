@@ -49,7 +49,7 @@ graph TB
 - `HeistElement` - Flat UI element representation (heistId, label, value, traits, frame, custom content)
 - `ElementNode` - Recursive tree structure with containers
 - `Group` - Container metadata (type, label, frame)
-- `Interface` - Container for UI element interface data (flat list + optional tree + deterministic screenDescription)
+- `Interface` - Container for UI element interface data (internal flat list + public tree + deterministic screenDescription)
 - `ServerInfo` - Device and app metadata (incl. instanceId, listeningPort, simulatorUDID, vendorIdentifier)
 - `ActionResult` - Action outcome with method, optional message, interface delta, animation state, and optional `ScrollSearchResult`
 - `ActionTarget` - Two-strategy element resolution: `heistId` (stable token) or `match: ElementMatcher` (accessibility predicate)
