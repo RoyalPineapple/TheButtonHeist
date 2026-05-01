@@ -186,7 +186,8 @@ final class TheStash {
     @discardableResult
     func jumpToRecordedPosition(_ screenElement: ScreenElement, animated: Bool = true) -> CGPoint? {
         guard let origin = screenElement.contentSpaceOrigin,
-              let scrollView = screenElement.scrollView else { return nil }
+              let scrollView = screenElement.scrollView,
+              !scrollView.bhIsUnsafeForProgrammaticScrolling else { return nil }
         let savedOffset = scrollView.contentOffset
         let targetOffset = Self.scrollTargetOffset(for: origin, in: scrollView)
         scrollView.setContentOffset(targetOffset, animated: animated)
@@ -196,7 +197,9 @@ final class TheStash {
     /// Restore the element's owning scroll view to a previously saved offset.
     /// No-op if the scroll view has deallocated.
     func restoreScrollPosition(_ screenElement: ScreenElement, to offset: CGPoint, animated: Bool = true) {
-        screenElement.scrollView?.setContentOffset(offset, animated: animated)
+        guard let scrollView = screenElement.scrollView,
+              !scrollView.bhIsUnsafeForProgrammaticScrolling else { return }
+        scrollView.setContentOffset(offset, animated: animated)
     }
 
     /// Clamped, centered content offset for a point in scroll-view content space.

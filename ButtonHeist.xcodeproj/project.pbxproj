@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		00AD4580D4093B2C32B02A43 /* ScrollToVisibleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BE246859FDEDCD3B4C5F5E9 /* ScrollToVisibleTests.swift */; };
+		01E5A7DE5814E052E6EC4931 /* UIScrollView+ProgrammaticScrollSafety.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC6F10CA5EECFBD0A011F553 /* UIScrollView+ProgrammaticScrollSafety.swift */; };
 		0249446E4E09A71EB77AC228 /* AccessibilityHierarchyReconciliationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A23BFDA702935F9635FDA847 /* AccessibilityHierarchyReconciliationTests.swift */; };
 		036A97225C8E6C36CC730DA1 /* TheInsideJobStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8704DBF79498D0AAA0EDF20B /* TheInsideJobStateTests.swift */; };
 		0396556B127BB166C42DB438 /* BH Demo.app in Dependencies */ = {isa = PBXBuildFile; fileRef = 5598A55C05BC6726CABD5670 /* BH Demo.app */; };
@@ -482,6 +483,7 @@
 		EA4B53673ED9D9F18B586A92 /* TheBrains+Actions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheBrains+Actions.swift"; sourceTree = "<group>"; };
 		EB3D029B36F545CDF36A7BE5 /* ScreenManifestTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenManifestTests.swift; sourceTree = "<group>"; };
 		EC23F750B22956636D1DB832 /* ScreenMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenMetrics.swift; sourceTree = "<group>"; };
+		EC6F10CA5EECFBD0A011F553 /* UIScrollView+ProgrammaticScrollSafety.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIScrollView+ProgrammaticScrollSafety.swift"; sourceTree = "<group>"; };
 		F16F859F1B9863B934C03E3E /* Error+Message.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Error+Message.swift"; sourceTree = "<group>"; };
 		F460BE795E61168CDF5604F4 /* Dictionary+ArgParsing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Dictionary+ArgParsing.swift"; sourceTree = "<group>"; };
 		F54C2E9613470A1A13B64A26 /* ElementRegistryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElementRegistryTests.swift; sourceTree = "<group>"; };
@@ -744,6 +746,7 @@
 			children = (
 				DBB214DE813D7B7AAC1D5FCA /* CancellableSleep.swift */,
 				EC23F750B22956636D1DB832 /* ScreenMetrics.swift */,
+				EC6F10CA5EECFBD0A011F553 /* UIScrollView+ProgrammaticScrollSafety.swift */,
 			);
 			path = Support;
 			sourceTree = "<group>";
@@ -1267,6 +1270,7 @@
 				4FF292A4BA81E7F718F6D08A /* TheMuscle.swift in Sources */,
 				40888A351E80D3B4B46A1003 /* CancellableSleep.swift in Sources */,
 				37B4B9C76D5CDA76A5FE69C1 /* ScreenMetrics.swift in Sources */,
+				01E5A7DE5814E052E6EC4931 /* UIScrollView+ProgrammaticScrollSafety.swift in Sources */,
 				A0731112EA94ECABFB012AEB /* ActionResultBuilder.swift in Sources */,
 				D218666409EE198744A8DA19 /* TheBrains+Actions.swift in Sources */,
 				D1FFB551FE1CABDBBD72694A /* TheBrains+Dispatch.swift in Sources */,

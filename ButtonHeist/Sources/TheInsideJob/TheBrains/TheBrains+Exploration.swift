@@ -86,7 +86,10 @@ extension TheBrains {
                     continue
                 }
 
-                let scrollTarget = scrollableTarget(for: container, contentSize: contentSize)
+                guard let scrollTarget = scrollableTarget(for: container, contentSize: contentSize) else {
+                    manifest.markExplored(container)
+                    continue
+                }
                 let found = await exploreContainer(
                     container: container, scrollTarget: scrollTarget,
                     hasHOverflow: hasHOverflow, hasVOverflow: hasVOverflow,
