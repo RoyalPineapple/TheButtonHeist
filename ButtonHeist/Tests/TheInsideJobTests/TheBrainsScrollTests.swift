@@ -1,5 +1,6 @@
 #if canImport(UIKit)
 import XCTest
+import UIKit
 @testable import AccessibilitySnapshotParser
 @testable import TheInsideJob
 @testable import TheScore
@@ -17,6 +18,70 @@ final class TheBrainsScrollTests: XCTestCase {
     override func tearDown() async throws {
         brains = nil
         try await super.tearDown()
+    }
+
+    // MARK: - Programmatic Scroll Safety
+
+    func testExploreScreenSkipsUIPageViewControllerQueuingScrollView() async throws {
+        let windowScene = try requireForegroundWindowScene()
+        let pageViewController = UIPageViewController(
+            transitionStyle: .scroll,
+            navigationOrientation: .horizontal
+        )
+        let pages = [
+            PageContentViewController(label: "Page One Visible Label"),
+            PageContentViewController(label: "Page Two Hidden Label"),
+            PageContentViewController(label: "Page Three Hidden Label"),
+        ]
+        let dataSource = PageDataSource(pages: pages)
+        pageViewController.dataSource = dataSource
+        pageViewController.setViewControllers([pages[0]], direction: .forward, animated: false)
+        pageViewController.view.accessibilityViewIsModal = true
+
+        let window = UIWindow(windowScene: windowScene)
+        window.windowLevel = .alert + 20
+        window.rootViewController = pageViewController
+        window.frame = UIScreen.main.bounds
+        window.isHidden = false
+
+        defer {
+            window.isHidden = true
+            pageViewController.view.accessibilityViewIsModal = false
+        }
+
+        window.layoutIfNeeded()
+        await brains.tripwire.yieldFrames(3)
+
+        guard brains.refresh() != nil else {
+            throw XCTSkip("No live hierarchy available for UIPageViewController regression test")
+        }
+
+        let unsafeContainers = brains.stash.scrollableContainerViews.compactMap { entry -> AccessibilityContainer? in
+            let (container, view) = entry
+            guard let scrollView = view as? UIScrollView,
+                  scrollView.bhIsUnsafeForProgrammaticScrolling else {
+                return nil
+            }
+            return container
+        }
+        guard !unsafeContainers.isEmpty else {
+            throw XCTSkip("UIPageViewController did not expose _UIQueuingScrollView on this OS")
+        }
+
+        let manifest = await brains.exploreScreen()
+
+        for container in unsafeContainers {
+            XCTAssertTrue(
+                manifest.exploredContainers.contains(container),
+                "Unsafe page-view scroll containers should be marked explored without programmatic scrolling"
+            )
+        }
+        XCTAssertTrue(
+            brains.stash.registry.elements.values.contains {
+                $0.element.label == "Page One Visible Label"
+            },
+            "Visible page content should remain discoverable without scrolling the queuing scroll view"
+        )
     }
 
     // MARK: - scrollTargetOffset (Pure Math)
@@ -617,6 +682,71 @@ final class TheBrainsScrollTests: XCTestCase {
             accessibilityLanguage: nil,
             respondsToUserInteraction: false
         )
+    }
+
+    private func requireForegroundWindowScene() throws -> UIWindowScene {
+        guard let scene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
+        else {
+            throw XCTSkip("No foreground-active UIWindowScene available in test host")
+        }
+        return scene
+    }
+
+    private final class PageDataSource: NSObject, UIPageViewControllerDataSource {
+        let pages: [UIViewController]
+
+        init(pages: [UIViewController]) {
+            self.pages = pages
+        }
+
+        func pageViewController(
+            _ pageViewController: UIPageViewController,
+            viewControllerBefore viewController: UIViewController
+        ) -> UIViewController? {
+            guard let index = pages.firstIndex(of: viewController),
+                  index > 0 else {
+                return nil
+            }
+            return pages[index - 1]
+        }
+
+        func pageViewController(
+            _ pageViewController: UIPageViewController,
+            viewControllerAfter viewController: UIViewController
+        ) -> UIViewController? {
+            guard let index = pages.firstIndex(of: viewController),
+                  index < pages.count - 1 else {
+                return nil
+            }
+            return pages[index + 1]
+        }
+    }
+
+    private final class PageContentViewController: UIViewController {
+        private let pageLabel: String
+
+        init(label: String) {
+            self.pageLabel = label
+            super.init(nibName: nil, bundle: nil)
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        override func viewDidLoad() {
+            super.viewDidLoad()
+            view.backgroundColor = .white
+
+            let label = UILabel()
+            label.text = pageLabel
+            label.accessibilityLabel = pageLabel
+            label.isAccessibilityElement = true
+            label.frame = CGRect(x: 40, y: 120, width: 280, height: 44)
+            view.addSubview(label)
+        }
     }
 }
 

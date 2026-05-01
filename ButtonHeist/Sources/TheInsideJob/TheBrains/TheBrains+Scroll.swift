@@ -537,7 +537,9 @@ extension TheBrains {
                    Self.isObscuredByPresentation(view: view) {
                     return nil
                 }
-                let target = self.scrollableTarget(for: container, contentSize: contentSize)
+                guard let target = self.scrollableTarget(for: container, contentSize: contentSize) else {
+                    return nil
+                }
                 if let axis, !Self.scrollableAxis(of: target).contains(axis) { return nil }
                 return (target, container)
             }
@@ -549,8 +551,11 @@ extension TheBrains {
     func scrollableTarget(
         for container: AccessibilityContainer,
         contentSize: CGSize
-    ) -> ScrollableTarget {
+    ) -> ScrollableTarget? {
         if let view = stash.scrollableContainerViews[container], view.window != nil {
+            if let scrollView = view as? UIScrollView, scrollView.bhIsUnsafeForProgrammaticScrolling {
+                return nil
+            }
             if let scrollView = view as? UIScrollView, !forceSwipeScrolling {
                 return .uiScrollView(scrollView)
             }
@@ -665,6 +670,8 @@ extension TheBrains {
         axis: ScrollAxis? = nil
     ) -> ScrollableTarget? {
         if let sv = screenElement.scrollView {
+            guard !sv.bhIsUnsafeForProgrammaticScrolling else { return nil }
+
             let target: ScrollableTarget
             if forceSwipeScrolling {
                 let screenFrame = safeSwipeFrame(from: sv.convert(sv.bounds, to: nil))

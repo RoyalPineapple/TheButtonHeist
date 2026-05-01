@@ -19,6 +19,8 @@ extension TheSafecracker {
         direction: UIAccessibilityScrollDirection,
         animated: Bool = true
     ) -> Bool {
+        guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return false }
+
         let overlap = Self.pageOverlap
         let size = scrollView.frame.size
         let offset = scrollView.contentOffset
@@ -64,6 +66,8 @@ extension TheSafecracker {
         animated: Bool = true,
         comfortMarginFraction: CGFloat = 0
     ) -> Bool {
+        guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return false }
+
         let targetInScrollView = scrollView.convert(targetFrame, from: nil)
 
         let inset = scrollView.adjustedContentInset
@@ -114,6 +118,8 @@ extension TheSafecracker {
 
     /// Scroll to an absolute edge.
     func scrollToEdge(_ scrollView: UIScrollView, edge: ScrollEdge, animated: Bool = true) -> Bool {
+        guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return false }
+
         let insets = scrollView.adjustedContentInset
         var newOffset = scrollView.contentOffset
 
@@ -140,6 +146,8 @@ extension TheSafecracker {
         _ scrollView: UIScrollView,
         from direction: ScrollSearchDirection
     ) {
+        guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return }
+
         let insets = scrollView.adjustedContentInset
 
         switch direction {

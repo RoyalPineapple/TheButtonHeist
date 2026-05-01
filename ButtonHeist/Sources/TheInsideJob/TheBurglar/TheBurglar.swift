@@ -245,7 +245,11 @@ final class TheBurglar {
             hierarchy.compactMap(
                 context: nil as UIScrollView?,
                 container: { parentScrollView, accessibilityContainer in
-                    (scrollableContainerViews[accessibilityContainer] as? UIScrollView) ?? parentScrollView
+                    guard let scrollView = scrollableContainerViews[accessibilityContainer] as? UIScrollView,
+                          !scrollView.bhIsUnsafeForProgrammaticScrolling else {
+                        return parentScrollView
+                    }
+                    return scrollView
                 },
                 element: { element, _, scrollView in
                     let origin: CGPoint? = scrollView.flatMap { scrollView in
