@@ -76,6 +76,56 @@ final class TheBurglarParseTests: XCTestCase {
         XCTAssertTrue(values.contains("windowLevel: \(levelB.rawValue)"))
     }
 
+    func testParseIncludesPopoverContentSiblingAfterDismissRegion() throws {
+        let windowScene = try requireForegroundWindowScene()
+
+        let viewController = UIViewController()
+        viewController.view.backgroundColor = .white
+
+        let backgroundLabel = UILabel(frame: CGRect(x: 20, y: 20, width: 260, height: 44))
+        backgroundLabel.text = "Background Should Not Appear"
+        backgroundLabel.isAccessibilityElement = true
+        viewController.view.addSubview(backgroundLabel)
+
+        let dismissRegion = UIView(frame: viewController.view.bounds.insetBy(dx: -1000, dy: -1000))
+        dismissRegion.accessibilityViewIsModal = true
+        dismissRegion.isAccessibilityElement = false
+        dismissRegion.accessibilityIdentifier = "PopoverDismissRegion"
+        viewController.view.addSubview(dismissRegion)
+
+        let popoverButton = UIButton(type: .system)
+        popoverButton.setTitle("Popover Action", for: .normal)
+        popoverButton.frame = CGRect(x: 80, y: 120, width: 180, height: 44)
+        viewController.view.addSubview(popoverButton)
+
+        let window = UIWindow(windowScene: windowScene)
+        window.windowLevel = .alert + 20
+        window.rootViewController = viewController
+        window.frame = UIScreen.main.bounds
+        window.isHidden = false
+
+        defer {
+            window.isHidden = true
+        }
+
+        window.layoutIfNeeded()
+
+        guard let result = stash.parse() else {
+            XCTFail("Expected parse result for popover-style modal window")
+            return
+        }
+
+        let labels = result.elements.compactMap(\.label)
+        XCTAssertTrue(
+            labels.contains("Popover Action"),
+            "Popover content presented as a sibling after the dismiss region should be parsed"
+        )
+        XCTAssertFalse(
+            labels.contains("Background Should Not Appear"),
+            "Background siblings before the modal dismiss region should remain excluded"
+        )
+    }
+
     private func makeWindow(windowScene: UIWindowScene, level: UIWindow.Level) -> UIWindow {
         let vc = UIViewController()
         vc.view.backgroundColor = .white
