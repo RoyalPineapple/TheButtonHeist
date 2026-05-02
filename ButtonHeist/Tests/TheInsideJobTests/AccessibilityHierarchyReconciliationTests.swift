@@ -454,8 +454,6 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
         XCTAssertEqual(result.inserted.count, 1, "Only Row 3 is new")
     }
 
-    // MARK: - Degenerate Path Fingerprinting (regression: SPOS-App SIGTRAP)
-
     private func makePathElement(label: String, path: UIBezierPath) -> AccessibilityElement {
         AccessibilityElement(
             description: label,
