@@ -542,12 +542,13 @@ Recordings are saved to `demos/` with timestamped filenames. Default settings: `
 
 ## AccessibilitySnapshotBH Submodule
 
-The `AccessibilitySnapshotBH` submodule points at our fork (`RoyalPineapple/AccessibilitySnapshotBH`) on `main`. Upstream is `cashapp/AccessibilitySnapshot` (default branch: `main`). Our `main` is rebased on upstream `main` and carries four targeted commits:
+The `AccessibilitySnapshotBH` submodule points at our fork (`RoyalPineapple/AccessibilitySnapshotBH`) on `main`. Upstream is `cashapp/AccessibilitySnapshot` (default branch: `main`). Our `main` is rebased on upstream `main` and carries five targeted commits:
 
 1. `elementVisitor` closure on the hierarchy parser + xcodegen project support
 2. `Hashable` conformance on `AccessibilityElement`
 3. `traitNames` computed property and `fromNames` static method on UIAccessibilityTraits
 4. `containerVisitor` closure on the hierarchy parser + `.scrollable(contentSize:)` container type
+5. Popover modal sibling fix: traverse from the last modal subview onward (`subviews[lastModalIndex...]`) so popover content presented as a sibling after an empty dismiss region is not dropped
 
 **Rules for this submodule:**
 - Only touch files in the hierarchy parser (`Sources/AccessibilitySnapshot/Parser/`).
