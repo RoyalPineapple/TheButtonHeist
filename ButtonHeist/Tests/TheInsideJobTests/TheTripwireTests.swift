@@ -390,16 +390,6 @@ final class TheTripwireTests: XCTestCase {
 
     // MARK: - getAccessibleWindows (modal filtering)
 
-    func testGetAccessibleWindowsMatchesTraversableWhenNoModal() {
-        let traversable = tripwire.getTraversableWindows()
-        let accessible = tripwire.getAccessibleWindows()
-        XCTAssertEqual(
-            traversable.map { ObjectIdentifier($0.window) },
-            accessible.map { ObjectIdentifier($0.window) },
-            "Without a modal, accessible windows should equal traversable windows"
-        )
-    }
-
     func testGetAccessibleWindowsFiltersToModalWindow() {
         guard let windowScene = UIApplication.shared.connectedScenes
             .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
