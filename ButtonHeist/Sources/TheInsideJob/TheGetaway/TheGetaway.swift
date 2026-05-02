@@ -87,6 +87,14 @@ final class TheGetaway {
         }
 
         transport.onDataReceived = { [weak self] clientId, data, respond in
+            // Keepalives must be answered even when the main actor is wedged
+            // on a long parse/settle/explore. PingFastPath decodes and replies
+            // on the network queue; everything else takes the @MainActor hop.
+            if let pongData = PingFastPath.encodedPong(for: data) {
+                respond(pongData)
+                Task { @MainActor in self?.muscle.noteClientActivity(clientId) }
+                return
+            }
             Task { @MainActor in
                 await self?.handleClientMessage(clientId, data: data, respond: respond)
             }

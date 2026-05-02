@@ -53,6 +53,20 @@ final class TheBurglar {
             return nil
         }
 
+        // Parse runs on the main thread (UIKit accessibility SPI). Long parses
+        // here are the main culprit when the main actor stalls during a UIKit
+        // transition, so log durations to make the cost visible. Slow parses
+        // (>= 100ms) get info-level so they show up without enabling debug logs.
+        let parseStart = CFAbsoluteTimeGetCurrent()
+        defer {
+            let parseMs = Int((CFAbsoluteTimeGetCurrent() - parseStart) * 1000)
+            if parseMs >= 100 {
+                insideJobLogger.info("TheBurglar.parse(): \(parseMs)ms (\(windows.count) window(s))")
+            } else {
+                insideJobLogger.debug("TheBurglar.parse(): \(parseMs)ms (\(windows.count) window(s))")
+            }
+        }
+
         let revealedSearchBars = Self.revealHiddenSearchBars()
         defer { Self.restoreSearchBarHiding(revealedSearchBars) }
 

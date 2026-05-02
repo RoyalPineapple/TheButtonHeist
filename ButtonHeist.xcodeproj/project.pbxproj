@@ -62,6 +62,7 @@
 		45C3D85998AB61A6D3ECCDD8 /* TheSafecracker+IOHIDEventBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 321FA500B51174D203977116 /* TheSafecracker+IOHIDEventBuilder.swift */; };
 		461D067E90C5263C7A4CE830 /* TheSafecracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1308BFFECC16AF7E933839EB /* TheSafecracker.swift */; };
 		462DDE00FBBD9214256650F2 /* IdleMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D7445CF41642EDCE04E831F /* IdleMonitorTests.swift */; };
+		47404E80361396D5585D1421 /* PingFastPathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACA020DEAF0DB6FFA0BB3B27 /* PingFastPathTests.swift */; };
 		47556EEB40FCB7D5768C37A1 /* AccessibilityHierarchyFilterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52EB3108DFAB4DF60AB11A4C /* AccessibilityHierarchyFilterTests.swift */; };
 		475C23DE0FA87D9D78D1DB5A /* TheStash+Capture.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE34C2217F0FC3C805F20ED3 /* TheStash+Capture.swift */; };
 		4E025AADAFC3705425334617 /* Interactivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10D4AA78D802F6F18119E5F4 /* Interactivity.swift */; };
@@ -127,6 +128,7 @@
 		A2F13036F15FC1C1828257A0 /* TheHandoff.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49DC85F5FB0AB0E2A81C9B96 /* TheHandoff.swift */; };
 		A2F38991CC6DE0941A661DB3 /* Defaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D1E53484FFB4C5A65450ABE /* Defaults.swift */; };
 		A316C6ED9A0272428A388BEF /* swift-crypto_CryptoBoringWrapper.bundle in Resources */ = {isa = PBXBuildFile; fileRef = D99E915C8B258173B025852E /* swift-crypto_CryptoBoringWrapper.bundle */; };
+		A329FC0BCEC3647B2BFF1D51 /* PingFastPath.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEC77EDAB1D48630043C140D /* PingFastPath.swift */; };
 		A339D30D4BB6B82C2D3A9BA3 /* Exports.swift in Sources */ = {isa = PBXBuildFile; fileRef = 286300664EC22C2386C8F58E /* Exports.swift */; };
 		A3C01AF95DA5F2B88C93AD73 /* TripwireIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 802556A6984BBC74DD6AFE1D /* TripwireIntegrationTests.swift */; };
 		A5923A680CE4D3E5AE337D19 /* ActionExpectationValidationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B398A7FAB3ECAE8AD227D3C /* ActionExpectationValidationTests.swift */; };
@@ -434,6 +436,7 @@
 		A63CE2190936B721E21C76CE /* TheBrainsPipelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheBrainsPipelineTests.swift; sourceTree = "<group>"; };
 		A7E4CC1813061818AEFEECDC /* ScreenshotPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotPayloadTests.swift; sourceTree = "<group>"; };
 		A80FBE15B77A6320E4B9811F /* HeistTraitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistTraitTests.swift; sourceTree = "<group>"; };
+		ACA020DEAF0DB6FFA0BB3B27 /* PingFastPathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PingFastPathTests.swift; sourceTree = "<group>"; };
 		ACF6FCCFB96D20A5EBD41C48 /* TLSIdentityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TLSIdentityTests.swift; sourceTree = "<group>"; };
 		AE718BCA882D0B81118A3974 /* ActionExpectationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionExpectationTests.swift; sourceTree = "<group>"; };
 		AF447270F9C6204FF2DE6A4E /* TheBrains+Scroll.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheBrains+Scroll.swift"; sourceTree = "<group>"; };
@@ -484,6 +487,7 @@
 		EB3D029B36F545CDF36A7BE5 /* ScreenManifestTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenManifestTests.swift; sourceTree = "<group>"; };
 		EC23F750B22956636D1DB832 /* ScreenMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenMetrics.swift; sourceTree = "<group>"; };
 		EC6F10CA5EECFBD0A011F553 /* UIScrollView+ProgrammaticScrollSafety.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIScrollView+ProgrammaticScrollSafety.swift"; sourceTree = "<group>"; };
+		EEC77EDAB1D48630043C140D /* PingFastPath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PingFastPath.swift; sourceTree = "<group>"; };
 		F16F859F1B9863B934C03E3E /* Error+Message.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Error+Message.swift"; sourceTree = "<group>"; };
 		F460BE795E61168CDF5604F4 /* Dictionary+ArgParsing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Dictionary+ArgParsing.swift"; sourceTree = "<group>"; };
 		F54C2E9613470A1A13B64A26 /* ElementRegistryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElementRegistryTests.swift; sourceTree = "<group>"; };
@@ -658,6 +662,7 @@
 		12DAB8F7FD38E6D565402CEB /* TheGetaway */ = {
 			isa = PBXGroup;
 			children = (
+				EEC77EDAB1D48630043C140D /* PingFastPath.swift */,
 				63AEBA441147E38C0ED98046 /* TheGetaway.swift */,
 				DD05EE261CD3684BED556896 /* TheGetaway+Recording.swift */,
 			);
@@ -864,6 +869,7 @@
 				F54C2E9613470A1A13B64A26 /* ElementRegistryTests.swift */,
 				D49CBF2F9D6B021BBD2C282F /* IdAssignmentTests.swift */,
 				61EDA1A956342901286B448D /* InteractivityTests.swift */,
+				ACA020DEAF0DB6FFA0BB3B27 /* PingFastPathTests.swift */,
 				C3471869CA78AB09EF66258C /* PresentationObscuringTests.swift */,
 				EB3D029B36F545CDF36A7BE5 /* ScreenManifestTests.swift */,
 				4678F3C0E9535AC77ABF6CAB /* SimpleSocketServerIntegrationTests.swift */,
@@ -1279,6 +1285,7 @@
 				34748B05340F189CFD7271A8 /* TheBrains+Scroll.swift in Sources */,
 				DA15B523FFDEAC7C67CEA77E /* TheBrains.swift in Sources */,
 				15ACCDAABA1FB72018B87121 /* TheBurglar.swift in Sources */,
+				A329FC0BCEC3647B2BFF1D51 /* PingFastPath.swift in Sources */,
 				4514B88CC3887BD7B9BA0850 /* TheGetaway+Recording.swift in Sources */,
 				CB9EF56672ACCA277A091C9A /* TheGetaway.swift in Sources */,
 				D75454A1CADC70337F726797 /* TheInsideJob.swift in Sources */,
@@ -1391,6 +1398,7 @@
 				6A2F8720525350C9300E7371 /* ElementRegistryTests.swift in Sources */,
 				E84B186FCA145561549DE2EB /* IdAssignmentTests.swift in Sources */,
 				A70C5582716DE8D184D2187C /* InteractivityTests.swift in Sources */,
+				47404E80361396D5585D1421 /* PingFastPathTests.swift in Sources */,
 				F27EFB3BFD5F772ACEB4BAE6 /* PresentationObscuringTests.swift in Sources */,
 				15E21D8057F2471052C0CE95 /* ScreenManifestTests.swift in Sources */,
 				3F45E437D048808E37C101C9 /* SimpleSocketServerIntegrationTests.swift in Sources */,
