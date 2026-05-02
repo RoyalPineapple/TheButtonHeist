@@ -1,6 +1,30 @@
 #if canImport(UIKit) && canImport(AccessibilitySnapshotParser)
 import AccessibilitySnapshotParser
 import CoreGraphics
+import UIKit
+
+// MARK: - Safe Path Bounds
+
+extension UIBezierPath {
+    /// Bounds that won't trap on degenerate paths.
+    ///
+    /// `UIBezierPath.bounds` (and `cgPath.boundingBoxOfPath`) can return `.null`
+    /// — whose origin is `.infinity` — when the path is empty, and may carry
+    /// non-finite coordinates when callers feed in `.nan`/`.infinity`. Passing
+    /// those values to `Int(_:)` traps with a Swift runtime SIGTRAP. Returns
+    /// `.zero` for any non-finite result so callers can hash the rect safely.
+    var safeBounds: CGRect {
+        guard !isEmpty else { return .zero }
+        let rect = cgPath.boundingBoxOfPath
+        guard !rect.isNull,
+              rect.origin.x.isFinite,
+              rect.origin.y.isFinite,
+              rect.size.width.isFinite,
+              rect.size.height.isFinite
+        else { return .zero }
+        return rect
+    }
+}
 
 // MARK: - Content Fingerprint
 
@@ -31,8 +55,9 @@ extension AccessibilityElement {
                 hasher.combine(Int(rect.origin.x))
                 hasher.combine(Int(rect.origin.y))
             case let .path(path):
-                hasher.combine(Int(path.bounds.origin.x))
-                hasher.combine(Int(path.bounds.origin.y))
+                let bounds = path.safeBounds
+                hasher.combine(Int(bounds.origin.x))
+                hasher.combine(Int(bounds.origin.y))
             }
         }
         // Size is scroll-invariant — always include it
@@ -41,8 +66,9 @@ extension AccessibilityElement {
             hasher.combine(Int(rect.size.width))
             hasher.combine(Int(rect.size.height))
         case let .path(path):
-            hasher.combine(Int(path.bounds.size.width))
-            hasher.combine(Int(path.bounds.size.height))
+            let bounds = path.safeBounds
+            hasher.combine(Int(bounds.size.width))
+            hasher.combine(Int(bounds.size.height))
         }
         return hasher.finalize()
     }
