@@ -144,6 +144,8 @@ extension AccessibilityElement {
     }
 
     private static func stringMatches(_ candidate: String, _ pattern: String, mode: MatchMode) -> Bool {
+        let candidate = normalizeTypography(candidate)
+        let pattern = normalizeTypography(pattern)
         switch mode {
         case .exact:
             return candidate.localizedCaseInsensitiveCompare(pattern) == .orderedSame
@@ -151,6 +153,56 @@ extension AccessibilityElement {
             return candidate.localizedCaseInsensitiveContains(pattern)
         }
     }
+
+    /// Folds typographic punctuation that has an ASCII equivalent so labels carrying
+    /// smart quotes/dashes/ellipsis still match patterns typed with straight ASCII
+    /// (and vice versa). Real Unicode without an ASCII equivalent — emoji, accents,
+    /// CJK — is left untouched: this is about giving ASCII input a fair chance, not
+    /// about stripping non-ASCII characters.
+    private static func normalizeTypography(_ string: String) -> String {
+        guard string.unicodeScalars.contains(where: { typographicAsciiFold[$0] != nil }) else {
+            return string
+        }
+        var result = ""
+        result.reserveCapacity(string.count)
+        for scalar in string.unicodeScalars {
+            if let replacement = typographicAsciiFold[scalar] {
+                result.append(replacement)
+            } else {
+                result.unicodeScalars.append(scalar)
+            }
+        }
+        return result
+    }
+
+    private static let typographicAsciiFold: [Unicode.Scalar: String] = [
+        // Single quotes / apostrophes
+        "\u{2018}": "'",  // ' LEFT SINGLE QUOTATION MARK
+        "\u{2019}": "'",  // ' RIGHT SINGLE QUOTATION MARK / typographic apostrophe
+        "\u{201A}": "'",  // ‚ SINGLE LOW-9 QUOTATION MARK
+        "\u{201B}": "'",  // ‛ SINGLE HIGH-REVERSED-9 QUOTATION MARK
+        "\u{2032}": "'",  // ′ PRIME
+        // Double quotes
+        "\u{201C}": "\"", // " LEFT DOUBLE QUOTATION MARK
+        "\u{201D}": "\"", // " RIGHT DOUBLE QUOTATION MARK
+        "\u{201E}": "\"", // „ DOUBLE LOW-9 QUOTATION MARK
+        "\u{201F}": "\"", // ‟ DOUBLE HIGH-REVERSED-9 QUOTATION MARK
+        "\u{2033}": "\"", // ″ DOUBLE PRIME
+        // Dashes / hyphens
+        "\u{2010}": "-",  // ‐ HYPHEN
+        "\u{2011}": "-",  // ‑ NON-BREAKING HYPHEN
+        "\u{2012}": "-",  // ‒ FIGURE DASH
+        "\u{2013}": "-",  // – EN DASH
+        "\u{2014}": "-",  // — EM DASH
+        "\u{2015}": "-",  // ― HORIZONTAL BAR
+        "\u{2212}": "-",  // − MINUS SIGN
+        // Ellipsis
+        "\u{2026}": "...", // … HORIZONTAL ELLIPSIS
+        // Non-breaking / typographic spaces
+        "\u{00A0}": " ",  // NO-BREAK SPACE
+        "\u{2007}": " ",  // FIGURE SPACE
+        "\u{202F}": " ",  // NARROW NO-BREAK SPACE
+    ]
 }
 
 // MARK: - TheStash Match Pipeline
