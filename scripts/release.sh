@@ -5,19 +5,21 @@
 #   1. Validate: must be on main, in sync with origin, clean worktree
 #   2. Bump version across 5 files + regenerate Xcode projects
 #   3. Build CLI + MCP (in parallel)
-#   4. Run all tests (TheScoreTests, ButtonHeistTests, TheInsideJobTests)
-#   5. Rebase onto latest origin, commit, tag, push
-#   6. Wait for CI release workflow; upgrade Homebrew on success, rollback on failure
+#   4. Rebase onto latest origin, commit, tag, push
+#   5. Wait for CI release workflow; upgrade Homebrew on success, rollback on failure
+#
+# Tests are skipped by default — CI already ran them on the same commit.
+# Use --full to run local tests before committing.
 #
 # Versioning: SemVer (MAJOR.MINOR.PATCH). Default bump is patch.
 #
-# Usage: ./scripts/release.sh [--dry-run] [--skip-tests] [--major | --minor | <version>]
+# Usage: ./scripts/release.sh [--dry-run] [--full] [--major | --minor | <version>]
 # Example: ./scripts/release.sh              # Bump patch: 0.2.0 -> 0.2.1
 #          ./scripts/release.sh --minor      # Bump minor: 0.2.1 -> 0.3.0
 #          ./scripts/release.sh --major      # Bump major: 0.3.0 -> 1.0.0
 #          ./scripts/release.sh 0.5.0        # Explicit version
 #          ./scripts/release.sh --dry-run    # Preview only
-#          ./scripts/release.sh --skip-tests # Skip Phase 4
+#          ./scripts/release.sh --full       # Run local tests before committing
 
 set -euo pipefail
 
@@ -29,13 +31,14 @@ SEMVER_REGEX='^[0-9]+\.[0-9]+\.[0-9]+$'
 GITHUB_REPO="RoyalPineapple/TheButtonHeist"
 
 DRY_RUN=false
-SKIP_TESTS=false
+RUN_TESTS=false
 BUMP_TYPE=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dry-run)    DRY_RUN=true; shift ;;
-        --skip-tests) SKIP_TESTS=true; shift ;;
+        --full)       RUN_TESTS=true; shift ;;
+        --skip-tests) shift ;;  # legacy flag, tests skip by default now
         --major)      BUMP_TYPE="major"; shift ;;
         --minor)      BUMP_TYPE="minor"; shift ;;
         --patch)      BUMP_TYPE="patch"; shift ;;
@@ -90,6 +93,18 @@ if [[ "$LOCAL_SHA" != "$REMOTE_SHA" ]]; then
     exit 1
 fi
 
+# CI must have passed on this commit
+if [[ "$RUN_TESTS" == false ]]; then
+    CI_STATUS=$(gh run list --repo "$GITHUB_REPO" --commit "$LOCAL_SHA" --workflow CI --limit 1 --json conclusion --jq '.[0].conclusion' 2>/dev/null || true)
+    if [[ "$CI_STATUS" != "success" ]]; then
+        echo "Error: CI has not passed on this commit (status: ${CI_STATUS:-not found})"
+        echo "  Check: https://github.com/$GITHUB_REPO/actions"
+        echo "  Or run with --full to test locally"
+        exit 1
+    fi
+    echo "  CI: passed on $(echo "$LOCAL_SHA" | cut -c1-8)"
+fi
+
 # Clean worktree
 if [[ -n $(git status --porcelain) ]]; then
     echo "Error: worktree is not clean"
@@ -119,10 +134,10 @@ if [[ "$DRY_RUN" == true ]]; then
     echo "Would perform:"
     echo "  1. Bump version in 5 files + regenerate Xcode projects"
     echo "  2. Build CLI + MCP (parallel)"
-    if [[ "$SKIP_TESTS" == true ]]; then
-        echo "  3. (tests skipped)"
-    else
+    if [[ "$RUN_TESTS" == true ]]; then
         echo "  3. Run TheScoreTests, ButtonHeistTests, TheInsideJobTests"
+    else
+        echo "  3. (tests skipped — CI already ran them. Use --full to run locally)"
     fi
     echo "  4. Rebase, commit 'Release $NEW_VERSION', tag v$NEW_VERSION, push"
     echo "  5. Wait for CI release workflow"
@@ -243,11 +258,8 @@ echo ""
 # Phase 4: Test
 # --------------------------------------------------------------------------
 
-if [[ "$SKIP_TESTS" == true ]]; then
-    echo "==> Phase 4: Skipping tests (--skip-tests)"
-    echo ""
-else
-    echo "==> Phase 4: Running tests"
+if [[ "$RUN_TESTS" == true ]]; then
+    echo "==> Phase 4: Running tests (--full)"
 
     rm -rf ~/Library/Developer/Xcode/DerivedData/ButtonHeist-*
 
