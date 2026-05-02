@@ -407,6 +407,103 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertEqual(id, "save_button")
     }
 
+    // MARK: - Typographic Punctuation Normalization
+
+    // Smart/typographic punctuation with an ASCII equivalent is folded on
+    // both candidate and pattern, so callers don't have to care which form
+    // appears in either string. Real Unicode without an ASCII equivalent
+    // (emoji, accents, CJK) passes through untouched.
+
+    func testCurlyApostropheLabelMatchesStraightQuotePattern() {
+        let element = element(label: "Don\u{2019}t skip modifier item")
+        let matcher = ElementMatcher(label: "Don't skip modifier item")
+        XCTAssertTrue(element.matches(matcher, mode: .exact))
+        XCTAssertTrue(element.matches(matcher, mode: .substring))
+    }
+
+    func testStraightApostropheLabelMatchesCurlyQuotePattern() {
+        let element = element(label: "Don't skip modifier item")
+        let matcher = ElementMatcher(label: "Don\u{2019}t skip modifier item")
+        XCTAssertTrue(element.matches(matcher, mode: .exact))
+        XCTAssertTrue(element.matches(matcher, mode: .substring))
+    }
+
+    func testCurlyDoubleQuoteMatchesStraightDoubleQuote() {
+        let element = element(label: "He said \u{201C}hi\u{201D} loudly")
+        let matcher = ElementMatcher(label: "\"hi\"")
+        XCTAssertTrue(element.matches(matcher, mode: .substring))
+    }
+
+    func testEnDashMatchesHyphen() {
+        let element = element(label: "Page 1\u{2013}10")
+        XCTAssertTrue(element.matches(ElementMatcher(label: "Page 1-10"), mode: .exact))
+        XCTAssertTrue(element.matches(ElementMatcher(label: "1-10"), mode: .substring))
+    }
+
+    func testEmDashMatchesHyphen() {
+        let element = element(label: "wait \u{2014} stop")
+        XCTAssertTrue(element.matches(ElementMatcher(label: "wait - stop"), mode: .exact))
+    }
+
+    func testHyphenPatternMatchesEnDashLabel() {
+        let element = element(label: "1\u{2013}10")
+        XCTAssertTrue(element.matches(ElementMatcher(label: "1-10"), mode: .exact))
+    }
+
+    func testHorizontalEllipsisMatchesThreeDots() {
+        let element = element(label: "Loading\u{2026}")
+        XCTAssertTrue(element.matches(ElementMatcher(label: "Loading..."), mode: .exact))
+        XCTAssertTrue(element.matches(ElementMatcher(label: "..."), mode: .substring))
+    }
+
+    func testThreeDotsMatchHorizontalEllipsis() {
+        let element = element(label: "Loading...")
+        XCTAssertTrue(element.matches(ElementMatcher(label: "Loading\u{2026}"), mode: .exact))
+    }
+
+    func testNonBreakingSpaceMatchesRegularSpace() {
+        let element = element(label: "Save\u{00A0}As")
+        XCTAssertTrue(element.matches(ElementMatcher(label: "Save As"), mode: .exact))
+        XCTAssertTrue(element.matches(ElementMatcher(label: "Save As"), mode: .substring))
+    }
+
+    func testNormalizationAppliesToIdentifier() {
+        let element = element(identifier: "user\u{2019}s-button")
+        XCTAssertTrue(element.matches(ElementMatcher(identifier: "user's-button"), mode: .exact))
+    }
+
+    func testNormalizationAppliesToValue() {
+        let element = element(value: "Page 1\u{2013}10")
+        XCTAssertTrue(element.matches(ElementMatcher(value: "Page 1-10"), mode: .exact))
+    }
+
+    func testEmojiPreservedAndStillMatches() {
+        let element = element(label: "🔴 Don\u{2019}t skip 🚀")
+        // Emoji unchanged on both sides; apostrophe folded.
+        XCTAssertTrue(element.matches(ElementMatcher(label: "🔴 Don't skip 🚀"), mode: .exact))
+        XCTAssertTrue(element.matches(ElementMatcher(label: "🚀"), mode: .substring))
+    }
+
+    func testAccentsPreservedAndStillMatch() {
+        // Accented characters have no ASCII equivalent — they must match exactly,
+        // not get stripped to plain letters.
+        let element = element(label: "café")
+        XCTAssertTrue(element.matches(ElementMatcher(label: "café"), mode: .exact))
+        XCTAssertFalse(element.matches(ElementMatcher(label: "cafe"), mode: .exact))
+    }
+
+    func testCJKPreservedAndStillMatches() {
+        let element = element(label: "保存")
+        XCTAssertTrue(element.matches(ElementMatcher(label: "保存"), mode: .exact))
+    }
+
+    func testMixedTypographyDoesNotAlterRealUnicode() {
+        // Curly quote + emoji + accent in one label; pattern uses straight quote.
+        let element = element(label: "Café — Don\u{2019}t close 🔴")
+        let matcher = ElementMatcher(label: "Café - Don't close 🔴")
+        XCTAssertTrue(element.matches(matcher, mode: .exact))
+    }
+
     // MARK: - Unknown Trait Names
 
     func testUnknownTraitNameNeverMatches() {
