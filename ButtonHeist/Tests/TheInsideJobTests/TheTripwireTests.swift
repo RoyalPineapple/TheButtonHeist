@@ -500,6 +500,128 @@ final class TheTripwireTests: XCTestCase {
         XCTAssertTrue(accessible.first?.window === modalWindow)
     }
 
+    func testGetAccessibleWindowsFiltersToOverlayWindow() {
+        guard let windowScene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
+        else {
+            XCTFail("No active window scene")
+            return
+        }
+
+        // An overlay window (alert level) with no modal flag — UIAlertController
+        // and action sheets present like this. Should still shadow normal windows.
+        let overlayWindow = UIWindow(windowScene: windowScene)
+        overlayWindow.windowLevel = .alert
+        overlayWindow.frame = UIScreen.main.bounds
+        overlayWindow.isHidden = false
+
+        defer { overlayWindow.isHidden = true }
+
+        let accessible = tripwire.getAccessibleWindows()
+
+        XCTAssertEqual(accessible.count, 1, "Only the overlay window should be returned")
+        XCTAssertTrue(
+            accessible.first?.window === overlayWindow,
+            "The returned window should be the overlay window"
+        )
+    }
+
+    func testGetAccessibleWindowsFiltersToPresentedViewController() async {
+        guard let hostWindow = tripwire.getTraversableWindows().first?.window,
+              let hostRootVC = hostWindow.rootViewController
+        else {
+            XCTFail("Test host has no root VC")
+            return
+        }
+
+        let presented = UIViewController()
+        await withCheckedContinuation { continuation in
+            hostRootVC.present(presented, animated: false) { continuation.resume() }
+        }
+
+        let accessible = tripwire.getAccessibleWindows()
+
+        await withCheckedContinuation { continuation in
+            hostRootVC.dismiss(animated: false) { continuation.resume() }
+        }
+
+        XCTAssertEqual(accessible.count, 1, "Only the presented VC's window should be returned")
+        XCTAssertTrue(
+            accessible.first?.rootView === presented.view,
+            "rootView should be the presented VC's view, not the window"
+        )
+    }
+
+    func testGetAccessibleWindowsWalksToDeepestPresentedViewController() async {
+        guard let hostWindow = tripwire.getTraversableWindows().first?.window,
+              let hostRootVC = hostWindow.rootViewController
+        else {
+            XCTFail("Test host has no root VC")
+            return
+        }
+
+        let middle = UIViewController()
+        let deepest = UIViewController()
+
+        await withCheckedContinuation { continuation in
+            hostRootVC.present(middle, animated: false) { continuation.resume() }
+        }
+        await withCheckedContinuation { continuation in
+            middle.present(deepest, animated: false) { continuation.resume() }
+        }
+
+        let accessible = tripwire.getAccessibleWindows()
+
+        await withCheckedContinuation { continuation in
+            hostRootVC.dismiss(animated: false) { continuation.resume() }
+        }
+
+        XCTAssertEqual(accessible.count, 1)
+        XCTAssertTrue(
+            accessible.first?.rootView === deepest.view,
+            "Should walk to the deepest presented VC"
+        )
+    }
+
+    func testGetAccessibleWindowsModalFlagBeatsOverlay() {
+        guard let windowScene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
+        else {
+            XCTFail("No active window scene")
+            return
+        }
+
+        // Lower window flagged modal; higher overlay window has no flag.
+        // Modal flag takes precedence (it's checked first), so the lower
+        // flagged window wins.
+        let flaggedWindow = UIWindow(windowScene: windowScene)
+        flaggedWindow.windowLevel = .normal + 1
+        flaggedWindow.frame = UIScreen.main.bounds
+        let modalView = UIView()
+        modalView.accessibilityViewIsModal = true
+        flaggedWindow.addSubview(modalView)
+        flaggedWindow.isHidden = false
+
+        let overlayWindow = UIWindow(windowScene: windowScene)
+        overlayWindow.windowLevel = .alert
+        overlayWindow.frame = UIScreen.main.bounds
+        overlayWindow.isHidden = false
+
+        defer {
+            flaggedWindow.isHidden = true
+            overlayWindow.isHidden = true
+            modalView.removeFromSuperview()
+        }
+
+        let accessible = tripwire.getAccessibleWindows()
+
+        XCTAssertEqual(accessible.count, 1)
+        XCTAssertTrue(
+            accessible.first?.window === flaggedWindow,
+            "Modal flag should win over overlay-window check"
+        )
+    }
+
     func testGetAccessibleWindowsPicksFrontmostModal() {
         guard let windowScene = UIApplication.shared.connectedScenes
             .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene

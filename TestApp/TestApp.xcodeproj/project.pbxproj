@@ -44,6 +44,7 @@
 		4DF934707AE8F3560D688EF7 /* TheInsideJob.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 10CDD5E500E477B98B606858 /* TheInsideJob.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		4E9C59734A3E89DCF76E347A /* AccessibilitySnapshotParser_ObjC.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = C7BFD903B5A7DB547CD6A4C7 /* AccessibilitySnapshotParser_ObjC.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		51D3E58DA3240C7F96BDBAFA /* CalculatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFBC26E435BAE4472EEAEAB2 /* CalculatorView.swift */; };
+		52B4BF7C070EDECDA1D03017 /* ModalPermutationsDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 469AB4E978353B2B59D74320 /* ModalPermutationsDemo.swift */; };
 		540D12ACEC20064BAC859223 /* AccessibilitySnapshotParser.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 97C3DF6EAC0366513F5B9CB8 /* AccessibilitySnapshotParser.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		549C50E4D3617CF86748A988 /* SwiftASN1.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 568C6D6F3B1811E4D29924F9 /* SwiftASN1.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		5740C8AA78C991D3E0AA9D46 /* swift-crypto_CCryptoBoringSSL.bundle in Resources */ = {isa = PBXBuildFile; fileRef = D0DE24F8E60593CB79278BED /* swift-crypto_CCryptoBoringSSL.bundle */; };
@@ -217,6 +218,7 @@
 		3043BA82964C737BBCED996A /* Crypto.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Crypto.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		3C83CD8B9B8895CCCF58B8FB /* UIKitTestApp-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "UIKitTestApp-Info.plist"; sourceTree = "<group>"; };
 		3F615D34144CD2CEE208054B /* ButtonsActionsDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButtonsActionsDemo.swift; sourceTree = "<group>"; };
+		469AB4E978353B2B59D74320 /* ModalPermutationsDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModalPermutationsDemo.swift; sourceTree = "<group>"; };
 		484B42EBF5AEA433BA605F9B /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		568C6D6F3B1811E4D29924F9 /* SwiftASN1.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = SwiftASN1.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		695D9B596D045BB41F8C95A6 /* FormViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FormViewController.swift; sourceTree = "<group>"; };
@@ -321,6 +323,7 @@
 				98461A7DEEBAF0FBE167CDC0 /* LongListView.swift */,
 				14DB0C2E88AF1BD3F22236E6 /* MenuOrderView.swift */,
 				2D66B5DB457CE2C21836BE34 /* MessagesView.swift */,
+				469AB4E978353B2B59D74320 /* ModalPermutationsDemo.swift */,
 				CF6D57530170B53655EA07A4 /* ModalWindowDemo.swift */,
 				79538EA411CEC1C55C14AE0E /* NotesView.swift */,
 				ADE0A205FE071CCD5616DC41 /* PhotosView.swift */,
@@ -670,6 +673,7 @@
 				8772E72EB5A4058DAD26A05B /* LongListView.swift in Sources */,
 				2034653578CB8A03158380D3 /* MenuOrderView.swift in Sources */,
 				2A639C23AC4A8DFE2E0AAFE9 /* MessagesView.swift in Sources */,
+				52B4BF7C070EDECDA1D03017 /* ModalPermutationsDemo.swift in Sources */,
 				D85E49685498BCB9218A7EBC /* ModalWindowDemo.swift in Sources */,
 				7530B8E094B8A238664AAD79 /* NotesView.swift in Sources */,
 				03DC1ECC739B51DBDBC0F202 /* PhotosView.swift in Sources */,

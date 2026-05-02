@@ -57,6 +57,12 @@ struct RootView: View {
                 NavigationLink("Modal Window") {
                     ModalWindowDemo()
                 }
+                NavigationLink("Modal Permutations") {
+                    ModalPermutationsDemo()
+                }
+                NavigationLink("Alerts & Sheets") {
+                    AlertsSheetDemo()
+                }
 
                 Section("Scroll Tests") {
                     NavigationLink("Long List") {

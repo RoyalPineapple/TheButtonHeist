@@ -347,19 +347,46 @@ final class TheTripwire {
             .map { ($0, $0 as UIView) }
     }
 
-    /// Windows filtered for accessibility tree parsing. When any window contains
-    /// a view with `accessibilityViewIsModal`, only that window (the frontmost
-    /// modal) is returned — background windows are excluded from the tree, matching
-    /// the behavior of the macOS accessibility server (AXServer).
+    /// Windows filtered for accessibility tree parsing. Mirrors the filtering
+    /// VoiceOver applies — only the topmost modal context is exposed, and
+    /// everything beneath it is hidden from the tree.
+    ///
+    /// Three independent checks, in order:
+    /// 1. **Explicit modal flag** — any window containing a view with
+    ///    `accessibilityViewIsModal` set (popovers, custom overlays).
+    /// 2. **Overlay window** — frontmost window has `windowLevel > .normal`
+    ///    (UIAlertController, action sheets, status-bar level UI).
+    /// 3. **Modal presentation** — a window's root VC has a presented VC,
+    ///    in which case only the deepest presented VC's view is parsed,
+    ///    matching what `UIPresentationController` exposes to UIKit's AX.
+    ///
+    /// If none match, all traversable windows are returned (the original behavior).
     ///
     /// For screenshots, use `getTraversableWindows()` — visual compositing should
     /// include all windows so the dimmed background remains visible.
     func getAccessibleWindows() -> [(window: UIWindow, rootView: UIView)] {
         let windows = getTraversableWindows()
+        guard !windows.isEmpty else { return [] }
 
-        // Front-to-back: first window with a modal view wins.
         for entry in windows where containsModalView(entry.window) {
             return [entry]
+        }
+
+        if let top = windows.first,
+           top.window.windowLevel > .normal,
+           top.window.rootViewController != nil {
+            return [top]
+        }
+
+        for entry in windows {
+            guard let rootVC = entry.window.rootViewController else { continue }
+            var vc = rootVC
+            while let presented = vc.presentedViewController {
+                vc = presented
+            }
+            if vc !== rootVC {
+                return [(window: entry.window, rootView: vc.view)]
+            }
         }
 
         return windows
