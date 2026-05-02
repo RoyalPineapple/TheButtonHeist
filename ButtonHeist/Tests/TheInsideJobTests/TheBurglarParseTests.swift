@@ -108,8 +108,6 @@ final class TheBurglarParseTests: XCTestCase {
             window.isHidden = true
         }
 
-        window.layoutIfNeeded()
-
         guard let result = stash.parse() else {
             XCTFail("Expected parse result for popover-style modal window")
             return
