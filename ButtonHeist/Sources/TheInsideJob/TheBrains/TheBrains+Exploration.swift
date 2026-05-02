@@ -86,6 +86,16 @@ extension TheBrains {
                     continue
                 }
 
+                // A scroll-shaped container with inflated `contentSize` (e.g. a SwiftUI
+                // `NavigationStack` host wrapping a non-scrolling canvas) reports overflow
+                // even when no descendant element actually lives off-screen. Require at
+                // least one descendant whose AX frame extends past the container frame
+                // before paying for swipes.
+                guard Self.hasContentBeyondFrame(of: container, in: stash.currentHierarchy) else {
+                    manifest.markExplored(container)
+                    continue
+                }
+
                 guard let scrollTarget = scrollableTarget(for: container, contentSize: contentSize) else {
                     manifest.markExplored(container)
                     continue
@@ -284,6 +294,37 @@ extension TheBrains {
         guard case .scrollable(let contentSize) = container.type else { return 0 }
         return max(0, contentSize.width - container.frame.width)
             + max(0, contentSize.height - container.frame.height)
+    }
+
+    /// Returns true if any accessibility-element descendant of `container` has a
+    /// frame extending past `container.frame` by more than `tolerance` points.
+    ///
+    /// This is the AX-tree authority on "is there content beyond the fold". It is
+    /// stricter than the `contentSize > frame` check because UIKit/SwiftUI hosting
+    /// scroll views can report inflated `contentSize` driven by safe-area, nav-bar,
+    /// or scroll-edge geometry — not by actual off-screen content.
+    static func hasContentBeyondFrame(
+        of container: AccessibilityContainer,
+        in hierarchy: [AccessibilityHierarchy],
+        tolerance: CGFloat = 1
+    ) -> Bool {
+        let containerFrame = container.frame
+        let hits: [Bool] = hierarchy.compactMap(
+            first: 1,
+            context: false,
+            container: { isInside, current in isInside || current == container },
+            element: { element, _, isInside -> Bool? in
+                guard isInside else { return nil }
+                let elementFrame = element.shape.frame
+                let extendsBeyond =
+                    elementFrame.minX < containerFrame.minX - tolerance
+                    || elementFrame.minY < containerFrame.minY - tolerance
+                    || elementFrame.maxX > containerFrame.maxX + tolerance
+                    || elementFrame.maxY > containerFrame.maxY + tolerance
+                return extendsBeyond ? true : nil
+            }
+        )
+        return !hits.isEmpty
     }
 
     // MARK: - Presentation Obscuring
