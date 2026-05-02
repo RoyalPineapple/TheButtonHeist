@@ -38,7 +38,7 @@ extension AccessibilityElement.Shape {
     var frame: CGRect {
         switch self {
         case let .frame(rect): return rect
-        case let .path(path): return path.bounds
+        case let .path(path): return path.safeBounds
         }
     }
 }

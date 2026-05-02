@@ -454,6 +454,62 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
         XCTAssertEqual(result.inserted.count, 1, "Only Row 3 is new")
     }
 
+    // MARK: - Degenerate Path Fingerprinting (regression: SPOS-App SIGTRAP)
+
+    private func makePathElement(label: String, path: UIBezierPath) -> AccessibilityElement {
+        AccessibilityElement(
+            description: label,
+            label: label,
+            value: nil,
+            traits: .none,
+            identifier: nil,
+            hint: nil,
+            userInputLabels: nil,
+            shape: .path(path),
+            activationPoint: .zero,
+            usesDefaultActivationPoint: true,
+            customActions: [],
+            customContent: [],
+            customRotors: [],
+            accessibilityLanguage: nil,
+            respondsToUserInteraction: true
+        )
+    }
+
+    func testFingerprintEmptyPathDoesNotCrash() {
+        // Empty UIBezierPath: bounds is CGRect.null whose origin is .infinity,
+        // and Int(.infinity) traps. Must use safeBounds.
+        let element = makePathElement(label: "empty", path: UIBezierPath())
+        _ = element.contentFingerprint
+        _ = element.fingerprint(contentSpaceOrigin: nil)
+        _ = element.fingerprint(contentSpaceOrigin: CGPoint(x: 10, y: 20))
+    }
+
+    func testFingerprintNaNPathDoesNotCrash() {
+        let path = UIBezierPath()
+        path.move(to: CGPoint(x: CGFloat.nan, y: CGFloat.nan))
+        path.addLine(to: CGPoint(x: CGFloat.infinity, y: CGFloat.nan))
+        let element = makePathElement(label: "nan", path: path)
+        _ = element.contentFingerprint
+        _ = element.fingerprint(contentSpaceOrigin: nil)
+    }
+
+    func testFingerprintValidPathStillDeterministic() {
+        let pathA = UIBezierPath(rect: CGRect(x: 10, y: 20, width: 100, height: 40))
+        let pathB = UIBezierPath(rect: CGRect(x: 10, y: 20, width: 100, height: 40))
+        let elementA = makePathElement(label: "row", path: pathA)
+        let elementB = makePathElement(label: "row", path: pathB)
+        XCTAssertEqual(elementA.contentFingerprint, elementB.contentFingerprint)
+    }
+
+    func testFingerprintDifferentValidPathsDiffer() {
+        let pathA = UIBezierPath(rect: CGRect(x: 0, y: 0, width: 100, height: 40))
+        let pathB = UIBezierPath(rect: CGRect(x: 0, y: 100, width: 100, height: 40))
+        let elementA = makePathElement(label: "row", path: pathA)
+        let elementB = makePathElement(label: "row", path: pathB)
+        XCTAssertNotEqual(elementA.contentFingerprint, elementB.contentFingerprint)
+    }
+
     func testWindowSpaceStitchFailsWithScrolledFrames() {
         // Same scenario as above but using window-space fingerprints (no content origins).
         // The overlap should fail because Row 1 at screen y=44 ≠ Row 1 at screen y=0.
