@@ -967,6 +967,44 @@ final class TheTripwireTests: XCTestCase {
         XCTAssertNil(result, "Only passthrough windows present — no topmost VC")
     }
 
+    func testKeyboardAppearanceAndDisappearanceDoNotTriggerScreenChange() {
+        // The contract: a software keyboard sliding in or out over the
+        // current screen is not a screen change. The same app VC must be
+        // reported across all three phases (no keyboard → keyboard up →
+        // keyboard dismissed) so isScreenChange() compares equal and
+        // downstream callers don't poison their action delta / settle
+        // logic with a false screenChanged flag.
+        let appVC = UIViewController()
+        let appWindow = makeWindow(level: .normal, rootVC: appVC)
+        let keyboard = makeWindow(level: .alert, rootVC: UIViewController())
+        let isKeyboard: (UIWindow) -> Bool = { $0 === keyboard }
+
+        let appOnly = [(window: appWindow, rootView: appWindow as UIView)]
+        let withKeyboard = [
+            (window: keyboard, rootView: keyboard as UIView),
+            (window: appWindow, rootView: appWindow as UIView),
+        ]
+
+        let phases: [(label: String, windows: [(window: UIWindow, rootView: UIView)])] = [
+            ("before keyboard", appOnly),
+            ("keyboard up", withKeyboard),
+            ("keyboard dismissed", appOnly),
+        ]
+
+        let vcIds = phases.map { phase -> ObjectIdentifier? in
+            let vc = TheTripwire.topmostViewController(in: phase.windows, isPassthrough: isKeyboard)
+            XCTAssertTrue(vc === appVC,
+                          "Topmost VC must remain the app VC across phase '\(phase.label)'")
+            return vc.map(ObjectIdentifier.init)
+        }
+
+        // Every transition between phases must report no screen change.
+        for (before, after) in zip(vcIds, vcIds.dropFirst()) {
+            XCTAssertFalse(tripwire.isScreenChange(before: before, after: after),
+                           "Keyboard appearance/disappearance must not register as a screen change")
+        }
+    }
+
 }
 
 #endif // canImport(UIKit)
