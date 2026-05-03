@@ -55,8 +55,12 @@ final class TheBurglarParseTests: XCTestCase {
     func testParseWrapsEachWindowWithSemanticGroupInMultiWindowMode() throws {
         let windowScene = try requireForegroundWindowScene()
 
-        let levelA = UIWindow.Level(rawValue: 4321)
-        let levelB = UIWindow.Level(rawValue: 4322)
+        // Multi-window mode is only entered when no window is an overlay
+        // (no modal flag, no level > .normal with a root VC, no presentation).
+        // Use levels below .normal so the test windows coexist with the host
+        // window without triggering overlay filtering.
+        let levelA = UIWindow.Level(rawValue: -1001)
+        let levelB = UIWindow.Level(rawValue: -1002)
 
         let windowA = makeWindow(windowScene: windowScene, level: levelA)
         let windowB = makeWindow(windowScene: windowScene, level: levelB)

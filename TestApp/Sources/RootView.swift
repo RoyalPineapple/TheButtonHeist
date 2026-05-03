@@ -54,8 +54,17 @@ struct RootView: View {
                 NavigationLink("Tab Bar") {
                     TabBarDemoView()
                 }
-                NavigationLink("Modal Window") {
-                    ModalWindowDemo()
+
+                Section("Modals") {
+                    NavigationLink("Modal Window") {
+                        ModalWindowDemo()
+                    }
+                    NavigationLink("Modal Permutations") {
+                        ModalPermutationsDemo()
+                    }
+                    NavigationLink("Alerts & Sheets") {
+                        AlertsSheetDemo()
+                    }
                 }
 
                 Section("Scroll Tests") {
