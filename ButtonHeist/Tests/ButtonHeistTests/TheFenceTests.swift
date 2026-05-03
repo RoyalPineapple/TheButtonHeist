@@ -1210,4 +1210,130 @@ final class TheFenceTests: XCTestCase {
             "Second action must have been sent on the same connection — proves no reconnect detour"
         )
     }
+
+    /// A late `actionResult` arriving after the per-action timeout must be
+    /// dropped without affecting the connection or future actions. Before the
+    /// fix, the timeout path called `forceDisconnect`, so a late response landed
+    /// on a dead socket. Now the connection stays live, the response flows to
+    /// `actionTracker.resolve`, and the tracker silently no-ops on an unknown
+    /// requestId.
+    @ButtonHeistActor
+    func testLateActionResultAfterTimeoutIsSafelyDropped() async throws {
+        let device = DiscoveredDevice(
+            id: "late-device",
+            name: "MockApp#late",
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 1),
+            certFingerprint: "sha256:mock"
+        )
+        let mockConnection = MockConnection()
+        let fence = TheFence()
+        fence.handoff.makeConnection = { _, _, _ in mockConnection }
+        fence.handoff.connect(to: device)
+
+        do {
+            _ = try await fence.sendAndAwaitAction(.activate(.heistId("slow")), timeout: 0.05)
+            XCTFail("Expected first action to time out")
+        } catch let error as FenceError {
+            guard case .actionTimeout = error else {
+                return XCTFail("Expected .actionTimeout, got \(error)")
+            }
+        }
+
+        guard let lastSent = mockConnection.sent.last, let timedOutRequestId = lastSent.1 else {
+            return XCTFail("Expected the timed-out action to have been sent with a requestId")
+        }
+
+        // Deliver a response for the already-timed-out request. Must not crash,
+        // must not throw, must leave the socket alone.
+        let lateResult = ActionResult(success: true, method: .activate)
+        mockConnection.onEvent?(
+            .message(.actionResult(lateResult), requestId: timedOutRequestId, backgroundDelta: nil)
+        )
+
+        XCTAssertTrue(
+            fence.handoff.isConnected,
+            "A late response for an already-timed-out request must not affect the connection"
+        )
+
+        // A follow-up action still reaches the live socket — proves the late
+        // response did not poison tracker state.
+        let sendCountBefore = mockConnection.sent.count
+        do {
+            _ = try await fence.sendAndAwaitAction(.activate(.heistId("next")), timeout: 0.05)
+        } catch let error as FenceError {
+            guard case .actionTimeout = error else {
+                return XCTFail("Expected .actionTimeout for follow-up (no auto-response), got \(error)")
+            }
+        }
+        XCTAssertEqual(
+            mockConnection.sent.count,
+            sendCountBefore + 1,
+            "Follow-up action must reach the live socket after a late response was dropped"
+        )
+    }
+
+    /// With two actions in flight, a timeout on one must NOT cancel the other.
+    /// Before the fix, `forceDisconnect` -> `onDisconnected` ->
+    /// `cancelAllPendingRequests` would fail every sibling with
+    /// `.connectionFailed`. Now the timeout is local to its own request and a
+    /// sibling can still resolve from its own response.
+    @ButtonHeistActor
+    func testActionTimeoutDoesNotCancelSiblingPendingRequest() async throws {
+        let device = DiscoveredDevice(
+            id: "sibling-device",
+            name: "MockApp#sibling",
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 1),
+            certFingerprint: "sha256:mock"
+        )
+        let mockConnection = MockConnection()
+        let fence = TheFence()
+        fence.handoff.makeConnection = { _, _, _ in mockConnection }
+        fence.handoff.connect(to: device)
+
+        // Launch a sibling with a generous timeout. Its requestId is captured
+        // from `mockConnection.sent` once it has been registered with the
+        // tracker.
+        let sibling = Task { @ButtonHeistActor in
+            try await fence.sendAndAwaitAction(.activate(.heistId("sibling")), timeout: 5)
+        }
+
+        // Yield until the sibling has actually been sent. Polling the actor
+        // here avoids any sleep-based race.
+        while mockConnection.sent.isEmpty {
+            await Task.yield()
+        }
+        guard let firstSent = mockConnection.sent.first, let siblingRequestId = firstSent.1 else {
+            sibling.cancel()
+            return XCTFail("Expected sibling action to have been sent with a requestId")
+        }
+
+        // Now run a short-timeout action that will time out without a response.
+        do {
+            _ = try await fence.sendAndAwaitAction(.activate(.heistId("victim")), timeout: 0.05)
+            sibling.cancel()
+            XCTFail("Expected victim action to time out")
+            return
+        } catch let error as FenceError {
+            guard case .actionTimeout = error else {
+                sibling.cancel()
+                return XCTFail("Expected .actionTimeout for victim, got \(error)")
+            }
+        }
+
+        // Sibling must still be alive. Resolve it with its own response.
+        let siblingResult = ActionResult(success: true, method: .activate)
+        mockConnection.onEvent?(
+            .message(.actionResult(siblingResult), requestId: siblingRequestId, backgroundDelta: nil)
+        )
+
+        let result = try await sibling.value
+        XCTAssertTrue(
+            result.success,
+            "Sibling must resolve from its own response, not be cancelled by the victim's timeout"
+        )
+        XCTAssertTrue(
+            fence.handoff.isConnected,
+            "Connection must remain live after a sibling-only timeout"
+        )
+    }
 }
