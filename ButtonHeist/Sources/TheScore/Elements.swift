@@ -366,8 +366,8 @@ public func isStableIdentifier(_ identifier: String) -> Bool {
 /// `AccessibilitySnapshotParser.AccessibilityContainer` 1:1 but lives in
 /// TheScore so CLI/MCP don't pull UIKit. Created by the iOS server when
 /// converting the persistent registry tree to wire format.
-public struct ContainerInfo: Codable, Equatable, Hashable, Sendable {
-    public enum ContainerType: Codable, Equatable, Hashable, Sendable {
+public struct ContainerInfo: Equatable, Hashable, Sendable {
+    public enum ContainerType: Equatable, Hashable, Sendable {
         case semanticGroup(label: String?, value: String?, identifier: String?)
         case list
         case landmark
@@ -397,12 +397,148 @@ public struct ContainerInfo: Codable, Equatable, Hashable, Sendable {
     }
 }
 
+/// Coding keys shared by `ContainerInfo` and `InterfaceNode`'s container case
+/// so the discriminator + payload + frame all live at one level on the wire,
+/// matching the documented protocol shape.
+private enum ContainerCodingKey: String, CodingKey {
+    case type
+    case label, value, identifier
+    case contentWidth, contentHeight
+    case rowCount, columnCount
+    case frameX, frameY, frameWidth, frameHeight
+    case children
+}
+
+extension ContainerInfo: Codable {
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: ContainerCodingKey.self)
+        try Self.encodeShape(self, into: &container)
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: ContainerCodingKey.self)
+        self = try Self.decodeShape(from: container)
+    }
+
+    fileprivate static func encodeShape(
+        _ info: ContainerInfo,
+        into container: inout KeyedEncodingContainer<ContainerCodingKey>
+    ) throws {
+        switch info.type {
+        case let .semanticGroup(label, value, identifier):
+            try container.encode("semanticGroup", forKey: .type)
+            try container.encodeIfPresent(label, forKey: .label)
+            try container.encodeIfPresent(value, forKey: .value)
+            try container.encodeIfPresent(identifier, forKey: .identifier)
+        case .list:
+            try container.encode("list", forKey: .type)
+        case .landmark:
+            try container.encode("landmark", forKey: .type)
+        case let .dataTable(rowCount, columnCount):
+            try container.encode("dataTable", forKey: .type)
+            try container.encode(rowCount, forKey: .rowCount)
+            try container.encode(columnCount, forKey: .columnCount)
+        case .tabBar:
+            try container.encode("tabBar", forKey: .type)
+        case let .scrollable(contentWidth, contentHeight):
+            try container.encode("scrollable", forKey: .type)
+            try container.encode(contentWidth, forKey: .contentWidth)
+            try container.encode(contentHeight, forKey: .contentHeight)
+        }
+        try container.encode(info.frameX, forKey: .frameX)
+        try container.encode(info.frameY, forKey: .frameY)
+        try container.encode(info.frameWidth, forKey: .frameWidth)
+        try container.encode(info.frameHeight, forKey: .frameHeight)
+    }
+
+    fileprivate static func decodeShape(
+        from container: KeyedDecodingContainer<ContainerCodingKey>
+    ) throws -> ContainerInfo {
+        let typeName = try container.decode(String.self, forKey: .type)
+        let type: ContainerType
+        switch typeName {
+        case "semanticGroup":
+            type = .semanticGroup(
+                label: try container.decodeIfPresent(String.self, forKey: .label),
+                value: try container.decodeIfPresent(String.self, forKey: .value),
+                identifier: try container.decodeIfPresent(String.self, forKey: .identifier)
+            )
+        case "list":
+            type = .list
+        case "landmark":
+            type = .landmark
+        case "dataTable":
+            type = .dataTable(
+                rowCount: try container.decode(Int.self, forKey: .rowCount),
+                columnCount: try container.decode(Int.self, forKey: .columnCount)
+            )
+        case "tabBar":
+            type = .tabBar
+        case "scrollable":
+            type = .scrollable(
+                contentWidth: try container.decode(Double.self, forKey: .contentWidth),
+                contentHeight: try container.decode(Double.self, forKey: .contentHeight)
+            )
+        default:
+            throw DecodingError.dataCorruptedError(
+                forKey: ContainerCodingKey.type,
+                in: container,
+                debugDescription: "Unknown container type: \(typeName)"
+            )
+        }
+        return ContainerInfo(
+            type: type,
+            frameX: try container.decode(Double.self, forKey: .frameX),
+            frameY: try container.decode(Double.self, forKey: .frameY),
+            frameWidth: try container.decode(Double.self, forKey: .frameWidth),
+            frameHeight: try container.decode(Double.self, forKey: .frameHeight)
+        )
+    }
+}
+
 /// A node in the canonical interface tree. Leaves carry the full
 /// `HeistElement` payload — the tree is self-contained and there is no
 /// parallel flat array on the wire.
-public indirect enum InterfaceNode: Codable, Equatable, Sendable {
+public indirect enum InterfaceNode: Equatable, Sendable {
     case element(HeistElement)
     case container(ContainerInfo, children: [InterfaceNode])
+}
+
+extension InterfaceNode: Codable {
+    private enum NodeDiscriminator: String, CodingKey {
+        case element
+        case container
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var outer = encoder.container(keyedBy: NodeDiscriminator.self)
+        switch self {
+        case .element(let element):
+            try outer.encode(element, forKey: .element)
+        case .container(let info, let children):
+            var inner = outer.nestedContainer(keyedBy: ContainerCodingKey.self, forKey: .container)
+            try ContainerInfo.encodeShape(info, into: &inner)
+            try inner.encode(children, forKey: .children)
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let outer = try decoder.container(keyedBy: NodeDiscriminator.self)
+        if outer.contains(.element) {
+            self = .element(try outer.decode(HeistElement.self, forKey: .element))
+        } else if outer.contains(.container) {
+            let inner = try outer.nestedContainer(keyedBy: ContainerCodingKey.self, forKey: .container)
+            let info = try ContainerInfo.decodeShape(from: inner)
+            let children = try inner.decode([InterfaceNode].self, forKey: .children)
+            self = .container(info, children: children)
+        } else {
+            throw DecodingError.dataCorruptedError(
+                forKey: NodeDiscriminator.element,
+                in: outer,
+                debugDescription: "InterfaceNode must be either .element or .container"
+            )
+        }
+    }
 }
 
 public extension InterfaceNode {

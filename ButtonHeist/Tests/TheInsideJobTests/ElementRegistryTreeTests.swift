@@ -211,6 +211,70 @@ final class ElementRegistryTreeTests: XCTestCase {
         XCTAssertEqual(registry.findElement(heistId: "id-a")?.element.label, "New")
     }
 
+    /// Non-scrollable containers (list/landmark/tabBar/dataTable) currently
+    /// derive their `stableId` partly from `firstChildHeistId`. When the first
+    /// child changes between parses (deletion, scroll-out, hide), the
+    /// container's stableId changes, so orphans collected under the old
+    /// stableId can no longer reattach and surface at root level. This test
+    /// pins that documented limitation — when retention beyond the scrollable
+    /// case is required, fix the heuristic and update this test to assert
+    /// the orphan stays nested.
+    func testNonScrollableContainerLosesIdentityWhenFirstChildChanges() {
+        var registry = TheStash.ElementRegistry()
+        let rowA = makeElement(label: "Row A")
+        let rowB = makeElement(label: "Row B")
+        let listContainer = AccessibilityContainer(
+            type: .list,
+            frame: CGRect(x: 0, y: 0, width: 320, height: 200)
+        )
+
+        // First parse: list contains both rows; rowA is first.
+        registry.merge(
+            hierarchy: [
+                .container(listContainer, children: [
+                    .element(rowA, traversalIndex: 0),
+                    .element(rowB, traversalIndex: 1),
+                ])
+            ],
+            heistIds: heistIdMap([(rowA, "row_a"), (rowB, "row_b")]),
+            contexts: [:],
+            scrollableViews: [:]
+        )
+
+        // Second parse: rowA is gone; rowB is now first. The list container
+        // looks the same to the parser (same type, same frame) but its
+        // stableId now anchors on rowB, not rowA. The orphan rowA can't
+        // reattach to the rebuilt list.
+        registry.merge(
+            hierarchy: [
+                .container(listContainer, children: [
+                    .element(rowB, traversalIndex: 0),
+                ])
+            ],
+            heistIds: heistIdMap([(rowB, "row_b")]),
+            contexts: [:],
+            scrollableViews: [:]
+        )
+
+        XCTAssertNotNil(
+            registry.findElement(heistId: "row_a"),
+            "rowA must still be retained somewhere in the registry"
+        )
+
+        // Pin the current behavior: rowA surfaces at the root level, not
+        // under the list. Update this assertion if/when the stableId
+        // heuristic is replaced with something more durable.
+        let topLevel = registry.roots.compactMap { node -> String? in
+            if case .element(let element) = node { return element.heistId }
+            return nil
+        }
+        XCTAssertTrue(
+            topLevel.contains("row_a"),
+            "Known limitation: orphans of a non-scrollable container surface " +
+            "at root when the container's first-child anchor changes"
+        )
+    }
+
     func testMergeContainerSurvivesAcrossParses() {
         var registry = TheStash.ElementRegistry()
         let row = makeElement(label: "Row 0")

@@ -47,9 +47,9 @@ graph TB
 - `ClientMessage` - Messages from client to server (35 cases including 9 touch gestures, 3 scroll commands, text input, edit actions, idle waiting, recording control, status, and watch)
 - `ServerMessage` - Messages from server to client (18 cases including auth challenge/failure/approval, recording events, and interaction broadcasts)
 - `HeistElement` - Flat UI element representation (heistId, label, value, traits, frame, custom content)
-- `ElementNode` - Recursive tree structure with containers
-- `Group` - Container metadata (type, label, frame)
-- `Interface` - Container for UI element interface data (internal flat list + public tree + deterministic screenDescription)
+- `InterfaceNode` - Recursive tree node; leaves carry full `HeistElement` payloads, containers carry `ContainerInfo` + children
+- `ContainerInfo` - Container metadata (type discriminator + type-specific payload + frame)
+- `Interface` - Canonical UI interface data (single tree of `InterfaceNode` + computed `elements` flatten + deterministic screenDescription)
 - `ServerInfo` - Device and app metadata (incl. instanceId, listeningPort, simulatorUDID, vendorIdentifier)
 - `ActionResult` - Action outcome with method, optional message, interface delta, animation state, and optional `ScrollSearchResult`
 - `ActionTarget` - Two-strategy element resolution: `heistId` (stable token) or `match: ElementMatcher` (accessibility predicate)
@@ -67,7 +67,7 @@ graph TB
 **Design Decisions**:
 - All types are `Codable` and `Sendable` for JSON serialization and concurrency safety
 - No platform-specific imports (UIKit/AppKit)
-- Protocol version 6.8 with TLS transport metadata, envelope correlation, watch mode, session locking, action outcome signals, and composable element matching
+- Protocol version 8.0 with TLS transport metadata, envelope correlation, watch mode, session locking, action outcome signals, and composable element matching
 
 ### TheInsideJob
 
@@ -168,7 +168,7 @@ When the framework loads:
 - Connection scope filtering: rejects connections at `.ready` using typed host classification and interface detection (loopback = simulator, `anpi` interface = USB, other = network). Controlled by `INSIDEJOB_SCOPE` env var; defaults to simulator + USB only.
 - Newline-delimited JSON protocol (0x0A separator)
 - Max 5 concurrent connections, 30 messages/second rate limit, 10 MB buffer limit
-- Token-based authentication with session locking, envelope correlation, watch mode, and TLS transport metadata (v6.8)
+- Token-based authentication with session locking, envelope correlation, watch mode, and TLS transport metadata (v8.0)
 
 ### Connection Scope Filtering
 
@@ -646,7 +646,7 @@ sequenceDiagram
 See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 
 **Summary**:
-- Protocol version: 6.8
+- Protocol version: 8.0
 - Transport: TLS over TCP (Network framework NWListener/NWConnection with NWProtocolTLS)
 - Authentication: Token-based (required for driver connections), with optional on-device UI approval for auto-generated tokens. Watch (observer) connections require a token by default (`restrictWatchers` defaults to `true`).
 - Session locking: Single-driver exclusivity with release timer on disconnect. Observers do not claim sessions.

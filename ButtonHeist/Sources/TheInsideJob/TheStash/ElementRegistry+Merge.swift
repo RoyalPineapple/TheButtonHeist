@@ -114,7 +114,23 @@ extension TheStash.ElementRegistry {
 
     /// Walk the tree and return all leaf elements in depth-first traversal order.
     func flattenElements() -> [TheStash.ScreenElement] {
-        roots.flatMap { $0.flattenElements() }
+        var collected: [TheStash.ScreenElement] = []
+        Self.collectLeaves(roots, into: &collected)
+        return collected
+    }
+
+    private static func collectLeaves(
+        _ nodes: [TheStash.RegistryNode],
+        into collected: inout [TheStash.ScreenElement]
+    ) {
+        for node in nodes {
+            switch node {
+            case .element(let element):
+                collected.append(element)
+            case .container(_, let children):
+                collectLeaves(children, into: &collected)
+            }
+        }
     }
 
     /// O(1) lookup by heistId via `elementByHeistId`.
@@ -292,18 +308,15 @@ extension TheStash.ElementRegistry {
     private static func sortScrollableChildren(
         roots: [TheStash.RegistryNode]
     ) -> [TheStash.RegistryNode] {
-        roots.map { node in
-            switch node {
-            case .element:
-                return node
-            case .container(let entry, let children):
-                let sortedChildren = sortScrollableChildren(roots: children)
+        roots.mapTree(
+            onElement: { .element($0) },
+            onContainer: { entry, children in
                 if case .scrollable = entry.container.type {
-                    return .container(entry, children: sortedChildren.sorted(by: scrollableChildOrder))
+                    return .container(entry, children: children.sorted(by: scrollableChildOrder))
                 }
-                return .container(entry, children: sortedChildren)
+                return .container(entry, children: children)
             }
-        }
+        )
     }
 
     private static func scrollableChildOrder(
@@ -318,13 +331,14 @@ extension TheStash.ElementRegistry {
     }
 
     private static func firstY(of node: TheStash.RegistryNode) -> CGFloat {
-        switch node {
-        case .element(let element):
-            if let origin = element.contentSpaceOrigin { return origin.y }
-            return element.element.shape.frame.origin.y
-        case .container(let entry, let children):
-            return children.map { firstY(of: $0) }.min() ?? entry.container.frame.origin.y
-        }
+        node.folded(
+            onElement: { element in
+                element.contentSpaceOrigin?.y ?? element.element.shape.frame.origin.y
+            },
+            onContainer: { entry, results in
+                results.min() ?? entry.container.frame.origin.y
+            }
+        )
     }
 
     // MARK: - Empty Container Pruning (pure)
@@ -332,15 +346,12 @@ extension TheStash.ElementRegistry {
     private static func pruneEmptyContainers(
         roots: [TheStash.RegistryNode]
     ) -> [TheStash.RegistryNode] {
-        roots.compactMap { node in
-            switch node {
-            case .element:
-                return node
-            case .container(let entry, let children):
-                let pruned = pruneEmptyContainers(roots: children)
-                return pruned.isEmpty ? nil : .container(entry, children: pruned)
+        roots.mapTree(
+            onElement: { .element($0) },
+            onContainer: { entry, children in
+                children.isEmpty ? nil : .container(entry, children: children)
             }
-        }
+        )
     }
 
     // MARK: - Prune by Allowlist (pure)
@@ -348,15 +359,12 @@ extension TheStash.ElementRegistry {
     private static func prune(
         roots: [TheStash.RegistryNode], keeping: Set<String>
     ) -> [TheStash.RegistryNode] {
-        roots.compactMap { node in
-            switch node {
-            case .element(let element):
-                return keeping.contains(element.heistId) ? node : nil
-            case .container(let entry, let children):
-                let pruned = prune(roots: children, keeping: keeping)
-                return pruned.isEmpty ? nil : .container(entry, children: pruned)
+        roots.mapTree(
+            onElement: { keeping.contains($0.heistId) ? .element($0) : nil },
+            onContainer: { entry, children in
+                children.isEmpty ? nil : .container(entry, children: children)
             }
-        }
+        )
     }
 
     // MARK: - Index and Path Walks
@@ -454,21 +462,6 @@ extension TheStash.ElementRegistry {
                 }
             }
             return nil
-        }
-    }
-}
-
-// MARK: - Node Walks
-
-extension TheStash.RegistryNode {
-
-    /// Depth-first walk yielding every element leaf descendant.
-    func flattenElements() -> [TheStash.ScreenElement] {
-        switch self {
-        case .element(let element):
-            return [element]
-        case .container(_, let children):
-            return children.flatMap { $0.flattenElements() }
         }
     }
 }

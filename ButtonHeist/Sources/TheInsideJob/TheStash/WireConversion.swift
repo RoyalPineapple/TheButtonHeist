@@ -93,16 +93,12 @@ extension TheStash {
     /// Every element in the registry — visible, scrolled out, or otherwise
     /// off-live-parse — appears at its tree position.
     static func toWireTree(_ roots: [RegistryNode]) -> [InterfaceNode] {
-        roots.map { toWireNode($0) }
-    }
-
-    private static func toWireNode(_ node: RegistryNode) -> InterfaceNode {
-        switch node {
-        case .element(let element):
-            return .element(toWire(element))
-        case .container(let entry, let children):
-            return .container(toContainerInfo(entry.container), children: children.map(toWireNode))
-        }
+        roots.folded(
+            onElement: { InterfaceNode.element(toWire($0)) },
+            onContainer: { entry, children in
+                InterfaceNode.container(toContainerInfo(entry.container), children: children)
+            }
+        )
     }
 
     private static func toContainerInfo(_ container: AccessibilityContainer) -> ContainerInfo {
