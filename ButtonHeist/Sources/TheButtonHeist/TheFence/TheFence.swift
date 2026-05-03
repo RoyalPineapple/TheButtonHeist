@@ -642,11 +642,7 @@ public final class TheFence {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            let mapped = mapCaughtError(error)
-            if case .actionTimeout = mapped {
-                handoff.forceDisconnect()
-            }
-            throw mapped
+            throw mapCaughtError(error)
         }
     }
 

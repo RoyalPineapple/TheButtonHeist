@@ -1112,4 +1112,102 @@ final class TheFenceTests: XCTestCase {
             // Expected — no connection, but the point is it didn't short-circuit
         }
     }
+
+    // MARK: - Action Timeout Preserves Connection
+
+    /// An action timeout means "this single command took too long" — it does not
+    /// mean the connection is dead. The keepalive task (TheHandoff) is the sole
+    /// liveness signal. A 15s action timeout used to call `forceDisconnect`,
+    /// killing a healthy connection and forcing a reconnect cycle for every
+    /// slow-settling screen transition. That behavior is gone.
+    @ButtonHeistActor
+    func testActionTimeoutDoesNotForceDisconnect() async throws {
+        let device = DiscoveredDevice(
+            id: "timeout-device",
+            name: "MockApp#timeout",
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 1),
+            certFingerprint: "sha256:mock"
+        )
+        let mockConnection = MockConnection()
+        let fence = TheFence()
+        fence.handoff.makeConnection = { _, _, _ in mockConnection }
+        fence.handoff.connect(to: device)
+
+        XCTAssertTrue(fence.handoff.isConnected, "Precondition: handoff should be connected")
+        XCTAssertTrue(mockConnection.isConnected, "Precondition: underlying connection should be live")
+
+        let activate = ClientMessage.activate(.heistId("never-answered"))
+        do {
+            _ = try await fence.sendAndAwaitAction(activate, timeout: 0.05)
+            XCTFail("Expected FenceError.actionTimeout to be thrown")
+        } catch let error as FenceError {
+            guard case .actionTimeout = error else {
+                return XCTFail("Expected .actionTimeout, got \(error)")
+            }
+        }
+
+        XCTAssertTrue(
+            fence.handoff.isConnected,
+            "Action timeout must not tear down the handoff — keepalive owns liveness"
+        )
+        XCTAssertTrue(
+            mockConnection.isConnected,
+            "Underlying NWConnection-equivalent must not be disconnected on action timeout"
+        )
+    }
+
+    /// After an action times out, the next action on the same socket should go
+    /// straight through. No reconnect cycle, no extra discovery, no new
+    /// connection — the existing socket is reused.
+    @ButtonHeistActor
+    func testSubsequentActionAfterTimeoutReusesConnection() async throws {
+        let device = DiscoveredDevice(
+            id: "reuse-device",
+            name: "MockApp#reuse",
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 1),
+            certFingerprint: "sha256:mock"
+        )
+        let mockConnection = MockConnection()
+        let fence = TheFence()
+        fence.handoff.makeConnection = { _, _, _ in mockConnection }
+        fence.handoff.connect(to: device)
+
+        let connectCountAfterInitial = mockConnection.connectCount
+
+        do {
+            _ = try await fence.sendAndAwaitAction(.activate(.heistId("first")), timeout: 0.05)
+            XCTFail("Expected first action to time out")
+        } catch let error as FenceError {
+            guard case .actionTimeout = error else {
+                return XCTFail("Expected .actionTimeout, got \(error)")
+            }
+        }
+
+        XCTAssertEqual(
+            mockConnection.connectCount,
+            connectCountAfterInitial,
+            "No reconnect should occur after an action timeout"
+        )
+        XCTAssertTrue(
+            fence.handoff.isConnected,
+            "Handoff must still report connected so a follow-up action can be sent"
+        )
+
+        // The next send must reach the live socket. A force-disconnect would
+        // have flipped isConnected to false and the next sendAndAwait would
+        // throw .notConnected before even hitting the wire.
+        let sendCountBefore = mockConnection.sent.count
+        do {
+            _ = try await fence.sendAndAwaitAction(.activate(.heistId("second")), timeout: 0.05)
+        } catch let error as FenceError {
+            guard case .actionTimeout = error else {
+                return XCTFail("Second action should also time out (no auto-response wired), got \(error)")
+            }
+        }
+        XCTAssertEqual(
+            mockConnection.sent.count,
+            sendCountBefore + 1,
+            "Second action must have been sent on the same connection — proves no reconnect detour"
+        )
+    }
 }
