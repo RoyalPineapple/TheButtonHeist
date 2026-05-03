@@ -85,6 +85,33 @@ final class ElementRegistryTreeTests: XCTestCase {
         XCTAssertEqual(idV1, idV2, "Same content-frame yields same stableId regardless of contentSize")
     }
 
+    func testTopLevelScrollableStableIdSurvivesFrameDrift() {
+        let view = UIScrollView()
+        let containerV1 = AccessibilityContainer(
+            type: .scrollable(contentSize: CGSize(width: 320, height: 1000)),
+            frame: CGRect(x: 0, y: 0, width: 320, height: 480)
+        )
+        let containerV2 = AccessibilityContainer(
+            type: .scrollable(contentSize: CGSize(width: 320, height: 1000)),
+            frame: CGRect(x: 0, y: 88, width: 320, height: 392)
+        )
+
+        let idV1 = TheStash.ElementRegistry.stableId(
+            for: containerV1,
+            contentFrame: containerV1.frame,
+            isNestedInScrollView: false,
+            scrollableView: view
+        )
+        let idV2 = TheStash.ElementRegistry.stableId(
+            for: containerV2,
+            contentFrame: containerV2.frame,
+            isNestedInScrollView: false,
+            scrollableView: view
+        )
+
+        XCTAssertEqual(idV1, idV2, "Same top-level UIScrollView should keep identity across frame drift")
+    }
+
     func testScrollableStableIdDistinguishesContentSpacePosition() {
         // Two scrollables at different content-space positions (e.g. cell-embedded
         // carousels at different rows) get distinct ids — no collision via shared
@@ -100,6 +127,29 @@ final class ElementRegistryTreeTests: XCTestCase {
             for: container, contentFrame: CGRect(x: 0, y: 5400, width: 320, height: 480)
         )
         XCTAssertNotEqual(id1, id2)
+    }
+
+    func testNestedScrollableStableIdUsesContentSpacePositionEvenWithSameView() {
+        let reusedView = UIScrollView()
+        let container = AccessibilityContainer(
+            type: .scrollable(contentSize: CGSize(width: 320, height: 1000)),
+            frame: CGRect(x: 0, y: 200, width: 320, height: 200)
+        )
+
+        let id1 = TheStash.ElementRegistry.stableId(
+            for: container,
+            contentFrame: CGRect(x: 0, y: 500, width: 320, height: 200),
+            isNestedInScrollView: true,
+            scrollableView: reusedView
+        )
+        let id2 = TheStash.ElementRegistry.stableId(
+            for: container,
+            contentFrame: CGRect(x: 0, y: 2700, width: 320, height: 200),
+            isNestedInScrollView: true,
+            scrollableView: reusedView
+        )
+
+        XCTAssertNotEqual(id1, id2, "Nested scrollables must not collapse by reused UIView identity")
     }
 
     func testListStableIdDerivesFromContentFrame() {

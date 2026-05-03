@@ -132,7 +132,7 @@ final class TheBurglar {
             elementObjects: result.objects
         )
 
-        let containerContentFrames = Self.buildContainerContentFrames(
+        let containerIdentityContext = Self.buildContainerIdentityContext(
             hierarchy: result.hierarchy,
             scrollableContainerViews: result.scrollViews
         )
@@ -143,7 +143,9 @@ final class TheBurglar {
             heistIds: heistIds,
             contexts: contexts,
             hierarchy: result.hierarchy,
-            containerContentFrames: containerContentFrames
+            containerContentFrames: containerIdentityContext.contentFrames,
+            containersNestedInScrollView: containerIdentityContext.nestedInScrollView,
+            scrollableViews: result.scrollViews
         )
 
         // Detect first responder among parsed elements — no view hierarchy walk.
@@ -268,27 +270,38 @@ final class TheBurglar {
     /// scroll view keeps its identity as the outer view scrolls, and reusable
     /// cell-embedded containers at distinct logical positions get distinct
     /// ids (no UIView-instance ambiguity from the cell pool).
-    static func buildContainerContentFrames(
+    struct ContainerIdentityContext {
+        let contentFrames: [AccessibilityContainer: CGRect]
+        let nestedInScrollView: Set<AccessibilityContainer>
+    }
+
+    static func buildContainerIdentityContext(
         hierarchy: [AccessibilityHierarchy],
         scrollableContainerViews: [AccessibilityContainer: UIView]
-    ) -> [AccessibilityContainer: CGRect] {
-        var result: [AccessibilityContainer: CGRect] = [:]
+    ) -> ContainerIdentityContext {
+        var contentFrames: [AccessibilityContainer: CGRect] = [:]
+        var nestedInScrollView = Set<AccessibilityContainer>()
         for node in hierarchy {
             collectContainerContentFrames(
                 node: node,
                 parentScrollView: nil,
                 scrollableContainerViews: scrollableContainerViews,
-                into: &result
+                into: &contentFrames,
+                nestedInScrollView: &nestedInScrollView
             )
         }
-        return result
+        return ContainerIdentityContext(
+            contentFrames: contentFrames,
+            nestedInScrollView: nestedInScrollView
+        )
     }
 
     private static func collectContainerContentFrames(
         node: AccessibilityHierarchy,
         parentScrollView: UIScrollView?,
         scrollableContainerViews: [AccessibilityContainer: UIView],
-        into result: inout [AccessibilityContainer: CGRect]
+        into result: inout [AccessibilityContainer: CGRect],
+        nestedInScrollView: inout Set<AccessibilityContainer>
     ) {
         guard case .container(let container, let children) = node else { return }
 
@@ -297,6 +310,7 @@ final class TheBurglar {
         if let scrollView = parentScrollView, !frame.isNull, !frame.isEmpty {
             let origin = scrollView.convert(frame.origin, from: nil)
             contentFrame = CGRect(origin: origin, size: frame.size)
+            nestedInScrollView.insert(container)
         } else {
             contentFrame = frame
         }
@@ -315,7 +329,8 @@ final class TheBurglar {
                 node: child,
                 parentScrollView: childScrollView,
                 scrollableContainerViews: scrollableContainerViews,
-                into: &result
+                into: &result,
+                nestedInScrollView: &nestedInScrollView
             )
         }
     }

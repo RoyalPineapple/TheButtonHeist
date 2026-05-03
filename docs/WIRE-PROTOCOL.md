@@ -1516,7 +1516,7 @@ A single recorded interaction event captured during a Stakeout recording.
 {"protocolVersion":"8.0","type":"pong"}
 
 # Server auto-pushes interface change
-{"protocolVersion":"8.0","type":"interface","payload":{"timestamp":"2026-02-03T14:08:15.500Z","elements":[...],"tree":[...]}}
+{"protocolVersion":"8.0","type":"interface","payload":{"timestamp":"2026-02-03T14:08:15.500Z","tree":[...]}}
 {"protocolVersion":"8.0","type":"screen","payload":{"pngData":"...","width":393.0,"height":852.0,"timestamp":"2026-02-03T14:08:15.550Z"}}
 ```
 

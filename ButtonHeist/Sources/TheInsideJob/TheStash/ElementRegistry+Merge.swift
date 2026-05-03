@@ -25,17 +25,28 @@ extension TheStash.ElementRegistry {
     /// Strategy by container type:
     /// - `.semanticGroup`: derived from label/value/identifier slugs only.
     ///   Frame is irrelevant — the metadata IS the identity.
-    /// - `.scrollable` / `.list` / `.landmark` / `.tabBar`: type tag plus a
-    ///   coarse content-frame hash.
+    /// - Top-level `.scrollable`: object identity via the live scroll view ref
+    ///   so normal screen-space frame drift does not detach retained children.
+    /// - Nested `.scrollable`: type tag plus coarse content-frame hash, so
+    ///   cell-reused inner scroll views at different logical positions do not
+    ///   collapse into one container.
+    /// - `.list` / `.landmark` / `.tabBar`: type tag plus a coarse
+    ///   content-frame hash.
     /// - `.dataTable`: type tag plus row/column counts plus content-frame
     ///   hash.
     static func stableId(
         for container: AccessibilityContainer,
-        contentFrame: CGRect
+        contentFrame: CGRect,
+        isNestedInScrollView: Bool = false,
+        scrollableView: UIView? = nil
     ) -> String {
         let frameHash = coarseFrameHash(contentFrame)
         switch container.type {
         case .scrollable:
+            if let scrollableView, !isNestedInScrollView {
+                let oid = ObjectIdentifier(scrollableView)
+                return "scrollable_\(String(oid.hashValue, radix: 16))"
+            }
             return "scrollable_\(frameHash)"
         case .semanticGroup(let label, let value, let identifier):
             let labelSlug = TheScore.slugify(label) ?? "anon"
@@ -85,7 +96,9 @@ extension TheStash.ElementRegistry {
         hierarchy: [AccessibilityHierarchy],
         heistIds: [AccessibilityElement: String],
         contexts: [AccessibilityElement: TheStash.ElementContext],
-        containerContentFrames: [AccessibilityContainer: CGRect]
+        containerContentFrames: [AccessibilityContainer: CGRect],
+        containersNestedInScrollView: Set<AccessibilityContainer> = [],
+        scrollableViews: [AccessibilityContainer: UIView] = [:]
     ) {
         let oldRoots = roots
         let oldIndex = elementByHeistId
@@ -97,6 +110,8 @@ extension TheStash.ElementRegistry {
             heistIds: heistIds,
             contexts: contexts,
             containerContentFrames: containerContentFrames,
+            containersNestedInScrollView: containersNestedInScrollView,
+            scrollableViews: scrollableViews,
             oldIndex: oldIndex,
             oldRoots: oldRoots
         )
@@ -182,6 +197,8 @@ extension TheStash.ElementRegistry {
         heistIds: [AccessibilityElement: String],
         contexts: [AccessibilityElement: TheStash.ElementContext],
         containerContentFrames: [AccessibilityContainer: CGRect],
+        containersNestedInScrollView: Set<AccessibilityContainer>,
+        scrollableViews: [AccessibilityContainer: UIView],
         oldIndex: [String: TheStash.RegistryPath],
         oldRoots: [TheStash.RegistryNode]
     ) -> [TheStash.RegistryNode] {
@@ -189,6 +206,8 @@ extension TheStash.ElementRegistry {
             buildNode(
                 hier: hier, heistIds: heistIds, contexts: contexts,
                 containerContentFrames: containerContentFrames,
+                containersNestedInScrollView: containersNestedInScrollView,
+                scrollableViews: scrollableViews,
                 oldIndex: oldIndex, oldRoots: oldRoots
             )
         }
@@ -199,6 +218,8 @@ extension TheStash.ElementRegistry {
         heistIds: [AccessibilityElement: String],
         contexts: [AccessibilityElement: TheStash.ElementContext],
         containerContentFrames: [AccessibilityContainer: CGRect],
+        containersNestedInScrollView: Set<AccessibilityContainer>,
+        scrollableViews: [AccessibilityContainer: UIView],
         oldIndex: [String: TheStash.RegistryPath],
         oldRoots: [TheStash.RegistryNode]
     ) -> TheStash.RegistryNode? {
@@ -223,11 +244,18 @@ extension TheStash.ElementRegistry {
                 buildNode(
                     hier: child, heistIds: heistIds, contexts: contexts,
                     containerContentFrames: containerContentFrames,
+                    containersNestedInScrollView: containersNestedInScrollView,
+                    scrollableViews: scrollableViews,
                     oldIndex: oldIndex, oldRoots: oldRoots
                 )
             }
             let contentFrame = containerContentFrames[container] ?? container.frame
-            let stableId = Self.stableId(for: container, contentFrame: contentFrame)
+            let stableId = Self.stableId(
+                for: container,
+                contentFrame: contentFrame,
+                isNestedInScrollView: containersNestedInScrollView.contains(container),
+                scrollableView: scrollableViews[container]
+            )
             let entry = TheStash.RegistryContainerEntry(stableId: stableId, container: container)
             return .container(entry, children: childNodes)
         }

@@ -320,6 +320,30 @@ final class WireConverterTests: XCTestCase {
         XCTAssertEqual(delta.elementCount, 1)
     }
 
+    func testTreeOnlyChangeReturnsFullInterface() {
+        let element = makeScreenElement(heistId: "button_ok", label: "OK", traits: [.button])
+        let beforeTreeHash = [InterfaceNode.element(WireConversion.toWire(element))].hashValue
+        let container = AccessibilityContainer(
+            type: .list,
+            frame: CGRect(x: 0, y: 0, width: 320, height: 100)
+        )
+        let entry = TheStash.RegistryContainerEntry(stableId: "list_0", container: container)
+        let afterTree: [TheStash.RegistryNode] = [
+            .container(entry, children: [.element(element)])
+        ]
+
+        let delta = WireConversion.computeDelta(
+            before: [element],
+            after: [element],
+            beforeTreeHash: beforeTreeHash,
+            afterTree: afterTree,
+            isScreenChange: false
+        )
+
+        XCTAssertEqual(delta.kind, .screenChanged)
+        XCTAssertEqual(delta.newInterface?.elements.map(\.heistId), ["button_ok"])
+    }
+
     // MARK: - Delta: Duplicate heistId Pairing
 
     func testDuplicateHeistIdPairedByIndex() {

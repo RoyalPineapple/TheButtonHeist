@@ -159,6 +159,7 @@ extension TheBrains {
 
         let delta = stash.computeDelta(
             before: before.snapshot, after: afterSnapshot,
+            beforeTreeHash: before.treeHash,
             isScreenChange: false
         )
 

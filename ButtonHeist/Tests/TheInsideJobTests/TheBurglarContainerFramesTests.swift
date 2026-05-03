@@ -3,7 +3,7 @@ import XCTest
 @testable import AccessibilitySnapshotParser
 @testable import TheInsideJob
 
-/// Direct tests for `TheBurglar.buildContainerContentFrames` — the parent-
+/// Direct tests for `TheBurglar.buildContainerIdentityContext` — the parent-
 /// scrollable-threading walk that converts each container's screen-space
 /// frame into the nearest enclosing scrollable's content space. Container
 /// stableIds depend on these frames, so a bug in the walker would silently
@@ -41,12 +41,13 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             .container(container, children: [.element(element, traversalIndex: 0)])
         ]
 
-        let result = TheBurglar.buildContainerContentFrames(
+        let result = TheBurglar.buildContainerIdentityContext(
             hierarchy: hierarchy,
             scrollableContainerViews: [:]
         )
 
-        XCTAssertEqual(result[container], container.frame)
+        XCTAssertEqual(result.contentFrames[container], container.frame)
+        XCTAssertFalse(result.nestedInScrollView.contains(container))
     }
 
     func testNestedContainerExpressedInParentScrollableContentSpace() {
@@ -74,20 +75,22 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             ])
         ]
 
-        let result = TheBurglar.buildContainerContentFrames(
+        let result = TheBurglar.buildContainerIdentityContext(
             hierarchy: hierarchy,
             scrollableContainerViews: [outer: scrollView]
         )
 
-        XCTAssertEqual(result[outer], outer.frame,
+        XCTAssertEqual(result.contentFrames[outer], outer.frame,
                        "Top-level scrollable: no enclosing scrollable, frame stays in screen space")
+        XCTAssertFalse(result.nestedInScrollView.contains(outer))
 
-        let innerContent = try? XCTUnwrap(result[inner])
+        let innerContent = try? XCTUnwrap(result.contentFrames[inner])
         XCTAssertEqual(innerContent?.origin.x ?? .nan, 0, accuracy: 0.5)
         XCTAssertEqual(innerContent?.origin.y ?? .nan, 300, accuracy: 0.5,
                        "screen-y 200 + contentOffset.y 100 = content-y 300")
         XCTAssertEqual(innerContent?.size, inner.frame.size,
                        "Size is unchanged by coordinate conversion")
+        XCTAssertTrue(result.nestedInScrollView.contains(inner))
     }
 
     func testNestedContainerScrollIndependence() {
@@ -111,7 +114,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             type: .list,
             frame: CGRect(x: 0, y: 200, width: 320, height: 200)
         )
-        let result1 = TheBurglar.buildContainerContentFrames(
+        let result1 = TheBurglar.buildContainerIdentityContext(
             hierarchy: [.container(outer, children: [
                 .container(innerParse1, children: [.element(makeElement(), traversalIndex: 0)])
             ])],
@@ -126,16 +129,18 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             type: .list,
             frame: CGRect(x: 0, y: -800, width: 320, height: 200)
         )
-        let result2 = TheBurglar.buildContainerContentFrames(
+        let result2 = TheBurglar.buildContainerIdentityContext(
             hierarchy: [.container(outer, children: [
                 .container(innerParse2, children: [.element(makeElement(), traversalIndex: 0)])
             ])],
             scrollableContainerViews: [outer: scrollView]
         )
 
-        XCTAssertEqual(result1[innerParse1]?.origin.y ?? .nan, 200, accuracy: 0.5)
-        XCTAssertEqual(result2[innerParse2]?.origin.y ?? .nan, 200, accuracy: 0.5,
+        XCTAssertEqual(result1.contentFrames[innerParse1]?.origin.y ?? .nan, 200, accuracy: 0.5)
+        XCTAssertEqual(result2.contentFrames[innerParse2]?.origin.y ?? .nan, 200, accuracy: 0.5,
                        "Inner container's content-frame must be invariant under outer scroll")
+        XCTAssertTrue(result1.nestedInScrollView.contains(innerParse1))
+        XCTAssertTrue(result2.nestedInScrollView.contains(innerParse2))
     }
 }
 

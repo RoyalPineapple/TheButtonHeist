@@ -469,14 +469,22 @@ final class TheStash {
         WireConversion.toWireTree(registry.roots)
     }
 
+    /// Hash of the canonical wire tree, including container topology and
+    /// metadata as well as leaf element payloads.
+    func wireTreeHash() -> Int {
+        wireTree().hashValue
+    }
+
     /// Compute the delta between two snapshots.
     func computeDelta(
         before: [ScreenElement],
         after: [ScreenElement],
+        beforeTreeHash: Int? = nil,
         isScreenChange: Bool
     ) -> InterfaceDelta {
         WireConversion.computeDelta(
             before: before, after: after,
+            beforeTreeHash: beforeTreeHash,
             afterTree: registry.roots, isScreenChange: isScreenChange
         )
     }

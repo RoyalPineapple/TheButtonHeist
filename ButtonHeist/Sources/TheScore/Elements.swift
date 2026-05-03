@@ -499,7 +499,7 @@ extension ContainerInfo: Codable {
 /// A node in the canonical interface tree. Leaves carry the full
 /// `HeistElement` payload — the tree is self-contained and there is no
 /// parallel flat array on the wire.
-public indirect enum InterfaceNode: Equatable, Sendable {
+public indirect enum InterfaceNode: Equatable, Hashable, Sendable {
     case element(HeistElement)
     case container(ContainerInfo, children: [InterfaceNode])
 }

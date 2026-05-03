@@ -142,12 +142,15 @@ extension TheStash {
     static func computeDelta(
         before: [ScreenElement],
         after: [ScreenElement],
+        beforeTreeHash: Int? = nil,
         afterTree: [RegistryNode],
         isScreenChange: Bool
     ) -> InterfaceDelta {
+        let afterWireTree = toWireTree(afterTree)
+
         // Screen changed: VC identity differs → return full new interface
         if isScreenChange {
-            let fullInterface = Interface(timestamp: Date(), tree: toWireTree(afterTree))
+            let fullInterface = Interface(timestamp: Date(), tree: afterWireTree)
             return InterfaceDelta(
                 kind: .screenChanged,
                 elementCount: after.count,
@@ -168,6 +171,13 @@ extension TheStash {
                 }
             }
             if unchanged {
+                if let beforeTreeHash, beforeTreeHash != afterWireTree.hashValue {
+                    return InterfaceDelta(
+                        kind: .screenChanged,
+                        elementCount: after.count,
+                        newInterface: Interface(timestamp: Date(), tree: afterWireTree)
+                    )
+                }
                 return InterfaceDelta(kind: .noChange, elementCount: after.count)
             }
         }
