@@ -10,62 +10,58 @@ import AccessibilitySnapshotParser
 
 extension TheStash.ElementRegistry {
 
-    /// Compute a stable identifier for a parser container. Identifiers persist
-    /// across parses so the registry tree can survive frame drift, content
-    /// size changes, and viewport-trimmed reparses.
+    /// Compute a stable identifier for a parser container, derived from its
+    /// own exposed values. Identifiers persist across parses so the registry
+    /// tree can survive frame drift, content size changes, and
+    /// viewport-trimmed reparses.
+    ///
+    /// `contentFrame` is the container's frame expressed in the nearest
+    /// enclosing scrollable's content space (or screen space for top-level
+    /// containers) — TheBurglar computes it during the parse walk. Using the
+    /// content-space frame means a container nested in a scroll view keeps
+    /// its identity as the outer view scrolls, and reusable cell-embedded
+    /// containers at distinct logical positions get distinct ids.
     ///
     /// Strategy by container type:
-    /// - `.scrollable`: object identity via the live scroll view ref. The same
-    ///   `UIScrollView` produces the same id across parses regardless of frame
-    ///   or content size shifts.
-    /// - `.semanticGroup`: derived from label/value/identifier. Two semantic
-    ///   groups with identical metadata collapse to the same id (acceptable;
-    ///   they're indistinguishable to users too).
-    /// - `.list` / `.landmark` / `.tabBar` / `.dataTable`: a coarse-frame hash
-    ///   plus the heistId of the first child anchors topology. Heuristic;
-    ///   collisions degrade to "merged into one node" rather than a crash.
+    /// - `.semanticGroup`: derived from label/value/identifier slugs only.
+    ///   Frame is irrelevant — the metadata IS the identity.
+    /// - `.scrollable` / `.list` / `.landmark` / `.tabBar`: type tag plus a
+    ///   coarse content-frame hash.
+    /// - `.dataTable`: type tag plus row/column counts plus content-frame
+    ///   hash.
     static func stableId(
         for container: AccessibilityContainer,
-        scrollableViews: [AccessibilityContainer: UIView],
-        firstChildHeistId: String?
+        contentFrame: CGRect
     ) -> String {
+        let frameHash = coarseFrameHash(contentFrame)
         switch container.type {
         case .scrollable:
-            if let view = scrollableViews[container] {
-                let oid = ObjectIdentifier(view)
-                return "scrollable_\(String(oid.hashValue, radix: 16))"
-            }
-            return "scrollable_\(coarseFrameHash(container.frame))_\(firstChildHeistId ?? "anon")"
-
+            return "scrollable_\(frameHash)"
         case .semanticGroup(let label, let value, let identifier):
             let labelSlug = TheScore.slugify(label) ?? "anon"
             let valueSlug = TheScore.slugify(value) ?? ""
             let identifierSlug = identifier ?? ""
             return "semantic_\(identifierSlug)_\(labelSlug)_\(valueSlug)"
-
         case .list:
-            return "list_\(coarseFrameHash(container.frame))_\(firstChildHeistId ?? "anon")"
-
+            return "list_\(frameHash)"
         case .landmark:
-            return "landmark_\(coarseFrameHash(container.frame))_\(firstChildHeistId ?? "anon")"
-
+            return "landmark_\(frameHash)"
         case .tabBar:
-            return "tabBar_\(coarseFrameHash(container.frame))_\(firstChildHeistId ?? "anon")"
-
+            return "tabBar_\(frameHash)"
         case .dataTable(let rows, let columns):
-            return "table_\(rows)x\(columns)_\(coarseFrameHash(container.frame))_\(firstChildHeistId ?? "anon")"
+            return "table_\(rows)x\(columns)_\(frameHash)"
         }
     }
 
     /// Quantize a frame to 8-pt cells before hashing so minor layout shifts
-    /// don't break container identity. Collisions are acceptable here:
-    /// a colliding hash is OK because the type tag and first-child heistId
-    /// both participate in the final stableId.
+    /// don't break container identity. NaN/infinity coordinates (e.g. from
+    /// UIPickerView's 3D-transformed cells) are sanitized to 0 to keep the
+    /// hash a total function.
     private static func coarseFrameHash(_ frame: CGRect) -> String {
-        let x = Int((frame.origin.x / 8).rounded())
-        let y = Int((frame.origin.y / 8).rounded())
-        let width = Int((frame.size.width / 8).rounded())
-        let height = Int((frame.size.height / 8).rounded())
+        let x = Int((frame.origin.x.sanitizedForJSON / 8).rounded())
+        let y = Int((frame.origin.y.sanitizedForJSON / 8).rounded())
+        let width = Int((frame.size.width.sanitizedForJSON / 8).rounded())
+        let height = Int((frame.size.height.sanitizedForJSON / 8).rounded())
         return "\(x)_\(y)_\(width)_\(height)"
     }
 
@@ -89,7 +85,7 @@ extension TheStash.ElementRegistry {
         hierarchy: [AccessibilityHierarchy],
         heistIds: [AccessibilityElement: String],
         contexts: [AccessibilityElement: TheStash.ElementContext],
-        scrollableViews: [AccessibilityContainer: UIView]
+        containerContentFrames: [AccessibilityContainer: CGRect]
     ) {
         let oldRoots = roots
         let oldIndex = elementByHeistId
@@ -100,7 +96,7 @@ extension TheStash.ElementRegistry {
             hierarchy: hierarchy,
             heistIds: heistIds,
             contexts: contexts,
-            scrollableViews: scrollableViews,
+            containerContentFrames: containerContentFrames,
             oldIndex: oldIndex,
             oldRoots: oldRoots
         )
@@ -185,14 +181,15 @@ extension TheStash.ElementRegistry {
         hierarchy: [AccessibilityHierarchy],
         heistIds: [AccessibilityElement: String],
         contexts: [AccessibilityElement: TheStash.ElementContext],
-        scrollableViews: [AccessibilityContainer: UIView],
+        containerContentFrames: [AccessibilityContainer: CGRect],
         oldIndex: [String: TheStash.RegistryPath],
         oldRoots: [TheStash.RegistryNode]
     ) -> [TheStash.RegistryNode] {
         hierarchy.compactMap { hier in
             buildNode(
                 hier: hier, heistIds: heistIds, contexts: contexts,
-                scrollableViews: scrollableViews, oldIndex: oldIndex, oldRoots: oldRoots
+                containerContentFrames: containerContentFrames,
+                oldIndex: oldIndex, oldRoots: oldRoots
             )
         }
     }
@@ -201,7 +198,7 @@ extension TheStash.ElementRegistry {
         hier: AccessibilityHierarchy,
         heistIds: [AccessibilityElement: String],
         contexts: [AccessibilityElement: TheStash.ElementContext],
-        scrollableViews: [AccessibilityContainer: UIView],
+        containerContentFrames: [AccessibilityContainer: CGRect],
         oldIndex: [String: TheStash.RegistryPath],
         oldRoots: [TheStash.RegistryNode]
     ) -> TheStash.RegistryNode? {
@@ -225,13 +222,12 @@ extension TheStash.ElementRegistry {
             let childNodes = children.compactMap { child in
                 buildNode(
                     hier: child, heistIds: heistIds, contexts: contexts,
-                    scrollableViews: scrollableViews, oldIndex: oldIndex, oldRoots: oldRoots
+                    containerContentFrames: containerContentFrames,
+                    oldIndex: oldIndex, oldRoots: oldRoots
                 )
             }
-            let firstChild = firstHeistId(in: childNodes)
-            let stableId = Self.stableId(
-                for: container, scrollableViews: scrollableViews, firstChildHeistId: firstChild
-            )
+            let contentFrame = containerContentFrames[container] ?? container.frame
+            let stableId = Self.stableId(for: container, contentFrame: contentFrame)
             let entry = TheStash.RegistryContainerEntry(stableId: stableId, container: container)
             return .container(entry, children: childNodes)
         }

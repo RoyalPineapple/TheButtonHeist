@@ -83,7 +83,7 @@ extension TheStash {
         heistIds: [String],
         contexts: [AccessibilityElement: ElementContext],
         hierarchy: [AccessibilityHierarchy],
-        scrollableViews: [AccessibilityContainer: UIView]
+        containerContentFrames: [AccessibilityContainer: CGRect]
     ) {
         var resolvedHeistIds: [AccessibilityElement: String] = [:]
         for (parsedElement, baseHeistId) in zip(parsedElements, heistIds) {
@@ -99,7 +99,7 @@ extension TheStash {
             hierarchy: hierarchy,
             heistIds: resolvedHeistIds,
             contexts: contexts,
-            scrollableViews: scrollableViews
+            containerContentFrames: containerContentFrames
         )
     }
 
@@ -156,7 +156,7 @@ extension TheStash {
             hierarchy: [.element(element.element, traversalIndex: roots.count)],
             heistIds: [element.element: element.heistId],
             contexts: [element.element: context],
-            scrollableViews: [:]
+            containerContentFrames: [:]
         )
     }
     }

@@ -60,51 +60,83 @@ final class ElementRegistryTreeTests: XCTestCase {
             frame: CGRect(x: 50, y: 200, width: 100, height: 100)
         )
 
-        let idA = TheStash.ElementRegistry.stableId(for: containerA, scrollableViews: [:], firstChildHeistId: nil)
-        let idB = TheStash.ElementRegistry.stableId(for: containerB, scrollableViews: [:], firstChildHeistId: nil)
+        let idA = TheStash.ElementRegistry.stableId(for: containerA, contentFrame: containerA.frame)
+        let idB = TheStash.ElementRegistry.stableId(for: containerB, contentFrame: containerB.frame)
 
         XCTAssertEqual(idA, idB, "Same semantic group metadata yields same stableId across frame drift")
     }
 
-    func testScrollableStableIdHoldsAcrossFrameDrift() {
-        let view = UIScrollView()
+    func testScrollableStableIdSurvivesContentSizeDrift() {
+        // Same scrollable across parses (same content-frame) — contentSize
+        // changing as rows are added shouldn't change identity.
+        let frame = CGRect(x: 0, y: 0, width: 320, height: 480)
         let containerV1 = AccessibilityContainer(
             type: .scrollable(contentSize: CGSize(width: 320, height: 1000)),
-            frame: CGRect(x: 0, y: 0, width: 320, height: 480)
+            frame: frame
         )
         let containerV2 = AccessibilityContainer(
             type: .scrollable(contentSize: CGSize(width: 320, height: 5000)),
-            frame: CGRect(x: 0, y: 100, width: 320, height: 480)
+            frame: frame
         )
 
-        let idV1 = TheStash.ElementRegistry.stableId(
-            for: containerV1, scrollableViews: [containerV1: view], firstChildHeistId: nil
-        )
-        let idV2 = TheStash.ElementRegistry.stableId(
-            for: containerV2, scrollableViews: [containerV2: view], firstChildHeistId: nil
-        )
+        let idV1 = TheStash.ElementRegistry.stableId(for: containerV1, contentFrame: frame)
+        let idV2 = TheStash.ElementRegistry.stableId(for: containerV2, contentFrame: frame)
 
-        XCTAssertEqual(idV1, idV2, "Same UIScrollView yields same stableId regardless of frame or content size")
+        XCTAssertEqual(idV1, idV2, "Same content-frame yields same stableId regardless of contentSize")
     }
 
-    func testListStableIdUsesFrameAndFirstChild() {
+    func testScrollableStableIdDistinguishesContentSpacePosition() {
+        // Two scrollables at different content-space positions (e.g. cell-embedded
+        // carousels at different rows) get distinct ids — no collision via shared
+        // UIView instance from a cell reuse pool.
+        let container = AccessibilityContainer(
+            type: .scrollable(contentSize: CGSize(width: 320, height: 1000)),
+            frame: CGRect(x: 0, y: 0, width: 320, height: 480)
+        )
+        let id1 = TheStash.ElementRegistry.stableId(
+            for: container, contentFrame: CGRect(x: 0, y: 500, width: 320, height: 480)
+        )
+        let id2 = TheStash.ElementRegistry.stableId(
+            for: container, contentFrame: CGRect(x: 0, y: 5400, width: 320, height: 480)
+        )
+        XCTAssertNotEqual(id1, id2)
+    }
+
+    func testListStableIdDerivesFromContentFrame() {
         let container = AccessibilityContainer(
             type: .list,
             frame: CGRect(x: 0, y: 100, width: 320, height: 400)
         )
-        let id1 = TheStash.ElementRegistry.stableId(for: container, scrollableViews: [:], firstChildHeistId: "row_0")
-        let id2 = TheStash.ElementRegistry.stableId(for: container, scrollableViews: [:], firstChildHeistId: "row_0")
-        let id3 = TheStash.ElementRegistry.stableId(for: container, scrollableViews: [:], firstChildHeistId: "row_99")
+        let id1 = TheStash.ElementRegistry.stableId(
+            for: container, contentFrame: container.frame
+        )
+        let id2 = TheStash.ElementRegistry.stableId(
+            for: container, contentFrame: container.frame
+        )
+        let id3 = TheStash.ElementRegistry.stableId(
+            for: container, contentFrame: CGRect(x: 0, y: 800, width: 320, height: 400)
+        )
 
-        XCTAssertEqual(id1, id2, "Identical inputs yield identical ids")
-        XCTAssertNotEqual(id1, id3, "Different first-child anchors yield different ids")
+        XCTAssertEqual(id1, id2, "Identical content-frame yields identical id")
+        XCTAssertNotEqual(id1, id3, "Different content-frame yields different id")
+    }
+
+    func testCoarseFrameHashSanitizesNonFiniteCoordinates() {
+        // A list whose frame became NaN (e.g. UIPickerView 3D-transform corner case)
+        // must still produce a usable stableId without trapping.
+        let container = AccessibilityContainer(
+            type: .list,
+            frame: CGRect(x: 0, y: 0, width: 320, height: 400)
+        )
+        let nanFrame = CGRect(x: CGFloat.nan, y: 0, width: 320, height: 400)
+        _ = TheStash.ElementRegistry.stableId(for: container, contentFrame: nanFrame)
     }
 
     // MARK: - Merge
 
     func testMergeEmptyHierarchyLeavesEmptyTree() {
         var registry = TheStash.ElementRegistry()
-        registry.merge(hierarchy: [], heistIds: [:], contexts: [:], scrollableViews: [:])
+        registry.merge(hierarchy: [], heistIds: [:], contexts: [:], containerContentFrames: [:])
         XCTAssertTrue(registry.roots.isEmpty)
         XCTAssertTrue(registry.elementByHeistId.isEmpty)
     }
@@ -117,7 +149,7 @@ final class ElementRegistryTreeTests: XCTestCase {
             hierarchy: leaves([elementA, elementB]),
             heistIds: heistIdMap([(elementA, "id-a"), (elementB, "id-b")]),
             contexts: [:],
-            scrollableViews: [:]
+            containerContentFrames: [:]
         )
 
         let flat = registry.flattenElements()
@@ -132,9 +164,9 @@ final class ElementRegistryTreeTests: XCTestCase {
         let hierarchy = leaves([elementA])
         let heistIds = heistIdMap([(elementA, "id-a")])
 
-        registry.merge(hierarchy: hierarchy, heistIds: heistIds, contexts: [:], scrollableViews: [:])
+        registry.merge(hierarchy: hierarchy, heistIds: heistIds, contexts: [:], containerContentFrames: [:])
         let firstRoots = registry.roots.count
-        registry.merge(hierarchy: hierarchy, heistIds: heistIds, contexts: [:], scrollableViews: [:])
+        registry.merge(hierarchy: hierarchy, heistIds: heistIds, contexts: [:], containerContentFrames: [:])
 
         XCTAssertEqual(registry.roots.count, firstRoots, "Merging an identical parse is idempotent")
         XCTAssertEqual(registry.flattenElements().map(\.heistId), ["id-a"])
@@ -149,7 +181,7 @@ final class ElementRegistryTreeTests: XCTestCase {
             hierarchy: leaves([elementA, elementB]),
             heistIds: heistIdMap([(elementA, "id-a"), (elementB, "id-b")]),
             contexts: [:],
-            scrollableViews: [:]
+            containerContentFrames: [:]
         )
 
         // Second parse: only B is live. A scrolled out.
@@ -157,7 +189,7 @@ final class ElementRegistryTreeTests: XCTestCase {
             hierarchy: leaves([elementB]),
             heistIds: heistIdMap([(elementB, "id-b")]),
             contexts: [:],
-            scrollableViews: [:]
+            containerContentFrames: [:]
         )
 
         let ids = registry.flattenElements().map(\.heistId)
@@ -174,7 +206,7 @@ final class ElementRegistryTreeTests: XCTestCase {
             hierarchy: leaves([elementA]),
             heistIds: heistIdMap([(elementA, "id-a")]),
             contexts: [:],
-            scrollableViews: [:]
+            containerContentFrames: [:]
         )
 
         // Second parse: B is new. A is still present.
@@ -182,7 +214,7 @@ final class ElementRegistryTreeTests: XCTestCase {
             hierarchy: leaves([elementA, elementB]),
             heistIds: heistIdMap([(elementA, "id-a"), (elementB, "id-b")]),
             contexts: [:],
-            scrollableViews: [:]
+            containerContentFrames: [:]
         )
 
         let ids = registry.flattenElements().map(\.heistId)
@@ -198,28 +230,24 @@ final class ElementRegistryTreeTests: XCTestCase {
             hierarchy: leaves([oldElement]),
             heistIds: heistIdMap([(oldElement, "id-a")]),
             contexts: [:],
-            scrollableViews: [:]
+            containerContentFrames: [:]
         )
         registry.merge(
             hierarchy: leaves([newElement]),
             heistIds: heistIdMap([(newElement, "id-a")]),
             contexts: [:],
-            scrollableViews: [:]
+            containerContentFrames: [:]
         )
 
         XCTAssertEqual(registry.flattenElements().count, 1)
         XCTAssertEqual(registry.findElement(heistId: "id-a")?.element.label, "New")
     }
 
-    /// Non-scrollable containers (list/landmark/tabBar/dataTable) currently
-    /// derive their `stableId` partly from `firstChildHeistId`. When the first
-    /// child changes between parses (deletion, scroll-out, hide), the
-    /// container's stableId changes, so orphans collected under the old
-    /// stableId can no longer reattach and surface at root level. This test
-    /// pins that documented limitation — when retention beyond the scrollable
-    /// case is required, fix the heuristic and update this test to assert
-    /// the orphan stays nested.
-    func testNonScrollableContainerLosesIdentityWhenFirstChildChanges() {
+    /// Non-scrollable containers (list/landmark/tabBar/dataTable) derive
+    /// their `stableId` from the container's content-space frame, so identity
+    /// holds through child churn. An orphan whose siblings changed entirely
+    /// still reattaches to the same list across parses.
+    func testNonScrollableContainerKeepsIdentityWhenChildrenChurn() {
         var registry = TheStash.ElementRegistry()
         let rowA = makeElement(label: "Row A")
         let rowB = makeElement(label: "Row B")
@@ -228,7 +256,7 @@ final class ElementRegistryTreeTests: XCTestCase {
             frame: CGRect(x: 0, y: 0, width: 320, height: 200)
         )
 
-        // First parse: list contains both rows; rowA is first.
+        // First parse: list contains both rows.
         registry.merge(
             hierarchy: [
                 .container(listContainer, children: [
@@ -238,13 +266,11 @@ final class ElementRegistryTreeTests: XCTestCase {
             ],
             heistIds: heistIdMap([(rowA, "row_a"), (rowB, "row_b")]),
             contexts: [:],
-            scrollableViews: [:]
+            containerContentFrames: [listContainer: listContainer.frame]
         )
 
-        // Second parse: rowA is gone; rowB is now first. The list container
-        // looks the same to the parser (same type, same frame) but its
-        // stableId now anchors on rowB, not rowA. The orphan rowA can't
-        // reattach to the rebuilt list.
+        // Second parse: rowA is gone; rowB is now the first child.
+        // List identity is content-frame-based, so it survives.
         registry.merge(
             hierarchy: [
                 .container(listContainer, children: [
@@ -253,32 +279,40 @@ final class ElementRegistryTreeTests: XCTestCase {
             ],
             heistIds: heistIdMap([(rowB, "row_b")]),
             contexts: [:],
-            scrollableViews: [:]
+            containerContentFrames: [listContainer: listContainer.frame]
         )
 
         XCTAssertNotNil(
             registry.findElement(heistId: "row_a"),
-            "rowA must still be retained somewhere in the registry"
+            "rowA must be retained in the registry"
         )
 
-        // Pin the current behavior: rowA surfaces at the root level, not
-        // under the list. Update this assertion if/when the stableId
-        // heuristic is replaced with something more durable.
         let topLevel = registry.roots.compactMap { node -> String? in
             if case .element(let element) = node { return element.heistId }
             return nil
         }
-        XCTAssertTrue(
+        XCTAssertFalse(
             topLevel.contains("row_a"),
-            "Known limitation: orphans of a non-scrollable container surface " +
-            "at root when the container's first-child anchor changes"
+            "rowA must NOT surface at root — list identity holds across child churn"
         )
+
+        var foundUnderList = false
+        for node in registry.roots {
+            if case .container(let entry, let children) = node,
+               case .list = entry.container.type {
+                for child in children {
+                    if case .element(let element) = child, element.heistId == "row_a" {
+                        foundUnderList = true
+                    }
+                }
+            }
+        }
+        XCTAssertTrue(foundUnderList, "rowA should be a child of the list container")
     }
 
     func testMergeContainerSurvivesAcrossParses() {
         var registry = TheStash.ElementRegistry()
         let row = makeElement(label: "Row 0")
-        let scrollView = UIScrollView()
         let container = AccessibilityContainer(
             type: .scrollable(contentSize: CGSize(width: 320, height: 5000)),
             frame: CGRect(x: 0, y: 0, width: 320, height: 480)
@@ -291,7 +325,7 @@ final class ElementRegistryTreeTests: XCTestCase {
             hierarchy: hierarchy,
             heistIds: heistIdMap([(row, "row_0")]),
             contexts: [:],
-            scrollableViews: [container: scrollView]
+            containerContentFrames: [container: container.frame]
         )
 
         // Reparse: same scroll view but row scrolled out (no live children).
@@ -299,7 +333,7 @@ final class ElementRegistryTreeTests: XCTestCase {
             hierarchy: [],
             heistIds: [:],
             contexts: [:],
-            scrollableViews: [:]
+            containerContentFrames: [:]
         )
 
         XCTAssertNotNil(registry.findElement(heistId: "row_0"),
@@ -335,7 +369,7 @@ final class ElementRegistryTreeTests: XCTestCase {
                 (row1, "row_1"),
             ]),
             contexts: [:],
-            scrollableViews: [scrollContainer: UIScrollView()]
+            containerContentFrames: [scrollContainer: scrollContainer.frame]
         )
 
         XCTAssertEqual(
@@ -366,7 +400,7 @@ final class ElementRegistryTreeTests: XCTestCase {
             hierarchy: hierarchy,
             heistIds: heistIdMap([(row, "row_0")]),
             contexts: [:],
-            scrollableViews: [scrollContainer: UIScrollView()]
+            containerContentFrames: [scrollContainer: scrollContainer.frame]
         )
 
         XCTAssertEqual(registry.findElement(heistId: "row_0")?.element.label, "Row")
@@ -387,7 +421,7 @@ final class ElementRegistryTreeTests: XCTestCase {
                 (elementC, "id-c"),
             ]),
             contexts: [:],
-            scrollableViews: [:]
+            containerContentFrames: [:]
         )
 
         registry.pruneTree(keeping: ["id-a", "id-c"])
@@ -407,7 +441,7 @@ final class ElementRegistryTreeTests: XCTestCase {
             hierarchy: [.container(scrollContainer, children: [.element(row, traversalIndex: 0)])],
             heistIds: heistIdMap([(row, "row_0")]),
             contexts: [:],
-            scrollableViews: [scrollContainer: UIScrollView()]
+            containerContentFrames: [scrollContainer: scrollContainer.frame]
         )
 
         registry.pruneTree(keeping: [])
@@ -423,7 +457,6 @@ final class ElementRegistryTreeTests: XCTestCase {
     /// This test exercises a sequence of merges and validates after every step.
     func testInvariantsHoldAcrossSequenceOfMerges() {
         var registry = TheStash.ElementRegistry()
-        let scrollView = UIScrollView()
         let scrollContainer = AccessibilityContainer(
             type: .scrollable(contentSize: CGSize(width: 320, height: 5000)),
             frame: CGRect(x: 0, y: 0, width: 320, height: 480)
@@ -439,7 +472,7 @@ final class ElementRegistryTreeTests: XCTestCase {
             hierarchy: leaves([alpha, beta]),
             heistIds: heistIdMap([(alpha, "id-alpha"), (beta, "id-beta")]),
             contexts: [:],
-            scrollableViews: [:]
+            containerContentFrames: [:]
         )
         XCTAssertNil(registry.validateInvariants())
 
@@ -462,7 +495,7 @@ final class ElementRegistryTreeTests: XCTestCase {
                 (row1, "row-1"),
             ]),
             contexts: [:],
-            scrollableViews: [scrollContainer: scrollView]
+            containerContentFrames: [scrollContainer: scrollContainer.frame]
         )
         XCTAssertNil(registry.validateInvariants())
 
@@ -481,7 +514,7 @@ final class ElementRegistryTreeTests: XCTestCase {
                 (row1, "row-1"),
             ]),
             contexts: [:],
-            scrollableViews: [scrollContainer: scrollView]
+            containerContentFrames: [scrollContainer: scrollContainer.frame]
         )
         XCTAssertNil(registry.validateInvariants())
         XCTAssertNotNil(registry.findElement(heistId: "row-0"))
@@ -520,7 +553,7 @@ final class ElementRegistryTreeTests: XCTestCase {
                 (footer, "footer"),
             ]),
             contexts: [:],
-            scrollableViews: [scrollContainer: UIScrollView()]
+            containerContentFrames: [scrollContainer: scrollContainer.frame]
         )
 
         let flat = registry.flattenElements().map(\.heistId)
@@ -544,7 +577,6 @@ final class ElementRegistryTreeTests: XCTestCase {
             type: .scrollable(contentSize: CGSize(width: 402, height: 5311)),
             frame: CGRect(x: 0, y: 0, width: 402, height: 800)
         )
-        let scrollView = UIScrollView()
 
         // First parse includes search field + rows.
         registry.merge(
@@ -561,7 +593,7 @@ final class ElementRegistryTreeTests: XCTestCase {
                 (row1, "row_1"),
             ]),
             contexts: [:],
-            scrollableViews: [scrollContainer: scrollView]
+            containerContentFrames: [scrollContainer: scrollContainer.frame]
         )
 
         // Second parse: scrolled past the search field. It's no longer live,
@@ -575,12 +607,77 @@ final class ElementRegistryTreeTests: XCTestCase {
             ],
             heistIds: heistIdMap([(row0, "row_0"), (row1, "row_1")]),
             contexts: [:],
-            scrollableViews: [scrollContainer: scrollView]
+            containerContentFrames: [scrollContainer: scrollContainer.frame]
         )
 
         let ids = registry.flattenElements().map(\.heistId)
         XCTAssertTrue(ids.contains("search_items_searchField"),
                       "Search field absent from current parse must still be in the registry tree")
+    }
+
+    // MARK: - Cell Reuse Safety
+
+    /// End-to-end property test for the cell-reuse hazard the content-frame
+    /// identity model is designed to prevent.
+    ///
+    /// Scenario: a UICollectionView (or UITableView) reuses a cell whose
+    /// inner UIScrollView (a horizontal carousel) was previously bound to row
+    /// 5's data and is now bound to row 27's data. Under an `ObjectIdentifier`-
+    /// based identity, both carousels would share a stableId and an orphan
+    /// from row 5's carousel would attach as a sibling of row 27's content —
+    /// cross-contamination. Under content-space-frame identity, the two
+    /// carousels live at distinct logical positions (content-y = 500 vs 2700)
+    /// and so receive distinct stableIds.
+    ///
+    /// The property under test: row 5's orphan element MUST NOT end up
+    /// nested as a sibling of row 27's content under any single container.
+    func testCellReusedScrollableDoesNotCrossContaminateContents() {
+        var registry = TheStash.ElementRegistry()
+        let carousel = AccessibilityContainer(
+            type: .scrollable(contentSize: CGSize(width: 320, height: 1000)),
+            frame: CGRect(x: 0, y: 200, width: 320, height: 200)
+        )
+        let row5Item = makeElement(label: "Row 5 Item")
+        let row27Item = makeElement(label: "Row 27 Item")
+
+        // Parse 1: row 5's carousel at content-y = 500.
+        registry.merge(
+            hierarchy: [.container(carousel, children: [.element(row5Item, traversalIndex: 0)])],
+            heistIds: heistIdMap([(row5Item, "row5_item")]),
+            contexts: [:],
+            containerContentFrames: [carousel: CGRect(x: 0, y: 500, width: 320, height: 200)]
+        )
+
+        // Parse 2: cell reuse — same AccessibilityContainer value (and possibly the
+        // same backing UIView from the cell pool), but at content-y = 2700.
+        registry.merge(
+            hierarchy: [.container(carousel, children: [.element(row27Item, traversalIndex: 0)])],
+            heistIds: heistIdMap([(row27Item, "row27_item")]),
+            contexts: [:],
+            containerContentFrames: [carousel: CGRect(x: 0, y: 2700, width: 320, height: 200)]
+        )
+
+        XCTAssertNotNil(registry.findElement(heistId: "row5_item"),
+                        "row 5's element retained in the registry")
+        XCTAssertNotNil(registry.findElement(heistId: "row27_item"),
+                        "row 27's element present from the live parse")
+
+        var crossContamination = false
+        for node in registry.roots {
+            if case .container(_, let children) = node {
+                let ids = children.compactMap { node -> String? in
+                    if case .element(let element) = node { return element.heistId }
+                    return nil
+                }
+                if ids.contains("row5_item") && ids.contains("row27_item") {
+                    crossContamination = true
+                }
+            }
+        }
+        XCTAssertFalse(
+            crossContamination,
+            "A cell-reused scrollable at a different content-position must not adopt orphans from its previous logical content"
+        )
     }
 }
 

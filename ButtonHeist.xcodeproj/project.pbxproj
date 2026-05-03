@@ -103,6 +103,7 @@
 		7FB26FEC3688200253566165 /* swift-crypto_CCryptoBoringSSL.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 13D30AC92A982F4FC9F47B71 /* swift-crypto_CCryptoBoringSSL.bundle */; };
 		81D404D32B637C1A1CE69D10 /* ElementRegistry+Merge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A33F684672F99BB922FDD9C4 /* ElementRegistry+Merge.swift */; };
 		83B29D2A5A9726FCFBCC1062 /* TheHandoffStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCE478B1B9A069FD64C5BD2E /* TheHandoffStateTests.swift */; };
+		86AD65304E33955480EAF158 /* TheBurglarContainerFramesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0E4125D91BDBBE45E6C66F9 /* TheBurglarContainerFramesTests.swift */; };
 		871194C060FF486DFB34A4C6 /* TheStash+Matching.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0108809EB5567BB0C5665090 /* TheStash+Matching.swift */; };
 		89284D94AD5C257AB04C81E9 /* ClientMessages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F2A56B947CB11F8C462EC56 /* ClientMessages.swift */; };
 		89F5F2170E4655D1EB591286 /* TheBookKeeper+Compression.swift in Sources */ = {isa = PBXBuildFile; fileRef = A476106DD1E4E3A5664FB323 /* TheBookKeeper+Compression.swift */; };
@@ -434,6 +435,7 @@
 		9A918FE0F8CB350A49C5A16C /* TheScore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TheScore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		9A93F116628B208D1D4508DF /* SessionManifest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionManifest.swift; sourceTree = "<group>"; };
 		9BE246859FDEDCD3B4C5F5E9 /* ScrollToVisibleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollToVisibleTests.swift; sourceTree = "<group>"; };
+		A0E4125D91BDBBE45E6C66F9 /* TheBurglarContainerFramesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheBurglarContainerFramesTests.swift; sourceTree = "<group>"; };
 		A10CE4609BC79CCF4BF0CFAA /* AccessibilitySnapshotParser.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AccessibilitySnapshotParser.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		A23BFDA702935F9635FDA847 /* AccessibilityHierarchyReconciliationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityHierarchyReconciliationTests.swift; sourceTree = "<group>"; };
 		A33F684672F99BB922FDD9C4 /* ElementRegistry+Merge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ElementRegistry+Merge.swift"; sourceTree = "<group>"; };
@@ -886,6 +888,7 @@
 				A63CE2190936B721E21C76CE /* TheBrainsPipelineTests.swift */,
 				BD414D07E60258326145755A /* TheBrainsScrollTests.swift */,
 				1BE3551882C8F9FF740EA26B /* TheBurglarApplyTests.swift */,
+				A0E4125D91BDBBE45E6C66F9 /* TheBurglarContainerFramesTests.swift */,
 				FEF358739DC27BF19F7C58C7 /* TheBurglarParseTests.swift */,
 				8704DBF79498D0AAA0EDF20B /* TheInsideJobStateTests.swift */,
 				594A7F8340C7B335C8033319 /* TheMuscleTests.swift */,
@@ -1420,6 +1423,7 @@
 				D2DD07E8902C0F7FC09419C8 /* TheBrainsPipelineTests.swift in Sources */,
 				2FC3CAAB5ABC9EC51DDF3246 /* TheBrainsScrollTests.swift in Sources */,
 				37A3E33799F2C13AF5F9D355 /* TheBurglarApplyTests.swift in Sources */,
+				86AD65304E33955480EAF158 /* TheBurglarContainerFramesTests.swift in Sources */,
 				75784BEDD12A767343FDACC7 /* TheBurglarParseTests.swift in Sources */,
 				036A97225C8E6C36CC730DA1 /* TheInsideJobStateTests.swift in Sources */,
 				70645F302E2187171D64E958 /* TheMuscleTests.swift in Sources */,
@@ -1981,6 +1985,7 @@
 				LastSwiftMigration = 2620;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SRCROOT = "/Users/aodawa/conductor/workspaces/accra/tyler-v3";
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 				SWIFT_VERSION = 6;
 				VALIDATE_PRODUCT = YES;
@@ -2044,6 +2049,7 @@
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SRCROOT = "/Users/aodawa/conductor/workspaces/accra/tyler-v3";
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 				SWIFT_VERSION = 6;
 			};
