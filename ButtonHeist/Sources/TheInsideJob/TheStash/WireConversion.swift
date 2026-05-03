@@ -6,6 +6,13 @@ import TheScore
 
 import AccessibilitySnapshotParser
 
+private struct WireTreeRecord {
+    let ref: TreeNodeRef
+    let location: TreeLocation
+    let node: InterfaceNode
+    let ancestors: [String]
+}
+
 // MARK: - Float Sanitization
 
 extension CGFloat {
@@ -270,13 +277,6 @@ extension TheStash {
         )
     }
 
-    private struct TreeRecord {
-        let ref: TreeNodeRef
-        let location: TreeLocation
-        let node: InterfaceNode
-        let ancestors: [String]
-    }
-
     private static func computeTreeDelta(
         beforeTree: [InterfaceNode],
         afterTree: [InterfaceNode],
@@ -337,8 +337,8 @@ extension TheStash {
         )
     }
 
-    private static func indexTree(_ roots: [InterfaceNode]) -> [String: TreeRecord] {
-        var result: [String: TreeRecord] = [:]
+    private static func indexTree(_ roots: [InterfaceNode]) -> [String: WireTreeRecord] {
+        var result: [String: WireTreeRecord] = [:]
         for (index, node) in roots.enumerated() {
             collectTreeRecords(
                 node,
@@ -356,11 +356,11 @@ extension TheStash {
         parentId: String?,
         index: Int,
         ancestors: [String],
-        into result: inout [String: TreeRecord]
+        into result: inout [String: WireTreeRecord]
     ) {
         guard let ref = treeRef(for: node) else { return }
         let location = TreeLocation(parentId: parentId, index: index)
-        result[ref.id] = TreeRecord(ref: ref, location: location, node: node, ancestors: ancestors)
+        result[ref.id] = WireTreeRecord(ref: ref, location: location, node: node, ancestors: ancestors)
 
         guard case .container(_, let children) = node else { return }
         let childAncestors = ancestors + [ref.id]
