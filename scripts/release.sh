@@ -93,13 +93,25 @@ if [[ "$LOCAL_SHA" != "$REMOTE_SHA" ]]; then
     exit 1
 fi
 
-# CI must have passed on this commit
+# CI must have passed on this commit — wait up to 20 minutes
 if [[ "$RUN_TESTS" == false ]]; then
-    CI_STATUS=$(gh run list --repo "$GITHUB_REPO" --commit "$LOCAL_SHA" --workflow CI --limit 1 --json conclusion --jq '.[0].conclusion' 2>/dev/null || true)
-    if [[ "$CI_STATUS" != "success" ]]; then
-        echo "Error: CI has not passed on this commit (status: ${CI_STATUS:-not found})"
+    echo "  Waiting for CI on $(echo "$LOCAL_SHA" | cut -c1-8)..."
+    CI_DEADLINE=$((SECONDS + 1200))
+    CI_RUN_ID=""
+    while [[ $SECONDS -lt $CI_DEADLINE ]]; do
+        CI_RUN_ID=$(gh run list --repo "$GITHUB_REPO" --commit "$LOCAL_SHA" --workflow CI --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
+        if [[ -n "$CI_RUN_ID" && "$CI_RUN_ID" != "null" ]]; then break; fi
+        sleep 5
+    done
+    if [[ -z "$CI_RUN_ID" || "$CI_RUN_ID" == "null" ]]; then
+        echo "Error: no CI run found after 20 minutes"
         echo "  Check: https://github.com/$GITHUB_REPO/actions"
         echo "  Or run with --full to test locally"
+        exit 1
+    fi
+    if ! gh run watch "$CI_RUN_ID" --repo "$GITHUB_REPO" --exit-status; then
+        echo "Error: CI failed on $(echo "$LOCAL_SHA" | cut -c1-8)"
+        echo "  https://github.com/$GITHUB_REPO/actions/runs/$CI_RUN_ID"
         exit 1
     fi
     echo "  CI: passed on $(echo "$LOCAL_SHA" | cut -c1-8)"
