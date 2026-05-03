@@ -52,7 +52,7 @@ final class FenceResponseTests: XCTestCase {
     }
 
     func testInterfaceEmptyHumanFormatting() {
-        let iface = Interface(timestamp: Date(), elements: [])
+        let iface = Interface(timestamp: Date(), tree: [])
         let response = FenceResponse.interface(iface)
         let output = response.humanFormatted()
         XCTAssertTrue(output.contains("0 elements"))
@@ -66,7 +66,7 @@ final class FenceResponseTests: XCTestCase {
             frameX: 10, frameY: 20, frameWidth: 100, frameHeight: 44,
             actions: [.activate]
         )
-        let iface = Interface(timestamp: Date(), elements: [element])
+        let iface = Interface(timestamp: Date(), tree: [.element(element)])
         let response = FenceResponse.interface(iface)
         let output = response.humanFormatted()
         XCTAssertTrue(output.contains("1 elements"))
@@ -251,7 +251,7 @@ final class FenceResponseTests: XCTestCase {
             value: nil, identifier: nil,
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44, actions: []
         )
-        let iface = Interface(timestamp: Date(), elements: [element])
+        let iface = Interface(timestamp: Date(), tree: [.element(element)])
         let response = FenceResponse.interface(iface)
         let dict = response.jsonDict()!
         XCTAssertEqual(dict["status"] as? String, "ok")

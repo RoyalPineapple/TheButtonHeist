@@ -78,8 +78,8 @@ extension TheStash.ElementRegistry {
     /// build a fresh tree from the incoming hierarchy, attach orphans under
     /// their previous container, sort scrollable children by content-space Y,
     /// prune empty containers, and rebuild the heistId index. Each step is a
-    /// total function from `[Node]` to `[Node]`, so the final state depends
-    /// only on inputs.
+    /// total function from `[RegistryNode]` to `[RegistryNode]`, so the final
+    /// state depends only on inputs.
     ///
     /// Live elements update in place (new `AccessibilityElement` payload, new
     /// UIKit context); absent elements are retained at their last known
@@ -140,12 +140,14 @@ extension TheStash.ElementRegistry {
         let parentStableId: String?
     }
 
-    private static func collectOrphans(roots: [Node], liveHeistIds: Set<String>) -> [Orphan] {
+    private static func collectOrphans(
+        roots: [TheStash.RegistryNode], liveHeistIds: Set<String>
+    ) -> [Orphan] {
         roots.flatMap { collectOrphans(node: $0, parentStableId: nil, liveHeistIds: liveHeistIds) }
     }
 
     private static func collectOrphans(
-        node: Node,
+        node: TheStash.RegistryNode,
         parentStableId: String?,
         liveHeistIds: Set<String>
     ) -> [Orphan] {
@@ -168,9 +170,9 @@ extension TheStash.ElementRegistry {
         heistIds: [AccessibilityElement: String],
         contexts: [AccessibilityElement: TheStash.ElementContext],
         scrollableViews: [AccessibilityContainer: UIView],
-        oldIndex: [String: NodePath],
-        oldRoots: [Node]
-    ) -> [Node] {
+        oldIndex: [String: TheStash.RegistryPath],
+        oldRoots: [TheStash.RegistryNode]
+    ) -> [TheStash.RegistryNode] {
         hierarchy.compactMap { hier in
             buildNode(
                 hier: hier, heistIds: heistIds, contexts: contexts,
@@ -184,9 +186,9 @@ extension TheStash.ElementRegistry {
         heistIds: [AccessibilityElement: String],
         contexts: [AccessibilityElement: TheStash.ElementContext],
         scrollableViews: [AccessibilityContainer: UIView],
-        oldIndex: [String: NodePath],
-        oldRoots: [Node]
-    ) -> Node? {
+        oldIndex: [String: TheStash.RegistryPath],
+        oldRoots: [TheStash.RegistryNode]
+    ) -> TheStash.RegistryNode? {
         switch hier {
         case .element(let parsedElement, _):
             guard let heistId = heistIds[parsedElement] else { return nil }
@@ -214,12 +216,12 @@ extension TheStash.ElementRegistry {
             let stableId = Self.stableId(
                 for: container, scrollableViews: scrollableViews, firstChildHeistId: firstChild
             )
-            let entry = ContainerEntry(stableId: stableId, container: container)
+            let entry = TheStash.RegistryContainerEntry(stableId: stableId, container: container)
             return .container(entry, children: childNodes)
         }
     }
 
-    private static func firstHeistId(in nodes: [Node]) -> String? {
+    private static func firstHeistId(in nodes: [TheStash.RegistryNode]) -> String? {
         for node in nodes {
             switch node {
             case .element(let element):
@@ -233,14 +235,18 @@ extension TheStash.ElementRegistry {
 
     // MARK: - Orphan Attachment (pure)
 
-    private static func attachOrphans(roots: [Node], orphans: [Orphan]) -> [Node] {
+    private static func attachOrphans(
+        roots: [TheStash.RegistryNode], orphans: [Orphan]
+    ) -> [TheStash.RegistryNode] {
         orphans.reduce(roots) { acc, orphan in
             attach(roots: acc, orphan: orphan)
         }
     }
 
-    private static func attach(roots: [Node], orphan: Orphan) -> [Node] {
-        let orphanNode = Node.element(orphan.element)
+    private static func attach(
+        roots: [TheStash.RegistryNode], orphan: Orphan
+    ) -> [TheStash.RegistryNode] {
+        let orphanNode = TheStash.RegistryNode.element(orphan.element)
         if let parentStableId = orphan.parentStableId,
            let attached = attachInside(roots: roots, parentStableId: parentStableId, child: orphanNode) {
             return attached
@@ -252,10 +258,10 @@ extension TheStash.ElementRegistry {
     /// `child` to its children. Returns the new tree on first match, nil if
     /// no matching container was found.
     private static func attachInside(
-        roots: [Node],
+        roots: [TheStash.RegistryNode],
         parentStableId: String,
-        child: Node
-    ) -> [Node]? {
+        child: TheStash.RegistryNode
+    ) -> [TheStash.RegistryNode]? {
         for index in roots.indices {
             switch roots[index] {
             case .element:
@@ -283,7 +289,9 @@ extension TheStash.ElementRegistry {
     /// Sort the children of every `.scrollable` container by content-space Y so
     /// off-screen orphans interleave with visible siblings. Non-scrollable
     /// containers preserve incoming order.
-    private static func sortScrollableChildren(roots: [Node]) -> [Node] {
+    private static func sortScrollableChildren(
+        roots: [TheStash.RegistryNode]
+    ) -> [TheStash.RegistryNode] {
         roots.map { node in
             switch node {
             case .element:
@@ -298,7 +306,9 @@ extension TheStash.ElementRegistry {
         }
     }
 
-    private static func scrollableChildOrder(_ lhs: Node, _ rhs: Node) -> Bool {
+    private static func scrollableChildOrder(
+        _ lhs: TheStash.RegistryNode, _ rhs: TheStash.RegistryNode
+    ) -> Bool {
         let lhsY = firstY(of: lhs)
         let rhsY = firstY(of: rhs)
         if lhsY != rhsY { return lhsY < rhsY }
@@ -307,7 +317,7 @@ extension TheStash.ElementRegistry {
         return lhsId < rhsId
     }
 
-    private static func firstY(of node: Node) -> CGFloat {
+    private static func firstY(of node: TheStash.RegistryNode) -> CGFloat {
         switch node {
         case .element(let element):
             if let origin = element.contentSpaceOrigin { return origin.y }
@@ -319,7 +329,9 @@ extension TheStash.ElementRegistry {
 
     // MARK: - Empty Container Pruning (pure)
 
-    private static func pruneEmptyContainers(roots: [Node]) -> [Node] {
+    private static func pruneEmptyContainers(
+        roots: [TheStash.RegistryNode]
+    ) -> [TheStash.RegistryNode] {
         roots.compactMap { node in
             switch node {
             case .element:
@@ -333,7 +345,9 @@ extension TheStash.ElementRegistry {
 
     // MARK: - Prune by Allowlist (pure)
 
-    private static func prune(roots: [Node], keeping: Set<String>) -> [Node] {
+    private static func prune(
+        roots: [TheStash.RegistryNode], keeping: Set<String>
+    ) -> [TheStash.RegistryNode] {
         roots.compactMap { node in
             switch node {
             case .element(let element):
@@ -347,9 +361,11 @@ extension TheStash.ElementRegistry {
 
     // MARK: - Index and Path Walks
 
-    /// Resolve a `NodePath` to its leaf element, returning nil if the path
+    /// Resolve a `RegistryPath` to its leaf element, returning nil if the path
     /// does not reach a leaf or is otherwise invalid.
-    static func element(at path: NodePath, in roots: [Node]) -> TheStash.ScreenElement? {
+    static func element(
+        at path: TheStash.RegistryPath, in roots: [TheStash.RegistryNode]
+    ) -> TheStash.ScreenElement? {
         guard let firstIndex = path.first, roots.indices.contains(firstIndex) else { return nil }
         let node = roots[firstIndex]
         let rest = Array(path.dropFirst())
@@ -361,15 +377,21 @@ extension TheStash.ElementRegistry {
         }
     }
 
-    private static func buildIndex(roots: [Node]) -> [String: NodePath] {
-        var index: [String: NodePath] = [:]
+    private static func buildIndex(
+        roots: [TheStash.RegistryNode]
+    ) -> [String: TheStash.RegistryPath] {
+        var index: [String: TheStash.RegistryPath] = [:]
         for (idx, root) in roots.enumerated() {
             buildIndex(node: root, path: [idx], into: &index)
         }
         return index
     }
 
-    private static func buildIndex(node: Node, path: NodePath, into index: inout [String: NodePath]) {
+    private static func buildIndex(
+        node: TheStash.RegistryNode,
+        path: TheStash.RegistryPath,
+        into index: inout [String: TheStash.RegistryPath]
+    ) {
         switch node {
         case .element(let element):
             index[element.heistId] = path
@@ -418,7 +440,7 @@ extension TheStash.ElementRegistry {
         return nil
     }
 
-    private func validateContainersHaveDescendants(_ node: Node) -> String? {
+    private func validateContainersHaveDescendants(_ node: TheStash.RegistryNode) -> String? {
         switch node {
         case .element:
             return nil
@@ -438,7 +460,7 @@ extension TheStash.ElementRegistry {
 
 // MARK: - Node Walks
 
-extension TheStash.ElementRegistry.Node {
+extension TheStash.RegistryNode {
 
     /// Depth-first walk yielding every element leaf descendant.
     func flattenElements() -> [TheStash.ScreenElement] {

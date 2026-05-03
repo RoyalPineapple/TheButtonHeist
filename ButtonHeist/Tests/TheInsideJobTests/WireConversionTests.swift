@@ -309,7 +309,7 @@ final class WireConverterTests: XCTestCase {
         let after = [afterElement]
         // The new wire shape derives newInterface from the registry tree, not
         // the flat snapshot — so the tree must reflect after.
-        let afterTree: [TheStash.ElementRegistry.Node] = [.element(afterElement)]
+        let afterTree: [TheStash.RegistryNode] = [.element(afterElement)]
 
         let delta = WireConversion.computeDelta(
             before: before, after: after, afterTree: afterTree, isScreenChange: true

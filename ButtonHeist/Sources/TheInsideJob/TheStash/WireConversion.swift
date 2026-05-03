@@ -92,11 +92,11 @@ extension TheStash {
     /// Convert the persistent registry tree to its canonical wire form.
     /// Every element in the registry — visible, scrolled out, or otherwise
     /// off-live-parse — appears at its tree position.
-    static func toWireTree(_ roots: [ElementRegistry.Node]) -> [InterfaceNode] {
+    static func toWireTree(_ roots: [RegistryNode]) -> [InterfaceNode] {
         roots.map { toWireNode($0) }
     }
 
-    private static func toWireNode(_ node: ElementRegistry.Node) -> InterfaceNode {
+    private static func toWireNode(_ node: RegistryNode) -> InterfaceNode {
         switch node {
         case .element(let element):
             return .element(toWire(element))
@@ -146,7 +146,7 @@ extension TheStash {
     static func computeDelta(
         before: [ScreenElement],
         after: [ScreenElement],
-        afterTree: [ElementRegistry.Node],
+        afterTree: [RegistryNode],
         isScreenChange: Bool
     ) -> InterfaceDelta {
         // Screen changed: VC identity differs → return full new interface

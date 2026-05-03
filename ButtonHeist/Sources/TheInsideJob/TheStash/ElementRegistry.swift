@@ -8,35 +8,20 @@ import AccessibilitySnapshotParser
 
 extension TheStash {
 
-    /// The element registry — a persistent tree of elements and containers
-    /// that survives across parses.
-    ///
-    /// `roots` is the canonical source of truth. Every element ever observed
-    /// for the current screen lives somewhere in the tree, even if the live
-    /// parse no longer mentions it (scrolled out, filtered by overlay
-    /// presentation, etc.). Containers are display-only: agents target
-    /// leaf elements, never containers directly.
-    ///
-    /// Invariants enforced by API:
-    /// - Every leaf in `roots` has an entry in `elementByHeistId` pointing to its NodePath.
-    /// - `viewportIds` is a subset of the heistIds reachable from `roots`.
-    /// - `reverseIndex` is rebuilt in sync with the live parse, not the persistent tree.
-    /// - A container is present iff it has at least one element descendant.
-    struct ElementRegistry {
-
     // MARK: - Tree Node
 
-    /// A node in the persistent registry tree.
-    enum Node {
+    /// A node in the persistent registry tree. Lifted out of `ElementRegistry`
+    /// to satisfy SwiftLint's `nesting` rule (max one level deep).
+    enum RegistryNode {
         /// A leaf element with its UIKit context.
         case element(ScreenElement)
         /// A container with its children.
-        case container(ContainerEntry, children: [Node])
+        case container(RegistryContainerEntry, children: [RegistryNode])
     }
 
     /// A container in the registry tree, identified by a stable id that
     /// persists across parses even if the underlying frame drifts.
-    struct ContainerEntry {
+    struct RegistryContainerEntry {
         /// Stable identity for this container across parses. Computed from
         /// the container's type and topology — see `stableId(for:...)`.
         let stableId: String
@@ -47,16 +32,32 @@ extension TheStash {
 
     /// Path to a node in the registry tree — each element is the child index
     /// at that depth. An empty path is invalid (no root has the empty path).
-    typealias NodePath = [Int]
+    typealias RegistryPath = [Int]
+
+    /// The element registry — a persistent tree of elements and containers
+    /// that survives across parses.
+    ///
+    /// `roots` is the canonical source of truth. Every element ever observed
+    /// for the current screen lives somewhere in the tree, even if the live
+    /// parse no longer mentions it (scrolled out, filtered by overlay
+    /// presentation, etc.). Containers are display-only: agents target
+    /// leaf elements, never containers directly.
+    ///
+    /// Invariants enforced by API:
+    /// - Every leaf in `roots` has an entry in `elementByHeistId` pointing to its RegistryPath.
+    /// - `viewportIds` is a subset of the heistIds reachable from `roots`.
+    /// - `reverseIndex` is rebuilt in sync with the live parse, not the persistent tree.
+    /// - A container is present iff it has at least one element descendant.
+    struct ElementRegistry {
 
     // MARK: - Storage
 
     /// The persistent tree. Source of truth for every element known to this
     /// screen, including off-screen / non-live elements.
-    var roots: [Node] = []
+    var roots: [RegistryNode] = []
 
     /// O(1) heistId → tree path lookup. Rebuilt on every mutation.
-    var elementByHeistId: [String: NodePath] = [:]
+    var elementByHeistId: [String: RegistryPath] = [:]
 
     /// HeistIds currently visible in the device viewport — rebuilt each refresh cycle.
     var viewportIds: Set<String> = []
