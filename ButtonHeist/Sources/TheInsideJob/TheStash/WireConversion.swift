@@ -20,8 +20,9 @@ extension CGFloat {
 
 extension TheStash {
 
-    /// Converts internal accessibility types to wire format (HeistElement, ElementNode)
-    /// and computes interface deltas. Pure transformations — no mutable state.
+    /// Converts internal accessibility types to wire format (HeistElement,
+    /// InterfaceNode, ContainerInfo) and computes interface deltas.
+    /// Pure transformations — no mutable state.
     @MainActor enum WireConversion {
 
     // MARK: - Trait Names
@@ -86,52 +87,49 @@ extension TheStash {
         entries.map { toWire($0) }
     }
 
-    // MARK: - Tree Conversion
+    // MARK: - Tree Conversion (registry → wire)
 
-    static func convertNode(_ node: AccessibilityHierarchy) -> ElementNode {
-        node.folded(
-            onElement: { _, traversalIndex in
-                .element(order: traversalIndex)
-            },
-            onContainer: { container, childNodes in
-                .container(convertContainer(container), children: childNodes)
-            }
-        )
+    /// Convert the persistent registry tree to its canonical wire form.
+    /// Every element in the registry — visible, scrolled out, or otherwise
+    /// off-live-parse — appears at its tree position.
+    static func toWireTree(_ roots: [ElementRegistry.Node]) -> [InterfaceNode] {
+        roots.map { toWireNode($0) }
     }
 
-    private static func convertContainer(_ container: AccessibilityContainer) -> Group {
-        let (groupType, label, value, identifier): (GroupType, String?, String?, String?)
-        switch container.type {
-        case let .semanticGroup(l, v, id):
-            groupType = .semanticGroup
-            label = l; value = v; identifier = id
-        case .list:
-            groupType = .list
-            label = nil; value = nil; identifier = nil
-        case .landmark:
-            groupType = .landmark
-            label = nil; value = nil; identifier = nil
-        case .dataTable:
-            groupType = .dataTable
-            label = nil; value = nil; identifier = nil
-        case .tabBar:
-            groupType = .tabBar
-            label = nil; value = nil; identifier = nil
-        case .scrollable(let contentSize):
-            groupType = .scrollable
-            let width = Int(contentSize.width.sanitizedForJSON)
-            let height = Int(contentSize.height.sanitizedForJSON)
-            label = nil; value = "\(width)x\(height)"; identifier = nil
+    private static func toWireNode(_ node: ElementRegistry.Node) -> InterfaceNode {
+        switch node {
+        case .element(let element):
+            return .element(toWire(element))
+        case .container(let entry, let children):
+            return .container(toContainerInfo(entry.container), children: children.map(toWireNode))
         }
-        return Group(
-            type: groupType,
-            label: label,
-            value: value,
-            identifier: identifier,
-            frameX: container.frame.origin.x.sanitizedForJSON,
-            frameY: container.frame.origin.y.sanitizedForJSON,
-            frameWidth: container.frame.size.width.sanitizedForJSON,
-            frameHeight: container.frame.size.height.sanitizedForJSON
+    }
+
+    private static func toContainerInfo(_ container: AccessibilityContainer) -> ContainerInfo {
+        let type: ContainerInfo.ContainerType
+        switch container.type {
+        case let .semanticGroup(label, value, identifier):
+            type = .semanticGroup(label: label, value: value, identifier: identifier)
+        case .list:
+            type = .list
+        case .landmark:
+            type = .landmark
+        case let .dataTable(rowCount, columnCount):
+            type = .dataTable(rowCount: rowCount, columnCount: columnCount)
+        case .tabBar:
+            type = .tabBar
+        case .scrollable(let contentSize):
+            type = .scrollable(
+                contentWidth: Double(contentSize.width.sanitizedForJSON),
+                contentHeight: Double(contentSize.height.sanitizedForJSON)
+            )
+        }
+        return ContainerInfo(
+            type: type,
+            frameX: Double(container.frame.origin.x.sanitizedForJSON),
+            frameY: Double(container.frame.origin.y.sanitizedForJSON),
+            frameWidth: Double(container.frame.size.width.sanitizedForJSON),
+            frameHeight: Double(container.frame.size.height.sanitizedForJSON)
         )
     }
 
@@ -140,25 +138,23 @@ extension TheStash {
     /// Compare two element snapshots and return a compact delta.
     ///
     /// Screen change detection is done by the caller via view controller identity —
-    /// `isScreenChange` is true when the screen changed (VC identity or topology). This function handles
+    /// `isScreenChange` is true when the screen changed. This function handles
     /// the response payloads:
-    /// - screen_changed → full new interface
+    /// - screen_changed → full new interface tree
     /// - elements_changed → added/removed/updated diff
     /// - no_change → element count only
     static func computeDelta(
         before: [ScreenElement],
         after: [ScreenElement],
-        afterTree: [AccessibilityHierarchy]?,
+        afterTree: [ElementRegistry.Node],
         isScreenChange: Bool
     ) -> InterfaceDelta {
         // Screen changed: VC identity differs → return full new interface
         if isScreenChange {
-            let afterWire = toWire(after)
-            let tree = afterTree?.map { convertNode($0) }
-            let fullInterface = Interface(timestamp: Date(), elements: afterWire, tree: tree)
+            let fullInterface = Interface(timestamp: Date(), tree: toWireTree(afterTree))
             return InterfaceDelta(
                 kind: .screenChanged,
-                elementCount: afterWire.count,
+                elementCount: after.count,
                 newInterface: fullInterface
             )
         }
@@ -181,9 +177,6 @@ extension TheStash {
         }
 
         // Something changed — convert to wire for property-level diff.
-        // Both snapshots are .all (full registry), so every known element is
-        // represented in both. The reconciliation produces a clean diff without
-        // needing off-screen recovery hacks.
         let beforeWire = toWire(before)
         let afterWire = toWire(after)
 

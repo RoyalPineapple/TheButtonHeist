@@ -117,9 +117,10 @@ final class TheBurglar {
     // MARK: - Apply (mutates registry)
 
     /// Apply a parse result to the registry. Sets `currentHierarchy`,
-    /// `scrollableContainerViews`, upserts into `registry.elements`, rebuilds `registry.viewportIds`.
-    /// Apply a parse result to the stash. Returns the assigned heistIds
-    /// so the caller can track them (e.g. for explore cycle accumulation).
+    /// `scrollableContainerViews`, merges the parsed hierarchy into the
+    /// persistent registry tree, refreshes viewport / reverseIndex.
+    /// Returns the assigned heistIds so callers can track them (e.g. for
+    /// explore cycle accumulation).
     @discardableResult
     func apply(_ result: ParseResult, to stash: TheStash) -> [String] {
         stash.currentHierarchy = result.hierarchy
@@ -132,7 +133,13 @@ final class TheBurglar {
         )
 
         let heistIds = TheStash.IdAssignment.assign(result.elements)
-        stash.registry.apply(parsedElements: result.elements, heistIds: heistIds, contexts: contexts)
+        stash.registry.register(
+            parsedElements: result.elements,
+            heistIds: heistIds,
+            contexts: contexts,
+            hierarchy: result.hierarchy,
+            scrollableViews: result.scrollViews
+        )
 
         // Detect first responder among parsed elements — no view hierarchy walk.
         let firstResponders = zip(result.elements, heistIds).filter { element, _ in

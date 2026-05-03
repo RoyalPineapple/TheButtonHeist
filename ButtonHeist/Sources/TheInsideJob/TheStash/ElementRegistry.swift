@@ -8,16 +8,55 @@ import AccessibilitySnapshotParser
 
 extension TheStash {
 
-    /// The element registry — tracks all known elements, their viewport visibility,
-    /// and reverse lookup indices.
+    /// The element registry — a persistent tree of elements and containers
+    /// that survives across parses.
+    ///
+    /// `roots` is the canonical source of truth. Every element ever observed
+    /// for the current screen lives somewhere in the tree, even if the live
+    /// parse no longer mentions it (scrolled out, filtered by overlay
+    /// presentation, etc.). Containers are display-only: agents target
+    /// leaf elements, never containers directly.
     ///
     /// Invariants enforced by API:
-    /// - viewportIds is always a subset of elements.keys
-    /// - reverseIndex is rebuilt in sync with viewportIds
+    /// - Every leaf in `roots` has an entry in `elementByHeistId` pointing to its NodePath.
+    /// - `viewportIds` is a subset of the heistIds reachable from `roots`.
+    /// - `reverseIndex` is rebuilt in sync with the live parse, not the persistent tree.
+    /// - A container is present iff it has at least one element descendant.
     struct ElementRegistry {
 
-    /// Persistent element registry keyed by heistId. Lives for the screen's duration.
-    var elements: [String: ScreenElement] = [:]
+    // MARK: - Tree Node
+
+    /// A node in the persistent registry tree.
+    enum Node {
+        /// A leaf element with its UIKit context.
+        case element(ScreenElement)
+        /// A container with its children.
+        case container(ContainerEntry, children: [Node])
+    }
+
+    /// A container in the registry tree, identified by a stable id that
+    /// persists across parses even if the underlying frame drifts.
+    struct ContainerEntry {
+        /// Stable identity for this container across parses. Computed from
+        /// the container's type and topology — see `stableId(for:...)`.
+        let stableId: String
+        /// Most recently observed parser container value. Frame and content
+        /// size may shift across parses, but stableId stays put.
+        var container: AccessibilityContainer
+    }
+
+    /// Path to a node in the registry tree — each element is the child index
+    /// at that depth. An empty path is invalid (no root has the empty path).
+    typealias NodePath = [Int]
+
+    // MARK: - Storage
+
+    /// The persistent tree. Source of truth for every element known to this
+    /// screen, including off-screen / non-live elements.
+    var roots: [Node] = []
+
+    /// O(1) heistId → tree path lookup. Rebuilt on every mutation.
+    var elementByHeistId: [String: NodePath] = [:]
 
     /// HeistIds currently visible in the device viewport — rebuilt each refresh cycle.
     var viewportIds: Set<String> = []
@@ -27,50 +66,49 @@ extension TheStash {
     var firstResponderHeistId: String?
 
     /// Reverse index: AccessibilityElement → heistId for the current visible set.
+    /// Scoped to the live parse, not the persistent tree — used by matchers
+    /// to fast-path hierarchy hits to their resolved heistId.
     var reverseIndex: [AccessibilityElement: String] = [:]
 
     // MARK: - Mutation
 
-    /// Upsert elements into the registry from a parse result.
-    mutating func apply(
+    /// Apply a parse result: resolve heistIds with content-space disambiguation,
+    /// merge into the persistent tree, refresh viewport/reverseIndex.
+    ///
+    /// Live state (viewport, reverseIndex) is rebuilt from the incoming parse;
+    /// persistent state (the tree) is merged.
+    mutating func register(
         parsedElements: [AccessibilityElement],
         heistIds: [String],
-        contexts: [AccessibilityElement: ElementContext]
+        contexts: [AccessibilityElement: ElementContext],
+        hierarchy: [AccessibilityHierarchy],
+        scrollableViews: [AccessibilityContainer: UIView]
     ) {
-        var resolvedPairs: [(AccessibilityElement, String)] = []
-
+        var resolvedHeistIds: [AccessibilityElement: String] = [:]
         for (parsedElement, baseHeistId) in zip(parsedElements, heistIds) {
             let context = contexts[parsedElement]
-            let heistId = resolveHeistId(baseHeistId, contentSpaceOrigin: context?.contentSpaceOrigin)
-            resolvedPairs.append((parsedElement, heistId))
-            if var existing = elements[heistId] {
-                existing.element = parsedElement
-                existing.object = context?.object
-                existing.scrollView = context?.scrollView
-                existing.contentSpaceOrigin = context?.contentSpaceOrigin ?? existing.contentSpaceOrigin
-                elements[heistId] = existing
-            } else {
-                elements[heistId] = ScreenElement(
-                    heistId: heistId,
-                    contentSpaceOrigin: context?.contentSpaceOrigin,
-                    element: parsedElement,
-                    object: context?.object,
-                    scrollView: context?.scrollView
-                )
-            }
+            let resolved = resolveHeistId(baseHeistId, contentSpaceOrigin: context?.contentSpaceOrigin)
+            resolvedHeistIds[parsedElement] = resolved
         }
 
-        reverseIndex = Dictionary(
-            resolvedPairs.map { ($0.0, $0.1) },
-            uniquingKeysWith: { _, latest in latest }
-        )
+        reverseIndex = resolvedHeistIds
+        viewportIds = Set(resolvedHeistIds.values)
 
-        viewportIds = Set(resolvedPairs.map(\.1))
+        merge(
+            hierarchy: hierarchy,
+            heistIds: resolvedHeistIds,
+            contexts: contexts,
+            scrollableViews: scrollableViews
+        )
     }
 
+    /// Resolve a base heistId, appending a content-space suffix when an
+    /// existing element with the same base id occupies a different position.
+    /// Disambiguates cell-reuse cases where the same `accessibilityIdentifier`
+    /// shows up at multiple scroll offsets.
     private func resolveHeistId(_ baseHeistId: String, contentSpaceOrigin: CGPoint?) -> String {
         guard let contentSpaceOrigin,
-              let existing = elements[baseHeistId],
+              let existing = findElement(heistId: baseHeistId),
               let existingOrigin = existing.contentSpaceOrigin,
               !Self.sameOrigin(existingOrigin, contentSpaceOrigin) else {
             return baseHeistId
@@ -84,7 +122,8 @@ extension TheStash {
 
     /// Clear everything — suspend or full reset.
     mutating func clear() {
-        elements.removeAll()
+        roots.removeAll()
+        elementByHeistId.removeAll()
         viewportIds.removeAll()
         reverseIndex.removeAll()
         firstResponderHeistId = nil
@@ -92,13 +131,32 @@ extension TheStash {
 
     /// Clear screen-level state on screen change.
     mutating func clearScreen() {
-        elements.removeAll()
+        roots.removeAll()
+        elementByHeistId.removeAll()
         reverseIndex.removeAll()
     }
 
     /// Prune elements not in the given set (post-explore cleanup).
     mutating func prune(keeping seen: Set<String>) {
-        elements = elements.filter { seen.contains($0.key) }
+        pruneTree(keeping: seen)
+    }
+
+    /// Test-only: insert a single element at root level by synthesizing a
+    /// minimal hierarchy and merging it. Used by unit tests that need to
+    /// pre-populate the registry without going through TheBurglar's parse
+    /// pipeline.
+    mutating func insertForTesting(_ element: ScreenElement) {
+        let context = ElementContext(
+            contentSpaceOrigin: element.contentSpaceOrigin,
+            scrollView: element.scrollView,
+            object: element.object
+        )
+        merge(
+            hierarchy: [.element(element.element, traversalIndex: roots.count)],
+            heistIds: [element.element: element.heistId],
+            contexts: [element.element: context],
+            scrollableViews: [:]
+        )
     }
     }
 

@@ -355,9 +355,9 @@ extension FenceResponse {
     }
 
     private func interfaceTreeDictionaries(_ interface: Interface, detail: InterfaceDetail) -> [[String: Any]] {
-        let tree = interface.tree ?? interface.elements.indices.map { ElementNode.element(order: $0) }
-        return tree.map {
-            elementNodeDictionary($0, elements: interface.elements, detail: detail)
+        var indexCounter = 0
+        return interface.tree.map { node in
+            interfaceNodeDictionary(node, detail: detail, indexCounter: &indexCounter)
         }
     }
 
@@ -430,40 +430,54 @@ extension FenceResponse {
         return entry
     }
 
-    private func elementNodeDictionary(
-        _ node: ElementNode,
-        elements: [HeistElement],
-        detail: InterfaceDetail
+    private func interfaceNodeDictionary(
+        _ node: InterfaceNode,
+        detail: InterfaceDetail,
+        indexCounter: inout Int
     ) -> [String: Any] {
         switch node {
-        case .element(let order):
-            guard elements.indices.contains(order) else {
-                return ["element": ["order": order]]
-            }
-            var payload = elementDictionary(elements[order], detail: detail)
-            payload["order"] = order
+        case .element(let element):
+            var payload = elementDictionary(element, detail: detail)
+            payload["order"] = indexCounter
+            indexCounter += 1
             return ["element": payload]
-        case .container(let group, let children):
-            var payload = groupDictionary(group, detail: detail)
-            payload["children"] = children.map {
-                elementNodeDictionary($0, elements: elements, detail: detail)
+        case .container(let info, let children):
+            var payload = containerInfoDictionary(info, detail: detail)
+            payload["children"] = children.map { child -> [String: Any] in
+                interfaceNodeDictionary(child, detail: detail, indexCounter: &indexCounter)
             }
             return ["container": payload]
         }
     }
 
-    private func groupDictionary(_ group: Group, detail: InterfaceDetail) -> [String: Any] {
-        var payload: [String: Any] = [
-            "type": group.type.rawValue
-        ]
-        if let label = group.label { payload["label"] = label }
-        if let value = group.value { payload["value"] = value }
-        if let identifier = group.identifier { payload["identifier"] = identifier }
+    private func containerInfoDictionary(_ info: ContainerInfo, detail: InterfaceDetail) -> [String: Any] {
+        var payload: [String: Any] = [:]
+        switch info.type {
+        case .semanticGroup(let label, let value, let identifier):
+            payload["type"] = "semanticGroup"
+            if let label { payload["label"] = label }
+            if let value { payload["value"] = value }
+            if let identifier { payload["identifier"] = identifier }
+        case .list:
+            payload["type"] = "list"
+        case .landmark:
+            payload["type"] = "landmark"
+        case .dataTable(let rowCount, let columnCount):
+            payload["type"] = "dataTable"
+            payload["rowCount"] = rowCount
+            payload["columnCount"] = columnCount
+        case .tabBar:
+            payload["type"] = "tabBar"
+        case .scrollable(let contentWidth, let contentHeight):
+            payload["type"] = "scrollable"
+            payload["contentWidth"] = contentWidth
+            payload["contentHeight"] = contentHeight
+        }
         if detail == .full {
-            payload["frameX"] = group.frameX
-            payload["frameY"] = group.frameY
-            payload["frameWidth"] = group.frameWidth
-            payload["frameHeight"] = group.frameHeight
+            payload["frameX"] = info.frameX
+            payload["frameY"] = info.frameY
+            payload["frameWidth"] = info.frameWidth
+            payload["frameHeight"] = info.frameHeight
         }
         return payload
     }

@@ -55,7 +55,7 @@ final class MessageIntegrationTests: XCTestCase {
             )
         }
 
-        let payload = Interface(timestamp: Date(), elements: elements)
+        let payload = Interface(timestamp: Date(), tree: elements.map { .element($0) })
         let message = ServerMessage.interface(payload)
 
         let encoder = JSONEncoder()
@@ -98,7 +98,7 @@ final class MessageIntegrationTests: XCTestCase {
                 protocolVersion: "1.0", appName: "Test", bundleIdentifier: "com.test",
                 deviceName: "Device", systemVersion: "17.0", screenWidth: 390, screenHeight: 844
             )),
-            .interface(Interface(timestamp: Date(), elements: [])),
+            .interface(Interface(timestamp: Date(), tree: [])),
             .pong,
             .status(StatusPayload(
                 identity: StatusIdentity(
@@ -176,7 +176,7 @@ final class MessageIntegrationTests: XCTestCase {
                 frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
                 actions: []
             )
-            let payload = Interface(timestamp: Date(), elements: [element])
+            let payload = Interface(timestamp: Date(), tree: [.element(element)])
             let msg = ServerMessage.interface(payload)
 
             let data = try encoder.encode(msg)

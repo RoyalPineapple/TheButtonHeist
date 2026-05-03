@@ -288,7 +288,7 @@ final class ActionExpectationValidationTests: XCTestCase {
             actions: [.activate]
         )
         let newInterface = Interface(
-            timestamp: Date(), elements: [newElement], tree: nil
+            timestamp: Date(), tree: [.element(newElement)]
         )
         let result = ActionResult(
             success: true, method: .waitForChange,
@@ -311,7 +311,7 @@ final class ActionExpectationValidationTests: XCTestCase {
             actions: [.activate]
         )
         let newInterface = Interface(
-            timestamp: Date(), elements: [otherElement], tree: nil
+            timestamp: Date(), tree: [.element(otherElement)]
         )
         let result = ActionResult(
             success: true, method: .waitForChange,
@@ -346,7 +346,7 @@ final class ActionExpectationValidationTests: XCTestCase {
             actions: [.activate]
         )
         let newInterface = Interface(
-            timestamp: Date(), elements: [newElement], tree: nil
+            timestamp: Date(), tree: [.element(newElement)]
         )
         let result = ActionResult(
             success: true, method: .waitForChange,
@@ -380,7 +380,7 @@ final class ActionExpectationValidationTests: XCTestCase {
             actions: []
         )
         let newInterface = Interface(
-            timestamp: Date(), elements: [sameElement], tree: nil
+            timestamp: Date(), tree: [.element(sameElement)]
         )
         let result = ActionResult(
             success: true, method: .waitForChange,

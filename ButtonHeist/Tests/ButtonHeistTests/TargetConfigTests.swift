@@ -281,7 +281,7 @@ final class TargetConfigTests: XCTestCase {
         mockConn.autoResponse = { message in
             switch message {
             case .requestInterface:
-                return .interface(Interface(timestamp: Date(), elements: []))
+                return .interface(Interface(timestamp: Date(), tree: []))
             case .explore:
                 return .actionResult(ActionResult(
                     success: true, method: .explore,

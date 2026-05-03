@@ -158,74 +158,25 @@ extension HeistTrait: Codable {
     }
 }
 
-// MARK: - Group Type
-
-/// Container group classification in the element tree.
-public enum GroupType: Equatable, Hashable, Sendable {
-    case semanticGroup, list, landmark, dataTable, tabBar, scrollable
-    case unknown(String)
-}
-
-extension GroupType: CaseIterable {
-    public static var allCases: [GroupType] {
-        [.semanticGroup, .list, .landmark, .dataTable, .tabBar, .scrollable]
-    }
-}
-
-extension GroupType: RawRepresentable {
-    private static let nameToType: [String: GroupType] = {
-        var map: [String: GroupType] = [:]
-        for groupType in allCases { map[groupType.nameValue] = groupType }
-        return map
-    }()
-
-    /// Returns nil for unknown group-type strings. Use Codable for forward-compatible decoding.
-    public init?(rawValue: String) {
-        guard let known = Self.nameToType[rawValue] else { return nil }
-        self = known
-    }
-
-    /// The string name for known cases. `.unknown` stores its own value.
-    /// Cases are spelled out explicitly to pin the wire contract — `String(describing:)`
-    /// is reflection, not a documented API, and changes here are wire-breaking.
-    private var nameValue: String {
-        switch self {
-        case .semanticGroup: return "semanticGroup"
-        case .list: return "list"
-        case .landmark: return "landmark"
-        case .dataTable: return "dataTable"
-        case .tabBar: return "tabBar"
-        case .scrollable: return "scrollable"
-        case .unknown(let value): return value
-        }
-    }
-
-    public var rawValue: String { nameValue }
-}
-
-extension GroupType: Codable {
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        let value = try container.decode(String.self)
-        self = GroupType(rawValue: value) ?? .unknown(value)
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        try container.encode(rawValue)
-    }
-}
-
 // MARK: - Interface
 
 /// A snapshot of the current accessibility interface returned by the server.
+///
+/// The wire shape carries a single canonical tree of `InterfaceNode` values
+/// with `HeistElement` payloads at the leaves. There is no parallel flat
+/// element array on the wire; `elements` is a depth-first flatten for source
+/// compatibility with the few callers that want a flat list.
 public struct Interface: Codable, Sendable {
     public let timestamp: Date
-    public let elements: [HeistElement]
-    /// Optional tree structure for grouped display
-    public let tree: [ElementNode]?
+    public let tree: [InterfaceNode]
 
     // MARK: - Computed Properties
+
+    /// Depth-first flatten of the tree. Returns every leaf element in
+    /// VoiceOver traversal order. Computed; not stored on the wire.
+    public var elements: [HeistElement] {
+        tree.flatten()
+    }
 
     /// Deterministic one-line screen summary built from element metadata.
     /// Format: "{screen name} — {interactive element counts}"
@@ -249,9 +200,8 @@ public struct Interface: Codable, Sendable {
         Self.buildNavigation(from: elements)
     }
 
-    public init(timestamp: Date, elements: [HeistElement], tree: [ElementNode]? = nil) {
+    public init(timestamp: Date, tree: [InterfaceNode]) {
         self.timestamp = timestamp
-        self.elements = elements
         self.tree = tree
     }
 
@@ -410,33 +360,36 @@ public func isStableIdentifier(_ identifier: String) -> Bool {
                      options: .regularExpression) == nil
 }
 
-/// A container group in the element tree — a collection of siblings that share
-/// a semantic grouping (list, grid, scrollable region, etc.) or an explicit
-/// `accessibilityContainer`.
-public struct Group: Codable, Equatable, Hashable, Sendable {
-    public let type: GroupType
-    public let label: String?
-    public let value: String?
-    public let identifier: String?
+// MARK: - Interface Tree (canonical wire shape)
+
+/// Container metadata for the canonical interface tree. Mirrors
+/// `AccessibilitySnapshotParser.AccessibilityContainer` 1:1 but lives in
+/// TheScore so CLI/MCP don't pull UIKit. Created by the iOS server when
+/// converting the persistent registry tree to wire format.
+public struct ContainerInfo: Codable, Equatable, Hashable, Sendable {
+    public enum ContainerType: Codable, Equatable, Hashable, Sendable {
+        case semanticGroup(label: String?, value: String?, identifier: String?)
+        case list
+        case landmark
+        case dataTable(rowCount: Int, columnCount: Int)
+        case tabBar
+        case scrollable(contentWidth: Double, contentHeight: Double)
+    }
+
+    public let type: ContainerType
     public let frameX: Double
     public let frameY: Double
     public let frameWidth: Double
     public let frameHeight: Double
 
     public init(
-        type: GroupType,
-        label: String?,
-        value: String?,
-        identifier: String?,
+        type: ContainerType,
         frameX: Double,
         frameY: Double,
         frameWidth: Double,
         frameHeight: Double
     ) {
         self.type = type
-        self.label = label
-        self.value = value
-        self.identifier = identifier
         self.frameX = frameX
         self.frameY = frameY
         self.frameWidth = frameWidth
@@ -444,15 +397,31 @@ public struct Group: Codable, Equatable, Hashable, Sendable {
     }
 }
 
-/// A node in the element tree — either a leaf referencing an element by its
-/// `order` index into `Interface.elements`, or a container grouping children
-/// under a `Group`.
-public indirect enum ElementNode: Codable, Equatable, Sendable {
-    /// A leaf node referencing an element by its zero-based position in the
-    /// parent `Interface.elements` array.
-    case element(order: Int)
-    /// A container node grouping children under a shared `Group`.
-    case container(Group, children: [ElementNode])
+/// A node in the canonical interface tree. Leaves carry the full
+/// `HeistElement` payload — the tree is self-contained and there is no
+/// parallel flat array on the wire.
+public indirect enum InterfaceNode: Codable, Equatable, Sendable {
+    case element(HeistElement)
+    case container(ContainerInfo, children: [InterfaceNode])
+}
+
+public extension InterfaceNode {
+    /// Depth-first flatten yielding every leaf element in traversal order.
+    func flatten() -> [HeistElement] {
+        switch self {
+        case .element(let element):
+            return [element]
+        case .container(_, let children):
+            return children.flatMap { $0.flatten() }
+        }
+    }
+}
+
+public extension Array where Element == InterfaceNode {
+    /// Depth-first flatten across a forest.
+    func flatten() -> [HeistElement] {
+        flatMap { $0.flatten() }
+    }
 }
 
 // MARK: - Heist Element
