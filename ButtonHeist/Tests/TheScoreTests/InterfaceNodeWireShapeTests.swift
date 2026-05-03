@@ -171,19 +171,19 @@ final class InterfaceNodeWireShapeTests: XCTestCase {
     // MARK: - Decoding rejects malformed input
 
     func testDecodingFailsForUnknownContainerType() {
-        let json = """
+        let json = Data("""
         {"container": {
           "type": "futureContainerType",
           "frameX": 0, "frameY": 0, "frameWidth": 0, "frameHeight": 0,
           "children": []
         }}
-        """.data(using: .utf8)!
+        """.utf8)
 
         XCTAssertThrowsError(try decoder.decode(InterfaceNode.self, from: json))
     }
 
     func testDecodingFailsForMissingDiscriminator() {
-        let json = "{}".data(using: .utf8)!
+        let json = Data("{}".utf8)
         XCTAssertThrowsError(try decoder.decode(InterfaceNode.self, from: json))
     }
 }
