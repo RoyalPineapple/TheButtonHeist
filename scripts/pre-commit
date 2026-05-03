@@ -18,11 +18,19 @@ if command -v tuist >/dev/null 2>&1; then
     # Ensure external dependencies are fetched before generating
     tuist install >/dev/null 2>&1 || true
     if tuist generate --no-open --no-binary-cache >/dev/null 2>&1; then
+        # Auto-clean pbxproj noise that tuist (and Xcode UI edits) leak in:
+        # hardcoded SRCROOT, duplicated header search paths, etc.
+        find . -name 'project.pbxproj' \
+            -not -path './Tuist/.build/*' \
+            -not -path './submodules/*' \
+            -not -path './.context/*' \
+            -print0 | xargs -0 python3 scripts/clean-pbxproj.py >/dev/null 2>&1 || true
+
         dirty=$(git diff --name-only -- '*.pbxproj' '*.xcworkspacedata' '*.xcscheme')
         if [[ -n "$dirty" ]]; then
             echo "error: tuist generate produced uncommitted project changes:"
             echo "$dirty"
-            echo "Stage them (git add -- '*.pbxproj' '*.xcworkspacedata') or investigate."
+            echo "Run scripts/generate-project.sh and stage the result, or investigate."
             exit 1
         fi
     else
@@ -56,11 +64,17 @@ if [[ -n "$tuist_files" ]]; then
     echo "Tuist config changed — regenerating to check for drift..."
     tuist install >/dev/null 2>&1 || true
     if tuist generate --no-open --no-binary-cache >/dev/null 2>&1; then
+        find . -name 'project.pbxproj' \
+            -not -path './Tuist/.build/*' \
+            -not -path './submodules/*' \
+            -not -path './.context/*' \
+            -print0 | xargs -0 python3 scripts/clean-pbxproj.py >/dev/null 2>&1 || true
+
         drift=$(git diff --name-only -- '*.pbxproj' '*.xcworkspacedata')
         if [[ -n "$drift" ]]; then
             echo "error: tuist generate produced unstaged changes:"
             echo "$drift"
-            echo "Stage the regenerated project files before committing."
+            echo "Run scripts/generate-project.sh and stage the result before committing."
             exit 1
         fi
     else

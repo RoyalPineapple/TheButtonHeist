@@ -142,10 +142,6 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         textField.isAccessibilityElement = true
         textField.accessibilityLabel = "TypeTest"
         window.addSubview(textField)
-        defer {
-            textField.resignFirstResponder()
-            textField.removeFromSuperview()
-        }
 
         textField.becomeFirstResponder()
         try await waitForKeyboardBridge()
@@ -153,6 +149,8 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         let result = await safecracker.typeText("hello")
         XCTAssertTrue(result, "typeText should succeed when keyboard is active")
         XCTAssertEqual(textField.text, "hello")
+
+        await teardownKeyboard(textField: textField)
     }
 
     func testDeleteTextFromTextField() async throws {
@@ -160,18 +158,15 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         textField.frame = CGRect(x: 50, y: 400, width: 200, height: 44)
         textField.text = "world"
         window.addSubview(textField)
-        defer {
-            textField.resignFirstResponder()
-            textField.removeFromSuperview()
-        }
 
         textField.becomeFirstResponder()
         try await waitForKeyboardBridge()
 
-        // Select all text first, then delete
         let deleted = await safecracker.deleteText(count: 5)
         XCTAssertTrue(deleted, "deleteText should succeed")
         XCTAssertEqual(textField.text, "")
+
+        await teardownKeyboard(textField: textField)
     }
 
     func testDeleteZeroCountReturnsTrue() async {
@@ -182,11 +177,10 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
 
     // MARK: - Edit Actions
 
-    func testResignFirstResponder() {
+    func testResignFirstResponder() async {
         let textField = UITextField()
         textField.frame = CGRect(x: 50, y: 500, width: 200, height: 44)
         window.addSubview(textField)
-        defer { textField.removeFromSuperview() }
 
         textField.becomeFirstResponder()
         XCTAssertTrue(textField.isFirstResponder)
@@ -194,6 +188,8 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         let result = safecracker.resignFirstResponder()
         XCTAssertTrue(result)
         XCTAssertFalse(textField.isFirstResponder)
+
+        await teardownKeyboard(textField: textField)
     }
 
     // MARK: - Private Helpers
@@ -206,6 +202,29 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         guard KeyboardBridge.shared() != nil else {
             XCTFail("Keyboard bridge not available after 2s")
             return
+        }
+    }
+
+    /// Resign first responder, remove the text field, and wait for the
+    /// keyboard window to retire from the foreground scene. The keyboard's
+    /// `UIRemoteKeyboardWindow` and `UITextEffectsWindow` are owned by iOS
+    /// and persist beyond `resignFirstResponder()` — without an explicit
+    /// wait they leak across tests and pollute the next setUp's window list.
+    private func teardownKeyboard(textField: UITextField) async {
+        textField.resignFirstResponder()
+        textField.removeFromSuperview()
+
+        // Poll up to 2s for keyboard-related windows to disappear from the
+        // foreground scene's window list.
+        for _ in 0..<40 {
+            let traversable = UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .filter { $0.activationState == .foregroundActive }
+                .flatMap(\.windows)
+                .filter { !$0.isHidden && $0.bounds.size != .zero }
+            let hasPassthrough = traversable.contains(where: TheTripwire.isSystemPassthroughWindow)
+            if !hasPassthrough { return }
+            try? await Task.sleep(for: .milliseconds(50))
         }
     }
 }

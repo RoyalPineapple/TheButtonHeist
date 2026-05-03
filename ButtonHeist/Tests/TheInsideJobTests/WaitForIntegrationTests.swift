@@ -14,9 +14,13 @@ final class WaitForIntegrationTests: XCTestCase {
 
     override func setUp() async throws {
         insideJob = TheInsideJob(token: "wait-for-test-token")
+        // Pick the frontmost non-passthrough window so a keyboard window left
+        // over from a prior test in the suite (which is hidden from the
+        // accessibility tree) doesn't receive our test labels.
         let windows = insideJob.tripwire.getTraversableWindows()
+            .filter { !TheTripwire.isSystemPassthroughWindow($0.window) }
         window = windows.first?.window
-        XCTAssertNotNil(window, "Test host must provide a window")
+        XCTAssertNotNil(window, "Test host must provide a non-passthrough window")
     }
 
     override func tearDown() async throws {

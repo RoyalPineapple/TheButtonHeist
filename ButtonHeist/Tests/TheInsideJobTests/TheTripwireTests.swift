@@ -792,6 +792,120 @@ final class TheTripwireTests: XCTestCase {
         XCTAssertTrue(result.first?.window === overlay, "Overlay should win over presented-VC branch")
     }
 
+    // MARK: - System Passthrough Windows (keyboard / text-effects)
+
+    func testFilterSkipsPassthroughWhenLookingForOverlay() {
+        // Frontmost window is a system passthrough (keyboard) above .normal —
+        // it must NOT be treated as the overlay. The base app window beneath
+        // should remain accessible so the focused text field and surrounding
+        // content stay in the tree while the keyboard is up.
+        let keyboard = makeWindow(level: .alert, rootVC: UIViewController())
+        let appWindow = makeWindow(level: .normal, rootVC: UIViewController())
+        let input = [
+            (window: keyboard, rootView: keyboard as UIView),
+            (window: appWindow, rootView: appWindow as UIView),
+        ]
+
+        let result = TheTripwire.filterToAccessibleWindows(
+            input,
+            isPassthrough: { $0 === keyboard }
+        )
+
+        XCTAssertEqual(result.count, 1, "Should fall through to app window")
+        XCTAssertTrue(result.first?.window === appWindow,
+                      "App window should be returned, not the passthrough keyboard")
+    }
+
+    func testFilterPicksRealOverlayBeneathPassthrough() {
+        // When the keyboard is up over a UIAlertController, the overlay branch
+        // should still pick the alert window (after skipping the keyboard),
+        // not return all three windows.
+        let keyboard = makeWindow(level: .statusBar, rootVC: UIViewController())
+        let alert = makeWindow(level: .alert, rootVC: UIViewController())
+        let base = makeWindow(level: .normal, rootVC: UIViewController())
+        let input = [
+            (window: keyboard, rootView: keyboard as UIView),
+            (window: alert, rootView: alert as UIView),
+            (window: base, rootView: base as UIView),
+        ]
+
+        let result = TheTripwire.filterToAccessibleWindows(
+            input,
+            isPassthrough: { $0 === keyboard }
+        )
+
+        XCTAssertEqual(result.count, 1)
+        XCTAssertTrue(result.first?.window === alert,
+                      "Alert window should win once keyboard is filtered out")
+    }
+
+    func testFilterFindsPresentedVCBeneathPassthrough() {
+        // Keyboard above an app window whose root VC has a presented VC.
+        // After skipping the keyboard, the presented-VC branch should win.
+        let root = StubViewController()
+        let presented = StubViewController()
+        root.fakePresented = presented
+
+        let keyboard = makeWindow(level: .alert, rootVC: UIViewController())
+        let appWindow = makeWindow(level: .normal, rootVC: root)
+        let input = [
+            (window: keyboard, rootView: keyboard as UIView),
+            (window: appWindow, rootView: appWindow as UIView),
+        ]
+
+        let result = TheTripwire.filterToAccessibleWindows(
+            input,
+            isPassthrough: { $0 === keyboard }
+        )
+
+        XCTAssertEqual(result.count, 1)
+        XCTAssertTrue(result.first?.window === appWindow)
+        XCTAssertTrue(result.first?.rootView === presented.view,
+                      "Should return deepest presented VC's view, not the keyboard")
+    }
+
+    func testFilterFallbackExcludesPassthroughWindows() {
+        // No overlay, no presented VC, two app-level windows plus a keyboard.
+        // The fallback should return the two app windows and drop the keyboard.
+        let keyboard = makeWindow(level: .alert, rootVC: UIViewController())
+        let a = makeWindow(level: .normal, rootVC: UIViewController())
+        let b = makeWindow(level: .normal - 1, rootVC: UIViewController())
+        let input = [
+            (window: keyboard, rootView: keyboard as UIView),
+            (window: a, rootView: a as UIView),
+            (window: b, rootView: b as UIView),
+        ]
+
+        let result = TheTripwire.filterToAccessibleWindows(
+            input,
+            isPassthrough: { $0 === keyboard }
+        )
+
+        XCTAssertEqual(result.count, 2, "Fallback should return only app windows")
+        XCTAssertFalse(result.contains(where: { $0.window === keyboard }),
+                       "Passthrough window must not be in fallback result")
+    }
+
+    func testFilterReturnsAllWhenOnlyPassthroughsExist() {
+        // Defensive: if every window is a passthrough, fall back to the full
+        // input rather than returning an empty list. Better to over-include
+        // than starve the parser of any windows at all.
+        let keyboard = makeWindow(level: .alert, rootVC: UIViewController())
+        let textEffects = makeWindow(level: .alert + 1, rootVC: UIViewController())
+        let input = [
+            (window: textEffects, rootView: textEffects as UIView),
+            (window: keyboard, rootView: keyboard as UIView),
+        ]
+
+        let result = TheTripwire.filterToAccessibleWindows(
+            input,
+            isPassthrough: { _ in true }
+        )
+
+        XCTAssertEqual(result.count, 2,
+                       "All-passthrough input should fall back to original list, not empty")
+    }
+
 }
 
 #endif // canImport(UIKit)

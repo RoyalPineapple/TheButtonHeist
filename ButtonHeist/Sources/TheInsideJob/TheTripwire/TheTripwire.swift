@@ -354,13 +354,16 @@ final class TheTripwire {
     /// Three independent checks, in order:
     /// 1. **Explicit modal flag** — any window containing a view with
     ///    `accessibilityViewIsModal` set (popovers, custom overlays).
-    /// 2. **Overlay window** — frontmost window has `windowLevel > .normal`
-    ///    (UIAlertController, action sheets, status-bar level UI).
+    /// 2. **Overlay window** — frontmost non-passthrough window has
+    ///    `windowLevel > .normal` (UIAlertController, action sheets,
+    ///    status-bar level UI). System decoration windows like the software
+    ///    keyboard and text-effects window are excluded — they sit above
+    ///    `.normal` but are not modal takeovers.
     /// 3. **Modal presentation** — a window's root VC has a presented VC,
     ///    in which case only the deepest presented VC's view is parsed,
     ///    matching what `UIPresentationController` exposes to UIKit's AX.
     ///
-    /// If none match, all traversable windows are returned (the original behavior).
+    /// If none match, all traversable non-passthrough windows are returned.
     ///
     /// For screenshots, use `getTraversableWindows()` — visual compositing should
     /// include all windows so the dimmed background remains visible.
@@ -368,12 +371,36 @@ final class TheTripwire {
         Self.filterToAccessibleWindows(getTraversableWindows())
     }
 
+    /// Window classes iOS uses for system-managed UI decorations that sit
+    /// above `windowLevel.normal` but contain no app content the agent can
+    /// usefully act on. Treating them as the topmost overlay would hide the
+    /// real app window beneath, which is the common cause of "0 elements"
+    /// snapshots while a software keyboard is up. `nonisolated` so the
+    /// passthrough check can run as a plain `(UIWindow) -> Bool` — the data
+    /// is immutable and touches no main-actor state.
+    nonisolated static let systemPassthroughWindowClassNames: Set<String> = [
+        "UIRemoteKeyboardWindow",
+        "UITextEffectsWindow",
+    ]
+
+    /// Whether a window is a system-managed decoration (keyboard, text-effects)
+    /// that should not be treated as a modal takeover even though its window
+    /// level is above `.normal`.
+    nonisolated static func isSystemPassthroughWindow(_ window: UIWindow) -> Bool {
+        systemPassthroughWindowClassNames.contains(NSStringFromClass(type(of: window)))
+    }
+
     /// Pure filter applying the VoiceOver-equivalent precedence chain to a
     /// window list. Extracted from `getAccessibleWindows()` so callers can
     /// supply a controlled list and the precedence logic can be exercised
     /// without depending on the host app's window state.
+    ///
+    /// `isPassthrough` lets tests inject a custom predicate so the
+    /// passthrough branch can be exercised without instantiating private
+    /// UIKit window classes.
     static func filterToAccessibleWindows(
-        _ windows: [(window: UIWindow, rootView: UIView)]
+        _ windows: [(window: UIWindow, rootView: UIView)],
+        isPassthrough: (UIWindow) -> Bool = isSystemPassthroughWindow
     ) -> [(window: UIWindow, rootView: UIView)] {
         guard !windows.isEmpty else { return [] }
 
@@ -381,17 +408,19 @@ final class TheTripwire {
             return [modalEntry]
         }
 
-        if let top = windows.first,
+        let appWindows = windows.filter { !isPassthrough($0.window) }
+
+        if let top = appWindows.first,
            top.window.windowLevel > .normal,
            top.window.rootViewController != nil {
             return [top]
         }
 
-        if let presented = windows.lazy.compactMap(deepestPresentedEntry).first {
+        if let presented = appWindows.lazy.compactMap(deepestPresentedEntry).first {
             return [presented]
         }
 
-        return windows
+        return appWindows.isEmpty ? windows : appWindows
     }
 
     /// If `entry`'s root VC has a presentation chain, return the deepest
@@ -422,8 +451,12 @@ final class TheTripwire {
     // MARK: - View Controller Identity
 
     /// The topmost visible view controller — the deepest pushed/presented VC.
+    /// Skips system passthrough windows (keyboard, text-effects) so a keyboard
+    /// appearance doesn't falsely register as a view-controller change.
     func topmostViewController() -> UIViewController? {
-        guard let root = getTraversableWindows().first?.window.rootViewController else {
+        let appWindow = getTraversableWindows()
+            .first(where: { !Self.isSystemPassthroughWindow($0.window) })
+        guard let root = appWindow?.window.rootViewController else {
             return nil
         }
         return deepestViewController(from: root)

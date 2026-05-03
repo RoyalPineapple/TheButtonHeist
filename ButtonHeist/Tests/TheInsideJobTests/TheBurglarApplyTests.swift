@@ -186,7 +186,7 @@ final class TheBurglarApplyTests: XCTestCase {
 
     // MARK: - First responder detection
 
-    func testApplyDetectsFirstResponder() {
+    func testApplyDetectsFirstResponder() async {
         let textField = UITextField()
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 375, height: 667))
         window.addSubview(textField)
@@ -211,6 +211,22 @@ final class TheBurglarApplyTests: XCTestCase {
 
         textField.resignFirstResponder()
         window.isHidden = true
+        // Wait for the iOS keyboard windows (UIRemoteKeyboardWindow,
+        // UITextEffectsWindow) to retire from the foreground scene so they
+        // don't leak into the next test's window list.
+        await waitForKeyboardWindowsToRetire()
+    }
+
+    private func waitForKeyboardWindowsToRetire() async {
+        for _ in 0..<40 {
+            let traversable = UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .filter { $0.activationState == .foregroundActive }
+                .flatMap(\.windows)
+                .filter { !$0.isHidden && $0.bounds.size != .zero }
+            if !traversable.contains(where: TheTripwire.isSystemPassthroughWindow) { return }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
     }
 
     func testApplyFirstResponderNilWhenNoneActive() {
