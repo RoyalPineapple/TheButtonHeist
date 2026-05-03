@@ -377,6 +377,7 @@ public struct ContainerInfo: Equatable, Hashable, Sendable {
     }
 
     public let type: ContainerType
+    public let stableId: String?
     public let frameX: Double
     public let frameY: Double
     public let frameWidth: Double
@@ -384,12 +385,14 @@ public struct ContainerInfo: Equatable, Hashable, Sendable {
 
     public init(
         type: ContainerType,
+        stableId: String? = nil,
         frameX: Double,
         frameY: Double,
         frameWidth: Double,
         frameHeight: Double
     ) {
         self.type = type
+        self.stableId = stableId
         self.frameX = frameX
         self.frameY = frameY
         self.frameWidth = frameWidth
@@ -402,6 +405,7 @@ public struct ContainerInfo: Equatable, Hashable, Sendable {
 /// matching the documented protocol shape.
 private enum ContainerCodingKey: String, CodingKey {
     case type
+    case stableId
     case label, value, identifier
     case contentWidth, contentHeight
     case rowCount, columnCount
@@ -445,6 +449,7 @@ extension ContainerInfo: Codable {
             try container.encode(contentWidth, forKey: .contentWidth)
             try container.encode(contentHeight, forKey: .contentHeight)
         }
+        try container.encodeIfPresent(info.stableId, forKey: .stableId)
         try container.encode(info.frameX, forKey: .frameX)
         try container.encode(info.frameY, forKey: .frameY)
         try container.encode(info.frameWidth, forKey: .frameWidth)
@@ -488,6 +493,7 @@ extension ContainerInfo: Codable {
         }
         return ContainerInfo(
             type: type,
+            stableId: try container.decodeIfPresent(String.self, forKey: .stableId),
             frameX: try container.decode(Double.self, forKey: .frameX),
             frameY: try container.decode(Double.self, forKey: .frameY),
             frameWidth: try container.decode(Double.self, forKey: .frameWidth),

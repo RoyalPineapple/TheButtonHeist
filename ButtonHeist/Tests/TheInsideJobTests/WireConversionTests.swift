@@ -320,9 +320,9 @@ final class WireConverterTests: XCTestCase {
         XCTAssertEqual(delta.elementCount, 1)
     }
 
-    func testTreeOnlyChangeReturnsFullInterface() {
+    func testTreeOnlyChangeReturnsStructuralInsertion() {
         let element = makeScreenElement(heistId: "button_ok", label: "OK", traits: [.button])
-        let beforeTreeHash = [InterfaceNode.element(WireConversion.toWire(element))].hashValue
+        let beforeTree = [InterfaceNode.element(WireConversion.toWire(element))]
         let container = AccessibilityContainer(
             type: .list,
             frame: CGRect(x: 0, y: 0, width: 320, height: 100)
@@ -335,13 +335,95 @@ final class WireConverterTests: XCTestCase {
         let delta = WireConversion.computeDelta(
             before: [element],
             after: [element],
-            beforeTreeHash: beforeTreeHash,
+            beforeTree: beforeTree,
+            beforeTreeHash: beforeTree.hashValue,
             afterTree: afterTree,
             isScreenChange: false
         )
 
-        XCTAssertEqual(delta.kind, .screenChanged)
-        XCTAssertEqual(delta.newInterface?.elements.map(\.heistId), ["button_ok"])
+        XCTAssertEqual(delta.kind, .elementsChanged)
+        XCTAssertNil(delta.newInterface)
+        XCTAssertEqual(delta.treeInserted?.count, 1)
+        XCTAssertEqual(delta.treeInserted?.first?.location, TreeLocation(parentId: nil, index: 0))
+        guard case .container(let info, let children) = delta.treeInserted?.first?.node else {
+            return XCTFail("Expected inserted container")
+        }
+        XCTAssertEqual(info.stableId, "list_0")
+        XCTAssertEqual(children.flatten().map(\.heistId), ["button_ok"])
+        XCTAssertEqual(
+            delta.treeMoved,
+            [TreeMove(
+                ref: TreeNodeRef(id: "button_ok", kind: .element),
+                from: TreeLocation(parentId: nil, index: 0),
+                to: TreeLocation(parentId: "list_0", index: 0)
+            )]
+        )
+    }
+
+    func testTreeReorderReturnsMoves() {
+        let first = makeScreenElement(heistId: "first", label: "First")
+        let second = makeScreenElement(heistId: "second", label: "Second")
+        let beforeTree = [
+            InterfaceNode.element(WireConversion.toWire(first)),
+            InterfaceNode.element(WireConversion.toWire(second)),
+        ]
+        let afterTree: [TheStash.RegistryNode] = [
+            .element(second),
+            .element(first),
+        ]
+
+        let delta = WireConversion.computeDelta(
+            before: [first, second],
+            after: [second, first],
+            beforeTree: beforeTree,
+            beforeTreeHash: beforeTree.hashValue,
+            afterTree: afterTree,
+            isScreenChange: false
+        )
+
+        XCTAssertEqual(delta.kind, .elementsChanged)
+        XCTAssertNil(delta.added)
+        XCTAssertNil(delta.removed)
+        XCTAssertEqual(delta.treeMoved?.count, 2)
+        XCTAssertTrue(delta.treeMoved?.contains {
+            $0.ref == TreeNodeRef(id: "second", kind: .element)
+                && $0.from == TreeLocation(parentId: nil, index: 1)
+                && $0.to == TreeLocation(parentId: nil, index: 0)
+        } ?? false)
+        XCTAssertTrue(delta.treeMoved?.contains {
+            $0.ref == TreeNodeRef(id: "first", kind: .element)
+                && $0.from == TreeLocation(parentId: nil, index: 0)
+                && $0.to == TreeLocation(parentId: nil, index: 1)
+        } ?? false)
+    }
+
+    func testTreeDeletionReturnsRemovalLocation() {
+        let first = makeScreenElement(heistId: "first", label: "First")
+        let second = makeScreenElement(heistId: "second", label: "Second")
+        let beforeTree = [
+            InterfaceNode.element(WireConversion.toWire(first)),
+            InterfaceNode.element(WireConversion.toWire(second)),
+        ]
+        let afterTree: [TheStash.RegistryNode] = [.element(first)]
+
+        let delta = WireConversion.computeDelta(
+            before: [first, second],
+            after: [first],
+            beforeTree: beforeTree,
+            beforeTreeHash: beforeTree.hashValue,
+            afterTree: afterTree,
+            isScreenChange: false
+        )
+
+        XCTAssertEqual(delta.kind, .elementsChanged)
+        XCTAssertEqual(delta.removed, ["second"])
+        XCTAssertEqual(
+            delta.treeRemoved,
+            [TreeRemoval(
+                ref: TreeNodeRef(id: "second", kind: .element),
+                location: TreeLocation(parentId: nil, index: 1)
+            )]
+        )
     }
 
     // MARK: - Delta: Duplicate heistId Pairing

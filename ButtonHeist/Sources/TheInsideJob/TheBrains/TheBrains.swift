@@ -91,6 +91,7 @@ final class TheBrains {
         let snapshot: [TheStash.ScreenElement]
         let elements: [AccessibilityElement]
         let hierarchy: [AccessibilityHierarchy]
+        let tree: [InterfaceNode]
         let treeHash: Int
         let viewController: ObjectIdentifier?
     }
@@ -98,11 +99,13 @@ final class TheBrains {
     /// Capture the current state for delta computation before an action.
     /// Caller must have called `refresh()` already this frame.
     func captureBeforeState() -> BeforeState {
+        let tree = stash.wireTree()
         BeforeState(
             snapshot: stash.selectElements(),
             elements: stash.currentHierarchy.sortedElements,
             hierarchy: stash.currentHierarchy,
-            treeHash: stash.wireTreeHash(),
+            tree: tree,
+            treeHash: tree.hashValue,
             viewController: tripwire.topmostViewController().map(ObjectIdentifier.init)
         )
     }
@@ -174,6 +177,7 @@ final class TheBrains {
 
         let delta = stash.computeDelta(
             before: before.snapshot, after: afterSnapshot,
+            beforeTree: before.tree,
             beforeTreeHash: before.treeHash,
             isScreenChange: isScreenChange
         )
@@ -447,6 +451,7 @@ final class TheBrains {
         )
         return stash.computeDelta(
             before: before.snapshot, after: afterSnapshot,
+            beforeTree: before.tree,
             beforeTreeHash: before.treeHash,
             isScreenChange: isScreenChange
         )

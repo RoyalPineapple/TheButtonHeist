@@ -479,11 +479,13 @@ final class TheStash {
     func computeDelta(
         before: [ScreenElement],
         after: [ScreenElement],
+        beforeTree: [InterfaceNode]? = nil,
         beforeTreeHash: Int? = nil,
         isScreenChange: Bool
     ) -> InterfaceDelta {
         WireConversion.computeDelta(
             before: before, after: after,
+            beforeTree: beforeTree,
             beforeTreeHash: beforeTreeHash,
             afterTree: registry.roots, isScreenChange: isScreenChange
         )

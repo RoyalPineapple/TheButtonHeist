@@ -96,12 +96,13 @@ extension TheStash {
         roots.folded(
             onElement: { InterfaceNode.element(toWire($0)) },
             onContainer: { entry, children in
-                InterfaceNode.container(toContainerInfo(entry.container), children: children)
+                InterfaceNode.container(toContainerInfo(entry), children: children)
             }
         )
     }
 
-    private static func toContainerInfo(_ container: AccessibilityContainer) -> ContainerInfo {
+    private static func toContainerInfo(_ entry: RegistryContainerEntry) -> ContainerInfo {
+        let container = entry.container
         let type: ContainerInfo.ContainerType
         switch container.type {
         case let .semanticGroup(label, value, identifier):
@@ -122,6 +123,7 @@ extension TheStash {
         }
         return ContainerInfo(
             type: type,
+            stableId: entry.stableId,
             frameX: Double(container.frame.origin.x.sanitizedForJSON),
             frameY: Double(container.frame.origin.y.sanitizedForJSON),
             frameWidth: Double(container.frame.size.width.sanitizedForJSON),
@@ -142,6 +144,7 @@ extension TheStash {
     static func computeDelta(
         before: [ScreenElement],
         after: [ScreenElement],
+        beforeTree: [InterfaceNode]? = nil,
         beforeTreeHash: Int? = nil,
         afterTree: [RegistryNode],
         isScreenChange: Bool
@@ -172,11 +175,19 @@ extension TheStash {
             }
             if unchanged {
                 if let beforeTreeHash, beforeTreeHash != afterWireTree.hashValue {
-                    return InterfaceDelta(
-                        kind: .screenChanged,
-                        elementCount: after.count,
-                        newInterface: Interface(timestamp: Date(), tree: afterWireTree)
-                    )
+                    if let beforeTree {
+                        return computeTreeDelta(
+                            beforeTree: beforeTree,
+                            afterTree: afterWireTree,
+                            elementCount: after.count
+                        )
+                    } else {
+                        return InterfaceDelta(
+                            kind: .screenChanged,
+                            elementCount: after.count,
+                            newInterface: Interface(timestamp: Date(), tree: afterWireTree)
+                        )
+                    }
                 }
                 return InterfaceDelta(kind: .noChange, elementCount: after.count)
             }
@@ -186,7 +197,15 @@ extension TheStash {
         let beforeWire = toWire(before)
         let afterWire = toWire(after)
 
-        return computeElementDelta(beforeEls: beforeWire, afterEls: afterWire)
+        let elementDelta = computeElementDelta(beforeEls: beforeWire, afterEls: afterWire)
+        guard let beforeTree else { return elementDelta }
+
+        let treeDelta = computeTreeDelta(
+            beforeTree: beforeTree,
+            afterTree: afterWireTree,
+            elementCount: after.count
+        )
+        return merge(elementDelta: elementDelta, treeDelta: treeDelta, elementCount: after.count)
     }
 
     /// Semantic element diff — heistId is the sole matching key.
@@ -229,6 +248,166 @@ extension TheStash {
             removed: removed.isEmpty ? nil : removed,
             updated: updated.isEmpty ? nil : updated
         )
+    }
+
+    private static func merge(
+        elementDelta: InterfaceDelta,
+        treeDelta: InterfaceDelta,
+        elementCount: Int
+    ) -> InterfaceDelta {
+        guard elementDelta.kind != .noChange || treeDelta.kind != .noChange else {
+            return InterfaceDelta(kind: .noChange, elementCount: elementCount)
+        }
+        return InterfaceDelta(
+            kind: .elementsChanged,
+            elementCount: elementCount,
+            added: elementDelta.added,
+            removed: elementDelta.removed,
+            updated: elementDelta.updated,
+            treeInserted: treeDelta.treeInserted,
+            treeRemoved: treeDelta.treeRemoved,
+            treeMoved: treeDelta.treeMoved
+        )
+    }
+
+    private struct TreeRecord {
+        let ref: TreeNodeRef
+        let location: TreeLocation
+        let node: InterfaceNode
+        let ancestors: [String]
+    }
+
+    private static func computeTreeDelta(
+        beforeTree: [InterfaceNode],
+        afterTree: [InterfaceNode],
+        elementCount: Int
+    ) -> InterfaceDelta {
+        let oldRecords = indexTree(beforeTree)
+        let newRecords = indexTree(afterTree)
+        let oldIds = Set(oldRecords.keys)
+        let newIds = Set(newRecords.keys)
+
+        let insertedIds = newIds.subtracting(oldIds)
+        let removedIds = oldIds.subtracting(newIds)
+
+        let inserted = insertedIds
+            .filter { id in
+                guard let record = newRecords[id] else { return false }
+                return !record.ancestors.contains(where: insertedIds.contains)
+            }
+            .compactMap { id -> TreeInsertion? in
+                guard let record = newRecords[id] else { return nil }
+                return TreeInsertion(location: record.location, node: record.node)
+            }
+            .sorted(by: treeInsertionOrder)
+
+        let removed = removedIds
+            .filter { id in
+                guard let record = oldRecords[id] else { return false }
+                return !record.ancestors.contains(where: removedIds.contains)
+            }
+            .compactMap { id -> TreeRemoval? in
+                guard let record = oldRecords[id] else { return nil }
+                return TreeRemoval(ref: record.ref, location: record.location)
+            }
+            .sorted(by: treeRemovalOrder)
+
+        let rawMoved = oldIds.intersection(newIds).compactMap { id -> TreeMove? in
+            guard let old = oldRecords[id], let new = newRecords[id] else { return nil }
+            guard old.location != new.location else { return nil }
+            return TreeMove(ref: new.ref, from: old.location, to: new.location)
+        }
+        let movedIds = Set(rawMoved.map(\.ref.id))
+        let moved = rawMoved
+            .filter { move in
+                let ancestors = newRecords[move.ref.id]?.ancestors ?? []
+                return !ancestors.contains(where: movedIds.contains)
+            }
+            .sorted(by: treeMoveOrder)
+
+        guard !inserted.isEmpty || !removed.isEmpty || !moved.isEmpty else {
+            return InterfaceDelta(kind: .noChange, elementCount: elementCount)
+        }
+        return InterfaceDelta(
+            kind: .elementsChanged,
+            elementCount: elementCount,
+            treeInserted: inserted.isEmpty ? nil : inserted,
+            treeRemoved: removed.isEmpty ? nil : removed,
+            treeMoved: moved.isEmpty ? nil : moved
+        )
+    }
+
+    private static func indexTree(_ roots: [InterfaceNode]) -> [String: TreeRecord] {
+        var result: [String: TreeRecord] = [:]
+        for (index, node) in roots.enumerated() {
+            collectTreeRecords(
+                node,
+                parentId: nil,
+                index: index,
+                ancestors: [],
+                into: &result
+            )
+        }
+        return result
+    }
+
+    private static func collectTreeRecords(
+        _ node: InterfaceNode,
+        parentId: String?,
+        index: Int,
+        ancestors: [String],
+        into result: inout [String: TreeRecord]
+    ) {
+        guard let ref = treeRef(for: node) else { return }
+        let location = TreeLocation(parentId: parentId, index: index)
+        result[ref.id] = TreeRecord(ref: ref, location: location, node: node, ancestors: ancestors)
+
+        guard case .container(_, let children) = node else { return }
+        let childAncestors = ancestors + [ref.id]
+        for (childIndex, child) in children.enumerated() {
+            collectTreeRecords(
+                child,
+                parentId: ref.id,
+                index: childIndex,
+                ancestors: childAncestors,
+                into: &result
+            )
+        }
+    }
+
+    private static func treeRef(for node: InterfaceNode) -> TreeNodeRef? {
+        switch node {
+        case .element(let element):
+            return TreeNodeRef(id: element.heistId, kind: .element)
+        case .container(let info, _):
+            guard let stableId = info.stableId else { return nil }
+            return TreeNodeRef(id: stableId, kind: .container)
+        }
+    }
+
+    private static func treeInsertionOrder(_ lhs: TreeInsertion, _ rhs: TreeInsertion) -> Bool {
+        compare(lhs.location, rhs.location)
+    }
+
+    private static func treeRemovalOrder(_ lhs: TreeRemoval, _ rhs: TreeRemoval) -> Bool {
+        compare(lhs.location, rhs.location)
+    }
+
+    private static func treeMoveOrder(_ lhs: TreeMove, _ rhs: TreeMove) -> Bool {
+        compare(lhs.to, rhs.to)
+    }
+
+    private static func compare(_ lhs: TreeLocation, _ rhs: TreeLocation) -> Bool {
+        switch (lhs.parentId, rhs.parentId) {
+        case let (left?, right?) where left != right:
+            return left < right
+        case (nil, _?):
+            return true
+        case (_?, nil):
+            return false
+        default:
+            return lhs.index < rhs.index
+        }
     }
 
     /// Build an ElementUpdate if any mutable property differs.
