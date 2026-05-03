@@ -90,7 +90,11 @@ extension TheStash {
         var resolvedHeistIds: [AccessibilityElement: String] = [:]
         for (parsedElement, baseHeistId) in zip(parsedElements, heistIds) {
             let context = contexts[parsedElement]
-            let resolved = resolveHeistId(baseHeistId, contentSpaceOrigin: context?.contentSpaceOrigin)
+            let resolved = resolveHeistId(
+                baseHeistId,
+                element: parsedElement,
+                contentSpaceOrigin: context?.contentSpaceOrigin
+            )
             resolvedHeistIds[parsedElement] = resolved
         }
 
@@ -107,11 +111,20 @@ extension TheStash {
         )
     }
 
-    /// Resolve a base heistId, appending a content-space suffix when an
-    /// existing element with the same base id occupies a different position.
-    /// Disambiguates cell-reuse cases where the same `accessibilityIdentifier`
-    /// shows up at multiple scroll offsets.
-    private func resolveHeistId(_ baseHeistId: String, contentSpaceOrigin: CGPoint?) -> String {
+    /// Resolve a base heistId, appending a content-space suffix only when an
+    /// existing element with the same base id no longer describes the same
+    /// accessible thing at a different position. If the minimum matcher is
+    /// unchanged, keep the heistId stable so reorders surface as moves.
+    private func resolveHeistId(
+        _ baseHeistId: String,
+        element: AccessibilityElement,
+        contentSpaceOrigin: CGPoint?
+    ) -> String {
+        if let existing = findElement(heistId: baseHeistId),
+           Self.hasSameMinimumMatcher(existing.element, element) {
+            return baseHeistId
+        }
+
         guard let contentSpaceOrigin,
               let existing = findElement(heistId: baseHeistId),
               let existingOrigin = existing.contentSpaceOrigin,
@@ -119,6 +132,13 @@ extension TheStash {
             return baseHeistId
         }
         return "\(baseHeistId)_at_\(Int(contentSpaceOrigin.x.rounded()))_\(Int(contentSpaceOrigin.y.rounded()))"
+    }
+
+    private static func hasSameMinimumMatcher(_ lhs: AccessibilityElement, _ rhs: AccessibilityElement) -> Bool {
+        lhs.label == rhs.label &&
+            lhs.identifier == rhs.identifier &&
+            lhs.value == rhs.value &&
+            lhs.traits == rhs.traits
     }
 
     private static func sameOrigin(_ lhs: CGPoint, _ rhs: CGPoint) -> Bool {

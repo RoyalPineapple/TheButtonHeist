@@ -323,6 +323,21 @@ extension FenceResponse {
                     }
                 }
             }
+            if let inserted = delta.treeInserted, !inserted.isEmpty {
+                for entry in inserted {
+                    lines.append("  + tree \(Self.compactTreeLocation(entry.location))")
+                }
+            }
+            if let removed = delta.treeRemoved, !removed.isEmpty {
+                for entry in removed {
+                    lines.append("  - tree \(entry.ref.id) at \(Self.compactTreeLocation(entry.location))")
+                }
+            }
+            if let moved = delta.treeMoved, !moved.isEmpty {
+                for entry in moved {
+                    lines.append("  ↕ \(entry.ref.id): \(Self.compactTreeLocation(entry.from)) → \(Self.compactTreeLocation(entry.to))")
+                }
+            }
             return lines.joined(separator: "\n")
 
         case .screenChanged:
@@ -332,6 +347,13 @@ extension FenceResponse {
             }
             return lines.joined(separator: "\n")
         }
+    }
+
+    private static func compactTreeLocation(_ location: TreeLocation) -> String {
+        if let parentId = location.parentId {
+            return "\(parentId)[\(location.index)]"
+        }
+        return "root[\(location.index)]"
     }
 
 }

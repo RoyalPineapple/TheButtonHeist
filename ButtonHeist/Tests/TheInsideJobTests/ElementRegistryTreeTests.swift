@@ -293,6 +293,82 @@ final class ElementRegistryTreeTests: XCTestCase {
         XCTAssertEqual(registry.findElement(heistId: "id-a")?.element.label, "New")
     }
 
+    func testSameMinimumMatcherKeepsHeistIdWhenContentPositionChanges() {
+        var registry = TheStash.ElementRegistry()
+        let initial = makeElement(label: "Song A")
+        let moved = makeElement(label: "Song A")
+
+        registry.register(
+            parsedElements: [initial],
+            heistIds: ["song_a_staticText"],
+            contexts: [
+                initial: TheStash.ElementContext(
+                    contentSpaceOrigin: CGPoint(x: 0, y: 100),
+                    scrollView: nil,
+                    object: nil
+                ),
+            ],
+            hierarchy: [.element(initial, traversalIndex: 0)],
+            containerContentFrames: [:]
+        )
+
+        registry.register(
+            parsedElements: [moved],
+            heistIds: ["song_a_staticText"],
+            contexts: [
+                moved: TheStash.ElementContext(
+                    contentSpaceOrigin: CGPoint(x: 0, y: 200),
+                    scrollView: nil,
+                    object: nil
+                ),
+            ],
+            hierarchy: [.element(moved, traversalIndex: 0)],
+            containerContentFrames: [:]
+        )
+
+        XCTAssertNotNil(registry.findElement(heistId: "song_a_staticText"))
+        XCTAssertNil(registry.findElement(heistId: "song_a_staticText_at_0_200"))
+        XCTAssertEqual(registry.flattenElements().map(\.heistId), ["song_a_staticText"])
+    }
+
+    func testDifferentMinimumMatcherUsesContentPositionSuffix() {
+        var registry = TheStash.ElementRegistry()
+        let initial = makeElement(label: "Song A")
+        let replacement = makeElement(label: "Song B")
+
+        registry.register(
+            parsedElements: [initial],
+            heistIds: ["song_staticText"],
+            contexts: [
+                initial: TheStash.ElementContext(
+                    contentSpaceOrigin: CGPoint(x: 0, y: 100),
+                    scrollView: nil,
+                    object: nil
+                ),
+            ],
+            hierarchy: [.element(initial, traversalIndex: 0)],
+            containerContentFrames: [:]
+        )
+
+        registry.register(
+            parsedElements: [replacement],
+            heistIds: ["song_staticText"],
+            contexts: [
+                replacement: TheStash.ElementContext(
+                    contentSpaceOrigin: CGPoint(x: 0, y: 200),
+                    scrollView: nil,
+                    object: nil
+                ),
+            ],
+            hierarchy: [.element(replacement, traversalIndex: 0)],
+            containerContentFrames: [:]
+        )
+
+        XCTAssertNotNil(registry.findElement(heistId: "song_staticText"))
+        XCTAssertNotNil(registry.findElement(heistId: "song_staticText_at_0_200"))
+        XCTAssertEqual(Set(registry.flattenElements().map(\.heistId)), ["song_staticText", "song_staticText_at_0_200"])
+    }
+
     /// Non-scrollable containers (list/landmark/tabBar/dataTable) derive
     /// their `stableId` from the container's content-space frame, so identity
     /// holds through child churn. An orphan whose siblings changed entirely

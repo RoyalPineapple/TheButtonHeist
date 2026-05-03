@@ -13,6 +13,18 @@ private struct WireTreeRecord {
     let ancestors: [String]
 }
 
+private struct FunctionalElementSignature: Hashable {
+    let description: String
+    let label: String?
+    let value: String?
+    let identifier: String?
+    let hint: String?
+    let traits: [HeistTrait]
+    let respondsToUserInteraction: Bool
+    let customContent: [HeistCustomContent]?
+    let actions: [ElementAction]?
+}
+
 // MARK: - Float Sanitization
 
 extension CGFloat {
@@ -212,7 +224,12 @@ extension TheStash {
             afterTree: afterWireTree,
             elementCount: after.count
         )
-        return merge(elementDelta: elementDelta, treeDelta: treeDelta, elementCount: after.count)
+        let adjustedElementDelta = suppressFunctionalMoveElementChurn(
+            elementDelta: elementDelta,
+            beforeEls: beforeWire,
+            afterEls: afterWire
+        )
+        return merge(elementDelta: adjustedElementDelta, treeDelta: treeDelta, elementCount: after.count)
     }
 
     /// Semantic element diff — heistId is the sole matching key.
@@ -277,6 +294,48 @@ extension TheStash {
         )
     }
 
+    private static func suppressFunctionalMoveElementChurn(
+        elementDelta: InterfaceDelta,
+        beforeEls: [HeistElement],
+        afterEls: [HeistElement]
+    ) -> InterfaceDelta {
+        let beforeIds = Set(beforeEls.map(\.heistId))
+        let afterIds = Set(afterEls.map(\.heistId))
+        let removedIds = beforeIds.subtracting(afterIds)
+        let addedIds = afterIds.subtracting(beforeIds)
+        guard !removedIds.isEmpty, !addedIds.isEmpty else { return elementDelta }
+
+        let removedById = Dictionary(grouping: beforeEls.filter { removedIds.contains($0.heistId) }, by: \.heistId)
+            .compactMapValues { $0.count == 1 ? $0[0] : nil }
+        let addedById = Dictionary(grouping: afterEls.filter { addedIds.contains($0.heistId) }, by: \.heistId)
+            .compactMapValues { $0.count == 1 ? $0[0] : nil }
+
+        let pairs = inferFunctionalHeistElementPairs(removedById: removedById, addedById: addedById)
+        guard !pairs.isEmpty else { return elementDelta }
+
+        let pairedRemoved = Set(pairs.map(\.removedId))
+        let pairedAdded = Set(pairs.map(\.insertedId))
+        let added = elementDelta.added?.filter { !pairedAdded.contains($0.heistId) }
+        let removed = elementDelta.removed?.filter { !pairedRemoved.contains($0) }
+        let hasRemainingChange = added?.isEmpty == false
+            || removed?.isEmpty == false
+            || elementDelta.updated?.isEmpty == false
+            || elementDelta.treeInserted?.isEmpty == false
+            || elementDelta.treeRemoved?.isEmpty == false
+            || elementDelta.treeMoved?.isEmpty == false
+
+        return InterfaceDelta(
+            kind: hasRemainingChange ? elementDelta.kind : .noChange,
+            elementCount: elementDelta.elementCount,
+            added: added?.isEmpty == false ? added : nil,
+            removed: removed?.isEmpty == false ? removed : nil,
+            updated: elementDelta.updated,
+            treeInserted: elementDelta.treeInserted,
+            treeRemoved: elementDelta.treeRemoved,
+            treeMoved: elementDelta.treeMoved
+        )
+    }
+
     private static func computeTreeDelta(
         beforeTree: [InterfaceNode],
         afterTree: [InterfaceNode],
@@ -289,8 +348,16 @@ extension TheStash {
 
         let insertedIds = newIds.subtracting(oldIds)
         let removedIds = oldIds.subtracting(newIds)
+        let inferredPairs = inferFunctionalTreePairs(
+            oldRecords: oldRecords,
+            newRecords: newRecords,
+            removedIds: removedIds,
+            insertedIds: insertedIds
+        )
+        let inferredInsertedIds = Set(inferredPairs.map(\.insertedId))
+        let inferredRemovedIds = Set(inferredPairs.map(\.removedId))
 
-        let inserted = insertedIds
+        let inserted = insertedIds.subtracting(inferredInsertedIds)
             .filter { id in
                 guard let record = newRecords[id] else { return false }
                 return !record.ancestors.contains(where: insertedIds.contains)
@@ -301,7 +368,7 @@ extension TheStash {
             }
             .sorted(by: treeInsertionOrder)
 
-        let removed = removedIds
+        let removed = removedIds.subtracting(inferredRemovedIds)
             .filter { id in
                 guard let record = oldRecords[id] else { return false }
                 return !record.ancestors.contains(where: removedIds.contains)
@@ -312,11 +379,17 @@ extension TheStash {
             }
             .sorted(by: treeRemovalOrder)
 
+        let inferredMoves = inferredPairs.compactMap { pair -> TreeMove? in
+            guard let old = oldRecords[pair.removedId],
+                  let new = newRecords[pair.insertedId] else { return nil }
+            guard old.location != new.location else { return nil }
+            return TreeMove(ref: old.ref, from: old.location, to: new.location)
+        }
         let rawMoved = oldIds.intersection(newIds).compactMap { id -> TreeMove? in
             guard let old = oldRecords[id], let new = newRecords[id] else { return nil }
             guard old.location != new.location else { return nil }
             return TreeMove(ref: new.ref, from: old.location, to: new.location)
-        }
+        } + inferredMoves
         let movedIds = Set(rawMoved.map(\.ref.id))
         let moved = rawMoved
             .filter { move in
@@ -334,6 +407,83 @@ extension TheStash {
             treeInserted: inserted.isEmpty ? nil : inserted,
             treeRemoved: removed.isEmpty ? nil : removed,
             treeMoved: moved.isEmpty ? nil : moved
+        )
+    }
+
+    private static func inferFunctionalTreePairs(
+        oldRecords: [String: WireTreeRecord],
+        newRecords: [String: WireTreeRecord],
+        removedIds: Set<String>,
+        insertedIds: Set<String>
+    ) -> [(removedId: String, insertedId: String)] {
+        let removedById = Dictionary(uniqueKeysWithValues: removedIds.compactMap { id in
+            oldRecords[id].map { (id, $0) }
+        })
+        let insertedById = Dictionary(uniqueKeysWithValues: insertedIds.compactMap { id in
+            newRecords[id].map { (id, $0) }
+        })
+
+        return inferFunctionalTreeRecordPairs(removedById: removedById, addedById: insertedById)
+    }
+
+    private static func inferFunctionalHeistElementPairs(
+        removedById: [String: HeistElement],
+        addedById: [String: HeistElement]
+    ) -> [(removedId: String, insertedId: String)] {
+        let removed = removedById.map { id, element in
+            (id, functionalSignature(for: element))
+        }
+        let added = addedById.map { id, element in
+            (id, functionalSignature(for: element))
+        }
+        return inferFunctionalPairs(removed: removed, added: added)
+    }
+
+    private static func inferFunctionalTreeRecordPairs(
+        removedById: [String: WireTreeRecord],
+        addedById: [String: WireTreeRecord]
+    ) -> [(removedId: String, insertedId: String)] {
+        let removed = removedById.compactMap { id, record -> (String, FunctionalElementSignature)? in
+            functionalSignature(for: record).map { (id, $0) }
+        }
+        let added = addedById.compactMap { id, record -> (String, FunctionalElementSignature)? in
+            functionalSignature(for: record).map { (id, $0) }
+        }
+        return inferFunctionalPairs(removed: removed, added: added)
+    }
+
+    private static func inferFunctionalPairs(
+        removed: [(String, FunctionalElementSignature)],
+        added: [(String, FunctionalElementSignature)]
+    ) -> [(removedId: String, insertedId: String)] {
+        let removedGroups = Dictionary(grouping: removed, by: \.1)
+        let addedGroups = Dictionary(grouping: added, by: \.1)
+
+        return Set(removedGroups.keys).intersection(addedGroups.keys).compactMap { signature in
+            guard let removedMatches = removedGroups[signature],
+                  let addedMatches = addedGroups[signature],
+                  removedMatches.count == 1,
+                  addedMatches.count == 1 else { return nil }
+            return (removedId: removedMatches[0].0, insertedId: addedMatches[0].0)
+        }
+    }
+
+    private static func functionalSignature(for record: WireTreeRecord) -> FunctionalElementSignature? {
+        guard case .element(let element) = record.node else { return nil }
+        return functionalSignature(for: element)
+    }
+
+    private static func functionalSignature(for element: HeistElement) -> FunctionalElementSignature {
+        FunctionalElementSignature(
+            description: element.description,
+            label: element.label,
+            value: element.value,
+            identifier: element.identifier,
+            hint: element.hint,
+            traits: element.traits,
+            respondsToUserInteraction: element.respondsToUserInteraction,
+            customContent: element.customContent,
+            actions: element.actions
         )
     }
 

@@ -397,6 +397,87 @@ final class WireConverterTests: XCTestCase {
         } ?? false)
     }
 
+    func testFunctionallyIdenticalRemoveAddReturnsTreeMove() {
+        let beforeElement = makeScreenElement(
+            heistId: "telescope_far_light_3_32_button",
+            label: "Telescope, Far Light, 3:32",
+            traits: [.button],
+            frameY: 100,
+            activationPointY: 122
+        )
+        let afterElement = makeScreenElement(
+            heistId: "telescope_far_light_3_32_button_at_0_200",
+            label: "Telescope, Far Light, 3:32",
+            traits: [.button],
+            frameY: 200,
+            activationPointY: 222
+        )
+        let other = makeScreenElement(heistId: "daybreak_morning_ritual_button", label: "Daybreak")
+        let beforeTree = [
+            InterfaceNode.element(WireConversion.toWire(beforeElement)),
+            InterfaceNode.element(WireConversion.toWire(other)),
+        ]
+        let afterTree: [TheStash.RegistryNode] = [
+            .element(other),
+            .element(afterElement),
+        ]
+
+        let delta = WireConversion.computeDelta(
+            before: [beforeElement, other],
+            after: [other, afterElement],
+            beforeTree: beforeTree,
+            beforeTreeHash: beforeTree.hashValue,
+            afterTree: afterTree,
+            isScreenChange: false
+        )
+
+        XCTAssertEqual(delta.kind, .elementsChanged)
+        XCTAssertNil(delta.added)
+        XCTAssertNil(delta.removed)
+        XCTAssertNil(delta.treeInserted)
+        XCTAssertNil(delta.treeRemoved)
+        XCTAssertTrue(delta.treeMoved?.contains {
+            $0.ref == TreeNodeRef(id: "telescope_far_light_3_32_button", kind: .element)
+                && $0.from == TreeLocation(parentId: nil, index: 0)
+                && $0.to == TreeLocation(parentId: nil, index: 1)
+        } ?? false)
+    }
+
+    func testFunctionallyIdenticalRemoveAddAtSameLocationReturnsNoChange() {
+        let beforeElement = makeScreenElement(
+            heistId: "telescope_far_light_3_32_button",
+            label: "Telescope, Far Light, 3:32",
+            traits: [.button],
+            frameY: 100,
+            activationPointY: 122
+        )
+        let afterElement = makeScreenElement(
+            heistId: "telescope_far_light_3_32_button_at_0_200",
+            label: "Telescope, Far Light, 3:32",
+            traits: [.button],
+            frameY: 200,
+            activationPointY: 222
+        )
+        let beforeTree = [InterfaceNode.element(WireConversion.toWire(beforeElement))]
+        let afterTree: [TheStash.RegistryNode] = [.element(afterElement)]
+
+        let delta = WireConversion.computeDelta(
+            before: [beforeElement],
+            after: [afterElement],
+            beforeTree: beforeTree,
+            beforeTreeHash: beforeTree.hashValue,
+            afterTree: afterTree,
+            isScreenChange: false
+        )
+
+        XCTAssertEqual(delta.kind, .noChange)
+        XCTAssertNil(delta.added)
+        XCTAssertNil(delta.removed)
+        XCTAssertNil(delta.treeInserted)
+        XCTAssertNil(delta.treeRemoved)
+        XCTAssertNil(delta.treeMoved)
+    }
+
     func testTreeDeletionReturnsRemovalLocation() {
         let first = makeScreenElement(heistId: "first", label: "First")
         let second = makeScreenElement(heistId: "second", label: "Second")

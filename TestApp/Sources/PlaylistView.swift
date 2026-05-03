@@ -142,7 +142,12 @@ struct PlaylistView: View {
 
     private func shufflePlaylist() {
         guard songs.count >= 2 else { return }
+        let originalOrder = songs.map(\.id)
         songs.shuffle()
+        if songs.map(\.id) == originalOrder {
+            let first = songs.removeFirst()
+            songs.append(first)
+        }
         NSLog("[Playlist] Shuffled (queue: %@)", queueString)
     }
 

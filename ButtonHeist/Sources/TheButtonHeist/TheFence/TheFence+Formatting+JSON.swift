@@ -450,6 +450,17 @@ extension FenceResponse {
         }
     }
 
+    private func deltaNodeDictionary(_ node: InterfaceNode) -> [String: Any] {
+        switch node {
+        case .element(let element):
+            return ["element": elementDictionary(element, detail: .summary)]
+        case .container(let info, let children):
+            var payload = containerInfoDictionary(info, detail: .summary)
+            payload["children"] = children.map(deltaNodeDictionary)
+            return ["container": payload]
+        }
+    }
+
     private func containerInfoDictionary(_ info: ContainerInfo, detail: InterfaceDetail) -> [String: Any] {
         var payload: [String: Any] = [:]
         switch info.type {
@@ -515,8 +526,54 @@ extension FenceResponse {
                 }
             }
         }
+        if let treeInserted = delta.treeInserted {
+            payload["treeInserted"] = treeInserted.map(treeInsertionDictionary)
+        }
+        if let treeRemoved = delta.treeRemoved {
+            payload["treeRemoved"] = treeRemoved.map(treeRemovalDictionary)
+        }
+        if let treeMoved = delta.treeMoved {
+            payload["treeMoved"] = treeMoved.map(treeMoveDictionary)
+        }
         if let newInterface = delta.newInterface {
             payload["newInterface"] = interfaceDictionary(newInterface, detail: .summary)
+        }
+        return payload
+    }
+
+    private func treeInsertionDictionary(_ insertion: TreeInsertion) -> [String: Any] {
+        [
+            "location": treeLocationDictionary(insertion.location),
+            "node": deltaNodeDictionary(insertion.node),
+        ]
+    }
+
+    private func treeRemovalDictionary(_ removal: TreeRemoval) -> [String: Any] {
+        [
+            "ref": treeNodeRefDictionary(removal.ref),
+            "location": treeLocationDictionary(removal.location),
+        ]
+    }
+
+    private func treeMoveDictionary(_ move: TreeMove) -> [String: Any] {
+        [
+            "ref": treeNodeRefDictionary(move.ref),
+            "from": treeLocationDictionary(move.from),
+            "to": treeLocationDictionary(move.to),
+        ]
+    }
+
+    private func treeNodeRefDictionary(_ ref: TreeNodeRef) -> [String: Any] {
+        [
+            "id": ref.id,
+            "kind": ref.kind.rawValue,
+        ]
+    }
+
+    private func treeLocationDictionary(_ location: TreeLocation) -> [String: Any] {
+        var payload: [String: Any] = ["index": location.index]
+        if let parentId = location.parentId {
+            payload["parentId"] = parentId
         }
         return payload
     }

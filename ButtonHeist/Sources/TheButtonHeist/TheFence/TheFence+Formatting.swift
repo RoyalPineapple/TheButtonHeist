@@ -312,10 +312,16 @@ public enum FenceResponse {
             let addedCount = delta.added?.count ?? 0
             let removedCount = delta.removed?.count ?? 0
             let updatedCount = delta.updated?.count ?? 0
+            let insertedCount = delta.treeInserted?.count ?? 0
+            let treeRemovedCount = delta.treeRemoved?.count ?? 0
+            let movedCount = delta.treeMoved?.count ?? 0
             var parts: [String] = ["\(delta.elementCount) elements"]
             if addedCount > 0 { parts.append("+\(addedCount) added") }
             if removedCount > 0 { parts.append("-\(removedCount) removed") }
             if updatedCount > 0 { parts.append("~\(updatedCount) updated") }
+            if insertedCount > 0 { parts.append("+\(insertedCount) tree inserted") }
+            if treeRemovedCount > 0 { parts.append("-\(treeRemovedCount) tree removed") }
+            if movedCount > 0 { parts.append("↕\(movedCount) moved") }
             return "[" + parts.joined(separator: ", ") + "]"
         case .screenChanged:
             return "[\(delta.elementCount) elements, screen changed]"
