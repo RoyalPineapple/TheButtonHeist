@@ -212,11 +212,11 @@ Sessions expire after 60 seconds of inactivity by default. If you go too long be
 
 **Fix:** Rebuild both sides from the same commit. Rebuild the CLI (`cd ButtonHeistCLI && swift build -c release`), rebuild the app (`xcodebuild ... build`), and reinstall. The two version strings in the error tell you which side is behind.
 
-## "Action timed out — connection lost"
+## "Command timed out waiting for a response from the app"
 
-The connection dropped mid-action. Different from initial connection timeout — this means a previously working connection broke.
+A single command took longer than the action timeout (15s for most actions, 30s for `type_text` and screenshots). The connection itself is still up — only the keepalive task (6 missed pongs ≈ 30s of silence) tears down a connection. After this error you can retry on the same session.
 
-**Fix:** The app may have crashed, been killed by the OS, or the simulator was shut down. Check `xcrun simctl list devices booted` to see if the simulator is still up. If it is, check if the app process is running. Relaunch if needed. TheFence will attempt to reconnect automatically if `autoReconnect` is enabled (the MCP server default).
+**Fix:** Usually the app is busy on its main thread, finishing a long UI transition, or sending a large response (e.g. a big screenshot or interface tree). Retry the command. If it keeps timing out, check whether the app is actually wedged: `xcrun simctl list devices booted` to confirm the simulator is up, then look at the app process. If the connection has truly been lost you'll see a different error (`notConnected`) on the next command, and TheFence will reconnect automatically when `autoReconnect` is enabled (the MCP server default).
 
 ## General debugging strategy
 
