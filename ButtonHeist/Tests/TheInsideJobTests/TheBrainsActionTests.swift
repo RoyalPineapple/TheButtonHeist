@@ -140,13 +140,13 @@ final class TheBrainsActionTests: XCTestCase {
     func testCaptureBeforeStateIncludesRegisteredElements() {
         let element = makeElement(label: "Title", traits: .header)
         let heistId = "header_title"
-        brains.stash.registry.elements[heistId] = TheStash.ScreenElement(
+        brains.stash.registry.insertForTesting(TheStash.ScreenElement(
             heistId: heistId,
             contentSpaceOrigin: nil,
             element: element,
             object: nil,
             scrollView: nil
-        )
+        ))
         brains.stash.currentHierarchy = [.element(element, traversalIndex: 0)]
 
         let before = brains.captureBeforeState()
@@ -223,13 +223,13 @@ final class TheBrainsActionTests: XCTestCase {
 
     func testClearCacheResetsStashAndExploreState() {
         let element = makeElement(label: "Item")
-        brains.stash.registry.elements["test_id"] = TheStash.ScreenElement(
+        brains.stash.registry.insertForTesting(TheStash.ScreenElement(
             heistId: "test_id",
             contentSpaceOrigin: nil,
             element: element,
             object: nil,
             scrollView: nil
-        )
+        ))
         brains.beginExploreCycle()
         brains.containerExploreStates[
             AccessibilityContainer(
@@ -347,13 +347,13 @@ final class TheBrainsActionTests: XCTestCase {
         element: AccessibilityElement,
         object: NSObject?
     ) {
-        brains.stash.registry.elements[heistId] = TheStash.ScreenElement(
+        brains.stash.registry.insertForTesting(TheStash.ScreenElement(
             heistId: heistId,
             contentSpaceOrigin: nil,
             element: element,
             object: object,
             scrollView: nil
-        )
+        ))
         brains.stash.registry.viewportIds.insert(heistId)
     }
 

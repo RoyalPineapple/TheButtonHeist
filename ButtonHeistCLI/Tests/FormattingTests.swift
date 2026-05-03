@@ -66,12 +66,12 @@ final class FormattingTests: XCTestCase {
 
     func testFormatSnapshotJSON() {
         let element = makeElement(label: "Test", index: 0, actions: [])
-        let payload = Interface(timestamp: Date(), elements: [element])
+        let payload = Interface(timestamp: Date(), tree: [.element(element)])
 
         let json = formatInterfaceJSON(payload)
 
         XCTAssertNotNil(json)
-        XCTAssertTrue(json!.contains("\"elements\""))
+        XCTAssertTrue(json!.contains("\"tree\""))
         XCTAssertTrue(json!.contains("\"timestamp\""))
     }
 

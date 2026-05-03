@@ -65,7 +65,7 @@ final class ServerMessageTests: XCTestCase {
             frameX: 10, frameY: 20, frameWidth: 100, frameHeight: 44,
             actions: [.activate]
         )
-        let payload = Interface(timestamp: Date(), elements: [element])
+        let payload = Interface(timestamp: Date(), tree: [.element(element)])
         let message = ServerMessage.interface(payload)
 
         let encoder = JSONEncoder()

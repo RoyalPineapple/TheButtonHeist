@@ -388,6 +388,15 @@ public struct InterfaceDelta: Codable, Sendable {
     /// Elements whose properties changed (present for .elementsChanged)
     public let updated: [ElementUpdate]?
 
+    /// Nodes inserted into the interface tree (present for structural .elementsChanged)
+    public let treeInserted: [TreeInsertion]?
+
+    /// Nodes removed from the interface tree (present for structural .elementsChanged)
+    public let treeRemoved: [TreeRemoval]?
+
+    /// Existing nodes moved within the interface tree (present for structural .elementsChanged)
+    public let treeMoved: [TreeMove]?
+
     /// Full new interface (present only for .screenChanged)
     public let newInterface: Interface?
 
@@ -399,6 +408,9 @@ public struct InterfaceDelta: Codable, Sendable {
         added: [HeistElement]? = nil,
         removed: [String]? = nil,
         updated: [ElementUpdate]? = nil,
+        treeInserted: [TreeInsertion]? = nil,
+        treeRemoved: [TreeRemoval]? = nil,
+        treeMoved: [TreeMove]? = nil,
         newInterface: Interface? = nil
     ) {
         self.kind = kind
@@ -406,7 +418,73 @@ public struct InterfaceDelta: Codable, Sendable {
         self.added = added
         self.removed = removed
         self.updated = updated
+        self.treeInserted = treeInserted
+        self.treeRemoved = treeRemoved
+        self.treeMoved = treeMoved
         self.newInterface = newInterface
+    }
+}
+
+/// Stable identity namespace for a node in `Interface.tree`.
+public enum TreeNodeKind: String, Codable, Sendable, Equatable {
+    case element
+    case container
+}
+
+/// A stable reference to an existing tree node.
+public struct TreeNodeRef: Codable, Sendable, Equatable {
+    public let id: String
+    public let kind: TreeNodeKind
+
+    public init(id: String, kind: TreeNodeKind) {
+        self.id = id
+        self.kind = kind
+    }
+}
+
+/// A location in the interface tree. `parentId == nil` means the root forest.
+public struct TreeLocation: Codable, Sendable, Equatable {
+    public let parentId: String?
+    public let index: Int
+
+    public init(parentId: String?, index: Int) {
+        self.parentId = parentId
+        self.index = index
+    }
+}
+
+/// A node inserted into `Interface.tree`.
+public struct TreeInsertion: Codable, Sendable, Equatable {
+    public let location: TreeLocation
+    public let node: InterfaceNode
+
+    public init(location: TreeLocation, node: InterfaceNode) {
+        self.location = location
+        self.node = node
+    }
+}
+
+/// A node removed from `Interface.tree`.
+public struct TreeRemoval: Codable, Sendable, Equatable {
+    public let ref: TreeNodeRef
+    public let location: TreeLocation
+
+    public init(ref: TreeNodeRef, location: TreeLocation) {
+        self.ref = ref
+        self.location = location
+    }
+}
+
+/// An existing node moved within `Interface.tree`.
+public struct TreeMove: Codable, Sendable, Equatable {
+    public let ref: TreeNodeRef
+    public let from: TreeLocation
+    public let to: TreeLocation
+
+    public init(ref: TreeNodeRef, from: TreeLocation, to: TreeLocation) {
+        self.ref = ref
+        self.from = from
+        self.to = to
     }
 }
 

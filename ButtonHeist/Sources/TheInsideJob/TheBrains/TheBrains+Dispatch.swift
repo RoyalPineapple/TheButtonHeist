@@ -159,7 +159,9 @@ extension TheBrains {
 
         let delta = stash.computeDelta(
             before: before.snapshot, after: afterSnapshot,
-            afterTree: stash.currentHierarchy, isScreenChange: false
+            beforeTree: before.tree,
+            beforeTreeHash: before.treeHash,
+            isScreenChange: false
         )
 
         let exploreElements = stash.toWire(afterSnapshot)

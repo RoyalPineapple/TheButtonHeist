@@ -32,7 +32,7 @@ func makeConnectedFence() -> (TheFence, MockConnection) {
     mockConn.autoResponse = { message in
         switch message {
         case .requestInterface:
-            return .interface(Interface(timestamp: Date(), elements: []))
+            return .interface(Interface(timestamp: Date(), tree: []))
         case .requestScreen:
             return .screen(ScreenPayload(pngData: "", width: 393, height: 852))
         case .stopRecording:

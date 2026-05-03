@@ -73,7 +73,7 @@ final class TheHandoffMessageTests: XCTestCase {
         var receivedPayload: Interface?
         handoff.onInterface = { payload, _ in receivedPayload = payload }
 
-        let interface = Interface(timestamp: Date(), elements: [])
+        let interface = Interface(timestamp: Date(), tree: [])
         handoff.handleServerMessage(.interface(interface), requestId: nil)
 
         XCTAssertNotNil(handoff.currentInterface)
@@ -83,7 +83,7 @@ final class TheHandoffMessageTests: XCTestCase {
     @ButtonHeistActor
     func testInterfaceResponseDoesNotUpdateCurrent() async {
         let handoff = TheHandoff()
-        handoff.handleServerMessage(.interface(Interface(timestamp: Date(), elements: [])),
+        handoff.handleServerMessage(.interface(Interface(timestamp: Date(), tree: [])),
                                     requestId: "req-1")
 
         XCTAssertNil(handoff.currentInterface)

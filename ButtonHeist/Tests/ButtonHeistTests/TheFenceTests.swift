@@ -203,11 +203,8 @@ final class TheFenceTests: XCTestCase {
             frameHeight: 44,
             actions: [.activate]
         )
-        let group = Group(
+        let containerInfo = ContainerInfo(
             type: .list,
-            label: "Settings list",
-            value: nil,
-            identifier: nil,
             frameX: 0,
             frameY: 44,
             frameWidth: 390,
@@ -215,10 +212,9 @@ final class TheFenceTests: XCTestCase {
         )
         let interface = Interface(
             timestamp: Date(),
-            elements: [title, wifi],
             tree: [
-                .element(order: 0),
-                .container(group, children: [.element(order: 1)]),
+                .element(title),
+                .container(containerInfo, children: [.element(wifi)]),
             ]
         )
 
@@ -260,11 +256,8 @@ final class TheFenceTests: XCTestCase {
             frameHeight: 44,
             actions: [.activate]
         )
-        let group = Group(
-            type: .scrollable,
-            label: nil,
-            value: "390x1200",
-            identifier: nil,
+        let containerInfo = ContainerInfo(
+            type: .scrollable(contentWidth: 390, contentHeight: 1200),
             frameX: 0,
             frameY: 44,
             frameWidth: 390,
@@ -272,8 +265,7 @@ final class TheFenceTests: XCTestCase {
         )
         let interface = Interface(
             timestamp: Date(),
-            elements: [element],
-            tree: [.container(group, children: [.element(order: 0)])]
+            tree: [.container(containerInfo, children: [.element(element)])]
         )
 
         let response = FenceResponse.interface(interface, detail: .summary)
@@ -284,7 +276,8 @@ final class TheFenceTests: XCTestCase {
         let tree = interfaceDict["tree"] as! [[String: Any]]
         let container = tree[0]["container"] as! [String: Any]
         XCTAssertEqual(container["type"] as? String, "scrollable")
-        XCTAssertEqual(container["value"] as? String, "390x1200")
+        XCTAssertEqual(container["contentWidth"] as? Double, 390)
+        XCTAssertEqual(container["contentHeight"] as? Double, 1200)
         XCTAssertNil(container["frameY"])
 
         let children = container["children"] as! [[String: Any]]
@@ -311,11 +304,8 @@ final class TheFenceTests: XCTestCase {
             frameHeight: 44,
             actions: [.activate]
         )
-        let group = Group(
-            type: .scrollable,
-            label: nil,
-            value: "390x1200",
-            identifier: nil,
+        let containerInfo = ContainerInfo(
+            type: .scrollable(contentWidth: 390, contentHeight: 1200),
             frameX: 0,
             frameY: 44,
             frameWidth: 390,
@@ -323,8 +313,7 @@ final class TheFenceTests: XCTestCase {
         )
         let interface = Interface(
             timestamp: Date(),
-            elements: [element],
-            tree: [.container(group, children: [.element(order: 0)])]
+            tree: [.container(containerInfo, children: [.element(element)])]
         )
 
         let text = FenceResponse.interface(interface, detail: .summary).compactFormatted()
@@ -350,11 +339,8 @@ final class TheFenceTests: XCTestCase {
             activationPointY: 66,
             actions: [.activate]
         )
-        let group = Group(
-            type: .scrollable,
-            label: nil,
-            value: "390x1200",
-            identifier: nil,
+        let containerInfo = ContainerInfo(
+            type: .scrollable(contentWidth: 390, contentHeight: 1200),
             frameX: 0,
             frameY: 44,
             frameWidth: 390,
@@ -362,8 +348,7 @@ final class TheFenceTests: XCTestCase {
         )
         let interface = Interface(
             timestamp: Date(),
-            elements: [element],
-            tree: [.container(group, children: [.element(order: 0)])]
+            tree: [.container(containerInfo, children: [.element(element)])]
         )
 
         let text = FenceResponse.interface(interface, detail: .full).compactFormatted()
@@ -1067,7 +1052,7 @@ final class TheFenceTests: XCTestCase {
             description: "Button", label: "New Order", value: nil, identifier: nil,
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44, actions: [.activate]
         )
-        let fullInterface = Interface(timestamp: Date(), elements: [element])
+        let fullInterface = Interface(timestamp: Date(), tree: [.element(element)])
         let delta = InterfaceDelta(
             kind: .screenChanged, elementCount: 1, newInterface: fullInterface
         )

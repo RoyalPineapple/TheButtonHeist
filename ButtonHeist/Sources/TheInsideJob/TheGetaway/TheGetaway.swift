@@ -373,7 +373,7 @@ final class TheGetaway {
         let payload = brains.currentInterface()
         insideJobLogger.info("Explore: \(payload.elements.count) elements (\(manifest.scrollCount) scrolls, \(time)s)")
         sendMessage(.interface(payload), requestId: requestId, respond: respond)
-        brains.recordSentState(treeHash: payload.elements.hashValue)
+        brains.recordSentState(treeHash: payload.tree.hashValue)
     }
 
     // MARK: - Screen Capture

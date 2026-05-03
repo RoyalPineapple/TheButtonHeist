@@ -139,7 +139,7 @@ final class InterfaceComputedTests: XCTestCase {
         let elements = [
             makeElement(label: "Controls Demo", traits: [.header]),
         ]
-        let interface = Interface(timestamp: Date(), elements: elements)
+        let interface = Interface(timestamp: Date(), tree: elements.map { .element($0) })
         XCTAssertEqual(interface.screenId, "controls_demo")
     }
 
@@ -147,7 +147,7 @@ final class InterfaceComputedTests: XCTestCase {
         let elements = [
             makeElement(label: "Save", traits: [.button]),
         ]
-        let interface = Interface(timestamp: Date(), elements: elements)
+        let interface = Interface(timestamp: Date(), tree: elements.map { .element($0) })
         XCTAssertNil(interface.screenId)
     }
 

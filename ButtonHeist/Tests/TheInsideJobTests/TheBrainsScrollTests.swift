@@ -77,7 +77,7 @@ final class TheBrainsScrollTests: XCTestCase {
             )
         }
         XCTAssertTrue(
-            brains.stash.registry.elements.values.contains {
+            brains.stash.registry.flattenElements().contains {
                 $0.element.label == "Page One Visible Label"
             },
             "Visible page content should remain discoverable without scrolling the queuing scroll view"
@@ -314,13 +314,13 @@ final class TheBrainsScrollTests: XCTestCase {
     func testOffViewportEntryByHeistIdReturnsWhenOffScreen() {
         let element = makeElement(label: "Item")
         let heistId = "button_item"
-        brains.stash.registry.elements[heistId] = TheStash.ScreenElement(
+        brains.stash.registry.insertForTesting(TheStash.ScreenElement(
             heistId: heistId,
             contentSpaceOrigin: CGPoint(x: 0, y: 2000),
             element: element,
             object: nil,
             scrollView: nil
-        )
+        ))
         brains.stash.registry.viewportIds = ["other_element"]
 
         let entry = brains.offViewportRegistryEntry(for: .heistId(heistId))
@@ -331,13 +331,13 @@ final class TheBrainsScrollTests: XCTestCase {
     func testOffViewportEntryByHeistIdReturnsNilWhenOnScreen() {
         let element = makeElement(label: "Item")
         let heistId = "button_item"
-        brains.stash.registry.elements[heistId] = TheStash.ScreenElement(
+        brains.stash.registry.insertForTesting(TheStash.ScreenElement(
             heistId: heistId,
             contentSpaceOrigin: nil,
             element: element,
             object: nil,
             scrollView: nil
-        )
+        ))
         brains.stash.registry.viewportIds = [heistId]
 
         let entry = brains.offViewportRegistryEntry(for: .heistId(heistId))
@@ -347,13 +347,13 @@ final class TheBrainsScrollTests: XCTestCase {
     func testOffViewportEntryByMatcherReturnsOffScreenMatch() {
         let element = makeElement(label: "Target Button", traits: .button)
         let heistId = "button_target_button"
-        brains.stash.registry.elements[heistId] = TheStash.ScreenElement(
+        brains.stash.registry.insertForTesting(TheStash.ScreenElement(
             heistId: heistId,
             contentSpaceOrigin: CGPoint(x: 0, y: 3000),
             element: element,
             object: nil,
             scrollView: nil
-        )
+        ))
         brains.stash.registry.viewportIds = ["other_element"]
 
         let matcher = ElementMatcher(label: "Target Button")
@@ -365,13 +365,13 @@ final class TheBrainsScrollTests: XCTestCase {
     func testOffViewportEntryByMatcherReturnsNilWhenOnScreen() {
         let element = makeElement(label: "Visible Item", traits: .button)
         let heistId = "button_visible_item"
-        brains.stash.registry.elements[heistId] = TheStash.ScreenElement(
+        brains.stash.registry.insertForTesting(TheStash.ScreenElement(
             heistId: heistId,
             contentSpaceOrigin: nil,
             element: element,
             object: nil,
             scrollView: nil
-        )
+        ))
         brains.stash.registry.viewportIds = [heistId]
 
         let matcher = ElementMatcher(label: "Visible Item")

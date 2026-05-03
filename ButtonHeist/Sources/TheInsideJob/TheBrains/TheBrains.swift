@@ -91,16 +91,21 @@ final class TheBrains {
         let snapshot: [TheStash.ScreenElement]
         let elements: [AccessibilityElement]
         let hierarchy: [AccessibilityHierarchy]
+        let tree: [InterfaceNode]
+        let treeHash: Int
         let viewController: ObjectIdentifier?
     }
 
     /// Capture the current state for delta computation before an action.
     /// Caller must have called `refresh()` already this frame.
     func captureBeforeState() -> BeforeState {
-        BeforeState(
+        let tree = stash.wireTree()
+        return BeforeState(
             snapshot: stash.selectElements(),
             elements: stash.currentHierarchy.sortedElements,
             hierarchy: stash.currentHierarchy,
+            tree: tree,
+            treeHash: tree.hashValue,
             viewController: tripwire.topmostViewController().map(ObjectIdentifier.init)
         )
     }
@@ -172,7 +177,9 @@ final class TheBrains {
 
         let delta = stash.computeDelta(
             before: before.snapshot, after: afterSnapshot,
-            afterTree: afterResult?.hierarchy, isScreenChange: isScreenChange
+            beforeTree: before.tree,
+            beforeTreeHash: before.treeHash,
+            isScreenChange: isScreenChange
         )
 
         let exploreResult = ExploreResult(
@@ -246,9 +253,8 @@ final class TheBrains {
 
     /// Snapshot current state as "last sent" — call after every response to the driver.
     func recordSentState() {
-        let snapshot = stash.selectElements()
         lastSentState = SentState(
-            treeHash: stash.toWire(snapshot).hashValue,
+            treeHash: stash.wireTreeHash(),
             beforeState: captureBeforeState(),
             screenId: stash.lastScreenId
         )
@@ -270,23 +276,17 @@ final class TheBrains {
     func broadcastInterfaceIfChanged() -> Interface? {
         guard refresh() != nil else { return nil }
 
-        let snapshot = stash.selectElements()
-        let wireElements = stash.toWire(snapshot)
-        let currentHash = wireElements.hashValue
+        let currentHash = stash.wireTreeHash()
 
         guard currentHash != stash.lastHierarchyHash else { return nil }
         stash.lastHierarchyHash = currentHash
 
-        let tree = stash.convertTree(stash.currentHierarchy)
-        return Interface(timestamp: Date(), elements: wireElements, tree: tree)
+        return Interface(timestamp: Date(), tree: stash.wireTree())
     }
 
     /// Build a full Interface payload from current state.
     func currentInterface() -> Interface {
-        let snapshot = stash.selectElements()
-        let wireElements = stash.toWire(snapshot)
-        let tree = stash.convertTree(stash.currentHierarchy)
-        return Interface(timestamp: Date(), elements: wireElements, tree: tree)
+        Interface(timestamp: Date(), tree: stash.wireTree())
     }
 
     // MARK: - Background Delta
@@ -297,8 +297,7 @@ final class TheBrains {
         guard let sent = lastSentState, sent.treeHash != 0 else { return nil }
         guard refresh() != nil else { return nil }
         let snapshot = stash.selectElements()
-        let wireElements = stash.toWire(snapshot)
-        let currentHash = wireElements.hashValue
+        let currentHash = stash.wireTreeHash()
         guard currentHash != sent.treeHash else { return nil }
 
         return computeDelta(
@@ -433,7 +432,7 @@ final class TheBrains {
     private func refreshAndSnapshot() -> (snapshot: [TheStash.ScreenElement], wireHash: Int)? {
         guard refresh() != nil else { return nil }
         let snapshot = stash.selectElements()
-        let wireHash = stash.toWire(snapshot).hashValue
+        let wireHash = stash.wireTreeHash()
         return (snapshot, wireHash)
     }
 
@@ -452,7 +451,9 @@ final class TheBrains {
         )
         return stash.computeDelta(
             before: before.snapshot, after: afterSnapshot,
-            afterTree: stash.currentHierarchy, isScreenChange: isScreenChange
+            beforeTree: before.tree,
+            beforeTreeHash: before.treeHash,
+            isScreenChange: isScreenChange
         )
     }
 

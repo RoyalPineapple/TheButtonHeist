@@ -38,10 +38,10 @@ final class TheBurglarApplyTests: XCTestCase {
         let heistIds = stash.apply(result)
 
         XCTAssertEqual(heistIds.count, 2)
-        XCTAssertEqual(stash.registry.elements.count, 2,
+        XCTAssertEqual(stash.registry.elementByHeistId.count, 2,
                        "Registry should have one entry per element")
         for heistId in heistIds {
-            XCTAssertNotNil(stash.registry.elements[heistId],
+            XCTAssertNotNil(stash.registry.findElement(heistId: heistId),
                            "Each heistId should map to a registry entry")
         }
     }
@@ -80,7 +80,7 @@ final class TheBurglarApplyTests: XCTestCase {
 
         let heistId = stash.registry.reverseIndex[element]
         XCTAssertNotNil(heistId, "reverseIndex should map element → heistId")
-        XCTAssertNotNil(stash.registry.elements[heistId ?? ""],
+        XCTAssertNotNil(stash.registry.findElement(heistId: heistId ?? ""),
                        "Reverse-indexed heistId should exist in registry")
     }
 
@@ -269,7 +269,7 @@ final class TheBurglarApplyTests: XCTestCase {
 
         stash.apply(resultV2)
 
-        let entry = stash.registry.elements[heistId]
+        let entry = stash.registry.findElement(heistId: heistId)
         XCTAssertNotNil(entry, "Entry should still exist under the same heistId")
         XCTAssertEqual(entry?.element.value, "5",
                        "Element value should be updated to new value")
@@ -347,7 +347,7 @@ final class TheBurglarApplyTests: XCTestCase {
             return
         }
 
-        XCTAssertNotNil(stash.registry.elements[heistId]?.contentSpaceOrigin,
+        XCTAssertNotNil(stash.registry.findElement(heistId: heistId)?.contentSpaceOrigin,
                         "Element inside a scrollable container should receive a contentSpaceOrigin")
     }
 
@@ -370,7 +370,7 @@ final class TheBurglarApplyTests: XCTestCase {
             return
         }
 
-        XCTAssertNil(stash.registry.elements[heistId]?.contentSpaceOrigin,
+        XCTAssertNil(stash.registry.findElement(heistId: heistId)?.contentSpaceOrigin,
                      "Element with no enclosing scroll view should have nil contentSpaceOrigin")
     }
 

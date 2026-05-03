@@ -197,13 +197,13 @@ final class TheBrainsPipelineTests: XCTestCase {
         seedRegistry(heistId: "button_seen", label: "Seen", traits: .button)
         seedRegistry(heistId: "button_orphan", label: "Orphan", traits: .button,
                      includeInViewport: false)
-        XCTAssertEqual(brains.stash.registry.elements.count, 2)
+        XCTAssertEqual(brains.stash.registry.elementByHeistId.count, 2)
 
         _ = await brains.exploreAndPrune()
 
-        XCTAssertTrue(brains.stash.registry.elements.keys.contains("button_seen"),
+        XCTAssertTrue(brains.stash.registry.elementByHeistId.keys.contains("button_seen"),
                       "Viewport elements must survive the prune")
-        XCTAssertFalse(brains.stash.registry.elements.keys.contains("button_orphan"),
+        XCTAssertFalse(brains.stash.registry.elementByHeistId.keys.contains("button_orphan"),
                        "Elements not in the viewport (or in a cached container) must be pruned")
     }
 
@@ -223,13 +223,13 @@ final class TheBrainsPipelineTests: XCTestCase {
             throw XCTSkip("No scrollable container available in host UI")
         }
         let cachedElement = makeElement(label: "Cached", traits: .button)
-        brains.stash.registry.elements["button_cached"] = TheStash.ScreenElement(
+        brains.stash.registry.insertForTesting(TheStash.ScreenElement(
             heistId: "button_cached",
             contentSpaceOrigin: nil,
             element: cachedElement,
             object: nil,
             scrollView: nil
-        )
+        ))
         brains.containerExploreStates[container] = TheBrains.ContainerExploreState(
             visibleSubtreeFingerprint: fingerprint,
             discoveredHeistIds: ["button_cached"]
@@ -237,7 +237,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         _ = await brains.exploreAndPrune()
 
-        XCTAssertTrue(brains.stash.registry.elements.keys.contains("button_cached"),
+        XCTAssertTrue(brains.stash.registry.elementByHeistId.keys.contains("button_cached"),
                       "Cached discovered ids must survive prune when fingerprint cache hits")
     }
 
@@ -284,13 +284,13 @@ final class TheBrainsPipelineTests: XCTestCase {
             accessibilityLanguage: nil,
             respondsToUserInteraction: false
         )
-        brains.stash.registry.elements[heistId] = TheStash.ScreenElement(
+        brains.stash.registry.insertForTesting(TheStash.ScreenElement(
             heistId: heistId,
             contentSpaceOrigin: nil,
             element: element,
             object: nil,
             scrollView: nil
-        )
+        ))
         if includeInViewport {
             brains.stash.registry.viewportIds.insert(heistId)
             brains.stash.currentHierarchy.append(.element(element, traversalIndex: 0))

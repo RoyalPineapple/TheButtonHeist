@@ -52,7 +52,7 @@ final class FenceResponseTests: XCTestCase {
     }
 
     func testInterfaceEmptyHumanFormatting() {
-        let iface = Interface(timestamp: Date(), elements: [])
+        let iface = Interface(timestamp: Date(), tree: [])
         let response = FenceResponse.interface(iface)
         let output = response.humanFormatted()
         XCTAssertTrue(output.contains("0 elements"))
@@ -66,7 +66,7 @@ final class FenceResponseTests: XCTestCase {
             frameX: 10, frameY: 20, frameWidth: 100, frameHeight: 44,
             actions: [.activate]
         )
-        let iface = Interface(timestamp: Date(), elements: [element])
+        let iface = Interface(timestamp: Date(), tree: [.element(element)])
         let response = FenceResponse.interface(iface)
         let output = response.humanFormatted()
         XCTAssertTrue(output.contains("1 elements"))
@@ -188,6 +188,38 @@ final class FenceResponseTests: XCTestCase {
         XCTAssertTrue(output.contains("-2 removed"))
     }
 
+    func testDeltaStructuralFormatting() {
+        let delta = InterfaceDelta(
+            kind: .elementsChanged,
+            elementCount: 5,
+            treeInserted: [
+                TreeInsertion(
+                    location: TreeLocation(parentId: nil, index: 1),
+                    node: .element(makeElement(heistId: "new_row", label: "New Row"))
+                ),
+            ],
+            treeRemoved: [
+                TreeRemoval(
+                    ref: TreeNodeRef(id: "old_row", kind: .element),
+                    location: TreeLocation(parentId: nil, index: 2)
+                ),
+            ],
+            treeMoved: [
+                TreeMove(
+                    ref: TreeNodeRef(id: "moved_row", kind: .element),
+                    from: TreeLocation(parentId: nil, index: 0),
+                    to: TreeLocation(parentId: nil, index: 3)
+                ),
+            ]
+        )
+        let result = ActionResult(success: true, method: .syntheticTap, interfaceDelta: delta)
+        let output = FenceResponse.action(result: result).humanFormatted()
+
+        XCTAssertTrue(output.contains("+1 tree inserted"))
+        XCTAssertTrue(output.contains("-1 tree removed"))
+        XCTAssertTrue(output.contains("↕1 moved"))
+    }
+
     func testDeltaScreenChangedFormatting() {
         let delta = InterfaceDelta(kind: .screenChanged, elementCount: 12)
         let result = ActionResult(success: true, method: .syntheticTap, interfaceDelta: delta)
@@ -251,7 +283,7 @@ final class FenceResponseTests: XCTestCase {
             value: nil, identifier: nil,
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44, actions: []
         )
-        let iface = Interface(timestamp: Date(), elements: [element])
+        let iface = Interface(timestamp: Date(), tree: [.element(element)])
         let response = FenceResponse.interface(iface)
         let dict = response.jsonDict()!
         XCTAssertEqual(dict["status"] as? String, "ok")
@@ -282,6 +314,45 @@ final class FenceResponseTests: XCTestCase {
         let response = FenceResponse.action(result: result)
         let dict = response.jsonDict()!
         XCTAssertNotNil(dict["delta"])
+    }
+
+    func testActionWithStructuralDeltaJsonFormatting() {
+        let delta = InterfaceDelta(
+            kind: .elementsChanged,
+            elementCount: 5,
+            treeInserted: [
+                TreeInsertion(
+                    location: TreeLocation(parentId: nil, index: 1),
+                    node: .element(makeElement(heistId: "new_row", label: "New Row"))
+                ),
+            ],
+            treeRemoved: [
+                TreeRemoval(
+                    ref: TreeNodeRef(id: "old_row", kind: .element),
+                    location: TreeLocation(parentId: nil, index: 2)
+                ),
+            ],
+            treeMoved: [
+                TreeMove(
+                    ref: TreeNodeRef(id: "moved_row", kind: .element),
+                    from: TreeLocation(parentId: nil, index: 0),
+                    to: TreeLocation(parentId: nil, index: 3)
+                ),
+            ]
+        )
+        let result = ActionResult(success: true, method: .syntheticTap, interfaceDelta: delta)
+        let response = FenceResponse.action(result: result)
+        let dict = response.jsonDict()!
+        let deltaDict = dict["delta"] as? [String: Any]
+
+        XCTAssertEqual((deltaDict?["treeInserted"] as? [[String: Any]])?.count, 1)
+        XCTAssertEqual((deltaDict?["treeRemoved"] as? [[String: Any]])?.count, 1)
+        let moved = deltaDict?["treeMoved"] as? [[String: Any]]
+        XCTAssertEqual(moved?.count, 1)
+        let ref = moved?.first?["ref"] as? [String: Any]
+        XCTAssertEqual(ref?["id"] as? String, "moved_row")
+        let to = moved?.first?["to"] as? [String: Any]
+        XCTAssertEqual(to?["index"] as? Int, 3)
     }
 
     func testActionAnimatingJsonFormatting() {
@@ -392,6 +463,21 @@ final class FenceResponseTests: XCTestCase {
             name: name,
             endpoint: .hostPort(host: "127.0.0.1", port: 9999),
             simulatorUDID: simulatorUDID
+        )
+    }
+
+    private func makeElement(heistId: String, label: String) -> HeistElement {
+        HeistElement(
+            heistId: heistId,
+            description: label,
+            label: label,
+            value: nil,
+            identifier: nil,
+            frameX: 0,
+            frameY: 0,
+            frameWidth: 100,
+            frameHeight: 44,
+            actions: []
         )
     }
 

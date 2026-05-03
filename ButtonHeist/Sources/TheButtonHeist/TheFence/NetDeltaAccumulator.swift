@@ -45,6 +45,9 @@ internal enum NetDeltaAccumulator {
             added: postMerge.added,
             removed: postMerge.removed,
             updated: postMerge.updated,
+            treeInserted: postMerge.treeInserted,
+            treeRemoved: postMerge.treeRemoved,
+            treeMoved: postMerge.treeMoved,
             newInterface: finalInterface
         )
     }
@@ -73,13 +76,37 @@ internal enum NetDeltaAccumulator {
                 elementsById.removeValue(forKey: update.heistId)
             }
         }
-        let elements = interface.elements
-            .filter { elementsById[$0.heistId] != nil }
-            .map { elementsById[$0.heistId] ?? $0 }
-            + (delta.added ?? []).filter { original in
-                !interface.elements.contains { $0.heistId == original.heistId }
+
+        // Walk the tree, swapping each leaf with its updated counterpart and
+        // dropping leaves whose heistId was removed/dropped from elementsById.
+        // Containers with no surviving children are pruned.
+        let originalHeistIds = Set(interface.elements.map(\.heistId))
+        let updatedTree = mapTree(interface.tree, elementsById: elementsById)
+
+        // Append any "added" element that wasn't already in the original tree
+        // at the root level — we don't know its tree position from the delta.
+        let novelAdds = (delta.added ?? []).filter { !originalHeistIds.contains($0.heistId) }
+        let finalTree = updatedTree + novelAdds.map { InterfaceNode.element($0) }
+
+        return Interface(timestamp: interface.timestamp, tree: finalTree)
+    }
+
+    /// Walk the tree, replacing each leaf with its updated counterpart from
+    /// `elementsById` (or dropping the leaf if absent). Containers with no
+    /// surviving descendants are pruned.
+    private static func mapTree(
+        _ nodes: [InterfaceNode], elementsById: [String: HeistElement]
+    ) -> [InterfaceNode] {
+        nodes.compactMap { node in
+            switch node {
+            case .element(let element):
+                guard let updated = elementsById[element.heistId] else { return nil }
+                return .element(updated)
+            case .container(let info, let children):
+                let newChildren = mapTree(children, elementsById: elementsById)
+                return newChildren.isEmpty ? nil : .container(info, children: newChildren)
             }
-        return Interface(timestamp: interface.timestamp, elements: elements, tree: interface.tree)
+        }
     }
 
     /// Apply a property change to `element`. Returns `false` when the property cannot be
@@ -146,8 +173,15 @@ internal enum NetDeltaAccumulator {
         var netAdded: [String: HeistElement] = [:]  // heistId → element
         var netRemoved: Set<String> = []
         var netUpdated: [String: [PropertyChange]] = [:]  // heistId → latest changes
+        var treeInserted: [TreeInsertion] = []
+        var treeRemoved: [TreeRemoval] = []
+        var treeMoved: [TreeMove] = []
 
         for delta in deltas {
+            treeInserted.append(contentsOf: delta.treeInserted ?? [])
+            treeRemoved.append(contentsOf: delta.treeRemoved ?? [])
+            treeMoved.append(contentsOf: delta.treeMoved ?? [])
+
             for element in delta.added ?? [] {
                 if netRemoved.contains(element.heistId) {
                     // Was removed earlier, now re-added → treat as net add
@@ -193,7 +227,10 @@ internal enum NetDeltaAccumulator {
         let updatedList = netUpdated.map { ElementUpdate(heistId: $0.key, changes: $0.value) }
             .sorted { $0.heistId < $1.heistId }
 
-        if addedList.isEmpty && removedList.isEmpty && updatedList.isEmpty { return nil }
+        if addedList.isEmpty && removedList.isEmpty && updatedList.isEmpty
+            && treeInserted.isEmpty && treeRemoved.isEmpty && treeMoved.isEmpty {
+            return nil
+        }
 
         let lastCount = deltas.last?.elementCount ?? 0
         return InterfaceDelta(
@@ -201,7 +238,10 @@ internal enum NetDeltaAccumulator {
             elementCount: lastCount,
             added: addedList.isEmpty ? nil : addedList,
             removed: removedList.isEmpty ? nil : removedList,
-            updated: updatedList.isEmpty ? nil : updatedList
+            updated: updatedList.isEmpty ? nil : updatedList,
+            treeInserted: treeInserted.isEmpty ? nil : treeInserted,
+            treeRemoved: treeRemoved.isEmpty ? nil : treeRemoved,
+            treeMoved: treeMoved.isEmpty ? nil : treeMoved
         )
     }
 }

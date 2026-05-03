@@ -117,9 +117,10 @@ final class TheBurglar {
     // MARK: - Apply (mutates registry)
 
     /// Apply a parse result to the registry. Sets `currentHierarchy`,
-    /// `scrollableContainerViews`, upserts into `registry.elements`, rebuilds `registry.viewportIds`.
-    /// Apply a parse result to the stash. Returns the assigned heistIds
-    /// so the caller can track them (e.g. for explore cycle accumulation).
+    /// `scrollableContainerViews`, merges the parsed hierarchy into the
+    /// persistent registry tree, refreshes viewport / reverseIndex.
+    /// Returns the assigned heistIds so callers can track them (e.g. for
+    /// explore cycle accumulation).
     @discardableResult
     func apply(_ result: ParseResult, to stash: TheStash) -> [String] {
         stash.currentHierarchy = result.hierarchy
@@ -131,8 +132,21 @@ final class TheBurglar {
             elementObjects: result.objects
         )
 
+        let containerIdentityContext = Self.buildContainerIdentityContext(
+            hierarchy: result.hierarchy,
+            scrollableContainerViews: result.scrollViews
+        )
+
         let heistIds = TheStash.IdAssignment.assign(result.elements)
-        stash.registry.apply(parsedElements: result.elements, heistIds: heistIds, contexts: contexts)
+        stash.registry.register(
+            parsedElements: result.elements,
+            heistIds: heistIds,
+            contexts: contexts,
+            hierarchy: result.hierarchy,
+            containerContentFrames: containerIdentityContext.contentFrames,
+            containersNestedInScrollView: containerIdentityContext.nestedInScrollView,
+            scrollableViews: result.scrollViews
+        )
 
         // Detect first responder among parsed elements — no view hierarchy walk.
         let firstResponders = zip(result.elements, heistIds).filter { element, _ in
@@ -244,6 +258,81 @@ final class TheBurglar {
             }
         )
         return TabBarPartition(hasTabBar: hasTabBar, contentLabels: contentLabels)
+    }
+
+    // MARK: - Container Content-Frame Building
+
+    /// Walk the hierarchy tree to compute each container's frame expressed in
+    /// the nearest enclosing scrollable's content space. Top-level containers
+    /// (no enclosing scrollable) keep their screen-space frame.
+    ///
+    /// The result feeds `ElementRegistry.stableId` so a container nested in a
+    /// scroll view keeps its identity as the outer view scrolls, and reusable
+    /// cell-embedded containers at distinct logical positions get distinct
+    /// ids (no UIView-instance ambiguity from the cell pool).
+    struct ContainerIdentityContext {
+        let contentFrames: [AccessibilityContainer: CGRect]
+        let nestedInScrollView: Set<AccessibilityContainer>
+    }
+
+    static func buildContainerIdentityContext(
+        hierarchy: [AccessibilityHierarchy],
+        scrollableContainerViews: [AccessibilityContainer: UIView]
+    ) -> ContainerIdentityContext {
+        var contentFrames: [AccessibilityContainer: CGRect] = [:]
+        var nestedInScrollView = Set<AccessibilityContainer>()
+        for node in hierarchy {
+            collectContainerContentFrames(
+                node: node,
+                parentScrollView: nil,
+                scrollableContainerViews: scrollableContainerViews,
+                into: &contentFrames,
+                nestedInScrollView: &nestedInScrollView
+            )
+        }
+        return ContainerIdentityContext(
+            contentFrames: contentFrames,
+            nestedInScrollView: nestedInScrollView
+        )
+    }
+
+    private static func collectContainerContentFrames(
+        node: AccessibilityHierarchy,
+        parentScrollView: UIScrollView?,
+        scrollableContainerViews: [AccessibilityContainer: UIView],
+        into result: inout [AccessibilityContainer: CGRect],
+        nestedInScrollView: inout Set<AccessibilityContainer>
+    ) {
+        guard case .container(let container, let children) = node else { return }
+
+        let frame = container.frame
+        let contentFrame: CGRect
+        if let scrollView = parentScrollView, !frame.isNull, !frame.isEmpty {
+            let origin = scrollView.convert(frame.origin, from: nil)
+            contentFrame = CGRect(origin: origin, size: frame.size)
+            nestedInScrollView.insert(container)
+        } else {
+            contentFrame = frame
+        }
+        result[container] = contentFrame
+
+        let childScrollView: UIScrollView?
+        if let scrollView = scrollableContainerViews[container] as? UIScrollView,
+           !scrollView.bhIsUnsafeForProgrammaticScrolling {
+            childScrollView = scrollView
+        } else {
+            childScrollView = parentScrollView
+        }
+
+        for child in children {
+            collectContainerContentFrames(
+                node: child,
+                parentScrollView: childScrollView,
+                scrollableContainerViews: scrollableContainerViews,
+                into: &result,
+                nestedInScrollView: &nestedInScrollView
+            )
+        }
     }
 
     // MARK: - Element Context Building

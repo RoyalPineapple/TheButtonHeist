@@ -71,20 +71,15 @@ final class TheStash {
 
     // MARK: - Traversal Order Index
 
-    /// Build a heistId→traversal-order lookup from the current hierarchy.
-    /// Elements discovered via scroll exploration but not in the current viewport
-    /// won't appear in currentHierarchy — they get Int.max.
+    /// Build a heistId→traversal-order lookup. The registry tree IS the
+    /// canonical traversal order — depth-first walk yields elements in
+    /// VoiceOver order, with off-screen orphans interleaved by their
+    /// content-space Y. Diagnostics still need a `[heistId: Int]` map for
+    /// formatting, so we serialize the walk here.
     func buildTraversalOrderIndex() -> [String: Int] {
-        let reverseIndex = registry.reverseIndex
+        let flattened = registry.flattenElements()
         return Dictionary(
-            currentHierarchy.compactMap(
-                context: (),
-                container: { _, _ in () },
-                element: { element, traversalIndex, _ in
-                    reverseIndex[element].map { ($0, traversalIndex) }
-                }
-            ),
-            uniquingKeysWith: { _, latest in latest }
+            uniqueKeysWithValues: flattened.enumerated().map { ($0.element.heistId, $0.offset) }
         )
     }
 
@@ -261,9 +256,9 @@ final class TheStash {
     func resolveTarget(_ target: ElementTarget) -> TargetResolution {
         switch target {
         case .heistId(let heistId):
-            guard let entry = registry.elements[heistId] else {
+            guard let entry = registry.findElement(heistId: heistId) else {
                 return .notFound(diagnostics: Diagnostics.heistIdNotFound(
-                    heistId, knownIds: registry.elements.keys, viewportCount: registry.viewportIds.count
+                    heistId, knownIds: registry.elementByHeistId.keys, viewportCount: registry.viewportIds.count
                 ))
             }
             return .resolved(ResolvedTarget(screenElement: entry))
@@ -315,13 +310,13 @@ final class TheStash {
 
     /// Existence check — does any element match this target?
     /// Unlike resolveTarget, does NOT require uniqueness for matchers.
-    /// For heistId: checks registry.elements.
+    /// For heistId: checks the persistent registry tree.
     /// For matcher: checks currentHierarchy only (not registry). The registry
     /// caches previously-seen elements and would defeat wait_for absent checks.
     func hasTarget(_ target: ElementTarget) -> Bool {
         switch target {
         case .heistId(let heistId):
-            return registry.elements[heistId] != nil
+            return registry.findElement(heistId: heistId) != nil
         case .matcher(let matcher, _):
             // Exact matches are a subset of substring matches, so a single substring
             // pass answers "does any element match" for the exact-then-substring fallback.
@@ -362,7 +357,8 @@ final class TheStash {
     func matcherNotFoundMessage(_ matcher: ElementMatcher) -> String {
         Diagnostics.matcherNotFound(
             matcher, hierarchy: currentHierarchy,
-            screenElements: registry.elements, viewportHeistIds: registry.viewportIds,
+            screenElements: registry.flattenElements(),
+            viewportHeistIds: registry.viewportIds,
             traversalOrder: buildTraversalOrderIndex()
         )
     }
@@ -397,17 +393,12 @@ final class TheStash {
 
     // MARK: - Element Selection
 
-    /// All elements in the registry, sorted by traversal order.
-    /// Off-screen elements (Int.max) sort to the end, with heistId as tiebreaker.
+    /// All elements in the registry, in tree (depth-first) order. The tree
+    /// itself encodes traversal order — visible elements in their incoming
+    /// order, off-screen elements interleaved with their last-known siblings
+    /// by content-space Y for scrollable containers.
     func selectElements() -> [ScreenElement] {
-        let orderByHeistId = buildTraversalOrderIndex()
-        return registry.elements.values
-            .sorted {
-                let orderA = orderByHeistId[$0.heistId] ?? Int.max
-                let orderB = orderByHeistId[$1.heistId] ?? Int.max
-                if orderA != orderB { return orderA < orderB }
-                return $0.heistId < $1.heistId
-            }
+        registry.flattenElements()
     }
 
     // MARK: - Refresh Pipeline
@@ -473,21 +464,30 @@ final class TheStash {
         WireConversion.toWire(entry)
     }
 
-    /// Convert the hierarchy tree to wire format.
-    func convertTree(_ hierarchy: [AccessibilityHierarchy]) -> [ElementNode]? {
-        hierarchy.isEmpty ? nil : hierarchy.map { WireConversion.convertNode($0) }
+    /// Convert the persistent registry tree to its canonical wire form.
+    func wireTree() -> [InterfaceNode] {
+        WireConversion.toWireTree(registry.roots)
+    }
+
+    /// Hash of the canonical wire tree, including container topology and
+    /// metadata as well as leaf element payloads.
+    func wireTreeHash() -> Int {
+        wireTree().hashValue
     }
 
     /// Compute the delta between two snapshots.
     func computeDelta(
         before: [ScreenElement],
         after: [ScreenElement],
-        afterTree: [AccessibilityHierarchy]?,
+        beforeTree: [InterfaceNode]? = nil,
+        beforeTreeHash: Int? = nil,
         isScreenChange: Bool
     ) -> InterfaceDelta {
         WireConversion.computeDelta(
             before: before, after: after,
-            afterTree: afterTree, isScreenChange: isScreenChange
+            beforeTree: beforeTree,
+            beforeTreeHash: beforeTreeHash,
+            afterTree: registry.roots, isScreenChange: isScreenChange
         )
     }
 

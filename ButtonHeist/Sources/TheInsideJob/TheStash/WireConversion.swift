@@ -6,6 +6,34 @@ import TheScore
 
 import AccessibilitySnapshotParser
 
+private struct WireTreeRecord {
+    let ref: TreeNodeRef
+    let location: TreeLocation
+    let node: InterfaceNode
+    let ancestors: [String]
+}
+
+private struct ElementIdentitySignature: Hashable {
+    let text: String?
+    let identifier: String?
+    let hint: String?
+    let stableTraits: [HeistTrait]
+}
+
+private struct ElementStateSignature: Hashable {
+    let label: String?
+    let value: String?
+    let transientTraits: [HeistTrait]
+    let respondsToUserInteraction: Bool
+    let customContent: [HeistCustomContent]?
+    let actions: [ElementAction]?
+}
+
+private struct ElementPairingSignature: Hashable {
+    let identity: ElementIdentitySignature
+    let state: ElementStateSignature
+}
+
 // MARK: - Float Sanitization
 
 extension CGFloat {
@@ -20,8 +48,9 @@ extension CGFloat {
 
 extension TheStash {
 
-    /// Converts internal accessibility types to wire format (HeistElement, ElementNode)
-    /// and computes interface deltas. Pure transformations — no mutable state.
+    /// Converts internal accessibility types to wire format (HeistElement,
+    /// InterfaceNode, ContainerInfo) and computes interface deltas.
+    /// Pure transformations — no mutable state.
     @MainActor enum WireConversion {
 
     // MARK: - Trait Names
@@ -86,52 +115,47 @@ extension TheStash {
         entries.map { toWire($0) }
     }
 
-    // MARK: - Tree Conversion
+    // MARK: - Tree Conversion (registry → wire)
 
-    static func convertNode(_ node: AccessibilityHierarchy) -> ElementNode {
-        node.folded(
-            onElement: { _, traversalIndex in
-                .element(order: traversalIndex)
-            },
-            onContainer: { container, childNodes in
-                .container(convertContainer(container), children: childNodes)
+    /// Convert the persistent registry tree to its canonical wire form.
+    /// Every element in the registry — visible, scrolled out, or otherwise
+    /// off-live-parse — appears at its tree position.
+    static func toWireTree(_ roots: [RegistryNode]) -> [InterfaceNode] {
+        roots.folded(
+            onElement: { InterfaceNode.element(toWire($0)) },
+            onContainer: { entry, children in
+                InterfaceNode.container(toContainerInfo(entry), children: children)
             }
         )
     }
 
-    private static func convertContainer(_ container: AccessibilityContainer) -> Group {
-        let (groupType, label, value, identifier): (GroupType, String?, String?, String?)
+    private static func toContainerInfo(_ entry: RegistryContainerEntry) -> ContainerInfo {
+        let container = entry.container
+        let type: ContainerInfo.ContainerType
         switch container.type {
-        case let .semanticGroup(l, v, id):
-            groupType = .semanticGroup
-            label = l; value = v; identifier = id
+        case let .semanticGroup(label, value, identifier):
+            type = .semanticGroup(label: label, value: value, identifier: identifier)
         case .list:
-            groupType = .list
-            label = nil; value = nil; identifier = nil
+            type = .list
         case .landmark:
-            groupType = .landmark
-            label = nil; value = nil; identifier = nil
-        case .dataTable:
-            groupType = .dataTable
-            label = nil; value = nil; identifier = nil
+            type = .landmark
+        case let .dataTable(rowCount, columnCount):
+            type = .dataTable(rowCount: rowCount, columnCount: columnCount)
         case .tabBar:
-            groupType = .tabBar
-            label = nil; value = nil; identifier = nil
+            type = .tabBar
         case .scrollable(let contentSize):
-            groupType = .scrollable
-            let width = Int(contentSize.width.sanitizedForJSON)
-            let height = Int(contentSize.height.sanitizedForJSON)
-            label = nil; value = "\(width)x\(height)"; identifier = nil
+            type = .scrollable(
+                contentWidth: Double(contentSize.width.sanitizedForJSON),
+                contentHeight: Double(contentSize.height.sanitizedForJSON)
+            )
         }
-        return Group(
-            type: groupType,
-            label: label,
-            value: value,
-            identifier: identifier,
-            frameX: container.frame.origin.x.sanitizedForJSON,
-            frameY: container.frame.origin.y.sanitizedForJSON,
-            frameWidth: container.frame.size.width.sanitizedForJSON,
-            frameHeight: container.frame.size.height.sanitizedForJSON
+        return ContainerInfo(
+            type: type,
+            stableId: entry.stableId,
+            frameX: Double(container.frame.origin.x.sanitizedForJSON),
+            frameY: Double(container.frame.origin.y.sanitizedForJSON),
+            frameWidth: Double(container.frame.size.width.sanitizedForJSON),
+            frameHeight: Double(container.frame.size.height.sanitizedForJSON)
         )
     }
 
@@ -140,25 +164,27 @@ extension TheStash {
     /// Compare two element snapshots and return a compact delta.
     ///
     /// Screen change detection is done by the caller via view controller identity —
-    /// `isScreenChange` is true when the screen changed (VC identity or topology). This function handles
+    /// `isScreenChange` is true when the screen changed. This function handles
     /// the response payloads:
-    /// - screen_changed → full new interface
+    /// - screen_changed → full new interface tree
     /// - elements_changed → added/removed/updated diff
     /// - no_change → element count only
     static func computeDelta(
         before: [ScreenElement],
         after: [ScreenElement],
-        afterTree: [AccessibilityHierarchy]?,
+        beforeTree: [InterfaceNode]? = nil,
+        beforeTreeHash: Int? = nil,
+        afterTree: [RegistryNode],
         isScreenChange: Bool
     ) -> InterfaceDelta {
+        let afterWireTree = toWireTree(afterTree)
+
         // Screen changed: VC identity differs → return full new interface
         if isScreenChange {
-            let afterWire = toWire(after)
-            let tree = afterTree?.map { convertNode($0) }
-            let fullInterface = Interface(timestamp: Date(), elements: afterWire, tree: tree)
+            let fullInterface = Interface(timestamp: Date(), tree: afterWireTree)
             return InterfaceDelta(
                 kind: .screenChanged,
-                elementCount: afterWire.count,
+                elementCount: after.count,
                 newInterface: fullInterface
             )
         }
@@ -176,18 +202,43 @@ extension TheStash {
                 }
             }
             if unchanged {
+                if let beforeTreeHash, beforeTreeHash != afterWireTree.hashValue {
+                    if let beforeTree {
+                        return computeTreeDelta(
+                            beforeTree: beforeTree,
+                            afterTree: afterWireTree,
+                            elementCount: after.count
+                        )
+                    } else {
+                        return InterfaceDelta(
+                            kind: .screenChanged,
+                            elementCount: after.count,
+                            newInterface: Interface(timestamp: Date(), tree: afterWireTree)
+                        )
+                    }
+                }
                 return InterfaceDelta(kind: .noChange, elementCount: after.count)
             }
         }
 
         // Something changed — convert to wire for property-level diff.
-        // Both snapshots are .all (full registry), so every known element is
-        // represented in both. The reconciliation produces a clean diff without
-        // needing off-screen recovery hacks.
         let beforeWire = toWire(before)
         let afterWire = toWire(after)
 
-        return computeElementDelta(beforeEls: beforeWire, afterEls: afterWire)
+        let elementDelta = computeElementDelta(beforeEls: beforeWire, afterEls: afterWire)
+        guard let beforeTree else { return elementDelta }
+
+        let treeDelta = computeTreeDelta(
+            beforeTree: beforeTree,
+            afterTree: afterWireTree,
+            elementCount: after.count
+        )
+        let adjustedElementDelta = suppressFunctionalMoveElementChurn(
+            elementDelta: elementDelta,
+            beforeEls: beforeWire,
+            afterEls: afterWire
+        )
+        return merge(elementDelta: adjustedElementDelta, treeDelta: treeDelta, elementCount: after.count)
     }
 
     /// Semantic element diff — heistId is the sole matching key.
@@ -232,8 +283,352 @@ extension TheStash {
         )
     }
 
+    private static func merge(
+        elementDelta: InterfaceDelta,
+        treeDelta: InterfaceDelta,
+        elementCount: Int
+    ) -> InterfaceDelta {
+        guard elementDelta.kind != .noChange || treeDelta.kind != .noChange else {
+            return InterfaceDelta(kind: .noChange, elementCount: elementCount)
+        }
+        return InterfaceDelta(
+            kind: .elementsChanged,
+            elementCount: elementCount,
+            added: elementDelta.added,
+            removed: elementDelta.removed,
+            updated: elementDelta.updated,
+            treeInserted: treeDelta.treeInserted,
+            treeRemoved: treeDelta.treeRemoved,
+            treeMoved: treeDelta.treeMoved
+        )
+    }
+
+    private static func suppressFunctionalMoveElementChurn(
+        elementDelta: InterfaceDelta,
+        beforeEls: [HeistElement],
+        afterEls: [HeistElement]
+    ) -> InterfaceDelta {
+        let beforeIds = Set(beforeEls.map(\.heistId))
+        let afterIds = Set(afterEls.map(\.heistId))
+        let removedIds = beforeIds.subtracting(afterIds)
+        let addedIds = afterIds.subtracting(beforeIds)
+        guard !removedIds.isEmpty, !addedIds.isEmpty else { return elementDelta }
+
+        let removedById = Dictionary(grouping: beforeEls.filter { removedIds.contains($0.heistId) }, by: \.heistId)
+            .compactMapValues { $0.count == 1 ? $0[0] : nil }
+        let addedById = Dictionary(grouping: afterEls.filter { addedIds.contains($0.heistId) }, by: \.heistId)
+            .compactMapValues { $0.count == 1 ? $0[0] : nil }
+
+        let pairs = inferFunctionalHeistElementPairs(removedById: removedById, addedById: addedById)
+        guard !pairs.isEmpty else { return elementDelta }
+
+        let pairedRemoved = Set(pairs.map(\.removedId))
+        let pairedAdded = Set(pairs.map(\.insertedId))
+        let added = elementDelta.added?.filter { !pairedAdded.contains($0.heistId) }
+        let removed = elementDelta.removed?.filter { !pairedRemoved.contains($0) }
+        let inferredUpdates = pairs.compactMap { pair -> ElementUpdate? in
+            guard let old = removedById[pair.removedId],
+                  let new = addedById[pair.insertedId] else { return nil }
+            return buildElementUpdate(old: old, new: new, heistId: pair.removedId, includeGeometry: false)
+        }
+        let updated = (elementDelta.updated ?? []) + inferredUpdates
+        let hasRemainingChange = added?.isEmpty == false
+            || removed?.isEmpty == false
+            || !updated.isEmpty
+            || elementDelta.treeInserted?.isEmpty == false
+            || elementDelta.treeRemoved?.isEmpty == false
+            || elementDelta.treeMoved?.isEmpty == false
+
+        return InterfaceDelta(
+            kind: hasRemainingChange ? elementDelta.kind : .noChange,
+            elementCount: elementDelta.elementCount,
+            added: added?.isEmpty == false ? added : nil,
+            removed: removed?.isEmpty == false ? removed : nil,
+            updated: updated.isEmpty ? nil : updated,
+            treeInserted: elementDelta.treeInserted,
+            treeRemoved: elementDelta.treeRemoved,
+            treeMoved: elementDelta.treeMoved
+        )
+    }
+
+    private static func computeTreeDelta(
+        beforeTree: [InterfaceNode],
+        afterTree: [InterfaceNode],
+        elementCount: Int
+    ) -> InterfaceDelta {
+        let oldRecords = indexTree(beforeTree)
+        let newRecords = indexTree(afterTree)
+        let oldIds = Set(oldRecords.keys)
+        let newIds = Set(newRecords.keys)
+
+        let insertedIds = newIds.subtracting(oldIds)
+        let removedIds = oldIds.subtracting(newIds)
+        let inferredPairs = inferFunctionalTreePairs(
+            oldRecords: oldRecords,
+            newRecords: newRecords,
+            removedIds: removedIds,
+            insertedIds: insertedIds
+        )
+        let inferredInsertedIds = Set(inferredPairs.map(\.insertedId))
+        let inferredRemovedIds = Set(inferredPairs.map(\.removedId))
+
+        let inserted = insertedIds.subtracting(inferredInsertedIds)
+            .filter { id in
+                guard let record = newRecords[id] else { return false }
+                return !record.ancestors.contains(where: insertedIds.contains)
+            }
+            .compactMap { id -> TreeInsertion? in
+                guard let record = newRecords[id] else { return nil }
+                return TreeInsertion(location: record.location, node: record.node)
+            }
+            .sorted(by: treeInsertionOrder)
+
+        let removed = removedIds.subtracting(inferredRemovedIds)
+            .filter { id in
+                guard let record = oldRecords[id] else { return false }
+                return !record.ancestors.contains(where: removedIds.contains)
+            }
+            .compactMap { id -> TreeRemoval? in
+                guard let record = oldRecords[id] else { return nil }
+                return TreeRemoval(ref: record.ref, location: record.location)
+            }
+            .sorted(by: treeRemovalOrder)
+
+        let inferredMoves = inferredPairs.compactMap { pair -> TreeMove? in
+            guard let old = oldRecords[pair.removedId],
+                  let new = newRecords[pair.insertedId] else { return nil }
+            guard old.location != new.location else { return nil }
+            return TreeMove(ref: old.ref, from: old.location, to: new.location)
+        }
+        let rawMoved = oldIds.intersection(newIds).compactMap { id -> TreeMove? in
+            guard let old = oldRecords[id], let new = newRecords[id] else { return nil }
+            guard old.location != new.location else { return nil }
+            return TreeMove(ref: new.ref, from: old.location, to: new.location)
+        } + inferredMoves
+        let movedIds = Set(rawMoved.map(\.ref.id))
+        let moved = rawMoved
+            .filter { move in
+                let ancestors = newRecords[move.ref.id]?.ancestors ?? []
+                return !ancestors.contains(where: movedIds.contains)
+            }
+            .sorted(by: treeMoveOrder)
+
+        guard !inserted.isEmpty || !removed.isEmpty || !moved.isEmpty else {
+            return InterfaceDelta(kind: .noChange, elementCount: elementCount)
+        }
+        return InterfaceDelta(
+            kind: .elementsChanged,
+            elementCount: elementCount,
+            treeInserted: inserted.isEmpty ? nil : inserted,
+            treeRemoved: removed.isEmpty ? nil : removed,
+            treeMoved: moved.isEmpty ? nil : moved
+        )
+    }
+
+    private static func inferFunctionalTreePairs(
+        oldRecords: [String: WireTreeRecord],
+        newRecords: [String: WireTreeRecord],
+        removedIds: Set<String>,
+        insertedIds: Set<String>
+    ) -> [(removedId: String, insertedId: String)] {
+        let removedById = Dictionary(uniqueKeysWithValues: removedIds.compactMap { id in
+            oldRecords[id].map { (id, $0) }
+        })
+        let insertedById = Dictionary(uniqueKeysWithValues: insertedIds.compactMap { id in
+            newRecords[id].map { (id, $0) }
+        })
+
+        return inferFunctionalTreeRecordPairs(removedById: removedById, addedById: insertedById)
+    }
+
+    private static func inferFunctionalHeistElementPairs(
+        removedById: [String: HeistElement],
+        addedById: [String: HeistElement]
+    ) -> [(removedId: String, insertedId: String)] {
+        let removed = removedById.map { id, element in
+            (id, pairingSignature(for: element))
+        }
+        let added = addedById.map { id, element in
+            (id, pairingSignature(for: element))
+        }
+        return inferFunctionalPairs(removed: removed, added: added)
+    }
+
+    private static func inferFunctionalTreeRecordPairs(
+        removedById: [String: WireTreeRecord],
+        addedById: [String: WireTreeRecord]
+    ) -> [(removedId: String, insertedId: String)] {
+        let removed = removedById.compactMap { id, record -> (String, ElementPairingSignature)? in
+            pairingSignature(for: record).map { (id, $0) }
+        }
+        let added = addedById.compactMap { id, record -> (String, ElementPairingSignature)? in
+            pairingSignature(for: record).map { (id, $0) }
+        }
+        return inferFunctionalPairs(removed: removed, added: added)
+    }
+
+    private static func inferFunctionalPairs(
+        removed: [(String, ElementPairingSignature)],
+        added: [(String, ElementPairingSignature)]
+    ) -> [(removedId: String, insertedId: String)] {
+        let removedByIdentity = Dictionary(grouping: removed, by: { $0.1.identity })
+        let addedByIdentity = Dictionary(grouping: added, by: { $0.1.identity })
+        let identities = Set(removedByIdentity.keys).intersection(addedByIdentity.keys)
+        var pairs: [(removedId: String, insertedId: String)] = []
+
+        for identity in identities {
+            guard let removedMatches = removedByIdentity[identity],
+                  let addedMatches = addedByIdentity[identity] else { continue }
+            if removedMatches.count == 1 && addedMatches.count == 1 {
+                pairs.append((removedId: removedMatches[0].0, insertedId: addedMatches[0].0))
+                continue
+            }
+
+            let removedByFullSignature = Dictionary(grouping: removedMatches, by: \.1)
+            let addedByFullSignature = Dictionary(grouping: addedMatches, by: \.1)
+            for signature in Set(removedByFullSignature.keys).intersection(addedByFullSignature.keys) {
+                guard let removedStateMatches = removedByFullSignature[signature],
+                      let addedStateMatches = addedByFullSignature[signature],
+                      removedStateMatches.count == 1,
+                      addedStateMatches.count == 1 else { continue }
+                pairs.append((removedId: removedStateMatches[0].0, insertedId: addedStateMatches[0].0))
+            }
+        }
+        return pairs
+    }
+
+    private static func pairingSignature(for record: WireTreeRecord) -> ElementPairingSignature? {
+        guard case .element(let element) = record.node else { return nil }
+        return pairingSignature(for: element)
+    }
+
+    private static func pairingSignature(for element: HeistElement) -> ElementPairingSignature {
+        ElementPairingSignature(identity: identitySignature(for: element), state: stateSignature(for: element))
+    }
+
+    private static func identitySignature(for element: HeistElement) -> ElementIdentitySignature {
+        let text = firstNonEmpty(element.identifier, element.label, element.description)
+        return ElementIdentitySignature(
+            text: text,
+            identifier: element.identifier,
+            hint: element.hint,
+            stableTraits: normalizedTraits(element.traits.filter { !Self.transientTraits.contains($0) })
+        )
+    }
+
+    private static func stateSignature(for element: HeistElement) -> ElementStateSignature {
+        ElementStateSignature(
+            label: element.label,
+            value: element.value,
+            transientTraits: normalizedTraits(element.traits.filter(Self.transientTraits.contains)),
+            respondsToUserInteraction: element.respondsToUserInteraction,
+            customContent: element.customContent,
+            actions: element.actions
+        )
+    }
+
+    private static func firstNonEmpty(_ values: String?...) -> String? {
+        for value in values {
+            if let value, !value.isEmpty {
+                return value
+            }
+        }
+        return nil
+    }
+
+    private static func normalizedTraits(_ traits: [HeistTrait]) -> [HeistTrait] {
+        traits.sorted { $0.rawValue < $1.rawValue }
+    }
+
+    private static let transientTraits: Set<HeistTrait> = [
+        .selected,
+        .notEnabled,
+        .isEditing,
+        .inactive,
+        .visited,
+        .updatesFrequently,
+    ]
+
+    private static func indexTree(_ roots: [InterfaceNode]) -> [String: WireTreeRecord] {
+        var result: [String: WireTreeRecord] = [:]
+        for (index, node) in roots.enumerated() {
+            collectTreeRecords(
+                node,
+                parentId: nil,
+                index: index,
+                ancestors: [],
+                into: &result
+            )
+        }
+        return result
+    }
+
+    private static func collectTreeRecords(
+        _ node: InterfaceNode,
+        parentId: String?,
+        index: Int,
+        ancestors: [String],
+        into result: inout [String: WireTreeRecord]
+    ) {
+        guard let ref = treeRef(for: node) else { return }
+        let location = TreeLocation(parentId: parentId, index: index)
+        result[ref.id] = WireTreeRecord(ref: ref, location: location, node: node, ancestors: ancestors)
+
+        guard case .container(_, let children) = node else { return }
+        let childAncestors = ancestors + [ref.id]
+        for (childIndex, child) in children.enumerated() {
+            collectTreeRecords(
+                child,
+                parentId: ref.id,
+                index: childIndex,
+                ancestors: childAncestors,
+                into: &result
+            )
+        }
+    }
+
+    private static func treeRef(for node: InterfaceNode) -> TreeNodeRef? {
+        switch node {
+        case .element(let element):
+            return TreeNodeRef(id: element.heistId, kind: .element)
+        case .container(let info, _):
+            guard let stableId = info.stableId else { return nil }
+            return TreeNodeRef(id: stableId, kind: .container)
+        }
+    }
+
+    private static func treeInsertionOrder(_ lhs: TreeInsertion, _ rhs: TreeInsertion) -> Bool {
+        compare(lhs.location, rhs.location)
+    }
+
+    private static func treeRemovalOrder(_ lhs: TreeRemoval, _ rhs: TreeRemoval) -> Bool {
+        compare(lhs.location, rhs.location)
+    }
+
+    private static func treeMoveOrder(_ lhs: TreeMove, _ rhs: TreeMove) -> Bool {
+        compare(lhs.to, rhs.to)
+    }
+
+    private static func compare(_ lhs: TreeLocation, _ rhs: TreeLocation) -> Bool {
+        switch (lhs.parentId, rhs.parentId) {
+        case let (left?, right?) where left != right:
+            return left < right
+        case (nil, _?):
+            return true
+        case (_?, nil):
+            return false
+        default:
+            return lhs.index < rhs.index
+        }
+    }
+
     /// Build an ElementUpdate if any mutable property differs.
-    private static func buildElementUpdate(old: HeistElement, new: HeistElement) -> ElementUpdate? {
+    private static func buildElementUpdate(
+        old: HeistElement,
+        new: HeistElement,
+        heistId: String? = nil,
+        includeGeometry: Bool = true
+    ) -> ElementUpdate? {
         var changes: [PropertyChange] = []
 
         if old.label != new.label {
@@ -276,17 +671,17 @@ extension TheStash {
         }
         let oldFrame = "\(Int(old.frameX)),\(Int(old.frameY)),\(Int(old.frameWidth)),\(Int(old.frameHeight))"
         let newFrame = "\(Int(new.frameX)),\(Int(new.frameY)),\(Int(new.frameWidth)),\(Int(new.frameHeight))"
-        if oldFrame != newFrame {
+        if includeGeometry && oldFrame != newFrame {
             changes.append(PropertyChange(property: .frame, old: oldFrame, new: newFrame))
         }
         let oldAP = "\(Int(old.activationPointX)),\(Int(old.activationPointY))"
         let newAP = "\(Int(new.activationPointX)),\(Int(new.activationPointY))"
-        if oldAP != newAP {
+        if includeGeometry && oldAP != newAP {
             changes.append(PropertyChange(property: .activationPoint, old: oldAP, new: newAP))
         }
 
         guard !changes.isEmpty else { return nil }
-        return ElementUpdate(heistId: new.heistId, changes: changes)
+        return ElementUpdate(heistId: heistId ?? new.heistId, changes: changes)
     }
     }
 } // extension TheStash
