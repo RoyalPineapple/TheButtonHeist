@@ -135,11 +135,33 @@ extension TheStash {
     }
 
     private static func hasSameMinimumMatcher(_ lhs: AccessibilityElement, _ rhs: AccessibilityElement) -> Bool {
-        lhs.label == rhs.label &&
-            lhs.identifier == rhs.identifier &&
-            lhs.value == rhs.value &&
-            lhs.traits == rhs.traits
+        guard lhs.identifier == rhs.identifier,
+              lhs.label == rhs.label,
+              stableTraitNames(lhs.traits) == stableTraitNames(rhs.traits) else {
+            return false
+        }
+
+        // Value is a fallback matcher field for otherwise generic elements,
+        // but state changes should not force a new identity when label/id/role
+        // already identify the same accessible thing.
+        if lhs.identifier?.isEmpty == false || lhs.label?.isEmpty == false {
+            return true
+        }
+        return lhs.value == rhs.value
     }
+
+    private static func stableTraitNames(_ traits: UIAccessibilityTraits) -> Set<String> {
+        Set(traits.traitNames).subtracting(Self.transientTraitNames)
+    }
+
+    private static let transientTraitNames: Set<String> = [
+        HeistTrait.selected.rawValue,
+        HeistTrait.notEnabled.rawValue,
+        HeistTrait.isEditing.rawValue,
+        HeistTrait.inactive.rawValue,
+        HeistTrait.visited.rawValue,
+        HeistTrait.updatesFrequently.rawValue,
+    ]
 
     private static func sameOrigin(_ lhs: CGPoint, _ rhs: CGPoint) -> Bool {
         abs(lhs.x - rhs.x) < 0.5 && abs(lhs.y - rhs.y) < 0.5

@@ -13,16 +13,25 @@ private struct WireTreeRecord {
     let ancestors: [String]
 }
 
-private struct FunctionalElementSignature: Hashable {
-    let description: String
-    let label: String?
-    let value: String?
+private struct ElementIdentitySignature: Hashable {
+    let text: String?
     let identifier: String?
     let hint: String?
-    let traits: [HeistTrait]
+    let stableTraits: [HeistTrait]
+}
+
+private struct ElementStateSignature: Hashable {
+    let label: String?
+    let value: String?
+    let transientTraits: [HeistTrait]
     let respondsToUserInteraction: Bool
     let customContent: [HeistCustomContent]?
     let actions: [ElementAction]?
+}
+
+private struct ElementPairingSignature: Hashable {
+    let identity: ElementIdentitySignature
+    let state: ElementStateSignature
 }
 
 // MARK: - Float Sanitization
@@ -317,9 +326,15 @@ extension TheStash {
         let pairedAdded = Set(pairs.map(\.insertedId))
         let added = elementDelta.added?.filter { !pairedAdded.contains($0.heistId) }
         let removed = elementDelta.removed?.filter { !pairedRemoved.contains($0) }
+        let inferredUpdates = pairs.compactMap { pair -> ElementUpdate? in
+            guard let old = removedById[pair.removedId],
+                  let new = addedById[pair.insertedId] else { return nil }
+            return buildElementUpdate(old: old, new: new, heistId: pair.removedId, includeGeometry: false)
+        }
+        let updated = (elementDelta.updated ?? []) + inferredUpdates
         let hasRemainingChange = added?.isEmpty == false
             || removed?.isEmpty == false
-            || elementDelta.updated?.isEmpty == false
+            || !updated.isEmpty
             || elementDelta.treeInserted?.isEmpty == false
             || elementDelta.treeRemoved?.isEmpty == false
             || elementDelta.treeMoved?.isEmpty == false
@@ -329,7 +344,7 @@ extension TheStash {
             elementCount: elementDelta.elementCount,
             added: added?.isEmpty == false ? added : nil,
             removed: removed?.isEmpty == false ? removed : nil,
-            updated: elementDelta.updated,
+            updated: updated.isEmpty ? nil : updated,
             treeInserted: elementDelta.treeInserted,
             treeRemoved: elementDelta.treeRemoved,
             treeMoved: elementDelta.treeMoved
@@ -431,10 +446,10 @@ extension TheStash {
         addedById: [String: HeistElement]
     ) -> [(removedId: String, insertedId: String)] {
         let removed = removedById.map { id, element in
-            (id, functionalSignature(for: element))
+            (id, pairingSignature(for: element))
         }
         let added = addedById.map { id, element in
-            (id, functionalSignature(for: element))
+            (id, pairingSignature(for: element))
         }
         return inferFunctionalPairs(removed: removed, added: added)
     }
@@ -443,49 +458,96 @@ extension TheStash {
         removedById: [String: WireTreeRecord],
         addedById: [String: WireTreeRecord]
     ) -> [(removedId: String, insertedId: String)] {
-        let removed = removedById.compactMap { id, record -> (String, FunctionalElementSignature)? in
-            functionalSignature(for: record).map { (id, $0) }
+        let removed = removedById.compactMap { id, record -> (String, ElementPairingSignature)? in
+            pairingSignature(for: record).map { (id, $0) }
         }
-        let added = addedById.compactMap { id, record -> (String, FunctionalElementSignature)? in
-            functionalSignature(for: record).map { (id, $0) }
+        let added = addedById.compactMap { id, record -> (String, ElementPairingSignature)? in
+            pairingSignature(for: record).map { (id, $0) }
         }
         return inferFunctionalPairs(removed: removed, added: added)
     }
 
     private static func inferFunctionalPairs(
-        removed: [(String, FunctionalElementSignature)],
-        added: [(String, FunctionalElementSignature)]
+        removed: [(String, ElementPairingSignature)],
+        added: [(String, ElementPairingSignature)]
     ) -> [(removedId: String, insertedId: String)] {
-        let removedGroups = Dictionary(grouping: removed, by: \.1)
-        let addedGroups = Dictionary(grouping: added, by: \.1)
+        let removedByIdentity = Dictionary(grouping: removed, by: { $0.1.identity })
+        let addedByIdentity = Dictionary(grouping: added, by: { $0.1.identity })
+        let identities = Set(removedByIdentity.keys).intersection(addedByIdentity.keys)
+        var pairs: [(removedId: String, insertedId: String)] = []
 
-        return Set(removedGroups.keys).intersection(addedGroups.keys).compactMap { signature in
-            guard let removedMatches = removedGroups[signature],
-                  let addedMatches = addedGroups[signature],
-                  removedMatches.count == 1,
-                  addedMatches.count == 1 else { return nil }
-            return (removedId: removedMatches[0].0, insertedId: addedMatches[0].0)
+        for identity in identities {
+            guard let removedMatches = removedByIdentity[identity],
+                  let addedMatches = addedByIdentity[identity] else { continue }
+            if removedMatches.count == 1 && addedMatches.count == 1 {
+                pairs.append((removedId: removedMatches[0].0, insertedId: addedMatches[0].0))
+                continue
+            }
+
+            let removedByFullSignature = Dictionary(grouping: removedMatches, by: \.1)
+            let addedByFullSignature = Dictionary(grouping: addedMatches, by: \.1)
+            for signature in Set(removedByFullSignature.keys).intersection(addedByFullSignature.keys) {
+                guard let removedStateMatches = removedByFullSignature[signature],
+                      let addedStateMatches = addedByFullSignature[signature],
+                      removedStateMatches.count == 1,
+                      addedStateMatches.count == 1 else { continue }
+                pairs.append((removedId: removedStateMatches[0].0, insertedId: addedStateMatches[0].0))
+            }
         }
+        return pairs
     }
 
-    private static func functionalSignature(for record: WireTreeRecord) -> FunctionalElementSignature? {
+    private static func pairingSignature(for record: WireTreeRecord) -> ElementPairingSignature? {
         guard case .element(let element) = record.node else { return nil }
-        return functionalSignature(for: element)
+        return pairingSignature(for: element)
     }
 
-    private static func functionalSignature(for element: HeistElement) -> FunctionalElementSignature {
-        FunctionalElementSignature(
-            description: element.description,
-            label: element.label,
-            value: element.value,
+    private static func pairingSignature(for element: HeistElement) -> ElementPairingSignature {
+        ElementPairingSignature(identity: identitySignature(for: element), state: stateSignature(for: element))
+    }
+
+    private static func identitySignature(for element: HeistElement) -> ElementIdentitySignature {
+        let text = firstNonEmpty(element.identifier, element.label, element.description)
+        return ElementIdentitySignature(
+            text: text,
             identifier: element.identifier,
             hint: element.hint,
-            traits: element.traits,
+            stableTraits: normalizedTraits(element.traits.filter { !Self.transientTraits.contains($0) })
+        )
+    }
+
+    private static func stateSignature(for element: HeistElement) -> ElementStateSignature {
+        ElementStateSignature(
+            label: element.label,
+            value: element.value,
+            transientTraits: normalizedTraits(element.traits.filter(Self.transientTraits.contains)),
             respondsToUserInteraction: element.respondsToUserInteraction,
             customContent: element.customContent,
             actions: element.actions
         )
     }
+
+    private static func firstNonEmpty(_ values: String?...) -> String? {
+        for value in values {
+            if let value, !value.isEmpty {
+                return value
+            }
+        }
+        return nil
+    }
+
+    private static func normalizedTraits(_ traits: [HeistTrait]) -> [HeistTrait] {
+        traits.sorted { $0.rawValue < $1.rawValue }
+    }
+
+    private static let transientTraits: Set<HeistTrait> = [
+        .selected,
+        .notEnabled,
+        .isEditing,
+        .inactive,
+        .visited,
+        .updatesFrequently,
+    ]
 
     private static func indexTree(_ roots: [InterfaceNode]) -> [String: WireTreeRecord] {
         var result: [String: WireTreeRecord] = [:]
@@ -561,7 +623,12 @@ extension TheStash {
     }
 
     /// Build an ElementUpdate if any mutable property differs.
-    private static func buildElementUpdate(old: HeistElement, new: HeistElement) -> ElementUpdate? {
+    private static func buildElementUpdate(
+        old: HeistElement,
+        new: HeistElement,
+        heistId: String? = nil,
+        includeGeometry: Bool = true
+    ) -> ElementUpdate? {
         var changes: [PropertyChange] = []
 
         if old.label != new.label {
@@ -604,17 +671,17 @@ extension TheStash {
         }
         let oldFrame = "\(Int(old.frameX)),\(Int(old.frameY)),\(Int(old.frameWidth)),\(Int(old.frameHeight))"
         let newFrame = "\(Int(new.frameX)),\(Int(new.frameY)),\(Int(new.frameWidth)),\(Int(new.frameHeight))"
-        if oldFrame != newFrame {
+        if includeGeometry && oldFrame != newFrame {
             changes.append(PropertyChange(property: .frame, old: oldFrame, new: newFrame))
         }
         let oldAP = "\(Int(old.activationPointX)),\(Int(old.activationPointY))"
         let newAP = "\(Int(new.activationPointX)),\(Int(new.activationPointY))"
-        if oldAP != newAP {
+        if includeGeometry && oldAP != newAP {
             changes.append(PropertyChange(property: .activationPoint, old: oldAP, new: newAP))
         }
 
         guard !changes.isEmpty else { return nil }
-        return ElementUpdate(heistId: new.heistId, changes: changes)
+        return ElementUpdate(heistId: heistId ?? new.heistId, changes: changes)
     }
     }
 } // extension TheStash

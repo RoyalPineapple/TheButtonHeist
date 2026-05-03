@@ -443,6 +443,58 @@ final class WireConverterTests: XCTestCase {
         } ?? false)
     }
 
+    func testStableMatchWithStateChangeReturnsTreeMoveAndUpdate() {
+        let beforeElement = makeScreenElement(
+            heistId: "favorite_button",
+            label: "Favorite",
+            value: "0",
+            traits: [.button],
+            frameY: 100,
+            activationPointY: 122
+        )
+        let afterElement = makeScreenElement(
+            heistId: "favorite_button_at_0_200",
+            label: "Favorite",
+            value: "1",
+            traits: [.button, .selected],
+            frameY: 200,
+            activationPointY: 222
+        )
+        let other = makeScreenElement(heistId: "queue_button", label: "Queue")
+        let beforeTree = [
+            InterfaceNode.element(WireConversion.toWire(beforeElement)),
+            InterfaceNode.element(WireConversion.toWire(other)),
+        ]
+        let afterTree: [TheStash.RegistryNode] = [
+            .element(other),
+            .element(afterElement),
+        ]
+
+        let delta = WireConversion.computeDelta(
+            before: [beforeElement, other],
+            after: [other, afterElement],
+            beforeTree: beforeTree,
+            beforeTreeHash: beforeTree.hashValue,
+            afterTree: afterTree,
+            isScreenChange: false
+        )
+
+        XCTAssertEqual(delta.kind, .elementsChanged)
+        XCTAssertNil(delta.added)
+        XCTAssertNil(delta.removed)
+        XCTAssertNil(delta.treeInserted)
+        XCTAssertNil(delta.treeRemoved)
+        XCTAssertTrue(delta.treeMoved?.contains {
+            $0.ref == TreeNodeRef(id: "favorite_button", kind: .element)
+                && $0.from == TreeLocation(parentId: nil, index: 0)
+                && $0.to == TreeLocation(parentId: nil, index: 1)
+        } ?? false)
+        let update = delta.updated?.first { $0.heistId == "favorite_button" }
+        XCTAssertNotNil(update)
+        XCTAssertTrue(update?.changes.contains { $0.property == .value && $0.old == "0" && $0.new == "1" } == true)
+        XCTAssertTrue(update?.changes.contains { $0.property == .traits } == true)
+    }
+
     func testFunctionallyIdenticalRemoveAddAtSameLocationReturnsNoChange() {
         let beforeElement = makeScreenElement(
             heistId: "telescope_far_light_3_32_button",

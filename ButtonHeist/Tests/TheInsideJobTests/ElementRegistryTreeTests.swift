@@ -15,13 +15,15 @@ final class ElementRegistryTreeTests: XCTestCase {
     private func makeElement(
         label: String? = nil,
         identifier: String? = nil,
+        value: String? = nil,
+        traits: UIAccessibilityTraits = [],
         frame: CGRect = .zero
     ) -> AccessibilityElement {
         AccessibilityElement(
             description: label ?? "",
             label: label,
-            value: nil,
-            traits: [],
+            value: value,
+            traits: traits,
             identifier: identifier,
             hint: nil,
             userInputLabels: nil,
@@ -329,6 +331,82 @@ final class ElementRegistryTreeTests: XCTestCase {
         XCTAssertNotNil(registry.findElement(heistId: "song_a_staticText"))
         XCTAssertNil(registry.findElement(heistId: "song_a_staticText_at_0_200"))
         XCTAssertEqual(registry.flattenElements().map(\.heistId), ["song_a_staticText"])
+    }
+
+    func testStateChangeKeepsHeistIdWhenContentPositionChanges() {
+        var registry = TheStash.ElementRegistry()
+        let initial = makeElement(label: "Favorite", value: "0", traits: [.button])
+        let movedAndSelected = makeElement(label: "Favorite", value: "1", traits: [.button, .selected])
+
+        registry.register(
+            parsedElements: [initial],
+            heistIds: ["favorite_button"],
+            contexts: [
+                initial: TheStash.ElementContext(
+                    contentSpaceOrigin: CGPoint(x: 0, y: 100),
+                    scrollView: nil,
+                    object: nil
+                ),
+            ],
+            hierarchy: [.element(initial, traversalIndex: 0)],
+            containerContentFrames: [:]
+        )
+
+        registry.register(
+            parsedElements: [movedAndSelected],
+            heistIds: ["favorite_button"],
+            contexts: [
+                movedAndSelected: TheStash.ElementContext(
+                    contentSpaceOrigin: CGPoint(x: 0, y: 200),
+                    scrollView: nil,
+                    object: nil
+                ),
+            ],
+            hierarchy: [.element(movedAndSelected, traversalIndex: 0)],
+            containerContentFrames: [:]
+        )
+
+        XCTAssertNotNil(registry.findElement(heistId: "favorite_button"))
+        XCTAssertNil(registry.findElement(heistId: "favorite_button_at_0_200"))
+        XCTAssertEqual(registry.flattenElements().map(\.heistId), ["favorite_button"])
+    }
+
+    func testStableTraitChangeUsesContentPositionSuffix() {
+        var registry = TheStash.ElementRegistry()
+        let button = makeElement(label: "Open", traits: [.button])
+        let link = makeElement(label: "Open", traits: [.link])
+
+        registry.register(
+            parsedElements: [button],
+            heistIds: ["open"],
+            contexts: [
+                button: TheStash.ElementContext(
+                    contentSpaceOrigin: CGPoint(x: 0, y: 100),
+                    scrollView: nil,
+                    object: nil
+                ),
+            ],
+            hierarchy: [.element(button, traversalIndex: 0)],
+            containerContentFrames: [:]
+        )
+
+        registry.register(
+            parsedElements: [link],
+            heistIds: ["open"],
+            contexts: [
+                link: TheStash.ElementContext(
+                    contentSpaceOrigin: CGPoint(x: 0, y: 200),
+                    scrollView: nil,
+                    object: nil
+                ),
+            ],
+            hierarchy: [.element(link, traversalIndex: 0)],
+            containerContentFrames: [:]
+        )
+
+        XCTAssertNotNil(registry.findElement(heistId: "open"))
+        XCTAssertNotNil(registry.findElement(heistId: "open_at_0_200"))
+        XCTAssertEqual(Set(registry.flattenElements().map(\.heistId)), ["open", "open_at_0_200"])
     }
 
     func testDifferentMinimumMatcherUsesContentPositionSuffix() {
