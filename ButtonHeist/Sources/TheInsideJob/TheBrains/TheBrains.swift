@@ -100,7 +100,7 @@ final class TheBrains {
     /// Caller must have called `refresh()` already this frame.
     func captureBeforeState() -> BeforeState {
         let tree = stash.wireTree()
-        BeforeState(
+        return BeforeState(
             snapshot: stash.selectElements(),
             elements: stash.currentHierarchy.sortedElements,
             hierarchy: stash.currentHierarchy,
