@@ -34,19 +34,19 @@ This project uses [Tuist](https://tuist.io) to generate Xcode projects and works
 
 ### When to regenerate
 
-Re-run `tuist generate` after changing any `Project.swift`, `Workspace.swift`, or `Tuist/Package.swift`:
+Re-run the canonical generate script after changing any `Project.swift`, `Workspace.swift`, or `Tuist/Package.swift`:
 
 ```bash
-# Install external dependencies (needed after changing Tuist/Package.swift)
-tuist install
-
-# Regenerate Xcode projects and workspace
-tuist generate --no-open
+./scripts/generate-project.sh
 ```
+
+The script wraps `tuist install && tuist generate --no-open` and then runs `scripts/clean-pbxproj.py` over every generated `project.pbxproj` to strip known dirty patterns: hardcoded `SRCROOT = /Users/...`, duplicate `$(inherited)` entries, and duplicate header / framework / runpath search path entries. The pre-commit hook runs the same cleaner so anything that slips through gets surfaced before a commit lands.
+
+Calling `tuist generate` directly still works for quick iteration, but prefer the wrapper before committing — otherwise you risk pushing the noise above.
 
 **Never edit `.xcodeproj` or `.xcworkspace` files directly.** Always modify the Tuist configuration (`Project.swift`, `Workspace.swift`, `Tuist/Package.swift`) and regenerate. After regenerating, commit the updated `.xcodeproj` and `.xcworkspace` files.
 
-**Never commit hardcoded absolute paths in `.xcodeproj` files.** Xcode resolves `SRCROOT` automatically from the `.xcodeproj` location — never set it explicitly in build settings. Hardcoded paths like `SRCROOT = /Users/...` break builds for every other developer and CI. If you see absolute paths in a generated `.pbxproj`, do not commit them — investigate and fix the Tuist configuration instead.
+**Never commit hardcoded absolute paths in `.xcodeproj` files.** Xcode resolves `SRCROOT` automatically from the `.xcodeproj` location — never set it explicitly in build settings. Hardcoded paths like `SRCROOT = /Users/...` break builds for every other developer and CI. The cleaner strips these automatically; if you see one survive, investigate the Tuist configuration.
 
 ## Canonical Test Runner
 

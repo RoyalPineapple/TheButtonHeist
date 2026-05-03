@@ -186,7 +186,7 @@ final class TheBurglarApplyTests: XCTestCase {
 
     // MARK: - First responder detection
 
-    func testApplyDetectsFirstResponder() {
+    func testApplyDetectsFirstResponder() async {
         let textField = UITextField()
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 375, height: 667))
         window.addSubview(textField)
@@ -211,6 +211,10 @@ final class TheBurglarApplyTests: XCTestCase {
 
         textField.resignFirstResponder()
         window.isHidden = true
+        // Wait for the iOS keyboard windows (UIRemoteKeyboardWindow,
+        // UITextEffectsWindow) to retire from the foreground scene so they
+        // don't leak into the next test's window list.
+        await KeyboardWindowTestHelpers.waitForKeyboardWindowsToRetire()
     }
 
     func testApplyFirstResponderNilWhenNoneActive() {
