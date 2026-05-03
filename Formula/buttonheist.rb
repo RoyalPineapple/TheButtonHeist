@@ -9,7 +9,7 @@
 class Buttonheist < Formula
   desc "Give AI agents full programmatic control of iOS apps"
   homepage "https://github.com/RoyalPineapple/ButtonHeist"
-  version "0.2.18"
+  version "0.2.19"
 
   url "https://github.com/RoyalPineapple/ButtonHeist/releases/download/v#{version}/buttonheist-#{version}-macos.tar.gz"
   sha256 "PLACEHOLDER"
