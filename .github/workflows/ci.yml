@@ -169,9 +169,17 @@ jobs:
       - name: Verify generated project is up to date
         timeout-minutes: 3
         run: |
-          tuist generate --no-binary-cache
+          tuist generate --no-binary-cache --no-open
+          # Strip the same noise scripts/generate-project.sh strips locally
+          # (duplicate $(inherited), hardcoded SRCROOT) so the committed
+          # pbxproj matches what contributors check in via the wrapper.
+          find . -name 'project.pbxproj' \
+            -not -path './Tuist/.build/*' \
+            -not -path './submodules/*' \
+            -not -path './.context/*' \
+            -print0 | xargs -0 python3 scripts/clean-pbxproj.py
           git diff --exit-code -- '*.pbxproj' '*.xcworkspacedata' || {
-            echo "::error::Generated Xcode project is out of date. Run 'tuist generate' and commit the changes."
+            echo "::error::Generated Xcode project is out of date. Run 'scripts/generate-project.sh' and commit the changes."
             echo "::group::Diff"
             git diff -- '*.pbxproj' '*.xcworkspacedata'
             echo "::endgroup::"
