@@ -56,7 +56,7 @@ public enum FenceError: Error, LocalizedError {
             return """
                 Command timed out waiting for a response from the app.
                   The app may be busy on its main thread, processing a long-running UI update, or sending a large response.
-                  The client closed the stale socket; the next command will reconnect automatically when possible.
+                  The connection is preserved — retry the command on the same session.
                 """
         case .actionFailed(let message):
             return "Action failed: \(message)"

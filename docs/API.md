@@ -496,7 +496,7 @@ public enum FenceError: Error, LocalizedError
 | `sessionLocked(_:)` | Session held by another driver |
 | `authFailed(_:)` | Authentication failed |
 | `notConnected` | Not connected to device |
-| `actionTimeout` | Action timed out, connection lost |
+| `actionTimeout` | Action timed out — connection is preserved |
 | `actionFailed(_:)` | Action failed with server error message |
 
 ### TargetConfig

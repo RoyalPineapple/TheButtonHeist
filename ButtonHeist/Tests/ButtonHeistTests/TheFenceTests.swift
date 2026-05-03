@@ -658,7 +658,7 @@ final class TheFenceTests: XCTestCase {
 
         XCTAssertTrue(description.contains("waiting for a response"))
         XCTAssertTrue(description.contains("main thread"))
-        XCTAssertTrue(description.contains("reconnect automatically"))
+        XCTAssertTrue(description.contains("connection is preserved"))
     }
 
     @ButtonHeistActor
