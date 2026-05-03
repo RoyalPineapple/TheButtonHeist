@@ -454,15 +454,28 @@ final class TheTripwire {
     /// Skips system passthrough windows (keyboard, text-effects) so a keyboard
     /// appearance doesn't falsely register as a view-controller change.
     func topmostViewController() -> UIViewController? {
-        let appWindow = getTraversableWindows()
-            .first(where: { !Self.isSystemPassthroughWindow($0.window) })
-        guard let root = appWindow?.window.rootViewController else {
+        Self.topmostViewController(in: getTraversableWindows())
+    }
+
+    /// Pure topmost-VC resolution against an explicit window list. Extracted
+    /// so the passthrough-skip logic can be exercised in unit tests without
+    /// relying on the host app's window state. `isPassthrough` lets tests
+    /// inject a custom predicate without instantiating private UIKit window
+    /// classes.
+    static func topmostViewController(
+        in windows: [(window: UIWindow, rootView: UIView)],
+        isPassthrough: (UIWindow) -> Bool = isSystemPassthroughWindow
+    ) -> UIViewController? {
+        guard let root = windows
+            .first(where: { !isPassthrough($0.window) })?
+            .window.rootViewController
+        else {
             return nil
         }
         return deepestViewController(from: root)
     }
 
-    private func deepestViewController(from vc: UIViewController) -> UIViewController {
+    private static func deepestViewController(from vc: UIViewController) -> UIViewController {
         if let presented = vc.presentedViewController {
             return deepestViewController(from: presented)
         }

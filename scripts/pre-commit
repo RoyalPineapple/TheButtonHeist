@@ -24,7 +24,8 @@ if command -v tuist >/dev/null 2>&1; then
             -not -path './Tuist/.build/*' \
             -not -path './submodules/*' \
             -not -path './.context/*' \
-            -print0 | xargs -0 python3 scripts/clean-pbxproj.py >/dev/null 2>&1 || true
+            -print0 | xargs -0 python3 scripts/clean-pbxproj.py >/dev/null \
+            || echo "warning: scripts/clean-pbxproj.py exited non-zero; pbxproj noise may not be stripped"
 
         dirty=$(git diff --name-only -- '*.pbxproj' '*.xcworkspacedata' '*.xcscheme')
         if [[ -n "$dirty" ]]; then
@@ -68,7 +69,8 @@ if [[ -n "$tuist_files" ]]; then
             -not -path './Tuist/.build/*' \
             -not -path './submodules/*' \
             -not -path './.context/*' \
-            -print0 | xargs -0 python3 scripts/clean-pbxproj.py >/dev/null 2>&1 || true
+            -print0 | xargs -0 python3 scripts/clean-pbxproj.py >/dev/null \
+            || echo "warning: scripts/clean-pbxproj.py exited non-zero; pbxproj noise may not be stripped"
 
         drift=$(git diff --name-only -- '*.pbxproj' '*.xcworkspacedata')
         if [[ -n "$drift" ]]; then

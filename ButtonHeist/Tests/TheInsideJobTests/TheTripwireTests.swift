@@ -906,6 +906,67 @@ final class TheTripwireTests: XCTestCase {
                        "All-passthrough input should fall back to original list, not empty")
     }
 
+    // MARK: - topmostViewController(in:) Passthrough
+
+    func testTopmostViewControllerSkipsPassthroughWindow() {
+        // Frontmost window is a system passthrough — its rootVC must not be
+        // chosen as the topmost VC, otherwise a keyboard appearance would
+        // register as a screen change and stale every screenChanged delta.
+        let keyboardVC = UIViewController()
+        let appVC = UIViewController()
+        let keyboard = makeWindow(level: .alert, rootVC: keyboardVC)
+        let appWindow = makeWindow(level: .normal, rootVC: appVC)
+        let input = [
+            (window: keyboard, rootView: keyboard as UIView),
+            (window: appWindow, rootView: appWindow as UIView),
+        ]
+
+        let result = TheTripwire.topmostViewController(
+            in: input,
+            isPassthrough: { $0 === keyboard }
+        )
+
+        XCTAssertTrue(result === appVC,
+                      "Should return the app window's rootVC, not the keyboard's")
+    }
+
+    func testTopmostViewControllerWalksPresentedChainBeneathPassthrough() {
+        // After skipping the keyboard, the deepest presented VC of the next
+        // app window should be returned — the same recursion as without a
+        // passthrough in front.
+        let root = StubViewController()
+        let presented = StubViewController()
+        root.fakePresented = presented
+
+        let keyboard = makeWindow(level: .alert, rootVC: UIViewController())
+        let appWindow = makeWindow(level: .normal, rootVC: root)
+        let input = [
+            (window: keyboard, rootView: keyboard as UIView),
+            (window: appWindow, rootView: appWindow as UIView),
+        ]
+
+        let result = TheTripwire.topmostViewController(
+            in: input,
+            isPassthrough: { $0 === keyboard }
+        )
+
+        XCTAssertTrue(result === presented,
+                      "Should walk the presentation chain past the passthrough")
+    }
+
+    func testTopmostViewControllerReturnsNilWhenOnlyPassthroughExists() {
+        // No app windows at all — return nil rather than picking the keyboard.
+        let keyboard = makeWindow(level: .alert, rootVC: UIViewController())
+        let input = [(window: keyboard, rootView: keyboard as UIView)]
+
+        let result = TheTripwire.topmostViewController(
+            in: input,
+            isPassthrough: { _ in true }
+        )
+
+        XCTAssertNil(result, "Only passthrough windows present — no topmost VC")
+    }
+
 }
 
 #endif // canImport(UIKit)

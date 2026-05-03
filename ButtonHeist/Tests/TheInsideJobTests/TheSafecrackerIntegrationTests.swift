@@ -213,19 +213,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
     private func teardownKeyboard(textField: UITextField) async {
         textField.resignFirstResponder()
         textField.removeFromSuperview()
-
-        // Poll up to 2s for keyboard-related windows to disappear from the
-        // foreground scene's window list.
-        for _ in 0..<40 {
-            let traversable = UIApplication.shared.connectedScenes
-                .compactMap { $0 as? UIWindowScene }
-                .filter { $0.activationState == .foregroundActive }
-                .flatMap(\.windows)
-                .filter { !$0.isHidden && $0.bounds.size != .zero }
-            let hasPassthrough = traversable.contains(where: TheTripwire.isSystemPassthroughWindow)
-            if !hasPassthrough { return }
-            try? await Task.sleep(for: .milliseconds(50))
-        }
+        await KeyboardWindowTestHelpers.waitForKeyboardWindowsToRetire()
     }
 }
 
