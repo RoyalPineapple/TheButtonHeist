@@ -203,12 +203,12 @@ struct ModalPermutationsDemo: View {
         overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         overlay.backgroundColor = UIColor.black.withAlphaComponent(0.6)
         overlay.accessibilityViewIsModal = true
-        overlay.accessibilityIdentifier = "InlineModalOverlay"
 
         let label = UILabel()
         label.text = "Inline Modal (same window)"
         label.textColor = .white
         label.font = .preferredFont(forTextStyle: .title2)
+        label.accessibilityTraits = .header
         label.translatesAutoresizingMaskIntoConstraints = false
         overlay.addSubview(label)
 
@@ -381,10 +381,8 @@ private final class UIKitModalContent: UIViewController {
 
 private extension UIViewController {
     func topMostPresented() -> UIViewController {
-        if let presented = presentedViewController {
-            return presented.topMostPresented()
-        }
-        return self
+        sequence(first: self, next: \.presentedViewController)
+            .reduce(self) { _, next in next }
     }
 }
 

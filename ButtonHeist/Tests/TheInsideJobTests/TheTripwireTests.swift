@@ -388,7 +388,7 @@ final class TheTripwireTests: XCTestCase {
         }
     }
 
-    // MARK: - getAccessibleWindows (modal filtering)
+    // MARK: - getAccessibleWindows (tree filtering)
 
     func testGetAccessibleWindowsFiltersToModalWindow() {
         guard let windowScene = UIApplication.shared.connectedScenes
@@ -658,6 +658,138 @@ final class TheTripwireTests: XCTestCase {
         XCTAssertTrue(hasRelevant, "Non-parallax keys should not be filtered")
 
         layer.removeAllAnimations()
+    }
+
+    // MARK: - filterToAccessibleWindows (pure precedence chain)
+
+    /// View controller stub that lets a test choose what
+    /// `presentedViewController` returns — bypasses UIKit's real
+    /// presentation lifecycle, which can't be driven synchronously
+    /// from a unit test without an attached window.
+    private final class StubViewController: UIViewController {
+        var fakePresented: UIViewController?
+        override var presentedViewController: UIViewController? { fakePresented }
+    }
+
+    /// Build a UIWindow on the active scene without making it visible —
+    /// callers pass the window directly into `filterToAccessibleWindows`,
+    /// so it never appears in the test host's `getTraversableWindows()`.
+    private func makeWindow(level: UIWindow.Level, rootVC: UIViewController? = nil) -> UIWindow {
+        guard let scene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
+        else {
+            XCTFail("No active window scene")
+            return UIWindow()
+        }
+        let window = UIWindow(windowScene: scene)
+        window.windowLevel = level
+        window.frame = UIScreen.main.bounds
+        window.rootViewController = rootVC
+        return window
+    }
+
+    func testFilterToAccessibleWindowsEmptyInputReturnsEmpty() {
+        let result = TheTripwire.filterToAccessibleWindows([])
+        XCTAssertTrue(result.isEmpty)
+    }
+
+    func testFilterToAccessibleWindowsPicksOverlayWhenNoModalFlag() {
+        let overlay = makeWindow(level: .alert, rootVC: UIViewController())
+        let base = makeWindow(level: .normal, rootVC: UIViewController())
+        let input = [
+            (window: overlay, rootView: overlay as UIView),
+            (window: base, rootView: base as UIView),
+        ]
+
+        let result = TheTripwire.filterToAccessibleWindows(input)
+
+        XCTAssertEqual(result.count, 1)
+        XCTAssertTrue(result.first?.window === overlay, "Overlay window should win")
+    }
+
+    func testFilterToAccessibleWindowsSkipsOverlayWithoutRootVC() {
+        // Frontmost overlay has no rootVC — overlay branch should not match,
+        // falling through to other branches (and ultimately the all-windows
+        // fallback since no presentation chain exists either).
+        let overlay = makeWindow(level: .alert, rootVC: nil)
+        let base = makeWindow(level: .normal, rootVC: UIViewController())
+        let input = [
+            (window: overlay, rootView: overlay as UIView),
+            (window: base, rootView: base as UIView),
+        ]
+
+        let result = TheTripwire.filterToAccessibleWindows(input)
+
+        XCTAssertEqual(result.count, 2, "Should fall through to all-windows fallback")
+    }
+
+    func testFilterToAccessibleWindowsPicksDeepestPresentedView() {
+        let root = StubViewController()
+        let mid = StubViewController()
+        let deepest = StubViewController()
+        root.fakePresented = mid
+        mid.fakePresented = deepest
+
+        let window = makeWindow(level: .normal, rootVC: root)
+
+        let input = [(window: window, rootView: window as UIView)]
+        let result = TheTripwire.filterToAccessibleWindows(input)
+
+        XCTAssertEqual(result.count, 1)
+        XCTAssertTrue(result.first?.window === window)
+        XCTAssertTrue(result.first?.rootView === deepest.view, "Should return deepest presented VC's view")
+    }
+
+    func testFilterToAccessibleWindowsFallsBackToAllWhenNothingMatches() {
+        let a = makeWindow(level: .normal, rootVC: UIViewController())
+        let b = makeWindow(level: .normal - 1, rootVC: UIViewController())
+        let input = [
+            (window: a, rootView: a as UIView),
+            (window: b, rootView: b as UIView),
+        ]
+
+        let result = TheTripwire.filterToAccessibleWindows(input)
+
+        XCTAssertEqual(result.count, 2, "All windows returned when no branch matches")
+    }
+
+    func testFilterToAccessibleWindowsModalFlagBeatsOverlayInPureFilter() {
+        let overlay = makeWindow(level: .alert, rootVC: UIViewController())
+        let flagged = makeWindow(level: .normal, rootVC: UIViewController())
+        let modalView = UIView()
+        modalView.accessibilityViewIsModal = true
+        flagged.addSubview(modalView)
+        defer { modalView.removeFromSuperview() }
+
+        let input = [
+            (window: overlay, rootView: overlay as UIView),
+            (window: flagged, rootView: flagged as UIView),
+        ]
+
+        let result = TheTripwire.filterToAccessibleWindows(input)
+
+        XCTAssertEqual(result.count, 1)
+        XCTAssertTrue(result.first?.window === flagged, "Modal flag should win over overlay")
+    }
+
+    func testFilterToAccessibleWindowsOverlayBeatsPresentedVC() {
+        // Lower window has presented VC; frontmost overlay has none but is
+        // higher level — overlay branch is checked before presented-VC walk.
+        let baseRoot = StubViewController()
+        baseRoot.fakePresented = UIViewController()
+        let baseWindow = makeWindow(level: .normal, rootVC: baseRoot)
+
+        let overlay = makeWindow(level: .alert, rootVC: UIViewController())
+
+        let input = [
+            (window: overlay, rootView: overlay as UIView),
+            (window: baseWindow, rootView: baseWindow as UIView),
+        ]
+
+        let result = TheTripwire.filterToAccessibleWindows(input)
+
+        XCTAssertEqual(result.count, 1)
+        XCTAssertTrue(result.first?.window === overlay, "Overlay should win over presented-VC branch")
     }
 
 }

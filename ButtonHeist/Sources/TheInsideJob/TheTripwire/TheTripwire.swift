@@ -365,11 +365,20 @@ final class TheTripwire {
     /// For screenshots, use `getTraversableWindows()` — visual compositing should
     /// include all windows so the dimmed background remains visible.
     func getAccessibleWindows() -> [(window: UIWindow, rootView: UIView)] {
-        let windows = getTraversableWindows()
+        Self.filterToAccessibleWindows(getTraversableWindows())
+    }
+
+    /// Pure filter applying the VoiceOver-equivalent precedence chain to a
+    /// window list. Extracted from `getAccessibleWindows()` so callers can
+    /// supply a controlled list and the precedence logic can be exercised
+    /// without depending on the host app's window state.
+    static func filterToAccessibleWindows(
+        _ windows: [(window: UIWindow, rootView: UIView)]
+    ) -> [(window: UIWindow, rootView: UIView)] {
         guard !windows.isEmpty else { return [] }
 
-        for entry in windows where containsModalView(entry.window) {
-            return [entry]
+        if let modalEntry = windows.first(where: { containsModalView($0.window) }) {
+            return [modalEntry]
         }
 
         if let top = windows.first,
@@ -378,25 +387,30 @@ final class TheTripwire {
             return [top]
         }
 
-        for entry in windows {
-            guard let rootVC = entry.window.rootViewController else { continue }
-            var vc = rootVC
-            while let presented = vc.presentedViewController {
-                vc = presented
-            }
-            if vc !== rootVC {
-                return [(window: entry.window, rootView: vc.view)]
-            }
+        if let presented = windows.lazy.compactMap(deepestPresentedEntry).first {
+            return [presented]
         }
 
         return windows
+    }
+
+    /// If `entry`'s root VC has a presentation chain, return the deepest
+    /// presented VC's view paired with the window. Returns `nil` when there
+    /// is no root VC or no presentation chain.
+    private static func deepestPresentedEntry(
+        _ entry: (window: UIWindow, rootView: UIView)
+    ) -> (window: UIWindow, rootView: UIView)? {
+        guard let rootVC = entry.window.rootViewController else { return nil }
+        let chain = Array(sequence(first: rootVC, next: \.presentedViewController))
+        guard let deepest = chain.last, deepest !== rootVC else { return nil }
+        return (window: entry.window, rootView: deepest.view)
     }
 
     /// Check whether a window contains a view with `accessibilityViewIsModal`.
     /// Walks up to 4 levels deep to account for UIKit's internal wrapper views
     /// (e.g. `UITransitionView`, `UIDropShadowView`) inserted between the window
     /// and the view controller's content.
-    private func containsModalView(_ window: UIWindow) -> Bool {
+    private static func containsModalView(_ window: UIWindow) -> Bool {
         func check(_ view: UIView, depth: Int) -> Bool {
             if view.accessibilityViewIsModal { return true }
             guard depth > 0 else { return false }
