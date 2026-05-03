@@ -231,13 +231,13 @@ extension TheStash {
         var seenIds = Set<String>()
         var matches = hierarchyHits.compactMap { match -> ScreenElement? in
             guard let heistId = registry.reverseIndex[match.element],
-                  let element = registry.elements[heistId],
+                  let element = registry.findElement(heistId: heistId),
                   seenIds.insert(heistId).inserted else { return nil }
             return element
         }
         if matches.count >= limit { return Array(matches.prefix(limit)) }
 
-        let offscreen = registry.elements.values
+        let offscreen = registry.flattenElements()
             .filter { !seenIds.contains($0.heistId) && $0.element.matches(matcher, mode: mode) }
             .sorted(by: registryOrder)
         matches.append(contentsOf: offscreen.prefix(limit - matches.count))

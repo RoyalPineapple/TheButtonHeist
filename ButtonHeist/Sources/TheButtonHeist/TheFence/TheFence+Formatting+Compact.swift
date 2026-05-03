@@ -245,47 +245,54 @@ extension FenceResponse {
         _ interface: Interface,
         detail: InterfaceDetail
     ) -> [String] {
-        let tree = interface.tree ?? interface.elements.indices.map { ElementNode.element(order: $0) }
-        return tree.flatMap {
-            compactTreeLines($0, elements: interface.elements, detail: detail, depth: 0)
+        var displayIndex = 0
+        return interface.tree.flatMap { node in
+            compactTreeLines(node, detail: detail, depth: 0, indexCounter: &displayIndex)
         }
     }
 
     private static func compactTreeLines(
-        _ node: ElementNode,
-        elements: [HeistElement],
+        _ node: InterfaceNode,
         detail: InterfaceDetail,
-        depth: Int
+        depth: Int,
+        indexCounter: inout Int
     ) -> [String] {
         let indent = String(repeating: "  ", count: depth)
         switch node {
-        case .element(let order):
-            guard elements.indices.contains(order) else {
-                return ["\(indent)[\(order)] <missing element>"]
-            }
-            return ["\(indent)\(compactElementLine(elements[order], displayIndex: order, detail: detail))"]
-        case .container(let group, let children):
-            let header = "\(indent)<\(compactGroupLine(group, detail: detail))>"
+        case .element(let element):
+            let line = "\(indent)\(compactElementLine(element, displayIndex: indexCounter, detail: detail))"
+            indexCounter += 1
+            return [line]
+        case .container(let info, let children):
+            let header = "\(indent)<\(compactContainerLine(info, detail: detail))>"
             let childLines = children.flatMap {
-                compactTreeLines($0, elements: elements, detail: detail, depth: depth + 1)
+                compactTreeLines($0, detail: detail, depth: depth + 1, indexCounter: &indexCounter)
             }
             return [header] + childLines
         }
     }
 
-    private static func compactGroupLine(_ group: Group, detail: InterfaceDetail) -> String {
-        var parts = [group.type.rawValue]
-        if let identifier = group.identifier, !identifier.isEmpty {
-            parts.append("id=\"\(identifier)\"")
-        }
-        if let label = group.label, !label.isEmpty {
-            parts.append("\"\(label)\"")
-        }
-        if let value = group.value, !value.isEmpty {
-            parts.append("= \"\(value)\"")
+    private static func compactContainerLine(_ info: ContainerInfo, detail: InterfaceDetail) -> String {
+        var parts: [String]
+        switch info.type {
+        case .semanticGroup(let label, let value, let identifier):
+            parts = ["semanticGroup"]
+            if let identifier, !identifier.isEmpty { parts.append("id=\"\(identifier)\"") }
+            if let label, !label.isEmpty { parts.append("\"\(label)\"") }
+            if let value, !value.isEmpty { parts.append("= \"\(value)\"") }
+        case .list:
+            parts = ["list"]
+        case .landmark:
+            parts = ["landmark"]
+        case .dataTable(let rowCount, let columnCount):
+            parts = ["dataTable", "\(rowCount)x\(columnCount)"]
+        case .tabBar:
+            parts = ["tabBar"]
+        case .scrollable(let contentWidth, let contentHeight):
+            parts = ["scrollable", "= \"\(Int(contentWidth))x\(Int(contentHeight))\""]
         }
         if detail == .full {
-            parts.append("frame=(\(Int(group.frameX)),\(Int(group.frameY)),\(Int(group.frameWidth)),\(Int(group.frameHeight)))")
+            parts.append("frame=(\(Int(info.frameX)),\(Int(info.frameY)),\(Int(info.frameWidth)),\(Int(info.frameHeight)))")
         }
         return parts.joined(separator: " ")
     }

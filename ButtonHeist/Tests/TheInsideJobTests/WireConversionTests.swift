@@ -121,7 +121,7 @@ final class WireConverterTests: XCTestCase {
     func testIdenticalSnapshotsReturnNoChange() {
         let elements = [makeScreenElement(heistId: "button_ok", label: "OK", traits: [.button])]
         let delta = WireConversion.computeDelta(
-            before: elements, after: elements, afterTree: nil, isScreenChange: false
+            before: elements, after: elements, afterTree: [], isScreenChange: false
         )
         XCTAssertEqual(delta.kind, .noChange)
         XCTAssertEqual(delta.elementCount, 1)
@@ -133,7 +133,7 @@ final class WireConverterTests: XCTestCase {
     func testEmptySnapshotsReturnNoChange() {
         let empty: [TheStash.ScreenElement] = []
         let delta = WireConversion.computeDelta(
-            before: empty, after: empty, afterTree: nil, isScreenChange: false
+            before: empty, after: empty, afterTree: [], isScreenChange: false
         )
         XCTAssertEqual(delta.kind, .noChange)
         XCTAssertEqual(delta.elementCount, 0)
@@ -147,7 +147,7 @@ final class WireConverterTests: XCTestCase {
         let after = before + [added]
 
         let delta = WireConversion.computeDelta(
-            before: before, after: after, afterTree: nil, isScreenChange: false
+            before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertEqual(delta.kind, .elementsChanged)
         XCTAssertEqual(delta.added?.count, 1)
@@ -165,7 +165,7 @@ final class WireConverterTests: XCTestCase {
         let after = [before[0]]
 
         let delta = WireConversion.computeDelta(
-            before: before, after: after, afterTree: nil, isScreenChange: false
+            before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertEqual(delta.kind, .elementsChanged)
         XCTAssertEqual(delta.removed, ["button_cancel"])
@@ -179,7 +179,7 @@ final class WireConverterTests: XCTestCase {
         let after = [makeScreenElement(heistId: "slider", value: "75%")]
 
         let delta = WireConversion.computeDelta(
-            before: before, after: after, afterTree: nil, isScreenChange: false
+            before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertEqual(delta.kind, .elementsChanged)
         XCTAssertEqual(delta.updated?.count, 1)
@@ -194,7 +194,7 @@ final class WireConverterTests: XCTestCase {
         let after = [makeScreenElement(heistId: "btn", traits: [.button, .selected])]
 
         let delta = WireConversion.computeDelta(
-            before: before, after: after, afterTree: nil, isScreenChange: false
+            before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertEqual(delta.kind, .elementsChanged)
         let change = delta.updated?.first?.changes.first
@@ -208,7 +208,7 @@ final class WireConverterTests: XCTestCase {
         let after = [makeScreenElement(heistId: "btn", hint: "Tap to go back")]
 
         let delta = WireConversion.computeDelta(
-            before: before, after: after, afterTree: nil, isScreenChange: false
+            before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertEqual(delta.kind, .elementsChanged)
         let change = delta.updated?.first?.changes.first
@@ -222,7 +222,7 @@ final class WireConverterTests: XCTestCase {
         let after = [makeScreenElement(heistId: "slider", traits: [.adjustable])]
 
         let delta = WireConversion.computeDelta(
-            before: before, after: after, afterTree: nil, isScreenChange: false
+            before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertEqual(delta.kind, .elementsChanged)
         XCTAssertNotNil(delta.updated)
@@ -233,7 +233,7 @@ final class WireConverterTests: XCTestCase {
         let after = [makeScreenElement(heistId: "box", frameX: 10, frameY: 20, frameWidth: 100, frameHeight: 50)]
 
         let delta = WireConversion.computeDelta(
-            before: before, after: after, afterTree: nil, isScreenChange: false
+            before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertEqual(delta.kind, .elementsChanged)
         let change = delta.updated?.first?.changes.first
@@ -247,7 +247,7 @@ final class WireConverterTests: XCTestCase {
         let after = [makeScreenElement(heistId: "btn", activationPointX: 75, activationPointY: 40)]
 
         let delta = WireConversion.computeDelta(
-            before: before, after: after, afterTree: nil, isScreenChange: false
+            before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertEqual(delta.kind, .elementsChanged)
         let change = delta.updated?.first?.changes.first
@@ -261,7 +261,7 @@ final class WireConverterTests: XCTestCase {
         let after = [makeScreenElement(heistId: "slider", value: "75%", hint: "Music Volume")]
 
         let delta = WireConversion.computeDelta(
-            before: before, after: after, afterTree: nil, isScreenChange: false
+            before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertEqual(delta.updated?.first?.changes.count, 2)
         let properties = delta.updated?.first?.changes.map(\.property)
@@ -276,7 +276,7 @@ final class WireConverterTests: XCTestCase {
         let after = [makeScreenElement(heistId: "loginButton", label: "Show Less", identifier: "loginButton")]
 
         let delta = WireConversion.computeDelta(
-            before: before, after: after, afterTree: nil, isScreenChange: false
+            before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertEqual(delta.kind, .elementsChanged)
         XCTAssertEqual(delta.updated?.count, 1)
@@ -293,7 +293,7 @@ final class WireConverterTests: XCTestCase {
         let after = [makeScreenElement(heistId: "button_done", label: "Done", traits: [.button])]
 
         let delta = WireConversion.computeDelta(
-            before: before, after: after, afterTree: nil, isScreenChange: false
+            before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertEqual(delta.kind, .elementsChanged)
         XCTAssertEqual(delta.removed, ["button_ok"])
@@ -305,10 +305,14 @@ final class WireConverterTests: XCTestCase {
 
     func testScreenChangeReturnsFull() {
         let before = [makeScreenElement(heistId: "button_ok")]
-        let after = [makeScreenElement(heistId: "header_settings", label: "Settings", traits: [.header])]
+        let afterElement = makeScreenElement(heistId: "header_settings", label: "Settings", traits: [.header])
+        let after = [afterElement]
+        // The new wire shape derives newInterface from the registry tree, not
+        // the flat snapshot — so the tree must reflect after.
+        let afterTree: [TheStash.RegistryNode] = [.element(afterElement)]
 
         let delta = WireConversion.computeDelta(
-            before: before, after: after, afterTree: nil, isScreenChange: true
+            before: before, after: after, afterTree: afterTree, isScreenChange: true
         )
         XCTAssertEqual(delta.kind, .screenChanged)
         XCTAssertNotNil(delta.newInterface)
@@ -329,7 +333,7 @@ final class WireConverterTests: XCTestCase {
         ]
 
         let delta = WireConversion.computeDelta(
-            before: before, after: after, afterTree: nil, isScreenChange: false
+            before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertEqual(delta.kind, .elementsChanged)
         XCTAssertEqual(delta.updated?.count, 2)
@@ -348,7 +352,7 @@ final class WireConverterTests: XCTestCase {
         ]
 
         let delta = WireConversion.computeDelta(
-            before: before, after: after, afterTree: nil, isScreenChange: false
+            before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertEqual(delta.kind, .elementsChanged)
         XCTAssertEqual(delta.updated?.count, 1)
@@ -361,7 +365,7 @@ final class WireConverterTests: XCTestCase {
         let screenElement = makeScreenElement(heistId: "btn", label: "OK", traits: [.button])
 
         let delta = WireConversion.computeDelta(
-            before: [screenElement], after: [screenElement], afterTree: nil, isScreenChange: false
+            before: [screenElement], after: [screenElement], afterTree: [], isScreenChange: false
         )
         XCTAssertEqual(delta.kind, .noChange)
     }
@@ -441,7 +445,7 @@ final class WireConverterTests: XCTestCase {
         )]
 
         let delta = WireConversion.computeDelta(
-            before: before, after: after, afterTree: nil, isScreenChange: false
+            before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertEqual(delta.kind, .elementsChanged)
         let change = delta.updated?.first?.changes.first
@@ -459,7 +463,7 @@ final class WireConverterTests: XCTestCase {
         )]
 
         let delta = WireConversion.computeDelta(
-            before: before, after: after, afterTree: nil, isScreenChange: false
+            before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertEqual(delta.kind, .elementsChanged)
         let change = delta.updated?.first?.changes.first
@@ -477,7 +481,7 @@ final class WireConverterTests: XCTestCase {
         let after = [makeScreenElement(heistId: "card", label: "Item")]
 
         let delta = WireConversion.computeDelta(
-            before: before, after: after, afterTree: nil, isScreenChange: false
+            before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertEqual(delta.kind, .elementsChanged)
         let change = delta.updated?.first?.changes.first
@@ -498,7 +502,7 @@ final class WireConverterTests: XCTestCase {
         )]
 
         let delta = WireConversion.computeDelta(
-            before: before, after: after, afterTree: nil, isScreenChange: false
+            before: before, after: after, afterTree: [], isScreenChange: false
         )
         let change = delta.updated?.first?.changes.first
         XCTAssertEqual(change?.new, "Temperature: 58°F; Humidity: 82%")
@@ -595,7 +599,7 @@ final class WireConverterTests: XCTestCase {
         )]
 
         let delta = WireConversion.computeDelta(
-            before: elements, after: elements, afterTree: nil, isScreenChange: false
+            before: elements, after: elements, afterTree: [], isScreenChange: false
         )
         XCTAssertEqual(delta.kind, .noChange)
     }
@@ -615,7 +619,7 @@ final class WireConverterTests: XCTestCase {
         )]
 
         let delta = WireConversion.computeDelta(
-            before: before, after: after, afterTree: nil, isScreenChange: false
+            before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertEqual(delta.kind, .elementsChanged)
         let change = delta.updated?.first?.changes.first
@@ -639,7 +643,7 @@ final class WireConverterTests: XCTestCase {
         )]
 
         let delta = WireConversion.computeDelta(
-            before: before, after: after, afterTree: nil, isScreenChange: false
+            before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertEqual(delta.kind, .elementsChanged)
         let properties = delta.updated?.first?.changes.map(\.property)
@@ -658,7 +662,7 @@ final class WireConverterTests: XCTestCase {
         )]
 
         let delta = WireConversion.computeDelta(
-            before: before, after: after, afterTree: nil, isScreenChange: false
+            before: before, after: after, afterTree: [], isScreenChange: false
         )
         let change = delta.updated?.first?.changes.first
         XCTAssertEqual(change?.property, .customContent)
@@ -674,7 +678,7 @@ final class WireConverterTests: XCTestCase {
         )]
 
         let delta = WireConversion.computeDelta(
-            before: before, after: after, afterTree: nil, isScreenChange: false
+            before: before, after: after, afterTree: [], isScreenChange: false
         )
         let change = delta.updated?.first?.changes.first
         XCTAssertEqual(change?.property, .customContent)

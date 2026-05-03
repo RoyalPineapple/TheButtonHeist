@@ -11,7 +11,7 @@ TheScore is the shared playbook. It defines:
 1. **All client-to-server messages** (`ClientMessage` — 37 cases)
 2. **All server-to-client messages** (`ServerMessage` — 18 cases, including `status(StatusPayload)`)
 3. **Request/response envelopes** (`RequestEnvelope`, `ResponseEnvelope`) for correlation
-4. **UI element types** (`HeistElement`, `Interface`, `ElementNode`, `ElementAction`, `Group`, `HeistCustomContent`)
+4. **UI element types** (`HeistElement`, `Interface`, `InterfaceNode`, `ElementAction`, `ContainerInfo`, `HeistCustomContent`)
 5. **Element targeting** (`ElementTarget`, `ElementMatcher`) — enum-based element reference (`.heistId`/`.matcher`) with structured multi-field AND matching
 6. **Action result types** (`ActionResult`, `InterfaceDelta`, `ActionMethod`, `ScrollSearchResult`)
 7. **Action outcome signals** (`ActionExpectation`, `ExpectationResult`) — outcome classifiers for actions
@@ -29,10 +29,10 @@ TheScore is the shared playbook. It defines:
 
 | File | Contents |
 |------|----------|
-| `Messages.swift` | `buttonHeistServiceType`, `protocolVersion` ("6.7"), `WireMessageType` (51 cases), `ButtonHeistActor` |
+| `Messages.swift` | `buttonHeistServiceType`, `protocolVersion` ("8.0"), `WireMessageType` (51 cases), `ButtonHeistActor` |
 | `ClientMessages.swift` | `RequestEnvelope`, `ClientMessage` (37 cases), all action target structs, `UnitPoint`, `RecordingConfig` |
 | `ServerMessages.swift` | `ResponseEnvelope`, `ServerMessage` (18 cases), `ActionResult`, `ErrorKind`, `InterfaceDelta`, `StatusPayload`, `ScreenPayload`, `RecordingPayload`, `InteractionEvent`, `ServerInfo` |
-| `Elements.swift` | `HeistElement`, `HeistTrait` (43 known cases + `unknown(String)`), `GroupType` (6 known cases + `unknown(String)`), `Interface`, `ElementNode`, `Group`, `ElementAction`, `HeistCustomContent`, `ElementTarget`, `ElementMatcher` |
+| `Elements.swift` | `HeistElement`, `HeistTrait` (43 known cases + `unknown(String)`), `Interface`, `InterfaceNode`, `ContainerInfo` (with nested `ContainerType`), `ElementAction`, `HeistCustomContent`, `ElementTarget`, `ElementMatcher` |
 | `ClientMessages+WireCoding.swift` | Custom flat envelope encoding for client messages |
 | `ServerMessages+WireCoding.swift` | Custom flat envelope encoding for server messages |
 | `HeistPlaybackReport.swift` | `HeistPlaybackReport`, `StepResult`, `PlaybackErrorKind`, `Outcome`, `junitXML()` generation |
@@ -101,8 +101,8 @@ graph TD
 classDiagram
     class Interface {
         +Date timestamp
-        +[HeistElement] elements
-        +[ElementNode]? tree
+        +[InterfaceNode] tree
+        +elements: [HeistElement] (computed flatten)
         +screenDescription: String (computed)
         +screenId: String? (computed)
     }
@@ -126,18 +126,25 @@ classDiagram
         +activationPoint: CGPoint (computed)
     }
 
-    class ElementNode {
+    class InterfaceNode {
         <<indirect enum>>
-        element(order: Int)
-        container(Group, [ElementNode])
+        element(HeistElement)
+        container(ContainerInfo, [InterfaceNode])
     }
 
-    class Group {
-        +GroupType type
-        +String? label
-        +String? value
-        +String? identifier
+    class ContainerInfo {
+        +ContainerType type
         +Double frameX/Y/Width/Height
+    }
+
+    class ContainerType {
+        <<enum>>
+        semanticGroup(label, value, identifier)
+        list
+        landmark
+        dataTable(rowCount, columnCount)
+        tabBar
+        scrollable(contentWidth, contentHeight)
     }
 
     class ElementAction {
@@ -154,9 +161,10 @@ classDiagram
         +Bool isImportant
     }
 
-    Interface --> HeistElement
-    Interface --> ElementNode
-    ElementNode --> Group
+    Interface --> InterfaceNode
+    InterfaceNode --> HeistElement
+    InterfaceNode --> ContainerInfo
+    ContainerInfo --> ContainerType
     HeistElement --> ElementAction
     HeistElement --> HeistCustomContent
 ```
@@ -354,10 +362,9 @@ classDiagram
 
 ### LOW PRIORITY
 
-**Nested tree encoding is now formatter-owned**
-- Top-level request/response envelopes are now explicit `type` / `payload`
-- Public interface JSON renders container fields and nested child elements directly
-- The internal `ElementNode` enum still uses Codable for in-process round trips
+**Interface tree wire encoding**
+- Top-level request/response envelopes are explicit `type` / `payload`
+- `InterfaceNode` and `ContainerInfo` carry custom `Codable` so the wire shape is `{"element": {...HeistElement...}}` and `{"container": {...ContainerInfo, "children":[...]}}` — the synthesized `_0`-wrapped form is never emitted on the wire
 
 **No formal schema validation**
 - Messages rely entirely on `Codable` for validation

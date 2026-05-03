@@ -73,13 +73,37 @@ internal enum NetDeltaAccumulator {
                 elementsById.removeValue(forKey: update.heistId)
             }
         }
-        let elements = interface.elements
-            .filter { elementsById[$0.heistId] != nil }
-            .map { elementsById[$0.heistId] ?? $0 }
-            + (delta.added ?? []).filter { original in
-                !interface.elements.contains { $0.heistId == original.heistId }
+
+        // Walk the tree, swapping each leaf with its updated counterpart and
+        // dropping leaves whose heistId was removed/dropped from elementsById.
+        // Containers with no surviving children are pruned.
+        let originalHeistIds = Set(interface.elements.map(\.heistId))
+        let updatedTree = mapTree(interface.tree, elementsById: elementsById)
+
+        // Append any "added" element that wasn't already in the original tree
+        // at the root level — we don't know its tree position from the delta.
+        let novelAdds = (delta.added ?? []).filter { !originalHeistIds.contains($0.heistId) }
+        let finalTree = updatedTree + novelAdds.map { InterfaceNode.element($0) }
+
+        return Interface(timestamp: interface.timestamp, tree: finalTree)
+    }
+
+    /// Walk the tree, replacing each leaf with its updated counterpart from
+    /// `elementsById` (or dropping the leaf if absent). Containers with no
+    /// surviving descendants are pruned.
+    private static func mapTree(
+        _ nodes: [InterfaceNode], elementsById: [String: HeistElement]
+    ) -> [InterfaceNode] {
+        nodes.compactMap { node in
+            switch node {
+            case .element(let element):
+                guard let updated = elementsById[element.heistId] else { return nil }
+                return .element(updated)
+            case .container(let info, let children):
+                let newChildren = mapTree(children, elementsById: elementsById)
+                return newChildren.isEmpty ? nil : .container(info, children: newChildren)
             }
-        return Interface(timestamp: interface.timestamp, elements: elements, tree: interface.tree)
+        }
     }
 
     /// Apply a property change to `element`. Returns `false` when the property cannot be

@@ -671,7 +671,7 @@ With the default `stop_on_error` policy, the batch halts at the first mismet exp
 
 ```swift
 public let buttonHeistServiceType = "_buttonheist._tcp"
-public let protocolVersion = "6.8"  // Protocol v6.8: current wire protocol version
+public let protocolVersion = "8.0"  // Protocol v8.0: canonical InterfaceNode tree wire shape
 ```
 
 ### ConnectionPhase
@@ -1101,43 +1101,53 @@ Container for UI element interface data.
 
 #### Properties
 
-- `timestamp: Date` - When the hierarchy was captured
-- `elements: [HeistElement]` - Internal flat list of UI elements used for targeting and deltas
-- `tree: [ElementNode]?` - Optional grouped structure with containers; public JSON output always presents an interface tree and falls back to element leaves when no container tree is available
-- `screenDescription: String` - Deterministic one-line screen summary (e.g. `"Sign In — 1 text field, 1 password field, 3 buttons"`)
-- `screenId: String?` - Slugified screen name for machine use (e.g. `"controls_demo"`), derived from the first header element's label
+- `timestamp: Date` — When the hierarchy was captured
+- `tree: [InterfaceNode]` — Canonical tree of leaf elements and grouping containers. Every element appears exactly once at its tree position; there is no parallel flat array on the wire.
+- `elements: [HeistElement]` — Computed depth-first flatten of `tree`. Provided for source compatibility with callers that want a flat list.
+- `screenDescription: String` — Deterministic one-line screen summary (e.g. `"Sign In — 1 text field, 1 password field, 3 buttons"`)
+- `screenId: String?` — Slugified screen name for machine use (e.g. `"controls_demo"`), derived from the first header element's label
 
-### ElementNode
+### InterfaceNode
 
 ```swift
-public indirect enum ElementNode: Codable, Equatable, Sendable
+public indirect enum InterfaceNode: Codable, Equatable, Sendable
 ```
 
-Recursive tree structure for UI element snapshot. In public JSON output, element leaves are expanded to an element payload with an added `order` field for cross-reference.
+Recursive node in the canonical interface tree. Leaves carry the full `HeistElement` payload — the tree is self-contained and there is no parallel flat array on the wire. Custom `Codable` produces the documented discriminator-keyed wire shape (`{"element": {...HeistElement...}}` / `{"container": {...ContainerInfo, "children":[...]}}`).
 
 #### Cases
 
-- `element(order: Int)` - Leaf node referencing element by index
-- `container(Group, children: [ElementNode])` - Container with children
+- `element(HeistElement)` — Leaf node carrying a full element payload
+- `container(ContainerInfo, children: [InterfaceNode])` — Container grouping nested nodes
 
-### Group
+### ContainerInfo
 
 ```swift
-public struct Group: Codable, Equatable, Hashable, Sendable
+public struct ContainerInfo: Codable, Equatable, Hashable, Sendable
 ```
+
+Container metadata for the canonical interface tree. Mirrors `AccessibilitySnapshotParser.AccessibilityContainer` 1:1 but lives in TheScore so CLI/MCP don't pull UIKit. The container `type` is itself an enum carrying the type-specific payload; on the wire the discriminator and payload are flattened to one level.
 
 #### Properties
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `type` | `String` | "semanticGroup", "list", "landmark", or "dataTable" |
-| `label` | `String?` | Container's label |
-| `value` | `String?` | Container's value |
-| `identifier` | `String?` | Container's identifier |
+| `type` | `ContainerInfo.ContainerType` | Container type with type-specific payload |
 | `frameX` | `Double` | Frame X origin |
 | `frameY` | `Double` | Frame Y origin |
 | `frameWidth` | `Double` | Frame width |
 | `frameHeight` | `Double` | Frame height |
+
+#### ContainerInfo.ContainerType
+
+| Case | Payload |
+|------|---------|
+| `semanticGroup(label:value:identifier:)` | Optional `String` label, value, identifier |
+| `list` | (none) |
+| `landmark` | (none) |
+| `dataTable(rowCount:columnCount:)` | `Int` row and column counts |
+| `tabBar` | (none) |
+| `scrollable(contentWidth:contentHeight:)` | `Double` content width and height |
 
 ### HeistElement
 

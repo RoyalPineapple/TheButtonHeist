@@ -8,8 +8,8 @@
 
 TheStash holds the goods — sole custodian of the live UIKit/accessibility object boundary. Value semantics at the API edge; all weak→strong promotion and NSObject touching happens inside:
 
-1. **Screen-lifetime element registry** — maintains `screenElements: [String: ScreenElement]` keyed by heistId, persistent across refreshes within the same screen
-2. **Target resolution** — `resolveTarget(_:)` is the single entry point: `.heistId` → O(1) dictionary lookup in `registry.elements`, `.matcher` → `uniqueMatch` tree walk + O(1) reverse index lookup via `registry.reverseIndex`. Returns `TargetResolution` enum (`.resolved(ResolvedTarget)`, `.notFound(diagnostics:)`, `.ambiguous(candidates:diagnostics:)`). See [12-UNIFIED-TARGETING.md](12-UNIFIED-TARGETING.md) for the full targeting system.
+1. **Screen-lifetime element registry** — a persistent tree of element/container nodes (`registry.roots: [RegistryNode]`) plus an O(1) heistId → tree path index (`registry.elementByHeistId`). Survives across refreshes within the same screen; off-screen elements are retained at their last-known tree position.
+2. **Target resolution** — `resolveTarget(_:)` is the single entry point: `.heistId` → O(1) path lookup via `registry.elementByHeistId` followed by tree walk, `.matcher` → `uniqueMatch` tree walk + O(1) reverse index lookup via `registry.reverseIndex`. Returns `TargetResolution` enum (`.resolved(ResolvedTarget)`, `.notFound(diagnostics:)`, `.ambiguous(candidates:diagnostics:)`). See [12-UNIFIED-TARGETING.md](12-UNIFIED-TARGETING.md) for the full targeting system.
 3. **Element matching** — `findMatch(_:)`, `hasMatch(_:)`, `resolveFirstMatch(_:)` search the canonical accessibility hierarchy using `ElementMatcher` predicates with AND semantics and case-insensitive substring matching.
 4. **HeistId synthesis** — `IdAssignment` assigns stable, deterministic `heistId` identifiers directly from `AccessibilityElement` (developer identifier preferred, else synthesized from traits+label; value excluded for stability), with suffix disambiguation for duplicates
 5. **Wire conversion at boundary** — `WireConversion.toWire()` converts `ScreenElement` → `HeistElement` only at serialization boundaries (Pulse broadcast, sendInterface, ExploreResult). All internal code operates on `AccessibilityElement`.
@@ -81,7 +81,8 @@ flowchart LR
 graph TD
     subgraph TheStash["TheStash (@MainActor, internal)"]
         subgraph Stores["Instance State"]
-            Registry["registry.elements: [String: ScreenElement]<br/>Persistent, screen-lifetime"]
+            Registry["registry.roots: [RegistryNode]<br/>Persistent tree, screen-lifetime"]
+            Index["registry.elementByHeistId: [String: RegistryPath]<br/>O(1) heistId → tree path lookup"]
             Viewport["registry.viewportIds: Set&lt;String&gt;<br/>Currently visible in device viewport"]
             Hierarchy["currentHierarchy: [AccessibilityHierarchy]<br/>Tree for matchers + scroll discovery"]
             ScrollViews["scrollableContainerViews<br/>[Container: UIView]"]
@@ -125,7 +126,7 @@ Two resolution strategies: O(1) dictionary lookup for heistIds, predicate search
 ```mermaid
 flowchart TD
     A["resolveTarget(ElementTarget)"] --> B{Target type?}
-    B -->|".heistId(id)"| C["registry.elements[id]"]
+    B -->|".heistId(id)"| C["registry.findElement(heistId:)<br/>(elementByHeistId path → tree walk)"]
     C --> D{Entry exists?}
     D -->|Yes| E["Return .resolved(ResolvedTarget)"]
     D -->|No| F["Return .notFound(diagnostics)"]
@@ -163,7 +164,7 @@ struct ScreenElement {
 **Lifetime rules:**
 - UIKit guarantees the scroll view outlives its children, so if `object != nil` then `scrollView != nil` (when originally set)
 - If `object == nil` but `scrollView != nil`, the element was deallocated (cell reuse) but the scroll view is still alive — you can still scroll to its content-space position
-- Any element in `registry.elements` is resolvable by heistId
+- Any element in `registry.elementByHeistId` is resolvable by heistId
 
 ## Instance State Inventory
 
@@ -171,17 +172,18 @@ struct ScreenElement {
 |-------|----------|---------|
 | `currentHierarchy` | Refresh | Tree for matcher resolution + scroll target discovery |
 | `scrollableContainerViews` | Refresh | Container → UIView for scroll operations |
-| `registry.elements` | Screen | The registry — all resolution paths read from here |
+| `registry.roots` | Screen | The persistent registry tree — every element ever observed for the current screen, including scrolled-out leaves |
+| `registry.elementByHeistId` | Screen | O(1) heistId → tree path lookup; rebuilt on every mutation |
 | `registry.viewportIds` | Refresh | HeistIds visible in the device viewport |
-| `registry.reverseIndex` | Refresh | O(1) reverse index: AccessibilityElement → heistId |
+| `registry.reverseIndex` | Refresh | O(1) reverse index: AccessibilityElement → heistId (live parse only) |
 | `registry.firstResponderHeistId` | Refresh | HeistId of the element whose live object is first responder (set by TheBurglar in `apply`, consumed by scroll) |
 | `lastHierarchyHash` | Screen | Pulse polling dedup memo |
 | `lastScreenName` | Screen | First header element label, computed once in `apply()` |
 | `lastScreenId` | Screen | Slugified `lastScreenName` (e.g. "controls_demo"), computed alongside it |
 
 **Data flows down through two tiers:**
-- **Tier 1 (tree)**: `currentHierarchy`, `scrollableContainerViews` — volatile, rebuilt each refresh
-- **Tier 2 (registry)**: `registry.elements`, `registry.viewportIds`, `registry.reverseIndex` — persistent, upserted
+- **Tier 1 (live parse)**: `currentHierarchy`, `scrollableContainerViews`, `registry.viewportIds`, `registry.reverseIndex` — volatile, rebuilt each refresh
+- **Tier 2 (persistent tree)**: `registry.roots`, `registry.elementByHeistId` — survive across parses; merge logic interleaves new parse results with retained orphans
 
 No store writes to another store. No circular dependencies.
 

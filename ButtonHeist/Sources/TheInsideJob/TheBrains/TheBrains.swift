@@ -172,7 +172,7 @@ final class TheBrains {
 
         let delta = stash.computeDelta(
             before: before.snapshot, after: afterSnapshot,
-            afterTree: afterResult?.hierarchy, isScreenChange: isScreenChange
+            isScreenChange: isScreenChange
         )
 
         let exploreResult = ExploreResult(
@@ -277,16 +277,12 @@ final class TheBrains {
         guard currentHash != stash.lastHierarchyHash else { return nil }
         stash.lastHierarchyHash = currentHash
 
-        let tree = stash.convertTree(stash.currentHierarchy)
-        return Interface(timestamp: Date(), elements: wireElements, tree: tree)
+        return Interface(timestamp: Date(), tree: stash.wireTree())
     }
 
     /// Build a full Interface payload from current state.
     func currentInterface() -> Interface {
-        let snapshot = stash.selectElements()
-        let wireElements = stash.toWire(snapshot)
-        let tree = stash.convertTree(stash.currentHierarchy)
-        return Interface(timestamp: Date(), elements: wireElements, tree: tree)
+        Interface(timestamp: Date(), tree: stash.wireTree())
     }
 
     // MARK: - Background Delta
@@ -452,7 +448,7 @@ final class TheBrains {
         )
         return stash.computeDelta(
             before: before.snapshot, after: afterSnapshot,
-            afterTree: stash.currentHierarchy, isScreenChange: isScreenChange
+            isScreenChange: isScreenChange
         )
     }
 

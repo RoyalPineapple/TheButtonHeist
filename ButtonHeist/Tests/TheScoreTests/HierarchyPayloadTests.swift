@@ -4,7 +4,7 @@ import XCTest
 final class SnapshotTests: XCTestCase {
 
     func testEmptyPayload() throws {
-        let payload = Interface(timestamp: Date(), elements: [])
+        let payload = Interface(timestamp: Date(), tree: [])
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -30,7 +30,7 @@ final class SnapshotTests: XCTestCase {
             )
         }
 
-        let payload = Interface(timestamp: Date(), elements: elements)
+        let payload = Interface(timestamp: Date(), tree: elements.map { .element($0) })
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -48,7 +48,7 @@ final class SnapshotTests: XCTestCase {
 
     func testTimestampPreservation() throws {
         let timestamp = Date(timeIntervalSince1970: 1700000000)
-        let payload = Interface(timestamp: timestamp, elements: [])
+        let payload = Interface(timestamp: timestamp, tree: [])
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601

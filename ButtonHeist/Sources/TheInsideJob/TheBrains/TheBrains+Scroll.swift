@@ -226,11 +226,11 @@ extension TheBrains {
             previousViewport: previousOnScreen,
             previousAnchor: previousAnchor
         )
-        var knownHeistIds = Set(stash.registry.elements.keys)
+        var knownHeistIds = Set(stash.registry.elementByHeistId.keys)
 
         while true {
             refresh()
-            let currentHeistIds = Set(stash.registry.elements.keys)
+            let currentHeistIds = Set(stash.registry.elementByHeistId.keys)
             let newHeistIds = currentHeistIds.subtracting(knownHeistIds)
             knownHeistIds.formUnion(newHeistIds)
 
@@ -253,7 +253,7 @@ extension TheBrains {
     /// across processes.
     private func viewportAnchorSignature() -> Int? {
         let anchors = stash.registry.viewportIds.compactMap { heistId -> String? in
-            guard let entry = stash.registry.elements[heistId],
+            guard let entry = stash.registry.findElement(heistId: heistId),
                   let origin = entry.contentSpaceOrigin else { return nil }
             return "\(heistId):\(Int(origin.x.rounded())):\(Int(origin.y.rounded()))"
         }.sorted()
@@ -430,7 +430,7 @@ extension TheBrains {
 
         // Known element with recorded position — one-shot jump
         if case .heistId(let heistId) = elementTarget,
-           let entry = stash.registry.elements[heistId],
+           let entry = stash.registry.findElement(heistId: heistId),
            stash.jumpToRecordedPosition(entry) != nil {
             await tripwire.yieldRealFrames(20)
             refresh()
@@ -468,7 +468,7 @@ extension TheBrains {
 
         // If we have a recorded position, try the one-shot path first
         if case .heistId(let heistId) = searchTarget,
-           let entry = stash.registry.elements[heistId],
+           let entry = stash.registry.findElement(heistId: heistId),
            let savedOffset = stash.jumpToRecordedPosition(entry) {
             await tripwire.yieldRealFrames(20)
             refresh()
@@ -570,7 +570,7 @@ extension TheBrains {
             success: false, method: .elementSearch,
             message: "Element not found after \(scrollCount) scrolls", value: nil,
             scrollSearchResult: ScrollSearchResult(
-                scrollCount: scrollCount, uniqueElementsSeen: stash.registry.elements.count,
+                scrollCount: scrollCount, uniqueElementsSeen: stash.registry.elementByHeistId.count,
                 totalItems: nil, exhaustive: true
             )
         )
@@ -581,7 +581,7 @@ extension TheBrains {
         return TheSafecracker.InteractionResult(
             success: true, method: .elementSearch, message: nil, value: nil,
             scrollSearchResult: ScrollSearchResult(
-                scrollCount: scrollCount, uniqueElementsSeen: stash.registry.elements.count,
+                scrollCount: scrollCount, uniqueElementsSeen: stash.registry.elementByHeistId.count,
                 totalItems: nil, exhaustive: false, foundElement: wire
             )
         )
@@ -620,7 +620,7 @@ extension TheBrains {
 
     func ensureFirstResponderOnScreen() async {
         guard let heistId = stash.registry.firstResponderHeistId,
-              let entry = stash.registry.elements[heistId],
+              let entry = stash.registry.findElement(heistId: heistId),
               let geometry = stash.liveGeometry(for: entry),
               !ScreenMetrics.current.bounds.contains(geometry.frame),
               !Self.interactionComfortZone.contains(geometry.activationPoint) else { return }
@@ -653,13 +653,12 @@ extension TheBrains {
         switch target {
         case .heistId(let heistId):
             guard !stash.registry.viewportIds.contains(heistId) else { return nil }
-            return stash.registry.elements[heistId]
+            return stash.registry.findElement(heistId: heistId)
         case .matcher(let matcher, _):
-            for (heistId, entry) in stash.registry.elements
-            where !stash.registry.viewportIds.contains(heistId) && entry.element.matches(matcher, mode: .substring) {
-                return entry
+            return stash.registry.flattenElements().first { entry in
+                !stash.registry.viewportIds.contains(entry.heistId)
+                    && entry.element.matches(matcher, mode: .substring)
             }
-            return nil
         }
     }
 

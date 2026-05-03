@@ -75,7 +75,7 @@ final class DiagnosticsTests: XCTestCase {
 
     func testCompactSummaryEmptyScreen() {
         let summary = Diagnostics.compactElementSummary(
-            screenElements: [:],
+            screenElements: [],
             viewportHeistIds: [],
             traversalOrder: [:]
         )
@@ -93,7 +93,7 @@ final class DiagnosticsTests: XCTestCase {
         )
 
         let summary = Diagnostics.compactElementSummary(
-            screenElements: ["hello": screenElement],
+            screenElements: [screenElement],
             viewportHeistIds: ["hello"],
             traversalOrder: ["hello": 0]
         )

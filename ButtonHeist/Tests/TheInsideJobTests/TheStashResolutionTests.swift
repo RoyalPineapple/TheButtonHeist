@@ -49,13 +49,13 @@ final class TheStashResolutionTests: XCTestCase {
 
     /// Register an element in the registry, currentHierarchy, and reverse index.
     private func register(_ element: AccessibilityElement, heistId: String, index: Int) {
-        bagman.registry.elements[heistId] = TheStash.ScreenElement(
+        bagman.registry.insertForTesting(TheStash.ScreenElement(
             heistId: heistId,
             contentSpaceOrigin: nil,
             element: element,
             object: nil,
             scrollView: nil
-        )
+        ))
         // Add to hierarchy and reverse index for matcher resolution
         hierarchyNodes.append(.element(element, traversalIndex: index))
         bagman.currentHierarchy = hierarchyNodes
@@ -66,13 +66,13 @@ final class TheStashResolutionTests: XCTestCase {
     /// Simulates an explored off-screen element that was discovered by full explore
     /// but is not currently visible in the viewport.
     private func registerOffScreen(_ element: AccessibilityElement, heistId: String) {
-        bagman.registry.elements[heistId] = TheStash.ScreenElement(
+        bagman.registry.insertForTesting(TheStash.ScreenElement(
             heistId: heistId,
             contentSpaceOrigin: nil,
             element: element,
             object: nil,
             scrollView: nil
-        )
+        ))
         bagman.registry.reverseIndex[element] = heistId
     }
 

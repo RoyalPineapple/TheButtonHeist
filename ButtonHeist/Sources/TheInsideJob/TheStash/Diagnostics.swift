@@ -41,7 +41,7 @@ extension TheStash {
     static func matcherNotFound(
         _ matcher: ElementMatcher,
         hierarchy: [AccessibilityHierarchy],
-        screenElements: [String: ScreenElement],
+        screenElements: [ScreenElement],
         viewportHeistIds: Set<String>,
         traversalOrder: [String: Int]
     ) -> String {
@@ -140,12 +140,12 @@ extension TheStash {
     /// Compact summary of on-screen elements for total-miss fallback.
     /// Capped at 20 elements to avoid flooding the response.
     static func compactElementSummary(
-        screenElements: [String: ScreenElement],
+        screenElements: [ScreenElement],
         viewportHeistIds: Set<String>,
         traversalOrder: [String: Int]
     ) -> String {
         let cap = 20
-        let visibleElements = screenElements.values
+        let visibleElements = screenElements
             .filter { viewportHeistIds.contains($0.heistId) }
             .sorted { (traversalOrder[$0.heistId] ?? Int.max) < (traversalOrder[$1.heistId] ?? Int.max) }
         if visibleElements.isEmpty {

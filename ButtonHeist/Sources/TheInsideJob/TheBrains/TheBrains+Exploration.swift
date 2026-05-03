@@ -238,7 +238,7 @@ extension TheBrains {
                 guard isInside,
                       let heistId = self.stash.registry.reverseIndex[element],
                       self.stash.registry.viewportIds.contains(heistId),
-                      let entry = self.stash.registry.elements[heistId] else { return nil }
+                      let entry = self.stash.registry.findElement(heistId: heistId) else { return nil }
                 return (element: entry.element, origin: entry.contentSpaceOrigin)
             }
         )
@@ -247,14 +247,14 @@ extension TheBrains {
 
     private func buildOriginIndex() -> [AccessibilityElement: CGPoint?] {
         Dictionary(
-            stash.registry.elements.values.map { ($0.element, $0.contentSpaceOrigin) },
+            stash.registry.flattenElements().map { ($0.element, $0.contentSpaceOrigin) },
             uniquingKeysWith: { first, _ in first }
         )
     }
 
     private func resolveHeistIds(for elements: [AccessibilityElement]) -> Set<String> {
         let heistIdByElement = Dictionary(
-            stash.registry.elements.map { ($0.value.element, $0.key) },
+            stash.registry.flattenElements().map { ($0.element, $0.heistId) },
             uniquingKeysWith: { first, _ in first }
         )
         return Set(elements.compactMap { heistIdByElement[$0] })

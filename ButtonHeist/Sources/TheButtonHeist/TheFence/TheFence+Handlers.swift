@@ -23,8 +23,7 @@ extension TheFence {
             let detail = (args["detail"] as? String).flatMap(InterfaceDetail.init) ?? .summary
             let interface = Interface(
                 timestamp: Date(),
-                elements: exploreResult.elements,
-                tree: nil
+                tree: exploreResult.elements.map { .element($0) }
             )
             return .interface(interface, detail: detail, explore: exploreResult)
         }
@@ -39,8 +38,7 @@ extension TheFence {
             let filtered = interface.elements.filter { $0.matches(matcher) }
             let filteredInterface = Interface(
                 timestamp: interface.timestamp,
-                elements: filtered,
-                tree: nil
+                tree: filtered.map { .element($0) }
             )
             return .interface(filteredInterface, detail: detail, filteredFrom: total)
         }
@@ -50,8 +48,7 @@ extension TheFence {
             let filtered = interface.elements.filter { filterSet.contains($0.heistId) }
             let filteredInterface = Interface(
                 timestamp: interface.timestamp,
-                elements: filtered,
-                tree: nil
+                tree: filtered.map { .element($0) }
             )
             return .interface(filteredInterface, detail: detail, filteredFrom: interface.elements.count)
         }
