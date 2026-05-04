@@ -71,8 +71,15 @@ final class TheGetaway {
                 insideJobLogger.info("Session settle config applied: cycles=\(config.cycles), timeoutMs=\(config.timeoutMs)")
             }
         }
-        muscle.onSessionActiveChanged = { [weak transport] isActive in
+        muscle.onSessionActiveChanged = { [weak transport, weak self] isActive in
             transport?.updateTXTRecord([TXTRecordKey.sessionActive.rawValue: isActive ? "1" : "0"])
+            self?.brains.isBackgroundCaptureActive = isActive
+            if !isActive {
+                self?.brains.snapshotTimeline.clear()
+            }
+        }
+        brains.tripwire.onPulseTick = { [weak self] in
+            self?.brains.recordBackgroundTick()
         }
 
         transport.onClientConnected = { [weak self] clientId, remoteAddress in

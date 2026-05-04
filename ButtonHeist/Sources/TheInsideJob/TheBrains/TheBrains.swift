@@ -37,11 +37,36 @@ final class TheBrains {
     var pendingSettleOverride: SettleConfig?
 
     /// Long-lived snapshot timeline. Populated by `SettleSession` during
-    /// action settle (Phase 2 — captures transient elements that came and
-    /// went mid-action) and can be sampled in the background between calls
-    /// (Phase 3 — captures auto-dismissed alerts the driver missed while
-    /// idle).
+    /// action settle and by `recordBackgroundTick()` between calls when a
+    /// session is active.
     let snapshotTimeline = SnapshotTimeline()
+
+    /// Whether to capture timeline snapshots on Tripwire ticks between
+    /// calls. Flipped on by `TheGetaway` when a session is active and off
+    /// when no driver is connected, so we don't pay the parse cost when no
+    /// one is listening.
+    var isBackgroundCaptureActive = false
+
+    /// Wall-clock timestamp of the last between-call timeline append.
+    /// Throttles background capture to ~10Hz so we don't parse on every
+    /// CADisplayLink tick (60Hz).
+    private var lastBackgroundCaptureAt: CFAbsoluteTime = 0
+
+    /// Minimum spacing between background captures, in seconds.
+    static let backgroundCaptureIntervalSec: CFAbsoluteTime = 0.1
+
+    /// Append the current AX-tree to the snapshot timeline if background
+    /// capture is active and at least `backgroundCaptureIntervalSec` has
+    /// elapsed since the last capture. Called from the Tripwire pulse.
+    /// No-op when a session isn't active or the throttle window is open.
+    func recordBackgroundTick() {
+        guard isBackgroundCaptureActive else { return }
+        let now = CFAbsoluteTimeGetCurrent()
+        guard now - lastBackgroundCaptureAt >= TheBrains.backgroundCaptureIntervalSec else { return }
+        lastBackgroundCaptureAt = now
+        guard let parse = stash.parse() else { return }
+        snapshotTimeline.append(parse.elements)
+    }
 
     /// Last dispatched swipe direction per swipeable target key.
     var lastSwipeDirectionByTarget: [String: UIAccessibilityScrollDirection] = [:]

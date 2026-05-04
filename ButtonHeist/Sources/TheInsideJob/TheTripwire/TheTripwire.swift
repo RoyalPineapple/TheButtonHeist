@@ -155,6 +155,12 @@ final class TheTripwire {
 
     var onTransition: ((PulseTransition) -> Void)?
 
+    /// Called once per pulse tick after the standard fingerprint scan and
+    /// transition firing. Subscribers must do their own throttling — this
+    /// fires at CADisplayLink cadence (60 Hz) when the pulse is running.
+    /// Used by `TheBrains` to drive between-call snapshot timeline capture.
+    var onPulseTick: (() -> Void)?
+
     private var pulsePhase: PulsePhase = .idle
 
     private var runningContext: RunningContext? {
@@ -293,6 +299,7 @@ final class TheTripwire {
         }
 
         resolveSettleWaiters(context: context, now: now, isQuiet: isQuiet)
+        onPulseTick?()
     }
 
     private func resolveSettleWaiters(context: RunningContext, now: CFAbsoluteTime, isQuiet: Bool) {

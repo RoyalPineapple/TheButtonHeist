@@ -55,6 +55,15 @@ struct RootView: View {
                     TabBarDemoView()
                 }
 
+                Section("Auto-Settle Fixtures") {
+                    NavigationLink("Transient Flow") {
+                        TransientFlowDemo()
+                    }
+                    NavigationLink("Analog Clock") {
+                        AnalogClockDemo()
+                    }
+                }
+
                 Section("Modals") {
                     NavigationLink("Modal Window") {
                         ModalWindowDemo()
