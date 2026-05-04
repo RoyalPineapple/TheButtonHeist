@@ -289,11 +289,13 @@ struct ButtonHeistMCPServer {
     // Raw base64 video payloads can be tens of megabytes, which would overwhelm the MCP
     // context window. Agents that need the actual file should pass "output" to stop_recording,
     // or use the CLI directly: `buttonheist session` → `stop_recording --output /path/to/file.mp4`
-    private static func renderResponse(_ response: FenceResponse, backgroundDelta: InterfaceDelta? = nil) throws -> CallTool.Result {
+    static func renderResponse(_ response: FenceResponse, backgroundDelta: InterfaceDelta? = nil) throws -> CallTool.Result {
         var content: [Tool.Content] = []
 
         // Background changes: what happened while the agent was thinking
-        if let backgroundDelta, backgroundDelta.kind != .noChange {
+        if let backgroundDelta,
+           backgroundDelta.kind != .noChange || backgroundDelta.transient?.isEmpty == false {
+            let transient = backgroundDelta.transient ?? []
             var lines: [String] = []
             switch backgroundDelta.kind {
             case .screenChanged:
@@ -303,11 +305,15 @@ struct ButtonHeistMCPServer {
                         lines.append("  [\(index)] \(Self.compactBackgroundElement(element))")
                     }
                 }
+                for element in transient {
+                    lines.append("  +- \(Self.compactBackgroundElement(element))")
+                }
             case .elementsChanged:
                 var parts: [String] = []
                 if let added = backgroundDelta.added { parts.append("+\(added.count)") }
                 if let removed = backgroundDelta.removed { parts.append("-\(removed.count)") }
                 if let updated = backgroundDelta.updated { parts.append("~\(updated.count)") }
+                if !transient.isEmpty { parts.append("+-\(transient.count)") }
                 lines.append("[background: elements changed \(parts.joined(separator: " ")) (\(backgroundDelta.elementCount) total)]")
                 if let added = backgroundDelta.added {
                     for element in added { lines.append("  + \(element.heistId) \"\(element.label ?? "")\"") }
@@ -315,8 +321,14 @@ struct ButtonHeistMCPServer {
                 if let removed = backgroundDelta.removed {
                     for heistId in removed { lines.append("  - \(heistId)") }
                 }
+                for element in transient {
+                    lines.append("  +- \(Self.compactBackgroundElement(element))")
+                }
             case .noChange:
-                break
+                lines.append("[background: no net change (\(backgroundDelta.elementCount) elements)]")
+                for element in transient {
+                    lines.append("  +- \(Self.compactBackgroundElement(element))")
+                }
             }
             if !lines.isEmpty {
                 content.append(.text(text: lines.joined(separator: "\n"), annotations: nil, _meta: nil))
