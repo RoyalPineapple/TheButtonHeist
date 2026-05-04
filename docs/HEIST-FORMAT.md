@@ -86,7 +86,7 @@ Each step is a flat JSON object compatible with `TheFence.execute(request:)` —
 
 ## Recording Guidance
 
-When recording a heist, **always target elements by matcher fields** (label, value, traits) — never by heistId. HeistIds are ephemeral screen-local identifiers that are meaningless on replay. Matcher fields describe the element's real accessibility identity, which is portable across sessions and devices.
+When recording a heist, **always target elements by stable matcher fields** (label, identifier, traits, and ordinal when needed) — never by heistId. HeistIds are ephemeral screen-local identifiers that are meaningless on replay. Matcher fields describe the element's real accessibility identity, which is portable across sessions and devices.
 
 **Workflow**: Call `get_interface` to inspect an element's full accessibility properties by heistId, then use those properties (label, traits) to target it in the action call. `get_interface` calls are filtered out of the recording — they exist only to help you build good matchers.
 

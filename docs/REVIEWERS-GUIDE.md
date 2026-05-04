@@ -22,9 +22,9 @@ Everything else builds on this core loop.
 
 ## Why So Many Commands?
 
-The `TheFence.Command` enum has 42 cases, the CLI has 15 top-level subcommands, and the MCP exposes 28 tools. This is driven by **iOS interaction coverage** — each command maps to a distinct iOS capability (accessibility activation, 7 gesture types, 3 scroll modes, text editing, recording, etc.).
+The `TheFence.Command` enum has 42 cases, the CLI has grouped top-level subcommands, and the MCP exposes 23 tools. This is driven by **iOS interaction coverage** — each command maps to a distinct iOS capability (accessibility activation, gesture types, scroll modes, text editing, recording, etc.).
 
-Both interfaces use the same **grouping strategy**: 8 gesture types fold into one tool (`gesture` in MCP, `touch` in CLI), and 5 accessibility actions fold into one tool (`accessibility_action` in MCP, `action --type` in CLI). Common operations like `activate`, `swipe`, and `scroll` are top-level in both.
+Both interfaces use the same **grouping strategy**: gesture variants fold into one surface (`gesture` in MCP, `touch` in CLI), scroll variants fold into `scroll`, and edit menu operations fold into `edit_action`. Common operations like `activate`, `type_text`, and `get_interface` stay top-level in both.
 
 ## TheFence and TheHandoff
 
@@ -54,7 +54,7 @@ Both CLI and MCP are thin shells. All business logic lives in `TheFence` and bel
 
 ## Wire Protocol
 
-Protocol v6.1. Request/response with `requestId` correlation via `RequestEnvelope`/`ResponseEnvelope`. Messages are JSON over TLS-encrypted TCP. Push notifications (interface updates, interaction broadcasts) use `requestId: nil`. See `docs/WIRE-PROTOCOL.md` for the full spec.
+Protocol v8.0. Request/response with `requestId` correlation via `RequestEnvelope`/`ResponseEnvelope`; interface payloads use the canonical `InterfaceNode` tree, not a parallel flat element array. Messages are JSON over TLS-encrypted TCP. Push notifications (interface updates, interaction broadcasts) use `requestId: nil`. See `docs/WIRE-PROTOCOL.md` for the full spec.
 
 ## Testing
 

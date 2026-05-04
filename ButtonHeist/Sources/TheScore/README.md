@@ -11,7 +11,7 @@ Shared wire protocol. Every type that crosses the TCP boundary lives here. No UI
    - `HeistTrait` — 48 named cases plus `.unknown(String)` for forward compatibility. Any unrecognized trait string round-trips correctly.
    - `ElementMatcher` — search predicate: label, identifier, value, traits, excludeTraits. All optional, AND semantics, case-insensitive substring matching.
    - `ElementTarget` — two cases: `.heistId(String)` for exact lookup, `.matcher(ElementMatcher, ordinal: Int?)` for predicate search. Wire format is flat — matcher fields sit at the same JSON level as heistId, no nesting.
-   - `Interface` — timestamp + `[HeistElement]` + optional `[ElementNode]` tree. Computed properties derive `screenName`, `screenId`, and `navigation` context from the element list.
+   - `Interface` — timestamp + canonical `[InterfaceNode]` tree. Computed properties derive the flat element list, `screenName`, `screenId`, and `navigation` context from that tree.
    - `ElementAction` — four cases with dual encoding: built-in actions are bare strings, `.custom(String)` is `{"custom": "name"}`.
 
 3. **`ClientMessages.swift`** — What clients send. `RequestEnvelope` wraps `protocolVersion`, `requestId`, and a `ClientMessage` (37 cases). Each action case carries a typed target struct (`TouchTapTarget`, `SwipeTarget`, `ScrollTarget`, etc.). `RecordingConfig` validates fps/scale ranges during deserialization, not after.
@@ -29,7 +29,7 @@ Shared wire protocol. Every type that crosses the TCP boundary lives here. No UI
 
 ## How a message round-trips
 
-**Client encodes:** `RequestEnvelope(message: .activate(.heistId("button_save")))` → encoder writes `{"protocolVersion":"6.8","type":"activate","payload":{"heistId":"button_save"}}`. The `type` string comes from `ClientMessage.wireMessageType`.
+**Client encodes:** `RequestEnvelope(message: .activate(.heistId("button_save")))` → encoder writes `{"protocolVersion":"8.0","type":"activate","payload":{"heistId":"button_save"}}`. The `type` string comes from `ClientMessage.wireMessageType`.
 
 **Server decodes:** `RequestEnvelope.decoded(from: data)` → reads `type` as `WireMessageType.activate` → `decodeActionMessage` calls `ElementTarget(from: payloadDecoder)` → returns `.activate(.heistId("button_save"))`.
 
