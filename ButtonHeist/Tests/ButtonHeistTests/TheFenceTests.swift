@@ -582,6 +582,62 @@ final class TheFenceTests: XCTestCase {
         XCTAssertFalse(ElementProperty.actions.isGeometry)
     }
 
+    // MARK: - Compact Delta Transient/Flicker Rendering
+
+    /// Auto-settle commonly produces a `.noChange` delta with transient
+    /// entries when an element appeared and disappeared during settle but
+    /// baseline and final are otherwise identical (the "brief loading
+    /// spinner after activate" case the feature targets). The compact
+    /// formatter must surface those, not collapse to "no change".
+    func testCompactDeltaNoChangeRendersTransients() {
+        let spinner = HeistElement(
+            heistId: "loading_indicator",
+            description: "Loading",
+            label: "Processing",
+            value: nil,
+            identifier: nil,
+            traits: [.staticText],
+            frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 30,
+            actions: []
+        )
+        let delta = InterfaceDelta(
+            kind: .noChange,
+            elementCount: 12,
+            transient: [spinner]
+        )
+        let output = FenceResponse.compactDelta(delta, method: "activate")
+        XCTAssertTrue(output.contains("+- "), "Transient marker should render under .noChange")
+        XCTAssertTrue(output.contains("Processing"), "Transient label should render")
+        XCTAssertFalse(output.contains("activate: no change"), "Should NOT collapse to plain 'no change' when transients are present")
+    }
+
+    func testCompactDeltaNoChangeRendersFlickers() {
+        let badge = HeistElement(
+            heistId: "tab_badge",
+            description: "Inbox 3",
+            label: "Inbox",
+            value: "3 unread",
+            identifier: nil,
+            traits: [.button],
+            frameX: 0, frameY: 0, frameWidth: 80, frameHeight: 30,
+            actions: [.activate]
+        )
+        let delta = InterfaceDelta(
+            kind: .noChange,
+            elementCount: 8,
+            flicker: [badge]
+        )
+        let output = FenceResponse.compactDelta(delta, method: "tap")
+        XCTAssertTrue(output.contains("-+ "), "Flicker marker should render under .noChange")
+        XCTAssertTrue(output.contains("Inbox"), "Flicker label should render")
+    }
+
+    func testCompactDeltaNoChangeWithoutTransientsCollapses() {
+        let delta = InterfaceDelta(kind: .noChange, elementCount: 5)
+        let output = FenceResponse.compactDelta(delta, method: "activate")
+        XCTAssertEqual(output, "activate: no change")
+    }
+
     // MARK: - JSON Delta Geometry Filtering
 
     func testActionJsonDeltaOmitsGeometryByDefault() {

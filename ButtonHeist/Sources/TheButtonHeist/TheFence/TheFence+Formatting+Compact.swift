@@ -300,7 +300,26 @@ extension FenceResponse {
     public static func compactDelta(_ delta: InterfaceDelta, method: String) -> String {
         switch delta.kind {
         case .noChange:
-            return "\(method): no change"
+            // Auto-settle can produce a .noChange delta carrying transient
+            // and/or flicker classifications when an element appeared and
+            // disappeared during settle but baseline and final are
+            // otherwise identical (the canonical "brief loading spinner
+            // after activate" case the feature targets, and the same
+            // shape `computeBackgroundDelta` synthesizes for between-call
+            // captures). Surface those entries instead of swallowing them.
+            let transient = delta.transient ?? []
+            let flicker = delta.flicker ?? []
+            if transient.isEmpty && flicker.isEmpty {
+                return "\(method): no change"
+            }
+            var lines: [String] = ["\(method): no net change (\(delta.elementCount) elements)"]
+            for element in transient {
+                lines.append("  +- \(compactElementLine(element))")
+            }
+            for element in flicker {
+                lines.append("  -+ \(compactElementLine(element))")
+            }
+            return lines.joined(separator: "\n")
 
         case .elementsChanged:
             var lines: [String] = ["\(method): elements changed (\(delta.elementCount) elements)"]
