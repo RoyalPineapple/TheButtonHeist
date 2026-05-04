@@ -1618,7 +1618,7 @@ The token is configured via `INSIDEJOB_TOKEN` env var or `InsideJobToken` Info.p
 
 Session locking prevents multiple drivers from interfering with each other. Only one driver can control a TheInsideJob host at a time.
 
-**Why sessions?** A single "driver" isn't a single TCP connection. Each CLI command (`buttonheist action`, `buttonheist screenshot`, etc.) creates a fresh connection, authenticates, executes, and disconnects. Only `session` maintains a persistent connection. The session concept spans multiple sequential connections from the same driver.
+**Why sessions?** A single "driver" isn't a single TCP connection. Each CLI command (`buttonheist activate`, `buttonheist get_screen`, etc.) creates a fresh connection, authenticates, executes, and disconnects. Only `session` maintains a persistent connection. The session concept spans multiple sequential connections from the same driver.
 
 **Driver Identity**: The server identifies drivers using a two-tier approach:
 1. `driverId` from the authenticate payload (when present) — set via `BUTTONHEIST_DRIVER_ID` env var

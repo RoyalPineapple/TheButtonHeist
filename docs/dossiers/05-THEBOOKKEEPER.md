@@ -363,7 +363,7 @@ Append-only (safe for crash recovery), streamable (`jq` works line-by-line), com
 
 ### Why lazy session creation?
 
-One-shot CLI commands (`buttonheist screenshot --output shot.png`) don't need session directories. TheBookKeeper starts in `.idle` and only allocates a directory when `beginSession` is called. `writeToPath` works without a session for explicit caller-specified paths. `logCommand`/`logResponse` silently no-op in idle.
+One-shot CLI commands (`buttonheist get_screen --output shot.png`) don't need session directories. TheBookKeeper starts in `.idle` and only allocates a directory when `beginSession` is called. `writeToPath` works without a session for explicit caller-specified paths. `logCommand`/`logResponse` silently no-op in idle.
 
 ### Why sequence numbers instead of timestamps in filenames?
 

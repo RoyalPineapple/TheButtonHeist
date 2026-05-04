@@ -54,7 +54,7 @@ buttonheist list
 buttonheist --device "iPhone 15 Pro" activate --identifier myButton
 
 # Take a screenshot over USB
-buttonheist --device "iPhone 15 Pro" screenshot --output screen.png
+buttonheist --device "iPhone 15 Pro" get_screen --output screen.png
 ```
 
 ### MCP Server

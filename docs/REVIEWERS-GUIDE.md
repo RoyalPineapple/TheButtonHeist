@@ -14,8 +14,8 @@ Most usage boils down to five CLI commands:
 buttonheist list                              # Find running apps
 buttonheist get_interface                     # Read the UI element tree
 buttonheist activate --identifier "loginBtn"  # Tap a control
-buttonheist type --text "hello@example.com"   # Type into a field
-buttonheist screenshot                        # Capture the screen
+buttonheist type_text "hello@example.com"     # Type into a field
+buttonheist get_screen                        # Capture the screen
 ```
 
 Everything else builds on this core loop.
