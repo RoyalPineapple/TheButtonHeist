@@ -514,6 +514,41 @@ final class ElementRegistryTreeTests: XCTestCase {
         XCTAssertTrue(foundUnderList, "rowA should be a child of the list container")
     }
 
+    func testNonScrollableContainerInterleavesRetainedChildrenByScreenPosition() {
+        var registry = TheStash.ElementRegistry()
+        let rowA = makeElement(label: "Row A", frame: CGRect(x: 0, y: 0, width: 320, height: 44))
+        let rowB = makeElement(label: "Row B", frame: CGRect(x: 0, y: 44, width: 320, height: 44))
+        let listContainer = AccessibilityContainer(
+            type: .list,
+            frame: CGRect(x: 0, y: 0, width: 320, height: 200)
+        )
+
+        registry.merge(
+            hierarchy: [
+                .container(listContainer, children: [
+                    .element(rowA, traversalIndex: 0),
+                    .element(rowB, traversalIndex: 1),
+                ])
+            ],
+            heistIds: heistIdMap([(rowA, "row_a"), (rowB, "row_b")]),
+            contexts: [:],
+            containerContentFrames: [listContainer: listContainer.frame]
+        )
+
+        registry.merge(
+            hierarchy: [
+                .container(listContainer, children: [
+                    .element(rowB, traversalIndex: 0),
+                ])
+            ],
+            heistIds: heistIdMap([(rowB, "row_b")]),
+            contexts: [:],
+            containerContentFrames: [listContainer: listContainer.frame]
+        )
+
+        XCTAssertEqual(registry.flattenElements().map(\.heistId), ["row_a", "row_b"])
+    }
+
     func testMergeContainerSurvivesAcrossParses() {
         var registry = TheStash.ElementRegistry()
         let row = makeElement(label: "Row 0")

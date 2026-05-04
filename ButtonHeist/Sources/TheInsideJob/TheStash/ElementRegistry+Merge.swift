@@ -116,7 +116,7 @@ extension TheStash.ElementRegistry {
             oldRoots: oldRoots
         )
         let attached = Self.attachOrphans(roots: built, orphans: orphans)
-        let sorted = Self.sortScrollableChildren(roots: attached)
+        let sorted = Self.sortContainerChildren(roots: attached, liveHeistIds: liveHeistIds)
         let pruned = Self.pruneEmptyContainers(roots: sorted)
 
         roots = pruned
@@ -324,13 +324,16 @@ extension TheStash.ElementRegistry {
         return nil
     }
 
-    // MARK: - Scrollable Reordering (pure)
+    // MARK: - Retained Child Reordering (pure)
 
-    /// Sort the children of every `.scrollable` container by content-space Y so
-    /// off-screen orphans interleave with visible siblings. Non-scrollable
-    /// containers preserve incoming order.
-    private static func sortScrollableChildren(
-        roots: [TheStash.RegistryNode]
+    /// Sort retained children back into a useful position after orphan
+    /// attachment. Scrollables use content-space order; non-scrollable
+    /// containers keep parser order unless they gained retained children, in
+    /// which case screen-space order prevents old entries from being appended
+    /// after their live siblings.
+    private static func sortContainerChildren(
+        roots: [TheStash.RegistryNode],
+        liveHeistIds: Set<String>
     ) -> [TheStash.RegistryNode] {
         roots.mapTree(
             onElement: { .element($0) },
@@ -338,9 +341,24 @@ extension TheStash.ElementRegistry {
                 if case .scrollable = entry.container.type {
                     return .container(entry, children: children.sorted(by: scrollableChildOrder))
                 }
+                if children.contains(where: { containsRetainedElement($0, liveHeistIds: liveHeistIds) }) {
+                    return .container(entry, children: children.sorted(by: screenChildOrder))
+                }
                 return .container(entry, children: children)
             }
         )
+    }
+
+    private static func containsRetainedElement(
+        _ node: TheStash.RegistryNode,
+        liveHeistIds: Set<String>
+    ) -> Bool {
+        switch node {
+        case .element(let element):
+            return !liveHeistIds.contains(element.heistId)
+        case .container(_, let children):
+            return children.contains { containsRetainedElement($0, liveHeistIds: liveHeistIds) }
+        }
     }
 
     private static func scrollableChildOrder(
@@ -361,6 +379,31 @@ extension TheStash.ElementRegistry {
             },
             onContainer: { entry, results in
                 results.min() ?? entry.container.frame.origin.y
+            }
+        )
+    }
+
+    private static func screenChildOrder(
+        _ lhs: TheStash.RegistryNode, _ rhs: TheStash.RegistryNode
+    ) -> Bool {
+        let lhsPoint = firstScreenPoint(of: lhs)
+        let rhsPoint = firstScreenPoint(of: rhs)
+        if abs(lhsPoint.y - rhsPoint.y) >= 0.5 { return lhsPoint.y < rhsPoint.y }
+        if abs(lhsPoint.x - rhsPoint.x) >= 0.5 { return lhsPoint.x < rhsPoint.x }
+        let lhsId = firstHeistId(in: [lhs]) ?? ""
+        let rhsId = firstHeistId(in: [rhs]) ?? ""
+        return lhsId < rhsId
+    }
+
+    private static func firstScreenPoint(of node: TheStash.RegistryNode) -> CGPoint {
+        node.folded(
+            onElement: { $0.element.shape.frame.origin },
+            onContainer: { entry, results in
+                results.sorted {
+                    if abs($0.y - $1.y) >= 0.5 { return $0.y < $1.y }
+                    if abs($0.x - $1.x) >= 0.5 { return $0.x < $1.x }
+                    return false
+                }.first ?? entry.container.frame.origin
             }
         )
     }
