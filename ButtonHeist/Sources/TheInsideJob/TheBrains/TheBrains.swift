@@ -133,18 +133,14 @@ final class TheBrains {
         }
 
         let start = CFAbsoluteTimeGetCurrent()
-        let settleSession = SettleSession(stash: stash, tripwire: tripwire)
+        let settleSession = SettleSession.live(stash: stash, tripwire: tripwire)
         let settleResult = await settleSession.run(start: start)
         let settleMs = settleResult.outcome.timeMs
-        let didSettle = settleResult.outcome.didSettleCleanly
-        switch settleResult.outcome {
-        case .settled:
-            insideJobLogger.info("Post-action settle: settled in \(settleMs)ms")
-        case .screenChanged:
-            insideJobLogger.info("Post-action settle: screen changed mid-loop after \(settleMs)ms")
-        case .timedOut:
-            insideJobLogger.info("Post-action settle: timed out after \(settleMs)ms")
+        var didSettle = settleResult.outcome.didSettleCleanly
+        if let cancelled = cancelledActionResult(settleResult.outcome, method: method, before: before, value: value) {
+            return cancelled
         }
+        logSettleOutcome(settleResult.outcome)
 
         var afterResult = stash.parse()
 
@@ -159,21 +155,9 @@ final class TheBrains {
             containerExploreStates.removeAll()
         }
 
-        // After a screen change (e.g. popup dismiss), the accessibility tree
-        // may be transiently empty — the old VC's elements are gone but the
-        // newly-exposed VC hasn't re-registered its elements yet. Wait for
-        // the tree to repopulate using the tripwire settle loop, then re-parse.
         if isScreenChange && (afterResult?.elements ?? []).isEmpty {
-            let repopStart = CFAbsoluteTimeGetCurrent()
-            for attempt in 1...10 {
-                _ = await tripwire.waitForAllClear(timeout: 0.2)
-                afterResult = stash.parse()
-                if let elements = afterResult?.elements, !elements.isEmpty {
-                    let repopMs = Int((CFAbsoluteTimeGetCurrent() - repopStart) * 1000)
-                    insideJobLogger.info("Screen re-populated after \(attempt) re-parse(s) in \(repopMs)ms")
-                    break
-                }
-            }
+            let repopulated = await repopulateAfterScreenChange(into: &afterResult)
+            if !repopulated { didSettle = false }
         }
 
         if let afterResult {
@@ -190,7 +174,7 @@ final class TheBrains {
             beforeTreeHash: before.treeHash,
             isScreenChange: isScreenChange
         )
-        let transientElements = transientElements(
+        let transientElements = SettleSession.transientElements(
             seenByKey: settleResult.elementsByKey,
             baseline: before.elements,
             final: afterResult?.elements ?? []
@@ -236,38 +220,57 @@ final class TheBrains {
         )
     }
 
-    // MARK: - Transient Capture
+    // MARK: - Settle Outcome Helpers
 
-    /// Compute the elements that appeared during settle but are absent from
-    /// both baseline and final — the "came and went" set. The settle loop
-    /// already accumulates every observed element into `seenByKey`, so this
-    /// is a set subtraction plus a deterministic sort.
-    ///
-    /// `Dictionary.compactMap` iteration order is not guaranteed across
-    /// runs, so we sort the result by `(frameMinY, frameMinX, label,
-    /// identifier)` — visually-natural reading order. Stable output across
-    /// runs is load-bearing for snapshot consumers (benchmark golden files,
-    /// reproducible LLM outputs against the same flow).
-    private func transientElements(
-        seenByKey: [TimelineKey: AccessibilityElement],
-        baseline: [AccessibilityElement],
-        final: [AccessibilityElement]
-    ) -> [AccessibilityElement] {
-        if seenByKey.isEmpty { return [] }
-        let baselineKeys = Set(baseline.map(\.timelineKey))
-        let finalKeys = Set(final.map(\.timelineKey))
-        let candidates = seenByKey.compactMap { key, element -> AccessibilityElement? in
-            (baselineKeys.contains(key) || finalKeys.contains(key)) ? nil : element
-        }
-        return candidates.sorted { lhs, rhs in
-            let lhsKey = lhs.timelineKey
-            let rhsKey = rhs.timelineKey
-            if lhsKey.frameMinY != rhsKey.frameMinY { return lhsKey.frameMinY < rhsKey.frameMinY }
-            if lhsKey.frameMinX != rhsKey.frameMinX { return lhsKey.frameMinX < rhsKey.frameMinX }
-            if (lhsKey.label ?? "") != (rhsKey.label ?? "") { return (lhsKey.label ?? "") < (rhsKey.label ?? "") }
-            return (lhsKey.identifier ?? "") < (rhsKey.identifier ?? "")
+    private func logSettleOutcome(_ outcome: SettleOutcome) {
+        switch outcome {
+        case .settled(let ms):
+            insideJobLogger.info("Post-action settle: settled in \(ms)ms")
+        case .screenChanged(let ms):
+            insideJobLogger.info("Post-action settle: screen changed mid-loop after \(ms)ms")
+        case .timedOut(let ms):
+            insideJobLogger.info("Post-action settle: timed out after \(ms)ms")
+        case .cancelled(let ms):
+            insideJobLogger.info("Post-action settle: cancelled after \(ms)ms")
         }
     }
+
+    /// Build a minimal failure result when settle is cancelled. Returning
+    /// here skips the rest of the pipeline (parse/explore/captureActionFrame)
+    /// — those would burn main-actor cycles for a result no one will read.
+    private func cancelledActionResult(
+        _ outcome: SettleOutcome,
+        method: ActionMethod,
+        before: BeforeState,
+        value: String?
+    ) -> ActionResult? {
+        guard case .cancelled(let ms) = outcome else { return nil }
+        var builder = ActionResultBuilder(method: method, snapshot: before.snapshot)
+        builder.message = "cancelled after \(ms)ms"
+        builder.value = value
+        builder.settled = false
+        builder.settleTimeMs = ms
+        return builder.failure(errorKind: .actionFailed)
+    }
+
+    /// Wait for the post-screen-change tree to repopulate. Returns true
+    /// if a non-empty parse landed within the attempt budget.
+    private func repopulateAfterScreenChange(into afterResult: inout TheStash.ParseResult?) async -> Bool {
+        let repopStart = CFAbsoluteTimeGetCurrent()
+        for attempt in 1...10 {
+            _ = await tripwire.waitForAllClear(timeout: 0.2)
+            afterResult = stash.parse()
+            if let elements = afterResult?.elements, !elements.isEmpty {
+                let repopMs = Int((CFAbsoluteTimeGetCurrent() - repopStart) * 1000)
+                insideJobLogger.info("Screen re-populated after \(attempt) re-parse(s) in \(repopMs)ms")
+                return true
+            }
+        }
+        insideJobLogger.info("Screen failed to re-populate after 10 attempts; reporting settled=false")
+        return false
+    }
+
+    // MARK: - Transient Capture
 
     /// Return a copy of `delta` with `transient` populated.
     private func enriching(

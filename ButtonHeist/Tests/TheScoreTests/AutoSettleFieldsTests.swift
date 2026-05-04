@@ -59,4 +59,55 @@ final class AutoSettleFieldsTests: XCTestCase {
         XCTAssertNil(decoded.transient)
         XCTAssertEqual(decoded.elementCount, 5)
     }
+
+    // MARK: - New-payload to Old-decoder
+
+    /// A stand-in for an "older client" that decodes only the fields it
+    /// knows about. Locks the contract that adding `settled` /
+    /// `settleTimeMs` / `transient` to the wire is non-breaking — the
+    /// older shape continues to deserialize cleanly when the encoder
+    /// emits the new fields.
+    private struct LegacyActionResult: Decodable {
+        let success: Bool
+        let method: ActionMethod
+        let message: String?
+    }
+
+    private struct LegacyInterfaceDelta: Decodable {
+        let kind: InterfaceDelta.DeltaKind
+        let elementCount: Int
+    }
+
+    func testNewActionResultPayloadDecodesIntoLegacyShape() throws {
+        let result = ActionResult(
+            success: true,
+            method: .activate,
+            message: "tap",
+            settled: true,
+            settleTimeMs: 312
+        )
+        let data = try JSONEncoder().encode(result)
+        let legacy = try JSONDecoder().decode(LegacyActionResult.self, from: data)
+        XCTAssertTrue(legacy.success)
+        XCTAssertEqual(legacy.method, .activate)
+        XCTAssertEqual(legacy.message, "tap")
+    }
+
+    func testNewInterfaceDeltaPayloadDecodesIntoLegacyShape() throws {
+        let element = HeistElement(
+            heistId: "loading",
+            description: "Loading",
+            label: "Processing",
+            value: nil,
+            identifier: nil,
+            traits: [.staticText],
+            frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 30,
+            actions: []
+        )
+        let delta = InterfaceDelta(kind: .noChange, elementCount: 7, transient: [element])
+        let data = try JSONEncoder().encode(delta)
+        let legacy = try JSONDecoder().decode(LegacyInterfaceDelta.self, from: data)
+        XCTAssertEqual(legacy.kind, .noChange)
+        XCTAssertEqual(legacy.elementCount, 7)
+    }
 }
