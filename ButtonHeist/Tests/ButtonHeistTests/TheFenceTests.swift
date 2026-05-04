@@ -872,6 +872,26 @@ final class TheFenceTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testRequestScopedServerErrorFailsPendingActionWithoutDisconnecting() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        mockConn.autoResponse = { _ in
+            .error("Response too large to send over the socket (20000001 bytes)")
+        }
+
+        do {
+            _ = try await fence.execute(request: ["command": "activate", "identifier": "button"])
+            XCTFail("Expected FenceError.actionFailed")
+        } catch {
+            guard case FenceError.actionFailed(let message) = error else {
+                return XCTFail("Expected actionFailed, got \(error)")
+            }
+            XCTAssertTrue(message.contains("Response too large"))
+        }
+
+        XCTAssertTrue(mockConn.isConnected)
+    }
+
+    @ButtonHeistActor
     func testWaitForRecordingTimeout() async throws {
         let fence = TheFence()
 

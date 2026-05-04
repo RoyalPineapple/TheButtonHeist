@@ -222,10 +222,9 @@ public actor SimpleSocketServer {
     }
 
     /// Try to fail the originating request explicitly when a response exceeds the send cap.
-    /// Recording responses (the typical cause of oversize, since video data is large) get a
-    /// `.recordingError` keyed to the original requestId so the recording tracker resolves
-    /// promptly. Other oversize cases are logged and dropped — the pending request will time
-    /// out, which is preferable to misclassifying the failure or tearing down the connection.
+    /// Recording responses get `.recordingError` because they use a recording-specific wait path.
+    /// Other responses get a request-scoped `.error`, allowing the client to fail the pending
+    /// request directly instead of surfacing a generic timeout.
     private func sendOversizedResponseError(
         clientId: Int,
         originalData: Data,
@@ -248,7 +247,11 @@ public actor SimpleSocketServer {
                 state: state
             )
         default:
-            logger.warning("Oversized non-recording response for client \(clientId) — dropping; the pending request will time out")
+            sendErrorEnvelope(
+                clientId: clientId,
+                envelope: ResponseEnvelope(requestId: envelope.requestId, message: .error(message)),
+                state: state
+            )
         }
     }
 

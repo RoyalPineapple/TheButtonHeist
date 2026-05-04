@@ -209,6 +209,14 @@ public final class TheFence {
             self.screenTracker.resolve(requestId: requestId, result: .success(payload))
         }
 
+        handoff.onRequestError = { [weak self] message, requestId in
+            guard let self else { return }
+            let error = FenceError.actionFailed(message)
+            self.actionTracker.resolve(requestId: requestId, result: .failure(error))
+            self.interfaceTracker.resolve(requestId: requestId, result: .failure(error))
+            self.screenTracker.resolve(requestId: requestId, result: .failure(error))
+        }
+
         handoff.onBackgroundDelta = { [weak self] delta in
             self?.enqueueBackgroundDelta(delta)
         }
