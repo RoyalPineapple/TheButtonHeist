@@ -5,6 +5,10 @@ import TheScore
 
 @main
 struct ButtonHeistMCPServer {
+    struct ToolRoutingError: Error, Equatable {
+        let message: String
+    }
+
     static func main() async throws {
         let (fence, idleMonitor) = await setUp()
 
@@ -171,55 +175,14 @@ struct ButtonHeistMCPServer {
         idleMonitor: IdleMonitor
     ) async -> CallTool.Result {
         do {
-            var request = try decodeArguments(params.arguments)
-
-            // Route tool name → TheFence command
-            switch params.name {
-            // Direct 1:1 tools — tool name IS the command
-            case "get_interface", "activate", "type_text", "get_screen",
-                 "wait_for_change", "wait_for", "start_recording", "stop_recording", "list_devices",
-                 "set_pasteboard", "get_pasteboard",
-                 "run_batch", "get_session_state",
-                 "connect", "list_targets",
-                 "get_session_log", "archive_session",
-                 "start_heist", "stop_heist", "play_heist":
-                request["command"] = params.name
-
-            // Grouped gesture tool — "type" field becomes the command
-            case "gesture":
-                guard let type = request.removeValue(forKey: "type") as? String else {
-                    return .init(content: [.text(text: "Missing required parameter: type", annotations: nil, _meta: nil)], isError: true)
-                }
-                request["command"] = type
-
-            // Grouped scroll tool — "mode" field selects the TheFence command
-            case "scroll":
-                let mode = (request.removeValue(forKey: "mode") as? String) ?? "page"
-                switch mode {
-                case "page":
-                    request["command"] = "scroll"
-                case "to_visible":
-                    request["command"] = "scroll_to_visible"
-                case "search":
-                    request["command"] = "element_search"
-                case "to_edge":
-                    request["command"] = "scroll_to_edge"
-                default:
-                    let message = "Unknown scroll mode: \(mode). Valid: page, to_visible, search, to_edge"
-                    return .init(content: [.text(text: message, annotations: nil, _meta: nil)], isError: true)
-                }
-
-            // edit_action routes "dismiss" to dismiss_keyboard
-            case "edit_action":
-                if let action = request["action"] as? String, action == "dismiss" {
-                    request.removeValue(forKey: "action")
-                    request["command"] = "dismiss_keyboard"
-                } else {
-                    request["command"] = "edit_action"
-                }
-
-            default:
-                return .init(content: [.text(text: "Unknown tool: \(params.name)", annotations: nil, _meta: nil)], isError: true)
+            let arguments = try decodeArguments(params.arguments)
+            let routed = routeToolRequest(name: params.name, arguments: arguments)
+            let request: [String: Any]
+            switch routed {
+            case .success(let value):
+                request = value
+            case .failure(let error):
+                return .init(content: [.text(text: error.message, annotations: nil, _meta: nil)], isError: true)
             }
 
             let response = try await fence.execute(request: request)
@@ -229,6 +192,62 @@ struct ButtonHeistMCPServer {
         } catch {
             idleMonitor.resetTimer()
             return .init(content: [.text(text: error.displayMessage, annotations: nil, _meta: nil)], isError: true)
+        }
+    }
+
+    static func routeToolRequest(
+        name: String,
+        arguments: [String: Any]
+    ) -> Result<[String: Any], ToolRoutingError> {
+        var request = arguments
+
+        // Direct 1:1 tools — tool name IS the command.
+        switch name {
+        case "get_interface", "activate", "type_text", "get_screen",
+             "wait_for_change", "wait_for", "start_recording", "stop_recording", "list_devices",
+             "set_pasteboard", "get_pasteboard",
+             "run_batch", "get_session_state",
+             "connect", "list_targets",
+             "get_session_log", "archive_session",
+             "start_heist", "stop_heist", "play_heist":
+            request["command"] = name
+            return .success(request)
+
+        case "gesture":
+            guard let type = request.removeValue(forKey: "type") as? String else {
+                return .failure(ToolRoutingError(message: "Missing required parameter: type"))
+            }
+            request["command"] = type
+            return .success(request)
+
+        case "scroll":
+            let mode = (request.removeValue(forKey: "mode") as? String) ?? "page"
+            switch mode {
+            case "page":
+                request["command"] = "scroll"
+            case "to_visible":
+                request["command"] = "scroll_to_visible"
+            case "search":
+                request["command"] = "element_search"
+            case "to_edge":
+                request["command"] = "scroll_to_edge"
+            default:
+                let message = "Unknown scroll mode: \(mode). Valid: page, to_visible, search, to_edge"
+                return .failure(ToolRoutingError(message: message))
+            }
+            return .success(request)
+
+        case "edit_action":
+            if let action = request["action"] as? String, action == "dismiss" {
+                request.removeValue(forKey: "action")
+                request["command"] = "dismiss_keyboard"
+            } else {
+                request["command"] = "edit_action"
+            }
+            return .success(request)
+
+        default:
+            return .failure(ToolRoutingError(message: "Unknown tool: \(name)"))
         }
     }
 
