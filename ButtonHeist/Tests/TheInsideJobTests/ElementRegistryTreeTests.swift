@@ -324,7 +324,7 @@ final class ElementRegistryTreeTests: XCTestCase {
                     object: nil
                 ),
             ],
-            hierarchy: [.element(moved, traversalIndex: 0)],
+            hierarchy: [.element(duplicate, traversalIndex: 0)],
             containerContentFrames: [:]
         )
 
