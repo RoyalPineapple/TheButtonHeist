@@ -44,6 +44,27 @@ struct ResponseRenderingTests {
         #expect(text.contains("+- spinner \"Loading\""))
     }
 
+    @Test("MCP renders every queued background delta")
+    func rendersMultipleBackgroundDeltas() throws {
+        let spinner = makeElement(heistId: "spinner", label: "Loading")
+        let result = makeElement(heistId: "result", label: "Result")
+        let deltas = [
+            InterfaceDelta(kind: .noChange, elementCount: 4, transient: [spinner]),
+            InterfaceDelta(kind: .elementsChanged, elementCount: 5, added: [result]),
+        ]
+
+        let response = try ButtonHeistMCPServer.renderResponse(
+            .ok(message: "done"),
+            backgroundDeltas: deltas
+        )
+        let text = renderedText(response)
+
+        #expect(text.contains("[background: no net change (4 elements)]"))
+        #expect(text.contains("+- spinner \"Loading\""))
+        #expect(text.contains("[background: elements changed +1 (5 total)]"))
+        #expect(text.contains("+ result \"Result\""))
+    }
+
     private func renderedText(_ result: CallTool.Result) -> String {
         result.content.compactMap { content in
             if case .text(let text, _, _) = content { return text }

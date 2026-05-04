@@ -187,8 +187,8 @@ struct ButtonHeistMCPServer {
 
             let response = try await fence.execute(request: request)
             idleMonitor.resetTimer()
-            let backgroundDelta = fence.drainBackgroundDelta()
-            return try renderResponse(response, backgroundDelta: backgroundDelta)
+            let backgroundDeltas = fence.drainBackgroundDeltas()
+            return try renderResponse(response, backgroundDeltas: backgroundDeltas)
         } catch {
             idleMonitor.resetTimer()
             return .init(content: [.text(text: error.displayMessage, annotations: nil, _meta: nil)], isError: true)
@@ -290,11 +290,15 @@ struct ButtonHeistMCPServer {
     // context window. Agents that need the actual file should pass "output" to stop_recording,
     // or use the CLI directly: `buttonheist session` → `stop_recording --output /path/to/file.mp4`
     static func renderResponse(_ response: FenceResponse, backgroundDelta: InterfaceDelta? = nil) throws -> CallTool.Result {
+        try renderResponse(response, backgroundDeltas: backgroundDelta.map { [$0] } ?? [])
+    }
+
+    static func renderResponse(_ response: FenceResponse, backgroundDeltas: [InterfaceDelta]) throws -> CallTool.Result {
         var content: [Tool.Content] = []
 
         // Background changes: what happened while the agent was thinking
-        if let backgroundDelta,
-           backgroundDelta.kind != .noChange || backgroundDelta.transient?.isEmpty == false {
+        for backgroundDelta in backgroundDeltas
+            where backgroundDelta.kind != .noChange || backgroundDelta.transient?.isEmpty == false {
             let transient = backgroundDelta.transient ?? []
             var lines: [String] = []
             switch backgroundDelta.kind {

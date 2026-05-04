@@ -250,6 +250,13 @@ public final class TheFence {
         return backgroundDeltas.removeFirst()
     }
 
+    /// Return and clear all queued background deltas in arrival order.
+    public func drainBackgroundDeltas() -> [InterfaceDelta] {
+        let deltas = backgroundDeltas
+        backgroundDeltas.removeAll()
+        return deltas
+    }
+
     /// Connect to a device and optionally enable auto-reconnect.
     public func start() async throws {
         if handoff.isConnected {

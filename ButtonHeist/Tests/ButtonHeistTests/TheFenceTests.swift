@@ -1063,6 +1063,19 @@ final class TheFenceTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testDrainBackgroundDeltasReturnsAllQueuedDeltas() async {
+        let fence = TheFence()
+        fence.handoff.onBackgroundDelta?(InterfaceDelta(kind: .elementsChanged, elementCount: 2))
+        fence.handoff.onBackgroundDelta?(InterfaceDelta(kind: .screenChanged, elementCount: 7))
+
+        let deltas = fence.drainBackgroundDeltas()
+
+        XCTAssertEqual(deltas.map(\.kind), [.elementsChanged, .screenChanged])
+        XCTAssertEqual(deltas.map(\.elementCount), [2, 7])
+        XCTAssertNil(fence.drainBackgroundDelta())
+    }
+
+    @ButtonHeistActor
     func testBackgroundExpectationMismatchDoesNotConsumeDelta() async throws {
         let (fence, _) = makeConnectedFence()
         fence.handoff.onBackgroundDelta?(InterfaceDelta(kind: .screenChanged, elementCount: 7))
