@@ -102,6 +102,9 @@ extension FenceResponse {
         if let value = result.value {
             text += "\nvalue: \"\(value)\""
         }
+        if let settled = result.settled, let settleTimeMs = result.settleTimeMs {
+            text += "\nsettled=\(settled) (\(settleTimeMs)ms)"
+        }
         if let expectation {
             if !expectation.met {
                 text += "\n[expectation FAILED: got \(expectation.actual ?? "nil")]"

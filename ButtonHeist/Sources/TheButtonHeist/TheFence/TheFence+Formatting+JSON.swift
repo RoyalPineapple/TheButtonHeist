@@ -246,6 +246,8 @@ extension FenceResponse {
         if let message = result.message { payload["message"] = message }
         if let value = result.value { payload["value"] = value }
         if result.animating == true { payload["animating"] = true }
+        if let settled = result.settled { payload["settled"] = settled }
+        if let settleTimeMs = result.settleTimeMs { payload["settleTimeMs"] = settleTimeMs }
         if let delta = result.interfaceDelta {
             payload["delta"] = deltaDictionary(delta)
         }
