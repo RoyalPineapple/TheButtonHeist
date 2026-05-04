@@ -216,10 +216,16 @@ public struct ActionResult: Codable, Sendable {
     public let scrollSearchResult: ScrollSearchResult?
     /// Diagnostics from an explore (full screen census) operation
     public let exploreResult: ExploreResult?
-    /// True when the AX tree reached the multi-cycle settle target before
-    /// the timeout. False when the timeout was hit. nil for older clients.
+    /// True when the response represents a settled UI state — either the
+    /// AX tree reached multi-cycle stability, or a screen transition
+    /// preempted the settle loop and the new screen has been observed via
+    /// the existing repopulation pipeline. False *only* when the hard
+    /// settle timeout elapsed while the tree was still changing — the
+    /// snapshot in `interfaceDelta` may not be a final state. nil for
+    /// older clients / pre-auto-settle responses.
     public let settled: Bool?
-    /// Wall-clock milliseconds from action start to settle decision.
+    /// Wall-clock milliseconds from action start to settle decision
+    /// (settled, screen-changed, or timed out).
     public let settleTimeMs: Int?
 
     public init(

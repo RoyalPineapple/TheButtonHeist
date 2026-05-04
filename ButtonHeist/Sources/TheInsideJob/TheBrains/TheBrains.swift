@@ -241,7 +241,13 @@ final class TheBrains {
     /// Compute the elements that appeared during settle but are absent from
     /// both baseline and final — the "came and went" set. The settle loop
     /// already accumulates every observed element into `seenByKey`, so this
-    /// is just a set subtraction. No separate timeline class needed.
+    /// is a set subtraction plus a deterministic sort.
+    ///
+    /// `Dictionary.compactMap` iteration order is not guaranteed across
+    /// runs, so we sort the result by `(frameMinY, frameMinX, label,
+    /// identifier)` — visually-natural reading order. Stable output across
+    /// runs is load-bearing for snapshot consumers (benchmark golden files,
+    /// reproducible LLM outputs against the same flow).
     private func transientElements(
         seenByKey: [TimelineKey: AccessibilityElement],
         baseline: [AccessibilityElement],
@@ -250,8 +256,16 @@ final class TheBrains {
         if seenByKey.isEmpty { return [] }
         let baselineKeys = Set(baseline.map(\.timelineKey))
         let finalKeys = Set(final.map(\.timelineKey))
-        return seenByKey.compactMap { key, element in
+        let candidates = seenByKey.compactMap { key, element -> AccessibilityElement? in
             (baselineKeys.contains(key) || finalKeys.contains(key)) ? nil : element
+        }
+        return candidates.sorted { lhs, rhs in
+            let lhsKey = lhs.timelineKey
+            let rhsKey = rhs.timelineKey
+            if lhsKey.frameMinY != rhsKey.frameMinY { return lhsKey.frameMinY < rhsKey.frameMinY }
+            if lhsKey.frameMinX != rhsKey.frameMinX { return lhsKey.frameMinX < rhsKey.frameMinX }
+            if (lhsKey.label ?? "") != (rhsKey.label ?? "") { return (lhsKey.label ?? "") < (rhsKey.label ?? "") }
+            return (lhsKey.identifier ?? "") < (rhsKey.identifier ?? "")
         }
     }
 

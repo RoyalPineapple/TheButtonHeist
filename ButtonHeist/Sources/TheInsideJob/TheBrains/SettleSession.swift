@@ -27,9 +27,16 @@ enum SettleOutcome: Equatable {
         }
     }
 
+    /// True when the response represents a UI state we believe in —
+    /// either the loop reached multi-cycle stability, or the settle loop
+    /// was preempted by a screen transition (the caller's existing
+    /// repopulation pipeline takes over and produces a valid snapshot of
+    /// the new screen). Only `.timedOut` returns false.
     var didSettleCleanly: Bool {
-        if case .settled = self { return true }
-        return false
+        switch self {
+        case .settled, .screenChanged: return true
+        case .timedOut: return false
+        }
     }
 }
 
