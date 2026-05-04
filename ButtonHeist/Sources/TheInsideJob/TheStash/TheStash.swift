@@ -127,9 +127,20 @@ final class TheStash {
         isInteractive(element: screenElement.element)
     }
 
-    /// Perform accessibilityActivate.
-    func activate(_ screenElement: ScreenElement) -> Bool {
-        screenElement.object?.accessibilityActivate() ?? false
+    /// Outcome of `activate(_:)`. Distinguishes "live object deallocated"
+    /// (cell reuse, screen torn down) from "live object refused to activate"
+    /// (accessibilityActivate returned false on a non-nil object) so callers
+    /// can build precise failure diagnostics.
+    enum ActivateOutcome {
+        case success
+        case objectDeallocated
+        case refused
+    }
+
+    /// Perform accessibilityActivate, distinguishing deallocated-vs-refused.
+    func activate(_ screenElement: ScreenElement) -> ActivateOutcome {
+        guard let object = screenElement.object else { return .objectDeallocated }
+        return object.accessibilityActivate() ? .success : .refused
     }
 
     /// Perform accessibilityIncrement.
