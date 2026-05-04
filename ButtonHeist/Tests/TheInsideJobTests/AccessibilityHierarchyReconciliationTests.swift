@@ -454,6 +454,56 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
         XCTAssertEqual(result.inserted.count, 1, "Only Row 3 is new")
     }
 
+    func testContentSpaceOrderingKeepsRetainedTailInPositionOrder() {
+        let accumulated = [
+            makeElement(label: "A", identifier: "a"),
+            makeElement(label: "B", identifier: "b"),
+            makeElement(label: "C", identifier: "c"),
+            makeElement(label: "D", identifier: "d"),
+            makeElement(label: "E", identifier: "e"),
+            makeElement(label: "F", identifier: "f"),
+            makeElement(label: "G", identifier: "g"),
+        ]
+        let accumulatedOrigins: [CGPoint?] = [
+            CGPoint(x: 0, y: 0),
+            CGPoint(x: 0, y: 100),
+            CGPoint(x: 0, y: 200),
+            CGPoint(x: 0, y: 300),
+            CGPoint(x: 0, y: 400),
+            CGPoint(x: 0, y: 500),
+            CGPoint(x: 0, y: 650),
+        ]
+
+        let page = [
+            makeElement(label: "X", identifier: "x"),
+            makeElement(label: "D", identifier: "d"),
+            makeElement(label: "E", identifier: "e"),
+            makeElement(label: "F", identifier: "f"),
+            makeElement(label: "H", identifier: "h"),
+            makeElement(label: "I", identifier: "i"),
+        ]
+        let pageOrigins: [CGPoint?] = [
+            CGPoint(x: 0, y: 250),
+            CGPoint(x: 0, y: 300),
+            CGPoint(x: 0, y: 400),
+            CGPoint(x: 0, y: 500),
+            CGPoint(x: 0, y: 600),
+            CGPoint(x: 0, y: 700),
+        ]
+
+        let result = stitchPage(
+            accumulated: accumulated,
+            accumulatedOrigins: accumulatedOrigins,
+            page: page,
+            pageOrigins: pageOrigins,
+            orderingAxis: .vertical
+        )
+
+        XCTAssertEqual(result.overlap.length, 3, "D/E/F anchor the merge")
+        XCTAssertEqual(result.elements.map(\.label), ["A", "B", "C", "X", "D", "E", "F", "H", "G", "I"])
+        XCTAssertEqual(result.inserted.map(\.label), ["X", "H", "I"])
+    }
+
     private func makePathElement(label: String, path: UIBezierPath) -> AccessibilityElement {
         AccessibilityElement(
             description: label,

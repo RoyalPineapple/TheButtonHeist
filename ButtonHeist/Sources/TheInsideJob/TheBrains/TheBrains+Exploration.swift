@@ -173,7 +173,8 @@ extension TheBrains {
                 accumulated: accumulated,
                 accumulatedOrigins: accumulatedOrigins,
                 page: page.elements,
-                pageOrigins: page.origins
+                pageOrigins: page.origins,
+                orderingAxis: hasHOverflow ? .horizontal : .vertical
             )
             accumulated = result.elements
             accumulatedOrigins = accumulated.map { originByElement[$0] ?? nil }
