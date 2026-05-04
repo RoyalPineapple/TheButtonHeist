@@ -133,9 +133,18 @@ final class TheBrains {
         }
 
         let start = CFAbsoluteTimeGetCurrent()
-        let settled = await tripwire.waitForAllClear(timeout: 1.0)
-        let settleMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
-        insideJobLogger.info("Post-action settle: \(settled ? "all clear" : "timed out") in \(settleMs)ms")
+        let settleSession = SettleSession(stash: stash, tripwire: tripwire)
+        let settleResult = await settleSession.run(start: start)
+        let settleMs = settleResult.outcome.timeMs
+        let didSettle = settleResult.outcome.didSettleCleanly
+        switch settleResult.outcome {
+        case .settled:
+            insideJobLogger.info("Post-action settle: settled in \(settleMs)ms")
+        case .screenChanged:
+            insideJobLogger.info("Post-action settle: screen changed mid-loop after \(settleMs)ms")
+        case .timedOut:
+            insideJobLogger.info("Post-action settle: timed out after \(settleMs)ms")
+        }
 
         var afterResult = stash.parse()
 
@@ -175,12 +184,20 @@ final class TheBrains {
         let manifest = await exploreAndPrune()
         let afterSnapshot = stash.selectElements()
 
-        let delta = stash.computeDelta(
+        let baseDelta = stash.computeDelta(
             before: before.snapshot, after: afterSnapshot,
             beforeTree: before.tree,
             beforeTreeHash: before.treeHash,
             isScreenChange: isScreenChange
         )
+        let transientElements = transientElements(
+            seenByKey: settleResult.elementsByKey,
+            baseline: before.elements,
+            final: afterResult?.elements ?? []
+        )
+        let delta = transientElements.isEmpty
+            ? baseDelta
+            : enriching(baseDelta, transient: transientElements)
 
         let exploreResult = ExploreResult(
             elements: [],
@@ -196,6 +213,8 @@ final class TheBrains {
         builder.message = message
         builder.value = value
         builder.interfaceDelta = delta
+        builder.settled = didSettle
+        builder.settleTimeMs = settleMs
 
         var elementLabel: String?
         var elementValue: String?
@@ -214,6 +233,45 @@ final class TheBrains {
             elementValue: elementValue,
             elementTraits: elementTraits,
             exploreResult: exploreResult
+        )
+    }
+
+    // MARK: - Transient Capture
+
+    /// Compute the elements that appeared during settle but are absent from
+    /// both baseline and final — the "came and went" set. The settle loop
+    /// already accumulates every observed element into `seenByKey`, so this
+    /// is just a set subtraction. No separate timeline class needed.
+    private func transientElements(
+        seenByKey: [TimelineKey: AccessibilityElement],
+        baseline: [AccessibilityElement],
+        final: [AccessibilityElement]
+    ) -> [AccessibilityElement] {
+        if seenByKey.isEmpty { return [] }
+        let baselineKeys = Set(baseline.map(\.timelineKey))
+        let finalKeys = Set(final.map(\.timelineKey))
+        return seenByKey.compactMap { key, element in
+            (baselineKeys.contains(key) || finalKeys.contains(key)) ? nil : element
+        }
+    }
+
+    /// Return a copy of `delta` with `transient` populated.
+    private func enriching(
+        _ delta: InterfaceDelta,
+        transient: [AccessibilityElement]
+    ) -> InterfaceDelta {
+        let transientWire = transient.map { TheStash.WireConversion.convert($0) }
+        return InterfaceDelta(
+            kind: delta.kind,
+            elementCount: delta.elementCount,
+            added: delta.added,
+            removed: delta.removed,
+            updated: delta.updated,
+            treeInserted: delta.treeInserted,
+            treeRemoved: delta.treeRemoved,
+            treeMoved: delta.treeMoved,
+            transient: transientWire,
+            newInterface: delta.newInterface
         )
     }
 

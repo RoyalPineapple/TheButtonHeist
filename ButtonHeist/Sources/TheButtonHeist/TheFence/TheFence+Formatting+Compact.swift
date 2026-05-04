@@ -298,45 +298,58 @@ extension FenceResponse {
     }
 
     public static func compactDelta(_ delta: InterfaceDelta, method: String) -> String {
+        let transient = delta.transient ?? []
         switch delta.kind {
         case .noChange:
-            return "\(method): no change"
+            // Auto-settle can produce a no-change delta carrying transients
+            // when an element appeared and disappeared during settle but
+            // baseline and final are otherwise identical. Surface those.
+            if transient.isEmpty {
+                return "\(method): no change"
+            }
+            var lines: [String] = ["\(method): no net change (\(delta.elementCount) elements)"]
+            for element in transient {
+                lines.append("  +- \(compactElementLine(element))")
+            }
+            return lines.joined(separator: "\n")
 
         case .elementsChanged:
             var lines: [String] = ["\(method): elements changed (\(delta.elementCount) elements)"]
-            if let added = delta.added, !added.isEmpty {
+            if let added = delta.added {
                 for element in added {
                     lines.append("  + \(compactElementLine(element))")
                 }
             }
-            if let removed = delta.removed, !removed.isEmpty {
+            if let removed = delta.removed {
                 for id in removed {
                     lines.append("  - \(id)")
                 }
             }
-            if let updates = delta.updated, !updates.isEmpty {
-                // Omit geometry changes (frame/activationPoint) — layout shifts are structural noise
+            if let updates = delta.updated {
+                // Omit geometry changes (frame/activationPoint) — layout shifts are structural noise.
                 for update in updates {
-                    let meaningful = update.changes.filter { !$0.property.isGeometry }
-                    for change in meaningful {
+                    for change in update.changes where !change.property.isGeometry {
                         lines.append("  ~ \(update.heistId): \(change.property.rawValue) \"\(change.old ?? "nil")\" → \"\(change.new ?? "nil")\"")
                     }
                 }
             }
-            if let inserted = delta.treeInserted, !inserted.isEmpty {
+            if let inserted = delta.treeInserted {
                 for entry in inserted {
                     lines.append("  + tree \(Self.compactTreeLocation(entry.location))")
                 }
             }
-            if let removed = delta.treeRemoved, !removed.isEmpty {
+            if let removed = delta.treeRemoved {
                 for entry in removed {
                     lines.append("  - tree \(entry.ref.id) at \(Self.compactTreeLocation(entry.location))")
                 }
             }
-            if let moved = delta.treeMoved, !moved.isEmpty {
+            if let moved = delta.treeMoved {
                 for entry in moved {
                     lines.append("  ↕ \(entry.ref.id): \(Self.compactTreeLocation(entry.from)) → \(Self.compactTreeLocation(entry.to))")
                 }
+            }
+            for element in transient {
+                lines.append("  +- \(compactElementLine(element))")
             }
             return lines.joined(separator: "\n")
 

@@ -110,6 +110,7 @@
 		8A1C2908B07C993A9BC28DE0 /* DeviceDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = B327E8A00585684B8DF1E7AE /* DeviceDiscovery.swift */; };
 		8B91F63EEF442864D214E3DF /* ActionExpectation.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB39FB885D566EFC3F947714 /* ActionExpectation.swift */; };
 		8C8119AE3B0BA5B2851A5F03 /* RegistryNode+Walks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 019DA0BC7B9EF8136B777588 /* RegistryNode+Walks.swift */; };
+		8DDAB77F92D5C0AC1F4C0F2B /* SettleSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9ADDF552D62895A7A002E496 /* SettleSession.swift */; };
 		8E15B3F0C1DC05A1CAF77FB6 /* WireConversionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 576DC1131A4B4E3E1404CE61 /* WireConversionTests.swift */; };
 		8E1E500B1C7470CB8C024D25 /* HeistPlaybackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCAC03500CC33AA545FDD5C4 /* HeistPlaybackTests.swift */; };
 		8E9AD2C6656A928C3154500D /* ConnectionPhaseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE04A923F733FBDDDE13EAFA /* ConnectionPhaseTests.swift */; };
@@ -158,6 +159,7 @@
 		C1FB9ED34C4A404BC0FF0977 /* TheBookKeeperTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F9E5BD783CB31E3A568EE70 /* TheBookKeeperTests.swift */; };
 		C23A54D8EE16D10E22F9DC02 /* TheScoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEB0B7809F88FC5A43CCE9A4 /* TheScoreTests.swift */; };
 		C37F1C9913776EF955109103 /* TheBookKeeper+Logging.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CAE462B3455397C39B17C05 /* TheBookKeeper+Logging.swift */; };
+		C47C6372CCEF5931E6EB2926 /* AutoSettleFieldsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2329BFD0EA57EF9F7B249C1 /* AutoSettleFieldsTests.swift */; };
 		C5342E6482326D40D2501735 /* swift-crypto_CCryptoBoringSSL.bundle in Dependencies */ = {isa = PBXBuildFile; fileRef = 13D30AC92A982F4FC9F47B71 /* swift-crypto_CCryptoBoringSSL.bundle */; };
 		C58ABCE1E2EC2AABA74AC5B0 /* X509.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2AAAEEB751AA8F9E857DAF57 /* X509.framework */; };
 		C631D8CED9D54B65D5B59413 /* TheSafecracker+MultiTouch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B37E569E22FDE553EB0005A /* TheSafecracker+MultiTouch.swift */; };
@@ -436,6 +438,7 @@
 		9714B85F0616DE73C7A879C6 /* ConstantsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstantsTests.swift; sourceTree = "<group>"; };
 		9A918FE0F8CB350A49C5A16C /* TheScore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TheScore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		9A93F116628B208D1D4508DF /* SessionManifest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionManifest.swift; sourceTree = "<group>"; };
+		9ADDF552D62895A7A002E496 /* SettleSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettleSession.swift; sourceTree = "<group>"; };
 		9BE246859FDEDCD3B4C5F5E9 /* ScrollToVisibleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollToVisibleTests.swift; sourceTree = "<group>"; };
 		A0E4125D91BDBBE45E6C66F9 /* TheBurglarContainerFramesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheBurglarContainerFramesTests.swift; sourceTree = "<group>"; };
 		A10CE4609BC79CCF4BF0CFAA /* AccessibilitySnapshotParser.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AccessibilitySnapshotParser.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -463,6 +466,7 @@
 		BF5926116DFCA33520480CBA /* TheSafecracker+Scroll.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+Scroll.swift"; sourceTree = "<group>"; };
 		C0F8269FADA6D781B5F509DA /* TheStakeout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheStakeout.swift; sourceTree = "<group>"; };
 		C22E288C7ED5647AD70907B9 /* KeyboardBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardBridge.swift; sourceTree = "<group>"; };
+		C2329BFD0EA57EF9F7B249C1 /* AutoSettleFieldsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoSettleFieldsTests.swift; sourceTree = "<group>"; };
 		C3471869CA78AB09EF66258C /* PresentationObscuringTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresentationObscuringTests.swift; sourceTree = "<group>"; };
 		C37A738D26A475EB890AB40A /* ArrayHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArrayHelpers.swift; sourceTree = "<group>"; };
 		C879C6DB96F32E5D65B8BBB4 /* TheBookKeeper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheBookKeeper.swift; sourceTree = "<group>"; };
@@ -816,6 +820,7 @@
 			isa = PBXGroup;
 			children = (
 				1D2C214AC9E3ECBCA3196E6E /* ActionResultBuilder.swift */,
+				9ADDF552D62895A7A002E496 /* SettleSession.swift */,
 				7A759CD7776997CD4951BF16 /* TheBrains.swift */,
 				EA4B53673ED9D9F18B586A92 /* TheBrains+Actions.swift */,
 				3535E1A875F4E39BB589D4A3 /* TheBrains+Dispatch.swift */,
@@ -957,6 +962,7 @@
 				AE718BCA882D0B81118A3974 /* ActionExpectationTests.swift */,
 				8B398A7FAB3ECAE8AD227D3C /* ActionExpectationValidationTests.swift */,
 				6BE8A7B3A58123142AC5A3C1 /* AuthMessageTests.swift */,
+				C2329BFD0EA57EF9F7B249C1 /* AutoSettleFieldsTests.swift */,
 				F6D73BFA5255C8A2DF49F8F9 /* ClientMessageTests.swift */,
 				FD96D09CD68F61CCD6902F18 /* ConnectionScopeTests.swift */,
 				9714B85F0616DE73C7A879C6 /* ConstantsTests.swift */,
@@ -1257,6 +1263,7 @@
 				90C6F22C34DC98C0606D37D7 /* ActionExpectationTests.swift in Sources */,
 				A5923A680CE4D3E5AE337D19 /* ActionExpectationValidationTests.swift in Sources */,
 				2A360A9CAC75AEA9C9993F93 /* AuthMessageTests.swift in Sources */,
+				C47C6372CCEF5931E6EB2926 /* AutoSettleFieldsTests.swift in Sources */,
 				04912A64AC25EE9FBAF9E407 /* ClientMessageTests.swift in Sources */,
 				5016FC7A53548764BBC63C6A /* ConnectionScopeTests.swift in Sources */,
 				57827CF243972B2F55DBB7E4 /* ConstantsTests.swift in Sources */,
@@ -1293,6 +1300,7 @@
 				37B4B9C76D5CDA76A5FE69C1 /* ScreenMetrics.swift in Sources */,
 				01E5A7DE5814E052E6EC4931 /* UIScrollView+ProgrammaticScrollSafety.swift in Sources */,
 				A0731112EA94ECABFB012AEB /* ActionResultBuilder.swift in Sources */,
+				8DDAB77F92D5C0AC1F4C0F2B /* SettleSession.swift in Sources */,
 				D218666409EE198744A8DA19 /* TheBrains+Actions.swift in Sources */,
 				D1FFB551FE1CABDBBD72694A /* TheBrains+Dispatch.swift in Sources */,
 				9537FBD236FB38F3BF2E7BF6 /* TheBrains+Exploration+Manifest.swift in Sources */,
@@ -1693,7 +1701,6 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(inherited)",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
 					"$(SRCROOT)/submodules/AccessibilitySnapshotBH/Sources/AccessibilitySnapshot/Parser/ObjC/include",
@@ -1743,7 +1750,6 @@
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				HEADER_SEARCH_PATHS = (
-					"$(inherited)",
 					"$(inherited)",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
@@ -1797,7 +1803,6 @@
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				HEADER_SEARCH_PATHS = (
-					"$(inherited)",
 					"$(inherited)",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
@@ -2070,7 +2075,6 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				HEADER_SEARCH_PATHS = (
-					"$(inherited)",
 					"$(inherited)",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",

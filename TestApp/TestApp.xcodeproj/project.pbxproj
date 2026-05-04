@@ -14,6 +14,7 @@
 		0337719452BD0B62F958F20A /* AccessibilitySnapshotParser.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 97C3DF6EAC0366513F5B9CB8 /* AccessibilitySnapshotParser.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		03DC1ECC739B51DBDBC0F202 /* PhotosView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADE0A205FE071CCD5616DC41 /* PhotosView.swift */; };
 		045F36CF18E0E18D9DE9D93C /* CartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 817198E55C3FA789E150CDEE /* CartView.swift */; };
+		052FA546DACF5D889737C956 /* TransientFlowDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = D26974A69D4ABA6149423035 /* TransientFlowDemo.swift */; };
 		122863BABB7EA562B6D35E90 /* swift-crypto_CryptoBoringWrapper.bundle in Resources */ = {isa = PBXBuildFile; fileRef = DB8715B7F0184816A69C6D1A /* swift-crypto_CryptoBoringWrapper.bundle */; };
 		136741C3EB01423C4C737A4F /* Crypto.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3043BA82964C737BBCED996A /* Crypto.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		1381577DD3EC2BC1FCF8DFCB /* TheScore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 6EF972032CB124C82F21FE17 /* TheScore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -61,6 +62,7 @@
 		82541C601407533FF3F64BD2 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 484B42EBF5AEA433BA605F9B /* AppDelegate.swift */; };
 		858C0F6CA62E8FECE563698C /* DemoCollectionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFCD3B58CA2D09B4D2C1508F /* DemoCollectionViewController.swift */; };
 		8772E72EB5A4058DAD26A05B /* LongListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98461A7DEEBAF0FBE167CDC0 /* LongListView.swift */; };
+		8DEDE9F0D849AEA51233BDE8 /* AnalogClockDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2E1395CF116B55B3E9A0D29 /* AnalogClockDemo.swift */; };
 		91E0AA8770665FEF917D43D5 /* TheInsideJob.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 10CDD5E500E477B98B606858 /* TheInsideJob.framework */; };
 		95933F58D556C9E567B760DD /* DemoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1607B6B404E9A862D18A0758 /* DemoApp.swift */; };
 		9978E2779881C59AB704F917 /* X509.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = A07CC6CBD100192D03333086 /* X509.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -239,6 +241,7 @@
 		98461A7DEEBAF0FBE167CDC0 /* LongListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LongListView.swift; sourceTree = "<group>"; };
 		9B56E5A3E3980E2D0BE602F9 /* GridGalleryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GridGalleryView.swift; sourceTree = "<group>"; };
 		A07CC6CBD100192D03333086 /* X509.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = X509.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		A2E1395CF116B55B3E9A0D29 /* AnalogClockDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalogClockDemo.swift; sourceTree = "<group>"; };
 		A3A036AB963C2084573C0E0F /* TuistAssets+BHDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TuistAssets+BHDemo.swift"; sourceTree = "<group>"; };
 		AA71465EF21792B3AD3C61DC /* ScrollSPIHarnessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollSPIHarnessView.swift; sourceTree = "<group>"; };
 		AD5D49BE1F9E9BE0A7CA1CE9 /* ContactsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsView.swift; sourceTree = "<group>"; };
@@ -254,6 +257,7 @@
 		CF6D57530170B53655EA07A4 /* ModalWindowDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModalWindowDemo.swift; sourceTree = "<group>"; };
 		CFCD3B58CA2D09B4D2C1508F /* DemoCollectionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoCollectionViewController.swift; sourceTree = "<group>"; };
 		D0DE24F8E60593CB79278BED /* swift-crypto_CCryptoBoringSSL.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "swift-crypto_CCryptoBoringSSL.bundle"; sourceTree = BUILT_PRODUCTS_DIR; };
+		D26974A69D4ABA6149423035 /* TransientFlowDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransientFlowDemo.swift; sourceTree = "<group>"; };
 		D6C417C981D5AF3F0C4C728D /* TuistBundle+UIKitTestApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TuistBundle+UIKitTestApp.swift"; sourceTree = "<group>"; };
 		DB8715B7F0184816A69C6D1A /* swift-crypto_CryptoBoringWrapper.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "swift-crypto_CryptoBoringWrapper.bundle"; sourceTree = BUILT_PRODUCTS_DIR; };
 		DD6B3686A342860E2AE5657A /* BH Demo-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "BH Demo-Info.plist"; sourceTree = "<group>"; };
@@ -306,6 +310,7 @@
 				00733DA9C5222B02C98C7D9B /* AdjustableControlsDemo.swift */,
 				81E8C9D791343980F9040B17 /* AlbumFlowView.swift */,
 				B30DEF646D2A291B883C6733 /* AlertsSheetDemo.swift */,
+				A2E1395CF116B55B3E9A0D29 /* AnalogClockDemo.swift */,
 				8B1E33E92F9049326D6B7919 /* AppSettings.swift */,
 				3F615D34144CD2CEE208054B /* ButtonsActionsDemo.swift */,
 				DFBC26E435BAE4472EEAEAB2 /* CalculatorView.swift */,
@@ -335,6 +340,7 @@
 				F7D07E273A0048DA7FE282A3 /* TodoListView.swift */,
 				FDDC28751BB57CA789B63ADC /* TogglePickerDemo.swift */,
 				BAC177FAE479E8AC2634A214 /* TouchCanvasView.swift */,
+				D26974A69D4ABA6149423035 /* TransientFlowDemo.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -656,6 +662,7 @@
 				59C0EB15C0E209AAA34B0AAF /* AdjustableControlsDemo.swift in Sources */,
 				E17121A1BE40039162AE871D /* AlbumFlowView.swift in Sources */,
 				E50EE0A9C3FCAF3445EA2035 /* AlertsSheetDemo.swift in Sources */,
+				8DEDE9F0D849AEA51233BDE8 /* AnalogClockDemo.swift in Sources */,
 				FDFBAFE43DB0B5850B5E9619 /* AppSettings.swift in Sources */,
 				178A958205D6E07039CD494B /* ButtonsActionsDemo.swift in Sources */,
 				51D3E58DA3240C7F96BDBAFA /* CalculatorView.swift in Sources */,
@@ -685,6 +692,7 @@
 				373DF0BC2F86E6A5E0B60910 /* TodoListView.swift in Sources */,
 				C76B14B2C35AD5658395C2F7 /* TogglePickerDemo.swift in Sources */,
 				1976C415B2288B336A8BA690 /* TouchCanvasView.swift in Sources */,
+				052FA546DACF5D889737C956 /* TransientFlowDemo.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -726,7 +734,6 @@
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				HEADER_SEARCH_PATHS = (
-					"$(inherited)",
 					"$(inherited)",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
@@ -779,7 +786,6 @@
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				HEADER_SEARCH_PATHS = (
-					"$(inherited)",
 					"$(inherited)",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
@@ -887,7 +893,6 @@
 				ENABLE_PREVIEWS = YES;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(inherited)",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
 					"$(SRCROOT)/../submodules/AccessibilitySnapshotBH/Sources/AccessibilitySnapshot/Parser/ObjC/include",
@@ -936,7 +941,6 @@
 				ENABLE_PREVIEWS = YES;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(inherited)",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
 					"$(SRCROOT)/../submodules/AccessibilitySnapshotBH/Sources/AccessibilitySnapshot/Parser/ObjC/include",
@@ -984,7 +988,6 @@
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				HEADER_SEARCH_PATHS = (
-					"$(inherited)",
 					"$(inherited)",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
@@ -1097,7 +1100,6 @@
 				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				HEADER_SEARCH_PATHS = (
-					"$(inherited)",
 					"$(inherited)",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
