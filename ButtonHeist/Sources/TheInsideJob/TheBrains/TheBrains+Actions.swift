@@ -69,16 +69,49 @@ extension TheBrains {
 
     func executeActivate(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
         await performElementAction(target: target, method: .activate) { resolved in
-            let point = resolved.element.activationPoint
-            if stash.activate(resolved.screenElement) {
-                self.safecracker.showFingerprint(at: point)
+            // First attempt — accessibilityActivate on the live UIKit object.
+            let firstOutcome = stash.activate(resolved.screenElement)
+            if firstOutcome == .success {
+                self.safecracker.showFingerprint(at: resolved.element.activationPoint)
                 return TheSafecracker.InteractionResult(success: true, method: .activate, message: nil, value: nil)
             }
-            if await self.safecracker.tap(at: point) {
-                self.safecracker.showFingerprint(at: point)
+
+            // Retry once after a refresh + ensureOnScreen cycle. Cell reuse during
+            // a scroll can deallocate the weak object ref between resolution and
+            // dispatch; re-resolving against a freshly-parsed tree gives us a new
+            // live object at the (possibly updated) activation point.
+            self.refresh()
+            await self.ensureOnScreen(for: target)
+            let retryResolution = self.stash.resolveTarget(target)
+            let retryResolved = retryResolution.resolved ?? resolved
+            let retryOutcome = self.stash.activate(retryResolved.screenElement)
+            if retryOutcome == .success {
+                self.safecracker.showFingerprint(at: retryResolved.element.activationPoint)
+                return TheSafecracker.InteractionResult(success: true, method: .activate, message: nil, value: nil)
+            }
+
+            // Synthetic tap fallback at the post-retry activation point.
+            let tapPoint = retryResolved.element.activationPoint
+            if await self.safecracker.tap(at: tapPoint) {
+                self.safecracker.showFingerprint(at: tapPoint)
                 return TheSafecracker.InteractionResult(success: true, method: .syntheticTap, message: nil, value: nil)
             }
-            return nil
+
+            // All paths exhausted — build a fact-only diagnostic from what we
+            // observed. The tap receiver is captured by re-running the same
+            // hit-test the (failed) tap would have used; the result is
+            // observation-only and does not claim element-level obstruction.
+            let receiver = self.safecracker.tapReceiverDiagnostic(at: tapPoint)
+            let traitNames = self.stash.traitNames(retryResolved.element.traits).map(\.rawValue)
+            let message = ActivateFailureDiagnostic.build(
+                element: retryResolved.element,
+                traitNames: traitNames,
+                activateOutcome: retryOutcome,
+                tapAttempted: true,
+                tapReceiver: receiver,
+                screenBounds: ScreenMetrics.current.bounds
+            )
+            return .failure(.activate, message: message)
         }
     }
 
