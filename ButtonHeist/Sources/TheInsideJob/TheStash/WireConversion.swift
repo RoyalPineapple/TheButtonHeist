@@ -115,6 +115,14 @@ extension TheStash {
         entries.map { toWire($0) }
     }
 
+    /// Convert a free-floating `AccessibilityElement` to a `HeistElement`
+    /// without a heistId. Used for transient and flicker reporting where the
+    /// element was never apply()'d to the registry — there's no heistId
+    /// to attach.
+    static func toWireWithoutHeistId(_ element: AccessibilityElement) -> HeistElement {
+        convert(element)
+    }
+
     // MARK: - Tree Conversion (registry → wire)
 
     /// Convert the persistent registry tree to its canonical wire form.

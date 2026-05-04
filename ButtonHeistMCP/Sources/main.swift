@@ -274,7 +274,9 @@ struct ButtonHeistMCPServer {
         var content: [Tool.Content] = []
 
         // Background changes: what happened while the agent was thinking
-        if let backgroundDelta, backgroundDelta.kind != .noChange {
+        let hasBackgroundTransients = (backgroundDelta?.transient?.isEmpty == false)
+            || (backgroundDelta?.flicker?.isEmpty == false)
+        if let backgroundDelta, backgroundDelta.kind != .noChange || hasBackgroundTransients {
             var lines: [String] = []
             switch backgroundDelta.kind {
             case .screenChanged:
@@ -289,6 +291,12 @@ struct ButtonHeistMCPServer {
                 if let added = backgroundDelta.added { parts.append("+\(added.count)") }
                 if let removed = backgroundDelta.removed { parts.append("-\(removed.count)") }
                 if let updated = backgroundDelta.updated { parts.append("~\(updated.count)") }
+                if let transient = backgroundDelta.transient, !transient.isEmpty {
+                    parts.append("+-\(transient.count)")
+                }
+                if let flicker = backgroundDelta.flicker, !flicker.isEmpty {
+                    parts.append("-+\(flicker.count)")
+                }
                 lines.append("[background: elements changed \(parts.joined(separator: " ")) (\(backgroundDelta.elementCount) total)]")
                 if let added = backgroundDelta.added {
                     for element in added { lines.append("  + \(element.heistId) \"\(element.label ?? "")\"") }
@@ -296,8 +304,33 @@ struct ButtonHeistMCPServer {
                 if let removed = backgroundDelta.removed {
                     for heistId in removed { lines.append("  - \(heistId)") }
                 }
+                if let transient = backgroundDelta.transient {
+                    for element in transient {
+                        lines.append("  +- \(element.heistId) \"\(element.label ?? "")\"")
+                    }
+                }
+                if let flicker = backgroundDelta.flicker {
+                    for element in flicker {
+                        lines.append("  -+ \(element.heistId) \"\(element.label ?? "")\"")
+                    }
+                }
             case .noChange:
-                break
+                // Tree hashes match but transients/flickers were captured —
+                // surface them so the driver knows something happened.
+                let transients = backgroundDelta.transient ?? []
+                let flickers = backgroundDelta.flicker ?? []
+                if !transients.isEmpty || !flickers.isEmpty {
+                    var parts: [String] = []
+                    if !transients.isEmpty { parts.append("+-\(transients.count)") }
+                    if !flickers.isEmpty { parts.append("-+\(flickers.count)") }
+                    lines.append("[background: \(parts.joined(separator: " ")) (\(backgroundDelta.elementCount) total)]")
+                    for element in transients {
+                        lines.append("  +- \(element.heistId) \"\(element.label ?? "")\"")
+                    }
+                    for element in flickers {
+                        lines.append("  -+ \(element.heistId) \"\(element.label ?? "")\"")
+                    }
+                }
             }
             if !lines.isEmpty {
                 content.append(.text(text: lines.joined(separator: "\n"), annotations: nil, _meta: nil))

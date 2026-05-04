@@ -65,6 +65,12 @@ final class TheGetaway {
         muscle.onClientAuthenticated = { [weak self] clientId, respond in
             self?.handleClientConnected(clientId, respond: respond)
         }
+        muscle.onSessionSettleConfig = { [weak self] config in
+            self?.brains.sessionSettleConfig = config
+            if let config {
+                insideJobLogger.info("Session settle config applied: cycles=\(config.cycles), timeoutMs=\(config.timeoutMs)")
+            }
+        }
         muscle.onSessionActiveChanged = { [weak transport] isActive in
             transport?.updateTXTRecord([TXTRecordKey.sessionActive.rawValue: isActive ? "1" : "0"])
         }
@@ -205,7 +211,7 @@ final class TheGetaway {
                     return
                 }
 
-                let actionResult = await brains.executeCommand(message)
+                let actionResult = await brains.executeCommand(message, settleOverride: envelope.settleOverride)
                 recordAndBroadcast(command: message, actionResult: actionResult, requestId: requestId, backgroundDelta: backgroundDelta, respond: respond)
             }
         }

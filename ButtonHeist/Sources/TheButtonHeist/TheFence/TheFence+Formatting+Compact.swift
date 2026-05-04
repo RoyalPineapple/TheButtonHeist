@@ -338,6 +338,16 @@ extension FenceResponse {
                     lines.append("  ↕ \(entry.ref.id): \(Self.compactTreeLocation(entry.from)) → \(Self.compactTreeLocation(entry.to))")
                 }
             }
+            if let transient = delta.transient, !transient.isEmpty {
+                for element in transient {
+                    lines.append("  +- \(compactElementLine(element))")
+                }
+            }
+            if let flicker = delta.flicker, !flicker.isEmpty {
+                for element in flicker {
+                    lines.append("  -+ \(compactElementLine(element))")
+                }
+            }
             return lines.joined(separator: "\n")
 
         case .screenChanged:

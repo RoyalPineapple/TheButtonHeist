@@ -23,6 +23,26 @@ final class TheBrains {
     let tripwire: TheTripwire
     let forceSwipeScrolling: Bool
 
+    /// Settle defaults negotiated at session handshake time
+    /// (`AuthenticatePayload.settleConfig`). `nil` until the auth handler
+    /// applies it; built-in defaults are used in the meantime. Settings are
+    /// applied once and never mutated mid-session.
+    var sessionSettleConfig: SettleConfig?
+
+    /// Per-action settle override taken from the incoming `RequestEnvelope`.
+    /// Set by `executeCommand` before dispatch and reset on exit. Read by
+    /// `actionResultWithDelta` when resolving the effective settle config.
+    /// Implicit state is bounded to a single dispatch — no other code reads
+    /// or writes this slot.
+    var pendingSettleOverride: SettleConfig?
+
+    /// Long-lived snapshot timeline. Populated by `SettleSession` during
+    /// action settle (Phase 2 — captures transient elements that came and
+    /// went mid-action) and can be sampled in the background between calls
+    /// (Phase 3 — captures auto-dismissed alerts the driver missed while
+    /// idle).
+    let snapshotTimeline = SnapshotTimeline()
+
     /// Last dispatched swipe direction per swipeable target key.
     var lastSwipeDirectionByTarget: [String: UIAccessibilityScrollDirection] = [:]
 
@@ -133,9 +153,27 @@ final class TheBrains {
         }
 
         let start = CFAbsoluteTimeGetCurrent()
-        let settled = await tripwire.waitForAllClear(timeout: 1.0)
-        let settleMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
-        insideJobLogger.info("Post-action settle: \(settled ? "all clear" : "timed out") in \(settleMs)ms")
+        let effectiveSettle = resolveSettleConfig(perAction: pendingSettleOverride)
+        // Drop any pre-action snapshots so they don't bleed into this
+        // window's transient/flicker classification.
+        snapshotTimeline.trim(before: start)
+        let settleSession = SettleSession(
+            config: effectiveSettle,
+            stash: stash,
+            tripwire: tripwire,
+            timeline: snapshotTimeline
+        )
+        let settleOutcome = await settleSession.run(start: start)
+        switch settleOutcome {
+        case .settled(let ms):
+            insideJobLogger.info("Post-action settle: settled in \(ms)ms (cycles=\(effectiveSettle.cycles))")
+        case .screenChanged(let ms):
+            insideJobLogger.info("Post-action settle: screen changed mid-loop after \(ms)ms — handing off to repopulation")
+        case .timedOut(let ms):
+            insideJobLogger.info("Post-action settle: timed out after \(ms)ms (timeoutMs=\(effectiveSettle.timeoutMs))")
+        }
+        let settleMs = settleOutcome.timeMs
+        let didSettle = settleOutcome.didSettleCleanly
 
         var afterResult = stash.parse()
 
@@ -175,12 +213,17 @@ final class TheBrains {
         let manifest = await exploreAndPrune()
         let afterSnapshot = stash.selectElements()
 
-        let delta = stash.computeDelta(
+        let baseDelta = stash.computeDelta(
             before: before.snapshot, after: afterSnapshot,
             beforeTree: before.tree,
             beforeTreeHash: before.treeHash,
             isScreenChange: isScreenChange
         )
+        let classification = snapshotTimeline.classify(
+            baseline: before.elements,
+            final: afterResult?.elements ?? []
+        )
+        let delta = baseDelta.enriching(with: classification)
 
         let exploreResult = ExploreResult(
             elements: [],
@@ -196,6 +239,8 @@ final class TheBrains {
         builder.message = message
         builder.value = value
         builder.interfaceDelta = delta
+        builder.settled = didSettle
+        builder.settleTimeMs = settleMs
 
         var elementLabel: String?
         var elementValue: String?
@@ -293,17 +338,35 @@ final class TheBrains {
 
     /// Check if the accessibility tree changed since the last response.
     /// Returns nil if unchanged or no prior response was sent.
+    ///
+    /// Enriches the delta with `transient` / `flicker` entries computed from
+    /// the snapshot timeline — captures elements that came and went during
+    /// any settle window that completed between the last response and now.
+    /// (For elements that came and went *purely* between calls without any
+    /// settle window in flight, capture requires a continuous timeline
+    /// observer that's not yet wired up — the wire format and classifier
+    /// are ready when it lands.)
     func computeBackgroundDelta() -> InterfaceDelta? {
         guard let sent = lastSentState, sent.treeHash != 0 else { return nil }
-        guard refresh() != nil else { return nil }
+        guard let parse = stash.refresh() else { return nil }
         let snapshot = stash.selectElements()
         let currentHash = stash.wireTreeHash()
-        guard currentHash != sent.treeHash else { return nil }
 
-        return computeDelta(
-            before: sent.beforeState,
-            afterSnapshot: snapshot
+        let classification = snapshotTimeline.classify(
+            baseline: sent.beforeState.elements,
+            final: parse.elements
         )
+
+        // No tree-hash change AND no transients/flickers → truly nothing happened.
+        if currentHash == sent.treeHash && !classification.hasAnyTransientOrFlicker {
+            return nil
+        }
+
+        let baseDelta = currentHash != sent.treeHash
+            ? computeDelta(before: sent.beforeState, afterSnapshot: snapshot)
+            : InterfaceDelta(kind: .noChange, elementCount: snapshot.count)
+
+        return baseDelta.enriching(with: classification)
     }
 
     /// Whether the screen changed since the last response (for fast-redirect logic).

@@ -10,7 +10,17 @@ extension TheBrains {
     /// Execute a command through the full interaction pipeline:
     /// refresh → snapshot → execute → settle → delta → result.
     /// Returns the ActionResult for TheInsideJob to send/broadcast.
-    func executeCommand(_ message: ClientMessage) async -> ActionResult {
+    ///
+    /// `settleOverride` carries the optional per-action settle config taken
+    /// from `RequestEnvelope.settleOverride`. When non-nil it wins over the
+    /// session config for the duration of this dispatch.
+    func executeCommand(
+        _ message: ClientMessage,
+        settleOverride: SettleConfig? = nil
+    ) async -> ActionResult {
+        pendingSettleOverride = settleOverride
+        defer { pendingSettleOverride = nil }
+
         switch message {
         case .activate, .increment, .decrement, .performCustomAction,
              .editAction, .setPasteboard, .getPasteboard, .resignFirstResponder:

@@ -180,6 +180,11 @@ final class TheMuscle {
     var markClientAuthenticated: ((_ clientId: Int) -> Void)?
     var disconnectClient: ((_ clientId: Int) -> Void)?
     var onClientAuthenticated: ((_ clientId: Int, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
+    /// Called when a session is established with a per-session settle config
+    /// from `AuthenticatePayload.settleConfig`. Wired to update the brain's
+    /// `sessionSettleConfig` slot. Called once per successful authentication;
+    /// `nil` config is allowed and means "use built-in defaults."
+    var onSessionSettleConfig: ((_ config: SettleConfig?) -> Void)?
     /// Called when the session active state changes (true = session claimed, false = released)
     var onSessionActiveChanged: ((_ isActive: Bool) -> Void)?
 
@@ -351,6 +356,7 @@ final class TheMuscle {
         }
 
         clients[clientId] = .authenticated(address: address, driverIdentity: driverIdentity, subscribed: false)
+        onSessionSettleConfig?(payload.settleConfig)
         markClientAuthenticated?(clientId)
         logger.info("Client \(clientId) authenticated with token")
         onClientAuthenticated?(clientId, respond)

@@ -10,15 +10,30 @@ public struct RequestEnvelope: Codable, Sendable {
     public let protocolVersion: String
     public let requestId: String?
     public let message: ClientMessage
+    /// Per-action settle override. When present, wins over the session's
+    /// connect-time `settleConfig` for this single request. Use sparingly —
+    /// most agents should rely on the session default.
+    public let settleOverride: SettleConfig?
 
-    public init(requestId: String? = nil, message: ClientMessage) {
-        self.init(wireProtocolVersion: TheScore.protocolVersion, requestId: requestId, message: message)
+    public init(requestId: String? = nil, message: ClientMessage, settleOverride: SettleConfig? = nil) {
+        self.init(
+            wireProtocolVersion: TheScore.protocolVersion,
+            requestId: requestId,
+            message: message,
+            settleOverride: settleOverride
+        )
     }
 
-    public init(wireProtocolVersion: String, requestId: String? = nil, message: ClientMessage) {
+    public init(
+        wireProtocolVersion: String,
+        requestId: String? = nil,
+        message: ClientMessage,
+        settleOverride: SettleConfig? = nil
+    ) {
         self.protocolVersion = wireProtocolVersion
         self.requestId = requestId
         self.message = message
+        self.settleOverride = settleOverride
     }
 
     /// Decode a request envelope from JSON data. Returns nil on decode failure.
@@ -422,9 +437,16 @@ public struct AuthenticatePayload: Codable, Sendable {
     /// Unique driver identity for session locking. When set, the server uses this
     /// (instead of the auth token) to distinguish drivers. Set via BUTTONHEIST_DRIVER_ID.
     public let driverId: String?
-    public init(token: String, driverId: String? = nil) {
+    /// Per-session settle defaults. Read once at handshake and used for every
+    /// subsequent action unless overridden via `RequestEnvelope.settleOverride`.
+    /// Mid-session mutation is intentionally not supported — settle preferences
+    /// belong to the session and are set once.
+    public let settleConfig: SettleConfig?
+
+    public init(token: String, driverId: String? = nil, settleConfig: SettleConfig? = nil) {
         self.token = token
         self.driverId = driverId
+        self.settleConfig = settleConfig
     }
 }
 

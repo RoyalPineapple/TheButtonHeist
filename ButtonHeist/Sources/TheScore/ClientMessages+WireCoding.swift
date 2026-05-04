@@ -12,6 +12,7 @@ private enum RequestEnvelopeCodingKeys: String, CodingKey {
     case requestId
     case type
     case payload
+    case settleOverride
 }
 
 // MARK: - RequestEnvelope Codable
@@ -21,6 +22,7 @@ extension RequestEnvelope {
         let container = try decoder.container(keyedBy: RequestEnvelopeCodingKeys.self)
         protocolVersion = try container.decode(String.self, forKey: .protocolVersion)
         requestId = try container.decodeIfPresent(String.self, forKey: .requestId)
+        settleOverride = try container.decodeIfPresent(SettleConfig.self, forKey: .settleOverride)
         let type = try container.decode(WireMessageType.self, forKey: .type)
         let payloadDecoder: Decoder? = container.contains(.payload)
             ? try container.superDecoder(forKey: .payload)
@@ -32,6 +34,7 @@ extension RequestEnvelope {
         var container = encoder.container(keyedBy: RequestEnvelopeCodingKeys.self)
         try container.encode(protocolVersion, forKey: .protocolVersion)
         try container.encodeIfPresent(requestId, forKey: .requestId)
+        try container.encodeIfPresent(settleOverride, forKey: .settleOverride)
         try container.encode(message.wireMessageType, forKey: .type)
         if message.hasPayload {
             try message.encodePayload(to: container.superEncoder(forKey: .payload))
