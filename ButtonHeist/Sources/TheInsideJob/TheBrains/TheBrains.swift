@@ -133,9 +133,14 @@ final class TheBrains {
         }
 
         let start = CFAbsoluteTimeGetCurrent()
-        let settled = await tripwire.waitForAllClear(timeout: 1.0)
-        let settleMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
-        insideJobLogger.info("Post-action settle: \(settled ? "all clear" : "timed out") in \(settleMs)ms")
+        let settleSession = SettleSession.live(stash: stash, tripwire: tripwire)
+        let settleResult = await settleSession.run(start: start)
+        let settleMs = settleResult.outcome.timeMs
+        var didSettle = settleResult.outcome.didSettleCleanly
+        if let cancelled = cancelledActionResult(settleResult.outcome, method: method, before: before, value: value) {
+            return cancelled
+        }
+        logSettleOutcome(settleResult.outcome)
 
         var afterResult = stash.parse()
 
@@ -150,21 +155,9 @@ final class TheBrains {
             containerExploreStates.removeAll()
         }
 
-        // After a screen change (e.g. popup dismiss), the accessibility tree
-        // may be transiently empty — the old VC's elements are gone but the
-        // newly-exposed VC hasn't re-registered its elements yet. Wait for
-        // the tree to repopulate using the tripwire settle loop, then re-parse.
         if isScreenChange && (afterResult?.elements ?? []).isEmpty {
-            let repopStart = CFAbsoluteTimeGetCurrent()
-            for attempt in 1...10 {
-                _ = await tripwire.waitForAllClear(timeout: 0.2)
-                afterResult = stash.parse()
-                if let elements = afterResult?.elements, !elements.isEmpty {
-                    let repopMs = Int((CFAbsoluteTimeGetCurrent() - repopStart) * 1000)
-                    insideJobLogger.info("Screen re-populated after \(attempt) re-parse(s) in \(repopMs)ms")
-                    break
-                }
-            }
+            let repopulated = await repopulateAfterScreenChange(into: &afterResult)
+            if !repopulated { didSettle = false }
         }
 
         if let afterResult {
@@ -175,12 +168,20 @@ final class TheBrains {
         let manifest = await exploreAndPrune()
         let afterSnapshot = stash.selectElements()
 
-        let delta = stash.computeDelta(
+        let baseDelta = stash.computeDelta(
             before: before.snapshot, after: afterSnapshot,
             beforeTree: before.tree,
             beforeTreeHash: before.treeHash,
             isScreenChange: isScreenChange
         )
+        let transientElements = SettleSession.transientElements(
+            seenByKey: settleResult.elementsByKey,
+            baseline: before.elements,
+            final: afterResult?.elements ?? []
+        )
+        let delta = transientElements.isEmpty
+            ? baseDelta
+            : enriching(baseDelta, transient: transientElements)
 
         let exploreResult = ExploreResult(
             elements: [],
@@ -196,6 +197,8 @@ final class TheBrains {
         builder.message = message
         builder.value = value
         builder.interfaceDelta = delta
+        builder.settled = didSettle
+        builder.settleTimeMs = settleMs
 
         var elementLabel: String?
         var elementValue: String?
@@ -214,6 +217,78 @@ final class TheBrains {
             elementValue: elementValue,
             elementTraits: elementTraits,
             exploreResult: exploreResult
+        )
+    }
+
+    // MARK: - Settle Outcome Helpers
+
+    private func logSettleOutcome(_ outcome: SettleOutcome) {
+        switch outcome {
+        case .settled(let ms):
+            insideJobLogger.info("Post-action settle: settled in \(ms)ms")
+        case .screenChanged(let ms):
+            insideJobLogger.info("Post-action settle: screen changed mid-loop after \(ms)ms")
+        case .timedOut(let ms):
+            insideJobLogger.info("Post-action settle: timed out after \(ms)ms")
+        case .cancelled(let ms):
+            insideJobLogger.info("Post-action settle: cancelled after \(ms)ms")
+        }
+    }
+
+    /// Build a minimal failure result when settle is cancelled. Returning
+    /// here skips the rest of the pipeline (parse/explore/captureActionFrame)
+    /// — those would burn main-actor cycles for a result no one will read.
+    private func cancelledActionResult(
+        _ outcome: SettleOutcome,
+        method: ActionMethod,
+        before: BeforeState,
+        value: String?
+    ) -> ActionResult? {
+        guard case .cancelled(let ms) = outcome else { return nil }
+        var builder = ActionResultBuilder(method: method, snapshot: before.snapshot)
+        builder.message = "cancelled after \(ms)ms"
+        builder.value = value
+        builder.settled = false
+        builder.settleTimeMs = ms
+        return builder.failure(errorKind: .actionFailed)
+    }
+
+    /// Wait for the post-screen-change tree to repopulate. Returns true
+    /// if a non-empty parse landed within the attempt budget.
+    private func repopulateAfterScreenChange(into afterResult: inout TheStash.ParseResult?) async -> Bool {
+        let repopStart = CFAbsoluteTimeGetCurrent()
+        for attempt in 1...10 {
+            _ = await tripwire.waitForAllClear(timeout: 0.2)
+            afterResult = stash.parse()
+            if let elements = afterResult?.elements, !elements.isEmpty {
+                let repopMs = Int((CFAbsoluteTimeGetCurrent() - repopStart) * 1000)
+                insideJobLogger.info("Screen re-populated after \(attempt) re-parse(s) in \(repopMs)ms")
+                return true
+            }
+        }
+        insideJobLogger.info("Screen failed to re-populate after 10 attempts; reporting settled=false")
+        return false
+    }
+
+    // MARK: - Transient Capture
+
+    /// Return a copy of `delta` with `transient` populated.
+    private func enriching(
+        _ delta: InterfaceDelta,
+        transient: [AccessibilityElement]
+    ) -> InterfaceDelta {
+        let transientWire = transient.map { TheStash.WireConversion.convert($0) }
+        return InterfaceDelta(
+            kind: delta.kind,
+            elementCount: delta.elementCount,
+            added: delta.added,
+            removed: delta.removed,
+            updated: delta.updated,
+            treeInserted: delta.treeInserted,
+            treeRemoved: delta.treeRemoved,
+            treeMoved: delta.treeMoved,
+            transient: transientWire,
+            newInterface: delta.newInterface
         )
     }
 

@@ -216,6 +216,17 @@ public struct ActionResult: Codable, Sendable {
     public let scrollSearchResult: ScrollSearchResult?
     /// Diagnostics from an explore (full screen census) operation
     public let exploreResult: ExploreResult?
+    /// True when the response represents a settled UI state — either the
+    /// AX tree reached multi-cycle stability, or a screen transition
+    /// preempted the settle loop and the new screen has been observed via
+    /// the existing repopulation pipeline. False *only* when the hard
+    /// settle timeout elapsed while the tree was still changing — the
+    /// snapshot in `interfaceDelta` may not be a final state. nil for
+    /// older clients / pre-auto-settle responses.
+    public let settled: Bool?
+    /// Wall-clock milliseconds from action start to settle decision
+    /// (settled, screen-changed, or timed out).
+    public let settleTimeMs: Int?
 
     public init(
         success: Bool,
@@ -231,7 +242,9 @@ public struct ActionResult: Codable, Sendable {
         screenName: String? = nil,
         screenId: String? = nil,
         scrollSearchResult: ScrollSearchResult? = nil,
-        exploreResult: ExploreResult? = nil
+        exploreResult: ExploreResult? = nil,
+        settled: Bool? = nil,
+        settleTimeMs: Int? = nil
     ) {
         self.success = success
         self.method = method
@@ -247,6 +260,8 @@ public struct ActionResult: Codable, Sendable {
         self.screenId = screenId
         self.scrollSearchResult = scrollSearchResult
         self.exploreResult = exploreResult
+        self.settled = settled
+        self.settleTimeMs = settleTimeMs
     }
 }
 
@@ -258,7 +273,8 @@ extension ActionResult {
             value: value, interfaceDelta: interfaceDelta, animating: animating,
             elementLabel: elementLabel, elementValue: elementValue, elementTraits: elementTraits,
             screenName: screenName, screenId: screenId, scrollSearchResult: scrollSearchResult,
-            exploreResult: exploreResult
+            exploreResult: exploreResult,
+            settled: settled, settleTimeMs: settleTimeMs
         )
     }
 
@@ -278,7 +294,8 @@ extension ActionResult {
             value: value, interfaceDelta: interfaceDelta, animating: animating,
             elementLabel: elementLabel, elementValue: elementValue, elementTraits: elementTraits,
             screenName: screenName, screenId: screenId, scrollSearchResult: scrollSearchResult,
-            exploreResult: fullExplore
+            exploreResult: fullExplore,
+            settled: settled, settleTimeMs: settleTimeMs
         )
     }
 }
@@ -397,6 +414,14 @@ public struct InterfaceDelta: Codable, Sendable {
     /// Existing nodes moved within the interface tree (present for structural .elementsChanged)
     public let treeMoved: [TreeMove]?
 
+    /// Elements that appeared and then disappeared during the post-action
+    /// settle window — captured from the snapshot in which they were
+    /// present. Rendered by the CLI/MCP as `+- heistId "label" [traits]`.
+    /// The canonical case: a brief loading spinner that resolves to a
+    /// confirmation that auto-dismisses, leaving baseline and final
+    /// otherwise identical.
+    public let transient: [HeistElement]?
+
     /// Full new interface (present only for .screenChanged)
     public let newInterface: Interface?
 
@@ -411,6 +436,7 @@ public struct InterfaceDelta: Codable, Sendable {
         treeInserted: [TreeInsertion]? = nil,
         treeRemoved: [TreeRemoval]? = nil,
         treeMoved: [TreeMove]? = nil,
+        transient: [HeistElement]? = nil,
         newInterface: Interface? = nil
     ) {
         self.kind = kind
@@ -421,6 +447,7 @@ public struct InterfaceDelta: Codable, Sendable {
         self.treeInserted = treeInserted
         self.treeRemoved = treeRemoved
         self.treeMoved = treeMoved
+        self.transient = transient
         self.newInterface = newInterface
     }
 }

@@ -22,6 +22,8 @@ struct ActionResultBuilder {
     var message: String?
     var value: String?
     var interfaceDelta: InterfaceDelta?
+    var settled: Bool?
+    var settleTimeMs: Int?
 
     /// Create a builder deriving screenName/screenId from a ScreenElement snapshot.
     init(method: ActionMethod, snapshot: [TheStash.ScreenElement]) {
@@ -56,7 +58,9 @@ struct ActionResultBuilder {
             screenName: screenName,
             screenId: screenId,
             scrollSearchResult: scrollSearchResult,
-            exploreResult: exploreResult
+            exploreResult: exploreResult,
+            settled: settled,
+            settleTimeMs: settleTimeMs
         )
     }
 
@@ -69,7 +73,9 @@ struct ActionResultBuilder {
             value: value,
             interfaceDelta: interfaceDelta,
             screenName: screenName,
-            screenId: screenId
+            screenId: screenId,
+            settled: settled,
+            settleTimeMs: settleTimeMs
         )
     }
 }

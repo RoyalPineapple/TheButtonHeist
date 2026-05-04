@@ -535,6 +535,9 @@ extension FenceResponse {
         if let treeMoved = delta.treeMoved {
             payload["treeMoved"] = treeMoved.map(treeMoveDictionary)
         }
+        if let transient = delta.transient, !transient.isEmpty {
+            payload["transient"] = transient.map { elementDictionary($0, detail: .summary) }
+        }
         if let newInterface = delta.newInterface {
             payload["newInterface"] = interfaceDictionary(newInterface, detail: .summary)
         }
