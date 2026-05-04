@@ -646,19 +646,20 @@ extension TheBrains {
     // MARK: - Off-Viewport Registry Lookup
 
     /// Find a registry element that matches `target` but is NOT in the current viewport.
-    /// For `.heistId`, looks up the registry directly. For `.matcher`, searches all
-    /// registry entries for the first off-viewport match. Returns nil if the element
-    /// is already visible or not in the registry.
+    /// For `.heistId`, looks up the registry directly. For `.matcher`, uses the same
+    /// resolver as final action targeting so exact/substring, ordinal, and ambiguity
+    /// semantics stay aligned. Returns nil if the selected element is already visible
+    /// or cannot resolve unambiguously.
     func offViewportRegistryEntry(for target: ElementTarget) -> TheStash.ScreenElement? {
         switch target {
         case .heistId(let heistId):
             guard !stash.registry.viewportIds.contains(heistId) else { return nil }
             return stash.registry.findElement(heistId: heistId)
-        case .matcher(let matcher, _):
-            return stash.registry.flattenElements().first { entry in
-                !stash.registry.viewportIds.contains(entry.heistId)
-                    && entry.element.matches(matcher, mode: .substring)
-            }
+        case .matcher:
+            guard let resolved = stash.resolveTarget(target).resolved,
+                  !stash.registry.viewportIds.contains(resolved.screenElement.heistId)
+            else { return nil }
+            return resolved.screenElement
         }
     }
 
