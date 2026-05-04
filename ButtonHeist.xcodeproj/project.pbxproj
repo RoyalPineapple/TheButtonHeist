@@ -141,6 +141,7 @@
 		A5923A680CE4D3E5AE337D19 /* ActionExpectationValidationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B398A7FAB3ECAE8AD227D3C /* ActionExpectationValidationTests.swift */; };
 		A65BD0AA33C822B456716447 /* AccessibilityElementDataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46B60C3CBA7FEE19B6FCFB08 /* AccessibilityElementDataTests.swift */; };
 		A66DDEF29EC93077D4392AFB /* TargetConfigTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05CB1CBE21394403A78BC900 /* TargetConfigTests.swift */; };
+		A6E4744089078056B0B81B52 /* NetDeltaAccumulatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1516619DB01066CA78C043C /* NetDeltaAccumulatorTests.swift */; };
 		A70C5582716DE8D184D2187C /* InteractivityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61EDA1A956342901286B448D /* InteractivityTests.swift */; };
 		AD8FC6AC09AAE31D6D365834 /* swift-crypto__CryptoExtras.bundle in Dependencies */ = {isa = PBXBuildFile; fileRef = 6A3DED8FA6023701C7060202 /* swift-crypto__CryptoExtras.bundle */; };
 		ADEBEB61F1B3DE1E04595B5F /* TLSIdentityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACF6FCCFB96D20A5EBD41C48 /* TLSIdentityTests.swift */; };
@@ -502,6 +503,7 @@
 		DEB0B7809F88FC5A43CCE9A4 /* TheScoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheScoreTests.swift; sourceTree = "<group>"; };
 		DF20B785D6EE842B5BA45D6C /* PendingRequestTrackerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingRequestTrackerTests.swift; sourceTree = "<group>"; };
 		DFE165B7F4612979A10F917F /* USBDeviceDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = USBDeviceDiscovery.swift; sourceTree = "<group>"; };
+		E1516619DB01066CA78C043C /* NetDeltaAccumulatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetDeltaAccumulatorTests.swift; sourceTree = "<group>"; };
 		E20911C376F477524EC4F207 /* TheStakeoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheStakeoutTests.swift; sourceTree = "<group>"; };
 		E4E2CC1F69874C1BC9C88BBD /* HeistPlaybackReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistPlaybackReport.swift; sourceTree = "<group>"; };
 		E6FD5CB2C4973611954AC543 /* TheBrains+Exploration+Manifest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheBrains+Exploration+Manifest.swift"; sourceTree = "<group>"; };
@@ -598,6 +600,7 @@
 				3929DF06998FDCC1E23824BF /* EnvironmentConfigTests.swift */,
 				6D7445CF41642EDCE04E831F /* IdleMonitorTests.swift */,
 				5B12846943603FCF34BBBFCA /* Mocks.swift */,
+				E1516619DB01066CA78C043C /* NetDeltaAccumulatorTests.swift */,
 				6CE5A357B75EBB623990B852 /* PendingRequestTrackerIntegrationTests.swift */,
 				DF20B785D6EE842B5BA45D6C /* PendingRequestTrackerTests.swift */,
 				1809F7EF8AE66B295A3EFFA3 /* SessionLockTests.swift */,
@@ -1411,6 +1414,7 @@
 				BB087841628B78C69870795C /* EnvironmentConfigTests.swift in Sources */,
 				462DDE00FBBD9214256650F2 /* IdleMonitorTests.swift in Sources */,
 				9C5A844A6040C6C5A5073D35 /* Mocks.swift in Sources */,
+				A6E4744089078056B0B81B52 /* NetDeltaAccumulatorTests.swift in Sources */,
 				6BEF5654D1A9FFD654921870 /* PendingRequestTrackerIntegrationTests.swift in Sources */,
 				942D16E2BC29E44084FDF8FE /* PendingRequestTrackerTests.swift in Sources */,
 				3EB1B7099693FEACF46E8F37 /* SessionLockTests.swift in Sources */,

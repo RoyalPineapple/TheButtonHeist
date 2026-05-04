@@ -208,10 +208,8 @@ internal enum NetDeltaAccumulator {
                 var changesToRecord = update.changes
                 if var added = netAdded[update.heistId] {
                     var unappliedChanges: [PropertyChange] = []
-                    for change in update.changes {
-                        if !apply(change, to: &added) {
-                            unappliedChanges.append(change)
-                        }
+                    for change in update.changes where !apply(change, to: &added) {
+                        unappliedChanges.append(change)
                     }
                     netAdded[update.heistId] = added
                     changesToRecord = unappliedChanges
