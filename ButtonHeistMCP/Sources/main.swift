@@ -273,79 +273,92 @@ struct ButtonHeistMCPServer {
     private static func renderResponse(_ response: FenceResponse, backgroundDelta: InterfaceDelta? = nil) throws -> CallTool.Result {
         var content: [Tool.Content] = []
 
-        // Background changes: what happened while the agent was thinking
-        let hasBackgroundTransients = (backgroundDelta?.transient?.isEmpty == false)
-            || (backgroundDelta?.flicker?.isEmpty == false)
-        if let backgroundDelta, backgroundDelta.kind != .noChange || hasBackgroundTransients {
-            var lines: [String] = []
-            switch backgroundDelta.kind {
-            case .screenChanged:
-                lines.append("[background: screen changed (\(backgroundDelta.elementCount) elements)]")
-                if let elements = backgroundDelta.newInterface?.elements {
-                    for (index, element) in elements.enumerated() {
-                        lines.append("  [\(index)] \(Self.compactBackgroundElement(element))")
-                    }
-                }
-            case .elementsChanged:
-                var parts: [String] = []
-                if let added = backgroundDelta.added { parts.append("+\(added.count)") }
-                if let removed = backgroundDelta.removed { parts.append("-\(removed.count)") }
-                if let updated = backgroundDelta.updated { parts.append("~\(updated.count)") }
-                if let transient = backgroundDelta.transient, !transient.isEmpty {
-                    parts.append("+-\(transient.count)")
-                }
-                if let flicker = backgroundDelta.flicker, !flicker.isEmpty {
-                    parts.append("-+\(flicker.count)")
-                }
-                lines.append("[background: elements changed \(parts.joined(separator: " ")) (\(backgroundDelta.elementCount) total)]")
-                if let added = backgroundDelta.added {
-                    for element in added { lines.append("  + \(element.heistId) \"\(element.label ?? "")\"") }
-                }
-                if let removed = backgroundDelta.removed {
-                    for heistId in removed { lines.append("  - \(heistId)") }
-                }
-                if let transient = backgroundDelta.transient {
-                    for element in transient {
-                        lines.append("  +- \(element.heistId) \"\(element.label ?? "")\"")
-                    }
-                }
-                if let flicker = backgroundDelta.flicker {
-                    for element in flicker {
-                        lines.append("  -+ \(element.heistId) \"\(element.label ?? "")\"")
-                    }
-                }
-            case .noChange:
-                // Tree hashes match but transients/flickers were captured —
-                // surface them so the driver knows something happened.
-                let transients = backgroundDelta.transient ?? []
-                let flickers = backgroundDelta.flicker ?? []
-                if !transients.isEmpty || !flickers.isEmpty {
-                    var parts: [String] = []
-                    if !transients.isEmpty { parts.append("+-\(transients.count)") }
-                    if !flickers.isEmpty { parts.append("-+\(flickers.count)") }
-                    lines.append("[background: \(parts.joined(separator: " ")) (\(backgroundDelta.elementCount) total)]")
-                    for element in transients {
-                        lines.append("  +- \(element.heistId) \"\(element.label ?? "")\"")
-                    }
-                    for element in flickers {
-                        lines.append("  -+ \(element.heistId) \"\(element.label ?? "")\"")
-                    }
-                }
-            }
-            if !lines.isEmpty {
-                content.append(.text(text: lines.joined(separator: "\n"), annotations: nil, _meta: nil))
-            }
+        if let backgroundText = renderBackgroundDeltaText(backgroundDelta) {
+            content.append(.text(text: backgroundText, annotations: nil, _meta: nil))
         }
 
-        // Screenshots: embed as image content
         if case .screenshotData(let pngData, _, _) = response {
             content.append(.image(data: pngData, mimeType: "image/png", annotations: nil, _meta: nil))
-        } else if case .screenshot = response {
-            // File-based screenshot — handled by compact text below
         }
 
         content.append(.text(text: response.compactFormatted(), annotations: nil, _meta: nil))
         return .init(content: content, isError: response.isFailure)
+    }
+
+    /// Render the `[background: …]` text that prefixes every response.
+    /// Returns nil when there's nothing to surface.
+    private static func renderBackgroundDeltaText(_ delta: InterfaceDelta?) -> String? {
+        guard let delta else { return nil }
+        let hasTransients = (delta.transient?.isEmpty == false)
+            || (delta.flicker?.isEmpty == false)
+        guard delta.kind != .noChange || hasTransients else { return nil }
+
+        let lines: [String]
+        switch delta.kind {
+        case .screenChanged: lines = backgroundScreenChangedLines(delta)
+        case .elementsChanged: lines = backgroundElementsChangedLines(delta)
+        case .noChange: lines = backgroundNoChangeLines(delta)
+        }
+        return lines.isEmpty ? nil : lines.joined(separator: "\n")
+    }
+
+    private static func backgroundScreenChangedLines(_ delta: InterfaceDelta) -> [String] {
+        var lines = ["[background: screen changed (\(delta.elementCount) elements)]"]
+        if let elements = delta.newInterface?.elements {
+            for (index, element) in elements.enumerated() {
+                lines.append("  [\(index)] \(Self.compactBackgroundElement(element))")
+            }
+        }
+        return lines
+    }
+
+    private static func backgroundElementsChangedLines(_ delta: InterfaceDelta) -> [String] {
+        var parts: [String] = []
+        if let added = delta.added { parts.append("+\(added.count)") }
+        if let removed = delta.removed { parts.append("-\(removed.count)") }
+        if let updated = delta.updated { parts.append("~\(updated.count)") }
+        if let transient = delta.transient, !transient.isEmpty { parts.append("+-\(transient.count)") }
+        if let flicker = delta.flicker, !flicker.isEmpty { parts.append("-+\(flicker.count)") }
+
+        var lines = ["[background: elements changed \(parts.joined(separator: " ")) (\(delta.elementCount) total)]"]
+        lines.append(contentsOf: backgroundAddedLines(delta.added))
+        lines.append(contentsOf: backgroundRemovedLines(delta.removed))
+        lines.append(contentsOf: backgroundTransientLines(delta.transient))
+        lines.append(contentsOf: backgroundFlickerLines(delta.flicker))
+        return lines
+    }
+
+    /// Tree hashes match but transients/flickers were captured — surface
+    /// them so the driver knows something happened.
+    private static func backgroundNoChangeLines(_ delta: InterfaceDelta) -> [String] {
+        let transients = delta.transient ?? []
+        let flickers = delta.flicker ?? []
+        guard !transients.isEmpty || !flickers.isEmpty else { return [] }
+
+        var parts: [String] = []
+        if !transients.isEmpty { parts.append("+-\(transients.count)") }
+        if !flickers.isEmpty { parts.append("-+\(flickers.count)") }
+
+        var lines = ["[background: \(parts.joined(separator: " ")) (\(delta.elementCount) total)]"]
+        lines.append(contentsOf: backgroundTransientLines(transients))
+        lines.append(contentsOf: backgroundFlickerLines(flickers))
+        return lines
+    }
+
+    private static func backgroundAddedLines(_ elements: [HeistElement]?) -> [String] {
+        (elements ?? []).map { "  + \($0.heistId) \"\($0.label ?? "")\"" }
+    }
+
+    private static func backgroundRemovedLines(_ heistIds: [String]?) -> [String] {
+        (heistIds ?? []).map { "  - \($0)" }
+    }
+
+    private static func backgroundTransientLines(_ elements: [HeistElement]?) -> [String] {
+        (elements ?? []).map { "  +- \($0.heistId) \"\($0.label ?? "")\"" }
+    }
+
+    private static func backgroundFlickerLines(_ elements: [HeistElement]?) -> [String] {
+        (elements ?? []).map { "  -+ \($0.heistId) \"\($0.label ?? "")\"" }
     }
 
     private static func compactBackgroundElement(_ element: HeistElement) -> String {

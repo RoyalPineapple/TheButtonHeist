@@ -80,14 +80,14 @@ final class SettleConfigTests: XCTestCase {
     func testOldEnvelopeWithoutSettleOverrideStillDecodes() throws {
         // Simulate a payload sent by an old client that has no knowledge of
         // settleOverride. The new decoder must accept it.
-        let json = """
+        let jsonString = """
         {
             "protocolVersion": "8.0",
             "requestId": "legacy",
             "type": "requestInterface"
         }
-        """.data(using: .utf8)!
-        let decoded = try RequestEnvelope.decoded(from: json)
+        """
+        let decoded = try RequestEnvelope.decoded(from: Data(jsonString.utf8))
         XCTAssertNil(decoded.settleOverride)
         XCTAssertEqual(decoded.requestId, "legacy")
     }
@@ -112,13 +112,13 @@ final class SettleConfigTests: XCTestCase {
     }
 
     func testOldAuthenticatePayloadWithoutSettleConfigDecodes() throws {
-        let json = """
+        let jsonString = """
         {
             "token": "legacy-token",
             "driverId": "legacy-driver"
         }
-        """.data(using: .utf8)!
-        let decoded = try JSONDecoder().decode(AuthenticatePayload.self, from: json)
+        """
+        let decoded = try JSONDecoder().decode(AuthenticatePayload.self, from: Data(jsonString.utf8))
         XCTAssertNil(decoded.settleConfig)
         XCTAssertEqual(decoded.token, "legacy-token")
     }
@@ -141,13 +141,13 @@ final class SettleConfigTests: XCTestCase {
     func testOldActionResultWithoutSettleFieldsDecodes() throws {
         // An action result encoded before auto-settle landed has no
         // `settled` or `settleTimeMs`. New decoder must accept it.
-        let json = """
+        let jsonString = """
         {
             "success": true,
             "method": "activate"
         }
-        """.data(using: .utf8)!
-        let decoded = try JSONDecoder().decode(ActionResult.self, from: json)
+        """
+        let decoded = try JSONDecoder().decode(ActionResult.self, from: Data(jsonString.utf8))
         XCTAssertNil(decoded.settled)
         XCTAssertNil(decoded.settleTimeMs)
     }

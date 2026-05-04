@@ -300,82 +300,95 @@ extension FenceResponse {
     public static func compactDelta(_ delta: InterfaceDelta, method: String) -> String {
         switch delta.kind {
         case .noChange:
-            // Auto-settle can produce a .noChange delta carrying transient
-            // and/or flicker classifications when an element appeared and
-            // disappeared during settle but baseline and final are
-            // otherwise identical (the canonical "brief loading spinner
-            // after activate" case the feature targets, and the same
-            // shape `computeBackgroundDelta` synthesizes for between-call
-            // captures). Surface those entries instead of swallowing them.
-            let transient = delta.transient ?? []
-            let flicker = delta.flicker ?? []
-            if transient.isEmpty && flicker.isEmpty {
-                return "\(method): no change"
-            }
-            var lines: [String] = ["\(method): no net change (\(delta.elementCount) elements)"]
-            for element in transient {
-                lines.append("  +- \(compactElementLine(element))")
-            }
-            for element in flicker {
-                lines.append("  -+ \(compactElementLine(element))")
-            }
-            return lines.joined(separator: "\n")
-
+            return compactNoChangeDelta(delta, method: method)
         case .elementsChanged:
-            var lines: [String] = ["\(method): elements changed (\(delta.elementCount) elements)"]
-            if let added = delta.added, !added.isEmpty {
-                for element in added {
-                    lines.append("  + \(compactElementLine(element))")
-                }
-            }
-            if let removed = delta.removed, !removed.isEmpty {
-                for id in removed {
-                    lines.append("  - \(id)")
-                }
-            }
-            if let updates = delta.updated, !updates.isEmpty {
-                // Omit geometry changes (frame/activationPoint) — layout shifts are structural noise
-                for update in updates {
-                    let meaningful = update.changes.filter { !$0.property.isGeometry }
-                    for change in meaningful {
-                        lines.append("  ~ \(update.heistId): \(change.property.rawValue) \"\(change.old ?? "nil")\" → \"\(change.new ?? "nil")\"")
-                    }
-                }
-            }
-            if let inserted = delta.treeInserted, !inserted.isEmpty {
-                for entry in inserted {
-                    lines.append("  + tree \(Self.compactTreeLocation(entry.location))")
-                }
-            }
-            if let removed = delta.treeRemoved, !removed.isEmpty {
-                for entry in removed {
-                    lines.append("  - tree \(entry.ref.id) at \(Self.compactTreeLocation(entry.location))")
-                }
-            }
-            if let moved = delta.treeMoved, !moved.isEmpty {
-                for entry in moved {
-                    lines.append("  ↕ \(entry.ref.id): \(Self.compactTreeLocation(entry.from)) → \(Self.compactTreeLocation(entry.to))")
-                }
-            }
-            if let transient = delta.transient, !transient.isEmpty {
-                for element in transient {
-                    lines.append("  +- \(compactElementLine(element))")
-                }
-            }
-            if let flicker = delta.flicker, !flicker.isEmpty {
-                for element in flicker {
-                    lines.append("  -+ \(compactElementLine(element))")
-                }
-            }
-            return lines.joined(separator: "\n")
-
+            return compactElementsChangedDelta(delta, method: method)
         case .screenChanged:
-            var lines: [String] = ["\(method): screen changed"]
-            if let newInterface = delta.newInterface {
-                lines.append(compactInterface(newInterface))
-            }
-            return lines.joined(separator: "\n")
+            return compactScreenChangedDelta(delta, method: method)
         }
+    }
+
+    /// `.noChange` rendering. Auto-settle can produce a no-change delta
+    /// carrying transient/flicker classifications when an element appeared
+    /// and disappeared during settle but baseline and final are otherwise
+    /// identical (the canonical "brief loading spinner after activate" case
+    /// the feature targets — and the same shape `computeBackgroundDelta`
+    /// synthesizes for between-call captures). Surface those instead of
+    /// collapsing to a bare "no change" line.
+    private static func compactNoChangeDelta(_ delta: InterfaceDelta, method: String) -> String {
+        let transient = delta.transient ?? []
+        let flicker = delta.flicker ?? []
+        if transient.isEmpty && flicker.isEmpty {
+            return "\(method): no change"
+        }
+        var lines: [String] = ["\(method): no net change (\(delta.elementCount) elements)"]
+        lines.append(contentsOf: transientLines(transient))
+        lines.append(contentsOf: flickerLines(flicker))
+        return lines.joined(separator: "\n")
+    }
+
+    private static func compactElementsChangedDelta(_ delta: InterfaceDelta, method: String) -> String {
+        var lines: [String] = ["\(method): elements changed (\(delta.elementCount) elements)"]
+        lines.append(contentsOf: addedLines(delta.added))
+        lines.append(contentsOf: removedLines(delta.removed))
+        lines.append(contentsOf: updatedLines(delta.updated))
+        lines.append(contentsOf: treeInsertedLines(delta.treeInserted))
+        lines.append(contentsOf: treeRemovedLines(delta.treeRemoved))
+        lines.append(contentsOf: treeMovedLines(delta.treeMoved))
+        lines.append(contentsOf: transientLines(delta.transient ?? []))
+        lines.append(contentsOf: flickerLines(delta.flicker ?? []))
+        return lines.joined(separator: "\n")
+    }
+
+    private static func compactScreenChangedDelta(_ delta: InterfaceDelta, method: String) -> String {
+        var lines: [String] = ["\(method): screen changed"]
+        if let newInterface = delta.newInterface {
+            lines.append(compactInterface(newInterface))
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    // MARK: - Per-Category Line Builders
+
+    private static func addedLines(_ elements: [HeistElement]?) -> [String] {
+        (elements ?? []).map { "  + \(compactElementLine($0))" }
+    }
+
+    private static func removedLines(_ heistIds: [String]?) -> [String] {
+        (heistIds ?? []).map { "  - \($0)" }
+    }
+
+    /// Omit geometry changes (frame/activationPoint) — layout shifts are structural noise.
+    private static func updatedLines(_ updates: [ElementUpdate]?) -> [String] {
+        (updates ?? []).flatMap { update in
+            update.changes
+                .filter { !$0.property.isGeometry }
+                .map { change in
+                    "  ~ \(update.heistId): \(change.property.rawValue) \"\(change.old ?? "nil")\" → \"\(change.new ?? "nil")\""
+                }
+        }
+    }
+
+    private static func treeInsertedLines(_ entries: [TreeInsertion]?) -> [String] {
+        (entries ?? []).map { "  + tree \(Self.compactTreeLocation($0.location))" }
+    }
+
+    private static func treeRemovedLines(_ entries: [TreeRemoval]?) -> [String] {
+        (entries ?? []).map { "  - tree \($0.ref.id) at \(Self.compactTreeLocation($0.location))" }
+    }
+
+    private static func treeMovedLines(_ entries: [TreeMove]?) -> [String] {
+        (entries ?? []).map {
+            "  ↕ \($0.ref.id): \(Self.compactTreeLocation($0.from)) → \(Self.compactTreeLocation($0.to))"
+        }
+    }
+
+    private static func transientLines(_ elements: [HeistElement]) -> [String] {
+        elements.map { "  +- \(compactElementLine($0))" }
+    }
+
+    private static func flickerLines(_ elements: [HeistElement]) -> [String] {
+        elements.map { "  -+ \(compactElementLine($0))" }
     }
 
     private static func compactTreeLocation(_ location: TreeLocation) -> String {
