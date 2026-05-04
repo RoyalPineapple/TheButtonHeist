@@ -1026,6 +1026,123 @@ final class TheFenceTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testDrainBackgroundDeltaPreservesArrivalOrder() async {
+        let fence = TheFence()
+        fence.handoff.onBackgroundDelta?(InterfaceDelta(kind: .elementsChanged, elementCount: 2))
+        fence.handoff.onBackgroundDelta?(InterfaceDelta(kind: .screenChanged, elementCount: 7))
+
+        let first = fence.drainBackgroundDelta()
+        XCTAssertEqual(first?.kind, .elementsChanged)
+        XCTAssertEqual(first?.elementCount, 2)
+
+        let second = fence.drainBackgroundDelta()
+        XCTAssertEqual(second?.kind, .screenChanged)
+        XCTAssertEqual(second?.elementCount, 7)
+
+        XCTAssertNil(fence.drainBackgroundDelta())
+    }
+
+    @ButtonHeistActor
+    func testBackgroundExpectationMismatchDoesNotConsumeDelta() async throws {
+        let (fence, _) = makeConnectedFence()
+        fence.handoff.onBackgroundDelta?(InterfaceDelta(kind: .screenChanged, elementCount: 7))
+
+        let response = try await fence.execute(request: [
+            "command": "activate",
+            "heistId": "stale_button",
+            "expect": [
+                "type": "element_updated",
+                "heistId": "counter",
+                "property": "value",
+                "newValue": "5",
+            ],
+        ])
+        if case .action(_, let expectation) = response {
+            XCTAssertEqual(expectation?.met, false)
+        } else {
+            XCTFail("Expected action response, got \(response)")
+        }
+
+        let queued = fence.drainBackgroundDelta()
+        XCTAssertEqual(queued?.kind, .screenChanged)
+        XCTAssertEqual(queued?.elementCount, 7)
+        XCTAssertNil(fence.drainBackgroundDelta())
+    }
+
+    @ButtonHeistActor
+    func testBackgroundExpectationConsumesOnlyMatchingDelta() async throws {
+        let device = DiscoveredDevice(
+            id: "mock-device",
+            name: "MockApp#test",
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 1),
+            certFingerprint: "sha256:mock"
+        )
+        let mockDiscovery = MockDiscovery()
+        mockDiscovery.discoveredDevices = [device]
+        let mockConnection = MockConnection()
+        mockConnection.serverInfo = ServerInfo(
+            protocolVersion: protocolVersion,
+            appName: "MockApp", bundleIdentifier: "com.test",
+            deviceName: "Sim", systemVersion: "18.0",
+            screenWidth: 390, screenHeight: 844
+        )
+
+        let fence = TheFence()
+        fence.handoff.makeDiscovery = { mockDiscovery }
+        fence.handoff.makeConnection = { _, _, _ in mockConnection }
+
+        fence.handoff.onBackgroundDelta?(InterfaceDelta(kind: .elementsChanged, elementCount: 2))
+        fence.handoff.onBackgroundDelta?(InterfaceDelta(kind: .screenChanged, elementCount: 7))
+
+        let response = try await fence.execute(request: [
+            "command": "activate",
+            "heistId": "stale_button",
+            "expect": "screen_changed",
+        ])
+
+        if case .action(let result, let expectation) = response {
+            XCTAssertTrue(result.success)
+            XCTAssertEqual(result.interfaceDelta?.kind, .screenChanged)
+            XCTAssertEqual(expectation?.met, true)
+            XCTAssertEqual(mockDiscovery.startCount, 0, "Short-circuit should avoid discovery")
+            XCTAssertEqual(mockConnection.connectCount, 0, "Short-circuit should avoid connection")
+        } else {
+            XCTFail("Expected action response, got \(response)")
+        }
+
+        let remaining = fence.drainBackgroundDelta()
+        XCTAssertEqual(remaining?.kind, .elementsChanged)
+        XCTAssertEqual(remaining?.elementCount, 2)
+        XCTAssertNil(fence.drainBackgroundDelta())
+    }
+
+    @ButtonHeistActor
+    func testBackgroundDeltaQueueDropsOldestWhenCapacityExceeded() async {
+        let fence = TheFence()
+        for count in 1...25 {
+            fence.handoff.onBackgroundDelta?(InterfaceDelta(kind: .elementsChanged, elementCount: count))
+        }
+
+        let first = fence.drainBackgroundDelta()
+        XCTAssertEqual(first?.elementCount, 6)
+
+        for expectedCount in 7...25 {
+            XCTAssertEqual(fence.drainBackgroundDelta()?.elementCount, expectedCount)
+        }
+        XCTAssertNil(fence.drainBackgroundDelta())
+    }
+
+    @ButtonHeistActor
+    func testBackgroundDeltaQueueClearsOnDisconnect() async {
+        let fence = TheFence()
+        fence.handoff.onBackgroundDelta?(InterfaceDelta(kind: .screenChanged, elementCount: 7))
+
+        fence.handoff.onDisconnected?(.serverClosed)
+
+        XCTAssertNil(fence.drainBackgroundDelta())
+    }
+
+    @ButtonHeistActor
     func testExpectationShortCircuitOnBackgroundDelta() async throws {
         let device = DiscoveredDevice(
             id: "mock-device",

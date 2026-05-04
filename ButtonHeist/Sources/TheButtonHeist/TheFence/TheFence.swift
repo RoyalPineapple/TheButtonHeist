@@ -210,25 +210,36 @@ public final class TheFence {
         }
 
         handoff.onBackgroundDelta = { [weak self] delta in
-            self?.lastBackgroundDelta = delta
+            self?.enqueueBackgroundDelta(delta)
         }
 
         handoff.onDisconnected = { [weak self] reason in
+            self?.backgroundDeltas.removeAll()
             self?.cancelAllPendingRequests(
                 error: FenceError.connectionFailed(reason.displayMessage)
             )
         }
     }
 
-    /// The most recent background delta received from the server.
-    /// Drained (read and cleared) by `drainBackgroundDelta()`.
-    private var lastBackgroundDelta: InterfaceDelta?
+    /// Bounded FIFO of background deltas received from the server.
+    ///
+    /// Expectation checks peek through this queue and acknowledge only the
+    /// delta that actually matches. This prevents a mismatched expectation from
+    /// destroying the only evidence of a background change.
+    private var backgroundDeltas: [InterfaceDelta] = []
+    private static let maxBackgroundDeltas = 20
 
-    /// Return and clear the last background delta, if any.
+    private func enqueueBackgroundDelta(_ delta: InterfaceDelta) {
+        backgroundDeltas.append(delta)
+        if backgroundDeltas.count > Self.maxBackgroundDeltas {
+            backgroundDeltas.removeFirst(backgroundDeltas.count - Self.maxBackgroundDeltas)
+        }
+    }
+
+    /// Return and clear the oldest queued background delta, if any.
     public func drainBackgroundDelta() -> InterfaceDelta? {
-        let delta = lastBackgroundDelta
-        lastBackgroundDelta = nil
-        return delta
+        guard !backgroundDeltas.isEmpty else { return nil }
+        return backgroundDeltas.removeFirst()
     }
 
     /// Connect to a device and optionally enable auto-reconnect.
@@ -246,6 +257,7 @@ public final class TheFence {
 
     /// Disconnect and cancel all pending requests.
     public func stop() {
+        backgroundDeltas.removeAll()
         cancelAllPendingRequests()
         handoff.disconnect()
         handoff.stopDiscovery()
@@ -325,16 +337,26 @@ public final class TheFence {
         _ expectation: ActionExpectation?,
         requestId: String
     ) -> FenceResponse? {
-        guard let expectation, let backgroundDelta = drainBackgroundDelta() else { return nil }
-        let syntheticResult = ActionResult(
-            success: true,
-            method: .waitForChange,
-            message: "expectation already met by background change",
-            interfaceDelta: backgroundDelta
-        )
-        let validation = expectation.validate(against: syntheticResult)
-        guard validation.met else { return nil }
-        let response = FenceResponse.action(result: syntheticResult, expectation: validation)
+        guard let expectation else { return nil }
+
+        var matched: (index: Int, result: ActionResult, validation: ExpectationResult)?
+        for (index, backgroundDelta) in backgroundDeltas.enumerated() {
+            let syntheticResult = ActionResult(
+                success: true,
+                method: .waitForChange,
+                message: "expectation already met by background change",
+                interfaceDelta: backgroundDelta
+            )
+            let validation = expectation.validate(against: syntheticResult)
+            if validation.met {
+                matched = (index, syntheticResult, validation)
+                break
+            }
+        }
+
+        guard let matched else { return nil }
+        backgroundDeltas.remove(at: matched.index)
+        let response = FenceResponse.action(result: matched.result, expectation: matched.validation)
         logResponse(requestId: requestId, response: response, durationMs: 0)
         return response
     }
