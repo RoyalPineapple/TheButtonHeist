@@ -29,6 +29,7 @@ let package = Package(
         .testTarget(
             name: "ButtonHeistCLITests",
             dependencies: [
+                .target(name: "ButtonHeistCLIExe"),
                 .product(name: "ButtonHeist", package: "ButtonHeist")
             ],
             path: "Tests",

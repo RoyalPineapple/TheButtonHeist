@@ -625,13 +625,13 @@ extension TheFence {
             try bookKeeper.startHeistRecording(app: app)
             return .heistStarted
         case .stopHeist:
-            let heist = try bookKeeper.stopHeistRecording()
             guard let outputPath = args.string("output") else {
                 throw FenceError.invalidRequest("stop_heist requires an 'output' path")
             }
             guard let resolvedURL = bookKeeper.validateOutputPath(outputPath) else {
                 throw FenceError.invalidRequest("Invalid output path: must not be empty or contain '..' components")
             }
+            let heist = try bookKeeper.stopHeistRecording()
             try TheBookKeeper.writeHeist(heist, to: resolvedURL)
             return .heistStopped(path: resolvedURL.path, stepCount: heist.steps.count)
         case .playHeist:

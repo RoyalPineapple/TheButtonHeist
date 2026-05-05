@@ -54,7 +54,7 @@ buttonheist list
 buttonheist --device "iPhone 15 Pro" activate --identifier myButton
 
 # Take a screenshot over USB
-buttonheist --device "iPhone 15 Pro" screenshot --output screen.png
+buttonheist --device "iPhone 15 Pro" get_screen --output screen.png
 ```
 
 ### MCP Server
@@ -151,12 +151,12 @@ sequenceDiagram
 ```bash
 # Using netcat (must authenticate first)
 nc -6 "fd9a:6190:eed7::1" <port>   # use port from `buttonheist list --format json`
-# Server sends: {"protocolVersion":"6.1","requestId":null,"type":"serverHello"}
-# Send: {"protocolVersion":"6.1","requestId":null,"type":"clientHello"}
-# Server sends: {"protocolVersion":"6.1","requestId":null,"type":"authRequired"}
-# Send: {"protocolVersion":"6.1","requestId":null,"type":"authenticate","payload":{"token":"your-token"}}
-# Server sends: {"protocolVersion":"6.1","requestId":null,"type":"info","payload":{...}}
-# Send: {"protocolVersion":"6.1","requestId":null,"type":"requestInterface"}
+# Server sends: {"protocolVersion":"8.0","requestId":null,"type":"serverHello"}
+# Send: {"protocolVersion":"8.0","requestId":null,"type":"clientHello"}
+# Server sends: {"protocolVersion":"8.0","requestId":null,"type":"authRequired"}
+# Send: {"protocolVersion":"8.0","requestId":null,"type":"authenticate","payload":{"token":"your-token"}}
+# Server sends: {"protocolVersion":"8.0","requestId":null,"type":"info","payload":{...}}
+# Send: {"protocolVersion":"8.0","requestId":null,"type":"requestInterface"}
 ```
 
 ## Message Protocol

@@ -24,11 +24,13 @@ extension TheStash {
 
     /// Capture the screen including the fingerprint overlay (for recordings).
     /// Unlike captureScreen(), this includes TheFingerprints.FingerprintWindow so
-    /// tap/swipe indicators are visible in the video. Collects windows from all
-    /// connected scenes so system-managed popup windows are included.
+    /// tap/swipe indicators are visible in the video. Collects visible windows
+    /// from foreground-active scenes so system-managed popup windows are included
+    /// without compositing inactive multi-window scenes into recordings.
     func captureScreenForRecording() -> UIImage? {
         let allWindows = UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
+            .filter { $0.activationState == .foregroundActive }
             .flatMap { $0.windows }
             .filter { !$0.isHidden && $0.bounds.size != .zero }
             .sorted { $0.windowLevel < $1.windowLevel }

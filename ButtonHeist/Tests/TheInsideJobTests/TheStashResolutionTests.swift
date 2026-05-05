@@ -60,6 +60,7 @@ final class TheStashResolutionTests: XCTestCase {
         hierarchyNodes.append(.element(element, traversalIndex: index))
         bagman.currentHierarchy = hierarchyNodes
         bagman.registry.reverseIndex[element] = heistId
+        bagman.registry.viewportIds.insert(heistId)
     }
 
     /// Register an element in the registry ONLY (not in currentHierarchy).
@@ -468,6 +469,23 @@ final class TheStashResolutionTests: XCTestCase {
         // hasTarget checks live hierarchy only — registry-only elements are invisible
         // so wait_for absent works correctly when elements leave the screen
         XCTAssertFalse(bagman.hasTarget(.matcher(ElementMatcher(label: "Below Fold"))))
+    }
+
+    func testHasTargetIgnoresOffScreenHeistIdInRegistry() {
+        let offScreen = element(label: "Below Fold", traits: .button)
+        registerOffScreen(offScreen, heistId: "below_fold_button")
+
+        // heistId target resolution can still use persistent registry memory, but
+        // wait_for presence/absence must reflect the current live accessibility tree.
+        XCTAssertNotNil(bagman.resolveTarget(.heistId("below_fold_button")).resolved)
+        XCTAssertFalse(bagman.hasTarget(.heistId("below_fold_button")))
+    }
+
+    func testHasTargetFindsLiveHeistIdInViewport() {
+        let element = element(label: "Visible", traits: .button)
+        register(element, heistId: "visible_button", index: 0)
+
+        XCTAssertTrue(bagman.hasTarget(.heistId("visible_button")))
     }
 
     func testRegisteredElementResolvesWithoutMarkPresented() {

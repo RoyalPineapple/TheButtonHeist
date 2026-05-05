@@ -243,6 +243,47 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertEqual(result?.message, "matched immediately")
     }
 
+    func testWaitForAbsentWithHeistIdSucceedsAfterElementLeavesLiveTree() async {
+        let label = addLabel("WaitFor-HeistId-GoingAway")
+
+        guard insideJob.brains.refresh() != nil else {
+            XCTFail("Could not refresh accessibility tree")
+            return
+        }
+        let elements = insideJob.brains.stash.selectElements()
+        let heistId = elements.first(where: {
+            $0.element.label == "WaitFor-HeistId-GoingAway"
+        })?.heistId
+
+        guard let heistId else {
+            XCTFail("Could not find heistId for test label")
+            return
+        }
+
+        let result: ActionResult? = await withCheckedContinuation { continuation in
+            Task { @MainActor in
+                let removeTask = Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                    label.removeFromSuperview()
+                }
+
+                let r = await self.waitFor(
+                    target: .heistId(heistId),
+                    absent: true,
+                    timeout: 10.0
+                )
+                removeTask.cancel()
+                continuation.resume(returning: r)
+            }
+        }
+
+        XCTAssertNotNil(result)
+        XCTAssertTrue(result?.success == true)
+        XCTAssertEqual(result?.method, .waitFor)
+        XCTAssertTrue(result?.message?.contains("absent confirmed") == true)
+        XCTAssertNil(result?.errorKind)
+    }
+
     // MARK: - Absent already absent returns immediately
 
     func testWaitForAbsentAlreadyAbsentReturnsImmediately() async {

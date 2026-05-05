@@ -196,6 +196,12 @@ public func findOverlap(
 
 // MARK: - Page Stitching
 
+/// Content-space axis used when stitching scroll pages with stable origins.
+public enum StitchOrderingAxis: Sendable {
+    case horizontal
+    case vertical
+}
+
 /// Result of merging a new page into the accumulated element sequence.
 public struct StitchResult: Equatable {
     /// The merged element sequence after incorporating the page.
@@ -221,6 +227,9 @@ public struct StitchResult: Equatable {
 /// 5. Elements in the overlap → update from page (fresher data).
 /// 6. Elements after the overlap in the page → append (scrolled forward).
 /// 7. Accumulated elements outside the page's range are preserved as-is.
+/// 8. When a scroll axis and complete content-space origins are provided, the
+///    merged result is ordered by content-space position so retained off-screen
+///    elements cannot drift behind newer page content.
 ///
 /// - Parameters:
 ///   - accumulated: Elements seen so far from previous pages.
@@ -235,7 +244,8 @@ public func stitchPage(
     accumulated: [AccessibilityElement],
     accumulatedOrigins: [CGPoint?],
     page: [AccessibilityElement],
-    pageOrigins: [CGPoint?]
+    pageOrigins: [CGPoint?],
+    orderingAxis: StitchOrderingAxis? = nil
 ) -> StitchResult {
     guard !page.isEmpty else {
         return StitchResult(
@@ -263,6 +273,19 @@ public func stitchPage(
     }
 
     let overlap = findOverlap(accumulated: accFingerprints, page: pageFingerprints)
+
+    if let ordered = stitchByContentOrigin(
+        accumulated: accumulated,
+        accumulatedOrigins: accumulatedOrigins,
+        accumulatedFingerprints: accFingerprints,
+        page: page,
+        pageOrigins: pageOrigins,
+        pageFingerprints: pageFingerprints,
+        overlap: overlap,
+        orderingAxis: orderingAxis
+    ) {
+        return ordered
+    }
 
     guard overlap.length > 0 else {
         return StitchResult(
@@ -320,6 +343,78 @@ public func stitchPage(
 
     return StitchResult(
         elements: result,
+        overlap: overlap,
+        inserted: inserted,
+        previousCount: accumulated.count
+    )
+}
+
+private struct OriginStitchEntry {
+    let element: AccessibilityElement
+    let origin: CGPoint
+    let order: Int
+}
+
+private func stitchByContentOrigin(
+    accumulated: [AccessibilityElement],
+    accumulatedOrigins: [CGPoint?],
+    accumulatedFingerprints: [Int],
+    page: [AccessibilityElement],
+    pageOrigins: [CGPoint?],
+    pageFingerprints: [Int],
+    overlap: OverlapResult,
+    orderingAxis: StitchOrderingAxis?
+) -> StitchResult? {
+    guard let orderingAxis,
+          accumulated.count == accumulatedOrigins.count,
+          page.count == pageOrigins.count,
+          accumulated.count == accumulatedFingerprints.count,
+          page.count == pageFingerprints.count
+    else { return nil }
+
+    let accumulatedResolvedOrigins = accumulatedOrigins.compactMap { $0 }
+    let pageResolvedOrigins = pageOrigins.compactMap { $0 }
+    guard accumulatedResolvedOrigins.count == accumulated.count,
+          pageResolvedOrigins.count == page.count
+    else { return nil }
+
+    let accumulatedFingerprintSet = Set(accumulatedFingerprints)
+    var entriesByFingerprint: [Int: OriginStitchEntry] = [:]
+    for index in accumulated.indices {
+        entriesByFingerprint[accumulatedFingerprints[index]] = OriginStitchEntry(
+            element: accumulated[index],
+            origin: accumulatedResolvedOrigins[index],
+            order: index
+        )
+    }
+
+    var inserted: [AccessibilityElement] = []
+    for index in page.indices {
+        let fingerprint = pageFingerprints[index]
+        if !accumulatedFingerprintSet.contains(fingerprint) {
+            inserted.append(page[index])
+        }
+        entriesByFingerprint[fingerprint] = OriginStitchEntry(
+            element: page[index],
+            origin: pageResolvedOrigins[index],
+            order: accumulated.count + index
+        )
+    }
+
+    let orderedEntries = entriesByFingerprint.values.sorted { lhs, rhs in
+        switch orderingAxis {
+        case .horizontal:
+            if lhs.origin.x != rhs.origin.x { return lhs.origin.x < rhs.origin.x }
+            if lhs.origin.y != rhs.origin.y { return lhs.origin.y < rhs.origin.y }
+        case .vertical:
+            if lhs.origin.y != rhs.origin.y { return lhs.origin.y < rhs.origin.y }
+            if lhs.origin.x != rhs.origin.x { return lhs.origin.x < rhs.origin.x }
+        }
+        return lhs.order < rhs.order
+    }
+
+    return StitchResult(
+        elements: orderedEntries.map(\.element),
         overlap: overlap,
         inserted: inserted,
         previousCount: accumulated.count

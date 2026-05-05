@@ -1173,6 +1173,47 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testStopHeistMissingOutputDoesNotStopRecording() async throws {
+        let (fence, _) = makeConnectedFence()
+        try fence.bookKeeper.beginSession(identifier: "stop-heist-missing-output")
+        try fence.bookKeeper.startHeistRecording(app: "com.test.mock")
+
+        do {
+            _ = try await fence.execute(request: ["command": "stop_heist"])
+            XCTFail("Expected FenceError.invalidRequest to be thrown")
+        } catch {
+            guard case FenceError.invalidRequest(let message) = error else {
+                return XCTFail("Expected FenceError.invalidRequest, got \(error)")
+            }
+            XCTAssertTrue(message.contains("requires an 'output' path"))
+        }
+
+        XCTAssertTrue(fence.bookKeeper.isRecordingHeist)
+    }
+
+    @ButtonHeistActor
+    func testStopHeistInvalidOutputDoesNotStopRecording() async throws {
+        let (fence, _) = makeConnectedFence()
+        try fence.bookKeeper.beginSession(identifier: "stop-heist-invalid-output")
+        try fence.bookKeeper.startHeistRecording(app: "com.test.mock")
+
+        do {
+            _ = try await fence.execute(request: [
+                "command": "stop_heist",
+                "output": "/tmp/../invalid.heist",
+            ])
+            XCTFail("Expected FenceError.invalidRequest to be thrown")
+        } catch {
+            guard case FenceError.invalidRequest(let message) = error else {
+                return XCTFail("Expected FenceError.invalidRequest, got \(error)")
+            }
+            XCTAssertTrue(message.contains("Invalid output path"))
+        }
+
+        XCTAssertTrue(fence.bookKeeper.isRecordingHeist)
+    }
+
+    @ButtonHeistActor
     func testPlayHeistEmptyStepsCompletesSuccessfully() async throws {
         let heist = HeistPlayback(app: "com.test.mock", steps: [])
         let heistURL = try writeTemporaryHeist(heist)

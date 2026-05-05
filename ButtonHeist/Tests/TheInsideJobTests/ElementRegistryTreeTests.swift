@@ -295,10 +295,10 @@ final class ElementRegistryTreeTests: XCTestCase {
         XCTAssertEqual(registry.findElement(heistId: "id-a")?.element.label, "New")
     }
 
-    func testSameMinimumMatcherKeepsHeistIdWhenContentPositionChanges() {
+    func testSameMinimumMatcherUsesContentPositionSuffixWhenPositionChanges() {
         var registry = TheStash.ElementRegistry()
         let initial = makeElement(label: "Song A")
-        let moved = makeElement(label: "Song A")
+        let duplicate = makeElement(label: "Song A")
 
         registry.register(
             parsedElements: [initial],
@@ -315,28 +315,28 @@ final class ElementRegistryTreeTests: XCTestCase {
         )
 
         registry.register(
-            parsedElements: [moved],
+            parsedElements: [duplicate],
             heistIds: ["song_a_staticText"],
             contexts: [
-                moved: TheStash.ElementContext(
+                duplicate: TheStash.ElementContext(
                     contentSpaceOrigin: CGPoint(x: 0, y: 200),
                     scrollView: nil,
                     object: nil
                 ),
             ],
-            hierarchy: [.element(moved, traversalIndex: 0)],
+            hierarchy: [.element(duplicate, traversalIndex: 0)],
             containerContentFrames: [:]
         )
 
         XCTAssertNotNil(registry.findElement(heistId: "song_a_staticText"))
-        XCTAssertNil(registry.findElement(heistId: "song_a_staticText_at_0_200"))
-        XCTAssertEqual(registry.flattenElements().map(\.heistId), ["song_a_staticText"])
+        XCTAssertNotNil(registry.findElement(heistId: "song_a_staticText_at_0_200"))
+        XCTAssertEqual(Set(registry.flattenElements().map(\.heistId)), ["song_a_staticText", "song_a_staticText_at_0_200"])
     }
 
-    func testStateChangeKeepsHeistIdWhenContentPositionChanges() {
+    func testStateChangeKeepsHeistIdAtSameContentPosition() {
         var registry = TheStash.ElementRegistry()
         let initial = makeElement(label: "Favorite", value: "0", traits: [.button])
-        let movedAndSelected = makeElement(label: "Favorite", value: "1", traits: [.button, .selected])
+        let selected = makeElement(label: "Favorite", value: "1", traits: [.button, .selected])
 
         registry.register(
             parsedElements: [initial],
@@ -353,16 +353,16 @@ final class ElementRegistryTreeTests: XCTestCase {
         )
 
         registry.register(
-            parsedElements: [movedAndSelected],
+            parsedElements: [selected],
             heistIds: ["favorite_button"],
             contexts: [
-                movedAndSelected: TheStash.ElementContext(
-                    contentSpaceOrigin: CGPoint(x: 0, y: 200),
+                selected: TheStash.ElementContext(
+                    contentSpaceOrigin: CGPoint(x: 0, y: 100),
                     scrollView: nil,
                     object: nil
                 ),
             ],
-            hierarchy: [.element(movedAndSelected, traversalIndex: 0)],
+            hierarchy: [.element(selected, traversalIndex: 0)],
             containerContentFrames: [:]
         )
 
@@ -512,6 +512,41 @@ final class ElementRegistryTreeTests: XCTestCase {
             }
         }
         XCTAssertTrue(foundUnderList, "rowA should be a child of the list container")
+    }
+
+    func testNonScrollableContainerInterleavesRetainedChildrenByScreenPosition() {
+        var registry = TheStash.ElementRegistry()
+        let rowA = makeElement(label: "Row A", frame: CGRect(x: 0, y: 0, width: 320, height: 44))
+        let rowB = makeElement(label: "Row B", frame: CGRect(x: 0, y: 44, width: 320, height: 44))
+        let listContainer = AccessibilityContainer(
+            type: .list,
+            frame: CGRect(x: 0, y: 0, width: 320, height: 200)
+        )
+
+        registry.merge(
+            hierarchy: [
+                .container(listContainer, children: [
+                    .element(rowA, traversalIndex: 0),
+                    .element(rowB, traversalIndex: 1),
+                ])
+            ],
+            heistIds: heistIdMap([(rowA, "row_a"), (rowB, "row_b")]),
+            contexts: [:],
+            containerContentFrames: [listContainer: listContainer.frame]
+        )
+
+        registry.merge(
+            hierarchy: [
+                .container(listContainer, children: [
+                    .element(rowB, traversalIndex: 0),
+                ])
+            ],
+            heistIds: heistIdMap([(rowB, "row_b")]),
+            contexts: [:],
+            containerContentFrames: [listContainer: listContainer.frame]
+        )
+
+        XCTAssertEqual(registry.flattenElements().map(\.heistId), ["row_a", "row_b"])
     }
 
     func testMergeContainerSurvivesAcrossParses() {

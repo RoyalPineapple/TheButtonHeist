@@ -582,7 +582,7 @@ cd ButtonHeistMCP && swift build -c release
 | `type_text` | Type text / delete characters | `text`, `deleteCount`, `clearFirst`, `heistId`, `label`, `identifier`, `value`, `traits`, `excludeTraits`, `expect` |
 | `get_screen` | Capture PNG screenshot | `output` (file path, optional) |
 | `wait_for_change` | Wait for UI to change, optionally matching an expectation | `expect`, `timeout` |
-| `wait_for` | Wait for element to appear/disappear | `label`, `identifier`, `value`, `traits`, `excludeTraits`, `absent`, `timeout` |
+| `wait_for` | Wait for element to appear/disappear | `heistId`, `label`, `identifier`, `value`, `traits`, `excludeTraits`, `ordinal`, `absent`, `timeout` |
 | `start_recording` | Start H.264/MP4 screen recording | `fps`, `scale`, `maxDuration`, `inactivityTimeout` |
 | `stop_recording` | Stop recording (returns metadata) | `output` (file path, optional) |
 | `list_devices` | List discovered iOS devices | — |
@@ -598,7 +598,7 @@ All tools use strict schemas (`additionalProperties: false`) — only documented
 
 #### activate
 
-The primary way to interact with buttons, links, and controls. Uses the activation-first pattern: tries `accessibilityActivate()` (like VoiceOver double-tap) first, falls back to synthetic tap at the element's activation point. Provide `identifier` or `order` from `get_interface`.
+The primary way to interact with buttons, links, and controls. Uses the activation-first pattern: tries `accessibilityActivate()` (like VoiceOver double-tap) first, falls back to synthetic tap at the element's activation point. Provide a `heistId` from `get_interface` or flat matcher fields such as `identifier`, `label`, `traits`, and optional `ordinal`.
 
 Pass `action` to perform a named action instead of default activation:
 - `"increment"` / `"decrement"` — For sliders, steppers
@@ -781,7 +781,7 @@ Messages sent from client to server.
 - `setPasteboard(SetPasteboardTarget)` - Write text to general pasteboard
 - `getPasteboard` - Read text from general pasteboard
 - `scroll(ScrollTarget)` - Axis-aware page scroll (finds scroll view matching direction's axis)
-- `scrollToVisible(ScrollToVisibleTarget)` - Hierarchy-driven scroll search with swipe fallback for nested layouts
+- `scrollToVisible(ScrollToVisibleTarget)` - One-shot scroll to a known registry element
 - `scrollToEdge(ScrollToEdgeTarget)` - Axis-aware edge jump with lazy container iteration
 - `resignFirstResponder` - Dismiss keyboard
 - `waitForIdle(WaitForIdleTarget)` - Wait for animations to settle (internal)
@@ -880,19 +880,19 @@ public struct SessionLockedPayload: Codable, Sendable
 - `message: String` - Human-readable description of why the session is locked
 - `activeConnections: Int` - Number of active connections in the current session
 
-### ActionTarget
+### ElementTarget
 
 ```swift
-public struct ActionTarget: Codable, Sendable
+public enum ElementTarget: Codable, Sendable
 ```
 
-Two resolution strategies: `heistId` (assigned token from `get_interface`) or `match` (describe the element by accessibility properties). `heistId` takes priority when both are present.
+Two resolution strategies: `heistId` (assigned token from `get_interface`) or flat matcher fields (describe the element by accessibility properties). `heistId` takes priority when both are present.
 
 #### Properties
 
 - `heistId: String?` - Stable element identifier assigned by `get_interface`
-- `match: ElementMatcher?` - Predicate matcher for accessibility-based resolution
-- `ordinal: Int?` - 0-based index to select among multiple matches. Requires `match`. Without ordinal, multiple matches return an ambiguity error with a hint showing valid ordinal range.
+- `label` / `identifier` / `value` / `traits` / `excludeTraits` - Predicate matcher fields for accessibility-based resolution
+- `ordinal: Int?` - 0-based index to select among multiple matcher results. Without ordinal, multiple matches return an ambiguity error with a hint showing valid ordinal range.
 
 ### TouchTapTarget
 
@@ -986,7 +986,7 @@ public struct ScrollToEdgeTarget: Codable, Sendable
 public struct ElementMatcher: Codable, Sendable, Equatable
 ```
 
-Composable predicate for matching elements in the accessibility tree. All specified fields use AND semantics. Used by `scrollToVisible`, `wait_for`, `get_interface` filtering, and all action commands via `ActionTarget.match`.
+Composable predicate for matching elements in the accessibility tree. All specified fields use AND semantics. Used by `scrollToVisible`, `wait_for`, `get_interface` filtering, and action commands through flat `ElementTarget` matcher fields.
 
 #### Properties
 
@@ -995,7 +995,6 @@ Composable predicate for matching elements in the accessibility tree. All specif
 - `value: String?` - Exact match on accessibility value
 - `traits: [String]?` - All listed traits must be present
 - `excludeTraits: [String]?` - None of the listed traits may be present
-- `absent: Bool?` - When `true`, inverts the match — succeeds when no element matches
 
 ### ScrollToVisibleTarget
 
@@ -1005,9 +1004,7 @@ public struct ScrollToVisibleTarget: Codable, Sendable
 
 #### Properties
 
-- `heistId: String?` - Stable heistId to search for while scrolling
-- `match: ElementMatcher?` - Predicate for the element to find
-- `direction: ScrollSearchDirection?` - Starting scroll direction (default: `.down`), adapted to each container's natural axis
+- `elementTarget: ElementTarget?` - Known registry element to scroll into view, encoded as flat `heistId` or matcher fields. This command does a one-shot recorded-position jump; use `ElementSearchTarget` for iterative discovery.
 
 ### ScrollSearchDirection
 
@@ -1028,7 +1025,7 @@ public enum ScrollSearchDirection: String, Codable, Sendable, CaseIterable
 public struct ScrollSearchResult: Codable, Sendable
 ```
 
-Diagnostic output from `scrollToVisible`.
+Diagnostic output from `elementSearch`.
 
 #### Properties
 
@@ -1044,11 +1041,14 @@ Diagnostic output from `scrollToVisible`.
 public struct WaitForTarget: Codable, Sendable
 ```
 
-Target for `wait_for` command — waits for an element matching a predicate to appear or disappear.
+Target for `wait_for` command — waits for an element matching a heistId or predicate to appear or disappear.
 
 #### Properties
 
-- `match: ElementMatcher` - Predicate describing the element to wait for
+- `elementTarget: ElementTarget` - Element to wait for, encoded as flat `heistId` or matcher fields
+- `heistId: String?` - Assigned element id from the current screen
+- `label` / `identifier` / `value` / `traits` / `excludeTraits` - Predicate fields for accessibility-based resolution
+- `ordinal: Int?` - 0-based index to select among multiple matcher results
 - `absent: Bool?` - When `true`, wait for element to NOT exist (default: `false`)
 - `timeout: Double?` - Maximum wait time in seconds (default: 10, max: 30)
 - `resolvedAbsent: Bool` - Computed: `absent ?? false`
@@ -1077,7 +1077,7 @@ Device and app metadata received after connecting.
 
 #### Properties
 
-- `protocolVersion: String` - Protocol version (e.g., "6.4")
+- `protocolVersion: String` - Protocol version (currently `"8.0"`)
 - `appName: String` - App display name
 - `bundleIdentifier: String` - App bundle identifier
 - `deviceName: String` - Device name
@@ -1252,7 +1252,7 @@ public struct ActionResult: Codable, Sendable
 - `animating: Bool?` - `true` if UI was still animating when result was produced; `nil` means idle
 - `screenName: String?` - Label of the first header element in the post-action snapshot
 - `screenId: String?` - Slugified screen name for machine use (e.g. `"controls_demo"`)
-- `scrollSearchResult: ScrollSearchResult?` - Diagnostics from `scrollToVisible` (scroll count, unique elements seen, total items, exhaustive flag, matched element)
+- `scrollSearchResult: ScrollSearchResult?` - Diagnostics from `elementSearch` (scroll count, unique elements seen, total items, exhaustive flag, matched element)
 - `exploreResult: ExploreResult?` - Diagnostics from `explore` (elements discovered, scroll count, containers explored)
 
 ### ActionMethod
@@ -1284,7 +1284,8 @@ public enum ActionMethod: String, Codable, Sendable
 - `waitForChange` - Wait-for-change completed
 - `waitFor` - Wait-for element completed
 - `scroll` - Scroll view scrolled by one page
-- `scrollToVisible` - Bidirectional scroll search found (or failed to find) element matching predicate
+- `scrollToVisible` - Known registry element was scrolled into view
+- `elementSearch` - Iterative scroll search found (or failed to find) element matching predicate
 - `scrollToEdge` - Scroll view scrolled to an edge
 - `explore` - Full element census completed (dispatched internally by `get_interface` with `full: true`)
 - `elementNotFound` - Element could not be found
@@ -1450,8 +1451,12 @@ Activate a UI element — the primary interaction command. Uses the activation-f
 USAGE: buttonheist activate [OPTIONS]
 
 OPTIONS:
-  --identifier <id>       Element accessibility identifier
-  --index <n>             Element traversal order index
+  <target>                Element heistId from get_interface
+  --heist-id <id>         Element heistId from get_interface
+  --identifier, -id <id>  Element accessibility identifier
+  --label, -l <label>     Element accessibility label
+  --traits <traits>       Required traits
+  --ordinal <n>           0-based index among multiple matcher results
   -f, --format <format>   Output format: human, json (default: human when interactive, json when piped)
   -t, --timeout <seconds> Timeout in seconds (default: 10)
   -q, --quiet             Suppress status messages
@@ -1461,7 +1466,7 @@ OPTIONS:
 Examples:
 ```bash
 buttonheist activate --identifier loginButton
-buttonheist activate --index 3
+buttonheist activate -l "Submit" --traits button
 ```
 
 ### buttonheist edit_action
@@ -1512,7 +1517,7 @@ Low-level touch gestures registered as top-level commands. For tapping buttons a
 | `buttonheist rotate` | Rotate at a point or element |
 | `buttonheist two_finger_tap` | Tap with two fingers at a point or element |
 
-All gesture commands accept `--identifier <id>` or `--index <n>` to target an element, or coordinate options (`--x`, `--y`, `--from-x`, `--from-y`, `--to-x`, `--to-y`) for explicit positioning, and `--device` to target a specific device.
+All gesture commands accept a positional heistId, `--heist-id`, or matcher fields such as `--identifier`, `--label`, `--traits`, and optional `--ordinal` to target an element. Coordinate options (`--x`, `--y`, `--from-x`, `--from-y`, `--to-x`, `--to-y`) remain available for explicit positioning, and `--device` targets a specific device.
 
 ### buttonheist type_text
 
@@ -1524,8 +1529,10 @@ USAGE: buttonheist type_text [OPTIONS]
 OPTIONS:
   --text <text>           Text to type
   --delete <n>            Number of characters to delete before typing
-  --identifier <id>       Element identifier (focuses field, reads value back)
-  --index <n>             Element index (focuses field, reads value back)
+  <target>                Element heistId (focuses field, reads value back)
+  --identifier, -id <id>  Element identifier (focuses field, reads value back)
+  --label, -l <label>     Element label (focuses field, reads value back)
+  --ordinal <n>           0-based index among multiple matcher results
   -t, --timeout <seconds> Timeout in seconds (default: 30)
   -q, --quiet             Suppress status messages
 ```
@@ -1555,8 +1562,10 @@ Scroll the nearest scroll view ancestor by one page.
 USAGE: buttonheist scroll [OPTIONS]
 
 OPTIONS:
-  --identifier <id>       Element identifier (scroll bubbles up to nearest scroll view)
-  --index <n>             Element index
+  <target>                Element heistId (scroll bubbles up to nearest scroll view)
+  --identifier, -id <id>  Element identifier
+  --label, -l <label>     Element label
+  --ordinal <n>           0-based index among multiple matcher results
   --direction <dir>       Scroll direction: up, down, left, right, next, previous
   -t, --timeout <seconds> Timeout in seconds (default: 10)
   -f, --format <format>   Output format: human, json (default: human when interactive, json when piped)
@@ -1566,9 +1575,7 @@ OPTIONS:
 
 ### buttonheist scroll_to_visible
 
-Search for an element by scrolling through the nearest scroll view. Matches elements
-by any combination of label, identifier, heistId, value, and traits (AND semantics).
-For UITableView/UICollectionView, provides exhaustive search with item count tracking.
+Scroll a known registry element into view. The element must already have been seen through `get_interface --full`, earlier scrolling, or an action delta. Use `element_search` for iterative discovery of unseen off-screen elements.
 
 ```
 USAGE: buttonheist scroll_to_visible [OPTIONS]
@@ -1580,11 +1587,31 @@ OPTIONS:
   --value <text>          Match element by accessibility value (exact)
   --traits <trait>        Required traits (all must be present, repeatable)
   --exclude-traits <trait> Excluded traits (none may be present, repeatable)
-  --scope <scope>         Match scope: elements (default), containers, both
-  --max-scrolls <n>       Maximum scroll attempts (default: 20, minimum: 1)
-  --direction <dir>       Starting scroll direction: down, up, left, right (default: down)
+  --ordinal <n>           0-based index among multiple matcher results
   -t, --timeout <seconds> Timeout in seconds (default: 30)
   -f, --format <format>   Output format: human, json (default: human when interactive, json when piped)
+  -q, --quiet             Suppress status messages
+  --device <filter>       Target a specific device
+```
+
+### buttonheist element_search
+
+Search for an unseen element by paging through scrollable containers. Leaves the viewport on the found element when successful.
+
+```
+USAGE: buttonheist element_search [OPTIONS]
+
+OPTIONS:
+  <target>                Element heistId
+  --identifier, -id <id>  Element accessibility identifier
+  --label, -l <label>     Element accessibility label
+  --value, -v <value>     Element accessibility value
+  --traits <trait>        Required traits (all must be present, repeatable)
+  --exclude-traits <trait> Excluded traits (none may be present, repeatable)
+  --ordinal <n>           0-based index among multiple matcher results
+  --direction, -d <dir>   Starting scroll direction: down, up, left, right
+  -t, --timeout <seconds> Timeout in seconds
+  -f, --format <format>   Output format: human, json
   -q, --quiet             Suppress status messages
   --device <filter>       Target a specific device
 ```
@@ -1597,8 +1624,10 @@ Scroll the nearest scroll view ancestor to an edge.
 USAGE: buttonheist scroll_to_edge [OPTIONS]
 
 OPTIONS:
-  --identifier <id>       Element identifier
-  --index <n>             Element index
+  <target>                Element heistId
+  --identifier, -id <id>  Element identifier
+  --label, -l <label>     Element label
+  --ordinal <n>           0-based index among multiple matcher results
   --edge <edge>           Target edge: top, bottom, left, right
   -t, --timeout <seconds> Timeout in seconds (default: 10)
   -f, --format <format>   Output format: human, json (default: human when interactive, json when piped)
@@ -1638,7 +1667,7 @@ The `--session-timeout` flag exits the session if no commands are received withi
 | `wait` | `wait_for` |
 | `record` | `start_recording` |
 
-Elements can be targeted by accessibility identifier (`tap myButton`), by order number (`tap #3`), or by coordinates (`tap 100 200`). Key=value pairs work for any parameter (`press identifier=btn duration=2`).
+Elements can be targeted by heistId (`tap button_login`), by matcher fields (`tap label="Submit" traits=button`), or by coordinates (`tap 100 200`). Key=value pairs work for any parameter (`press identifier=btn duration=2`).
 
 **JSON input:** Each line of stdin can also be a JSON object with a `command` field. Each command produces exactly one response. Use `--format json` to force JSON output.
 
@@ -1720,6 +1749,11 @@ OPTIONS:
   --heist-id <id>         Element heistId (from get_interface)
   --identifier <id>       Accessibility identifier
   --label <text>          Accessibility label
+  --value <text>          Accessibility value
+  --traits <traits>       Required traits, repeatable
+  --exclude-traits <traits>
+                           Excluded traits, repeatable
+  --ordinal <n>           0-based index among multiple matcher results
   -t, --timeout <seconds> Maximum wait time (default: 10, max: 30)
   --absent                Wait for element to disappear instead
   -f, --format <format>   Output format: human, json (default: auto)
@@ -1741,7 +1775,7 @@ buttonheist wait_for --heist-id button_login
 
 ### buttonheist watch
 
-Watch a live session as a read-only observer. Streams JSON events to stdout until killed with Ctrl+C. Does not require a token by default and does not claim a session lock — multiple observers can observe simultaneously alongside an active driver.
+Watch a live session as a read-only observer. Streams JSON events to stdout until killed with Ctrl+C. Observers require a valid token by default, but do not claim a session lock. Set `INSIDEJOB_RESTRICT_WATCHERS=0` on the server to allow unauthenticated observers.
 
 ```
 USAGE: buttonheist watch [OPTIONS]
@@ -1749,7 +1783,7 @@ USAGE: buttonheist watch [OPTIONS]
 OPTIONS:
   --device <filter>       Target a specific device by name, ID prefix, or index
   -t, --timeout <seconds> Connection timeout (default: 30)
-  --token <token>         Auth token (only needed if server requires INSIDEJOB_RESTRICT_WATCHERS)
+  --token <token>         Auth token (required by default; optional only when INSIDEJOB_RESTRICT_WATCHERS=0)
 ```
 
 **Output**: Newline-delimited JSON objects, each with a `type` field:
@@ -1762,17 +1796,17 @@ OPTIONS:
 
 **Examples:**
 ```bash
-# Watch the first available device
-buttonheist watch
+# Watch the first available device with auth
+buttonheist watch --token my-secret-token
 
 # Watch a specific device
-buttonheist watch --device my-simulator
+buttonheist watch --device my-simulator --token my-secret-token
 
 # Pipe to jq for formatted output
-buttonheist watch | jq .
+buttonheist watch --token my-secret-token | jq .
 
-# Watch with auth (when server requires it)
-buttonheist watch --token my-secret-token
+# Watch without auth only when the server sets INSIDEJOB_RESTRICT_WATCHERS=0
+buttonheist watch
 ```
 
 ---
@@ -1832,7 +1866,7 @@ class Inspector {
         handoff.onInterface = { iface, _ in
             print("Received \(iface.elements.count) elements")
             for element in iface.elements {
-                print("  \(element.order): \(element.description)")
+                print("  \(element.heistId): \(element.description)")
             }
         }
 
@@ -1859,7 +1893,7 @@ class Inspector {
 
 ```swift
 // Activate an element and wait for the result
-let target = ActionTarget(identifier: "loginButton", order: nil)
+let target = ElementTarget.matcher(ElementMatcher(identifier: "loginButton"))
 client.send(.activate(target))
 
 do {
@@ -1886,7 +1920,7 @@ echo '{"command":"get_interface"}' | buttonheist session --format json
 
 # Activate a button (primary interaction command)
 buttonheist activate --identifier loginButton
-buttonheist activate --index 3
+buttonheist activate -l "Submit" --traits button
 
 # Named actions (increment, decrement, custom)
 buttonheist activate --identifier volumeSlider --action increment
@@ -1917,9 +1951,9 @@ buttonheist type_text --delete 5 --text "World!" --identifier nameField
 
 # Scroll commands
 buttonheist scroll --identifier "buttonheist.longList.item-5" --direction up
-buttonheist scroll --index 3 --direction down
+buttonheist scroll -l "Messages" --ordinal 1 --direction down
 buttonheist scroll_to_visible --label "Color Picker"
 buttonheist scroll_to_visible --label "Settings" --traits header
-buttonheist scroll_to_visible --identifier "buttonheist.longList.last" --direction up
+buttonheist scroll_to_visible "buttonheist.longList.last"
 buttonheist scroll_to_edge --identifier "buttonheist.longList.item-0" --edge bottom
 ```

@@ -5,6 +5,10 @@ import TheScore
 
 @main
 struct ButtonHeistMCPServer {
+    struct ToolRoutingError: Error, Equatable {
+        let message: String
+    }
+
     static func main() async throws {
         let (fence, idleMonitor) = await setUp()
 
@@ -171,64 +175,79 @@ struct ButtonHeistMCPServer {
         idleMonitor: IdleMonitor
     ) async -> CallTool.Result {
         do {
-            var request = try decodeArguments(params.arguments)
-
-            // Route tool name → TheFence command
-            switch params.name {
-            // Direct 1:1 tools — tool name IS the command
-            case "get_interface", "activate", "type_text", "get_screen",
-                 "wait_for_change", "wait_for", "start_recording", "stop_recording", "list_devices",
-                 "set_pasteboard", "get_pasteboard",
-                 "run_batch", "get_session_state",
-                 "connect", "list_targets",
-                 "get_session_log", "archive_session",
-                 "start_heist", "stop_heist", "play_heist":
-                request["command"] = params.name
-
-            // Grouped gesture tool — "type" field becomes the command
-            case "gesture":
-                guard let type = request.removeValue(forKey: "type") as? String else {
-                    return .init(content: [.text(text: "Missing required parameter: type", annotations: nil, _meta: nil)], isError: true)
-                }
-                request["command"] = type
-
-            // Grouped scroll tool — "mode" field selects the TheFence command
-            case "scroll":
-                let mode = (request.removeValue(forKey: "mode") as? String) ?? "page"
-                switch mode {
-                case "page":
-                    request["command"] = "scroll"
-                case "to_visible":
-                    request["command"] = "scroll_to_visible"
-                case "search":
-                    request["command"] = "element_search"
-                case "to_edge":
-                    request["command"] = "scroll_to_edge"
-                default:
-                    let message = "Unknown scroll mode: \(mode). Valid: page, to_visible, search, to_edge"
-                    return .init(content: [.text(text: message, annotations: nil, _meta: nil)], isError: true)
-                }
-
-            // edit_action routes "dismiss" to dismiss_keyboard
-            case "edit_action":
-                if let action = request["action"] as? String, action == "dismiss" {
-                    request.removeValue(forKey: "action")
-                    request["command"] = "dismiss_keyboard"
-                } else {
-                    request["command"] = "edit_action"
-                }
-
-            default:
-                return .init(content: [.text(text: "Unknown tool: \(params.name)", annotations: nil, _meta: nil)], isError: true)
+            let arguments = try decodeArguments(params.arguments)
+            let routed = routeToolRequest(name: params.name, arguments: arguments)
+            let request: [String: Any]
+            switch routed {
+            case .success(let value):
+                request = value
+            case .failure(let error):
+                return .init(content: [.text(text: error.message, annotations: nil, _meta: nil)], isError: true)
             }
 
             let response = try await fence.execute(request: request)
             idleMonitor.resetTimer()
-            let backgroundDelta = fence.drainBackgroundDelta()
-            return try renderResponse(response, backgroundDelta: backgroundDelta)
+            let backgroundDeltas = fence.drainBackgroundDeltas()
+            return try renderResponse(response, backgroundDeltas: backgroundDeltas)
         } catch {
             idleMonitor.resetTimer()
             return .init(content: [.text(text: error.displayMessage, annotations: nil, _meta: nil)], isError: true)
+        }
+    }
+
+    static func routeToolRequest(
+        name: String,
+        arguments: [String: Any]
+    ) -> Result<[String: Any], ToolRoutingError> {
+        var request = arguments
+
+        // Direct 1:1 tools — tool name IS the command.
+        switch name {
+        case "get_interface", "activate", "type_text", "get_screen",
+             "wait_for_change", "wait_for", "start_recording", "stop_recording", "list_devices",
+             "set_pasteboard", "get_pasteboard",
+             "run_batch", "get_session_state",
+             "connect", "list_targets",
+             "get_session_log", "archive_session",
+             "start_heist", "stop_heist", "play_heist":
+            request["command"] = name
+            return .success(request)
+
+        case "gesture":
+            guard let type = request.removeValue(forKey: "type") as? String else {
+                return .failure(ToolRoutingError(message: "Missing required parameter: type"))
+            }
+            request["command"] = type
+            return .success(request)
+
+        case "scroll":
+            let mode = (request.removeValue(forKey: "mode") as? String) ?? "page"
+            switch mode {
+            case "page":
+                request["command"] = "scroll"
+            case "to_visible":
+                request["command"] = "scroll_to_visible"
+            case "search":
+                request["command"] = "element_search"
+            case "to_edge":
+                request["command"] = "scroll_to_edge"
+            default:
+                let message = "Unknown scroll mode: \(mode). Valid: page, to_visible, search, to_edge"
+                return .failure(ToolRoutingError(message: message))
+            }
+            return .success(request)
+
+        case "edit_action":
+            if let action = request["action"] as? String, action == "dismiss" {
+                request.removeValue(forKey: "action")
+                request["command"] = "dismiss_keyboard"
+            } else {
+                request["command"] = "edit_action"
+            }
+            return .success(request)
+
+        default:
+            return .failure(ToolRoutingError(message: "Unknown tool: \(name)"))
         }
     }
 
@@ -270,11 +289,17 @@ struct ButtonHeistMCPServer {
     // Raw base64 video payloads can be tens of megabytes, which would overwhelm the MCP
     // context window. Agents that need the actual file should pass "output" to stop_recording,
     // or use the CLI directly: `buttonheist session` → `stop_recording --output /path/to/file.mp4`
-    private static func renderResponse(_ response: FenceResponse, backgroundDelta: InterfaceDelta? = nil) throws -> CallTool.Result {
+    static func renderResponse(_ response: FenceResponse, backgroundDelta: InterfaceDelta? = nil) throws -> CallTool.Result {
+        try renderResponse(response, backgroundDeltas: backgroundDelta.map { [$0] } ?? [])
+    }
+
+    static func renderResponse(_ response: FenceResponse, backgroundDeltas: [InterfaceDelta]) throws -> CallTool.Result {
         var content: [Tool.Content] = []
 
         // Background changes: what happened while the agent was thinking
-        if let backgroundDelta, backgroundDelta.kind != .noChange {
+        for backgroundDelta in backgroundDeltas
+            where backgroundDelta.kind != .noChange || backgroundDelta.transient?.isEmpty == false {
+            let transient = backgroundDelta.transient ?? []
             var lines: [String] = []
             switch backgroundDelta.kind {
             case .screenChanged:
@@ -284,11 +309,15 @@ struct ButtonHeistMCPServer {
                         lines.append("  [\(index)] \(Self.compactBackgroundElement(element))")
                     }
                 }
+                for element in transient {
+                    lines.append("  +- \(Self.compactBackgroundElement(element))")
+                }
             case .elementsChanged:
                 var parts: [String] = []
                 if let added = backgroundDelta.added { parts.append("+\(added.count)") }
                 if let removed = backgroundDelta.removed { parts.append("-\(removed.count)") }
                 if let updated = backgroundDelta.updated { parts.append("~\(updated.count)") }
+                if !transient.isEmpty { parts.append("+-\(transient.count)") }
                 lines.append("[background: elements changed \(parts.joined(separator: " ")) (\(backgroundDelta.elementCount) total)]")
                 if let added = backgroundDelta.added {
                     for element in added { lines.append("  + \(element.heistId) \"\(element.label ?? "")\"") }
@@ -296,8 +325,14 @@ struct ButtonHeistMCPServer {
                 if let removed = backgroundDelta.removed {
                     for heistId in removed { lines.append("  - \(heistId)") }
                 }
+                for element in transient {
+                    lines.append("  +- \(Self.compactBackgroundElement(element))")
+                }
             case .noChange:
-                break
+                lines.append("[background: no net change (\(backgroundDelta.elementCount) elements)]")
+                for element in transient {
+                    lines.append("  +- \(Self.compactBackgroundElement(element))")
+                }
             }
             if !lines.isEmpty {
                 content.append(.text(text: lines.joined(separator: "\n"), annotations: nil, _meta: nil))

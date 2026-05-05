@@ -206,6 +206,27 @@ final class TheHandoffMessageTests: XCTestCase {
         XCTAssertTrue(receivedError?.contains("5.0") == true)
     }
 
+    @ButtonHeistActor
+    func testRequestScopedErrorDoesNotFailConnection() async {
+        let handoff = TheHandoff()
+        var receivedError: String?
+        var requestError: (message: String, requestId: String)?
+        handoff.onError = { receivedError = $0 }
+        handoff.onRequestError = { message, requestId in
+            requestError = (message, requestId)
+        }
+        handoff.handleServerMessage(.info(makeServerInfo()), requestId: nil)
+
+        handoff.handleServerMessage(.error("Response too large"), requestId: "request-1")
+
+        XCTAssertNil(receivedError)
+        XCTAssertEqual(requestError?.message, "Response too large")
+        XCTAssertEqual(requestError?.requestId, "request-1")
+        if case .failed = handoff.connectionPhase {
+            XCTFail("Request-scoped error should not fail the connection")
+        }
+    }
+
     // MARK: - .status
 
     @ButtonHeistActor

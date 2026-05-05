@@ -319,15 +319,15 @@ final class TheStash {
         return resolveTarget(effectiveTarget).resolved
     }
 
-    /// Existence check — does any element match this target?
+    /// Live existence check — does any current accessibility-tree element match this target?
     /// Unlike resolveTarget, does NOT require uniqueness for matchers.
-    /// For heistId: checks the persistent registry tree.
+    /// For heistId: checks the live viewport set, not the persistent registry.
     /// For matcher: checks currentHierarchy only (not registry). The registry
     /// caches previously-seen elements and would defeat wait_for absent checks.
     func hasTarget(_ target: ElementTarget) -> Bool {
         switch target {
         case .heistId(let heistId):
-            return registry.findElement(heistId: heistId) != nil
+            return registry.viewportIds.contains(heistId)
         case .matcher(let matcher, _):
             // Exact matches are a subset of substring matches, so a single substring
             // pass answers "does any element match" for the exact-then-substring fallback.

@@ -167,6 +167,8 @@ public final class TheHandoff {
     public var onRecordingError: ((String) -> Void)?
     /// General protocol/transport error reported by the server.
     public var onError: ((String) -> Void)?
+    /// Error response for a specific in-flight request.
+    public var onRequestError: ((String, String) -> Void)?
     /// Auth approved. The parameter is the approved token, or nil when reusing a persistent session.
     public var onAuthApproved: ((String?) -> Void)?
     /// Another agent currently owns the session. Payload carries details for the operator to resolve.
@@ -449,8 +451,12 @@ public final class TheHandoff {
             transitionRecordingTo(.idle)
             onRecordingError?(message)
         case .error(let message):
-            transitionToFailed(.error(message))
-            onError?(message)
+            if let requestId {
+                onRequestError?(message, requestId)
+            } else {
+                transitionToFailed(.error(message))
+                onError?(message)
+            }
         case .authApproved(let payload):
             token = payload.token
             onAuthApproved?(payload.token)

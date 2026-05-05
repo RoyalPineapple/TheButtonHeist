@@ -188,9 +188,9 @@ Activate an element (equivalent to VoiceOver double-tap). Uses the TouchInjector
 {"protocolVersion":"8.0","type":"activate","payload":{"identifier":"loginButton"}}
 ```
 
-**By traversal index:**
+**By matcher ordinal:**
 ```json
-{"protocolVersion":"8.0","type":"activate","payload":{"order":5}}
+{"protocolVersion":"8.0","type":"activate","payload":{"label":"Save","traits":["button"],"ordinal":1}}
 ```
 
 ### touchTap
@@ -312,9 +312,9 @@ Increment an adjustable element (e.g., slider, stepper). Calls `increment()` on 
 {"protocolVersion":"8.0","type":"increment","payload":{"identifier":"volumeSlider"}}
 ```
 
-**By traversal index:**
+**By matcher ordinal:**
 ```json
-{"protocolVersion":"8.0","type":"increment","payload":{"order":8}}
+{"protocolVersion":"8.0","type":"increment","payload":{"label":"Volume","traits":["adjustable"],"ordinal":0}}
 ```
 
 ### decrement
@@ -407,34 +407,60 @@ Scroll the nearest scroll view ancestor of a target element by approximately one
 {"protocolVersion":"8.0","type":"scroll","payload":{"elementTarget":{"identifier":"buttonheist.longList.item-5"},"direction":"up"}}
 ```
 
-**By traversal index:**
+**By matcher ordinal:**
 ```json
-{"protocolVersion":"8.0","type":"scroll","payload":{"elementTarget":{"order":10},"direction":"down"}}
+{"protocolVersion":"8.0","type":"scroll","payload":{"elementTarget":{"label":"Messages","ordinal":1},"direction":"down"}}
 ```
 
 Directions: `"up"`, `"down"`, `"left"`, `"right"`, `"next"`, `"previous"`.
 
 ### scrollToVisible
 
-Search for an element by scrolling through scroll views. Uses an `ElementMatcher` predicate — all specified fields must match (AND semantics). Returns a `ScrollSearchResult` with diagnostics. Walks the accessibility hierarchy tree (outermost first), scrolling each container until the target appears or all containers are exhausted.
+Scroll a known registry element into view. This is a one-shot recorded-position jump for elements already discovered by `get_interface --full` or prior scrolling. For iterative discovery of an element that may not be in the registry yet, use `element_search`.
 
-**Match fields:** `label`, `identifier`, `value` (exact string match), `traits` (all must be present), `excludeTraits` (none may be present). Note: `heistId` is not supported for `scrollToVisible` — use `identifier` or `label` instead.
+**Target fields:** `heistId`, or flat matcher fields `label`, `identifier`, `value`, `traits`, `excludeTraits`. Matcher fields are decoded at the payload root; there is no nested `match` object.
+
+**By heistId:**
+```json
+{"protocolVersion":"8.0","type":"scrollToVisible","payload":{"heistId":"buttonheist.longList.colorPicker"}}
+```
+
+**By label:**
+```json
+{"protocolVersion":"8.0","type":"scrollToVisible","payload":{"label":"Color Picker"}}
+```
+
+**Compound matcher:**
+```json
+{"protocolVersion":"8.0","type":"scrollToVisible","payload":{"label":"Settings","traits":["header"]}}
+```
+
+**Response** is an `actionResult` with `method: "scrollToVisible"`:
+```json
+{"type":"actionResult","payload":{"success":true,"method":"scrollToVisible"}}
+```
+
+### elementSearch
+
+Search for an element by scrolling through scroll views. Uses an `ElementTarget` predicate — all specified matcher fields must match (AND semantics). Returns a `ScrollSearchResult` with diagnostics. Walks the accessibility hierarchy tree (outermost first), scrolling each container until the target appears or all containers are exhausted.
+
+**Target fields:** `heistId`, or flat matcher fields `label`, `identifier`, `value`, `traits`, `excludeTraits`.
 
 **Search options:** `direction` (`"down"`, `"up"`, `"left"`, `"right"`, default: `"down"`).
 
 **By label:**
 ```json
-{"protocolVersion":"8.0","type":"scrollToVisible","payload":{"match":{"label":"Color Picker"}}}
+{"protocolVersion":"8.0","type":"elementSearch","payload":{"label":"Color Picker"}}
 ```
 
-**Compound match with direction:**
+**Compound matcher with direction:**
 ```json
-{"protocolVersion":"8.0","type":"scrollToVisible","payload":{"match":{"label":"Settings","traits":["header"]},"direction":"up"}}
+{"protocolVersion":"8.0","type":"elementSearch","payload":{"label":"Settings","traits":["header"],"direction":"up"}}
 ```
 
 **Response** includes `scrollSearchResult` on the `actionResult`:
 ```json
-{"type":"actionResult","payload":{"success":true,"method":"scrollToVisible","scrollSearchResult":{"scrollCount":3,"uniqueElementsSeen":25,"totalItems":80,"exhaustive":false,"foundElement":{...}}}}
+{"type":"actionResult","payload":{"success":true,"method":"elementSearch","scrollSearchResult":{"scrollCount":3,"uniqueElementsSeen":25,"totalItems":80,"exhaustive":false,"foundElement":{...}}}}
 ```
 
 ### scrollToEdge
@@ -526,12 +552,13 @@ Returns an `actionResult` with `method: "waitForChange"` and an `interfaceDelta`
 Wait for an element matching a predicate to appear (or disappear). Uses settle-event polling, not busy-waiting.
 
 ```json
-{"protocolVersion":"8.0","type":"waitFor","payload":{"match":{"label":"Loading"},"absent":true,"timeout":5.0}}
+{"protocolVersion":"8.0","type":"waitFor","payload":{"label":"Loading","absent":true,"timeout":5.0}}
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `match` | `ElementMatcher` | Predicate describing the element to wait for |
+| `heistId` | `String?` | Stable element identifier assigned by `get_interface` |
+| `label` / `identifier` / `value` / `traits` / `excludeTraits` | matcher fields | Predicate describing the element to wait for, decoded flat at the payload root |
 | `absent` | `Bool?` | When `true`, wait for element to NOT exist (default: `false`) |
 | `timeout` | `Double?` | Max wait time in seconds (default: 10, max: 30) |
 
@@ -582,7 +609,7 @@ Sent immediately on connection. The client must verify `protocolVersion` and res
 Sent when the peer's `protocolVersion` does not exactly match the server's current wire version. The server closes the connection immediately after sending this message.
 
 ```json
-{"protocolVersion":"8.0","requestId":null,"type":"protocolMismatch","payload":{"expectedProtocolVersion":"6.1","receivedProtocolVersion":"5.0"}}
+{"protocolVersion":"8.0","requestId":null,"type":"protocolMismatch","payload":{"expectedProtocolVersion":"8.0","receivedProtocolVersion":"7.0"}}
 ```
 
 ### authRequired
@@ -716,7 +743,7 @@ The `tree` is the canonical wire shape — every element appears exactly once at
 
 ### actionResult
 
-Response to `activate`, `one_finger_tap`, `increment`, `decrement`, `typeText`, `performCustomAction`, `handleAlert`, `setPasteboard`, `getPasteboard`, `scroll`, `scrollToVisible`, or `scrollToEdge` commands. Also returned internally by `explore` (dispatched via `get_interface` with `full: true`).
+Response to `activate`, `one_finger_tap`, `increment`, `decrement`, `typeText`, `performCustomAction`, `handleAlert`, `setPasteboard`, `getPasteboard`, `scroll`, `scrollToVisible`, `elementSearch`, or `scrollToEdge` commands. Also returned internally by `explore` (dispatched via `get_interface` with `full: true`).
 
 ```json
 {"protocolVersion":"8.0","type":"actionResult","payload":{
@@ -758,7 +785,8 @@ Possible methods:
 - `waitForChange` - Wait-for-change completed (expectation met or timeout)
 - `waitFor` - Wait-for element completed
 - `scroll` - Scroll view scrolled by one page
-- `scrollToVisible` - Bidirectional scroll search found (or failed to find) element matching predicate
+- `scrollToVisible` - Known registry element was scrolled into view
+- `elementSearch` - Iterative scroll search found (or failed to find) element matching predicate
 - `scrollToEdge` - Scroll view scrolled to an edge
 - `explore` - Full element census completed (all scrollable content discovered, scroll positions restored)
 - `elementNotFound` - Target element could not be found
@@ -910,22 +938,24 @@ Three ways to find elements, each suited to a different situation:
 |---------|----------------|-------------|
 | `get_interface` | Visible elements only | Fast reads. You know the element is on screen, or you want the current viewport. |
 | `get_interface` with `full: true` | Every element on screen, including off-screen content | You need to know what exists in scroll views without navigating. Returns the same `interface` response with all elements populated. |
-| `scroll_to_visible` | Scrolls until the target element is found, leaves viewport on it | You know the element exists and want to **navigate to it** for interaction. Changes the scroll position. |
+| `scroll_to_visible` | Jumps to a known registry element, leaves viewport on it | You have already discovered the element and want to **navigate to it** for interaction. Changes the scroll position. |
+| `element_search` | Scrolls until the target element is found, leaves viewport on it | You have not discovered the element yet and need to search scrollable content. |
 
-### Choosing between full and scroll_to_visible
+### Choosing between full, element_search, and scroll_to_visible
 
 - **`get_interface --full`** is a read operation. It explores, then restores scroll positions. The user sees no change. Use it when you need a census — "what elements are on this screen?" — without committing to navigate anywhere.
 
-- **`scroll_to_visible`** is a navigation action. It scrolls to the target and leaves the viewport there so you can interact with the element. Use it when you already know what you want and need to get to it.
+- **`scroll_to_visible`** is a recorded-position navigation action. It scrolls to a known target and leaves the viewport there so you can interact with the element. Use it after `get_interface --full`, previous scrolling, or a prior delta has discovered the element.
 
-Both use the same internal exploration algorithm. `get_interface --full` with no target does a complete census. `scroll_to_visible` uses element-first search and stops early when the target is found.
+- **`element_search`** is an iterative navigation action. It pages through scrollable containers and stops when the target is found. Use it when the element has not been seen yet.
 
 ```mermaid
 flowchart TD
     A[Need to find an element?] --> B{Is it likely visible?}
     B -->|Yes| C[get_interface]
     B -->|No / unsure| D{Need to interact with it?}
-    D -->|Yes| E[scroll_to_visible<br>Navigates to element,<br>leaves viewport there]
+    D -->|Yes, already discovered| E[scroll_to_visible<br>Jumps to known element,<br>leaves viewport there]
+    D -->|Yes, not yet discovered| I[element_search<br>Pages until found,<br>leaves viewport there]
     D -->|No, just check existence| F[get_interface --full<br>Census then restore<br>scroll positions]
     C --> G{Found it?}
     G -->|Yes| H[activate / scroll / interact]
@@ -938,7 +968,8 @@ Most agent workflows don't need full exploration. The typical pattern is:
 
 1. `get_interface` — see what's visible
 2. `activate` / `scroll` / `swipe` — interact with visible elements
-3. `scroll_to_visible` — find a specific off-screen element when needed
+3. `element_search` — find a specific unseen off-screen element when needed
+4. `scroll_to_visible` — return to a known off-screen element by recorded position
 
 Use `get_interface --full` when the screen has deep scrollable content and you need to make decisions based on elements that aren't currently visible (e.g., checking if a specific item exists in a long list before deciding what to do).
 
@@ -1024,15 +1055,15 @@ Container types:
 - `"tabBar"` — Tab bar container
 - `"scrollable"` — Scrollable region; carries `contentWidth` and `contentHeight`
 
-### ActionTarget
+### ElementTarget
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `heistId` | `String?` | Stable element identifier assigned by `get_interface` |
-| `match` | `ElementMatcher?` | Predicate matcher for accessibility-based resolution |
-| `ordinal` | `Int?` | 0-based index to select among multiple matches (requires `match`). Without ordinal, multiple matches return an ambiguity error. |
+| `label` / `identifier` / `value` / `traits` / `excludeTraits` | matcher fields | Predicate matcher fields for accessibility-based resolution, decoded flat at the target root |
+| `ordinal` | `Int?` | 0-based index to select among multiple matcher results. Without ordinal, multiple matches return an ambiguity error. |
 
-Two resolution strategies. Resolution priority: `heistId` > `match`. At least one field should be provided.
+Two resolution strategies. Resolution priority: `heistId` > matcher fields. At least one identity field should be provided.
 
 ### TouchTapTarget
 
@@ -1198,7 +1229,7 @@ Enum values: `"top"`, `"bottom"`, `"left"`, `"right"`.
 
 ### ElementMatcher
 
-Predicate for matching elements in the accessibility tree. All specified fields must match (AND semantics). Used by `scrollToVisible`, `waitFor`, `get_interface` filtering, and all action commands via `ActionTarget.match`.
+Predicate for matching elements in the accessibility tree. All specified fields must match (AND semantics). Used by `scrollToVisible`, `waitFor`, `get_interface` filtering, and action commands through flat `ElementTarget` matcher fields.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -1207,15 +1238,13 @@ Predicate for matching elements in the accessibility tree. All specified fields 
 | `value` | `String?` | Exact match on accessibility value |
 | `traits` | `[String]?` | All listed traits must be present on the element |
 | `excludeTraits` | `[String]?` | None of the listed traits may be present |
-| `absent` | `Bool?` | When `true`, inverts the match — succeeds when no element matches. Does not affect per-element predicate evaluation. |
 
 ### ScrollToVisibleTarget
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `heistId` | `String?` | Stable heistId to search for while scrolling |
-| `match` | `ElementMatcher?` | Predicate for the element to find |
-| `direction` | `ScrollSearchDirection?` | Starting scroll direction (default: `"down"`) |
+| `heistId` | `String?` | Known stable heistId to scroll into view |
+| `label` / `identifier` / `value` / `traits` / `excludeTraits` | matcher fields | Flat matcher fields for the known element to scroll into view |
 
 ### ScrollSearchDirection
 
@@ -1228,7 +1257,7 @@ Predicate for matching elements in the accessibility tree. All specified fields 
 
 ### ScrollSearchResult
 
-Diagnostic output from `scrollToVisible`, included on every `actionResult` for that command.
+Diagnostic output from `elementSearch`, included on every `actionResult` for that command.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -1248,7 +1277,9 @@ Diagnostic output from `scrollToVisible`, included on every `actionResult` for t
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `match` | `ElementMatcher` | Predicate describing the element to wait for |
+| `heistId` | `String?` | Assigned element id from the current screen, decoded flat at the payload root |
+| `label` / `identifier` / `value` / `traits` / `excludeTraits` | matcher fields | Predicate fields for accessibility-based resolution, decoded flat at the payload root |
+| `ordinal` | `Int?` | 0-based index to select among multiple matcher results |
 | `absent` | `Bool?` | When `true`, wait for element to NOT exist (default: `false`) |
 | `timeout` | `Double?` | Max wait time in seconds (default: 10, max: 30) |
 
@@ -1274,7 +1305,7 @@ A point in unit coordinates (0–1) relative to an element's accessibility frame
 | `animating` | `Bool?` | `true` if UI was still animating when result was produced; `nil` means idle |
 | `screenName` | `String?` | Label of the first header element in the post-action snapshot (screen name hint) |
 | `screenId` | `String?` | Slugified screen name for machine use (e.g. `"controls_demo"`) |
-| `scrollSearchResult` | `ScrollSearchResult?` | Diagnostics from `scrollToVisible` — scroll count, unique elements seen, total items, exhaustive flag, matched element |
+| `scrollSearchResult` | `ScrollSearchResult?` | Diagnostics from `elementSearch` — scroll count, unique elements seen, total items, exhaustive flag, matched element |
 
 ### ActionExpectation (Fence-level)
 
@@ -1564,7 +1595,7 @@ A single recorded interaction event captured during a Stakeout recording.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `token` | `String` | Auth token. Empty string for default open access. Required when `INSIDEJOB_RESTRICT_WATCHERS=1` is set on the server. |
+| `token` | `String` | Auth token required by default. Empty string is accepted only when `INSIDEJOB_RESTRICT_WATCHERS=0` is set on the server. |
 
 ## Implementation Notes
 
@@ -1587,7 +1618,7 @@ The token is configured via `INSIDEJOB_TOKEN` env var or `InsideJobToken` Info.p
 
 Session locking prevents multiple drivers from interfering with each other. Only one driver can control a TheInsideJob host at a time.
 
-**Why sessions?** A single "driver" isn't a single TCP connection. Each CLI command (`buttonheist action`, `buttonheist screenshot`, etc.) creates a fresh connection, authenticates, executes, and disconnects. Only `session` maintains a persistent connection. The session concept spans multiple sequential connections from the same driver.
+**Why sessions?** A single "driver" isn't a single TCP connection. Each CLI command (`buttonheist activate`, `buttonheist get_screen`, etc.) creates a fresh connection, authenticates, executes, and disconnects. Only `session` maintains a persistent connection. The session concept spans multiple sequential connections from the same driver.
 
 **Driver Identity**: The server identifies drivers using a two-tier approach:
 1. `driverId` from the authenticate payload (when present) — set via `BUTTONHEIST_DRIVER_ID` env var

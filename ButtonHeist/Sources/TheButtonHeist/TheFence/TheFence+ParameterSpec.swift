@@ -50,6 +50,23 @@ public enum MCPExposure: Sendable, Equatable {
     case notExposed
 }
 
+// MARK: - CLI Exposure
+
+/// How a command is surfaced by the top-level `buttonheist` CLI.
+///
+/// Declared next to `MCPExposure` so command-surface contracts live with the
+/// command catalog instead of being reverse-engineered from docs.
+public enum CLIExposure: Sendable, Equatable {
+    /// Top-level CLI command name equals the command raw value.
+    case directCommand
+    /// Command is routed through another top-level command.
+    case groupedUnder(String)
+    /// Only accepted by the interactive session parser or raw JSON mode.
+    case sessionOnly
+    /// Not exposed by the CLI.
+    case notExposed
+}
+
 // MARK: - Shared Parameter Blocks
 
 /// Reusable parameter groups shared across command specs.
@@ -85,6 +102,19 @@ public enum FenceParameterBlocks: Sendable {
 // MARK: - Per-Command Specs
 
 extension TheFence.Command {
+
+    public var cliExposure: CLIExposure {
+        switch self {
+        case .help, .quit, .exit, .status, .connect:
+            return .sessionOnly
+
+        case .increment, .decrement, .performCustomAction:
+            return .groupedUnder("activate")
+
+        default:
+            return .directCommand
+        }
+    }
 
     public var mcpExposure: MCPExposure {
         switch self {

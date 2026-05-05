@@ -379,6 +379,56 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertNil(entry, "Should return nil when matched element is in viewport")
     }
 
+    func testOffViewportEntryByMatcherHonorsOrdinal() {
+        let first = makeElement(label: "Item", shape: .frame(CGRect(x: 0, y: 0, width: 100, height: 44)))
+        let second = makeElement(label: "Item", shape: .frame(CGRect(x: 0, y: 44, width: 100, height: 44)))
+        brains.stash.registry.insertForTesting(TheStash.ScreenElement(
+            heistId: "item_first",
+            contentSpaceOrigin: CGPoint(x: 0, y: 100),
+            element: first,
+            object: nil,
+            scrollView: nil
+        ))
+        brains.stash.registry.insertForTesting(TheStash.ScreenElement(
+            heistId: "item_second",
+            contentSpaceOrigin: CGPoint(x: 0, y: 200),
+            element: second,
+            object: nil,
+            scrollView: nil
+        ))
+        brains.stash.registry.viewportIds = []
+
+        let matcher = ElementMatcher(label: "Item")
+        let entry = brains.offViewportRegistryEntry(for: .matcher(matcher, ordinal: 1))
+
+        XCTAssertEqual(entry?.heistId, "item_second")
+    }
+
+    func testOffViewportEntryByMatcherDoesNotPreScrollAmbiguousMatcher() {
+        let first = makeElement(label: "Item", shape: .frame(CGRect(x: 0, y: 0, width: 100, height: 44)))
+        let second = makeElement(label: "Item", shape: .frame(CGRect(x: 0, y: 44, width: 100, height: 44)))
+        brains.stash.registry.insertForTesting(TheStash.ScreenElement(
+            heistId: "item_first",
+            contentSpaceOrigin: CGPoint(x: 0, y: 100),
+            element: first,
+            object: nil,
+            scrollView: nil
+        ))
+        brains.stash.registry.insertForTesting(TheStash.ScreenElement(
+            heistId: "item_second",
+            contentSpaceOrigin: CGPoint(x: 0, y: 200),
+            element: second,
+            object: nil,
+            scrollView: nil
+        ))
+        brains.stash.registry.viewportIds = []
+
+        let matcher = ElementMatcher(label: "Item")
+        let entry = brains.offViewportRegistryEntry(for: .matcher(matcher))
+
+        XCTAssertNil(entry)
+    }
+
     // MARK: - ContainerExploreState
 
     func testContainerExploreStateStoresValues() {

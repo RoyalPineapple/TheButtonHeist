@@ -341,7 +341,7 @@ classDiagram
 ## Wire Protocol
 
 - **Framing:** Newline-delimited JSON (each message is JSON + `0x0A`)
-- **Protocol version:** `"6.7"` (explicit `type` / `payload` envelopes + exact hello/version matching)
+- **Protocol version:** `"8.0"` (explicit `type` / `payload` envelopes + exact hello/version matching + canonical interface tree payloads)
 - **Service type:** `_buttonheist._tcp`
 - **Encoding:** `Codable` with custom top-level envelope coding at the wire boundary
 - **All types:** `Codable` + `Sendable` for Swift 6 concurrency

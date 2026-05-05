@@ -111,10 +111,11 @@ extension TheStash {
         )
     }
 
-    /// Resolve a base heistId, appending a content-space suffix only when an
-    /// existing element with the same base id no longer describes the same
-    /// accessible thing at a different position. If the minimum matcher is
-    /// unchanged, keep the heistId stable so reorders surface as moves.
+    /// Resolve a base heistId, appending a content-space suffix when an
+    /// existing element with the same base id describes a different scroll
+    /// position. Matching label/id/role is not enough for scrollable content:
+    /// repeated rows can have identical accessible text while representing
+    /// different actionable elements.
     private func resolveHeistId(
         _ baseHeistId: String,
         element: AccessibilityElement,
@@ -122,6 +123,11 @@ extension TheStash {
     ) -> String {
         if let existing = findElement(heistId: baseHeistId),
            Self.hasSameMinimumMatcher(existing.element, element) {
+            if let contentSpaceOrigin,
+               let existingOrigin = existing.contentSpaceOrigin,
+               !Self.sameOrigin(existingOrigin, contentSpaceOrigin) {
+                return Self.contentPositionHeistId(baseHeistId, origin: contentSpaceOrigin)
+            }
             return baseHeistId
         }
 
@@ -131,7 +137,11 @@ extension TheStash {
               !Self.sameOrigin(existingOrigin, contentSpaceOrigin) else {
             return baseHeistId
         }
-        return "\(baseHeistId)_at_\(Int(contentSpaceOrigin.x.rounded()))_\(Int(contentSpaceOrigin.y.rounded()))"
+        return Self.contentPositionHeistId(baseHeistId, origin: contentSpaceOrigin)
+    }
+
+    private static func contentPositionHeistId(_ baseHeistId: String, origin: CGPoint) -> String {
+        "\(baseHeistId)_at_\(Int(origin.x.rounded()))_\(Int(origin.y.rounded()))"
     }
 
     private static func hasSameMinimumMatcher(_ lhs: AccessibilityElement, _ rhs: AccessibilityElement) -> Bool {

@@ -442,8 +442,8 @@ Agent → MCP tool call: activate {identifier: "loginButton"}
 ```
 1. Stateless commands (one-shot, reconnects each time)
    └── Bash: buttonheist get_interface --format json
-   └── Bash: buttonheist screenshot --output /tmp/screen.png
-   └── Bash: buttonheist touch one_finger_tap --identifier loginButton
+   └── Bash: buttonheist get_screen --output /tmp/screen.png
+   └── Bash: buttonheist one_finger_tap --identifier loginButton
 
 2. Session mode (persistent connection, JSON lines on stdin/stdout)
    └── Bash: buttonheist session --format json
