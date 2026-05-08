@@ -119,8 +119,7 @@ final class TheBrains {
         message: String? = nil,
         value: String? = nil,
         errorKind: ErrorKind? = nil,
-        before: BeforeState,
-        target: ElementTarget? = nil
+        before: BeforeState
     ) async -> ActionResult {
         guard success else {
             let kind = errorKind
@@ -165,7 +164,7 @@ final class TheBrains {
             recordDuringExplore(heistIds)
         }
 
-        let manifest = await exploreAndPrune()
+        _ = await exploreAndPrune()
         let afterSnapshot = stash.selectElements()
 
         let baseDelta = stash.computeDelta(
@@ -183,14 +182,6 @@ final class TheBrains {
             ? baseDelta
             : enriching(baseDelta, transient: transientElements)
 
-        let exploreResult = ExploreResult(
-            elements: [],
-            scrollCount: manifest.scrollCount,
-            containersExplored: manifest.exploredContainers.count,
-            containersSkippedObscured: manifest.skippedObscuredContainers,
-            explorationTime: manifest.explorationTime
-        )
-
         stash.captureActionFrame()
 
         var builder = ActionResultBuilder(method: method, snapshot: afterSnapshot)
@@ -200,24 +191,7 @@ final class TheBrains {
         builder.settled = didSettle
         builder.settleTimeMs = settleMs
 
-        var elementLabel: String?
-        var elementValue: String?
-        var elementTraits: [HeistTrait]?
-        if let target {
-            let postElement = stash.resolveTarget(target).resolved?.element
-            elementLabel = postElement?.label
-            elementValue = postElement?.value
-            if let traits = postElement?.traits {
-                elementTraits = stash.traitNames(traits)
-            }
-        }
-
-        return builder.success(
-            elementLabel: elementLabel,
-            elementValue: elementValue,
-            elementTraits: elementTraits,
-            exploreResult: exploreResult
-        )
+        return builder.success()
     }
 
     // MARK: - Settle Outcome Helpers

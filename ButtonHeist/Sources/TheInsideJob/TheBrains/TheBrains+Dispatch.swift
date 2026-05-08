@@ -60,8 +60,7 @@ extension TheBrains {
             method: result.method,
             message: result.message,
             value: result.value,
-            before: before,
-            target: command.actionTarget
+            before: before
         )
     }
 

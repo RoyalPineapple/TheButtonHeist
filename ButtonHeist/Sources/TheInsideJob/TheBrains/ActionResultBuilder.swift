@@ -6,14 +6,13 @@ import TheScore
 ///
 /// The builder captures screen context (screenName/screenId) from either a snapshot array or
 /// explicit values. Calling `.success()` vs `.failure()` enforces that error-only fields
-/// (errorKind) cannot appear on success results, and post-action element metadata cannot
-/// appear on failure results.
+/// (errorKind) cannot appear on success results.
 ///
 /// Usage:
 ///     var builder = ActionResultBuilder(method: .activate, snapshot: afterSnapshot)
 ///     builder.message = "Tapped Sign In"
 ///     builder.interfaceDelta = delta
-///     return builder.success(elementLabel: "Sign In", elementTraits: [.button])
+///     return builder.success()
 @MainActor
 struct ActionResultBuilder {
     let method: ActionMethod
@@ -40,9 +39,6 @@ struct ActionResultBuilder {
     }
 
     func success(
-        elementLabel: String? = nil,
-        elementValue: String? = nil,
-        elementTraits: [HeistTrait]? = nil,
         scrollSearchResult: ScrollSearchResult? = nil,
         exploreResult: ExploreResult? = nil
     ) -> ActionResult {
@@ -52,9 +48,6 @@ struct ActionResultBuilder {
             message: message,
             value: value,
             interfaceDelta: interfaceDelta,
-            elementLabel: elementLabel,
-            elementValue: elementValue,
-            elementTraits: elementTraits,
             screenName: screenName,
             screenId: screenId,
             scrollSearchResult: scrollSearchResult,

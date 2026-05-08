@@ -183,6 +183,13 @@ public enum ErrorKind: String, Codable, Sendable, CaseIterable {
 }
 
 /// The outcome of executing an action command, including post-action diagnostics.
+///
+/// The three command-specific fields — `value`, `scrollSearchResult`, and
+/// `exploreResult` — are mutually exclusive: at most one is non-nil, depending
+/// on which command produced the result.
+///   - `value`        → typeText / setPasteboard / getPasteboard
+///   - `scrollSearchResult` → element_search / scroll_to_visible
+///   - `exploreResult`      → the explicit `explore` command
 public struct ActionResult: Codable, Sendable {
     /// Whether the action was delivered and completed normally. `false` means
     /// the action reached the server but the handler reported failure — it is
@@ -195,26 +202,20 @@ public struct ActionResult: Codable, Sendable {
     public var message: String?
     /// Typed error classification (nil on success)
     public var errorKind: ErrorKind?
-    /// Current text field value after a typeText operation
+    /// Current text field value after a typeText / set/getPasteboard operation
     public var value: String?
     /// Compact delta describing what changed in the hierarchy after the action
     public var interfaceDelta: InterfaceDelta?
     /// Whether the UI was still animating when this result was produced.
     /// nil means idle (no animations detected).
     public var animating: Bool?
-    /// Post-action accessibility label of the acted-on element
-    public var elementLabel: String?
-    /// Post-action accessibility value of the acted-on element
-    public var elementValue: String?
-    /// Post-action accessibility traits of the acted-on element (e.g. [.button, .selected])
-    public var elementTraits: [HeistTrait]?
     /// Label of the first header element in the post-action snapshot (screen name hint)
     public var screenName: String?
     /// Slugified screen name for machine use (e.g. "controls_demo")
     public var screenId: String?
-    /// Diagnostics from a scroll_to_visible search operation
+    /// Diagnostics from a scroll_to_visible / element_search search operation
     public var scrollSearchResult: ScrollSearchResult?
-    /// Diagnostics from an explore (full screen census) operation
+    /// Full element census from the explicit `explore` command
     public var exploreResult: ExploreResult?
     /// True when the response represents a settled UI state — either the
     /// AX tree reached multi-cycle stability, or a screen transition
@@ -236,9 +237,6 @@ public struct ActionResult: Codable, Sendable {
         value: String? = nil,
         interfaceDelta: InterfaceDelta? = nil,
         animating: Bool? = nil,
-        elementLabel: String? = nil,
-        elementValue: String? = nil,
-        elementTraits: [HeistTrait]? = nil,
         screenName: String? = nil,
         screenId: String? = nil,
         scrollSearchResult: ScrollSearchResult? = nil,
@@ -253,9 +251,6 @@ public struct ActionResult: Codable, Sendable {
         self.value = value
         self.interfaceDelta = interfaceDelta
         self.animating = animating
-        self.elementLabel = elementLabel
-        self.elementValue = elementValue
-        self.elementTraits = elementTraits
         self.screenName = screenName
         self.screenId = screenId
         self.scrollSearchResult = scrollSearchResult
