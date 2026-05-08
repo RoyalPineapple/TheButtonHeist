@@ -255,7 +255,7 @@ extension ActionExpectation {
 
             // Normal path: check the added list from element-level diffs (or
             // post-screen-change post-edits).
-            let added = delta?.addedAcrossCases ?? []
+            let added = delta?.elementEdits?.added ?? []
             if !added.isEmpty {
                 if added.contains(where: { $0.matches(matcher) }) {
                     return ExpectationResult(met: true, expectation: self, actual: nil)
@@ -269,16 +269,19 @@ extension ActionExpectation {
 
             // Screen-change path: the entire interface is new, so every element
             // on the new screen effectively "appeared". Check newInterface.
-            if let newInterface = delta?.newInterface,
-               newInterface.elements.contains(where: { $0.matches(matcher) }) {
-                return ExpectationResult(met: true, expectation: self, actual: nil)
+            if case .screenChanged(let payload)? = delta {
+                if payload.newInterface.elements.contains(where: { $0.matches(matcher) }) {
+                    return ExpectationResult(met: true, expectation: self, actual: nil)
+                }
+                return ExpectationResult(
+                    met: false, expectation: self,
+                    actual: "screen changed but element not found in new interface"
+                )
             }
 
             return ExpectationResult(
                 met: false, expectation: self,
-                actual: delta?.isScreenChanged == true
-                    ? "screen changed but element not found in new interface"
-                    : "no elements added"
+                actual: "no elements added"
             )
 
         case .elementDisappeared(let matcher):
@@ -286,7 +289,7 @@ extension ActionExpectation {
 
             // Normal path: check the removed list from element-level diffs (or
             // post-screen-change post-edits).
-            let removed = delta?.removedAcrossCases ?? []
+            let removed = delta?.elementEdits?.removed ?? []
             if !removed.isEmpty {
                 let matched = removed.contains { heistId in
                     guard let element = preActionElements[heistId] else { return false }
@@ -304,9 +307,9 @@ extension ActionExpectation {
 
             // Screen-change path: the entire old screen is gone. Check if a
             // matching element existed before and is absent from the new interface.
-            if delta?.isScreenChanged == true {
+            if case .screenChanged(let payload)? = delta {
                 let matchedBefore = preActionElements.values.contains { $0.matches(matcher) }
-                let stillPresent = delta?.newInterface?.elements.contains { $0.matches(matcher) } ?? false
+                let stillPresent = payload.newInterface.elements.contains { $0.matches(matcher) }
                 if matchedBefore, !stillPresent {
                     return ExpectationResult(met: true, expectation: self, actual: nil)
                 }
@@ -345,7 +348,7 @@ extension ActionExpectation {
         oldValue: String?, newValue: String?,
         expectation: ActionExpectation, result: ActionResult
     ) -> ExpectationResult {
-        let updates = result.interfaceDelta?.updatedAcrossCases ?? []
+        let updates = result.interfaceDelta?.elementEdits?.updated ?? []
         guard !updates.isEmpty else {
             return ExpectationResult(met: false, expectation: expectation, actual: "no element updates")
         }

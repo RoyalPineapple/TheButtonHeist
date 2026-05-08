@@ -207,23 +207,28 @@ final class InterfaceDeltaRoundTripTests: XCTestCase {
         )
     }
 
-    func testAddedAcrossCasesReadsBothCases() {
+    func testElementEditsAccessorReadsBothCases() {
         let interface = Interface(timestamp: Date(timeIntervalSince1970: 1_000_000), tree: [])
         let element = makeElement(heistId: "x", label: "X")
         let elementsChanged = InterfaceDelta.elementsChanged(
             .init(elementCount: 1, edits: ElementEdits(added: [element]))
         )
-        XCTAssertEqual(elementsChanged.addedAcrossCases.map(\.heistId), ["x"])
+        XCTAssertEqual(elementsChanged.elementEdits?.added.map(\.heistId), ["x"])
 
         let screenChanged = InterfaceDelta.screenChanged(.init(
             elementCount: 1,
             newInterface: interface,
             postEdits: ElementEdits(added: [element])
         ))
-        XCTAssertEqual(screenChanged.addedAcrossCases.map(\.heistId), ["x"])
+        XCTAssertEqual(screenChanged.elementEdits?.added.map(\.heistId), ["x"])
+
+        let screenChangedNoPostEdits = InterfaceDelta.screenChanged(.init(
+            elementCount: 1, newInterface: interface
+        ))
+        XCTAssertNil(screenChangedNoPostEdits.elementEdits)
 
         let noChange = InterfaceDelta.noChange(.init(elementCount: 0))
-        XCTAssertTrue(noChange.addedAcrossCases.isEmpty)
+        XCTAssertNil(noChange.elementEdits)
     }
 
     // MARK: - Malformed Input Rejection

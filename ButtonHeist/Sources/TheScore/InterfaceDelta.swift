@@ -105,54 +105,21 @@ public enum InterfaceDelta: Sendable {
         }
     }
 
-    /// Elements that appear in this delta — either because they were added
-    /// in `.elementsChanged.edits.added` or they appear in
-    /// `.screenChanged.postEdits.added`. Used by `ActionExpectation` for
-    /// `elementAppeared` validation across element-level and post-screen-change
-    /// edits.
-    public var addedAcrossCases: [HeistElement] {
+    /// Element edits carried by this delta, regardless of case. For
+    /// `.elementsChanged` returns the case's edits; for `.screenChanged`
+    /// returns the optional `postEdits` (folded in by
+    /// `NetDeltaAccumulator.mergeAfterScreenChange` for batch merges); nil
+    /// for `.noChange`. Lets cross-case consumers (e.g. `ActionExpectation`)
+    /// read added/removed/updated without re-implementing the switch.
+    public var elementEdits: ElementEdits? {
         switch self {
         case .noChange:
-            return []
+            return nil
         case .elementsChanged(let payload):
-            return payload.edits.added
+            return payload.edits
         case .screenChanged(let payload):
-            return payload.postEdits?.added ?? []
+            return payload.postEdits
         }
-    }
-
-    /// HeistIds removed by this delta in either `.elementsChanged.edits.removed`
-    /// or `.screenChanged.postEdits.removed`.
-    public var removedAcrossCases: [String] {
-        switch self {
-        case .noChange:
-            return []
-        case .elementsChanged(let payload):
-            return payload.edits.removed
-        case .screenChanged(let payload):
-            return payload.postEdits?.removed ?? []
-        }
-    }
-
-    /// Element updates from either `.elementsChanged.edits.updated` or
-    /// `.screenChanged.postEdits.updated`.
-    public var updatedAcrossCases: [ElementUpdate] {
-        switch self {
-        case .noChange:
-            return []
-        case .elementsChanged(let payload):
-            return payload.edits.updated
-        case .screenChanged(let payload):
-            return payload.postEdits?.updated ?? []
-        }
-    }
-
-    /// New interface for `.screenChanged`, nil otherwise.
-    public var newInterface: Interface? {
-        if case .screenChanged(let payload) = self {
-            return payload.newInterface
-        }
-        return nil
     }
 
     // MARK: - Wire Discriminator
@@ -244,13 +211,7 @@ extension InterfaceDelta: Codable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let kindString = try container.decode(String.self, forKey: .kind)
-        guard let kind = Kind(rawValue: kindString) else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .kind, in: container,
-                debugDescription: "Unknown InterfaceDelta kind: \"\(kindString)\""
-            )
-        }
+        let kind = try container.decode(Kind.self, forKey: .kind)
         let elementCount = try container.decode(Int.self, forKey: .elementCount)
         let transient = try container.decodeIfPresent([HeistElement].self, forKey: .transient) ?? []
 
@@ -282,14 +243,14 @@ extension InterfaceDelta: Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
         case .noChange(let payload):
-            try container.encode(Kind.noChange.rawValue, forKey: .kind)
+            try container.encode(Kind.noChange, forKey: .kind)
             try container.encode(payload.elementCount, forKey: .elementCount)
             if !payload.transient.isEmpty {
                 try container.encode(payload.transient, forKey: .transient)
             }
 
         case .elementsChanged(let payload):
-            try container.encode(Kind.elementsChanged.rawValue, forKey: .kind)
+            try container.encode(Kind.elementsChanged, forKey: .kind)
             try container.encode(payload.elementCount, forKey: .elementCount)
             try payload.edits.encode(to: encoder)
             if !payload.transient.isEmpty {
@@ -297,7 +258,7 @@ extension InterfaceDelta: Codable {
             }
 
         case .screenChanged(let payload):
-            try container.encode(Kind.screenChanged.rawValue, forKey: .kind)
+            try container.encode(Kind.screenChanged, forKey: .kind)
             try container.encode(payload.elementCount, forKey: .elementCount)
             try container.encode(payload.newInterface, forKey: .newInterface)
             if let postEdits = payload.postEdits, !postEdits.isEmpty {

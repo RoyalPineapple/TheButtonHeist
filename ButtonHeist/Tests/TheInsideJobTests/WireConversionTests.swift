@@ -348,10 +348,11 @@ final class WireConverterTests: XCTestCase {
         let delta = WireConversion.computeDelta(
             before: before, after: after, afterTree: afterTree, isScreenChange: true
         )
-        XCTAssertTrue(delta.isScreenChanged)
-        XCTAssertNotNil(delta.newInterface)
-        XCTAssertEqual(delta.newInterface?.elements.count, 1)
-        XCTAssertEqual(delta.elementCount, 1)
+        guard case .screenChanged(let payload) = delta else {
+            return XCTFail("Expected .screenChanged, got \(delta)")
+        }
+        XCTAssertEqual(payload.newInterface.elements.count, 1)
+        XCTAssertEqual(payload.elementCount, 1)
     }
 
     func testTreeOnlyChangeReturnsStructuralInsertion() {
@@ -377,7 +378,6 @@ final class WireConverterTests: XCTestCase {
 
         XCTAssertFalse(delta.isScreenChanged)
         if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
-        XCTAssertNil(delta.newInterface)
         XCTAssertEqual(delta.testEdits.treeInsertedOptional?.count, 1)
         XCTAssertEqual(delta.testEdits.treeInsertedOptional?.first?.location, TreeLocation(parentId: nil, index: 0))
         guard case .container(let info, let children) = delta.testEdits.treeInsertedOptional?.first?.node else {

@@ -231,7 +231,7 @@ final class RecordingPayloadTests: XCTestCase {
         XCTAssertEqual(decoded.result.method, .syntheticTap)
         XCTAssertNotNil(decoded.result.interfaceDelta)
         XCTAssertEqual(decoded.result.interfaceDelta?.kindRawValue, "elementsChanged")
-        XCTAssertEqual(decoded.result.interfaceDelta?.updatedAcrossCases.first?.heistId, "okBtn")
+        XCTAssertEqual(decoded.result.interfaceDelta?.elementEdits?.updated.first?.heistId, "okBtn")
     }
 
     func testInteractionEventNilDelta() throws {

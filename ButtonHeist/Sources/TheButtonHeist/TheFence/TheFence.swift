@@ -426,13 +426,13 @@ public final class TheFence {
             )
         }
         guard let actionResult = response.actionResult,
-              let newInterface = actionResult.interfaceDelta?.newInterface else {
+              case .screenChanged(let payload)? = actionResult.interfaceDelta else {
             return ResponseCacheUpdate(
                 evidenceElements: lastInterfaceCache.isEmpty ? nil : Array(lastInterfaceCache.values),
                 postRecordBookKeeperElements: nil
             )
         }
-        return updateInterfaceCache(for: actionResult, newInterface: newInterface, preActionCache: preActionCache)
+        return updateInterfaceCache(for: actionResult, newInterface: payload.newInterface, preActionCache: preActionCache)
     }
 
     private func updateInterfaceCache(
@@ -440,13 +440,8 @@ public final class TheFence {
         newInterface: Interface,
         preActionCache: [String: HeistElement]
     ) -> ResponseCacheUpdate {
-        guard actionResult.interfaceDelta?.isScreenChanged == true else {
-            updateInterfaceCache(newInterface.elements)
-            return ResponseCacheUpdate(
-                evidenceElements: lastInterfaceCache.isEmpty ? nil : Array(lastInterfaceCache.values),
-                postRecordBookKeeperElements: nil
-            )
-        }
+        // Only reachable when interfaceDelta is .screenChanged (caller's guard).
+        // Below assumes newInterface is the screenChange payload.
         lastInterfaceCache.removeAll()
         for element in newInterface.elements {
             lastInterfaceCache[element.heistId] = element

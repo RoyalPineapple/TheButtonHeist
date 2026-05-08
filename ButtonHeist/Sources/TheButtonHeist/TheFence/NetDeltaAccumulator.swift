@@ -18,11 +18,14 @@ internal enum NetDeltaAccumulator {
         guard !meaningful.isEmpty else { return nil }
 
         // If any step was a screen change, the net is screenChanged with the last one's interface
-        if let lastScreenChange = meaningful.lastIndex(where: { $0.isScreenChanged }) {
-            guard case .screenChanged(let screenPayload) = meaningful[lastScreenChange] else {
-                return nil
-            }
-            return mergeAfterScreenChange(screenChange: screenPayload, deltas: deltas)
+        if let screenIndex = deltas.lastIndex(where: { delta in
+            if case .screenChanged = delta { return true }
+            return false
+        }), case .screenChanged(let screenPayload) = deltas[screenIndex] {
+            return mergeAfterScreenChange(
+                screenChange: screenPayload,
+                postDeltas: Array(deltas[(screenIndex + 1)...])
+            )
         }
 
         // All steps are elementsChanged or transient-bearing noChange —
@@ -30,16 +33,15 @@ internal enum NetDeltaAccumulator {
         return mergeElementDeltas(meaningful)
     }
 
+    /// Fold element-level edits that happened after `screenChange` into a
+    /// single `.screenChanged` result, applying them to the new interface.
+    /// `postDeltas` is the slice of the original sequence strictly after the
+    /// screen-change step; any further screen changes inside that slice are
+    /// dropped because the caller has already pinned to the *last* one.
     private static func mergeAfterScreenChange(
-        screenChange: InterfaceDelta.ScreenChanged, deltas: [InterfaceDelta]
+        screenChange: InterfaceDelta.ScreenChanged, postDeltas: [InterfaceDelta]
     ) -> InterfaceDelta {
-        // Find steps after the last screen change and fold their element changes
-        // into the screen change's interface
-        guard let screenIndex = deltas.lastIndex(where: { $0.isScreenChanged }) else {
-            return .screenChanged(screenChange)
-        }
-        let afterScreen = Array(deltas[(screenIndex + 1)...])
-        let postDeltas = afterScreen.filter { delta in
+        let postDeltas = postDeltas.filter { delta in
             switch delta {
             case .noChange(let payload): return !payload.transient.isEmpty
             case .elementsChanged: return true
