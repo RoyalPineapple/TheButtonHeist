@@ -32,8 +32,7 @@ struct SessionCommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Connection timeout in seconds (default: \(Int(SessionDefaults.connectionTimeout)))")
     var timeout: Double = SessionDefaults.connectionTimeout
 
-    @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
-    var format: OutputFormat?
+    @OptionGroup var output: OutputOptions
 
     @Option(name: .long, help: "Auth token from a previous connection")
     var token: String?
@@ -43,7 +42,7 @@ struct SessionCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        let effectiveFormat = format ?? .auto
+        let effectiveFormat = output.format ?? .auto
         let config = EnvironmentConfig.resolve(
             deviceFilter: device,
             token: token,

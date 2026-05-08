@@ -17,8 +17,7 @@ struct PlayHeistCommand: AsyncParsableCommand {
 
     @OptionGroup var connection: ConnectionOptions
 
-    @Option(name: .long, help: "Output format")
-    var format: OutputFormat = .auto
+    @OptionGroup var output: OutputOptions
 
     @ButtonHeistActor
     func run() async throws {
@@ -45,11 +44,11 @@ struct PlayHeistCommand: AsyncParsableCommand {
                 logStatus("Warning: --junit requested but playback did not produce a report")
             }
 
-            CLIRunner.outputResponse(response, format: format)
+            CLIRunner.outputResponse(response, format: output.format ?? .auto)
         } else {
             try await CLIRunner.run(
                 connection: connection,
-                format: format,
+                format: output.format,
                 request: request
             )
         }

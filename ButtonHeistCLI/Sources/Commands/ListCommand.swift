@@ -11,8 +11,7 @@ struct ListCommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Discovery timeout in seconds")
     var timeout: Double = 3.0
 
-    @Option(name: .shortAndLong, help: "Output format: human, json, compact (default: human when interactive, json when piped)")
-    var format: OutputFormat?
+    @OptionGroup var output: OutputOptions
 
     @ButtonHeistActor
     mutating func run() async throws {
@@ -27,6 +26,6 @@ struct ListCommand: AsyncParsableCommand {
             "command": TheFence.Command.listDevices.rawValue,
         ]
         let response = try await fence.execute(request: request)
-        CLIRunner.outputResponse(response, format: format ?? .auto)
+        CLIRunner.outputResponse(response, format: output.format ?? .auto)
     }
 }
