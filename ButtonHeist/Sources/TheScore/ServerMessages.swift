@@ -266,7 +266,6 @@ public struct ActionResult: Codable, Sendable {
 }
 
 extension ActionResult {
-    /// Return a copy with the scrollSearchResult field set.
     public func adding(scrollSearchResult: ScrollSearchResult?) -> ActionResult {
         ActionResult(
             success: success, method: method, message: message, errorKind: errorKind,
@@ -278,8 +277,9 @@ extension ActionResult {
         )
     }
 
-    /// Return a copy with the exploreResult's elements populated.
-    /// Used by the explicit explore command which needs the full element list.
+    /// Populate the `exploreResult.elements` array. Used by the explicit
+    /// `explore` command, which needs the full element list rather than
+    /// the diff-only summary.
     public func adding(exploreElements: [HeistElement]) -> ActionResult {
         guard let explore = exploreResult else { return self }
         let fullExplore = ExploreResult(
@@ -379,6 +379,9 @@ public struct ExploreResult: Codable, Sendable {
 // MARK: - Interface Delta
 
 /// Compact description of what changed in the accessibility hierarchy after an action.
+///
+/// `added`, `removed`, `updated`, and the `tree*` fields are populated for
+/// `.elementsChanged`. `newInterface` is populated only for `.screenChanged`.
 public struct InterfaceDelta: Codable, Sendable {
 
     // MARK: - Nested Types
@@ -396,22 +399,17 @@ public struct InterfaceDelta: Codable, Sendable {
 
     public let elementCount: Int
 
-    /// Elements that were added (present for .elementsChanged)
     public let added: [HeistElement]?
 
-    /// HeistIds of elements that were removed (present for .elementsChanged)
+    /// HeistIds of removed elements.
     public let removed: [String]?
 
-    /// Elements whose properties changed (present for .elementsChanged)
     public let updated: [ElementUpdate]?
 
-    /// Nodes inserted into the interface tree (present for structural .elementsChanged)
     public let treeInserted: [TreeInsertion]?
 
-    /// Nodes removed from the interface tree (present for structural .elementsChanged)
     public let treeRemoved: [TreeRemoval]?
 
-    /// Existing nodes moved within the interface tree (present for structural .elementsChanged)
     public let treeMoved: [TreeMove]?
 
     /// Elements that appeared and then disappeared during the post-action
@@ -422,7 +420,6 @@ public struct InterfaceDelta: Codable, Sendable {
     /// otherwise identical.
     public let transient: [HeistElement]?
 
-    /// Full new interface (present only for .screenChanged)
     public let newInterface: Interface?
 
     // MARK: - Init
@@ -586,25 +583,17 @@ public struct RecordingPayload: Codable, Sendable {
 
     // MARK: - Properties
 
-    /// Base64-encoded MP4 video data (H.264)
+    /// Base64-encoded MP4 video data (H.264).
     public let videoData: String
-    /// Video width in pixels
     public let width: Int
-    /// Video height in pixels
     public let height: Int
-    /// Recording duration in seconds
     public let duration: Double
-    /// Number of frames captured
     public let frameCount: Int
-    /// Frames per second used during recording
     public let fps: Int
-    /// Timestamp when recording started
     public let startTime: Date
-    /// Timestamp when recording ended
     public let endTime: Date
-    /// Reason recording stopped
     public let stopReason: StopReason
-    /// Ordered log of interactions recorded during this session (nil if no interactions occurred)
+    /// Ordered log of interactions recorded during this session, or nil if none occurred.
     public let interactionLog: [InteractionEvent]?
 
     // MARK: - Init
@@ -637,11 +626,9 @@ public struct RecordingPayload: Codable, Sendable {
 /// A single recorded interaction event captured during a TheStakeout recording.
 /// Uses `InterfaceDelta` instead of full before/after `Interface` snapshots to minimize payload size.
 public struct InteractionEvent: Codable, Sendable {
-    /// Time offset from recording start in seconds
+    /// Time offset from recording start, in seconds.
     public let timestamp: Double
-    /// The command that triggered this interaction
     public let command: ClientMessage
-    /// The result returned to the client (includes interfaceDelta)
     public let result: ActionResult
 
     public init(
@@ -746,7 +733,6 @@ public struct ServerInfo: Codable, Sendable {
 }
 
 extension ServerInfo {
-    /// Computed screen size as CGSize
     public var screenSize: CGSize {
         CGSize(width: screenWidth, height: screenHeight)
     }

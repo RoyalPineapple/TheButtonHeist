@@ -579,23 +579,18 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
     public var label: String?
     public var value: String?
     public var identifier: String?
-    /// Accessibility hint (read by VoiceOver after the description)
+    /// Read by VoiceOver after the label/value.
     public var hint: String?
-    /// Accessibility traits as typed enum values (e.g. [.button, .adjustable])
     public var traits: [HeistTrait]
     public var frameX: Double
     public var frameY: Double
     public var frameWidth: Double
     public var frameHeight: Double
-    /// Activation point X coordinate (where VoiceOver would tap)
+    /// Where VoiceOver would tap, in screen coordinates. May fall outside `frame`.
     public var activationPointX: Double
-    /// Activation point Y coordinate
     public var activationPointY: Double
-    /// Whether the element responds to user interaction
     public var respondsToUserInteraction: Bool
-    /// Custom content label/value pairs provided by the element
     public var customContent: [HeistCustomContent]?
-    /// Available actions for this element
     public var actions: [ElementAction]
 
     public init(
@@ -704,12 +699,10 @@ public struct ElementMatcher: Codable, Sendable, Equatable {
 // MARK: - Convenience Extensions
 
 extension HeistElement {
-    /// Computed frame as CGRect
     public var frame: CGRect {
         CGRect(x: frameX, y: frameY, width: frameWidth, height: frameHeight)
     }
 
-    /// Computed activation point as CGPoint
     public var activationPoint: CGPoint {
         CGPoint(x: activationPointX, y: activationPointY)
     }

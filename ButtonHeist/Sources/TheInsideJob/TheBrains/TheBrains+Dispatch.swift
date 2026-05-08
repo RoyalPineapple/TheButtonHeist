@@ -240,15 +240,6 @@ extension TheBrains {
     }
 
     private static func commandName(for message: ClientMessage) -> String {
-        if let name = handshakeCommandName(for: message) { return name }
-        if let name = accessibilityCommandName(for: message) { return name }
-        if let name = touchCommandName(for: message) { return name }
-        if let name = utilityCommandName(for: message) { return name }
-        if let name = recordingCommandName(for: message) { return name }
-        return "unknown"
-    }
-
-    private static func handshakeCommandName(for message: ClientMessage) -> String? {
         switch message {
         case .clientHello: return "client_hello"
         case .authenticate: return "authenticate"
@@ -258,12 +249,6 @@ extension TheBrains {
         case .ping: return "ping"
         case .status: return "status"
         case .requestScreen: return "request_screen"
-        default: return nil
-        }
-    }
-
-    private static func accessibilityCommandName(for message: ClientMessage) -> String? {
-        switch message {
         case .activate: return "activate"
         case .increment: return "increment"
         case .decrement: return "decrement"
@@ -272,12 +257,6 @@ extension TheBrains {
         case .setPasteboard: return "set_pasteboard"
         case .getPasteboard: return "get_pasteboard"
         case .resignFirstResponder: return "resign_first_responder"
-        default: return nil
-        }
-    }
-
-    private static func touchCommandName(for message: ClientMessage) -> String? {
-        switch message {
         case .touchTap: return "touch_tap"
         case .touchLongPress: return "touch_long_press"
         case .touchSwipe: return "touch_swipe"
@@ -287,12 +266,6 @@ extension TheBrains {
         case .touchTwoFingerTap: return "touch_two_finger_tap"
         case .touchDrawPath: return "touch_draw_path"
         case .touchDrawBezier: return "touch_draw_bezier"
-        default: return nil
-        }
-    }
-
-    private static func utilityCommandName(for message: ClientMessage) -> String? {
-        switch message {
         case .typeText: return "type_text"
         case .scroll: return "scroll"
         case .scrollToVisible: return "scroll_to_visible"
@@ -302,27 +275,15 @@ extension TheBrains {
         case .waitFor: return "wait_for"
         case .waitForChange: return "wait_for_change"
         case .explore: return "explore"
-        default: return nil
-        }
-    }
-
-    private static func recordingCommandName(for message: ClientMessage) -> String? {
-        switch message {
         case .startRecording: return "start_recording"
         case .stopRecording: return "stop_recording"
         case .watch: return "watch"
-        default: return nil
         }
     }
 
+    /// Map a ClientMessage to the ActionMethod that best identifies it for diagnostic output.
+    /// Handshake/control messages have no natural ActionMethod and fall back to `.activate`.
     private static func diagnosticMethod(for message: ClientMessage) -> ActionMethod {
-        if let method = diagnosticAccessibilityMethod(for: message) { return method }
-        if let method = diagnosticTouchMethod(for: message) { return method }
-        if let method = diagnosticUtilityMethod(for: message) { return method }
-        return .activate
-    }
-
-    private static func diagnosticAccessibilityMethod(for message: ClientMessage) -> ActionMethod? {
         switch message {
         case .activate: return .activate
         case .increment: return .increment
@@ -332,12 +293,6 @@ extension TheBrains {
         case .setPasteboard: return .setPasteboard
         case .getPasteboard: return .getPasteboard
         case .resignFirstResponder: return .resignFirstResponder
-        default: return nil
-        }
-    }
-
-    private static func diagnosticTouchMethod(for message: ClientMessage) -> ActionMethod? {
-        switch message {
         case .touchTap: return .syntheticTap
         case .touchLongPress: return .syntheticLongPress
         case .touchSwipe: return .syntheticSwipe
@@ -346,12 +301,6 @@ extension TheBrains {
         case .touchRotate: return .syntheticRotate
         case .touchTwoFingerTap: return .syntheticTwoFingerTap
         case .touchDrawPath, .touchDrawBezier: return .syntheticDrawPath
-        default: return nil
-        }
-    }
-
-    private static func diagnosticUtilityMethod(for message: ClientMessage) -> ActionMethod? {
-        switch message {
         case .typeText: return .typeText
         case .scroll: return .scroll
         case .scrollToVisible: return .scrollToVisible
@@ -361,56 +310,17 @@ extension TheBrains {
         case .waitFor: return .waitFor
         case .waitForChange: return .waitForChange
         case .explore: return .explore
-        default: return nil
+        case .clientHello, .authenticate, .requestInterface, .subscribe, .unsubscribe,
+             .ping, .status, .requestScreen, .startRecording, .stopRecording, .watch:
+            return .activate
         }
     }
 
+    /// Method to report when refresh fails before a command-specific executor runs.
+    /// Mirrors `diagnosticMethod` for action commands; handshake/control messages
+    /// (which never reach this path) fall back to `.activate`.
     private func fallbackMethod(for command: ClientMessage) -> ActionMethod {
-        if let method = fallbackAccessibilityMethod(for: command) { return method }
-        if let method = fallbackTouchMethod(for: command) { return method }
-        if let method = fallbackUtilityMethod(for: command) { return method }
-        return .activate
-    }
-
-    private func fallbackAccessibilityMethod(for command: ClientMessage) -> ActionMethod? {
-        switch command {
-        case .activate: return .activate
-        case .increment: return .increment
-        case .decrement: return .decrement
-        case .performCustomAction: return .customAction
-        case .editAction: return .editAction
-        case .resignFirstResponder: return .resignFirstResponder
-        case .setPasteboard: return .setPasteboard
-        case .getPasteboard: return .getPasteboard
-        default: return nil
-        }
-    }
-
-    private func fallbackTouchMethod(for command: ClientMessage) -> ActionMethod? {
-        switch command {
-        case .touchTap: return .syntheticTap
-        case .touchLongPress: return .syntheticLongPress
-        case .touchSwipe: return .syntheticSwipe
-        case .touchDrag: return .syntheticDrag
-        case .touchPinch: return .syntheticPinch
-        case .touchRotate: return .syntheticRotate
-        case .touchTwoFingerTap: return .syntheticTwoFingerTap
-        case .touchDrawPath, .touchDrawBezier: return .syntheticDrawPath
-        default: return nil
-        }
-    }
-
-    private func fallbackUtilityMethod(for command: ClientMessage) -> ActionMethod? {
-        switch command {
-        case .typeText: return .typeText
-        case .scroll: return .scroll
-        case .scrollToVisible: return .scrollToVisible
-        case .elementSearch: return .elementSearch
-        case .scrollToEdge: return .scrollToEdge
-        case .waitFor: return .waitFor
-        case .explore: return .explore
-        default: return nil
-        }
+        Self.diagnosticMethod(for: command)
     }
 }
 
