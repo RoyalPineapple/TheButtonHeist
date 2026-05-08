@@ -497,13 +497,21 @@ extension FenceResponse {
         case .noChange:
             break
         case .elementsChanged(let casePayload):
-            mergeEditDictionary(casePayload.edits, into: &payload)
+            if !casePayload.edits.isEmpty {
+                var editsDict: [String: Any] = [:]
+                mergeEditDictionary(casePayload.edits, into: &editsDict)
+                if !editsDict.isEmpty {
+                    payload["edits"] = editsDict
+                }
+            }
         case .screenChanged(let casePayload):
             payload["newInterface"] = interfaceDictionary(casePayload.newInterface, detail: .summary)
             if let postEdits = casePayload.postEdits, !postEdits.isEmpty {
                 var postDict: [String: Any] = [:]
                 mergeEditDictionary(postEdits, into: &postDict)
-                payload["postEdits"] = postDict
+                if !postDict.isEmpty {
+                    payload["postEdits"] = postDict
+                }
             }
         }
         return payload

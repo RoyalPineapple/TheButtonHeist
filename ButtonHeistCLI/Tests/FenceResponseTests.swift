@@ -332,10 +332,11 @@ final class FenceResponseTests: XCTestCase {
         let response = FenceResponse.action(result: result)
         let dict = response.jsonDict()!
         let deltaDict = dict["delta"] as? [String: Any]
+        let editsDict = deltaDict?["edits"] as? [String: Any]
 
-        XCTAssertEqual((deltaDict?["treeInserted"] as? [[String: Any]])?.count, 1)
-        XCTAssertEqual((deltaDict?["treeRemoved"] as? [[String: Any]])?.count, 1)
-        let moved = deltaDict?["treeMoved"] as? [[String: Any]]
+        XCTAssertEqual((editsDict?["treeInserted"] as? [[String: Any]])?.count, 1)
+        XCTAssertEqual((editsDict?["treeRemoved"] as? [[String: Any]])?.count, 1)
+        let moved = editsDict?["treeMoved"] as? [[String: Any]]
         XCTAssertEqual(moved?.count, 1)
         let ref = moved?.first?["ref"] as? [String: Any]
         XCTAssertEqual(ref?["id"] as? String, "moved_row")
