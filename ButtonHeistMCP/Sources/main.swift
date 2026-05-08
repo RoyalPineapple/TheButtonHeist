@@ -297,39 +297,42 @@ struct ButtonHeistMCPServer {
         var content: [Tool.Content] = []
 
         // Background changes: what happened while the agent was thinking
-        for backgroundDelta in backgroundDeltas
-            where backgroundDelta.kind != .noChange || backgroundDelta.transient?.isEmpty == false {
-            let transient = backgroundDelta.transient ?? []
+        for backgroundDelta in backgroundDeltas {
+            // Skip silent no-change deltas; keep transient-bearing ones since
+            // those describe activity the agent should know about.
+            if case .noChange(let payload) = backgroundDelta, payload.transient.isEmpty {
+                continue
+            }
+            let transient = backgroundDelta.transient
             var lines: [String] = []
-            switch backgroundDelta.kind {
-            case .screenChanged:
-                lines.append("[background: screen changed (\(backgroundDelta.elementCount) elements)]")
-                if let elements = backgroundDelta.newInterface?.elements {
-                    for (index, element) in elements.enumerated() {
-                        lines.append("  [\(index)] \(Self.compactBackgroundElement(element))")
-                    }
+            switch backgroundDelta {
+            case .screenChanged(let payload):
+                lines.append("[background: screen changed (\(payload.elementCount) elements)]")
+                for (index, element) in payload.newInterface.elements.enumerated() {
+                    lines.append("  [\(index)] \(Self.compactBackgroundElement(element))")
                 }
                 for element in transient {
                     lines.append("  +- \(Self.compactBackgroundElement(element))")
                 }
-            case .elementsChanged:
+            case .elementsChanged(let payload):
+                let edits = payload.edits
                 var parts: [String] = []
-                if let added = backgroundDelta.added { parts.append("+\(added.count)") }
-                if let removed = backgroundDelta.removed { parts.append("-\(removed.count)") }
-                if let updated = backgroundDelta.updated { parts.append("~\(updated.count)") }
+                if !edits.added.isEmpty { parts.append("+\(edits.added.count)") }
+                if !edits.removed.isEmpty { parts.append("-\(edits.removed.count)") }
+                if !edits.updated.isEmpty { parts.append("~\(edits.updated.count)") }
                 if !transient.isEmpty { parts.append("+-\(transient.count)") }
-                lines.append("[background: elements changed \(parts.joined(separator: " ")) (\(backgroundDelta.elementCount) total)]")
-                if let added = backgroundDelta.added {
-                    for element in added { lines.append("  + \(element.heistId) \"\(element.label ?? "")\"") }
+                lines.append("[background: elements changed \(parts.joined(separator: " ")) (\(payload.elementCount) total)]")
+                for element in edits.added {
+                    lines.append("  + \(element.heistId) \"\(element.label ?? "")\"")
                 }
-                if let removed = backgroundDelta.removed {
-                    for heistId in removed { lines.append("  - \(heistId)") }
+                for heistId in edits.removed {
+                    lines.append("  - \(heistId)")
                 }
                 for element in transient {
                     lines.append("  +- \(Self.compactBackgroundElement(element))")
                 }
-            case .noChange:
-                lines.append("[background: no net change (\(backgroundDelta.elementCount) elements)]")
+            case .noChange(let payload):
+                lines.append("[background: no net change (\(payload.elementCount) elements)]")
                 for element in transient {
                     lines.append("  +- \(Self.compactBackgroundElement(element))")
                 }

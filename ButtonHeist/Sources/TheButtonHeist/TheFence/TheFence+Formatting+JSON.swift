@@ -486,18 +486,39 @@ extension FenceResponse {
     /// Callers who need full geometry should use `get_interface --detail full`.
     private func deltaDictionary(_ delta: InterfaceDelta) -> [String: Any] {
         var payload: [String: Any] = [
-            "kind": delta.kind.rawValue,
+            "kind": delta.kindRawValue,
             "elementCount": delta.elementCount,
         ]
-        if let added = delta.added {
-            payload["added"] = added.map { elementDictionary($0, detail: .summary) }
+        let transient = delta.transient
+        if !transient.isEmpty {
+            payload["transient"] = transient.map { elementDictionary($0, detail: .summary) }
         }
-        if let removed = delta.removed {
-            payload["removed"] = removed
+        switch delta {
+        case .noChange:
+            break
+        case .elementsChanged(let casePayload):
+            mergeEditDictionary(casePayload.edits, into: &payload)
+        case .screenChanged(let casePayload):
+            payload["newInterface"] = interfaceDictionary(casePayload.newInterface, detail: .summary)
+            if let postEdits = casePayload.postEdits, !postEdits.isEmpty {
+                var postDict: [String: Any] = [:]
+                mergeEditDictionary(postEdits, into: &postDict)
+                payload["postEdits"] = postDict
+            }
         }
-        if let updated = delta.updated {
+        return payload
+    }
+
+    private func mergeEditDictionary(_ edits: ElementEdits, into payload: inout [String: Any]) {
+        if !edits.added.isEmpty {
+            payload["added"] = edits.added.map { elementDictionary($0, detail: .summary) }
+        }
+        if !edits.removed.isEmpty {
+            payload["removed"] = edits.removed
+        }
+        if !edits.updated.isEmpty {
             // Omit geometry changes (frame/activationPoint) — layout shifts are structural noise
-            let filtered: [ElementUpdate] = updated.compactMap { update in
+            let filtered: [ElementUpdate] = edits.updated.compactMap { update in
                 let meaningful = update.changes.filter { !$0.property.isGeometry }
                 return meaningful.isEmpty ? nil : ElementUpdate(heistId: update.heistId, changes: meaningful)
             }
@@ -515,22 +536,15 @@ extension FenceResponse {
                 }
             }
         }
-        if let treeInserted = delta.treeInserted {
-            payload["treeInserted"] = treeInserted.map(treeInsertionDictionary)
+        if !edits.treeInserted.isEmpty {
+            payload["treeInserted"] = edits.treeInserted.map(treeInsertionDictionary)
         }
-        if let treeRemoved = delta.treeRemoved {
-            payload["treeRemoved"] = treeRemoved.map(treeRemovalDictionary)
+        if !edits.treeRemoved.isEmpty {
+            payload["treeRemoved"] = edits.treeRemoved.map(treeRemovalDictionary)
         }
-        if let treeMoved = delta.treeMoved {
-            payload["treeMoved"] = treeMoved.map(treeMoveDictionary)
+        if !edits.treeMoved.isEmpty {
+            payload["treeMoved"] = edits.treeMoved.map(treeMoveDictionary)
         }
-        if let transient = delta.transient, !transient.isEmpty {
-            payload["transient"] = transient.map { elementDictionary($0, detail: .summary) }
-        }
-        if let newInterface = delta.newInterface {
-            payload["newInterface"] = interfaceDictionary(newInterface, detail: .summary)
-        }
-        return payload
     }
 
     private func treeInsertionDictionary(_ insertion: TreeInsertion) -> [String: Any] {

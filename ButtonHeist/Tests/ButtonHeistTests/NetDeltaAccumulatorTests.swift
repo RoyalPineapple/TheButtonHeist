@@ -6,19 +6,15 @@ final class NetDeltaAccumulatorTests: XCTestCase {
 
     func testAddUpdateRemoveNetsToNoDelta() {
         let element = makeElement(heistId: "item", label: "Item", value: nil)
-        let deltas = [
-            InterfaceDelta(kind: .elementsChanged, elementCount: 1, added: [element]),
-            InterfaceDelta(
-                kind: .elementsChanged,
-                elementCount: 1,
-                updated: [
-                    ElementUpdate(
-                        heistId: "item",
-                        changes: [PropertyChange(property: .value, old: nil, new: "On")]
-                    ),
-                ]
-            ),
-            InterfaceDelta(kind: .elementsChanged, elementCount: 0, removed: ["item"]),
+        let deltas: [InterfaceDelta] = [
+            .elementsChanged(.init(elementCount: 1, edits: ElementEdits(added: [element]))),
+            .elementsChanged(.init(elementCount: 1, edits: ElementEdits(updated: [
+                ElementUpdate(
+                    heistId: "item",
+                    changes: [PropertyChange(property: .value, old: nil, new: "On")]
+                ),
+            ]))),
+            .elementsChanged(.init(elementCount: 0, edits: ElementEdits(removed: ["item"]))),
         ]
 
         XCTAssertNil(NetDeltaAccumulator.merge(deltas: deltas))
@@ -26,74 +22,75 @@ final class NetDeltaAccumulatorTests: XCTestCase {
 
     func testUpdatesToNetAddedElementFoldIntoAddedElement() throws {
         let element = makeElement(heistId: "item", label: "Old", value: nil)
-        let deltas = [
-            InterfaceDelta(kind: .elementsChanged, elementCount: 1, added: [element]),
-            InterfaceDelta(
-                kind: .elementsChanged,
-                elementCount: 1,
-                updated: [
-                    ElementUpdate(heistId: "item", changes: [
-                        PropertyChange(property: .label, old: "Old", new: "New"),
-                        PropertyChange(property: .value, old: nil, new: "42"),
-                    ]),
-                ]
-            ),
+        let deltas: [InterfaceDelta] = [
+            .elementsChanged(.init(elementCount: 1, edits: ElementEdits(added: [element]))),
+            .elementsChanged(.init(elementCount: 1, edits: ElementEdits(updated: [
+                ElementUpdate(heistId: "item", changes: [
+                    PropertyChange(property: .label, old: "Old", new: "New"),
+                    PropertyChange(property: .value, old: nil, new: "42"),
+                ]),
+            ]))),
         ]
 
         let merged = try XCTUnwrap(NetDeltaAccumulator.merge(deltas: deltas))
 
-        XCTAssertEqual(merged.kind, .elementsChanged)
-        XCTAssertEqual(merged.added?.first?.label, "New")
-        XCTAssertEqual(merged.added?.first?.value, "42")
-        XCTAssertNil(merged.updated)
+        guard case .elementsChanged(let payload) = merged else {
+            return XCTFail("Expected .elementsChanged, got \(merged)")
+        }
+        XCTAssertEqual(payload.edits.added.first?.label, "New")
+        XCTAssertEqual(payload.edits.added.first?.value, "42")
+        XCTAssertTrue(payload.edits.updated.isEmpty)
     }
 
     func testPartiallyAppliedUpdatesToNetAddedElementOnlyRecordUnappliedChanges() throws {
         let element = makeElement(heistId: "item", label: "Old", value: nil, actions: [.activate])
-        let deltas = [
-            InterfaceDelta(kind: .elementsChanged, elementCount: 1, added: [element]),
-            InterfaceDelta(
-                kind: .elementsChanged,
-                elementCount: 1,
-                updated: [
-                    ElementUpdate(heistId: "item", changes: [
-                        PropertyChange(property: .label, old: "Old", new: "New"),
-                        PropertyChange(property: .actions, old: "activate", new: "activate, magic"),
-                    ]),
-                ]
-            ),
+        let deltas: [InterfaceDelta] = [
+            .elementsChanged(.init(elementCount: 1, edits: ElementEdits(added: [element]))),
+            .elementsChanged(.init(elementCount: 1, edits: ElementEdits(updated: [
+                ElementUpdate(heistId: "item", changes: [
+                    PropertyChange(property: .label, old: "Old", new: "New"),
+                    PropertyChange(property: .actions, old: "activate", new: "activate, magic"),
+                ]),
+            ]))),
         ]
 
         let merged = try XCTUnwrap(NetDeltaAccumulator.merge(deltas: deltas))
 
-        XCTAssertEqual(merged.added?.first?.label, "New")
-        XCTAssertEqual(merged.updated?.first?.changes.map(\.property), [.actions])
+        guard case .elementsChanged(let payload) = merged else {
+            return XCTFail("Expected .elementsChanged, got \(merged)")
+        }
+        XCTAssertEqual(payload.edits.added.first?.label, "New")
+        XCTAssertEqual(payload.edits.updated.first?.changes.map(\.property), [.actions])
     }
 
     func testTransientNoChangeDeltaIsPreserved() throws {
         let spinner = makeElement(heistId: "spinner", label: "Loading", value: nil)
-        let delta = InterfaceDelta(kind: .noChange, elementCount: 3, transient: [spinner])
+        let delta: InterfaceDelta = .noChange(.init(elementCount: 3, transient: [spinner]))
 
         let merged = try XCTUnwrap(NetDeltaAccumulator.merge(deltas: [delta]))
 
-        XCTAssertEqual(merged.kind, .noChange)
-        XCTAssertEqual(merged.elementCount, 3)
-        XCTAssertEqual(merged.transient?.map(\.heistId), ["spinner"])
+        guard case .noChange(let payload) = merged else {
+            return XCTFail("Expected .noChange, got \(merged)")
+        }
+        XCTAssertEqual(payload.elementCount, 3)
+        XCTAssertEqual(payload.transient.map(\.heistId), ["spinner"])
     }
 
     func testTransientsSurviveElementMerge() throws {
         let spinner = makeElement(heistId: "spinner", label: "Loading", value: nil)
         let done = makeElement(heistId: "done", label: "Done", value: nil)
-        let deltas = [
-            InterfaceDelta(kind: .noChange, elementCount: 1, transient: [spinner]),
-            InterfaceDelta(kind: .elementsChanged, elementCount: 2, added: [done]),
+        let deltas: [InterfaceDelta] = [
+            .noChange(.init(elementCount: 1, transient: [spinner])),
+            .elementsChanged(.init(elementCount: 2, edits: ElementEdits(added: [done]))),
         ]
 
         let merged = try XCTUnwrap(NetDeltaAccumulator.merge(deltas: deltas))
 
-        XCTAssertEqual(merged.kind, .elementsChanged)
-        XCTAssertEqual(merged.added?.map(\.heistId), ["done"])
-        XCTAssertEqual(merged.transient?.map(\.heistId), ["spinner"])
+        guard case .elementsChanged(let payload) = merged else {
+            return XCTFail("Expected .elementsChanged, got \(merged)")
+        }
+        XCTAssertEqual(payload.edits.added.map(\.heistId), ["done"])
+        XCTAssertEqual(payload.transient.map(\.heistId), ["spinner"])
     }
 
     private func makeElement(

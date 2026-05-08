@@ -1,14 +1,10 @@
 import Foundation
 
-// MARK: - Interface Delta V2
+// MARK: - Interface Delta
 
-/// Compact description of what changed in the accessibility hierarchy after an action.
-///
-/// V2 of the wire-level delta type. Replaces the discriminator-plus-optionals
-/// struct with an explicit state machine. Each case carries exactly the data
-/// valid for that phase. The legacy `InterfaceDelta` struct will be deleted
-/// once every producer and consumer has been switched to this type.
-public enum InterfaceDeltaV2: Sendable {
+/// Compact description of what changed in the accessibility hierarchy after
+/// an action. Each case carries exactly the data valid for that phase.
+public enum InterfaceDelta: Sendable {
     /// Hierarchy is unchanged. May still carry transient elements that
     /// appeared and disappeared during settle while baseline and final were
     /// otherwise identical.
@@ -94,8 +90,7 @@ public enum InterfaceDeltaV2: Sendable {
         }
     }
 
-    /// True iff this is a screen change. Convenience for the common
-    /// `delta.kind == .screenChanged` check.
+    /// True iff this delta is a screen change.
     public var isScreenChanged: Bool {
         if case .screenChanged = self { return true }
         return false
@@ -235,9 +230,9 @@ extension ElementEdits: Codable {
     }
 }
 
-// MARK: - InterfaceDeltaV2 Codable
+// MARK: - InterfaceDelta Codable
 
-extension InterfaceDeltaV2: Codable {
+extension InterfaceDelta: Codable {
     private enum CodingKeys: String, CodingKey {
         case kind
         case elementCount

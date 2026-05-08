@@ -20,6 +20,12 @@ public let buttonHeistServiceType = "_buttonheist._tcp"
 ///     lives on `ResponseEnvelope.protocolVersion` (and on
 ///     `RequestEnvelope.protocolVersion` for client messages); the
 ///     duplicate copy on `ServerInfo` had zero production readers.
+///   - `InterfaceDelta` is a discriminated union with cases `noChange`
+///     / `elementsChanged` / `screenChanged`. Element edits live under
+///     a shared `ElementEdits` shape that omits empty collections, and
+///     post-screen-change edits live in a nested `postEdits` object on
+///     `screenChanged` deltas. Old clients that decoded the previous
+///     flat-fields shape break.
 ///   Old clients that read any of these keys will see them missing.
 /// 8.0: `Interface` now ships a single canonical `tree:
 ///   [InterfaceNode]` with `HeistElement` payloads at the leaves. The legacy

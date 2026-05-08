@@ -317,78 +317,7 @@ public struct ExploreResult: Codable, Sendable {
     }
 }
 
-// MARK: - Interface Delta
-
-/// Compact description of what changed in the accessibility hierarchy after an action.
-///
-/// `added`, `removed`, `updated`, and the `tree*` fields are populated for
-/// `.elementsChanged`. `newInterface` is populated only for `.screenChanged`.
-public struct InterfaceDelta: Codable, Sendable {
-
-    // MARK: - Nested Types
-
-    /// Classification of the change that occurred.
-    public enum DeltaKind: String, Codable, Sendable {
-        case noChange
-        case elementsChanged
-        case screenChanged
-    }
-
-    // MARK: - Properties
-
-    public let kind: DeltaKind
-
-    public let elementCount: Int
-
-    public let added: [HeistElement]?
-
-    /// HeistIds of removed elements.
-    public let removed: [String]?
-
-    public let updated: [ElementUpdate]?
-
-    public let treeInserted: [TreeInsertion]?
-
-    public let treeRemoved: [TreeRemoval]?
-
-    public let treeMoved: [TreeMove]?
-
-    /// Elements that appeared and then disappeared during the post-action
-    /// settle window — captured from the snapshot in which they were
-    /// present. Rendered by the CLI/MCP as `+- heistId "label" [traits]`.
-    /// The canonical case: a brief loading spinner that resolves to a
-    /// confirmation that auto-dismisses, leaving baseline and final
-    /// otherwise identical.
-    public let transient: [HeistElement]?
-
-    public let newInterface: Interface?
-
-    // MARK: - Init
-
-    public init(
-        kind: DeltaKind,
-        elementCount: Int,
-        added: [HeistElement]? = nil,
-        removed: [String]? = nil,
-        updated: [ElementUpdate]? = nil,
-        treeInserted: [TreeInsertion]? = nil,
-        treeRemoved: [TreeRemoval]? = nil,
-        treeMoved: [TreeMove]? = nil,
-        transient: [HeistElement]? = nil,
-        newInterface: Interface? = nil
-    ) {
-        self.kind = kind
-        self.elementCount = elementCount
-        self.added = added
-        self.removed = removed
-        self.updated = updated
-        self.treeInserted = treeInserted
-        self.treeRemoved = treeRemoved
-        self.treeMoved = treeMoved
-        self.transient = transient
-        self.newInterface = newInterface
-    }
-}
+// MARK: - Tree Edit Types
 
 /// Stable identity namespace for a node in `Interface.tree`.
 public enum TreeNodeKind: String, Codable, Sendable, Equatable {

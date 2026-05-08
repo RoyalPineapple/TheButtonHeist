@@ -577,42 +577,9 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     // MARK: - InterfaceDelta
-
-    func testInterfaceDeltaRoundTrip() throws {
-        let delta = InterfaceDelta(
-            kind: .elementsChanged,
-            elementCount: 10,
-            added: [HeistElement(
-                heistId: "new_btn", description: "New Button",
-                label: "Save", value: nil, identifier: nil,
-                traits: [.button],
-                frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
-                actions: [.activate]
-            )],
-            removed: ["old_btn"],
-            updated: [ElementUpdate(
-                heistId: "counter",
-                changes: [PropertyChange(property: .value, old: "1", new: "2")]
-            )]
-        )
-        let data = try encoder.encode(delta)
-        let decoded = try decoder.decode(InterfaceDelta.self, from: data)
-        XCTAssertEqual(decoded.kind, .elementsChanged)
-        XCTAssertEqual(decoded.elementCount, 10)
-        XCTAssertEqual(decoded.added?.count, 1)
-        XCTAssertEqual(decoded.removed, ["old_btn"])
-        XCTAssertEqual(decoded.updated?.count, 1)
-        XCTAssertNil(decoded.newInterface)
-    }
-
-    func testInterfaceDeltaKindAllCases() throws {
-        for kind in [InterfaceDelta.DeltaKind.noChange, .elementsChanged, .screenChanged] {
-            let delta = InterfaceDelta(kind: kind, elementCount: 0)
-            let data = try encoder.encode(delta)
-            let decoded = try decoder.decode(InterfaceDelta.self, from: data)
-            XCTAssertEqual(decoded.kind, kind)
-        }
-    }
+    //
+    // Coverage lives in InterfaceDeltaRoundTripTests.swift — this file's
+    // generic round-trip suite is for shapes without per-case Codable.
 
     // MARK: - PropertyChange / ElementUpdate
 

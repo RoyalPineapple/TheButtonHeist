@@ -252,18 +252,26 @@ final class TheBrains {
         transient: [AccessibilityElement]
     ) -> InterfaceDelta {
         let transientWire = transient.map { TheStash.WireConversion.convert($0) }
-        return InterfaceDelta(
-            kind: delta.kind,
-            elementCount: delta.elementCount,
-            added: delta.added,
-            removed: delta.removed,
-            updated: delta.updated,
-            treeInserted: delta.treeInserted,
-            treeRemoved: delta.treeRemoved,
-            treeMoved: delta.treeMoved,
-            transient: transientWire,
-            newInterface: delta.newInterface
-        )
+        switch delta {
+        case .noChange(let payload):
+            return .noChange(InterfaceDelta.NoChange(
+                elementCount: payload.elementCount,
+                transient: transientWire
+            ))
+        case .elementsChanged(let payload):
+            return .elementsChanged(InterfaceDelta.ElementsChanged(
+                elementCount: payload.elementCount,
+                edits: payload.edits,
+                transient: transientWire
+            ))
+        case .screenChanged(let payload):
+            return .screenChanged(InterfaceDelta.ScreenChanged(
+                elementCount: payload.elementCount,
+                newInterface: payload.newInterface,
+                postEdits: payload.postEdits,
+                transient: transientWire
+            ))
+        }
     }
 
     // MARK: - Keyboard Observation
@@ -435,7 +443,7 @@ final class TheBrains {
             }
 
             beforeWireHash = current.wireHash
-            insideJobLogger.debug("wait_for_change round \(round): \(delta.kind.rawValue), expectation not yet met")
+            insideJobLogger.debug("wait_for_change round \(round): \(delta.kindRawValue), expectation not yet met")
         }
 
         // Timeout

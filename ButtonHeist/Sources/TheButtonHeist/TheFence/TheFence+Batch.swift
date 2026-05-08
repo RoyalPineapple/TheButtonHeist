@@ -132,7 +132,7 @@ extension TheFence {
         case .action(let result, _):
             return BatchStepSummary(
                 command: command,
-                deltaKind: result.interfaceDelta?.kind.rawValue,
+                deltaKind: result.interfaceDelta?.kindRawValue,
                 screenName: result.screenName,
                 screenId: result.screenId,
                 expectationMet: expectationMet,

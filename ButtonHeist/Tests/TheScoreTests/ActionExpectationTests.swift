@@ -56,14 +56,14 @@ final class ActionExpectationTests: XCTestCase {
     // MARK: - Validation: screenChanged
 
     func testScreenChangedMetWhenDeltaIsScreenChanged() {
-        let delta = InterfaceDelta(kind: .screenChanged, elementCount: 5)
+        let delta: InterfaceDelta = .screenChanged(.init(elementCount: 5, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.screenChanged.validate(against: action)
         XCTAssertTrue(result.met)
     }
 
     func testScreenChangedNotMetWhenDeltaIsElementsChanged() {
-        let delta = InterfaceDelta(kind: .elementsChanged, elementCount: 5)
+        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.screenChanged.validate(against: action)
         XCTAssertFalse(result.met)
@@ -80,14 +80,14 @@ final class ActionExpectationTests: XCTestCase {
     // MARK: - Validation: elementsChanged
 
     func testElementsChangedMetWhenDeltaIsElementsChanged() {
-        let delta = InterfaceDelta(kind: .elementsChanged, elementCount: 10)
+        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 10, edits: ElementEdits()))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.elementsChanged.validate(against: action)
         XCTAssertTrue(result.met)
     }
 
     func testElementsChangedNotMetWhenDeltaIsNoChange() {
-        let delta = InterfaceDelta(kind: .noChange, elementCount: 5)
+        let delta: InterfaceDelta = .noChange(.init(elementCount: 5))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.elementsChanged.validate(against: action)
         XCTAssertFalse(result.met)
@@ -95,7 +95,7 @@ final class ActionExpectationTests: XCTestCase {
     }
 
     func testElementsChangedMetWhenScreenChanged() {
-        let delta = InterfaceDelta(kind: .screenChanged, elementCount: 5)
+        let delta: InterfaceDelta = .screenChanged(.init(elementCount: 5, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.elementsChanged.validate(against: action)
         XCTAssertTrue(result.met)
@@ -128,63 +128,45 @@ final class ActionExpectationTests: XCTestCase {
     // MARK: - Validation: elementUpdated
 
     func testElementUpdatedMetWhenNewValueMatches() {
-        let delta = InterfaceDelta(
-            kind: .elementsChanged, elementCount: 5,
-            updated: [ElementUpdate(heistId: "counter", changes: [PropertyChange(property: .value, old: "3", new: "5")])]
-        )
+        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [ElementUpdate(heistId: "counter", changes: [PropertyChange(property: .value, old: "3", new: "5")])])))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.elementUpdated(newValue: "5").validate(against: action)
         XCTAssertTrue(result.met)
     }
 
     func testElementUpdatedNotMetWhenNoMatch() {
-        let delta = InterfaceDelta(
-            kind: .elementsChanged, elementCount: 5,
-            updated: [ElementUpdate(heistId: "counter", changes: [PropertyChange(property: .value, old: "3", new: "4")])]
-        )
+        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [ElementUpdate(heistId: "counter", changes: [PropertyChange(property: .value, old: "3", new: "4")])])))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.elementUpdated(newValue: "5").validate(against: action)
         XCTAssertFalse(result.met)
     }
 
     func testElementUpdatedMetWhenHeistIdAndNewValueMatch() {
-        let delta = InterfaceDelta(
-            kind: .elementsChanged, elementCount: 5,
-            updated: [
+        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [
                 ElementUpdate(heistId: "other", changes: [PropertyChange(property: .value, old: "1", new: "5")]),
                 ElementUpdate(heistId: "counter", changes: [PropertyChange(property: .value, old: "3", new: "5")]),
-            ]
-        )
+            ])))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.elementUpdated(heistId: "counter", newValue: "5").validate(against: action)
         XCTAssertTrue(result.met)
     }
 
     func testElementUpdatedNotMetWhenHeistIdDoesNotMatch() {
-        let delta = InterfaceDelta(
-            kind: .elementsChanged, elementCount: 5,
-            updated: [ElementUpdate(heistId: "other", changes: [PropertyChange(property: .value, old: "3", new: "5")])]
-        )
+        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [ElementUpdate(heistId: "other", changes: [PropertyChange(property: .value, old: "3", new: "5")])])))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.elementUpdated(heistId: "counter", newValue: "5").validate(against: action)
         XCTAssertFalse(result.met)
     }
 
     func testElementUpdatedMetWhenOldAndNewValueMatch() {
-        let delta = InterfaceDelta(
-            kind: .elementsChanged, elementCount: 5,
-            updated: [ElementUpdate(heistId: "counter", changes: [PropertyChange(property: .value, old: "3", new: "5")])]
-        )
+        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [ElementUpdate(heistId: "counter", changes: [PropertyChange(property: .value, old: "3", new: "5")])])))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.elementUpdated(oldValue: "3", newValue: "5").validate(against: action)
         XCTAssertTrue(result.met)
     }
 
     func testElementUpdatedNoFieldsMetWhenAnyUpdatesExist() {
-        let delta = InterfaceDelta(
-            kind: .elementsChanged, elementCount: 5,
-            updated: [ElementUpdate(heistId: "counter", changes: [PropertyChange(property: .value, old: "a", new: "b")])]
-        )
+        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [ElementUpdate(heistId: "counter", changes: [PropertyChange(property: .value, old: "a", new: "b")])])))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.elementUpdated().validate(against: action)
         XCTAssertTrue(result.met)
@@ -198,7 +180,7 @@ final class ActionExpectationTests: XCTestCase {
     }
 
     func testElementUpdatedNotMetWhenEmptyUpdates() {
-        let delta = InterfaceDelta(kind: .elementsChanged, elementCount: 5, updated: [])
+        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [])))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.elementUpdated(newValue: "5").validate(against: action)
         XCTAssertFalse(result.met)
@@ -206,10 +188,7 @@ final class ActionExpectationTests: XCTestCase {
     }
 
     func testElementUpdatedDiagnosticOnMiss() {
-        let delta = InterfaceDelta(
-            kind: .elementsChanged, elementCount: 5,
-            updated: [ElementUpdate(heistId: "counter", changes: [PropertyChange(property: .value, old: "3", new: "4")])]
-        )
+        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [ElementUpdate(heistId: "counter", changes: [PropertyChange(property: .value, old: "3", new: "4")])])))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.elementUpdated(newValue: "5").validate(against: action)
         XCTAssertFalse(result.met)
@@ -217,26 +196,20 @@ final class ActionExpectationTests: XCTestCase {
     }
 
     func testElementUpdatedMatchesAnyAmongMultipleUpdates() {
-        let delta = InterfaceDelta(
-            kind: .elementsChanged, elementCount: 10,
-            updated: [
+        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 10, edits: ElementEdits(updated: [
                 ElementUpdate(heistId: "label", changes: [PropertyChange(property: .value, old: "A", new: "B")]),
                 ElementUpdate(heistId: "counter", changes: [PropertyChange(property: .value, old: "3", new: "5")]),
-            ]
-        )
+            ])))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.elementUpdated(newValue: "5").validate(against: action)
         XCTAssertTrue(result.met)
     }
 
     func testElementUpdatedWithPropertyFilter() {
-        let delta = InterfaceDelta(
-            kind: .elementsChanged, elementCount: 5,
-            updated: [ElementUpdate(heistId: "btn", changes: [
+        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [ElementUpdate(heistId: "btn", changes: [
                 PropertyChange(property: .traits, old: "", new: "selected"),
                 PropertyChange(property: .value, old: "3", new: "5"),
-            ])]
-        )
+            ])])))
         let action = makeResult(success: true, delta: delta)
         let traitsResult = ActionExpectation.elementUpdated(heistId: "btn", property: .traits).validate(against: action)
         XCTAssertTrue(traitsResult.met)
@@ -259,7 +232,7 @@ final class ActionExpectationTests: XCTestCase {
 
     func testElementAppearedMetWhenMatchFound() {
         let added = [makeElement(label: "New Task", traits: [.staticText])]
-        let delta = InterfaceDelta(kind: .elementsChanged, elementCount: 5, added: added)
+        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: added)))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.elementAppeared(
             ElementMatcher(label: "New Task", traits: [.staticText])
@@ -269,7 +242,7 @@ final class ActionExpectationTests: XCTestCase {
 
     func testElementAppearedNotMetWhenNoMatch() {
         let added = [makeElement(label: "Other Item", traits: [.staticText])]
-        let delta = InterfaceDelta(kind: .elementsChanged, elementCount: 5, added: added)
+        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: added)))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.elementAppeared(
             ElementMatcher(label: "New Task")
@@ -278,7 +251,7 @@ final class ActionExpectationTests: XCTestCase {
     }
 
     func testElementAppearedNotMetWhenNoAdded() {
-        let delta = InterfaceDelta(kind: .elementsChanged, elementCount: 5)
+        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.elementAppeared(
             ElementMatcher(label: "New Task")
@@ -298,7 +271,7 @@ final class ActionExpectationTests: XCTestCase {
     }
 
     func testElementDisappearedMetWhenMatchFound() {
-        let delta = InterfaceDelta(kind: .elementsChanged, elementCount: 3, removed: ["button_old"])
+        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 3, edits: ElementEdits(removed: ["button_old"])))
         let action = makeResult(success: true, delta: delta)
         let preAction: [String: HeistElement] = [
             "button_old": makeElement(label: "Old Item", traits: [.button]),
@@ -310,7 +283,7 @@ final class ActionExpectationTests: XCTestCase {
     }
 
     func testElementDisappearedNotMetWithoutCache() {
-        let delta = InterfaceDelta(kind: .elementsChanged, elementCount: 3, removed: ["button_old"])
+        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 3, edits: ElementEdits(removed: ["button_old"])))
         let action = makeResult(success: true, delta: delta)
         // No pre-action cache — can't resolve removed heistIds
         let result = ActionExpectation.elementDisappeared(
@@ -333,7 +306,7 @@ final class ActionExpectationTests: XCTestCase {
 
     func testCompoundAllMet() {
         let added = [makeElement(label: "New Task", traits: [.staticText])]
-        let delta = InterfaceDelta(kind: .elementsChanged, elementCount: 5, added: added)
+        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: added)))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.compound([
             .elementsChanged,
@@ -344,7 +317,7 @@ final class ActionExpectationTests: XCTestCase {
 
     func testCompoundFailsIfAnyUnmet() {
         let added = [makeElement(label: "New Task", traits: [.staticText])]
-        let delta = InterfaceDelta(kind: .elementsChanged, elementCount: 5, added: added)
+        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: added)))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.compound([
             .elementsChanged,

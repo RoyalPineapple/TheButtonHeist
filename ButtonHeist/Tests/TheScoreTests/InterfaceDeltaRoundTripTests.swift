@@ -1,11 +1,11 @@
 import XCTest
 @testable import TheScore
 
-// MARK: - InterfaceDeltaV2 Round-Trip Tests
+// MARK: - InterfaceDelta Round-Trip Tests
 
 /// Wire-shape gate for the new enum-of-cases InterfaceDelta. Each case
 /// covers a sparse and a full encoding plus a malformed-input rejection.
-final class InterfaceDeltaV2RoundTripTests: XCTestCase {
+final class InterfaceDeltaRoundTripTests: XCTestCase {
 
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
@@ -13,14 +13,14 @@ final class InterfaceDeltaV2RoundTripTests: XCTestCase {
     // MARK: - noChange
 
     func testNoChangeSparseRoundTrip() throws {
-        let delta = InterfaceDeltaV2.noChange(.init(elementCount: 12))
+        let delta = InterfaceDelta.noChange(.init(elementCount: 12))
         let data = try encoder.encode(delta)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         XCTAssertEqual(json["kind"] as? String, "noChange")
         XCTAssertEqual(json["elementCount"] as? Int, 12)
         XCTAssertNil(json["transient"])
 
-        let decoded = try decoder.decode(InterfaceDeltaV2.self, from: data)
+        let decoded = try decoder.decode(InterfaceDelta.self, from: data)
         guard case .noChange(let payload) = decoded else {
             return XCTFail("Expected .noChange, got \(decoded)")
         }
@@ -30,9 +30,9 @@ final class InterfaceDeltaV2RoundTripTests: XCTestCase {
 
     func testNoChangeWithTransientsRoundTrip() throws {
         let spinner = makeElement(heistId: "spin", label: "Loading")
-        let delta = InterfaceDeltaV2.noChange(.init(elementCount: 4, transient: [spinner]))
+        let delta = InterfaceDelta.noChange(.init(elementCount: 4, transient: [spinner]))
         let data = try encoder.encode(delta)
-        let decoded = try decoder.decode(InterfaceDeltaV2.self, from: data)
+        let decoded = try decoder.decode(InterfaceDelta.self, from: data)
         guard case .noChange(let payload) = decoded else {
             return XCTFail("Expected .noChange, got \(decoded)")
         }
@@ -45,7 +45,7 @@ final class InterfaceDeltaV2RoundTripTests: XCTestCase {
     func testElementsChangedSparseRoundTrip() throws {
         let added = makeElement(heistId: "save", label: "Save")
         let edits = ElementEdits(added: [added])
-        let delta = InterfaceDeltaV2.elementsChanged(.init(elementCount: 14, edits: edits))
+        let delta = InterfaceDelta.elementsChanged(.init(elementCount: 14, edits: edits))
         let data = try encoder.encode(delta)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         XCTAssertEqual(json["kind"] as? String, "elementsChanged")
@@ -56,7 +56,7 @@ final class InterfaceDeltaV2RoundTripTests: XCTestCase {
         XCTAssertNil(json["treeInserted"])
         XCTAssertNil(json["transient"])
 
-        let decoded = try decoder.decode(InterfaceDeltaV2.self, from: data)
+        let decoded = try decoder.decode(InterfaceDelta.self, from: data)
         guard case .elementsChanged(let payload) = decoded else {
             return XCTFail("Expected .elementsChanged, got \(decoded)")
         }
@@ -90,11 +90,11 @@ final class InterfaceDeltaV2RoundTripTests: XCTestCase {
                 to: TreeLocation(parentId: nil, index: 3)
             )]
         )
-        let delta = InterfaceDeltaV2.elementsChanged(.init(
+        let delta = InterfaceDelta.elementsChanged(.init(
             elementCount: 14, edits: edits, transient: [transient]
         ))
         let data = try encoder.encode(delta)
-        let decoded = try decoder.decode(InterfaceDeltaV2.self, from: data)
+        let decoded = try decoder.decode(InterfaceDelta.self, from: data)
         guard case .elementsChanged(let payload) = decoded else {
             return XCTFail("Expected .elementsChanged, got \(decoded)")
         }
@@ -112,7 +112,7 @@ final class InterfaceDeltaV2RoundTripTests: XCTestCase {
 
     func testScreenChangedCleanRoundTrip() throws {
         let interface = Interface(timestamp: Date(timeIntervalSince1970: 1_000_000), tree: [])
-        let delta = InterfaceDeltaV2.screenChanged(.init(
+        let delta = InterfaceDelta.screenChanged(.init(
             elementCount: 8, newInterface: interface
         ))
         let data = try encoder.encode(delta)
@@ -123,7 +123,7 @@ final class InterfaceDeltaV2RoundTripTests: XCTestCase {
         XCTAssertNil(json["postEdits"])
         XCTAssertNil(json["transient"])
 
-        let decoded = try decoder.decode(InterfaceDeltaV2.self, from: data)
+        let decoded = try decoder.decode(InterfaceDelta.self, from: data)
         guard case .screenChanged(let payload) = decoded else {
             return XCTFail("Expected .screenChanged, got \(decoded)")
         }
@@ -137,7 +137,7 @@ final class InterfaceDeltaV2RoundTripTests: XCTestCase {
         let transient = makeElement(heistId: "spin", label: "Loading")
         let interface = Interface(timestamp: Date(timeIntervalSince1970: 1_000_000), tree: [])
         let postEdits = ElementEdits(added: [added])
-        let delta = InterfaceDeltaV2.screenChanged(.init(
+        let delta = InterfaceDelta.screenChanged(.init(
             elementCount: 9,
             newInterface: interface,
             postEdits: postEdits,
@@ -148,7 +148,7 @@ final class InterfaceDeltaV2RoundTripTests: XCTestCase {
         XCTAssertNotNil(json["postEdits"])
         XCTAssertNotNil(json["transient"])
 
-        let decoded = try decoder.decode(InterfaceDeltaV2.self, from: data)
+        let decoded = try decoder.decode(InterfaceDelta.self, from: data)
         guard case .screenChanged(let payload) = decoded else {
             return XCTFail("Expected .screenChanged, got \(decoded)")
         }
@@ -158,7 +158,7 @@ final class InterfaceDeltaV2RoundTripTests: XCTestCase {
 
     func testScreenChangedDropsEmptyPostEdits() throws {
         let interface = Interface(timestamp: Date(timeIntervalSince1970: 1_000_000), tree: [])
-        let delta = InterfaceDeltaV2.screenChanged(.init(
+        let delta = InterfaceDelta.screenChanged(.init(
             elementCount: 8,
             newInterface: interface,
             postEdits: ElementEdits()
@@ -172,57 +172,57 @@ final class InterfaceDeltaV2RoundTripTests: XCTestCase {
 
     func testElementCountAccessor() {
         let interface = Interface(timestamp: Date(timeIntervalSince1970: 1_000_000), tree: [])
-        XCTAssertEqual(InterfaceDeltaV2.noChange(.init(elementCount: 4)).elementCount, 4)
+        XCTAssertEqual(InterfaceDelta.noChange(.init(elementCount: 4)).elementCount, 4)
         XCTAssertEqual(
-            InterfaceDeltaV2.elementsChanged(.init(elementCount: 7, edits: ElementEdits())).elementCount,
+            InterfaceDelta.elementsChanged(.init(elementCount: 7, edits: ElementEdits())).elementCount,
             7
         )
         XCTAssertEqual(
-            InterfaceDeltaV2.screenChanged(.init(elementCount: 9, newInterface: interface)).elementCount,
+            InterfaceDelta.screenChanged(.init(elementCount: 9, newInterface: interface)).elementCount,
             9
         )
     }
 
     func testKindRawValueAccessor() {
         let interface = Interface(timestamp: Date(timeIntervalSince1970: 1_000_000), tree: [])
-        XCTAssertEqual(InterfaceDeltaV2.noChange(.init(elementCount: 0)).kindRawValue, "noChange")
+        XCTAssertEqual(InterfaceDelta.noChange(.init(elementCount: 0)).kindRawValue, "noChange")
         XCTAssertEqual(
-            InterfaceDeltaV2.elementsChanged(.init(elementCount: 0, edits: ElementEdits())).kindRawValue,
+            InterfaceDelta.elementsChanged(.init(elementCount: 0, edits: ElementEdits())).kindRawValue,
             "elementsChanged"
         )
         XCTAssertEqual(
-            InterfaceDeltaV2.screenChanged(.init(elementCount: 0, newInterface: interface)).kindRawValue,
+            InterfaceDelta.screenChanged(.init(elementCount: 0, newInterface: interface)).kindRawValue,
             "screenChanged"
         )
     }
 
     func testIsScreenChangedAccessor() {
         let interface = Interface(timestamp: Date(timeIntervalSince1970: 1_000_000), tree: [])
-        XCTAssertFalse(InterfaceDeltaV2.noChange(.init(elementCount: 0)).isScreenChanged)
+        XCTAssertFalse(InterfaceDelta.noChange(.init(elementCount: 0)).isScreenChanged)
         XCTAssertFalse(
-            InterfaceDeltaV2.elementsChanged(.init(elementCount: 0, edits: ElementEdits())).isScreenChanged
+            InterfaceDelta.elementsChanged(.init(elementCount: 0, edits: ElementEdits())).isScreenChanged
         )
         XCTAssertTrue(
-            InterfaceDeltaV2.screenChanged(.init(elementCount: 0, newInterface: interface)).isScreenChanged
+            InterfaceDelta.screenChanged(.init(elementCount: 0, newInterface: interface)).isScreenChanged
         )
     }
 
     func testAddedAcrossCasesReadsBothCases() {
         let interface = Interface(timestamp: Date(timeIntervalSince1970: 1_000_000), tree: [])
         let element = makeElement(heistId: "x", label: "X")
-        let elementsChanged = InterfaceDeltaV2.elementsChanged(
+        let elementsChanged = InterfaceDelta.elementsChanged(
             .init(elementCount: 1, edits: ElementEdits(added: [element]))
         )
         XCTAssertEqual(elementsChanged.addedAcrossCases.map(\.heistId), ["x"])
 
-        let screenChanged = InterfaceDeltaV2.screenChanged(.init(
+        let screenChanged = InterfaceDelta.screenChanged(.init(
             elementCount: 1,
             newInterface: interface,
             postEdits: ElementEdits(added: [element])
         ))
         XCTAssertEqual(screenChanged.addedAcrossCases.map(\.heistId), ["x"])
 
-        let noChange = InterfaceDeltaV2.noChange(.init(elementCount: 0))
+        let noChange = InterfaceDelta.noChange(.init(elementCount: 0))
         XCTAssertTrue(noChange.addedAcrossCases.isEmpty)
     }
 
@@ -231,28 +231,28 @@ final class InterfaceDeltaV2RoundTripTests: XCTestCase {
     func testRejectsUnknownKind() {
         let payload = #"{"kind": "shrugChanged", "elementCount": 0}"#
         XCTAssertThrowsError(
-            try decoder.decode(InterfaceDeltaV2.self, from: Data(payload.utf8))
+            try decoder.decode(InterfaceDelta.self, from: Data(payload.utf8))
         )
     }
 
     func testRejectsMissingKind() {
         let payload = #"{"elementCount": 0}"#
         XCTAssertThrowsError(
-            try decoder.decode(InterfaceDeltaV2.self, from: Data(payload.utf8))
+            try decoder.decode(InterfaceDelta.self, from: Data(payload.utf8))
         )
     }
 
     func testRejectsScreenChangedWithoutNewInterface() {
         let payload = #"{"kind": "screenChanged", "elementCount": 0}"#
         XCTAssertThrowsError(
-            try decoder.decode(InterfaceDeltaV2.self, from: Data(payload.utf8))
+            try decoder.decode(InterfaceDelta.self, from: Data(payload.utf8))
         )
     }
 
     func testRejectsMissingElementCount() {
         let payload = #"{"kind": "noChange"}"#
         XCTAssertThrowsError(
-            try decoder.decode(InterfaceDeltaV2.self, from: Data(payload.utf8))
+            try decoder.decode(InterfaceDelta.self, from: Data(payload.utf8))
         )
     }
 

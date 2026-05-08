@@ -44,19 +44,19 @@ final class AutoSettleFieldsTests: XCTestCase {
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 30,
             actions: []
         )
-        let delta = InterfaceDelta(kind: .noChange, elementCount: 12, transient: [element])
+        let delta: InterfaceDelta = .noChange(.init(elementCount: 12, transient: [element]))
         let data = try JSONEncoder().encode(delta)
         let decoded = try JSONDecoder().decode(InterfaceDelta.self, from: data)
-        XCTAssertEqual(decoded.transient?.count, 1)
-        XCTAssertEqual(decoded.transient?.first?.label, "Processing")
+        XCTAssertEqual(decoded.transient.count, 1)
+        XCTAssertEqual(decoded.transient.first?.label, "Processing")
     }
 
-    func testOldInterfaceDeltaWithoutTransientDecodes() throws {
+    func testInterfaceDeltaWithoutTransientDecodesAsEmpty() throws {
         let jsonString = """
         {"kind": "noChange", "elementCount": 5}
         """
         let decoded = try JSONDecoder().decode(InterfaceDelta.self, from: Data(jsonString.utf8))
-        XCTAssertNil(decoded.transient)
+        XCTAssertTrue(decoded.transient.isEmpty)
         XCTAssertEqual(decoded.elementCount, 5)
     }
 
@@ -74,7 +74,7 @@ final class AutoSettleFieldsTests: XCTestCase {
     }
 
     private struct LegacyInterfaceDelta: Decodable {
-        let kind: InterfaceDelta.DeltaKind
+        let kind: String
         let elementCount: Int
     }
 
@@ -104,10 +104,10 @@ final class AutoSettleFieldsTests: XCTestCase {
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 30,
             actions: []
         )
-        let delta = InterfaceDelta(kind: .noChange, elementCount: 7, transient: [element])
+        let delta: InterfaceDelta = .noChange(.init(elementCount: 7, transient: [element]))
         let data = try JSONEncoder().encode(delta)
         let legacy = try JSONDecoder().decode(LegacyInterfaceDelta.self, from: data)
-        XCTAssertEqual(legacy.kind, .noChange)
+        XCTAssertEqual(legacy.kind, "noChange")
         XCTAssertEqual(legacy.elementCount, 7)
     }
 }

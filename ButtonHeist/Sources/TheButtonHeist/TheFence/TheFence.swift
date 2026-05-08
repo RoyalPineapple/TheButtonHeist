@@ -440,7 +440,7 @@ public final class TheFence {
         newInterface: Interface,
         preActionCache: [String: HeistElement]
     ) -> ResponseCacheUpdate {
-        guard actionResult.interfaceDelta?.kind == .screenChanged else {
+        guard actionResult.interfaceDelta?.isScreenChanged == true else {
             updateInterfaceCache(newInterface.elements)
             return ResponseCacheUpdate(
                 evidenceElements: lastInterfaceCache.isEmpty ? nil : Array(lastInterfaceCache.values),

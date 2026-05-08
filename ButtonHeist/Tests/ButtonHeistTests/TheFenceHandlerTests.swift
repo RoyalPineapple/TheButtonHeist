@@ -1011,7 +1011,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testBatchCountsOnlyExplicitExpectations() async throws {
         let (fence, mockConn) = makeConnectedFence()
         // Mock returns a successful action result with an elementsChanged delta (updates only)
-        let delta = InterfaceDelta(kind: .elementsChanged, elementCount: 5)
+        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
         mockConn.autoResponse = { _ in
             .actionResult(ActionResult(success: true, method: .activate, interfaceDelta: delta))
         }
@@ -1037,7 +1037,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testBatchCountsMetExpectations() async throws {
         let (fence, mockConn) = makeConnectedFence()
-        let delta = InterfaceDelta(kind: .screenChanged, elementCount: 10)
+        let delta: InterfaceDelta = .screenChanged(.init(elementCount: 10, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])))
         mockConn.autoResponse = { _ in
             .actionResult(ActionResult(success: true, method: .activate, interfaceDelta: delta))
         }
