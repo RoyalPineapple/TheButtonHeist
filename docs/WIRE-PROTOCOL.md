@@ -858,7 +858,7 @@ Completed screen recording. Contains the H.264/MP4 video as base64-encoded data.
     {
       "timestamp":1.2,
       "command":{"type":"activate","payload":{"identifier":"loginButton"}},
-      "result":{"success":true,"method":"syntheticTap","interfaceDelta":{"kind":"elementsChanged","elementCount":12,"updated":[{"heistId":"button·loginButton","changes":[{"property":"value","old":null,"new":"Loading..."}]}]}}
+      "result":{"success":true,"method":"syntheticTap","interfaceDelta":{"kind":"elementsChanged","elementCount":12,"edits":{"updated":[{"heistId":"button·loginButton","changes":[{"property":"value","old":null,"new":"Loading..."}]}]}}}
     }
   ]
 }}
@@ -881,7 +881,7 @@ Recording failed with an error.
 Broadcast to all subscribed clients (including observers) after a driver performs an action. Contains the command, result, and interface delta.
 
 ```json
-{"protocolVersion":"9.0","type":"interaction","payload":{"timestamp":1709472045.123,"command":{"type":"activate","payload":{"identifier":"loginButton"}},"result":{"success":true,"method":"syntheticTap","interfaceDelta":{"kind":"elementsChanged","elementCount":12,"updated":[{"heistId":"button·loginButton","changes":[{"property":"value","old":null,"new":"Loading..."}]}]}}}}
+{"protocolVersion":"9.0","type":"interaction","payload":{"timestamp":1709472045.123,"command":{"type":"activate","payload":{"identifier":"loginButton"}},"result":{"success":true,"method":"syntheticTap","interfaceDelta":{"kind":"elementsChanged","elementCount":12,"edits":{"updated":[{"heistId":"button·loginButton","changes":[{"property":"value","old":null,"new":"Loading..."}]}]}}}}}
 ```
 
 | Field | Type | Description |
@@ -1397,19 +1397,21 @@ Case-specific fields:
 | `kind` | Additional fields | Notes |
 |--------|-------------------|-------|
 | `noChange` | (none) | The hierarchy did not change. May still carry `transient`. |
-| `elementsChanged` | `added`, `removed`, `updated`, `treeInserted`, `treeRemoved`, `treeMoved` | Element-level edits within the same screen. Each collection is omitted when empty. |
+| `elementsChanged` | `edits?` | Element-level edits within the same screen, nested as an `ElementEdits` sub-object. Omitted when empty; a missing key decodes as an empty `ElementEdits`. |
 | `screenChanged` | `newInterface`, `postEdits?` | View controller identity changed. `postEdits` is an `ElementEdits` sub-object describing edits folded in by `NetDeltaAccumulator.mergeAfterScreenChange` — present only on batch-merged deltas, omitted otherwise. `newInterface.tree` reflects element-level swaps from `postEdits.added`/`removed`/`updated` (best-effort) but does **not** apply the structural `treeInserted`/`treeRemoved`/`treeMoved` entries — those are descriptive diff metadata. When tree structure matters, treat `postEdits` as authoritative over `newInterface.tree`. |
 
-`postEdits` shape (when present):
+`ElementEdits` shape (used by both `elementsChanged.edits` and `screenChanged.postEdits`):
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `added` | `[HeistElement]?` | Elements added after the screen change |
-| `removed` | `[String]?` | HeistIds of elements removed after the screen change |
-| `updated` | `[ElementUpdate]?` | Element property changes after the screen change |
-| `treeInserted` | `[TreeInsertion]?` | Tree insertions after the screen change |
-| `treeRemoved` | `[TreeRemoval]?` | Tree removals after the screen change |
-| `treeMoved` | `[TreeMove]?` | Tree moves after the screen change |
+| `added` | `[HeistElement]?` | Elements added |
+| `removed` | `[String]?` | HeistIds of elements removed |
+| `updated` | `[ElementUpdate]?` | Element property changes |
+| `treeInserted` | `[TreeInsertion]?` | Tree insertions |
+| `treeRemoved` | `[TreeRemoval]?` | Tree removals |
+| `treeMoved` | `[TreeMove]?` | Tree moves |
+
+Each collection is omitted when empty.
 
 ### ElementUpdate
 

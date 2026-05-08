@@ -50,11 +50,16 @@ final class InterfaceDeltaRoundTripTests: XCTestCase {
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         XCTAssertEqual(json["kind"] as? String, "elementsChanged")
         XCTAssertEqual(json["elementCount"] as? Int, 14)
-        XCTAssertNotNil(json["added"])
+        // edits live nested under "edits" — never flat at the top level.
+        XCTAssertNil(json["added"])
         XCTAssertNil(json["removed"])
         XCTAssertNil(json["updated"])
         XCTAssertNil(json["treeInserted"])
         XCTAssertNil(json["transient"])
+        let editsJson = try XCTUnwrap(json["edits"] as? [String: Any])
+        XCTAssertNotNil(editsJson["added"])
+        XCTAssertNil(editsJson["removed"])
+        XCTAssertNil(editsJson["updated"])
 
         let decoded = try decoder.decode(InterfaceDelta.self, from: data)
         guard case .elementsChanged(let payload) = decoded else {
@@ -64,6 +69,42 @@ final class InterfaceDeltaRoundTripTests: XCTestCase {
         XCTAssertEqual(payload.edits.added.map(\.heistId), ["save"])
         XCTAssertTrue(payload.edits.removed.isEmpty)
         XCTAssertTrue(payload.transient.isEmpty)
+    }
+
+    func testElementsChangedEmptyEditsOmitsKey() throws {
+        let delta = InterfaceDelta.elementsChanged(.init(elementCount: 3, edits: ElementEdits()))
+        let data = try encoder.encode(delta)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertNil(json["edits"], "edits should be omitted when empty")
+
+        // Missing edits key must decode as an empty ElementEdits.
+        let decoded = try decoder.decode(InterfaceDelta.self, from: data)
+        guard case .elementsChanged(let payload) = decoded else {
+            return XCTFail("Expected .elementsChanged, got \(decoded)")
+        }
+        XCTAssertTrue(payload.edits.isEmpty)
+    }
+
+    func testElementsChangedRejectsLegacyFlatShape() {
+        // The pre-9.0 layout flattened ElementEdits keys to the top level.
+        // The new shape nests under `edits` — flat fields must not decode.
+        let element = """
+            {"heistId":"x","description":"X","label":"X","traits":["button"],\
+            "frameX":0,"frameY":0,"frameWidth":0,"frameHeight":0,\
+            "actions":["activate"]}
+            """
+        let payload = """
+            {"kind":"elementsChanged","elementCount":1,"added":[\(element)]}
+            """
+        let delta = try? decoder.decode(InterfaceDelta.self, from: Data(payload.utf8))
+        // Decoding succeeds (the discriminator and elementCount are valid),
+        // but the legacy `added` field at the top level must not populate
+        // `payload.edits`.
+        guard case .elementsChanged(let unwrapped) = delta else {
+            return XCTFail("Expected .elementsChanged, got \(String(describing: delta))")
+        }
+        XCTAssertTrue(unwrapped.edits.isEmpty,
+                      "Legacy flat `added` key at top level must be ignored")
     }
 
     func testElementsChangedFullRoundTrip() throws {

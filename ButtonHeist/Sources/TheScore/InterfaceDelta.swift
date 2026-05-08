@@ -211,7 +211,7 @@ extension InterfaceDelta: Codable {
         case kind
         case elementCount
         case transient
-        case added, removed, updated, treeInserted, treeRemoved, treeMoved
+        case edits
         case newInterface
         case postEdits
     }
@@ -227,7 +227,7 @@ extension InterfaceDelta: Codable {
             self = .noChange(NoChange(elementCount: elementCount, transient: transient))
 
         case .elementsChanged:
-            let edits = try ElementEdits(from: decoder)
+            let edits = try container.decodeIfPresent(ElementEdits.self, forKey: .edits) ?? ElementEdits()
             self = .elementsChanged(ElementsChanged(
                 elementCount: elementCount,
                 edits: edits,
@@ -259,7 +259,9 @@ extension InterfaceDelta: Codable {
         case .elementsChanged(let payload):
             try container.encode(Kind.elementsChanged, forKey: .kind)
             try container.encode(payload.elementCount, forKey: .elementCount)
-            try payload.edits.encode(to: encoder)
+            if !payload.edits.isEmpty {
+                try container.encode(payload.edits, forKey: .edits)
+            }
             if !payload.transient.isEmpty {
                 try container.encode(payload.transient, forKey: .transient)
             }

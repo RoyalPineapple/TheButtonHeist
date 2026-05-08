@@ -22,9 +22,12 @@ public let buttonHeistServiceType = "_buttonheist._tcp"
 ///     duplicate copy on `ServerInfo` had zero production readers.
 ///   - `InterfaceDelta` is a discriminated union with cases `noChange`
 ///     / `elementsChanged` / `screenChanged`. Element edits live under
-///     a shared `ElementEdits` shape that omits empty collections, and
-///     post-screen-change edits live in a nested `postEdits` object on
-///     `screenChanged` deltas. Old clients that decoded the previous
+///     a shared `ElementEdits` shape that omits empty collections.
+///     Both `elementsChanged.edits` and `screenChanged.postEdits` nest
+///     the same `ElementEdits` object under their respective keys —
+///     the wire shape is symmetric across the two cases. Empty `edits`
+///     and empty `postEdits` are omitted; missing keys decode as an
+///     empty `ElementEdits`. Old clients that decoded the previous
 ///     flat-fields shape break.
 ///   Old clients that read any of these keys will see them missing.
 /// 8.0: `Interface` now ships a single canonical `tree:

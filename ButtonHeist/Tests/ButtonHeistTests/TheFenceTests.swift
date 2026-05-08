@@ -583,7 +583,8 @@ final class TheFenceTests: XCTestCase {
         let response = FenceResponse.action(result: result)
         let json = response.jsonDict()!
         let deltaDict = json["delta"] as! [String: Any]
-        let updated = deltaDict["updated"] as! [[String: Any]]
+        let editsDict = deltaDict["edits"] as! [String: Any]
+        let updated = editsDict["updated"] as! [[String: Any]]
         XCTAssertEqual(updated.count, 1)
         let changes = updated[0]["changes"] as! [[String: Any]]
         let properties = changes.map { $0["property"] as! String }
@@ -602,7 +603,9 @@ final class TheFenceTests: XCTestCase {
         let response = FenceResponse.action(result: result)
         let json = response.jsonDict()!
         let deltaDict = json["delta"] as! [String: Any]
-        XCTAssertNil(deltaDict["updated"], "Geometry-only updates should be dropped entirely")
+        // Geometry-only updates are dropped — and with no other edits, the
+        // entire `edits` key is omitted from the delta dictionary.
+        XCTAssertNil(deltaDict["edits"], "Geometry-only updates should be dropped entirely")
     }
 
     // MARK: - FenceError
