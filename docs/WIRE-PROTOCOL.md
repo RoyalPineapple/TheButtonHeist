@@ -1333,8 +1333,8 @@ Every `ActionExpectation` serializes to a JSON object with a `type` discriminato
 |--------|---------|-------------|
 | `"screen_changed"` | *(no fields)* | VC identity changed |
 | `"elements_changed"` | *(no fields)* | Element-level add/remove/update (superset-met by screen_changed) |
-| `"element_updated"` | `heistId?`, `property?`, `oldValue?`, `newValue?` | A matching entry appears in `interfaceDelta.updated` |
-| `"element_appeared"` | `matcher` (ElementMatcher) | An element matching the matcher appears in `interfaceDelta.added` |
+| `"element_updated"` | `heistId?`, `property?`, `oldValue?`, `newValue?` | A matching entry appears in `interfaceDelta.edits.updated` |
+| `"element_appeared"` | `matcher` (ElementMatcher) | An element matching the matcher appears in `interfaceDelta.edits.added` |
 | `"element_disappeared"` | `matcher` (ElementMatcher) | An element matching the matcher was removed |
 | `"compound"` | `expectations` (`[ActionExpectation]`) | Every sub-expectation must be met |
 
