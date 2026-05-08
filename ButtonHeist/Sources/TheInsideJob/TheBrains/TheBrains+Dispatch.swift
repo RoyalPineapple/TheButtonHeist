@@ -50,7 +50,7 @@ extension TheBrains {
         interaction: () async -> TheSafecracker.InteractionResult
     ) async -> ActionResult {
         guard refresh() != nil else {
-            return treeUnavailableResult(method: fallbackMethod(for: command))
+            return treeUnavailableResult(method: Self.diagnosticMethod(for: command))
         }
         let before = captureBeforeState()
         let result = await interaction()
@@ -71,7 +71,7 @@ extension TheBrains {
         command: ClientMessage
     ) async -> ActionResult {
         guard refresh() != nil else {
-            return treeUnavailableResult(method: fallbackMethod(for: command))
+            return treeUnavailableResult(method: Self.diagnosticMethod(for: command))
         }
         let before = captureBeforeState()
         let result = await executeElementSearch(target)
@@ -316,12 +316,6 @@ extension TheBrains {
         }
     }
 
-    /// Method to report when refresh fails before a command-specific executor runs.
-    /// Mirrors `diagnosticMethod` for action commands; handshake/control messages
-    /// (which never reach this path) fall back to `.activate`.
-    private func fallbackMethod(for command: ClientMessage) -> ActionMethod {
-        Self.diagnosticMethod(for: command)
-    }
 }
 
 #endif // DEBUG
