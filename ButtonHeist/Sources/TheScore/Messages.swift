@@ -8,10 +8,19 @@ public let buttonHeistServiceType = "_buttonheist._tcp"
 /// Protocol version for compatibility checking.
 ///
 /// SemVer — bump minor for additive changes, major for breaking changes.
-/// 9.0 (this release): `ActionResult` drops the `elementLabel` /
-///   `elementValue` / `elementTraits` fields entirely (they had no readers)
-///   and stops emitting a stub `exploreResult` for non-explore actions.
-///   Old clients that read those keys will see them missing.
+/// 9.0 (this release): wire-shrink pass on dead bytes.
+///   - `ActionResult` drops the `elementLabel` / `elementValue` /
+///     `elementTraits` fields entirely (they had no readers) and stops
+///     emitting a stub `exploreResult` for non-explore actions.
+///   - `ExploreResult` drops `containersSkippedObscured` (zero readers
+///     in any formatter / MCP / CLI / client). The custom Codable that
+///     existed solely to provide a forward-compat default for that
+///     field is gone; synthesized Codable suffices.
+///   - `ServerInfo` drops `protocolVersion`. The wire-level version
+///     lives on `ResponseEnvelope.protocolVersion` (and on
+///     `RequestEnvelope.protocolVersion` for client messages); the
+///     duplicate copy on `ServerInfo` had zero production readers.
+///   Old clients that read any of these keys will see them missing.
 /// 8.0: `Interface` now ships a single canonical `tree:
 ///   [InterfaceNode]` with `HeistElement` payloads at the leaves. The legacy
 ///   parallel `elements: [HeistElement]` array and the index-indirected
