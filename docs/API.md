@@ -671,7 +671,7 @@ With the default `stop_on_error` policy, the batch halts at the first mismet exp
 
 ```swift
 public let buttonHeistServiceType = "_buttonheist._tcp"
-public let protocolVersion = "8.0"  // Protocol v8.0: canonical InterfaceNode tree wire shape
+public let protocolVersion = "9.0"  // Protocol v9.0: wire-shrink pass on dead bytes
 ```
 
 ### ConnectionPhase

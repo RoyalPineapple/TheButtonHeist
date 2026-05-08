@@ -17,10 +17,13 @@ final class DocumentationDriftTests: XCTestCase {
         let staleProtocolPhrases = [
             "Protocol v6",
             "Protocol v7",
+            "Protocol v8",
             "\"protocolVersion\":\"6",
             "\"protocolVersion\":\"7",
+            "\"protocolVersion\":\"8",
             "protocolVersion\":\"6",
             "protocolVersion\":\"7",
+            "protocolVersion\":\"8",
         ]
 
         for (path, content) in docs {

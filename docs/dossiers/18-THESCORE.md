@@ -29,7 +29,7 @@ TheScore is the shared playbook. It defines:
 
 | File | Contents |
 |------|----------|
-| `Messages.swift` | `buttonHeistServiceType`, `protocolVersion` ("8.0"), `WireMessageType` (51 cases), `ButtonHeistActor` |
+| `Messages.swift` | `buttonHeistServiceType`, `protocolVersion` ("9.0"), `WireMessageType` (51 cases), `ButtonHeistActor` |
 | `ClientMessages.swift` | `RequestEnvelope`, `ClientMessage` (37 cases), all action target structs, `UnitPoint`, `RecordingConfig` |
 | `ServerMessages.swift` | `ResponseEnvelope`, `ServerMessage` (18 cases), `ActionResult`, `ErrorKind`, `InterfaceDelta`, `StatusPayload`, `ScreenPayload`, `RecordingPayload`, `InteractionEvent`, `ServerInfo` |
 | `Elements.swift` | `HeistElement`, `HeistTrait` (43 known cases + `unknown(String)`), `Interface`, `InterfaceNode`, `ContainerInfo` (with nested `ContainerType`), `ElementAction`, `HeistCustomContent`, `ElementTarget`, `ElementMatcher` |
@@ -204,9 +204,6 @@ classDiagram
         +String? value
         +InterfaceDelta? interfaceDelta
         +Bool? animating
-        +String? elementLabel
-        +String? elementValue
-        +[HeistTrait]? elementTraits
         +String? screenName
         +String? screenId
         +ScrollSearchResult? scrollSearchResult
@@ -341,7 +338,7 @@ classDiagram
 ## Wire Protocol
 
 - **Framing:** Newline-delimited JSON (each message is JSON + `0x0A`)
-- **Protocol version:** `"8.0"` (explicit `type` / `payload` envelopes + exact hello/version matching + canonical interface tree payloads)
+- **Protocol version:** `"9.0"` (explicit `type` / `payload` envelopes + exact hello/version matching + canonical interface tree payloads)
 - **Service type:** `_buttonheist._tcp`
 - **Encoding:** `Codable` with custom top-level envelope coding at the wire boundary
 - **All types:** `Codable` + `Sendable` for Swift 6 concurrency

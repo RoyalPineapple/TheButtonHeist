@@ -37,7 +37,7 @@ Command execution engine. Takes a `ClientMessage`, works it through refresh → 
 
 6. **`TheBrains+Exploration+Manifest.swift`** — `ScreenManifest` bookkeeping struct. Tracks pending/explored containers, scroll count, skip counts, timing. `maxScrollsPerContainer = 200`.
 
-7. **`ActionResultBuilder.swift`** — Assembles `ActionResult` from method + snapshot. Two init paths (from `[ScreenElement]` or explicit screenName/Id). Two terminal methods: `success(elementLabel:elementValue:elementTraits:exploreResult:)` and `failure(errorKind:)`.
+7. **`ActionResultBuilder.swift`** — Assembles `ActionResult` from method + snapshot. Two init paths (from `[ScreenElement]` or explicit screenName/Id). Two terminal methods: `success(scrollSearchResult:exploreResult:)` and `failure(errorKind:)`.
 
 > Full dossier: [`docs/dossiers/13-THEBRAINS.md`](../../../../docs/dossiers/13-THEBRAINS.md)
 
