@@ -217,7 +217,15 @@ final class RecordingPayloadTests: XCTestCase {
     }
 
     func testInteractionEventTouchTapRoundTrip() throws {
-        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 1, edits: ElementEdits(updated: [ElementUpdate(heistId: "okBtn", changes: [PropertyChange(property: .value, old: nil, new: "tapped")])])))
+        let delta: InterfaceDelta = .elementsChanged(.init(
+            elementCount: 1,
+            edits: ElementEdits(updated: [
+                ElementUpdate(
+                    heistId: "okBtn",
+                    changes: [PropertyChange(property: .value, old: nil, new: "tapped")]
+                )
+            ])
+        ))
         let event = InteractionEvent(
             timestamp: 3.2,
             command: .touchTap(TouchTapTarget(elementTarget: .matcher(ElementMatcher(identifier: "okBtn")))),

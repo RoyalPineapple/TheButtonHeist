@@ -128,14 +128,18 @@ final class ActionExpectationTests: XCTestCase {
     // MARK: - Validation: elementUpdated
 
     func testElementUpdatedMetWhenNewValueMatches() {
-        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [ElementUpdate(heistId: "counter", changes: [PropertyChange(property: .value, old: "3", new: "5")])])))
+        let delta: InterfaceDelta = makeUpdateDelta(
+            heistId: "counter", property: .value, old: "3", new: "5"
+        )
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.elementUpdated(newValue: "5").validate(against: action)
         XCTAssertTrue(result.met)
     }
 
     func testElementUpdatedNotMetWhenNoMatch() {
-        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [ElementUpdate(heistId: "counter", changes: [PropertyChange(property: .value, old: "3", new: "4")])])))
+        let delta: InterfaceDelta = makeUpdateDelta(
+            heistId: "counter", property: .value, old: "3", new: "4"
+        )
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.elementUpdated(newValue: "5").validate(against: action)
         XCTAssertFalse(result.met)
@@ -152,21 +156,27 @@ final class ActionExpectationTests: XCTestCase {
     }
 
     func testElementUpdatedNotMetWhenHeistIdDoesNotMatch() {
-        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [ElementUpdate(heistId: "other", changes: [PropertyChange(property: .value, old: "3", new: "5")])])))
+        let delta: InterfaceDelta = makeUpdateDelta(
+            heistId: "other", property: .value, old: "3", new: "5"
+        )
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.elementUpdated(heistId: "counter", newValue: "5").validate(against: action)
         XCTAssertFalse(result.met)
     }
 
     func testElementUpdatedMetWhenOldAndNewValueMatch() {
-        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [ElementUpdate(heistId: "counter", changes: [PropertyChange(property: .value, old: "3", new: "5")])])))
+        let delta: InterfaceDelta = makeUpdateDelta(
+            heistId: "counter", property: .value, old: "3", new: "5"
+        )
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.elementUpdated(oldValue: "3", newValue: "5").validate(against: action)
         XCTAssertTrue(result.met)
     }
 
     func testElementUpdatedNoFieldsMetWhenAnyUpdatesExist() {
-        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [ElementUpdate(heistId: "counter", changes: [PropertyChange(property: .value, old: "a", new: "b")])])))
+        let delta: InterfaceDelta = makeUpdateDelta(
+            heistId: "counter", property: .value, old: "a", new: "b"
+        )
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.elementUpdated().validate(against: action)
         XCTAssertTrue(result.met)
@@ -188,7 +198,9 @@ final class ActionExpectationTests: XCTestCase {
     }
 
     func testElementUpdatedDiagnosticOnMiss() {
-        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [ElementUpdate(heistId: "counter", changes: [PropertyChange(property: .value, old: "3", new: "4")])])))
+        let delta: InterfaceDelta = makeUpdateDelta(
+            heistId: "counter", property: .value, old: "3", new: "4"
+        )
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.elementUpdated(newValue: "5").validate(against: action)
         XCTAssertFalse(result.met)
@@ -342,6 +354,24 @@ final class ActionExpectationTests: XCTestCase {
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
             actions: []
         )
+    }
+
+    private func makeUpdateDelta(
+        heistId: String,
+        property: ElementProperty,
+        old: String?,
+        new: String?,
+        elementCount: Int = 5
+    ) -> InterfaceDelta {
+        .elementsChanged(.init(
+            elementCount: elementCount,
+            edits: ElementEdits(updated: [
+                ElementUpdate(
+                    heistId: heistId,
+                    changes: [PropertyChange(property: property, old: old, new: new)]
+                )
+            ])
+        ))
     }
 
     private func makeResult(
