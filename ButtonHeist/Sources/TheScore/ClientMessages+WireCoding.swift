@@ -96,7 +96,11 @@ extension ClientMessage {
 
     // MARK: - Decoding
 
-    private static func decodeProtocolMessage(type: WireMessageType) -> ClientMessage? {
+    fileprivate static func decode(from payloadDecoder: Decoder?, type: WireMessageType) throws -> ClientMessage {
+        func payload() throws -> Decoder {
+            guard let payloadDecoder else { throw missingClientPayload(type) }
+            return payloadDecoder
+        }
         switch type {
         case .clientHello: return .clientHello
         case .requestInterface: return .requestInterface
@@ -109,190 +113,74 @@ extension ClientMessage {
         case .requestScreen: return .requestScreen
         case .explore: return .explore
         case .stopRecording: return .stopRecording
-        default: return nil
-        }
-    }
-
-    private static func decodeActionMessage(from decoder: Decoder, type: WireMessageType) throws -> ClientMessage? {
-        switch type {
-        case .authenticate:
-            return .authenticate(try AuthenticatePayload(from: decoder))
-        case .activate:
-            return .activate(try ElementTarget(from: decoder))
-        case .increment:
-            return .increment(try ElementTarget(from: decoder))
-        case .decrement:
-            return .decrement(try ElementTarget(from: decoder))
-        case .performCustomAction:
-            return .performCustomAction(try CustomActionTarget(from: decoder))
-        case .editAction:
-            return .editAction(try EditActionTarget(from: decoder))
-        case .setPasteboard:
-            return .setPasteboard(try SetPasteboardTarget(from: decoder))
-        case .watch:
-            return .watch(try WatchPayload(from: decoder))
+        case .authenticate: return .authenticate(try AuthenticatePayload(from: try payload()))
+        case .activate: return .activate(try ElementTarget(from: try payload()))
+        case .increment: return .increment(try ElementTarget(from: try payload()))
+        case .decrement: return .decrement(try ElementTarget(from: try payload()))
+        case .performCustomAction: return .performCustomAction(try CustomActionTarget(from: try payload()))
+        case .editAction: return .editAction(try EditActionTarget(from: try payload()))
+        case .setPasteboard: return .setPasteboard(try SetPasteboardTarget(from: try payload()))
+        case .watch: return .watch(try WatchPayload(from: try payload()))
+        case .touchTap: return .touchTap(try TouchTapTarget(from: try payload()))
+        case .touchLongPress: return .touchLongPress(try LongPressTarget(from: try payload()))
+        case .touchSwipe: return .touchSwipe(try SwipeTarget(from: try payload()))
+        case .touchDrag: return .touchDrag(try DragTarget(from: try payload()))
+        case .touchPinch: return .touchPinch(try PinchTarget(from: try payload()))
+        case .touchRotate: return .touchRotate(try RotateTarget(from: try payload()))
+        case .touchTwoFingerTap: return .touchTwoFingerTap(try TwoFingerTapTarget(from: try payload()))
+        case .touchDrawPath: return .touchDrawPath(try DrawPathTarget(from: try payload()))
+        case .touchDrawBezier: return .touchDrawBezier(try DrawBezierTarget(from: try payload()))
+        case .typeText: return .typeText(try TypeTextTarget(from: try payload()))
+        case .scroll: return .scroll(try ScrollTarget(from: try payload()))
+        case .scrollToVisible: return .scrollToVisible(try ScrollToVisibleTarget(from: try payload()))
+        case .elementSearch: return .elementSearch(try ElementSearchTarget(from: try payload()))
+        case .scrollToEdge: return .scrollToEdge(try ScrollToEdgeTarget(from: try payload()))
+        case .waitForIdle: return .waitForIdle(try WaitForIdleTarget(from: try payload()))
+        case .waitFor: return .waitFor(try WaitForTarget(from: try payload()))
+        case .waitForChange: return .waitForChange(try WaitForChangeTarget(from: try payload()))
+        case .startRecording: return .startRecording(try RecordingConfig(from: try payload()))
         default:
-            return nil
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: payloadDecoder?.codingPath ?? [],
+                debugDescription: "Unsupported client message type: \(type.rawValue)"
+            ))
         }
-    }
-
-    private static func decodeTouchMessage(from decoder: Decoder, type: WireMessageType) throws -> ClientMessage? {
-        switch type {
-        case .touchTap:
-            return .touchTap(try TouchTapTarget(from: decoder))
-        case .touchLongPress:
-            return .touchLongPress(try LongPressTarget(from: decoder))
-        case .touchSwipe:
-            return .touchSwipe(try SwipeTarget(from: decoder))
-        case .touchDrag:
-            return .touchDrag(try DragTarget(from: decoder))
-        case .touchPinch:
-            return .touchPinch(try PinchTarget(from: decoder))
-        case .touchRotate:
-            return .touchRotate(try RotateTarget(from: decoder))
-        case .touchTwoFingerTap:
-            return .touchTwoFingerTap(try TwoFingerTapTarget(from: decoder))
-        case .touchDrawPath:
-            return .touchDrawPath(try DrawPathTarget(from: decoder))
-        case .touchDrawBezier:
-            return .touchDrawBezier(try DrawBezierTarget(from: decoder))
-        default:
-            return nil
-        }
-    }
-
-    private static func decodeTextAndScrollMessage(from decoder: Decoder, type: WireMessageType) throws -> ClientMessage? {
-        switch type {
-        case .typeText:
-            return .typeText(try TypeTextTarget(from: decoder))
-        case .scroll:
-            return .scroll(try ScrollTarget(from: decoder))
-        case .scrollToVisible:
-            return .scrollToVisible(try ScrollToVisibleTarget(from: decoder))
-        case .elementSearch:
-            return .elementSearch(try ElementSearchTarget(from: decoder))
-        case .scrollToEdge:
-            return .scrollToEdge(try ScrollToEdgeTarget(from: decoder))
-        case .waitForIdle:
-            return .waitForIdle(try WaitForIdleTarget(from: decoder))
-        case .waitFor:
-            return .waitFor(try WaitForTarget(from: decoder))
-        case .waitForChange:
-            return .waitForChange(try WaitForChangeTarget(from: decoder))
-        case .startRecording:
-            return .startRecording(try RecordingConfig(from: decoder))
-        default:
-            return nil
-        }
-    }
-
-    fileprivate static func decode(from payloadDecoder: Decoder?, type: WireMessageType) throws -> ClientMessage {
-        if let message = decodeProtocolMessage(type: type) {
-            return message
-        }
-
-        guard let payloadDecoder else {
-            throw missingClientPayload(type)
-        }
-
-        if let message = try decodeActionMessage(from: payloadDecoder, type: type) {
-            return message
-        }
-        if let message = try decodeTouchMessage(from: payloadDecoder, type: type) {
-            return message
-        }
-        if let message = try decodeTextAndScrollMessage(from: payloadDecoder, type: type) {
-            return message
-        }
-
-        throw DecodingError.dataCorrupted(.init(
-            codingPath: payloadDecoder.codingPath,
-            debugDescription: "Unsupported client message type: \(type.rawValue)"
-        ))
     }
 
     // MARK: - Encoding
 
-    private func encodeActionPayload(to encoder: Encoder) throws -> Bool {
-        switch self {
-        case .authenticate(let payload):
-            try payload.encode(to: encoder)
-        case .activate(let payload):
-            try payload.encode(to: encoder)
-        case .increment(let payload):
-            try payload.encode(to: encoder)
-        case .decrement(let payload):
-            try payload.encode(to: encoder)
-        case .performCustomAction(let payload):
-            try payload.encode(to: encoder)
-        case .editAction(let payload):
-            try payload.encode(to: encoder)
-        case .setPasteboard(let payload):
-            try payload.encode(to: encoder)
-        case .watch(let payload):
-            try payload.encode(to: encoder)
-        default:
-            return false
-        }
-        return true
-    }
-
-    private func encodeTouchPayload(to encoder: Encoder) throws -> Bool {
-        switch self {
-        case .touchTap(let payload):
-            try payload.encode(to: encoder)
-        case .touchLongPress(let payload):
-            try payload.encode(to: encoder)
-        case .touchSwipe(let payload):
-            try payload.encode(to: encoder)
-        case .touchDrag(let payload):
-            try payload.encode(to: encoder)
-        case .touchPinch(let payload):
-            try payload.encode(to: encoder)
-        case .touchRotate(let payload):
-            try payload.encode(to: encoder)
-        case .touchTwoFingerTap(let payload):
-            try payload.encode(to: encoder)
-        case .touchDrawPath(let payload):
-            try payload.encode(to: encoder)
-        case .touchDrawBezier(let payload):
-            try payload.encode(to: encoder)
-        default:
-            return false
-        }
-        return true
-    }
-
-    private func encodeTextAndScrollPayload(to encoder: Encoder) throws -> Bool {
-        switch self {
-        case .typeText(let payload):
-            try payload.encode(to: encoder)
-        case .scroll(let payload):
-            try payload.encode(to: encoder)
-        case .scrollToVisible(let payload):
-            try payload.encode(to: encoder)
-        case .elementSearch(let payload):
-            try payload.encode(to: encoder)
-        case .scrollToEdge(let payload):
-            try payload.encode(to: encoder)
-        case .waitForIdle(let payload):
-            try payload.encode(to: encoder)
-        case .waitFor(let payload):
-            try payload.encode(to: encoder)
-        case .waitForChange(let payload):
-            try payload.encode(to: encoder)
-        case .startRecording(let payload):
-            try payload.encode(to: encoder)
-        default:
-            return false
-        }
-        return true
-    }
-
     fileprivate func encodePayload(to encoder: Encoder) throws {
-        if try encodeActionPayload(to: encoder) { return }
-        if try encodeTouchPayload(to: encoder) { return }
-        if try encodeTextAndScrollPayload(to: encoder) { return }
+        switch self {
+        case .clientHello, .requestInterface, .subscribe, .unsubscribe, .ping, .status,
+             .resignFirstResponder, .getPasteboard, .requestScreen, .explore, .stopRecording:
+            return
+        case .authenticate(let payload): try payload.encode(to: encoder)
+        case .activate(let payload): try payload.encode(to: encoder)
+        case .increment(let payload): try payload.encode(to: encoder)
+        case .decrement(let payload): try payload.encode(to: encoder)
+        case .performCustomAction(let payload): try payload.encode(to: encoder)
+        case .editAction(let payload): try payload.encode(to: encoder)
+        case .setPasteboard(let payload): try payload.encode(to: encoder)
+        case .watch(let payload): try payload.encode(to: encoder)
+        case .touchTap(let payload): try payload.encode(to: encoder)
+        case .touchLongPress(let payload): try payload.encode(to: encoder)
+        case .touchSwipe(let payload): try payload.encode(to: encoder)
+        case .touchDrag(let payload): try payload.encode(to: encoder)
+        case .touchPinch(let payload): try payload.encode(to: encoder)
+        case .touchRotate(let payload): try payload.encode(to: encoder)
+        case .touchTwoFingerTap(let payload): try payload.encode(to: encoder)
+        case .touchDrawPath(let payload): try payload.encode(to: encoder)
+        case .touchDrawBezier(let payload): try payload.encode(to: encoder)
+        case .typeText(let payload): try payload.encode(to: encoder)
+        case .scroll(let payload): try payload.encode(to: encoder)
+        case .scrollToVisible(let payload): try payload.encode(to: encoder)
+        case .elementSearch(let payload): try payload.encode(to: encoder)
+        case .scrollToEdge(let payload): try payload.encode(to: encoder)
+        case .waitForIdle(let payload): try payload.encode(to: encoder)
+        case .waitFor(let payload): try payload.encode(to: encoder)
+        case .waitForChange(let payload): try payload.encode(to: encoder)
+        case .startRecording(let payload): try payload.encode(to: encoder)
+        }
     }
 
     // MARK: - Codable Conformance

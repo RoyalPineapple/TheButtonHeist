@@ -622,8 +622,10 @@ public final class TheFence {
             return try await handleTypeText(args)
         case .editAction:
             return try await handleEditAction(args)
-        case .setPasteboard, .getPasteboard:
-            return try await handlePasteboard(command: command, args: args)
+        case .setPasteboard:
+            return try await handleSetPasteboard(args)
+        case .getPasteboard:
+            return try await handleGetPasteboard()
         case .dismissKeyboard:
             return try await sendAction(.resignFirstResponder)
         case .startRecording, .stopRecording:

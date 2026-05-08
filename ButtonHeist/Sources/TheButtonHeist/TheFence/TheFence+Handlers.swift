@@ -403,17 +403,6 @@ extension TheFence {
 
     // MARK: - Handler: Pasteboard
 
-    func handlePasteboard(command: Command, args: [String: Any]) async throws -> FenceResponse {
-        switch command {
-        case .setPasteboard:
-            return try await handleSetPasteboard(args)
-        case .getPasteboard:
-            return try await handleGetPasteboard()
-        default:
-            return .error("Unknown pasteboard action: \(command.rawValue)")
-        }
-    }
-
     func handleSetPasteboard(_ args: [String: Any]) async throws -> FenceResponse {
         guard let text = args.string("text") else {
             return .error("text is required for set_pasteboard")
@@ -604,20 +593,8 @@ extension TheFence {
             }
             let (archiveURL, manifest) = try await bookKeeper.archiveSession(deleteSource: deleteSource)
             return .archiveResult(path: archiveURL.path, manifest: manifest)
-        case .startHeist, .stopHeist, .playHeist:
-            return try await handleHeistCommand(command: command, args: args)
-        default:
-            return .error("Unexpected BookKeeper command: \(command.rawValue)")
-        }
-    }
-
-    // MARK: - Handler: Heist Recording & Playback
-
-    func handleHeistCommand(command: Command, args: [String: Any]) async throws -> FenceResponse {
-        switch command {
         case .startHeist:
             let app = args.string("app") ?? "com.buttonheist.testapp"
-            // Ensure a BookKeeper session is active — heist recording is a session artifact
             if bookKeeper.manifest == nil {
                 let identifier = args.string("identifier") ?? "heist"
                 try bookKeeper.beginSession(identifier: identifier)
@@ -637,7 +614,7 @@ extension TheFence {
         case .playHeist:
             return try await handlePlayHeist(args)
         default:
-            return .error("Unexpected heist command: \(command.rawValue)")
+            return .error("Unexpected BookKeeper command: \(command.rawValue)")
         }
     }
 

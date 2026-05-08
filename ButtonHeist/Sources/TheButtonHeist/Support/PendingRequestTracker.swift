@@ -7,9 +7,6 @@ import os
 /// via `wait(requestId:timeout:)`, and the corresponding response arrives later via
 /// `resolve(requestId:result:)`. If no response arrives within the timeout, the
 /// continuation resumes with `FenceError.actionTimeout`.
-///
-/// This type replaces the three hand-rolled `pending*Requests` dictionaries and the
-/// shared `waitForResponse<T>` method that previously lived in `TheFence`.
 @ButtonHeistActor
 final class PendingRequestTracker<T: Sendable> {
     private var pending: [String: @Sendable (Result<T, Error>) -> Void] = [:]
