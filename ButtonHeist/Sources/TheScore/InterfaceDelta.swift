@@ -49,6 +49,13 @@ public enum InterfaceDelta: Sendable {
     /// Payload for `.screenChanged`.
     public struct ScreenChanged: Sendable {
         public let elementCount: Int
+        /// Best-effort interface snapshot after the screen change and any
+        /// folded-in `postEdits`. `newInterface.tree` reflects element-level
+        /// swaps and added-at-root, but does *not* apply the structural
+        /// `treeInserted`/`treeRemoved`/`treeMoved` entries from `postEdits`
+        /// — those are descriptive diff metadata, not reconstruction
+        /// instructions. When tree structure matters, `postEdits` is
+        /// authoritative.
         public let newInterface: Interface
         /// Element edits that happened *after* the screen change, folded in
         /// by `NetDeltaAccumulator.mergeAfterScreenChange`. nil for

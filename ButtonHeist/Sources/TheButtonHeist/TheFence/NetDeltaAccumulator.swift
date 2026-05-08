@@ -18,10 +18,8 @@ internal enum NetDeltaAccumulator {
         guard !meaningful.isEmpty else { return nil }
 
         // If any step was a screen change, the net is screenChanged with the last one's interface
-        if let screenIndex = deltas.lastIndex(where: { delta in
-            if case .screenChanged = delta { return true }
-            return false
-        }), case .screenChanged(let screenPayload) = deltas[screenIndex] {
+        if let screenIndex = deltas.lastIndex(where: \.isScreenChanged),
+           case .screenChanged(let screenPayload) = deltas[screenIndex] {
             return mergeAfterScreenChange(
                 screenChange: screenPayload,
                 postDeltas: Array(deltas[(screenIndex + 1)...])
@@ -36,16 +34,21 @@ internal enum NetDeltaAccumulator {
     /// Fold element-level edits that happened after `screenChange` into a
     /// single `.screenChanged` result, applying them to the new interface.
     /// `postDeltas` is the slice of the original sequence strictly after the
-    /// screen-change step; any further screen changes inside that slice are
-    /// dropped because the caller has already pinned to the *last* one.
+    /// screen-change step. The caller has already pinned to the *last* screen
+    /// change, so this slice is structurally guaranteed not to contain another.
     private static func mergeAfterScreenChange(
         screenChange: InterfaceDelta.ScreenChanged, postDeltas: [InterfaceDelta]
     ) -> InterfaceDelta {
+        precondition(
+            !postDeltas.contains(where: \.isScreenChanged),
+            "post-screen-change slice must not contain another screen change"
+        )
         let postDeltas = postDeltas.filter { delta in
             switch delta {
             case .noChange(let payload): return !payload.transient.isEmpty
             case .elementsChanged: return true
-            case .screenChanged: return false
+            case .screenChanged:
+                preconditionFailure("guarded above")
             }
         }
         if postDeltas.isEmpty {
@@ -78,8 +81,25 @@ internal enum NetDeltaAccumulator {
         ))
     }
 
+    /// Apply element-level edits (`added`/`removed`/`updated`) to `interface`,
+    /// producing a best-effort `newInterface` for `.screenChanged.newInterface`.
+    ///
+    /// Tree-level edits (`treeInserted`/`treeRemoved`/`treeMoved`) are *not*
+    /// applied here — they are descriptive metadata produced by diffing two
+    /// snapshots, not instructions for reconstructing the tree. Consumers who
+    /// need the structural truth should read `postEdits` directly; the
+    /// `newInterface.tree` returned here reflects the leaf-level swaps and
+    /// adds, with novel adds appended at the root forest.
+    ///
+    /// `heistId` collisions in `interface.elements` are tolerated with
+    /// last-write-wins semantics — uniqueness is a best-effort property of the
+    /// snapshot, not an invariant (e.g. sibling `staticText` with identical
+    /// labels can synthesize the same id).
     private static func apply(_ edits: ElementEdits, to interface: Interface) -> Interface {
-        var elementsById = Dictionary(uniqueKeysWithValues: interface.elements.map { ($0.heistId, $0) })
+        var elementsById: [String: HeistElement] = [:]
+        for element in interface.elements {
+            elementsById[element.heistId] = element
+        }
         for heistId in edits.removed {
             elementsById.removeValue(forKey: heistId)
         }

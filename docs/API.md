@@ -1304,9 +1304,12 @@ Expectations follow a **"say what you know"** design: agents express what they c
 
 #### Cases
 
-- `screenChanged` - Expected `interfaceDelta.kind == .screenChanged`
-- `layoutChanged` - Expected `interfaceDelta.kind == .elementsChanged` (also met by `.screenChanged`)
-- `valueChanged(heistId: String?, oldValue: String?, newValue: String?)` - Expected a value change in `interfaceDelta.valueChanges`. All fields optional — provide what you know, omit what you don't. Met when any entry matches all provided fields.
+- `screenChanged` - Expected the result's `interfaceDelta` to be a `.screenChanged` case (view controller identity changed).
+- `elementsChanged` - Expected the result's `interfaceDelta` to be `.elementsChanged` (also met by `.screenChanged` under the superset rule).
+- `elementUpdated(heistId: String?, property: ElementProperty?, oldValue: String?, newValue: String?)` - Expected a property change on an element. All fields optional — provide what you know, omit what you don't. Met when any entry in the delta's `updated` list matches all provided fields.
+- `elementAppeared(ElementMatcher)` - Expected an element matching this predicate to appear in the delta's `added` list.
+- `elementDisappeared(ElementMatcher)` - Expected an element matching this predicate to disappear from the delta's `removed` list. Validation requires a pre-action element cache to resolve removed heistIds to matchers.
+- `compound([ActionExpectation])` - All sub-expectations must be met.
 
 #### Static Methods
 

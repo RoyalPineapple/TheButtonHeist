@@ -211,19 +211,43 @@ classDiagram
     }
 
     class InterfaceDelta {
-        +DeltaKind kind
-        +Int elementCount
-        +[HeistElement]? added
-        +[String]? removed
-        +[ElementUpdate]? updated
-        +Interface? newInterface
+        <<enum>>
+        noChange(NoChange)
+        elementsChanged(ElementsChanged)
+        screenChanged(ScreenChanged)
+        +elementCount: Int
+        +kindRawValue: String
+        +isScreenChanged: Bool
+        +transient: [HeistElement]
+        +elementEdits: ElementEdits?
     }
 
-    class DeltaKind {
-        <<enum>>
-        noChange
-        elementsChanged
-        screenChanged
+    class NoChange {
+        +Int elementCount
+        +[HeistElement] transient
+    }
+
+    class ElementsChanged {
+        +Int elementCount
+        +ElementEdits edits
+        +[HeistElement] transient
+    }
+
+    class ScreenChanged {
+        +Int elementCount
+        +Interface newInterface
+        +ElementEdits? postEdits
+        +[HeistElement] transient
+    }
+
+    class ElementEdits {
+        +[HeistElement] added
+        +[String] removed
+        +[ElementUpdate] updated
+        +[TreeInsertion] treeInserted
+        +[TreeRemoval] treeRemoved
+        +[TreeMove] treeMoved
+        +isEmpty: Bool
     }
 
     class ScrollSearchResult {
@@ -268,8 +292,12 @@ classDiagram
     ActionResult --> InterfaceDelta
     ActionResult --> ScrollSearchResult
     ActionResult --> ExploreResult
-    InterfaceDelta --> DeltaKind
-    InterfaceDelta --> ElementUpdate
+    InterfaceDelta --> NoChange
+    InterfaceDelta --> ElementsChanged
+    InterfaceDelta --> ScreenChanged
+    ElementsChanged --> ElementEdits
+    ScreenChanged --> ElementEdits
+    ElementEdits --> ElementUpdate
     ElementUpdate --> PropertyChange
     PropertyChange --> ElementProperty
 ```

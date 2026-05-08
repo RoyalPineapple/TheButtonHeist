@@ -1398,7 +1398,7 @@ Case-specific fields:
 |--------|-------------------|-------|
 | `noChange` | (none) | The hierarchy did not change. May still carry `transient`. |
 | `elementsChanged` | `added`, `removed`, `updated`, `treeInserted`, `treeRemoved`, `treeMoved` | Element-level edits within the same screen. Each collection is omitted when empty. |
-| `screenChanged` | `newInterface`, `postEdits?` | View controller identity changed. `postEdits` is an `ElementEdits` sub-object describing edits folded in by `NetDeltaAccumulator.mergeAfterScreenChange` — present only on batch-merged deltas, omitted otherwise. |
+| `screenChanged` | `newInterface`, `postEdits?` | View controller identity changed. `postEdits` is an `ElementEdits` sub-object describing edits folded in by `NetDeltaAccumulator.mergeAfterScreenChange` — present only on batch-merged deltas, omitted otherwise. `newInterface.tree` reflects element-level swaps from `postEdits.added`/`removed`/`updated` (best-effort) but does **not** apply the structural `treeInserted`/`treeRemoved`/`treeMoved` entries — those are descriptive diff metadata. When tree structure matters, treat `postEdits` as authoritative over `newInterface.tree`. |
 
 `postEdits` shape (when present):
 
