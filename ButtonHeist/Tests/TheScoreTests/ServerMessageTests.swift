@@ -5,7 +5,6 @@ final class ServerMessageTests: XCTestCase {
 
     func testInfoEncodeDecode() throws {
         let info = ServerInfo(
-            protocolVersion: "1.0",
             appName: "TestApp",
             bundleIdentifier: "com.test.app",
             deviceName: "iPhone",
@@ -18,7 +17,6 @@ final class ServerMessageTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
 
         if case .info(let decodedInfo) = decoded {
-            XCTAssertEqual(decodedInfo.protocolVersion, "1.0")
             XCTAssertEqual(decodedInfo.appName, "TestApp")
             XCTAssertEqual(decodedInfo.bundleIdentifier, "com.test.app")
         } else {

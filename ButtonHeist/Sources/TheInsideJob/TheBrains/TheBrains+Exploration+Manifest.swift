@@ -28,7 +28,7 @@ extension TheBrains {
         var skippedContainers = 0
 
         /// Containers skipped because they are behind a presented view controller.
-        /// Surfaced as `ExploreResult.containersSkippedObscured`.
+        /// Not surfaced on the wire today; kept for logging and diagnostics inside the server.
         var skippedObscuredContainers = 0
 
         /// Wall-clock time spent exploring, in seconds. Surfaced as `ExploreResult.explorationTime`.

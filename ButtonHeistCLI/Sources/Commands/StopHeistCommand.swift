@@ -8,23 +8,22 @@ struct StopHeistCommand: AsyncParsableCommand {
         abstract: "Stop recording and save the heist playback"
     )
 
-    @Option(name: .shortAndLong, help: "Output file path for the .heist file")
-    var output: String
+    @Option(name: [.customShort("o"), .customLong("output")], help: "Output file path for the .heist file")
+    var outputPath: String
 
     @OptionGroup var connection: ConnectionOptions
 
-    @Option(name: .long, help: "Output format")
-    var format: OutputFormat = .auto
+    @OptionGroup var output: OutputOptions
 
     @ButtonHeistActor
     func run() async throws {
         let request: [String: Any] = [
             "command": TheFence.Command.stopHeist.rawValue,
-            "output": output,
+            "output": outputPath,
         ]
         try await CLIRunner.run(
             connection: connection,
-            format: format,
+            format: output.format,
             request: request
         )
     }

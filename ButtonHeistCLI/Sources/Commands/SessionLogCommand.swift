@@ -10,15 +10,14 @@ struct SessionLogCommand: AsyncParsableCommand {
 
     @OptionGroup var connection: ConnectionOptions
 
-    @Option(name: .long, help: "Output format")
-    var format: OutputFormat = .auto
+    @OptionGroup var output: OutputOptions
 
     @ButtonHeistActor
     func run() async throws {
         let request: [String: Any] = ["command": TheFence.Command.getSessionLog.rawValue]
         try await CLIRunner.run(
             connection: connection,
-            format: format,
+            format: output.format,
             request: request
         )
     }

@@ -182,19 +182,19 @@ Auth messages use the standard newline-delimited JSON format wrapped in envelope
 ### Server → Client (ResponseEnvelope)
 
 ```json
-{"protocolVersion":"8.0","requestId":null,"type":"serverHello"}
-{"protocolVersion":"8.0","requestId":null,"type":"authRequired"}
-{"protocolVersion":"8.0","requestId":null,"type":"authApproved","payload":{"token":"A1B2C3D4-E5F6-..."}}
-{"protocolVersion":"8.0","requestId":null,"type":"authFailed","payload":"Invalid token. Retry without a token to request a fresh session."}
+{"protocolVersion":"9.0","requestId":null,"type":"serverHello"}
+{"protocolVersion":"9.0","requestId":null,"type":"authRequired"}
+{"protocolVersion":"9.0","requestId":null,"type":"authApproved","payload":{"token":"A1B2C3D4-E5F6-..."}}
+{"protocolVersion":"9.0","requestId":null,"type":"authFailed","payload":"Invalid token. Retry without a token to request a fresh session."}
 ```
 
 ### Client → Server (RequestEnvelope)
 
 ```json
-{"protocolVersion":"8.0","requestId":null,"type":"clientHello"}
-{"protocolVersion":"8.0","requestId":"req-1","type":"authenticate","payload":{"token":"my-secret-token"}}
-{"protocolVersion":"8.0","requestId":"req-2","type":"authenticate","payload":{"token":""}}
-{"protocolVersion":"8.0","requestId":null,"type":"watch","payload":{"token":""}}
+{"protocolVersion":"9.0","requestId":null,"type":"clientHello"}
+{"protocolVersion":"9.0","requestId":"req-1","type":"authenticate","payload":{"token":"my-secret-token"}}
+{"protocolVersion":"9.0","requestId":"req-2","type":"authenticate","payload":{"token":""}}
+{"protocolVersion":"9.0","requestId":null,"type":"watch","payload":{"token":""}}
 ```
 
 An empty token string in `authenticate` requests UI approval. A non-empty token attempts direct authentication. The `watch` message establishes a read-only observer connection.

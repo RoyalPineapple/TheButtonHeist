@@ -375,18 +375,14 @@ final class ActionExpectationTests: XCTestCase {
         success: Bool,
         message: String? = nil,
         value: String? = nil,
-        delta: InterfaceDelta? = nil,
-        elementLabel: String? = nil,
-        elementValue: String? = nil
+        delta: InterfaceDelta? = nil
     ) -> ActionResult {
         ActionResult(
             success: success,
             method: .syntheticTap,
             message: message,
             value: value,
-            interfaceDelta: delta,
-            elementLabel: elementLabel,
-            elementValue: elementValue
+            interfaceDelta: delta
         )
         // Note: animating param omitted (defaults to nil)
     }

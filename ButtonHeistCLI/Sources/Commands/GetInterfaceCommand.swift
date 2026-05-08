@@ -10,8 +10,7 @@ struct GetInterfaceCommand: AsyncParsableCommand {
 
     @OptionGroup var connection: ConnectionOptions
 
-    @Option(name: .shortAndLong, help: "Output format: human, json, compact (default: human when interactive, json when piped)")
-    var format: OutputFormat?
+    @OptionGroup var output: OutputOptions
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
@@ -28,7 +27,7 @@ struct GetInterfaceCommand: AsyncParsableCommand {
         if full { request["full"] = true }
         try await CLIRunner.run(
             connection: connection,
-            format: format,
+            format: output.format,
             request: request,
             statusMessage: full ? "Exploring screen..." : "Requesting interface..."
         )

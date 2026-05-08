@@ -729,44 +729,6 @@ final class WireTypeRoundTripTests: XCTestCase {
         }
     }
 
-    // MARK: - ActionResult.adding
-
-    func testActionResultAddingScrollSearchResult() {
-        let result = ActionResult(success: true, method: .scroll)
-        let searchResult = ScrollSearchResult(
-            scrollCount: 3, uniqueElementsSeen: 20, exhaustive: true
-        )
-        let updated = result.adding(scrollSearchResult: searchResult)
-        XCTAssertEqual(updated.scrollSearchResult?.scrollCount, 3)
-        XCTAssertTrue(updated.success)
-    }
-
-    func testActionResultAddingExploreElementsWithNoExploreResult() {
-        let result = ActionResult(success: true, method: .explore)
-        let updated = result.adding(exploreElements: [])
-        XCTAssertNil(updated.exploreResult)
-    }
-
-    func testActionResultAddingExploreElements() {
-        let element = HeistElement(
-            heistId: "el_1", description: "Button",
-            label: "Save", value: nil, identifier: nil,
-            traits: [.button],
-            frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
-            actions: [.activate]
-        )
-        let explore = ExploreResult(
-            elements: [], scrollCount: 5, containersExplored: 2, explorationTime: 1.5
-        )
-        let result = ActionResult(
-            success: true, method: .explore, exploreResult: explore
-        )
-        let updated = result.adding(exploreElements: [element])
-        XCTAssertEqual(updated.exploreResult?.elements.count, 1)
-        XCTAssertEqual(updated.exploreResult?.scrollCount, 5)
-        XCTAssertEqual(updated.exploreResult?.containersExplored, 2)
-    }
-
     // MARK: - RecordingPayload.StopReason
 
     func testStopReasonAllCasesRoundTrip() throws {

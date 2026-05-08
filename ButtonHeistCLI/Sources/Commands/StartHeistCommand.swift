@@ -13,8 +13,7 @@ struct StartHeistCommand: AsyncParsableCommand {
 
     @OptionGroup var connection: ConnectionOptions
 
-    @Option(name: .long, help: "Output format")
-    var format: OutputFormat = .auto
+    @OptionGroup var output: OutputOptions
 
     @ButtonHeistActor
     func run() async throws {
@@ -24,7 +23,7 @@ struct StartHeistCommand: AsyncParsableCommand {
         ]
         try await CLIRunner.run(
             connection: connection,
-            format: format,
+            format: output.format,
             request: request
         )
     }

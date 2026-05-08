@@ -132,13 +132,6 @@ public enum FenceResponse {
             return connected ? "Session: connected to \(device)" : "Session: not connected"
         case .targets(let targets, let defaultTarget):
             return formatTargetList(targets, defaultTarget: defaultTarget)
-        case .sessionLog, .archiveResult, .heistStarted, .heistStopped, .heistPlayback:
-            return formatBookKeeperHuman(self)
-        }
-    }
-
-    private func formatBookKeeperHuman(_ response: FenceResponse) -> String {
-        switch response {
         case .sessionLog(let manifest):
             return formatSessionLogHuman(manifest)
         case .archiveResult(let path, let manifest):
@@ -158,8 +151,6 @@ public enum FenceResponse {
                 text += "\n  error: \(failure.errorMessage)"
             }
             return text
-        default:
-            return ""
         }
     }
 

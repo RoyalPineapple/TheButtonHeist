@@ -109,7 +109,6 @@ final class TheHandoffStateTests: XCTestCase {
             connectionCount += 1
             let connection = MockConnection()
             connection.serverInfo = ServerInfo(
-                protocolVersion: "5.0",
                 appName: "TestApp",
                 bundleIdentifier: "com.test",
                 deviceName: "Simulator",
@@ -139,7 +138,6 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.makeConnection = { _, _, _ in
             let connection = MockConnection()
             connection.serverInfo = ServerInfo(
-                protocolVersion: "5.0",
                 appName: "TestApp",
                 bundleIdentifier: "com.test",
                 deviceName: "Simulator",
@@ -174,7 +172,6 @@ final class TheHandoffStateTests: XCTestCase {
                 ]
             } else {
                 connection.serverInfo = ServerInfo(
-                    protocolVersion: "5.0",
                     appName: "TestApp",
                     bundleIdentifier: "com.test",
                     deviceName: "Simulator",
@@ -373,7 +370,6 @@ final class TheHandoffStateTests: XCTestCase {
             connectedDeviceID = device.id
             let connection = MockConnection()
             connection.serverInfo = ServerInfo(
-                protocolVersion: "5.0",
                 appName: "AccessibilityTestApp",
                 bundleIdentifier: "com.buttonheist.testapp",
                 deviceName: "iPhone 16 Pro",
@@ -437,7 +433,6 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.makeConnection = { _, _, _ in
             let connection = MockConnection()
             connection.serverInfo = ServerInfo(
-                protocolVersion: "5.0",
                 appName: "AccessibilityTestApp",
                 bundleIdentifier: "com.buttonheist.testapp",
                 deviceName: "iPhone 16 Pro",

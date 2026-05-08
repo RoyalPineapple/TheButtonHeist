@@ -1114,7 +1114,6 @@ final class TheFenceTests: XCTestCase {
         mockDiscovery.discoveredDevices = [device]
         let mockConnection = MockConnection()
         mockConnection.serverInfo = ServerInfo(
-            protocolVersion: protocolVersion,
             appName: "MockApp", bundleIdentifier: "com.test",
             deviceName: "Sim", systemVersion: "18.0",
             screenWidth: 390, screenHeight: 844
@@ -1187,7 +1186,6 @@ final class TheFenceTests: XCTestCase {
         mockDiscovery.discoveredDevices = [device]
         let mockConnection = MockConnection()
         mockConnection.serverInfo = ServerInfo(
-            protocolVersion: protocolVersion,
             appName: "MockApp", bundleIdentifier: "com.test",
             deviceName: "Sim", systemVersion: "18.0",
             screenWidth: 390, screenHeight: 844
