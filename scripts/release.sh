@@ -218,6 +218,8 @@ echo ""
 
 echo "==> Phase 3: Building CLI + MCP"
 
+rm -rf ButtonHeistCLI/.build ButtonHeistMCP/.build
+
 CLI_LOG=$(mktemp)
 MCP_LOG=$(mktemp)
 
