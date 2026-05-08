@@ -1382,14 +1382,34 @@ Under `stop_on_error` policy, a failed expectation (`status: "expectation_failed
 
 ### InterfaceDelta
 
+`InterfaceDelta` is a discriminated union — the `kind` field selects which other fields are valid. Empty edit collections are omitted on the wire; missing keys decode as empty arrays.
+
+Common fields (every case):
+
 | Field | Type | Description |
 |-------|------|-------------|
 | `kind` | `String` | `"noChange"`, `"elementsChanged"`, or `"screenChanged"` |
 | `elementCount` | `Int` | Total element count after the action |
-| `added` | `[HeistElement]?` | Elements that were added (for `elementsChanged`) |
-| `removed` | `[String]?` | HeistIds of removed elements (for `elementsChanged`) |
-| `updated` | `[ElementUpdate]?` | Elements whose properties changed (for `elementsChanged`) |
-| `newInterface` | `Interface?` | Full new interface (for `screenChanged` only) |
+| `transient` | `[HeistElement]?` | Elements that appeared and disappeared during settle while baseline and final were otherwise identical. Omitted when empty. |
+
+Case-specific fields:
+
+| `kind` | Additional fields | Notes |
+|--------|-------------------|-------|
+| `noChange` | (none) | The hierarchy did not change. May still carry `transient`. |
+| `elementsChanged` | `added`, `removed`, `updated`, `treeInserted`, `treeRemoved`, `treeMoved` | Element-level edits within the same screen. Each collection is omitted when empty. |
+| `screenChanged` | `newInterface`, `postEdits?` | View controller identity changed. `postEdits` is an `ElementEdits` sub-object describing edits folded in by `NetDeltaAccumulator.mergeAfterScreenChange` — present only on batch-merged deltas, omitted otherwise. `newInterface.tree` reflects element-level swaps from `postEdits.added`/`removed`/`updated` (best-effort) but does **not** apply the structural `treeInserted`/`treeRemoved`/`treeMoved` entries — those are descriptive diff metadata. When tree structure matters, treat `postEdits` as authoritative over `newInterface.tree`. |
+
+`postEdits` shape (when present):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `added` | `[HeistElement]?` | Elements added after the screen change |
+| `removed` | `[String]?` | HeistIds of elements removed after the screen change |
+| `updated` | `[ElementUpdate]?` | Element property changes after the screen change |
+| `treeInserted` | `[TreeInsertion]?` | Tree insertions after the screen change |
+| `treeRemoved` | `[TreeRemoval]?` | Tree removals after the screen change |
+| `treeMoved` | `[TreeMove]?` | Tree moves after the screen change |
 
 ### ElementUpdate
 

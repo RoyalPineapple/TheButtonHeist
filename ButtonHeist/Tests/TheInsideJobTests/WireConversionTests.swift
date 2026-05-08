@@ -4,6 +4,28 @@ import XCTest
 @testable import TheInsideJob
 @testable import TheScore
 
+// Test-only conveniences for nil-or-array assertions.
+private extension InterfaceDelta {
+    /// Edit fields for a `.elementsChanged` or `.screenChanged.postEdits` delta.
+    /// Empty for other cases.
+    var testEdits: ElementEdits {
+        switch self {
+        case .noChange: return ElementEdits()
+        case .elementsChanged(let payload): return payload.edits
+        case .screenChanged(let payload): return payload.postEdits ?? ElementEdits()
+        }
+    }
+}
+
+private extension ElementEdits {
+    var addedOptional: [HeistElement]? { added.isEmpty ? nil : added }
+    var removedOptional: [String]? { removed.isEmpty ? nil : removed }
+    var updatedOptional: [ElementUpdate]? { updated.isEmpty ? nil : updated }
+    var treeInsertedOptional: [TreeInsertion]? { treeInserted.isEmpty ? nil : treeInserted }
+    var treeRemovedOptional: [TreeRemoval]? { treeRemoved.isEmpty ? nil : treeRemoved }
+    var treeMovedOptional: [TreeMove]? { treeMoved.isEmpty ? nil : treeMoved }
+}
+
 @MainActor
 final class WireConverterTests: XCTestCase {
 
@@ -123,11 +145,12 @@ final class WireConverterTests: XCTestCase {
         let delta = WireConversion.computeDelta(
             before: elements, after: elements, afterTree: [], isScreenChange: false
         )
-        XCTAssertEqual(delta.kind, .noChange)
+        XCTAssertFalse(delta.isScreenChanged)
+        if case .elementsChanged = delta { XCTFail("Expected .noChange, got .elementsChanged") }
         XCTAssertEqual(delta.elementCount, 1)
-        XCTAssertNil(delta.added)
-        XCTAssertNil(delta.removed)
-        XCTAssertNil(delta.updated)
+        XCTAssertNil(delta.testEdits.addedOptional)
+        XCTAssertNil(delta.testEdits.removedOptional)
+        XCTAssertNil(delta.testEdits.updatedOptional)
     }
 
     func testEmptySnapshotsReturnNoChange() {
@@ -135,7 +158,8 @@ final class WireConverterTests: XCTestCase {
         let delta = WireConversion.computeDelta(
             before: empty, after: empty, afterTree: [], isScreenChange: false
         )
-        XCTAssertEqual(delta.kind, .noChange)
+        XCTAssertFalse(delta.isScreenChanged)
+        if case .elementsChanged = delta { XCTFail("Expected .noChange, got .elementsChanged") }
         XCTAssertEqual(delta.elementCount, 0)
     }
 
@@ -149,10 +173,11 @@ final class WireConverterTests: XCTestCase {
         let delta = WireConversion.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
-        XCTAssertEqual(delta.kind, .elementsChanged)
-        XCTAssertEqual(delta.added?.count, 1)
-        XCTAssertEqual(delta.added?.first?.heistId, "button_cancel")
-        XCTAssertNil(delta.removed)
+        XCTAssertFalse(delta.isScreenChanged)
+        if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
+        XCTAssertEqual(delta.testEdits.addedOptional?.count, 1)
+        XCTAssertEqual(delta.testEdits.addedOptional?.first?.heistId, "button_cancel")
+        XCTAssertNil(delta.testEdits.removedOptional)
     }
 
     // MARK: - Delta: Element Removed
@@ -167,9 +192,10 @@ final class WireConverterTests: XCTestCase {
         let delta = WireConversion.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
-        XCTAssertEqual(delta.kind, .elementsChanged)
-        XCTAssertEqual(delta.removed, ["button_cancel"])
-        XCTAssertNil(delta.added)
+        XCTAssertFalse(delta.isScreenChanged)
+        if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
+        XCTAssertEqual(delta.testEdits.removedOptional, ["button_cancel"])
+        XCTAssertNil(delta.testEdits.addedOptional)
     }
 
     // MARK: - Delta: Property Changes
@@ -181,9 +207,10 @@ final class WireConverterTests: XCTestCase {
         let delta = WireConversion.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
-        XCTAssertEqual(delta.kind, .elementsChanged)
-        XCTAssertEqual(delta.updated?.count, 1)
-        let change = delta.updated?.first?.changes.first
+        XCTAssertFalse(delta.isScreenChanged)
+        if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
+        XCTAssertEqual(delta.testEdits.updatedOptional?.count, 1)
+        let change = delta.testEdits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .value)
         XCTAssertEqual(change?.old, "50%")
         XCTAssertEqual(change?.new, "75%")
@@ -196,8 +223,9 @@ final class WireConverterTests: XCTestCase {
         let delta = WireConversion.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
-        XCTAssertEqual(delta.kind, .elementsChanged)
-        let change = delta.updated?.first?.changes.first
+        XCTAssertFalse(delta.isScreenChanged)
+        if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
+        let change = delta.testEdits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .traits)
         XCTAssertEqual(change?.old, "button")
         XCTAssertEqual(change?.new, "button, selected")
@@ -210,8 +238,9 @@ final class WireConverterTests: XCTestCase {
         let delta = WireConversion.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
-        XCTAssertEqual(delta.kind, .elementsChanged)
-        let change = delta.updated?.first?.changes.first
+        XCTAssertFalse(delta.isScreenChanged)
+        if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
+        let change = delta.testEdits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .hint)
         XCTAssertEqual(change?.old, "Tap to continue")
         XCTAssertEqual(change?.new, "Tap to go back")
@@ -224,8 +253,9 @@ final class WireConverterTests: XCTestCase {
         let delta = WireConversion.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
-        XCTAssertEqual(delta.kind, .elementsChanged)
-        XCTAssertNotNil(delta.updated)
+        XCTAssertFalse(delta.isScreenChanged)
+        if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
+        XCTAssertNotNil(delta.testEdits.updatedOptional)
     }
 
     func testFrameChangeProducesUpdate() {
@@ -235,8 +265,9 @@ final class WireConverterTests: XCTestCase {
         let delta = WireConversion.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
-        XCTAssertEqual(delta.kind, .elementsChanged)
-        let change = delta.updated?.first?.changes.first
+        XCTAssertFalse(delta.isScreenChanged)
+        if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
+        let change = delta.testEdits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .frame)
         XCTAssertEqual(change?.old, "0,0,100,50")
         XCTAssertEqual(change?.new, "10,20,100,50")
@@ -249,8 +280,9 @@ final class WireConverterTests: XCTestCase {
         let delta = WireConversion.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
-        XCTAssertEqual(delta.kind, .elementsChanged)
-        let change = delta.updated?.first?.changes.first
+        XCTAssertFalse(delta.isScreenChanged)
+        if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
+        let change = delta.testEdits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .activationPoint)
         XCTAssertEqual(change?.old, "50,25")
         XCTAssertEqual(change?.new, "75,40")
@@ -263,8 +295,8 @@ final class WireConverterTests: XCTestCase {
         let delta = WireConversion.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
-        XCTAssertEqual(delta.updated?.first?.changes.count, 2)
-        let properties = delta.updated?.first?.changes.map(\.property)
+        XCTAssertEqual(delta.testEdits.updatedOptional?.first?.changes.count, 2)
+        let properties = delta.testEdits.updatedOptional?.first?.changes.map(\.property)
         XCTAssertTrue(properties?.contains(.value) == true)
         XCTAssertTrue(properties?.contains(.hint) == true)
     }
@@ -278,9 +310,10 @@ final class WireConverterTests: XCTestCase {
         let delta = WireConversion.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
-        XCTAssertEqual(delta.kind, .elementsChanged)
-        XCTAssertEqual(delta.updated?.count, 1)
-        let change = delta.updated?.first?.changes.first
+        XCTAssertFalse(delta.isScreenChanged)
+        if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
+        XCTAssertEqual(delta.testEdits.updatedOptional?.count, 1)
+        let change = delta.testEdits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .label)
         XCTAssertEqual(change?.old, "Show More")
         XCTAssertEqual(change?.new, "Show Less")
@@ -295,10 +328,11 @@ final class WireConverterTests: XCTestCase {
         let delta = WireConversion.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
-        XCTAssertEqual(delta.kind, .elementsChanged)
-        XCTAssertEqual(delta.removed, ["button_ok"])
-        XCTAssertEqual(delta.added?.first?.heistId, "button_done")
-        XCTAssertNil(delta.updated)
+        XCTAssertFalse(delta.isScreenChanged)
+        if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
+        XCTAssertEqual(delta.testEdits.removedOptional, ["button_ok"])
+        XCTAssertEqual(delta.testEdits.addedOptional?.first?.heistId, "button_done")
+        XCTAssertNil(delta.testEdits.updatedOptional)
     }
 
     // MARK: - Delta: Screen Change
@@ -314,10 +348,11 @@ final class WireConverterTests: XCTestCase {
         let delta = WireConversion.computeDelta(
             before: before, after: after, afterTree: afterTree, isScreenChange: true
         )
-        XCTAssertEqual(delta.kind, .screenChanged)
-        XCTAssertNotNil(delta.newInterface)
-        XCTAssertEqual(delta.newInterface?.elements.count, 1)
-        XCTAssertEqual(delta.elementCount, 1)
+        guard case .screenChanged(let payload) = delta else {
+            return XCTFail("Expected .screenChanged, got \(delta)")
+        }
+        XCTAssertEqual(payload.newInterface.elements.count, 1)
+        XCTAssertEqual(payload.elementCount, 1)
     }
 
     func testTreeOnlyChangeReturnsStructuralInsertion() {
@@ -341,17 +376,17 @@ final class WireConverterTests: XCTestCase {
             isScreenChange: false
         )
 
-        XCTAssertEqual(delta.kind, .elementsChanged)
-        XCTAssertNil(delta.newInterface)
-        XCTAssertEqual(delta.treeInserted?.count, 1)
-        XCTAssertEqual(delta.treeInserted?.first?.location, TreeLocation(parentId: nil, index: 0))
-        guard case .container(let info, let children) = delta.treeInserted?.first?.node else {
+        XCTAssertFalse(delta.isScreenChanged)
+        if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
+        XCTAssertEqual(delta.testEdits.treeInsertedOptional?.count, 1)
+        XCTAssertEqual(delta.testEdits.treeInsertedOptional?.first?.location, TreeLocation(parentId: nil, index: 0))
+        guard case .container(let info, let children) = delta.testEdits.treeInsertedOptional?.first?.node else {
             return XCTFail("Expected inserted container")
         }
         XCTAssertEqual(info.stableId, "list_0")
         XCTAssertEqual(children.flatten().map(\.heistId), ["button_ok"])
         XCTAssertEqual(
-            delta.treeMoved,
+            delta.testEdits.treeMovedOptional,
             [TreeMove(
                 ref: TreeNodeRef(id: "button_ok", kind: .element),
                 from: TreeLocation(parentId: nil, index: 0),
@@ -381,16 +416,17 @@ final class WireConverterTests: XCTestCase {
             isScreenChange: false
         )
 
-        XCTAssertEqual(delta.kind, .elementsChanged)
-        XCTAssertNil(delta.added)
-        XCTAssertNil(delta.removed)
-        XCTAssertEqual(delta.treeMoved?.count, 2)
-        XCTAssertTrue(delta.treeMoved?.contains {
+        XCTAssertFalse(delta.isScreenChanged)
+        if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
+        XCTAssertNil(delta.testEdits.addedOptional)
+        XCTAssertNil(delta.testEdits.removedOptional)
+        XCTAssertEqual(delta.testEdits.treeMovedOptional?.count, 2)
+        XCTAssertTrue(delta.testEdits.treeMovedOptional?.contains {
             $0.ref == TreeNodeRef(id: "second", kind: .element)
                 && $0.from == TreeLocation(parentId: nil, index: 1)
                 && $0.to == TreeLocation(parentId: nil, index: 0)
         } ?? false)
-        XCTAssertTrue(delta.treeMoved?.contains {
+        XCTAssertTrue(delta.testEdits.treeMovedOptional?.contains {
             $0.ref == TreeNodeRef(id: "first", kind: .element)
                 && $0.from == TreeLocation(parentId: nil, index: 0)
                 && $0.to == TreeLocation(parentId: nil, index: 1)
@@ -431,12 +467,13 @@ final class WireConverterTests: XCTestCase {
             isScreenChange: false
         )
 
-        XCTAssertEqual(delta.kind, .elementsChanged)
-        XCTAssertNil(delta.added)
-        XCTAssertNil(delta.removed)
-        XCTAssertNil(delta.treeInserted)
-        XCTAssertNil(delta.treeRemoved)
-        XCTAssertTrue(delta.treeMoved?.contains {
+        XCTAssertFalse(delta.isScreenChanged)
+        if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
+        XCTAssertNil(delta.testEdits.addedOptional)
+        XCTAssertNil(delta.testEdits.removedOptional)
+        XCTAssertNil(delta.testEdits.treeInsertedOptional)
+        XCTAssertNil(delta.testEdits.treeRemovedOptional)
+        XCTAssertTrue(delta.testEdits.treeMovedOptional?.contains {
             $0.ref == TreeNodeRef(id: "telescope_far_light_3_32_button", kind: .element)
                 && $0.from == TreeLocation(parentId: nil, index: 0)
                 && $0.to == TreeLocation(parentId: nil, index: 1)
@@ -479,17 +516,18 @@ final class WireConverterTests: XCTestCase {
             isScreenChange: false
         )
 
-        XCTAssertEqual(delta.kind, .elementsChanged)
-        XCTAssertNil(delta.added)
-        XCTAssertNil(delta.removed)
-        XCTAssertNil(delta.treeInserted)
-        XCTAssertNil(delta.treeRemoved)
-        XCTAssertTrue(delta.treeMoved?.contains {
+        XCTAssertFalse(delta.isScreenChanged)
+        if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
+        XCTAssertNil(delta.testEdits.addedOptional)
+        XCTAssertNil(delta.testEdits.removedOptional)
+        XCTAssertNil(delta.testEdits.treeInsertedOptional)
+        XCTAssertNil(delta.testEdits.treeRemovedOptional)
+        XCTAssertTrue(delta.testEdits.treeMovedOptional?.contains {
             $0.ref == TreeNodeRef(id: "favorite_button", kind: .element)
                 && $0.from == TreeLocation(parentId: nil, index: 0)
                 && $0.to == TreeLocation(parentId: nil, index: 1)
         } ?? false)
-        let update = delta.updated?.first { $0.heistId == "favorite_button" }
+        let update = delta.testEdits.updatedOptional?.first { $0.heistId == "favorite_button" }
         XCTAssertNotNil(update)
         XCTAssertTrue(update?.changes.contains { $0.property == .value && $0.old == "0" && $0.new == "1" } == true)
         XCTAssertTrue(update?.changes.contains { $0.property == .traits } == true)
@@ -522,12 +560,13 @@ final class WireConverterTests: XCTestCase {
             isScreenChange: false
         )
 
-        XCTAssertEqual(delta.kind, .noChange)
-        XCTAssertNil(delta.added)
-        XCTAssertNil(delta.removed)
-        XCTAssertNil(delta.treeInserted)
-        XCTAssertNil(delta.treeRemoved)
-        XCTAssertNil(delta.treeMoved)
+        XCTAssertFalse(delta.isScreenChanged)
+        if case .elementsChanged = delta { XCTFail("Expected .noChange, got .elementsChanged") }
+        XCTAssertNil(delta.testEdits.addedOptional)
+        XCTAssertNil(delta.testEdits.removedOptional)
+        XCTAssertNil(delta.testEdits.treeInsertedOptional)
+        XCTAssertNil(delta.testEdits.treeRemovedOptional)
+        XCTAssertNil(delta.testEdits.treeMovedOptional)
     }
 
     func testTreeDeletionReturnsRemovalLocation() {
@@ -548,10 +587,11 @@ final class WireConverterTests: XCTestCase {
             isScreenChange: false
         )
 
-        XCTAssertEqual(delta.kind, .elementsChanged)
-        XCTAssertEqual(delta.removed, ["second"])
+        XCTAssertFalse(delta.isScreenChanged)
+        if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
+        XCTAssertEqual(delta.testEdits.removedOptional, ["second"])
         XCTAssertEqual(
-            delta.treeRemoved,
+            delta.testEdits.treeRemovedOptional,
             [TreeRemoval(
                 ref: TreeNodeRef(id: "second", kind: .element),
                 location: TreeLocation(parentId: nil, index: 1)
@@ -574,10 +614,11 @@ final class WireConverterTests: XCTestCase {
         let delta = WireConversion.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
-        XCTAssertEqual(delta.kind, .elementsChanged)
-        XCTAssertEqual(delta.updated?.count, 2)
-        XCTAssertNil(delta.added)
-        XCTAssertNil(delta.removed)
+        XCTAssertFalse(delta.isScreenChanged)
+        if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
+        XCTAssertEqual(delta.testEdits.updatedOptional?.count, 2)
+        XCTAssertNil(delta.testEdits.addedOptional)
+        XCTAssertNil(delta.testEdits.removedOptional)
     }
 
     func testDuplicateHeistIdExcessGoesToAddedRemoved() {
@@ -593,9 +634,10 @@ final class WireConverterTests: XCTestCase {
         let delta = WireConversion.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
-        XCTAssertEqual(delta.kind, .elementsChanged)
-        XCTAssertEqual(delta.updated?.count, 1)
-        XCTAssertEqual(delta.removed?.count, 2)
+        XCTAssertFalse(delta.isScreenChanged)
+        if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
+        XCTAssertEqual(delta.testEdits.updatedOptional?.count, 1)
+        XCTAssertEqual(delta.testEdits.removedOptional?.count, 2)
     }
 
     // MARK: - Delta: Empty Diff Coerced to noChange
@@ -606,7 +648,8 @@ final class WireConverterTests: XCTestCase {
         let delta = WireConversion.computeDelta(
             before: [screenElement], after: [screenElement], afterTree: [], isScreenChange: false
         )
-        XCTAssertEqual(delta.kind, .noChange)
+        XCTAssertFalse(delta.isScreenChanged)
+        if case .elementsChanged = delta { XCTFail("Expected .noChange, got .elementsChanged") }
     }
 
     // MARK: - Snapshot Screen Name
@@ -686,8 +729,9 @@ final class WireConverterTests: XCTestCase {
         let delta = WireConversion.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
-        XCTAssertEqual(delta.kind, .elementsChanged)
-        let change = delta.updated?.first?.changes.first
+        XCTAssertFalse(delta.isScreenChanged)
+        if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
+        let change = delta.testEdits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .customContent)
         XCTAssertEqual(change?.old, "Size: 2.4 MB")
         XCTAssertEqual(change?.new, "Size: 3.1 MB")
@@ -704,8 +748,9 @@ final class WireConverterTests: XCTestCase {
         let delta = WireConversion.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
-        XCTAssertEqual(delta.kind, .elementsChanged)
-        let change = delta.updated?.first?.changes.first
+        XCTAssertFalse(delta.isScreenChanged)
+        if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
+        let change = delta.testEdits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .customContent)
         XCTAssertNil(change?.old)
         XCTAssertEqual(change?.new, "Price: $9.99")
@@ -722,8 +767,9 @@ final class WireConverterTests: XCTestCase {
         let delta = WireConversion.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
-        XCTAssertEqual(delta.kind, .elementsChanged)
-        let change = delta.updated?.first?.changes.first
+        XCTAssertFalse(delta.isScreenChanged)
+        if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
+        let change = delta.testEdits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .customContent)
         XCTAssertEqual(change?.old, "Price: $9.99")
         XCTAssertNil(change?.new)
@@ -743,7 +789,7 @@ final class WireConverterTests: XCTestCase {
         let delta = WireConversion.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
-        let change = delta.updated?.first?.changes.first
+        let change = delta.testEdits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.new, "Temperature: 58°F; Humidity: 82%")
     }
 
@@ -840,7 +886,8 @@ final class WireConverterTests: XCTestCase {
         let delta = WireConversion.computeDelta(
             before: elements, after: elements, afterTree: [], isScreenChange: false
         )
-        XCTAssertEqual(delta.kind, .noChange)
+        XCTAssertFalse(delta.isScreenChanged)
+        if case .elementsChanged = delta { XCTFail("Expected .noChange, got .elementsChanged") }
     }
 
     // MARK: - Delta: Importance Change
@@ -860,8 +907,9 @@ final class WireConverterTests: XCTestCase {
         let delta = WireConversion.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
-        XCTAssertEqual(delta.kind, .elementsChanged)
-        let change = delta.updated?.first?.changes.first
+        XCTAssertFalse(delta.isScreenChanged)
+        if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
+        let change = delta.testEdits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .customContent)
     }
 
@@ -884,8 +932,9 @@ final class WireConverterTests: XCTestCase {
         let delta = WireConversion.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
-        XCTAssertEqual(delta.kind, .elementsChanged)
-        let properties = delta.updated?.first?.changes.map(\.property)
+        XCTAssertFalse(delta.isScreenChanged)
+        if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
+        let properties = delta.testEdits.updatedOptional?.first?.changes.map(\.property)
         XCTAssertTrue(properties?.contains(.value) == true)
         XCTAssertTrue(properties?.contains(.customContent) == true)
     }
@@ -903,7 +952,7 @@ final class WireConverterTests: XCTestCase {
         let delta = WireConversion.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
-        let change = delta.updated?.first?.changes.first
+        let change = delta.testEdits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .customContent)
         XCTAssertEqual(change?.new, "Featured")
     }
@@ -919,7 +968,7 @@ final class WireConverterTests: XCTestCase {
         let delta = WireConversion.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
-        let change = delta.updated?.first?.changes.first
+        let change = delta.testEdits.updatedOptional?.first?.changes.first
         XCTAssertEqual(change?.property, .customContent)
         XCTAssertEqual(change?.new, "Available")
     }

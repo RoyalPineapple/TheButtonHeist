@@ -182,11 +182,9 @@ extension TheStash {
         // Screen changed: VC identity differs → return full new interface
         if isScreenChange {
             let fullInterface = Interface(timestamp: Date(), tree: afterWireTree)
-            return InterfaceDelta(
-                kind: .screenChanged,
-                elementCount: after.count,
-                newInterface: fullInterface
-            )
+            return .screenChanged(InterfaceDelta.ScreenChanged(
+                elementCount: after.count, newInterface: fullInterface
+            ))
         }
 
         // Fast no-change check on internal types — compares heistId + AccessibilityElement
@@ -204,20 +202,24 @@ extension TheStash {
             if unchanged {
                 if let beforeTreeHash, beforeTreeHash != afterWireTree.hashValue {
                     if let beforeTree {
-                        return computeTreeDelta(
+                        let treeEdits = computeTreeEdits(
                             beforeTree: beforeTree,
-                            afterTree: afterWireTree,
-                            elementCount: after.count
+                            afterTree: afterWireTree
                         )
+                        if treeEdits.isEmpty {
+                            return .noChange(InterfaceDelta.NoChange(elementCount: after.count))
+                        }
+                        return .elementsChanged(InterfaceDelta.ElementsChanged(
+                            elementCount: after.count, edits: treeEdits
+                        ))
                     } else {
-                        return InterfaceDelta(
-                            kind: .screenChanged,
+                        return .screenChanged(InterfaceDelta.ScreenChanged(
                             elementCount: after.count,
                             newInterface: Interface(timestamp: Date(), tree: afterWireTree)
-                        )
+                        ))
                     }
                 }
-                return InterfaceDelta(kind: .noChange, elementCount: after.count)
+                return .noChange(InterfaceDelta.NoChange(elementCount: after.count))
             }
         }
 
@@ -225,20 +227,38 @@ extension TheStash {
         let beforeWire = toWire(before)
         let afterWire = toWire(after)
 
-        let elementDelta = computeElementDelta(beforeEls: beforeWire, afterEls: afterWire)
-        guard let beforeTree else { return elementDelta }
+        let elementEdits = computeElementEdits(beforeEls: beforeWire, afterEls: afterWire)
+        guard let beforeTree else {
+            return makeDelta(edits: elementEdits, elementCount: after.count)
+        }
 
-        let treeDelta = computeTreeDelta(
+        let treeEdits = computeTreeEdits(
             beforeTree: beforeTree,
-            afterTree: afterWireTree,
-            elementCount: after.count
+            afterTree: afterWireTree
         )
-        let adjustedElementDelta = suppressFunctionalMoveElementChurn(
-            elementDelta: elementDelta,
+        let adjustedElementEdits = suppressFunctionalMoveElementChurn(
+            edits: elementEdits,
             beforeEls: beforeWire,
             afterEls: afterWire
         )
-        return merge(elementDelta: adjustedElementDelta, treeDelta: treeDelta, elementCount: after.count)
+        let combined = ElementEdits(
+            added: adjustedElementEdits.added,
+            removed: adjustedElementEdits.removed,
+            updated: adjustedElementEdits.updated,
+            treeInserted: treeEdits.treeInserted,
+            treeRemoved: treeEdits.treeRemoved,
+            treeMoved: treeEdits.treeMoved
+        )
+        return makeDelta(edits: combined, elementCount: after.count)
+    }
+
+    private static func makeDelta(edits: ElementEdits, elementCount: Int) -> InterfaceDelta {
+        if edits.isEmpty {
+            return .noChange(InterfaceDelta.NoChange(elementCount: elementCount))
+        }
+        return .elementsChanged(InterfaceDelta.ElementsChanged(
+            elementCount: elementCount, edits: edits
+        ))
     }
 
     /// Semantic element diff — heistId is the sole matching key.
@@ -246,12 +266,10 @@ extension TheStash {
     /// heistId encodes developer identifiers or synthesized trait+label (value excluded).
     /// For identifier-matched elements, label changes surface as property updates.
     /// For synthesized IDs, label changes produce different heistIds and appear as remove + add.
-    ///
-    /// Returns added/removed/updated categories. Updated elements carry per-property diffs.
-    private static func computeElementDelta(
+    private static func computeElementEdits(
         beforeEls: [HeistElement],
         afterEls: [HeistElement]
-    ) -> InterfaceDelta {
+    ) -> ElementEdits {
         let oldByHeistId = Dictionary(grouping: beforeEls, by: \.heistId)
         let newByHeistId = Dictionary(grouping: afterEls, by: \.heistId)
         let allHeistIds = Set(oldByHeistId.keys).union(newByHeistId.keys)
@@ -270,49 +288,19 @@ extension TheStash {
             added += newEls.suffix(from: pairCount)
         }
 
-        if added.isEmpty && removed.isEmpty && updated.isEmpty {
-            return InterfaceDelta(kind: .noChange, elementCount: afterEls.count)
-        }
-
-        return InterfaceDelta(
-            kind: .elementsChanged,
-            elementCount: afterEls.count,
-            added: added.isEmpty ? nil : added,
-            removed: removed.isEmpty ? nil : removed,
-            updated: updated.isEmpty ? nil : updated
-        )
-    }
-
-    private static func merge(
-        elementDelta: InterfaceDelta,
-        treeDelta: InterfaceDelta,
-        elementCount: Int
-    ) -> InterfaceDelta {
-        guard elementDelta.kind != .noChange || treeDelta.kind != .noChange else {
-            return InterfaceDelta(kind: .noChange, elementCount: elementCount)
-        }
-        return InterfaceDelta(
-            kind: .elementsChanged,
-            elementCount: elementCount,
-            added: elementDelta.added,
-            removed: elementDelta.removed,
-            updated: elementDelta.updated,
-            treeInserted: treeDelta.treeInserted,
-            treeRemoved: treeDelta.treeRemoved,
-            treeMoved: treeDelta.treeMoved
-        )
+        return ElementEdits(added: added, removed: removed, updated: updated)
     }
 
     private static func suppressFunctionalMoveElementChurn(
-        elementDelta: InterfaceDelta,
+        edits: ElementEdits,
         beforeEls: [HeistElement],
         afterEls: [HeistElement]
-    ) -> InterfaceDelta {
+    ) -> ElementEdits {
         let beforeIds = Set(beforeEls.map(\.heistId))
         let afterIds = Set(afterEls.map(\.heistId))
         let removedIds = beforeIds.subtracting(afterIds)
         let addedIds = afterIds.subtracting(beforeIds)
-        guard !removedIds.isEmpty, !addedIds.isEmpty else { return elementDelta }
+        guard !removedIds.isEmpty, !addedIds.isEmpty else { return edits }
 
         let removedById = Dictionary(grouping: beforeEls.filter { removedIds.contains($0.heistId) }, by: \.heistId)
             .compactMapValues { $0.count == 1 ? $0[0] : nil }
@@ -320,42 +308,33 @@ extension TheStash {
             .compactMapValues { $0.count == 1 ? $0[0] : nil }
 
         let pairs = inferFunctionalHeistElementPairs(removedById: removedById, addedById: addedById)
-        guard !pairs.isEmpty else { return elementDelta }
+        guard !pairs.isEmpty else { return edits }
 
         let pairedRemoved = Set(pairs.map(\.removedId))
         let pairedAdded = Set(pairs.map(\.insertedId))
-        let added = elementDelta.added?.filter { !pairedAdded.contains($0.heistId) }
-        let removed = elementDelta.removed?.filter { !pairedRemoved.contains($0) }
+        let added = edits.added.filter { !pairedAdded.contains($0.heistId) }
+        let removed = edits.removed.filter { !pairedRemoved.contains($0) }
         let inferredUpdates = pairs.compactMap { pair -> ElementUpdate? in
             guard let old = removedById[pair.removedId],
                   let new = addedById[pair.insertedId] else { return nil }
             return buildElementUpdate(old: old, new: new, heistId: pair.removedId, includeGeometry: false)
         }
-        let updated = (elementDelta.updated ?? []) + inferredUpdates
-        let hasRemainingChange = added?.isEmpty == false
-            || removed?.isEmpty == false
-            || !updated.isEmpty
-            || elementDelta.treeInserted?.isEmpty == false
-            || elementDelta.treeRemoved?.isEmpty == false
-            || elementDelta.treeMoved?.isEmpty == false
+        let updated = edits.updated + inferredUpdates
 
-        return InterfaceDelta(
-            kind: hasRemainingChange ? elementDelta.kind : .noChange,
-            elementCount: elementDelta.elementCount,
-            added: added?.isEmpty == false ? added : nil,
-            removed: removed?.isEmpty == false ? removed : nil,
-            updated: updated.isEmpty ? nil : updated,
-            treeInserted: elementDelta.treeInserted,
-            treeRemoved: elementDelta.treeRemoved,
-            treeMoved: elementDelta.treeMoved
+        return ElementEdits(
+            added: added,
+            removed: removed,
+            updated: updated,
+            treeInserted: edits.treeInserted,
+            treeRemoved: edits.treeRemoved,
+            treeMoved: edits.treeMoved
         )
     }
 
-    private static func computeTreeDelta(
+    private static func computeTreeEdits(
         beforeTree: [InterfaceNode],
-        afterTree: [InterfaceNode],
-        elementCount: Int
-    ) -> InterfaceDelta {
+        afterTree: [InterfaceNode]
+    ) -> ElementEdits {
         let oldRecords = indexTree(beforeTree)
         let newRecords = indexTree(afterTree)
         let oldIds = Set(oldRecords.keys)
@@ -413,16 +392,7 @@ extension TheStash {
             }
             .sorted(by: treeMoveOrder)
 
-        guard !inserted.isEmpty || !removed.isEmpty || !moved.isEmpty else {
-            return InterfaceDelta(kind: .noChange, elementCount: elementCount)
-        }
-        return InterfaceDelta(
-            kind: .elementsChanged,
-            elementCount: elementCount,
-            treeInserted: inserted.isEmpty ? nil : inserted,
-            treeRemoved: removed.isEmpty ? nil : removed,
-            treeMoved: moved.isEmpty ? nil : moved
-        )
+        return ElementEdits(treeInserted: inserted, treeRemoved: removed, treeMoved: moved)
     }
 
     private static func inferFunctionalTreePairs(

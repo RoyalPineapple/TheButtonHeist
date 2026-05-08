@@ -191,7 +191,7 @@ final class TheGetaway {
                 stakeout?.noteActivity()
                 let backgroundDelta = brains.computeBackgroundDelta()
 
-                if let backgroundDelta, backgroundDelta.kind == .screenChanged,
+                if let backgroundDelta, backgroundDelta.isScreenChanged,
                    brains.screenChangedSinceLastSent,
                    message.actionTarget != nil {
                     let lastScreen = brains.lastSentScreenId ?? "unknown"

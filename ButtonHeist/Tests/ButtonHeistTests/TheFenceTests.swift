@@ -368,7 +368,7 @@ final class TheFenceTests: XCTestCase {
     }
 
     func testActionWithExpectationFailedFormatting() {
-        let result = ActionResult(success: true, method: .activate, interfaceDelta: InterfaceDelta(kind: .noChange, elementCount: 5))
+        let result = ActionResult(success: true, method: .activate, interfaceDelta: .noChange(.init(elementCount: 5)))
         let expectation = ExpectationResult(met: false, expectation: .screenChanged, actual: "noChange")
         let response = FenceResponse.action(result: result, expectation: expectation)
         let text = response.humanFormatted()
@@ -522,48 +522,36 @@ final class TheFenceTests: XCTestCase {
     // MARK: - Compact Delta Geometry Filtering
 
     func testCompactDeltaOmitsFrameChanges() {
-        let delta = InterfaceDelta(
-            kind: .elementsChanged,
-            elementCount: 3,
-            updated: [
+        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 3, edits: ElementEdits(updated: [
                 ElementUpdate(heistId: "okBtn", changes: [
                     PropertyChange(property: .value, old: "0", new: "1"),
                     PropertyChange(property: .frame, old: "10,20,100,44", new: "10,25,100,44"),
                 ]),
-            ]
-        )
+            ])))
         let output = FenceResponse.compactDelta(delta, method: "tap")
         XCTAssertTrue(output.contains("value"), "Value change should appear")
         XCTAssertFalse(output.contains("frame"), "Frame change should be filtered")
     }
 
     func testCompactDeltaOmitsActivationPointChanges() {
-        let delta = InterfaceDelta(
-            kind: .elementsChanged,
-            elementCount: 2,
-            updated: [
+        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 2, edits: ElementEdits(updated: [
                 ElementUpdate(heistId: "slider", changes: [
                     PropertyChange(property: .activationPoint, old: "50,22", new: "55,22"),
                 ]),
-            ]
-        )
+            ])))
         let output = FenceResponse.compactDelta(delta, method: "drag")
         XCTAssertFalse(output.contains("activationPoint"), "ActivationPoint should be filtered")
         XCTAssertFalse(output.contains("~"), "No ~ lines when only geometry changed")
     }
 
     func testCompactDeltaKeepsNonGeometryChanges() {
-        let delta = InterfaceDelta(
-            kind: .elementsChanged,
-            elementCount: 4,
-            updated: [
+        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 4, edits: ElementEdits(updated: [
                 ElementUpdate(heistId: "toggle", changes: [
                     PropertyChange(property: .value, old: "off", new: "on"),
                     PropertyChange(property: .traits, old: "button", new: "button, selected"),
                     PropertyChange(property: .frame, old: "0,0,100,44", new: "0,5,100,44"),
                 ]),
-            ]
-        )
+            ])))
         let output = FenceResponse.compactDelta(delta, method: "tap")
         XCTAssertTrue(output.contains("value"))
         XCTAssertTrue(output.contains("traits"))
@@ -585,16 +573,12 @@ final class TheFenceTests: XCTestCase {
     // MARK: - JSON Delta Geometry Filtering
 
     func testActionJsonDeltaOmitsGeometryByDefault() {
-        let delta = InterfaceDelta(
-            kind: .elementsChanged,
-            elementCount: 2,
-            updated: [
+        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 2, edits: ElementEdits(updated: [
                 ElementUpdate(heistId: "label1", changes: [
                     PropertyChange(property: .frame, old: "0,0,100,44", new: "0,10,100,44"),
                     PropertyChange(property: .value, old: "a", new: "b"),
                 ]),
-            ]
-        )
+            ])))
         let result = ActionResult(success: true, method: .activate, interfaceDelta: delta)
         let response = FenceResponse.action(result: result)
         let json = response.jsonDict()!
@@ -608,16 +592,12 @@ final class TheFenceTests: XCTestCase {
     }
 
     func testActionJsonDeltaDropsGeometryOnlyUpdates() {
-        let delta = InterfaceDelta(
-            kind: .elementsChanged,
-            elementCount: 3,
-            updated: [
+        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 3, edits: ElementEdits(updated: [
                 ElementUpdate(heistId: "img", changes: [
                     PropertyChange(property: .frame, old: "0,0,50,50", new: "0,5,50,50"),
                     PropertyChange(property: .activationPoint, old: "25,25", new: "25,30"),
                 ]),
-            ]
-        )
+            ])))
         let result = ActionResult(success: true, method: .activate, interfaceDelta: delta)
         let response = FenceResponse.action(result: result)
         let json = response.jsonDict()!
@@ -1033,12 +1013,12 @@ final class TheFenceTests: XCTestCase {
     func testDrainBackgroundDeltaClearsAfterRead() async {
         let fence = TheFence()
         // Simulate a background delta arriving via the handoff callback
-        let delta = InterfaceDelta(kind: .screenChanged, elementCount: 7)
+        let delta: InterfaceDelta = .screenChanged(.init(elementCount: 7, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])))
         fence.handoff.onBackgroundDelta?(delta)
 
         let first = fence.drainBackgroundDelta()
         XCTAssertNotNil(first)
-        XCTAssertEqual(first?.kind, .screenChanged)
+        XCTAssertEqual(first?.isScreenChanged, true)
         XCTAssertEqual(first?.elementCount, 7)
 
         let second = fence.drainBackgroundDelta()
@@ -1048,15 +1028,15 @@ final class TheFenceTests: XCTestCase {
     @ButtonHeistActor
     func testDrainBackgroundDeltaPreservesArrivalOrder() async {
         let fence = TheFence()
-        fence.handoff.onBackgroundDelta?(InterfaceDelta(kind: .elementsChanged, elementCount: 2))
-        fence.handoff.onBackgroundDelta?(InterfaceDelta(kind: .screenChanged, elementCount: 7))
+        fence.handoff.onBackgroundDelta?(.elementsChanged(.init(elementCount: 2, edits: ElementEdits())))
+        fence.handoff.onBackgroundDelta?(.screenChanged(.init(elementCount: 7, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: []))))
 
         let first = fence.drainBackgroundDelta()
-        XCTAssertEqual(first?.kind, .elementsChanged)
+        XCTAssertEqual(first?.kindRawValue, "elementsChanged")
         XCTAssertEqual(first?.elementCount, 2)
 
         let second = fence.drainBackgroundDelta()
-        XCTAssertEqual(second?.kind, .screenChanged)
+        XCTAssertEqual(second?.isScreenChanged, true)
         XCTAssertEqual(second?.elementCount, 7)
 
         XCTAssertNil(fence.drainBackgroundDelta())
@@ -1065,12 +1045,12 @@ final class TheFenceTests: XCTestCase {
     @ButtonHeistActor
     func testDrainBackgroundDeltasReturnsAllQueuedDeltas() async {
         let fence = TheFence()
-        fence.handoff.onBackgroundDelta?(InterfaceDelta(kind: .elementsChanged, elementCount: 2))
-        fence.handoff.onBackgroundDelta?(InterfaceDelta(kind: .screenChanged, elementCount: 7))
+        fence.handoff.onBackgroundDelta?(.elementsChanged(.init(elementCount: 2, edits: ElementEdits())))
+        fence.handoff.onBackgroundDelta?(.screenChanged(.init(elementCount: 7, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: []))))
 
         let deltas = fence.drainBackgroundDeltas()
 
-        XCTAssertEqual(deltas.map(\.kind), [.elementsChanged, .screenChanged])
+        XCTAssertEqual(deltas.map(\.kindRawValue), ["elementsChanged", "screenChanged"])
         XCTAssertEqual(deltas.map(\.elementCount), [2, 7])
         XCTAssertNil(fence.drainBackgroundDelta())
     }
@@ -1078,7 +1058,7 @@ final class TheFenceTests: XCTestCase {
     @ButtonHeistActor
     func testBackgroundExpectationMismatchDoesNotConsumeDelta() async throws {
         let (fence, _) = makeConnectedFence()
-        fence.handoff.onBackgroundDelta?(InterfaceDelta(kind: .screenChanged, elementCount: 7))
+        fence.handoff.onBackgroundDelta?(.screenChanged(.init(elementCount: 7, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: []))))
 
         let response = try await fence.execute(request: [
             "command": "activate",
@@ -1097,7 +1077,7 @@ final class TheFenceTests: XCTestCase {
         }
 
         let queued = fence.drainBackgroundDelta()
-        XCTAssertEqual(queued?.kind, .screenChanged)
+        XCTAssertEqual(queued?.isScreenChanged, true)
         XCTAssertEqual(queued?.elementCount, 7)
         XCTAssertNil(fence.drainBackgroundDelta())
     }
@@ -1123,8 +1103,8 @@ final class TheFenceTests: XCTestCase {
         fence.handoff.makeDiscovery = { mockDiscovery }
         fence.handoff.makeConnection = { _, _, _ in mockConnection }
 
-        fence.handoff.onBackgroundDelta?(InterfaceDelta(kind: .elementsChanged, elementCount: 2))
-        fence.handoff.onBackgroundDelta?(InterfaceDelta(kind: .screenChanged, elementCount: 7))
+        fence.handoff.onBackgroundDelta?(.elementsChanged(.init(elementCount: 2, edits: ElementEdits())))
+        fence.handoff.onBackgroundDelta?(.screenChanged(.init(elementCount: 7, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: []))))
 
         let response = try await fence.execute(request: [
             "command": "activate",
@@ -1134,7 +1114,7 @@ final class TheFenceTests: XCTestCase {
 
         if case .action(let result, let expectation) = response {
             XCTAssertTrue(result.success)
-            XCTAssertEqual(result.interfaceDelta?.kind, .screenChanged)
+            XCTAssertEqual(result.interfaceDelta?.isScreenChanged, true)
             XCTAssertEqual(expectation?.met, true)
             XCTAssertEqual(mockDiscovery.startCount, 0, "Short-circuit should avoid discovery")
             XCTAssertEqual(mockConnection.connectCount, 0, "Short-circuit should avoid connection")
@@ -1143,7 +1123,7 @@ final class TheFenceTests: XCTestCase {
         }
 
         let remaining = fence.drainBackgroundDelta()
-        XCTAssertEqual(remaining?.kind, .elementsChanged)
+        XCTAssertEqual(remaining?.kindRawValue, "elementsChanged")
         XCTAssertEqual(remaining?.elementCount, 2)
         XCTAssertNil(fence.drainBackgroundDelta())
     }
@@ -1152,7 +1132,7 @@ final class TheFenceTests: XCTestCase {
     func testBackgroundDeltaQueueDropsOldestWhenCapacityExceeded() async {
         let fence = TheFence()
         for count in 1...25 {
-            fence.handoff.onBackgroundDelta?(InterfaceDelta(kind: .elementsChanged, elementCount: count))
+            fence.handoff.onBackgroundDelta?(.elementsChanged(.init(elementCount: count, edits: ElementEdits())))
         }
 
         let first = fence.drainBackgroundDelta()
@@ -1167,7 +1147,7 @@ final class TheFenceTests: XCTestCase {
     @ButtonHeistActor
     func testBackgroundDeltaQueueClearsOnDisconnect() async {
         let fence = TheFence()
-        fence.handoff.onBackgroundDelta?(InterfaceDelta(kind: .screenChanged, elementCount: 7))
+        fence.handoff.onBackgroundDelta?(.screenChanged(.init(elementCount: 7, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: []))))
 
         fence.handoff.onDisconnected?(.serverClosed)
 
@@ -1201,9 +1181,7 @@ final class TheFenceTests: XCTestCase {
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44, actions: [.activate]
         )
         let fullInterface = Interface(timestamp: Date(), tree: [.element(element)])
-        let delta = InterfaceDelta(
-            kind: .screenChanged, elementCount: 1, newInterface: fullInterface
-        )
+        let delta: InterfaceDelta = .screenChanged(.init(elementCount: 1, newInterface: fullInterface))
         fence.handoff.onBackgroundDelta?(delta)
 
         // Execute an action with expect=screen_changed — should short-circuit
@@ -1231,7 +1209,7 @@ final class TheFenceTests: XCTestCase {
         let fence = TheFence()
 
         // Background delta present but no expectation on the action
-        let delta = InterfaceDelta(kind: .screenChanged, elementCount: 3)
+        let delta: InterfaceDelta = .screenChanged(.init(elementCount: 3, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])))
         fence.handoff.onBackgroundDelta?(delta)
 
         // Action without expect — should NOT short-circuit, should try to connect

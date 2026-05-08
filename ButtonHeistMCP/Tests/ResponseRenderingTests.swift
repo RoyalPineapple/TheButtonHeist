@@ -9,7 +9,7 @@ struct ResponseRenderingTests {
     @Test("MCP renders no-change background transients")
     func rendersNoChangeBackgroundTransients() throws {
         let spinner = makeElement(heistId: "spinner", label: "Loading")
-        let delta = InterfaceDelta(kind: .noChange, elementCount: 4, transient: [spinner])
+        let delta: InterfaceDelta = .noChange(.init(elementCount: 4, transient: [spinner]))
 
         let result = try ButtonHeistMCPServer.renderResponse(
             .ok(message: "done"),
@@ -26,12 +26,7 @@ struct ResponseRenderingTests {
     func rendersElementChangedBackgroundTransients() throws {
         let added = makeElement(heistId: "result", label: "Result")
         let spinner = makeElement(heistId: "spinner", label: "Loading")
-        let delta = InterfaceDelta(
-            kind: .elementsChanged,
-            elementCount: 5,
-            added: [added],
-            transient: [spinner]
-        )
+        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: [added]), transient: [spinner]))
 
         let result = try ButtonHeistMCPServer.renderResponse(
             .ok(message: "done"),
@@ -48,9 +43,9 @@ struct ResponseRenderingTests {
     func rendersMultipleBackgroundDeltas() throws {
         let spinner = makeElement(heistId: "spinner", label: "Loading")
         let result = makeElement(heistId: "result", label: "Result")
-        let deltas = [
-            InterfaceDelta(kind: .noChange, elementCount: 4, transient: [spinner]),
-            InterfaceDelta(kind: .elementsChanged, elementCount: 5, added: [result]),
+        let deltas: [InterfaceDelta] = [
+            .noChange(.init(elementCount: 4, transient: [spinner])),
+            .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: [result]))),
         ]
 
         let response = try ButtonHeistMCPServer.renderResponse(

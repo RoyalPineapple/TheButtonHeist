@@ -216,14 +216,14 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testResponseEnvelopeWithBackgroundDelta() throws {
-        let delta = InterfaceDelta(kind: .screenChanged, elementCount: 5)
+        let delta: InterfaceDelta = .screenChanged(.init(elementCount: 5, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])))
         let envelope = ResponseEnvelope(requestId: "r-2", message: .pong, backgroundDelta: delta)
         let data = try JSONEncoder().encode(envelope)
         let decoded = try JSONDecoder().decode(ResponseEnvelope.self, from: data)
 
         XCTAssertEqual(decoded.requestId, "r-2")
         XCTAssertNotNil(decoded.backgroundDelta)
-        XCTAssertEqual(decoded.backgroundDelta?.kind, .screenChanged)
+        XCTAssertEqual(decoded.backgroundDelta?.isScreenChanged, true)
         XCTAssertEqual(decoded.backgroundDelta?.elementCount, 5)
     }
 

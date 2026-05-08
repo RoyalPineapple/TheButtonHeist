@@ -11,8 +11,8 @@ public enum InterfaceDetail: String, CaseIterable, Sendable {
 /// Summary of a single step within a batch execution.
 ///
 /// Consumed by batch formatters to build per-step human/JSON rows. `deltaKind`
-/// is the string form of `DeltaKind`; `expectationMet` is nil when the step had
-/// no expectation attached.
+/// is the wire-level `kind` discriminator from the step's `InterfaceDelta`;
+/// `expectationMet` is nil when the step had no expectation attached.
 public struct BatchStepSummary: Sendable {
     public let command: String
     public let deltaKind: String?
@@ -296,26 +296,21 @@ public enum FenceResponse {
     }
 
     private func formatDelta(_ delta: InterfaceDelta) -> String {
-        switch delta.kind {
-        case .noChange:
-            return "[\(delta.elementCount) elements, no change]"
-        case .elementsChanged:
-            let addedCount = delta.added?.count ?? 0
-            let removedCount = delta.removed?.count ?? 0
-            let updatedCount = delta.updated?.count ?? 0
-            let insertedCount = delta.treeInserted?.count ?? 0
-            let treeRemovedCount = delta.treeRemoved?.count ?? 0
-            let movedCount = delta.treeMoved?.count ?? 0
-            var parts: [String] = ["\(delta.elementCount) elements"]
-            if addedCount > 0 { parts.append("+\(addedCount) added") }
-            if removedCount > 0 { parts.append("-\(removedCount) removed") }
-            if updatedCount > 0 { parts.append("~\(updatedCount) updated") }
-            if insertedCount > 0 { parts.append("+\(insertedCount) tree inserted") }
-            if treeRemovedCount > 0 { parts.append("-\(treeRemovedCount) tree removed") }
-            if movedCount > 0 { parts.append("↕\(movedCount) moved") }
+        switch delta {
+        case .noChange(let payload):
+            return "[\(payload.elementCount) elements, no change]"
+        case .elementsChanged(let payload):
+            let edits = payload.edits
+            var parts: [String] = ["\(payload.elementCount) elements"]
+            if !edits.added.isEmpty { parts.append("+\(edits.added.count) added") }
+            if !edits.removed.isEmpty { parts.append("-\(edits.removed.count) removed") }
+            if !edits.updated.isEmpty { parts.append("~\(edits.updated.count) updated") }
+            if !edits.treeInserted.isEmpty { parts.append("+\(edits.treeInserted.count) tree inserted") }
+            if !edits.treeRemoved.isEmpty { parts.append("-\(edits.treeRemoved.count) tree removed") }
+            if !edits.treeMoved.isEmpty { parts.append("↕\(edits.treeMoved.count) moved") }
             return "[" + parts.joined(separator: ", ") + "]"
-        case .screenChanged:
-            return "[\(delta.elementCount) elements, screen changed]"
+        case .screenChanged(let payload):
+            return "[\(payload.elementCount) elements, screen changed]"
         }
     }
 }

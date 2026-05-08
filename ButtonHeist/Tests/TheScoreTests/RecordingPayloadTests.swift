@@ -195,7 +195,7 @@ final class RecordingPayloadTests: XCTestCase {
     // MARK: - InteractionEvent
 
     func testInteractionEventActivateRoundTrip() throws {
-        let delta = InterfaceDelta(kind: .noChange, elementCount: 5)
+        let delta: InterfaceDelta = .noChange(.init(elementCount: 5))
         let event = InteractionEvent(
             timestamp: 1.5,
             command: .activate(.matcher(ElementMatcher(identifier: "loginButton"))),
@@ -212,16 +212,20 @@ final class RecordingPayloadTests: XCTestCase {
         XCTAssertEqual(matcher.identifier, "loginButton")
         XCTAssertTrue(decoded.result.success)
         XCTAssertEqual(decoded.result.method, .activate)
-        XCTAssertEqual(decoded.result.interfaceDelta?.kind, .noChange)
+        XCTAssertEqual(decoded.result.interfaceDelta?.kindRawValue, "noChange")
         XCTAssertEqual(decoded.result.interfaceDelta?.elementCount, 5)
     }
 
     func testInteractionEventTouchTapRoundTrip() throws {
-        let delta = InterfaceDelta(
-            kind: .elementsChanged,
+        let delta: InterfaceDelta = .elementsChanged(.init(
             elementCount: 1,
-            updated: [ElementUpdate(heistId: "okBtn", changes: [PropertyChange(property: .value, old: nil, new: "tapped")])]
-        )
+            edits: ElementEdits(updated: [
+                ElementUpdate(
+                    heistId: "okBtn",
+                    changes: [PropertyChange(property: .value, old: nil, new: "tapped")]
+                )
+            ])
+        ))
         let event = InteractionEvent(
             timestamp: 3.2,
             command: .touchTap(TouchTapTarget(elementTarget: .matcher(ElementMatcher(identifier: "okBtn")))),
@@ -234,8 +238,8 @@ final class RecordingPayloadTests: XCTestCase {
         XCTAssertEqual(decoded.timestamp, 3.2)
         XCTAssertEqual(decoded.result.method, .syntheticTap)
         XCTAssertNotNil(decoded.result.interfaceDelta)
-        XCTAssertEqual(decoded.result.interfaceDelta?.kind, .elementsChanged)
-        XCTAssertEqual(decoded.result.interfaceDelta?.updated?.first?.heistId, "okBtn")
+        XCTAssertEqual(decoded.result.interfaceDelta?.kindRawValue, "elementsChanged")
+        XCTAssertEqual(decoded.result.interfaceDelta?.elementEdits?.updated.first?.heistId, "okBtn")
     }
 
     func testInteractionEventNilDelta() throws {
@@ -261,7 +265,7 @@ final class RecordingPayloadTests: XCTestCase {
         let event = InteractionEvent(
             timestamp: 1.0,
             command: .activate(.matcher(ElementMatcher(label: "element_3"))),
-            result: ActionResult(success: true, method: .activate, interfaceDelta: InterfaceDelta(kind: .noChange, elementCount: 0))
+            result: ActionResult(success: true, method: .activate, interfaceDelta: .noChange(.init(elementCount: 0)))
         )
         let payload = RecordingPayload(
             videoData: "AAAAIGZ0eXBpc29t",

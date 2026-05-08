@@ -9,59 +9,104 @@ import TheScore
 /// with the final interface. Otherwise, tracks net added/removed/updated.
 internal enum NetDeltaAccumulator {
     static func merge(deltas: [InterfaceDelta]) -> InterfaceDelta? {
-        let meaningful = deltas.filter { $0.kind != .noChange || hasTransient($0) }
+        let meaningful = deltas.filter { delta in
+            switch delta {
+            case .noChange(let payload): return !payload.transient.isEmpty
+            case .elementsChanged, .screenChanged: return true
+            }
+        }
         guard !meaningful.isEmpty else { return nil }
 
         // If any step was a screen change, the net is screenChanged with the last one's interface
-        if let lastScreenChange = meaningful.last(where: { $0.kind == .screenChanged }) {
-            return mergeAfterScreenChange(screenChange: lastScreenChange, deltas: deltas)
+        if let screenIndex = deltas.lastIndex(where: \.isScreenChanged),
+           case .screenChanged(let screenPayload) = deltas[screenIndex] {
+            return mergeAfterScreenChange(
+                screenChange: screenPayload,
+                postDeltas: Array(deltas[(screenIndex + 1)...])
+            )
         }
 
-        // All steps are elementsChanged — accumulate net adds/removes/updates
+        // All steps are elementsChanged or transient-bearing noChange —
+        // accumulate net adds/removes/updates.
         return mergeElementDeltas(meaningful)
     }
 
+    /// Fold element-level edits that happened after `screenChange` into a
+    /// single `.screenChanged` result, applying them to the new interface.
+    /// `postDeltas` is the slice of the original sequence strictly after the
+    /// screen-change step. The caller has already pinned to the *last* screen
+    /// change, so this slice is structurally guaranteed not to contain another.
     private static func mergeAfterScreenChange(
-        screenChange: InterfaceDelta, deltas: [InterfaceDelta]
+        screenChange: InterfaceDelta.ScreenChanged, postDeltas: [InterfaceDelta]
     ) -> InterfaceDelta {
-        // Find steps after the last screen change and fold their element changes
-        // into the screen change's interface
-        guard let screenIndex = deltas.lastIndex(where: { $0.kind == .screenChanged }) else {
-            return screenChange
+        precondition(
+            !postDeltas.contains(where: \.isScreenChanged),
+            "post-screen-change slice must not contain another screen change"
+        )
+        let postDeltas = postDeltas.filter { delta in
+            switch delta {
+            case .noChange(let payload): return !payload.transient.isEmpty
+            case .elementsChanged: return true
+            case .screenChanged:
+                preconditionFailure("guarded above")
+            }
         }
-        let afterScreen = Array(deltas[(screenIndex + 1)...])
-        let postDeltas = afterScreen.filter { $0.kind == .elementsChanged || hasTransient($0) }
         if postDeltas.isEmpty {
-            return screenChange
+            return .screenChanged(screenChange)
         }
         // Merge the post-screen element changes into one
-        guard let postMerge = mergeElementDeltas(postDeltas) else { return screenChange }
-        let finalInterface = screenChange.newInterface.map {
-            apply(postMerge, to: $0)
+        guard let postMerged = mergeElementDeltas(postDeltas) else {
+            return .screenChanged(screenChange)
         }
-        return InterfaceDelta(
-            kind: .screenChanged,
-            elementCount: finalInterface?.elements.count ?? postMerge.elementCount,
-            added: postMerge.added,
-            removed: postMerge.removed,
-            updated: postMerge.updated,
-            treeInserted: postMerge.treeInserted,
-            treeRemoved: postMerge.treeRemoved,
-            treeMoved: postMerge.treeMoved,
-            transient: mergeTransients(screenChange.transient, postMerge.transient),
-            newInterface: finalInterface
-        )
+        let postEdits: ElementEdits
+        let postTransients: [HeistElement]
+        switch postMerged {
+        case .noChange(let payload):
+            postEdits = ElementEdits()
+            postTransients = payload.transient
+        case .elementsChanged(let payload):
+            postEdits = payload.edits
+            postTransients = payload.transient
+        case .screenChanged:
+            // mergeElementDeltas never returns a screenChanged
+            return .screenChanged(screenChange)
+        }
+        let finalInterface = apply(postEdits, to: screenChange.newInterface)
+        let mergedTransients = mergeTransients(screenChange.transient, postTransients)
+        return .screenChanged(InterfaceDelta.ScreenChanged(
+            elementCount: finalInterface.elements.count,
+            newInterface: finalInterface,
+            postEdits: postEdits.isEmpty ? nil : postEdits,
+            transient: mergedTransients
+        ))
     }
 
-    private static func apply(_ delta: InterfaceDelta, to interface: Interface) -> Interface {
-        var elementsById = Dictionary(uniqueKeysWithValues: interface.elements.map { ($0.heistId, $0) })
-        for heistId in delta.removed ?? [] {
-            elementsById.removeValue(forKey: heistId)
-        }
-        for element in delta.added ?? [] {
+    /// Apply element-level edits (`added`/`removed`/`updated`) to `interface`,
+    /// producing a best-effort `newInterface` for `.screenChanged.newInterface`.
+    ///
+    /// Tree-level edits (`treeInserted`/`treeRemoved`/`treeMoved`) are *not*
+    /// applied here — they are descriptive metadata produced by diffing two
+    /// snapshots, not instructions for reconstructing the tree. Consumers who
+    /// need the structural truth should read `postEdits` directly; the
+    /// `newInterface.tree` returned here reflects the leaf-level swaps and
+    /// adds, with novel adds appended at the root forest.
+    ///
+    /// `heistId` collisions in `interface.elements` are tolerated with
+    /// last-write-wins semantics — uniqueness is a best-effort property of the
+    /// snapshot, not an invariant (e.g. sibling `staticText` with identical
+    /// labels can synthesize the same id).
+    private static func apply(_ edits: ElementEdits, to interface: Interface) -> Interface {
+        var elementsById: [String: HeistElement] = [:]
+        for element in interface.elements {
             elementsById[element.heistId] = element
         }
-        for update in delta.updated ?? [] {
+        for heistId in edits.removed {
+            elementsById.removeValue(forKey: heistId)
+        }
+        for element in edits.added {
+            elementsById[element.heistId] = element
+        }
+        for update in edits.updated {
             guard var element = elementsById[update.heistId] else { continue }
             var fullyApplied = true
             for change in update.changes where !apply(change, to: &element) {
@@ -72,8 +117,8 @@ internal enum NetDeltaAccumulator {
             } else {
                 // We couldn't apply every property delta in-place (e.g. actions/customContent
                 // are lossy strings on the wire). Drop the element from `newInterface` so the
-                // snapshot stays internally consistent — callers should read `delta.updated`
-                // for the authoritative change list.
+                // snapshot stays internally consistent — callers should read the authoritative
+                // edits.updated list.
                 elementsById.removeValue(forKey: update.heistId)
             }
         }
@@ -86,7 +131,7 @@ internal enum NetDeltaAccumulator {
 
         // Append any "added" element that wasn't already in the original tree
         // at the root level — we don't know its tree position from the delta.
-        let novelAdds = (delta.added ?? []).filter { !originalHeistIds.contains($0.heistId) }
+        let novelAdds = edits.added.filter { !originalHeistIds.contains($0.heistId) }
         let finalTree = updatedTree + novelAdds.map { InterfaceNode.element($0) }
 
         return Interface(timestamp: interface.timestamp, tree: finalTree)
@@ -181,12 +226,25 @@ internal enum NetDeltaAccumulator {
         var transientIds: Set<String> = []
 
         for delta in deltas {
-            treeInserted.append(contentsOf: delta.treeInserted ?? [])
-            treeRemoved.append(contentsOf: delta.treeRemoved ?? [])
-            treeMoved.append(contentsOf: delta.treeMoved ?? [])
-            appendUniqueTransients(delta.transient, to: &transient, seenIds: &transientIds)
+            let edits: ElementEdits
+            switch delta {
+            case .noChange(let payload):
+                edits = ElementEdits()
+                appendUniqueTransients(payload.transient, to: &transient, seenIds: &transientIds)
+                continue
+            case .elementsChanged(let payload):
+                edits = payload.edits
+                appendUniqueTransients(payload.transient, to: &transient, seenIds: &transientIds)
+            case .screenChanged:
+                // Caller filters screen changes out before reaching this loop.
+                continue
+            }
 
-            for element in delta.added ?? [] {
+            treeInserted.append(contentsOf: edits.treeInserted)
+            treeRemoved.append(contentsOf: edits.treeRemoved)
+            treeMoved.append(contentsOf: edits.treeMoved)
+
+            for element in edits.added {
                 if netRemoved.contains(element.heistId) {
                     // Was removed earlier, now re-added → treat as net add
                     netRemoved.remove(element.heistId)
@@ -195,7 +253,7 @@ internal enum NetDeltaAccumulator {
                     netAdded[element.heistId] = element
                 }
             }
-            for heistId in delta.removed ?? [] {
+            for heistId in edits.removed {
                 if netAdded.removeValue(forKey: heistId) != nil {
                     // Was added earlier in this batch, now removed → nets to nothing
                     netUpdated.removeValue(forKey: heistId)
@@ -204,7 +262,7 @@ internal enum NetDeltaAccumulator {
                     netUpdated.removeValue(forKey: heistId)
                 }
             }
-            for update in delta.updated ?? [] {
+            for update in edits.updated {
                 var changesToRecord = update.changes
                 if var added = netAdded[update.heistId] {
                     var unappliedChanges: [PropertyChange] = []
@@ -244,49 +302,46 @@ internal enum NetDeltaAccumulator {
         let updatedList = netUpdated.map { ElementUpdate(heistId: $0.key, changes: $0.value) }
             .sorted { $0.heistId < $1.heistId }
 
-        if addedList.isEmpty && removedList.isEmpty && updatedList.isEmpty
-            && treeInserted.isEmpty && treeRemoved.isEmpty && treeMoved.isEmpty
-            && transient.isEmpty {
+        let mergedEdits = ElementEdits(
+            added: addedList,
+            removed: removedList,
+            updated: updatedList,
+            treeInserted: treeInserted,
+            treeRemoved: treeRemoved,
+            treeMoved: treeMoved
+        )
+
+        if mergedEdits.isEmpty && transient.isEmpty {
             return nil
         }
 
         let lastCount = deltas.last?.elementCount ?? 0
-        return InterfaceDelta(
-            kind: addedList.isEmpty && removedList.isEmpty && updatedList.isEmpty
-                && treeInserted.isEmpty && treeRemoved.isEmpty && treeMoved.isEmpty
-                ? .noChange
-                : .elementsChanged,
+        if mergedEdits.isEmpty {
+            return .noChange(InterfaceDelta.NoChange(elementCount: lastCount, transient: transient))
+        }
+        return .elementsChanged(InterfaceDelta.ElementsChanged(
             elementCount: lastCount,
-            added: addedList.isEmpty ? nil : addedList,
-            removed: removedList.isEmpty ? nil : removedList,
-            updated: updatedList.isEmpty ? nil : updatedList,
-            treeInserted: treeInserted.isEmpty ? nil : treeInserted,
-            treeRemoved: treeRemoved.isEmpty ? nil : treeRemoved,
-            treeMoved: treeMoved.isEmpty ? nil : treeMoved,
-            transient: transient.isEmpty ? nil : transient
-        )
-    }
-
-    private static func hasTransient(_ delta: InterfaceDelta) -> Bool {
-        delta.transient?.isEmpty == false
+            edits: mergedEdits,
+            transient: transient
+        ))
     }
 
     private static func mergeTransients(
-        _ lhs: [HeistElement]?, _ rhs: [HeistElement]?
-    ) -> [HeistElement]? {
+        _ lhs: [HeistElement], _ rhs: [HeistElement]
+    ) -> [HeistElement] {
         var merged: [HeistElement] = []
         var seenIds = Set<String>()
         appendUniqueTransients(lhs, to: &merged, seenIds: &seenIds)
         appendUniqueTransients(rhs, to: &merged, seenIds: &seenIds)
-        return merged.isEmpty ? nil : merged
+        return merged
     }
 
     private static func appendUniqueTransients(
-        _ elements: [HeistElement]?,
+        _ elements: [HeistElement],
         to output: inout [HeistElement],
         seenIds: inout Set<String>
     ) {
-        for element in elements ?? [] where !seenIds.contains(element.heistId) {
+        for element in elements where !seenIds.contains(element.heistId) {
             seenIds.insert(element.heistId)
             output.append(element)
         }
