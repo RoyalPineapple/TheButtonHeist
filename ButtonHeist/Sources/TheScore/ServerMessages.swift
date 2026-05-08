@@ -187,35 +187,35 @@ public struct ActionResult: Codable, Sendable {
     /// Whether the action was delivered and completed normally. `false` means
     /// the action reached the server but the handler reported failure — it is
     /// not a transport-level error (those surface as thrown errors).
-    public let success: Bool
+    public var success: Bool
     /// Identifies which server-side handler produced this result (e.g.
     /// `.synthesizedTouch`, `.accessibilityActivate`). Useful when diagnosing
     /// why an action succeeded but had no visible effect.
-    public let method: ActionMethod
-    public let message: String?
+    public var method: ActionMethod
+    public var message: String?
     /// Typed error classification (nil on success)
-    public let errorKind: ErrorKind?
+    public var errorKind: ErrorKind?
     /// Current text field value after a typeText operation
-    public let value: String?
+    public var value: String?
     /// Compact delta describing what changed in the hierarchy after the action
-    public let interfaceDelta: InterfaceDelta?
+    public var interfaceDelta: InterfaceDelta?
     /// Whether the UI was still animating when this result was produced.
     /// nil means idle (no animations detected).
-    public let animating: Bool?
+    public var animating: Bool?
     /// Post-action accessibility label of the acted-on element
-    public let elementLabel: String?
+    public var elementLabel: String?
     /// Post-action accessibility value of the acted-on element
-    public let elementValue: String?
+    public var elementValue: String?
     /// Post-action accessibility traits of the acted-on element (e.g. [.button, .selected])
-    public let elementTraits: [HeistTrait]?
+    public var elementTraits: [HeistTrait]?
     /// Label of the first header element in the post-action snapshot (screen name hint)
-    public let screenName: String?
+    public var screenName: String?
     /// Slugified screen name for machine use (e.g. "controls_demo")
-    public let screenId: String?
+    public var screenId: String?
     /// Diagnostics from a scroll_to_visible search operation
-    public let scrollSearchResult: ScrollSearchResult?
+    public var scrollSearchResult: ScrollSearchResult?
     /// Diagnostics from an explore (full screen census) operation
-    public let exploreResult: ExploreResult?
+    public var exploreResult: ExploreResult?
     /// True when the response represents a settled UI state — either the
     /// AX tree reached multi-cycle stability, or a screen transition
     /// preempted the settle loop and the new screen has been observed via
@@ -223,10 +223,10 @@ public struct ActionResult: Codable, Sendable {
     /// settle timeout elapsed while the tree was still changing — the
     /// snapshot in `interfaceDelta` may not be a final state. nil for
     /// older clients / pre-auto-settle responses.
-    public let settled: Bool?
+    public var settled: Bool?
     /// Wall-clock milliseconds from action start to settle decision
     /// (settled, screen-changed, or timed out).
-    public let settleTimeMs: Int?
+    public var settleTimeMs: Int?
 
     public init(
         success: Bool,
@@ -262,41 +262,6 @@ public struct ActionResult: Codable, Sendable {
         self.exploreResult = exploreResult
         self.settled = settled
         self.settleTimeMs = settleTimeMs
-    }
-}
-
-extension ActionResult {
-    public func adding(scrollSearchResult: ScrollSearchResult?) -> ActionResult {
-        ActionResult(
-            success: success, method: method, message: message, errorKind: errorKind,
-            value: value, interfaceDelta: interfaceDelta, animating: animating,
-            elementLabel: elementLabel, elementValue: elementValue, elementTraits: elementTraits,
-            screenName: screenName, screenId: screenId, scrollSearchResult: scrollSearchResult,
-            exploreResult: exploreResult,
-            settled: settled, settleTimeMs: settleTimeMs
-        )
-    }
-
-    /// Populate the `exploreResult.elements` array. Used by the explicit
-    /// `explore` command, which needs the full element list rather than
-    /// the diff-only summary.
-    public func adding(exploreElements: [HeistElement]) -> ActionResult {
-        guard let explore = exploreResult else { return self }
-        let fullExplore = ExploreResult(
-            elements: exploreElements,
-            scrollCount: explore.scrollCount,
-            containersExplored: explore.containersExplored,
-            containersSkippedObscured: explore.containersSkippedObscured,
-            explorationTime: explore.explorationTime
-        )
-        return ActionResult(
-            success: success, method: method, message: message, errorKind: errorKind,
-            value: value, interfaceDelta: interfaceDelta, animating: animating,
-            elementLabel: elementLabel, elementValue: elementValue, elementTraits: elementTraits,
-            screenName: screenName, screenId: screenId, scrollSearchResult: scrollSearchResult,
-            exploreResult: fullExplore,
-            settled: settled, settleTimeMs: settleTimeMs
-        )
     }
 }
 

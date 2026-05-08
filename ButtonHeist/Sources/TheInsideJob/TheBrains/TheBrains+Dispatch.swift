@@ -76,14 +76,16 @@ extension TheBrains {
         let before = captureBeforeState()
         let result = await executeElementSearch(target)
 
-        return await actionResultWithDelta(
+        var enriched = await actionResultWithDelta(
             success: result.success,
             method: result.method,
             message: result.message,
             value: result.value,
             errorKind: result.success ? nil : .elementNotFound,
             before: before
-        ).adding(scrollSearchResult: result.scrollSearchResult)
+        )
+        enriched.scrollSearchResult = result.scrollSearchResult
+        return enriched
     }
 
     /// Wait for an element to appear or disappear.
