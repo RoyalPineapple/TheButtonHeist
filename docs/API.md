@@ -1414,7 +1414,7 @@ A single recorded interaction event captured during a Stakeout recording.
 ## CLI Reference
 
 **Location**: `ButtonHeistCLI/`
-**Version**: 0.2.20
+**Version**: 0.2.21
 
 All subcommands that connect to a device accept these connection options:
 
