@@ -265,7 +265,6 @@ final class TargetConfigTests: XCTestCase {
     )
 
     private static let testServerInfo = ServerInfo(
-        protocolVersion: "5.0",
         appName: "MockApp",
         bundleIdentifier: "com.test.mock",
         deviceName: "MockDevice",

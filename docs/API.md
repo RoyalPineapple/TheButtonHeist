@@ -1073,11 +1073,12 @@ A point in unit coordinates (0–1) relative to an element's accessibility frame
 public struct ServerInfo: Codable, Sendable
 ```
 
-Device and app metadata received after connecting.
+Device and app metadata received after connecting. The wire-level
+protocol version is carried by `ResponseEnvelope.protocolVersion` and
+is not duplicated here.
 
 #### Properties
 
-- `protocolVersion: String` - Protocol version (currently `"8.0"`)
 - `appName: String` - App display name
 - `bundleIdentifier: String` - App bundle identifier
 - `deviceName: String` - Device name

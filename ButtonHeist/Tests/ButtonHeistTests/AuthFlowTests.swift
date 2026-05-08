@@ -87,7 +87,6 @@ final class AuthFlowTests: XCTestCase {
         try conn.handleMessage(encode(.authApproved(AuthApprovedPayload(token: "new-token"))))
 
         let info = ServerInfo(
-            protocolVersion: "5.0",
             appName: "TestApp",
             bundleIdentifier: "com.test",
             deviceName: "Test",

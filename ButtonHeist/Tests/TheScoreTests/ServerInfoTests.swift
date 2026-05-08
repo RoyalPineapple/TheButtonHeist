@@ -5,7 +5,6 @@ final class ServerInfoTests: XCTestCase {
 
     func testScreenSizeComputed() {
         let info = ServerInfo(
-            protocolVersion: "1.0",
             appName: "Test",
             bundleIdentifier: "com.test",
             deviceName: "iPhone",
@@ -21,7 +20,6 @@ final class ServerInfoTests: XCTestCase {
 
     func testEncodingRoundTrip() throws {
         let info = ServerInfo(
-            protocolVersion: "1.0",
             appName: "TestApp",
             bundleIdentifier: "com.test.app",
             deviceName: "iPhone 15",
@@ -33,7 +31,6 @@ final class ServerInfoTests: XCTestCase {
         let data = try JSONEncoder().encode(info)
         let decoded = try JSONDecoder().decode(ServerInfo.self, from: data)
 
-        XCTAssertEqual(info.protocolVersion, decoded.protocolVersion)
         XCTAssertEqual(info.appName, decoded.appName)
         XCTAssertEqual(info.bundleIdentifier, decoded.bundleIdentifier)
         XCTAssertEqual(info.deviceName, decoded.deviceName)
@@ -44,7 +41,6 @@ final class ServerInfoTests: XCTestCase {
 
     func testEncodingRoundTripWithInstanceId() throws {
         let info = ServerInfo(
-            protocolVersion: "2.0",
             appName: "TestApp",
             bundleIdentifier: "com.test.app",
             deviceName: "iPhone 16 Pro",
@@ -66,7 +62,6 @@ final class ServerInfoTests: XCTestCase {
         // Optional fields absent — instanceId and listeningPort decode as nil
         let json = """
         {
-            "protocolVersion": "2.0",
             "appName": "OldApp",
             "bundleIdentifier": "com.old",
             "deviceName": "iPhone 15",
@@ -85,7 +80,6 @@ final class ServerInfoTests: XCTestCase {
 
     func testEncodingWithNilInstanceId() throws {
         let info = ServerInfo(
-            protocolVersion: "2.0",
             appName: "TestApp",
             bundleIdentifier: "com.test",
             deviceName: "iPhone",
@@ -103,7 +97,6 @@ final class ServerInfoTests: XCTestCase {
 
     func testEncodingRoundTripWithDeviceIdentifiers() throws {
         let info = ServerInfo(
-            protocolVersion: "2.0",
             appName: "TestApp",
             bundleIdentifier: "com.test.app",
             deviceName: "iPhone 16 Pro",
@@ -127,7 +120,6 @@ final class ServerInfoTests: XCTestCase {
         // Simulate server that doesn't include simulatorUDID/vendorIdentifier
         let json = """
         {
-            "protocolVersion": "2.0",
             "appName": "OldApp",
             "bundleIdentifier": "com.old",
             "deviceName": "iPhone 15",
@@ -154,7 +146,6 @@ final class ServerInfoTests: XCTestCase {
 
         for (name, version, width, height) in devices {
             let info = ServerInfo(
-                protocolVersion: "1.0",
                 appName: "TestApp",
                 bundleIdentifier: "com.test",
                 deviceName: name,

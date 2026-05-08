@@ -621,8 +621,10 @@ public struct AuthApprovedPayload: Codable, Sendable {
 }
 
 /// Server identity and capabilities sent after a successful handshake.
+///
+/// Wire-level protocol version is carried by `ResponseEnvelope.protocolVersion`;
+/// it is not duplicated here.
 public struct ServerInfo: Codable, Sendable {
-    public let protocolVersion: String
     public let appName: String
     public let bundleIdentifier: String
     public let deviceName: String
@@ -643,7 +645,6 @@ public struct ServerInfo: Codable, Sendable {
     public let tlsActive: Bool?
 
     public init(
-        protocolVersion: String,
         appName: String,
         bundleIdentifier: String,
         deviceName: String,
@@ -657,7 +658,6 @@ public struct ServerInfo: Codable, Sendable {
         vendorIdentifier: String? = nil,
         tlsActive: Bool? = nil
     ) {
-        self.protocolVersion = protocolVersion
         self.appName = appName
         self.bundleIdentifier = bundleIdentifier
         self.deviceName = deviceName

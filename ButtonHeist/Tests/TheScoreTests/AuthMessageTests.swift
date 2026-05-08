@@ -119,7 +119,6 @@ final class AuthMessageTests: XCTestCase {
 
     func testServerInfoWithInstanceIdentifier() throws {
         let info = ServerInfo(
-            protocolVersion: "3.0",
             appName: "TestApp",
             bundleIdentifier: "com.test.app",
             deviceName: "iPhone",
@@ -138,7 +137,6 @@ final class AuthMessageTests: XCTestCase {
     func testServerInfoWithoutInstanceIdentifier() throws {
         let json = """
         {
-            "protocolVersion": "3.0",
             "appName": "TestApp",
             "bundleIdentifier": "com.test",
             "deviceName": "iPhone",
@@ -178,7 +176,6 @@ final class AuthMessageTests: XCTestCase {
 
         // Step 3a: Server sends info on success
         let serverInfo = ServerInfo(
-            protocolVersion: "3.0",
             appName: "MyApp",
             bundleIdentifier: "com.test.myapp",
             deviceName: "iPhone 16",
@@ -191,7 +188,6 @@ final class AuthMessageTests: XCTestCase {
         let infoData = try JSONEncoder().encode(infoMsg)
         let decodedInfo = try JSONDecoder().decode(ServerMessage.self, from: infoData)
         if case .info(let info) = decodedInfo {
-            XCTAssertEqual(info.protocolVersion, "3.0")
             XCTAssertEqual(info.instanceIdentifier, "test-1")
         } else {
             XCTFail("Step 3a failed: expected info")

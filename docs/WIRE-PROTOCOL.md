@@ -977,9 +977,11 @@ Use `get_interface --full` when the screen has deep scrollable content and you n
 
 ### ServerInfo
 
+The wire-level protocol version is carried by `ResponseEnvelope.protocolVersion`
+and is not duplicated on `ServerInfo`.
+
 | Field | Type | Description |
 |-------|------|-------------|
-| `protocolVersion` | `String` | Protocol version (currently `"8.0"`) |
 | `appName` | `String` | App display name |
 | `bundleIdentifier` | `String` | App bundle identifier |
 | `deviceName` | `String` | Device name (e.g., "iPhone 15 Pro") |

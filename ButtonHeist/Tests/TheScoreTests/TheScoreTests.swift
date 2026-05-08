@@ -19,7 +19,6 @@ final class MessageIntegrationTests: XCTestCase {
 
         // 3. Server sends info
         let serverInfo = ServerInfo(
-            protocolVersion: protocolVersion,
             appName: "IntegrationTest",
             bundleIdentifier: "com.test.integration",
             deviceName: "Test Device",
@@ -33,7 +32,7 @@ final class MessageIntegrationTests: XCTestCase {
         // 4. Client receives and decodes
         let decodedServerMsg = try JSONDecoder().decode(ServerMessage.self, from: serverData)
         if case .info(let info) = decodedServerMsg {
-            XCTAssertEqual(info.protocolVersion, protocolVersion)
+            XCTAssertEqual(info.appName, "IntegrationTest")
         } else {
             XCTFail("Client should receive info message")
         }
@@ -95,7 +94,7 @@ final class MessageIntegrationTests: XCTestCase {
 
         let serverMessages: [ServerMessage] = [
             .info(ServerInfo(
-                protocolVersion: "1.0", appName: "Test", bundleIdentifier: "com.test",
+                appName: "Test", bundleIdentifier: "com.test",
                 deviceName: "Device", systemVersion: "17.0", screenWidth: 390, screenHeight: 844
             )),
             .interface(Interface(timestamp: Date(), tree: [])),

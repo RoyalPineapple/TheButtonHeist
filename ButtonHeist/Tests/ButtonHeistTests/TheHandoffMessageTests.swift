@@ -356,7 +356,6 @@ final class TheHandoffMessageTests: XCTestCase {
 
     private func makeServerInfo() -> ServerInfo {
         ServerInfo(
-            protocolVersion: "6.7",
             appName: "TestApp",
             bundleIdentifier: "com.test",
             deviceName: "iPhone",
