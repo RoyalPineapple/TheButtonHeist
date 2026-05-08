@@ -53,13 +53,6 @@ extension FenceResponse {
             var result: [String: Any] = ["status": "ok", "targets": info]
             if let defaultTarget { result["default"] = defaultTarget }
             return result
-        case .sessionLog, .archiveResult, .heistStarted, .heistStopped, .heistPlayback:
-            return bookKeeperJsonDict(self)
-        }
-    }
-
-    private func bookKeeperJsonDict(_ response: FenceResponse) -> [String: Any] {
-        switch response {
         case .sessionLog(let manifest):
             return sessionLogJsonDict(manifest)
         case .archiveResult(let path, let manifest):
@@ -81,10 +74,6 @@ extension FenceResponse {
                 dict["failure"] = playbackFailureDict(failure)
             }
             return dict
-        case .ok, .error, .help, .status, .devices, .interface, .action,
-             .screenshot, .screenshotData, .recording, .recordingData, .batch,
-             .sessionState, .targets:
-            return ["status": "ok"]
         }
     }
 

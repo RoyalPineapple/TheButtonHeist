@@ -53,13 +53,6 @@ extension FenceResponse {
                 let isDefault = name == defaultTarget ? " *" : ""
                 return "\(name): \(target.device)\(isDefault)"
             }.joined(separator: "\n")
-        case .sessionLog, .archiveResult, .heistStarted, .heistStopped, .heistPlayback:
-            return compactBookKeeper(self)
-        }
-    }
-
-    private func compactBookKeeper(_ response: FenceResponse) -> String {
-        switch response {
         case .sessionLog(let manifest):
             var text = "session: \(manifest.sessionId), \(manifest.commandCount) commands, \(manifest.artifacts.count) artifacts"
             if manifest.errorCount > 0 { text += ", \(manifest.errorCount) errors" }
@@ -75,8 +68,6 @@ extension FenceResponse {
             if let index = failedIndex { text += " (failed at \(index))" }
             if let failure { text += " [\(failure.step.command): \(failure.errorMessage)]" }
             return text
-        default:
-            return ""
         }
     }
 
