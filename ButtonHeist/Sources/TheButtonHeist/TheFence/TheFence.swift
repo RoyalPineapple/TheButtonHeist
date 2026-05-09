@@ -160,10 +160,12 @@ public final class TheFence {
     var config: Configuration
     let handoff = TheHandoff()
     let bookKeeper = TheBookKeeper()
-    /// Playback phase — prevents re-entrant play_heist calls.
+    /// Heist playback re-entrancy state. `.playing` carries the wall-clock
+    /// timestamp playback started so callers can reason about how long the
+    /// current playback has been running.
     enum PlaybackPhase {
         case idle
-        case playing
+        case playing(startedAt: Date)
     }
     var playbackPhase: PlaybackPhase = .idle
 
@@ -177,7 +179,14 @@ public final class TheFence {
     private let interfaceTracker = PendingRequestTracker<Interface>()
     private let screenTracker = PendingRequestTracker<ScreenPayload>()
     private let recordingTracker = PendingRequestTracker<RecordingPayload>()
-    private var recordingWaitInFlight = false
+
+    /// State of the in-flight `stop_recording` wait, if any. `.waiting`
+    /// carries the synthetic request ID used to key the recording tracker.
+    enum RecordingWait {
+        case idle
+        case waiting(syntheticId: String)
+    }
+    private var recordingWait: RecordingWait = .idle
 
     public init(configuration: Configuration = .init()) {
         self.config = configuration
@@ -779,19 +788,19 @@ public final class TheFence {
         timeout: TimeInterval,
         afterRegister: (() -> Void)?
     ) async throws -> RecordingPayload {
-        guard !recordingWaitInFlight else {
+        guard case .idle = recordingWait else {
             throw FenceError.invalidRequest("stop_recording already waiting for completion")
         }
-        recordingWaitInFlight = true
+        let syntheticId = "recording"
+        recordingWait = .waiting(syntheticId: syntheticId)
         let previousOnRecording = handoff.onRecording
         let previousOnRecordingError = handoff.onRecordingError
         defer {
-            recordingWaitInFlight = false
+            recordingWait = .idle
             handoff.onRecording = previousOnRecording
             handoff.onRecordingError = previousOnRecordingError
         }
 
-        let syntheticId = "recording"
         handoff.onRecording = { [weak self] payload in
             self?.recordingTracker.resolve(requestId: syntheticId, result: .success(payload))
         }

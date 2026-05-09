@@ -652,7 +652,7 @@ extension TheFence {
         var failure: PlaybackFailure?
         var stepResults: [HeistPlaybackReport.StepResult] = []
 
-        playbackPhase = .playing
+        playbackPhase = .playing(startedAt: Date())
         defer { playbackPhase = .idle }
 
         // Prime the registry before playback — get_interface defaults to full exploration
