@@ -174,6 +174,7 @@ struct ButtonHeistMCPServer {
         fence: TheFence,
         idleMonitor: IdleMonitor
     ) async -> CallTool.Result {
+        defer { idleMonitor.resetTimer() }
         do {
             let arguments = try decodeArguments(params.arguments)
             let routed = routeToolRequest(name: params.name, arguments: arguments)
@@ -186,11 +187,9 @@ struct ButtonHeistMCPServer {
             }
 
             let response = try await fence.execute(request: request)
-            idleMonitor.resetTimer()
             let backgroundDeltas = fence.drainBackgroundDeltas()
             return try renderResponse(response, backgroundDeltas: backgroundDeltas)
         } catch {
-            idleMonitor.resetTimer()
             return .init(content: [.text(text: error.displayMessage, annotations: nil, _meta: nil)], isError: true)
         }
     }
@@ -342,11 +341,10 @@ struct ButtonHeistMCPServer {
             }
         }
 
-        // Screenshots: embed as image content
+        // Screenshots: embed as image content. File-based screenshots fall through
+        // to the compact text below.
         if case .screenshotData(let pngData, _, _) = response {
             content.append(.image(data: pngData, mimeType: "image/png", annotations: nil, _meta: nil))
-        } else if case .screenshot = response {
-            // File-based screenshot — handled by compact text below
         }
 
         content.append(.text(text: response.compactFormatted(), annotations: nil, _meta: nil))
