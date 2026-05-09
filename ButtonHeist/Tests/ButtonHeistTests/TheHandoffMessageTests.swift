@@ -226,7 +226,7 @@ final class TheHandoffMessageTests: XCTestCase {
         }
         handoff.handleServerMessage(.info(makeServerInfo()), requestId: nil)
 
-        handoff.handleServerMessage(.error("Response too large"), requestId: "request-1")
+        handoff.handleServerMessage(.error(ServerError(kind: .general, message: "Response too large")), requestId: "request-1")
 
         XCTAssertNil(receivedError)
         XCTAssertEqual(requestError?.message, "Response too large")

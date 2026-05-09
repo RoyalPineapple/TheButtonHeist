@@ -651,7 +651,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testWireMessageTypeCaseCount() {
-        XCTAssertEqual(WireMessageType.allCases.count, 54)
+        XCTAssertEqual(WireMessageType.allCases.count, 52)
     }
 
     // MARK: - TXTRecordKey

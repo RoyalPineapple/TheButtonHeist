@@ -250,7 +250,7 @@ public actor SimpleSocketServer {
             clientId: clientId,
             envelope: ResponseEnvelope(
                 requestId: envelope.requestId,
-                message: .error(ServerError(kind: kind, message: message))
+                message: .error(TheScore.ServerError(kind: kind, message: message))
             ),
             state: state
         )

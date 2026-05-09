@@ -48,7 +48,7 @@ final class TheHandoffStateTests: XCTestCase {
         var receivedError: String?
         handoff.onError = { receivedError = $0 }
 
-        handoff.handleServerMessage(.error("something went wrong"), requestId: nil)
+        handoff.handleServerMessage(.error(ServerError(kind: .general, message: "something went wrong")), requestId: nil)
 
         assertFailed(handoff.connectionPhase, failure: .error("something went wrong"))
         XCTAssertEqual(receivedError, "something went wrong")
@@ -331,7 +331,7 @@ final class TheHandoffStateTests: XCTestCase {
                         ))
                     default:
                         XCTFail("Unexpected probe message: \(message)")
-                        return .error("unexpected")
+                        return .error(ServerError(kind: .general, message: "unexpected"))
                     }
                 }
             }
@@ -408,7 +408,7 @@ final class TheHandoffStateTests: XCTestCase {
                         ))
                     default:
                         XCTFail("Unexpected probe message: \(message)")
-                        return .error("unexpected")
+                        return .error(ServerError(kind: .general, message: "unexpected"))
                     }
                 }
             }
@@ -478,7 +478,7 @@ final class TheHandoffStateTests: XCTestCase {
                             ))
                         default:
                             XCTFail("Unexpected probe message: \(message)")
-                            return .error("unexpected")
+                            return .error(ServerError(kind: .general, message: "unexpected"))
                         }
                     }
                 }
@@ -537,7 +537,7 @@ final class TheHandoffStateTests: XCTestCase {
                     ))
                 default:
                     XCTFail("Unexpected probe message: \(message)")
-                    return .error("unexpected")
+                    return .error(ServerError(kind: .general, message: "unexpected"))
                 }
             }
             return connection

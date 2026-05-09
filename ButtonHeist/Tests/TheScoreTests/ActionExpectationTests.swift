@@ -384,7 +384,7 @@ final class ActionExpectationTests: XCTestCase {
             success: success,
             method: .syntheticTap,
             message: message,
-            value: value,
+            payload: value.map { .value($0) },
             interfaceDelta: delta
         )
         // Note: animating param omitted (defaults to nil)

@@ -858,7 +858,7 @@ final class TheFenceTests: XCTestCase {
     func testRequestScopedServerErrorFailsPendingActionWithoutDisconnecting() async throws {
         let (fence, mockConn) = makeConnectedFence()
         mockConn.autoResponse = { _ in
-            .error("Response too large to send over the socket (20000001 bytes)")
+            .error(ServerError(kind: .general, message: "Response too large to send over the socket (20000001 bytes)"))
         }
 
         do {
@@ -983,7 +983,7 @@ final class TheFenceTests: XCTestCase {
                         ))
                     default:
                         XCTFail("Unexpected probe message: \(message)")
-                        return .error("unexpected")
+                        return .error(ServerError(kind: .general, message: "unexpected"))
                     }
                 }
             }

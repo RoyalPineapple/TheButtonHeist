@@ -707,7 +707,7 @@ final class TheMuscle {
     private func sendMessage(_ message: ServerMessage, respond: @escaping @Sendable (Data) -> Void) {
         if let data = encodeEnvelope(message) {
             respond(data)
-        } else if let errorData = encodeEnvelope(.error("Encoding failed")) {
+        } else if let errorData = encodeEnvelope(.error(ServerError(kind: .general, message: "Encoding failed"))) {
             respond(errorData)
         }
     }

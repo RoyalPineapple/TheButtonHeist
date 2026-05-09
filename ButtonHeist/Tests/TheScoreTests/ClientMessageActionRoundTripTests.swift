@@ -236,13 +236,16 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
     }
 
     func testActionResultWithValueField() throws {
-        let result = ActionResult(success: true, method: .typeText, value: "hello world")
+        let result = ActionResult(success: true, method: .typeText, payload: .value("hello world"))
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
 
         XCTAssertTrue(decoded.success)
         XCTAssertEqual(decoded.method, .typeText)
-        XCTAssertEqual(decoded.value, "hello world")
+        guard case .value(let text) = decoded.payload else {
+            return XCTFail("Expected .value payload, got \(String(describing: decoded.payload))")
+        }
+        XCTAssertEqual(text, "hello world")
     }
 
     func testServerMessageActionResultEncoding() throws {
