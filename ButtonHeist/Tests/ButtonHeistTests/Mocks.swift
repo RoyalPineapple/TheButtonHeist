@@ -1,4 +1,5 @@
 import Network
+import XCTest
 @testable import ButtonHeist
 import TheScore
 
@@ -11,6 +12,65 @@ extension DeviceConnection {
         let dummyConnection = NWConnection(host: "127.0.0.1", port: 1, using: .tcp)
         connectionState = .connected(ActiveConnection(connection: dummyConnection))
     }
+}
+
+/// Pattern-match helpers for `TheHandoff.ConnectionPhase`. Replaces the
+/// dropped `Equatable` conformance — production code never compared phases
+/// for equality.
+@ButtonHeistActor
+func assertDisconnected(
+    _ phase: TheHandoff.ConnectionPhase,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) {
+    if case .disconnected = phase { return }
+    XCTFail("Expected .disconnected, got \(phase)", file: file, line: line)
+}
+
+@ButtonHeistActor
+func assertConnected(
+    _ phase: TheHandoff.ConnectionPhase,
+    device expected: DiscoveredDevice? = nil,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) {
+    guard case .connected(let session) = phase else {
+        XCTFail("Expected .connected, got \(phase)", file: file, line: line)
+        return
+    }
+    if let expected {
+        XCTAssertEqual(session.device, expected, file: file, line: line)
+    }
+}
+
+@ButtonHeistActor
+func assertFailed(
+    _ phase: TheHandoff.ConnectionPhase,
+    failure expected: TheHandoff.ConnectionFailure,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) {
+    guard case .failed(let failure) = phase else {
+        XCTFail("Expected .failed(\(expected)), got \(phase)", file: file, line: line)
+        return
+    }
+    XCTAssertEqual(failure, expected, file: file, line: line)
+}
+
+/// Drive `TheHandoff` through a mock connection to land in `.connected`.
+/// Returns the mock so the caller can inspect sent messages or trigger
+/// further events. The mock does not auto-emit `.info` so the caller can
+/// drive `handleServerMessage(.info(...))` explicitly when needed.
+@ButtonHeistActor
+@discardableResult
+func connectMockHandoff(
+    _ handoff: TheHandoff,
+    device: DiscoveredDevice = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+) -> MockConnection {
+    let mock = MockConnection()
+    handoff.makeConnection = { _, _, _ in mock }
+    handoff.connect(to: device)
+    return mock
 }
 
 // MARK: - Mock Implementations for DeviceConnecting / DeviceDiscovering

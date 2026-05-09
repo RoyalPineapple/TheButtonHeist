@@ -51,15 +51,44 @@ public final class TheHandoff {
         }
     }
 
+    /// State carried while connected: device, keepalive task, and the
+    /// session-scoped data that only makes sense during a live connection.
+    /// Bundling these into the phase makes "connected but no server info" a
+    /// transient inner state rather than a sibling-of-phase race.
+    public struct ConnectedSession {
+        public let device: DiscoveredDevice
+        let keepaliveTask: Task<Void, Never>
+        public var serverInfo: ServerInfo?
+        public var currentInterface: Interface?
+        public var currentScreen: ScreenPayload?
+        public var recordingPhase: RecordingPhase
+
+        init(
+            device: DiscoveredDevice,
+            keepaliveTask: Task<Void, Never>,
+            serverInfo: ServerInfo? = nil,
+            currentInterface: Interface? = nil,
+            currentScreen: ScreenPayload? = nil,
+            recordingPhase: RecordingPhase = .idle
+        ) {
+            self.device = device
+            self.keepaliveTask = keepaliveTask
+            self.serverInfo = serverInfo
+            self.currentInterface = currentInterface
+            self.currentScreen = currentScreen
+            self.recordingPhase = recordingPhase
+        }
+    }
+
     /// Explicit connection lifecycle state machine. The device is carried in
     /// `.connecting` and `.connected` so `connectedDevice` cannot drift from
     /// the phase — impossible states like "connected but no device" are
-    /// unrepresentable. The keepalive task lives in `.connected` because it
-    /// only runs while connected — transitioning out cancels it implicitly.
+    /// unrepresentable. `.connected` carries the full session payload so
+    /// session-scoped data clears automatically on transition.
     public enum ConnectionPhase {
         case disconnected
         case connecting(device: DiscoveredDevice)
-        case connected(device: DiscoveredDevice, keepaliveTask: Task<Void, Never>)
+        case connected(ConnectedSession)
         case failed(ConnectionFailure)
     }
 
@@ -83,10 +112,6 @@ public final class TheHandoff {
     public private(set) var discoveredDevices: [DiscoveredDevice] = []
     public private(set) var isDiscovering: Bool = false
     public private(set) var connectionPhase: ConnectionPhase = .disconnected
-    public private(set) var serverInfo: ServerInfo?
-    public private(set) var currentInterface: Interface?
-    public private(set) var currentScreen: ScreenPayload?
-    public private(set) var recordingPhase: RecordingPhase = .idle
     public private(set) var reconnectPolicy: ReconnectPolicy = .disabled
     private var missedPongCount: Int = 0
 
@@ -97,29 +122,28 @@ public final class TheHandoff {
     }
 
     private func transitionToConnected(device: DiscoveredDevice, keepaliveTask: Task<Void, Never>) {
-        connectionPhase = .connected(device: device, keepaliveTask: keepaliveTask)
+        connectionPhase = .connected(ConnectedSession(device: device, keepaliveTask: keepaliveTask))
     }
 
     private func transitionToFailed(_ failure: ConnectionFailure) {
-        if case .connected(_, let keepaliveTask) = connectionPhase {
-            keepaliveTask.cancel()
+        if case .connected(let session) = connectionPhase {
+            session.keepaliveTask.cancel()
         }
         connectionPhase = .failed(failure)
     }
 
     private func transitionToDisconnected() {
-        if case .connected(_, let keepaliveTask) = connectionPhase {
-            keepaliveTask.cancel()
+        if case .connected(let session) = connectionPhase {
+            session.keepaliveTask.cancel()
         }
         connectionPhase = .disconnected
-        serverInfo = nil
-        currentInterface = nil
-        currentScreen = nil
-        recordingPhase = .idle
     }
 
-    private func transitionRecordingTo(_ phase: RecordingPhase) {
-        recordingPhase = phase
+    /// Mutate the connected session in place. No-op when not connected.
+    private func mutateConnectedSession(_ body: (inout ConnectedSession) -> Void) {
+        guard case .connected(var session) = connectionPhase else { return }
+        body(&session)
+        connectionPhase = .connected(session)
     }
 
     // MARK: - Derived State
@@ -130,8 +154,28 @@ public final class TheHandoff {
     }
 
     public var connectedDevice: DiscoveredDevice? {
-        if case .connected(let device, _) = connectionPhase { return device }
+        if case .connected(let session) = connectionPhase { return session.device }
         return nil
+    }
+
+    public var serverInfo: ServerInfo? {
+        if case .connected(let session) = connectionPhase { return session.serverInfo }
+        return nil
+    }
+
+    public var currentInterface: Interface? {
+        if case .connected(let session) = connectionPhase { return session.currentInterface }
+        return nil
+    }
+
+    public var currentScreen: ScreenPayload? {
+        if case .connected(let session) = connectionPhase { return session.currentScreen }
+        return nil
+    }
+
+    public var recordingPhase: RecordingPhase {
+        if case .connected(let session) = connectionPhase { return session.recordingPhase }
+        return .idle
     }
 
     public var isRecording: Bool {
@@ -423,7 +467,7 @@ public final class TheHandoff {
         }
         switch message {
         case .info(let info):
-            serverInfo = info
+            mutateConnectedSession { $0.serverInfo = info }
             if autoSubscribe {
                 connection?.send(.subscribe)
                 connection?.send(.requestInterface)
@@ -431,24 +475,24 @@ public final class TheHandoff {
             onConnected?(info)
         case .interface(let payload):
             if requestId == nil {
-                currentInterface = payload
+                mutateConnectedSession { $0.currentInterface = payload }
             }
             onInterface?(payload, requestId)
         case .actionResult(let result):
             onActionResult?(result, requestId)
         case .screen(let payload):
             if requestId == nil {
-                currentScreen = payload
+                mutateConnectedSession { $0.currentScreen = payload }
             }
             onScreen?(payload, requestId)
         case .recordingStarted:
-            transitionRecordingTo(.recording)
+            mutateConnectedSession { $0.recordingPhase = .recording }
             onRecordingStarted?()
         case .recording(let payload):
-            transitionRecordingTo(.idle)
+            mutateConnectedSession { $0.recordingPhase = .idle }
             onRecording?(payload)
         case .recordingError(let message):
-            transitionRecordingTo(.idle)
+            mutateConnectedSession { $0.recordingPhase = .idle }
             onRecordingError?(message)
         case .error(let message):
             if let requestId {
@@ -477,7 +521,7 @@ public final class TheHandoff {
         case .pong:
             missedPongCount = 0
         case .recordingStopped:
-            transitionRecordingTo(.idle)
+            mutateConnectedSession { $0.recordingPhase = .idle }
         case .serverHello, .authRequired:
             break
         }
@@ -488,7 +532,6 @@ public final class TheHandoff {
             reconnectTask?.cancel()
             reconnectPolicy = .enabled(filter: filter, reconnectTask: nil)
         }
-        // keepaliveTask cancellation handled by transitionToDisconnected
         connection?.disconnect()
         connection = nil
         transitionToDisconnected()
@@ -656,24 +699,7 @@ public final class TheHandoff {
     }
 }
 
-// MARK: - Custom Equatable (tasks excluded from comparison)
-
-extension TheHandoff.ConnectionPhase: Equatable {
-    public static func == (lhs: Self, rhs: Self) -> Bool {
-        switch (lhs, rhs) {
-        case (.disconnected, .disconnected):
-            return true
-        case (.connecting(let lhsDevice), .connecting(let rhsDevice)):
-            return lhsDevice == rhsDevice
-        case (.connected(let lhsDevice, _), .connected(let rhsDevice, _)):
-            return lhsDevice == rhsDevice
-        case (.failed(let lhsFailure), .failed(let rhsFailure)):
-            return lhsFailure == rhsFailure
-        default:
-            return false
-        }
-    }
-}
+// MARK: - ReconnectPolicy Equatable (filter-only, tasks excluded)
 
 extension TheHandoff.ReconnectPolicy: Equatable {
     public static func == (lhs: Self, rhs: Self) -> Bool {

@@ -9,6 +9,7 @@ final class TheHandoffMessageTests: XCTestCase {
     @ButtonHeistActor
     func testInfoSetsServerInfoAndCallsOnConnected() async {
         let handoff = TheHandoff()
+        connectMockHandoff(handoff)
         var receivedInfo: ServerInfo?
         handoff.onConnected = { receivedInfo = $0 }
 
@@ -70,6 +71,7 @@ final class TheHandoffMessageTests: XCTestCase {
     @ButtonHeistActor
     func testInterfacePushUpdatesCurrentInterface() async {
         let handoff = TheHandoff()
+        connectMockHandoff(handoff)
         var receivedPayload: Interface?
         handoff.onInterface = { payload, _ in receivedPayload = payload }
 
@@ -83,6 +85,7 @@ final class TheHandoffMessageTests: XCTestCase {
     @ButtonHeistActor
     func testInterfaceResponseDoesNotUpdateCurrent() async {
         let handoff = TheHandoff()
+        connectMockHandoff(handoff)
         handoff.handleServerMessage(.interface(Interface(timestamp: Date(), tree: [])),
                                     requestId: "req-1")
 
@@ -94,6 +97,7 @@ final class TheHandoffMessageTests: XCTestCase {
     @ButtonHeistActor
     func testScreenPushUpdatesCurrentScreen() async {
         let handoff = TheHandoff()
+        connectMockHandoff(handoff)
         var receivedScreen: ScreenPayload?
         handoff.onScreen = { payload, _ in receivedScreen = payload }
 
@@ -107,6 +111,7 @@ final class TheHandoffMessageTests: XCTestCase {
     @ButtonHeistActor
     func testScreenResponseDoesNotUpdateCurrent() async {
         let handoff = TheHandoff()
+        connectMockHandoff(handoff)
         let screen = ScreenPayload(pngData: "abc", width: 390, height: 844)
         handoff.handleServerMessage(.screen(screen), requestId: "req-1")
 
@@ -150,7 +155,7 @@ final class TheHandoffMessageTests: XCTestCase {
         let payload = SessionLockedPayload(message: "Session busy", activeConnections: 2)
         handoff.handleServerMessage(.sessionLocked(payload), requestId: nil)
 
-        XCTAssertEqual(handoff.connectionPhase, .failed(.sessionLocked("Session busy")))
+        assertFailed(handoff.connectionPhase, failure: .sessionLocked("Session busy"))
         XCTAssertEqual(receivedPayload?.activeConnections, 2)
     }
 
@@ -164,7 +169,7 @@ final class TheHandoffMessageTests: XCTestCase {
 
         handoff.handleServerMessage(.authFailed("bad token"), requestId: nil)
 
-        XCTAssertEqual(handoff.connectionPhase, .failed(.authFailed("bad token")))
+        assertFailed(handoff.connectionPhase, failure: .authFailed("bad token"))
         XCTAssertEqual(receivedReason, "bad token")
     }
 
@@ -209,6 +214,7 @@ final class TheHandoffMessageTests: XCTestCase {
     @ButtonHeistActor
     func testRequestScopedErrorDoesNotFailConnection() async {
         let handoff = TheHandoff()
+        connectMockHandoff(handoff)
         var receivedError: String?
         var requestError: (message: String, requestId: String)?
         handoff.onError = { receivedError = $0 }
@@ -244,7 +250,7 @@ final class TheHandoffMessageTests: XCTestCase {
         handoff.handleServerMessage(.status(payload), requestId: nil)
 
         // Status is log-only; no state change should occur
-        XCTAssertEqual(handoff.connectionPhase, .disconnected)
+        assertDisconnected(handoff.connectionPhase)
         XCTAssertNil(handoff.serverInfo)
     }
 
@@ -254,34 +260,35 @@ final class TheHandoffMessageTests: XCTestCase {
     func testServerHelloDoesNotMutateState() async {
         let handoff = TheHandoff()
         handoff.handleServerMessage(.serverHello, requestId: nil)
-        XCTAssertEqual(handoff.connectionPhase, .disconnected)
+        assertDisconnected(handoff.connectionPhase)
     }
 
     @ButtonHeistActor
     func testPongDoesNotMutateState() async {
         let handoff = TheHandoff()
         handoff.handleServerMessage(.pong, requestId: nil)
-        XCTAssertEqual(handoff.connectionPhase, .disconnected)
+        assertDisconnected(handoff.connectionPhase)
     }
 
     @ButtonHeistActor
     func testAuthRequiredDoesNotMutateState() async {
         let handoff = TheHandoff()
         handoff.handleServerMessage(.authRequired, requestId: nil)
-        XCTAssertEqual(handoff.connectionPhase, .disconnected)
+        assertDisconnected(handoff.connectionPhase)
     }
 
     @ButtonHeistActor
-    func testRecordingStoppedDoesNotMutateState() async {
+    func testRecordingStoppedWhileDisconnectedIsNoOp() async {
         let handoff = TheHandoff()
         handoff.handleServerMessage(.recordingStopped, requestId: nil)
-        XCTAssertEqual(handoff.connectionPhase, .disconnected)
+        assertDisconnected(handoff.connectionPhase)
         XCTAssertEqual(handoff.recordingPhase, .idle)
     }
 
     @ButtonHeistActor
     func testRecordingStoppedTransitionsRecordingToIdle() async {
         let handoff = TheHandoff()
+        connectMockHandoff(handoff)
         handoff.handleServerMessage(.recordingStarted, requestId: nil)
 
         handoff.handleServerMessage(.recordingStopped, requestId: nil)
@@ -294,6 +301,7 @@ final class TheHandoffMessageTests: XCTestCase {
     @ButtonHeistActor
     func testRecordingStartedTransitions() async {
         let handoff = TheHandoff()
+        connectMockHandoff(handoff)
         var startedCalled = false
         handoff.onRecordingStarted = { startedCalled = true }
 
@@ -306,6 +314,7 @@ final class TheHandoffMessageTests: XCTestCase {
     @ButtonHeistActor
     func testRecordingPayloadTransitionsToIdle() async {
         let handoff = TheHandoff()
+        connectMockHandoff(handoff)
         // Start recording first
         handoff.handleServerMessage(.recordingStarted, requestId: nil)
         XCTAssertEqual(handoff.recordingPhase, .recording)
@@ -328,6 +337,7 @@ final class TheHandoffMessageTests: XCTestCase {
     @ButtonHeistActor
     func testRecordingErrorTransitionsToIdle() async {
         let handoff = TheHandoff()
+        connectMockHandoff(handoff)
         handoff.handleServerMessage(.recordingStarted, requestId: nil)
 
         var receivedError: String?
