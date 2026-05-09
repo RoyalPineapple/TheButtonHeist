@@ -145,14 +145,19 @@ public final class TheBookKeeper {
 
     // MARK: - Recovery
 
+    /// Whether an abandoned session carried unflushed heist evidence at
+    /// recovery time. `.present` collapses the previous co-varying optional
+    /// pair so callers can't observe an inconsistent count/path combination.
+    enum RecoveredHeistEvidence: Sendable, Equatable {
+        case absent
+        case present(count: Int, path: URL)
+    }
+
     /// A session that was recovered from an abandoned state.
     struct RecoveredSession: Sendable {
         let sessionId: String
         let directory: URL
-        /// Number of heist evidence entries found, or nil if no heist was in progress.
-        let heistEvidenceCount: Int?
-        /// Path to the heist evidence file, if one exists.
-        let heistFilePath: URL?
+        let heistEvidence: RecoveredHeistEvidence
     }
 
     /// Scan for abandoned sessions and recover them.
@@ -196,14 +201,13 @@ public final class TheBookKeeper {
                   !fileManager.fileExists(atPath: compressedLog.path) else { return nil }
 
             let sessionId = directoryURL.lastPathComponent
-            guard let heistInfo = recoverSession(directory: directoryURL, sessionId: sessionId) else {
+            guard let heistEvidence = recoverSession(directory: directoryURL, sessionId: sessionId) else {
                 return nil
             }
             return RecoveredSession(
                 sessionId: sessionId,
                 directory: directoryURL,
-                heistEvidenceCount: heistInfo.evidenceCount,
-                heistFilePath: heistInfo.filePath
+                heistEvidence: heistEvidence
             )
         }
     }
@@ -211,7 +215,7 @@ public final class TheBookKeeper {
     private func recoverSession(
         directory: URL,
         sessionId: String
-    ) -> (evidenceCount: Int?, filePath: URL?)? {
+    ) -> RecoveredHeistEvidence? {
         let fileManager = FileManager.default
         let manifestPath = directory.appendingPathComponent("manifest.json")
 
@@ -276,15 +280,13 @@ public final class TheBookKeeper {
 
         // Check for abandoned heist evidence
         let heistLog = directory.appendingPathComponent("heist.jsonl")
-        var heistEvidenceCount: Int?
-        var heistFilePath: URL?
+        var heistEvidence: RecoveredHeistEvidence = .absent
         if fileManager.fileExists(atPath: heistLog.path) {
             do {
                 let heistData = try Data(contentsOf: heistLog)
                 if !heistData.isEmpty {
                     let lineCount = heistData.reduce(0) { count, byte in byte == 0x0A ? count + 1 : count }
-                    heistEvidenceCount = lineCount
-                    heistFilePath = heistLog
+                    heistEvidence = .present(count: lineCount, path: heistLog)
                     logger.warning(
                         "Abandoned heist in session \(sessionId) — \(lineCount) evidence entries preserved at \(heistLog.path)"
                     )
@@ -295,7 +297,7 @@ public final class TheBookKeeper {
         }
 
         logger.info("Recovered abandoned session: \(sessionId)")
-        return (heistEvidenceCount, heistFilePath)
+        return heistEvidence
     }
 
     // MARK: - Lifecycle

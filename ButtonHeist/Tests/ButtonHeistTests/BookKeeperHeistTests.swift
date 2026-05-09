@@ -417,8 +417,7 @@ final class BookKeeperHeistTests: XCTestCase {
 
         XCTAssertEqual(recovered.count, 1)
         XCTAssertEqual(recovered[0].sessionId, "abandoned-2026-04-03-120000")
-        XCTAssertNil(recovered[0].heistEvidenceCount)
-        XCTAssertNil(recovered[0].heistFilePath)
+        XCTAssertEqual(recovered[0].heistEvidence, .absent)
         // Raw log should be compressed
         XCTAssertFalse(FileManager.default.fileExists(
             atPath: sessionDir.appendingPathComponent("session.jsonl").path
@@ -458,8 +457,11 @@ final class BookKeeperHeistTests: XCTestCase {
         let recovered = bookKeeper.recoverAbandonedSessions()
 
         XCTAssertEqual(recovered.count, 1)
-        XCTAssertEqual(recovered[0].heistEvidenceCount, 1)
-        XCTAssertNotNil(recovered[0].heistFilePath)
+        guard case .present(let count, _) = recovered[0].heistEvidence else {
+            XCTFail("Expected .present evidence, got \(recovered[0].heistEvidence)")
+            return
+        }
+        XCTAssertEqual(count, 1)
         // heist.jsonl should still exist — partial evidence preserved
         XCTAssertTrue(FileManager.default.fileExists(
             atPath: sessionDir.appendingPathComponent("heist.jsonl").path
