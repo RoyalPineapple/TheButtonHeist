@@ -68,27 +68,21 @@ struct NotesView: View {
         let note = NoteItem(id: UUID(), title: title, body: "", createdAt: Date())
         notes.append(note)
         newNoteTitle = ""
-        NSLog("[Notes] Added: \"%@\" (total: %d)", title, notes.count)
     }
 
     private func deleteNote(_ note: NoteItem) {
         guard let index = notes.firstIndex(where: { $0.id == note.id }) else { return }
-        let title = notes[index].title
         notes.remove(at: index)
-        NSLog("[Notes] Deleted: \"%@\" (remaining: %d)", title, notes.count)
     }
 
     private func deleteNotes(at offsets: IndexSet) {
         for index in offsets.sorted().reversed() {
-            NSLog("[Notes] Deleted: \"%@\"", notes[index].title)
             notes.remove(at: index)
         }
     }
 
     private func clearAll() {
-        let count = notes.count
         notes.removeAll()
-        NSLog("[Notes] Cleared %d notes", count)
     }
 }
 

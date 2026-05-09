@@ -106,12 +106,10 @@ struct LoginView: View {
 
                 VStack(spacing: 12) {
                     Button("Forgot Password?") {
-                        NSLog("[Login] Forgot password tapped")
                     }
                     .font(.subheadline)
 
                     Button("Create Account") {
-                        NSLog("[Login] Create account tapped")
                     }
                     .font(.subheadline)
                 }
@@ -152,22 +150,18 @@ struct LoginView: View {
     private func signIn() {
         if let errors = validate() {
             submission = .failed(errors)
-            NSLog("[Login] Validation failed")
             return
         }
 
-        NSLog("[Login] Attempting sign in: %@", email)
         submission = .submitting
 
         Task {
             do {
                 try await Task.sleep(for: .seconds(2))
             } catch {
-                NSLog("[Login] Sign in cancelled")
                 return
             }
             submission = .failed(FieldErrors(general: "Invalid email or password"))
-            NSLog("[Login] Sign in failed (demo — always fails)")
         }
     }
 }

@@ -30,9 +30,6 @@ struct DashboardView: View {
             }
         }
         .navigationTitle("Dashboard")
-        .onChange(of: selectedTab) { _, newValue in
-            NSLog("[Dashboard] Switched to %@", newValue.rawValue)
-        }
     }
 
     // MARK: - Activity Tab
@@ -132,7 +129,6 @@ struct DashboardView: View {
         withAnimation {
             alerts.removeAll { $0.id == alert.id }
         }
-        NSLog("[Dashboard] Dismissed alert: %@ (remaining: %d)", alert.message, alerts.count)
     }
 }
 

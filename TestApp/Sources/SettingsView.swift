@@ -14,9 +14,6 @@ struct SettingsView: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .onChange(of: settings.colorScheme) { _, newValue in
-                    NSLog("[Settings] Color scheme: %@", newValue.rawValue)
-                }
 
                 Picker("Accent Color", selection: $settings.accentColor) {
                     ForEach(AppSettings.AppAccentColor.allCases, id: \.self) { color in
@@ -24,9 +21,6 @@ struct SettingsView: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .onChange(of: settings.accentColor) { _, newValue in
-                    NSLog("[Settings] Accent color: %@", newValue.rawValue)
-                }
 
                 Picker("Text Size", selection: $settings.textSize) {
                     ForEach(AppSettings.AppTextSize.allCases, id: \.self) { size in
@@ -34,28 +28,16 @@ struct SettingsView: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .onChange(of: settings.textSize) { _, newValue in
-                    NSLog("[Settings] Text size: %@", newValue.rawValue)
-                }
             }
 
             Section("Profile") {
                 TextField("Username", text: $settings.username)
-                    .onChange(of: settings.username) { _, newValue in
-                        NSLog("[Settings] Username: \"%@\"", newValue)
-                    }
             }
 
             Section("Behavior") {
                 Toggle("Show Completed Todos", isOn: $settings.showCompletedTodos)
-                    .onChange(of: settings.showCompletedTodos) { _, newValue in
-                        NSLog("[Settings] Show completed todos: %@", newValue ? "on" : "off")
-                    }
 
                 Toggle("Compact Mode", isOn: $settings.compactMode)
-                    .onChange(of: settings.compactMode) { _, newValue in
-                        NSLog("[Settings] Compact mode: %@", newValue ? "on" : "off")
-                    }
             }
 
             Section("Current Values") {

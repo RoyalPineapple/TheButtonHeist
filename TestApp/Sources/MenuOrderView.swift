@@ -221,7 +221,6 @@ struct MenuOrderView: View {
             Section {
                 Button {
                     checkoutPhase = .processing
-                    NSLog("[Menu] Payment processing for %@", formatPrice(total))
                     Task {
                         let roll = Int.random(in: 1...100)
                         let delay: Double = switch roll {
@@ -230,7 +229,6 @@ struct MenuOrderView: View {
                         case 91...95: 7.0
                         default:      10.0
                         }
-                        NSLog("[Menu] Payment delay: %.1fs (roll: %d)", delay, roll)
                         do {
                             try await Task.sleep(for: .seconds(delay))
                         } catch {
@@ -238,7 +236,6 @@ struct MenuOrderView: View {
                         }
                         let orderNumber = "ORD-\(Int.random(in: 1000...9999))"
                         checkoutPhase = .confirmed(orderNumber: orderNumber)
-                        NSLog("[Menu] Payment confirmed: %@ (%.1fs)", orderNumber, delay)
                     }
                 } label: {
                     HStack {
@@ -251,7 +248,6 @@ struct MenuOrderView: View {
 
                 Button("Back to Menu") {
                     checkoutPhase = .browsing
-                    NSLog("[Menu] Returned to menu from checkout")
                 }
             }
         }
@@ -298,7 +294,6 @@ struct MenuOrderView: View {
             Spacer()
             Button("New Order") {
                 resetOrder()
-                NSLog("[Menu] Starting new order")
             }
             .buttonStyle(.borderedProminent)
             .padding(.bottom, 40)
@@ -359,7 +354,6 @@ struct MenuOrderView: View {
         Section {
             Button {
                 checkoutPhase = .reviewing
-                NSLog("[Menu] Proceeding to checkout: %d items, %@", totalQuantity, formatPrice(total))
             } label: {
                 HStack {
                     Spacer()
@@ -373,7 +367,6 @@ struct MenuOrderView: View {
             if totalQuantity > 0 {
                 Button("Clear Order", role: .destructive) {
                     resetOrder()
-                    NSLog("[Menu] Order cleared")
                 }
             }
         }
@@ -488,7 +481,6 @@ private struct MenuItemRow: View {
                 }
                 .pickerStyle(.segmented)
                 .onChange(of: item.selectedSize) { _, newValue in
-                    NSLog("[Menu] %@ size: %@", item.name, newValue.rawValue)
                 }
             }
 
@@ -508,7 +500,6 @@ private struct MenuItemRow: View {
                                 } else {
                                     item.activeOptions.remove(option.id)
                                 }
-                                NSLog("[Menu] %@ option '%@': %@", item.name, option.label, enabled ? "on" : "off")
                             }
                         )) {
                             HStack {
@@ -533,7 +524,6 @@ private struct MenuItemRow: View {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         item.quantity = 1
                     }
-                    NSLog("[Menu] Added to cart: %@", item.name)
                 } label: {
                     HStack {
                         Spacer()
@@ -564,7 +554,6 @@ private struct MenuItemRow: View {
                     .accessibilityLabel("\(item.name) quantity")
                     .accessibilityValue(String(item.quantity))
                     .onChange(of: item.quantity) { _, newValue in
-                        NSLog("[Menu] %@ quantity: %d", item.name, newValue)
                     }
 
                     if item.quantity > 0 {
@@ -574,7 +563,6 @@ private struct MenuItemRow: View {
                                 item.activeOptions = []
                                 item.selectedSize = .regular
                             }
-                            NSLog("[Menu] Removed from cart: %@", item.name)
                         } label: {
                             Text("Remove")
                                 .font(.caption)

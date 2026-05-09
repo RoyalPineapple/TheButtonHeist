@@ -34,10 +34,8 @@ struct ModalWindowDemo: View {
             HStack {
                 Button("Create Item") {
                     lastAction = "Popup shown"
-                    NSLog("[ModalWindowDemo] Showing popup")
                     popupController.showPopup { action in
                         lastAction = action
-                        NSLog("[ModalWindowDemo] Popup action: %@", action)
                     }
                 }
                 .buttonStyle(.borderedProminent)
@@ -179,7 +177,6 @@ private final class ModalPopupViewController: UIViewController {
 
     @objc private func buttonTapped(_ sender: UIButton) {
         guard let title = sender.configuration?.title else { return }
-        NSLog("[ModalWindowDemo] Button tapped: %@", title)
         onAction?(title)
     }
 }

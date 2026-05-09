@@ -72,7 +72,6 @@ struct AlbumFlowView: View {
 
         return Button {
             playback = .playing(featured)
-            NSLog("[Albums] Selected: %@ by %@", featured.title, featured.artist)
         } label: {
             ZStack(alignment: .bottomLeading) {
                 RoundedRectangle(cornerRadius: 16)
@@ -136,7 +135,6 @@ struct AlbumFlowView: View {
 
         return Button {
             playback = .playing(album)
-            NSLog("[Albums] Selected: %@ by %@", album.title, album.artist)
         } label: {
             VStack(alignment: .leading, spacing: 6) {
                 ZStack {
@@ -172,10 +170,8 @@ struct AlbumFlowView: View {
                         Button {
                             if isQueued {
                                 queue.removeAll { $0.id == album.id }
-                                NSLog("[Albums] Removed from queue: %@", album.title)
                             } else {
                                 queue.append(album)
-                                NSLog("[Albums] Added to queue: %@", album.title)
                             }
                         } label: {
                             Label(
@@ -186,10 +182,8 @@ struct AlbumFlowView: View {
                         Button {
                             if favorites.contains(album.id) {
                                 favorites.remove(album.id)
-                                NSLog("[Albums] Unfavorited: %@", album.title)
                             } else {
                                 favorites.insert(album.id)
-                                NSLog("[Albums] Favorited: %@", album.title)
                             }
                         } label: {
                             Label(
@@ -214,19 +208,15 @@ struct AlbumFlowView: View {
         .accessibilityAction(named: isQueued ? "Remove from Queue" : "Add to Queue") {
             if isQueued {
                 queue.removeAll { $0.id == album.id }
-                NSLog("[Albums] Removed from queue: %@", album.title)
             } else {
                 queue.append(album)
-                NSLog("[Albums] Added to queue: %@", album.title)
             }
         }
         .accessibilityAction(named: favorites.contains(album.id) ? "Remove from Favorites" : "Add to Favorites") {
             if favorites.contains(album.id) {
                 favorites.remove(album.id)
-                NSLog("[Albums] Unfavorited: %@", album.title)
             } else {
                 favorites.insert(album.id)
-                NSLog("[Albums] Favorited: %@", album.title)
             }
         }
     }
@@ -300,7 +290,6 @@ struct AlbumFlowView: View {
                         if let next = queue.first {
                             queue.removeFirst()
                             playback = .playing(next)
-                            NSLog("[Albums] Skipped to: %@ by %@", next.title, next.artist)
                         }
                     } label: {
                         Image(systemName: "forward.fill")

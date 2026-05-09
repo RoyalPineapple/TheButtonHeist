@@ -66,7 +66,6 @@ struct PlaylistView: View {
                     ForEach(songs) { song in
                         SongRow(song: song, isPlaying: song.id == nowPlayingID) {
                             nowPlayingID = song.id
-                            NSLog("[Playlist] Now playing: %@", song.title)
                         } onLike: {
                             toggleLike(song)
                         }
@@ -79,12 +78,10 @@ struct PlaylistView: View {
                         songs.remove(atOffsets: offsets)
                         for s in removed {
                             if s.id == nowPlayingID { nowPlayingID = nil }
-                            NSLog("[Playlist] Removed: %@", s.title)
                         }
                     }
                     .onMove { from, to in
                         songs.move(fromOffsets: from, toOffset: to)
-                        NSLog("[Playlist] Reordered (queue: %@)", queueString)
                     }
                 }
             }
@@ -114,13 +111,11 @@ struct PlaylistView: View {
         songs.append(song)
         if nowPlayingID == nil { nowPlayingID = song.id }
         nextTrack += 1
-        NSLog("[Playlist] Added: %@ — %@ (total: %d)", song.title, song.artist, songs.count)
     }
 
     private func addAlbum() {
         let count = Int.random(in: 3...5)
         for _ in 0..<count { addSong() }
-        NSLog("[Playlist] Added album (%d tracks, total: %d)", count, songs.count)
     }
 
     // MARK: - Remove
@@ -128,14 +123,11 @@ struct PlaylistView: View {
     private func removeSong(_ song: Song) {
         songs.removeAll { $0.id == song.id }
         if song.id == nowPlayingID { nowPlayingID = songs.first?.id }
-        NSLog("[Playlist] Removed: %@ (remaining: %d)", song.title, songs.count)
     }
 
     private func clearPlaylist() {
-        let count = songs.count
         songs.removeAll()
         nowPlayingID = nil
-        NSLog("[Playlist] Cleared %d songs", count)
     }
 
     // MARK: - Reorder
@@ -148,13 +140,11 @@ struct PlaylistView: View {
             let first = songs.removeFirst()
             songs.append(first)
         }
-        NSLog("[Playlist] Shuffled (queue: %@)", queueString)
     }
 
     private func toggleLike(_ song: Song) {
         guard let idx = songs.firstIndex(where: { $0.id == song.id }) else { return }
         songs[idx].isLiked.toggle()
-        NSLog("[Playlist] %@: %@", songs[idx].isLiked ? "Liked" : "Unliked", song.title)
     }
 
     // MARK: - Autoplay
@@ -172,7 +162,6 @@ struct PlaylistView: View {
             }
         }
         autoplay = .running(timer)
-        NSLog("[Playlist] Autoplay started")
     }
 
     private func stopAutoplay() {
@@ -180,7 +169,6 @@ struct PlaylistView: View {
             timer.invalidate()
         }
         autoplay = .off
-        NSLog("[Playlist] Autoplay stopped")
     }
 }
 

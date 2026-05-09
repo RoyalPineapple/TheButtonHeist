@@ -122,12 +122,9 @@ struct CartView: View {
         guard let idx = items.firstIndex(where: { $0.id == itemID }) else { return }
 
         if quantity <= 0 {
-            let name = items[idx].name
             items.remove(at: idx)
-            NSLog("[Cart] Removed: %@ (remaining: %d)", name, items.count)
         } else {
             items[idx].quantity = quantity
-            NSLog("[Cart] Updated: %@ x%d", items[idx].name, quantity)
         }
     }
 
@@ -145,13 +142,10 @@ struct CartView: View {
         )
         items.append(item)
         addedExtras.insert(pick.name)
-        NSLog("[Cart] Added: %@ (total: %d)", item.name, items.count)
     }
 
     private func clearCart() {
-        let count = items.count
         items.removeAll()
-        NSLog("[Cart] Cleared %d items", count)
     }
 
     // MARK: - Formatting

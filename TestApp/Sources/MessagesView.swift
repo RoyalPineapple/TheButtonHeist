@@ -37,7 +37,6 @@ struct MessagesView: View {
                 Button {
                     withAnimation {
                         messages.removeAll()
-                        NSLog("[Messages] Cleared chat")
                     }
                 } label: {
                     Image(systemName: "trash")
@@ -100,7 +99,6 @@ struct MessagesView: View {
             messages.append(userMessage)
         }
         inputText = ""
-        NSLog("[Messages] Sent: %@ (total: %d)", trimmed, messages.count)
 
         scheduleBotReply()
     }
@@ -117,7 +115,6 @@ struct MessagesView: View {
             withAnimation {
                 messages.append(botMessage)
             }
-            NSLog("[Messages] Bot replied: %@ (total: %d)", reply, messages.count)
         }
     }
 }

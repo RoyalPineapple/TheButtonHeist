@@ -85,7 +85,6 @@ struct CalculatorView: View {
                 display += "\(number)"
             }
         }
-        NSLog("[Calc] Digit: %d, display: %@", number, display)
     }
 
     private func handleDecimal() {
@@ -103,7 +102,6 @@ struct CalculatorView: View {
     private func handleClear() {
         display = "0"
         entryState = .clean
-        NSLog("[Calc] Clear")
     }
 
     private func handleNegate() {
@@ -135,7 +133,6 @@ struct CalculatorView: View {
             }
             entryState = .operatorPending(accumulated: accumulated, operation: operation)
         }
-        NSLog("[Calc] Operation: %@", operation.rawValue)
     }
 
     private func handleEquals() {
@@ -145,14 +142,12 @@ struct CalculatorView: View {
                 let result = calculate(accumulated, displayValue, pending)
                 display = formatNumber(result)
                 entryState = .clean
-                NSLog("[Calc] Equals: %@", display)
             }
         case .operatorPending(let accumulated, let pending):
             // "5 + =" repeats the operand: 5 + 5 = 10 (matches iOS Calculator)
             let result = calculate(accumulated, accumulated, pending)
             display = formatNumber(result)
             entryState = .clean
-            NSLog("[Calc] Equals: %@", display)
         case .clean:
             break
         }

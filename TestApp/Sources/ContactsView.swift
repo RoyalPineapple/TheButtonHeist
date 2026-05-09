@@ -82,9 +82,6 @@ struct ContactsView: View {
                 }
             }
         }
-        .onChange(of: filteredContacts.count) { _, newCount in
-            NSLog("[Contacts] filtered results changed (showing: %d, total: %d)", newCount, contacts.count)
-        }
     }
 }
 
