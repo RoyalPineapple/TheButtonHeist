@@ -88,7 +88,6 @@ final class ServerMessageTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
 
         if case .pong = decoded {
-            // Success
         } else {
             XCTFail("Expected pong, got \(decoded)")
         }
@@ -209,7 +208,6 @@ final class ServerMessageTests: XCTestCase {
         XCTAssertEqual(decoded.requestId, "r-1")
         XCTAssertNil(decoded.backgroundDelta)
         if case .pong = decoded.message {
-            // Success
         } else {
             XCTFail("Expected pong, got \(decoded.message)")
         }

@@ -11,7 +11,6 @@ final class AuthMessageTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
 
         if case .authRequired = decoded {
-            // Success
         } else {
             XCTFail("Expected authRequired, got \(decoded)")
         }

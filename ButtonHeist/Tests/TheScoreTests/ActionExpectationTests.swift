@@ -390,7 +390,7 @@ final class ActionExpectationTests: XCTestCase {
         // Note: animating param omitted (defaults to nil)
     }
 
-    // MARK: - Wire Format: explicit `type` discriminator (protocol v7.0)
+    // MARK: - Wire Format: explicit `type` discriminator
 
     func testWireFormatScreenChanged() throws {
         let data = try JSONEncoder().encode(ActionExpectation.screenChanged)

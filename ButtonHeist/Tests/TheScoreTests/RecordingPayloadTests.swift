@@ -112,7 +112,6 @@ final class RecordingPayloadTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .stopRecording = decoded {
-            // Success
         } else {
             XCTFail("Expected stopRecording, got \(decoded)")
         }
@@ -126,7 +125,6 @@ final class RecordingPayloadTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
 
         if case .recordingStarted = decoded {
-            // Success
         } else {
             XCTFail("Expected recordingStarted, got \(decoded)")
         }
@@ -138,7 +136,6 @@ final class RecordingPayloadTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
 
         if case .recordingStopped = decoded {
-            // Success
         } else {
             XCTFail("Expected recordingStopped, got \(decoded)")
         }

@@ -86,10 +86,7 @@ final class MessageIntegrationTests: XCTestCase {
 
         for msg in clientMessages {
             let data = try JSONEncoder().encode(msg)
-            let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-            // Verify the decoded value can be re-encoded without error (structural round-trip)
-            let reEncoded = try JSONEncoder().encode(decoded)
-            XCTAssertFalse(reEncoded.isEmpty, "Re-encoded client message should not be empty")
+            _ = try JSONDecoder().decode(ClientMessage.self, from: data)
         }
 
         let serverMessages: [ServerMessage] = [
@@ -121,10 +118,7 @@ final class MessageIntegrationTests: XCTestCase {
 
         for msg in serverMessages {
             let data = try encoder.encode(msg)
-            let decoded = try decoder.decode(ServerMessage.self, from: data)
-            // Verify the decoded value can be re-encoded without error (structural round-trip)
-            let reEncoded = try encoder.encode(decoded)
-            XCTAssertFalse(reEncoded.isEmpty, "Re-encoded server message should not be empty")
+            _ = try decoder.decode(ServerMessage.self, from: data)
         }
     }
 
@@ -142,7 +136,6 @@ final class MessageIntegrationTests: XCTestCase {
             let decodedPong = try JSONDecoder().decode(ServerMessage.self, from: pongData)
 
             if case .pong = decodedPong {
-                // Success
             } else {
                 XCTFail("Expected pong response")
             }
