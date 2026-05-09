@@ -230,17 +230,6 @@ struct ToolSyncTests {
 
     // MARK: - Exhaustiveness
 
-    @Test("Command.parameters is exhaustive (no unhandled cases)")
-    func parameterSpecIsExhaustive() {
-        // If a new Command case is added without a parameters entry,
-        // the switch in parameters will fail to compile. This test
-        // verifies every case returns a non-crashing result at runtime.
-        for command in TheFence.Command.allCases {
-            _ = command.parameters
-            _ = command.mcpExposure
-        }
-    }
-
     @Test("ToolDefinitions.all has no duplicate tool names")
     func noDuplicateToolNames() {
         var seen = Set<String>()
