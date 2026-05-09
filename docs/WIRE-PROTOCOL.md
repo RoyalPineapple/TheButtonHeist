@@ -108,23 +108,23 @@ All messages are JSON objects terminated by a newline (`\n`). Envelopes use an e
 
 ### Request/Response Envelopes
 
-All messages are wrapped in envelope types for request-response correlation. Examples below omit `requestId` unless the correlation behavior is relevant.
+All messages are wrapped in envelope types for request-response correlation. Examples below omit `requestId` unless the correlation behavior is relevant. Examples below use `<calver>` as a placeholder for the current `buttonHeistVersion` (e.g. `2026.05.09`); the literal string is whatever `scripts/release.sh` last bumped.
 
 **Client → Server** (`RequestEnvelope`):
 ```json
-{"buttonHeistVersion":"0.2.21","requestId":"abc-123","type":"activate","payload":{"identifier":"loginButton"}}
+{"buttonHeistVersion":"<calver>","requestId":"abc-123","type":"activate","payload":{"identifier":"loginButton"}}
 ```
 
 **Server → Client** (`ResponseEnvelope`):
 ```json
-{"buttonHeistVersion":"0.2.21","requestId":"abc-123","type":"actionResult","payload":{"success":true,"method":"syntheticTap"}}
+{"buttonHeistVersion":"<calver>","requestId":"abc-123","type":"actionResult","payload":{"success":true,"method":"syntheticTap"}}
 ```
 
 When `requestId` is present, the server echoes it in the corresponding response so the client can match request-response pairs. Push broadcasts such as interface updates and interaction events have `requestId: null`. Screenshots are never broadcast; `screen` is only returned for explicit `requestScreen` requests.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `buttonHeistVersion` | `String` | Exact wire protocol version. Client and server must match exactly. |
+| `buttonHeistVersion` | `String` | Server's and client's `buttonHeistVersion`. Compared for exact equality at handshake; mismatch closes the connection with `protocolMismatch`. |
 | `requestId` | `String?` | Optional correlation ID; echoed in the response |
 | `type` | `String` | Explicit message discriminator |
 | `payload` | `Object / String / null` | Optional message payload |
@@ -137,7 +137,7 @@ When `requestId` is present, the server echoes it in the corresponding response 
 Version handshake sent immediately after `serverHello`.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"clientHello"}
+{"buttonHeistVersion":"<calver>","type":"clientHello"}
 ```
 
 ### authenticate
@@ -145,12 +145,12 @@ Version handshake sent immediately after `serverHello`.
 Authenticate with the server. Must be sent after a successful `clientHello` / `authRequired` handshake. Sending any other command before the handshake completes will result in immediate disconnection.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"authenticate","payload":{"token":"your-secret-token"}}
+{"buttonHeistVersion":"<calver>","type":"authenticate","payload":{"token":"your-secret-token"}}
 ```
 
 **With driver identity:**
 ```json
-{"buttonHeistVersion":"0.2.21","type":"authenticate","payload":{"token":"your-secret-token","driverId":"agent-1"}}
+{"buttonHeistVersion":"<calver>","type":"authenticate","payload":{"token":"your-secret-token","driverId":"agent-1"}}
 ```
 
 The optional `driverId` field provides a unique driver identity for session locking — when set, it takes precedence over the token for distinguishing drivers. See [Session Locking](#session-locking) for details.
@@ -160,7 +160,7 @@ The optional `driverId` field provides a unique driver identity for session lock
 Request current UI element interface. Returns only elements currently visible on screen.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"requestInterface"}
+{"buttonHeistVersion":"<calver>","type":"requestInterface"}
 ```
 
 ### subscribe
@@ -168,7 +168,7 @@ Request current UI element interface. Returns only elements currently visible on
 Subscribe to automatic interface and interaction updates. Screenshots are never broadcast; request them explicitly with `requestScreen`.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"subscribe"}
+{"buttonHeistVersion":"<calver>","type":"subscribe"}
 ```
 
 ### unsubscribe
@@ -176,7 +176,7 @@ Subscribe to automatic interface and interaction updates. Screenshots are never 
 Unsubscribe from automatic updates.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"unsubscribe"}
+{"buttonHeistVersion":"<calver>","type":"unsubscribe"}
 ```
 
 ### activate
@@ -185,12 +185,12 @@ Activate an element (equivalent to VoiceOver double-tap). Uses the TouchInjector
 
 **By identifier:**
 ```json
-{"buttonHeistVersion":"0.2.21","type":"activate","payload":{"identifier":"loginButton"}}
+{"buttonHeistVersion":"<calver>","type":"activate","payload":{"identifier":"loginButton"}}
 ```
 
 **By matcher ordinal:**
 ```json
-{"buttonHeistVersion":"0.2.21","type":"activate","payload":{"label":"Save","traits":["button"],"ordinal":1}}
+{"buttonHeistVersion":"<calver>","type":"activate","payload":{"label":"Save","traits":["button"],"ordinal":1}}
 ```
 
 ### touchTap
@@ -199,12 +199,12 @@ Tap at coordinates or on an element using synthetic touch injection via TheSafec
 
 **At coordinates:**
 ```json
-{"buttonHeistVersion":"0.2.21","type":"touchTap","payload":{"pointX":196.5,"pointY":659.0}}
+{"buttonHeistVersion":"<calver>","type":"touchTap","payload":{"pointX":196.5,"pointY":659.0}}
 ```
 
 **On element by identifier:**
 ```json
-{"buttonHeistVersion":"0.2.21","type":"touchTap","payload":{"elementTarget":{"identifier":"submitButton"}}}
+{"buttonHeistVersion":"<calver>","type":"touchTap","payload":{"elementTarget":{"identifier":"submitButton"}}}
 ```
 
 ### touchLongPress
@@ -212,12 +212,12 @@ Tap at coordinates or on an element using synthetic touch injection via TheSafec
 Long press at coordinates or on an element.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"touchLongPress","payload":{"pointX":100,"pointY":200,"duration":1.0}}
+{"buttonHeistVersion":"<calver>","type":"touchLongPress","payload":{"pointX":100,"pointY":200,"duration":1.0}}
 ```
 
 **On element (default 0.5s):**
 ```json
-{"buttonHeistVersion":"0.2.21","type":"touchLongPress","payload":{"elementTarget":{"identifier":"myButton"},"duration":0.5}}
+{"buttonHeistVersion":"<calver>","type":"touchLongPress","payload":{"elementTarget":{"identifier":"myButton"},"duration":0.5}}
 ```
 
 ### touchSwipe
@@ -226,12 +226,12 @@ Swipe between two points or in a direction from an element.
 
 **With explicit coordinates:**
 ```json
-{"buttonHeistVersion":"0.2.21","type":"touchSwipe","payload":{"startX":200,"startY":400,"endX":200,"endY":100,"duration":0.15}}
+{"buttonHeistVersion":"<calver>","type":"touchSwipe","payload":{"startX":200,"startY":400,"endX":200,"endY":100,"duration":0.15}}
 ```
 
 **From element in direction:**
 ```json
-{"buttonHeistVersion":"0.2.21","type":"touchSwipe","payload":{"elementTarget":{"identifier":"list"},"direction":"up","distance":300}}
+{"buttonHeistVersion":"<calver>","type":"touchSwipe","payload":{"elementTarget":{"identifier":"list"},"direction":"up","distance":300}}
 ```
 
 ### touchDrag
@@ -240,12 +240,12 @@ Drag from one point to another (slower than swipe, for sliders/reordering).
 
 **With explicit coordinates:**
 ```json
-{"buttonHeistVersion":"0.2.21","type":"touchDrag","payload":{"startX":100,"startY":200,"endX":300,"endY":200,"duration":0.5}}
+{"buttonHeistVersion":"<calver>","type":"touchDrag","payload":{"startX":100,"startY":200,"endX":300,"endY":200,"duration":0.5}}
 ```
 
 **From element:**
 ```json
-{"buttonHeistVersion":"0.2.21","type":"touchDrag","payload":{"elementTarget":{"identifier":"slider"},"endX":300,"endY":200}}
+{"buttonHeistVersion":"<calver>","type":"touchDrag","payload":{"elementTarget":{"identifier":"slider"},"endX":300,"endY":200}}
 ```
 
 ### touchPinch
@@ -253,12 +253,12 @@ Drag from one point to another (slower than swipe, for sliders/reordering).
 Pinch/zoom gesture centered at a point. Scale >1.0 zooms in, <1.0 zooms out.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"touchPinch","payload":{"centerX":200,"centerY":300,"scale":2.0,"spread":100,"duration":0.5}}
+{"buttonHeistVersion":"<calver>","type":"touchPinch","payload":{"centerX":200,"centerY":300,"scale":2.0,"spread":100,"duration":0.5}}
 ```
 
 **On element:**
 ```json
-{"buttonHeistVersion":"0.2.21","type":"touchPinch","payload":{"elementTarget":{"identifier":"mapView"},"scale":0.5}}
+{"buttonHeistVersion":"<calver>","type":"touchPinch","payload":{"elementTarget":{"identifier":"mapView"},"scale":0.5}}
 ```
 
 ### touchRotate
@@ -266,7 +266,7 @@ Pinch/zoom gesture centered at a point. Scale >1.0 zooms in, <1.0 zooms out.
 Rotation gesture centered at a point. Angle in radians.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"touchRotate","payload":{"centerX":200,"centerY":300,"angle":1.57,"radius":100,"duration":0.5}}
+{"buttonHeistVersion":"<calver>","type":"touchRotate","payload":{"centerX":200,"centerY":300,"angle":1.57,"radius":100,"duration":0.5}}
 ```
 
 ### touchTwoFingerTap
@@ -274,7 +274,7 @@ Rotation gesture centered at a point. Angle in radians.
 Two-finger tap at a point or element.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"touchTwoFingerTap","payload":{"centerX":200,"centerY":300,"spread":40}}
+{"buttonHeistVersion":"<calver>","type":"touchTwoFingerTap","payload":{"centerX":200,"centerY":300,"spread":40}}
 ```
 
 ### touchDrawPath
@@ -282,12 +282,12 @@ Two-finger tap at a point or element.
 Draw along a path by tracing through a sequence of waypoints. Supports duration (seconds) or velocity (points/second) for timing.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"touchDrawPath","payload":{"points":[{"x":100,"y":400},{"x":200,"y":300},{"x":300,"y":400}],"duration":1.0}}
+{"buttonHeistVersion":"<calver>","type":"touchDrawPath","payload":{"points":[{"x":100,"y":400},{"x":200,"y":300},{"x":300,"y":400}],"duration":1.0}}
 ```
 
 **With velocity:**
 ```json
-{"buttonHeistVersion":"0.2.21","type":"touchDrawPath","payload":{"points":[{"x":100,"y":400},{"x":200,"y":300},{"x":300,"y":400}],"velocity":500}}
+{"buttonHeistVersion":"<calver>","type":"touchDrawPath","payload":{"points":[{"x":100,"y":400},{"x":200,"y":300},{"x":300,"y":400}],"velocity":500}}
 ```
 
 ### touchDrawBezier
@@ -295,12 +295,12 @@ Draw along a path by tracing through a sequence of waypoints. Supports duration 
 Draw along cubic bezier curves. The server samples the curves to a polyline, then traces using the drawPath engine.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"touchDrawBezier","payload":{"startX":100,"startY":400,"segments":[{"cp1X":100,"cp1Y":200,"cp2X":300,"cp2Y":200,"endX":300,"endY":400}],"duration":1.0}}
+{"buttonHeistVersion":"<calver>","type":"touchDrawBezier","payload":{"startX":100,"startY":400,"segments":[{"cp1X":100,"cp1Y":200,"cp2X":300,"cp2Y":200,"endX":300,"endY":400}],"duration":1.0}}
 ```
 
 **With samples and velocity:**
 ```json
-{"buttonHeistVersion":"0.2.21","type":"touchDrawBezier","payload":{"startX":100,"startY":400,"segments":[{"cp1X":100,"cp1Y":200,"cp2X":300,"cp2Y":200,"endX":300,"endY":400}],"samplesPerSegment":40,"velocity":300}}
+{"buttonHeistVersion":"<calver>","type":"touchDrawBezier","payload":{"startX":100,"startY":400,"segments":[{"cp1X":100,"cp1Y":200,"cp2X":300,"cp2Y":200,"endX":300,"endY":400}],"samplesPerSegment":40,"velocity":300}}
 ```
 
 ### increment
@@ -309,12 +309,12 @@ Increment an adjustable element (e.g., slider, stepper). Calls `increment()` on 
 
 **By identifier:**
 ```json
-{"buttonHeistVersion":"0.2.21","type":"increment","payload":{"identifier":"volumeSlider"}}
+{"buttonHeistVersion":"<calver>","type":"increment","payload":{"identifier":"volumeSlider"}}
 ```
 
 **By matcher ordinal:**
 ```json
-{"buttonHeistVersion":"0.2.21","type":"increment","payload":{"label":"Volume","traits":["adjustable"],"ordinal":0}}
+{"buttonHeistVersion":"<calver>","type":"increment","payload":{"label":"Volume","traits":["adjustable"],"ordinal":0}}
 ```
 
 ### decrement
@@ -323,7 +323,7 @@ Decrement an adjustable element. Calls `decrement()` on the element's view.
 
 **By identifier:**
 ```json
-{"buttonHeistVersion":"0.2.21","type":"decrement","payload":{"identifier":"volumeSlider"}}
+{"buttonHeistVersion":"<calver>","type":"decrement","payload":{"identifier":"volumeSlider"}}
 ```
 
 ### performCustomAction
@@ -331,7 +331,7 @@ Decrement an adjustable element. Calls `decrement()` on the element's view.
 Invoke a named custom action on an element. The action name must match one of the element's `actions`.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"performCustomAction","payload":{"elementTarget":{"identifier":"myCell"},"actionName":"Delete"}}
+{"buttonHeistVersion":"<calver>","type":"performCustomAction","payload":{"elementTarget":{"identifier":"myCell"},"actionName":"Delete"}}
 ```
 
 ### typeText
@@ -340,22 +340,22 @@ Type text character-by-character by injecting into the keyboard input system (vi
 
 **Type text into a field (taps element to focus first):**
 ```json
-{"buttonHeistVersion":"0.2.21","type":"typeText","payload":{"text":"Hello","elementTarget":{"identifier":"nameField"}}}
+{"buttonHeistVersion":"<calver>","type":"typeText","payload":{"text":"Hello","elementTarget":{"identifier":"nameField"}}}
 ```
 
 **Delete 3 characters:**
 ```json
-{"buttonHeistVersion":"0.2.21","type":"typeText","payload":{"deleteCount":3,"elementTarget":{"identifier":"nameField"}}}
+{"buttonHeistVersion":"<calver>","type":"typeText","payload":{"deleteCount":3,"elementTarget":{"identifier":"nameField"}}}
 ```
 
 **Delete then retype (correction):**
 ```json
-{"buttonHeistVersion":"0.2.21","type":"typeText","payload":{"deleteCount":4,"text":"orld","elementTarget":{"identifier":"nameField"}}}
+{"buttonHeistVersion":"<calver>","type":"typeText","payload":{"deleteCount":4,"text":"orld","elementTarget":{"identifier":"nameField"}}}
 ```
 
 **Clear existing text then type new text:**
 ```json
-{"buttonHeistVersion":"0.2.21","type":"typeText","payload":{"clearFirst":true,"text":"replacement","elementTarget":{"identifier":"nameField"}}}
+{"buttonHeistVersion":"<calver>","type":"typeText","payload":{"clearFirst":true,"text":"replacement","elementTarget":{"identifier":"nameField"}}}
 ```
 
 | Field | Type | Description |
@@ -370,7 +370,7 @@ Type text character-by-character by injecting into the keyboard input system (vi
 Request a PNG capture of the current screen.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"requestScreen"}
+{"buttonHeistVersion":"<calver>","type":"requestScreen"}
 ```
 
 ### startRecording
@@ -378,7 +378,7 @@ Request a PNG capture of the current screen.
 Start recording the screen as H.264/MP4 video. Frames are captured at the configured FPS using `drawHierarchy` compositing (includes fingerprint overlays for taps and continuous gestures). Recording auto-stops when no screen changes and no real interactions (actions, touches, typing) are received for the inactivity timeout. Pings and keepalive messages do not reset the inactivity timer.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"startRecording","payload":{"fps":8,"scale":0.5,"inactivityTimeout":5.0,"maxDuration":60.0}}
+{"buttonHeistVersion":"<calver>","type":"startRecording","payload":{"fps":8,"scale":0.5,"inactivityTimeout":5.0,"maxDuration":60.0}}
 ```
 
 All fields are optional — defaults are applied server-side.
@@ -395,7 +395,7 @@ All fields are optional — defaults are applied server-side.
 Stop an active recording. The server finalizes the video and sends a `recording` message.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"stopRecording"}
+{"buttonHeistVersion":"<calver>","type":"stopRecording"}
 ```
 
 ### scroll
@@ -404,12 +404,12 @@ Scroll the nearest scroll view ancestor of a target element by approximately one
 
 **By identifier:**
 ```json
-{"buttonHeistVersion":"0.2.21","type":"scroll","payload":{"elementTarget":{"identifier":"buttonheist.longList.item-5"},"direction":"up"}}
+{"buttonHeistVersion":"<calver>","type":"scroll","payload":{"elementTarget":{"identifier":"buttonheist.longList.item-5"},"direction":"up"}}
 ```
 
 **By matcher ordinal:**
 ```json
-{"buttonHeistVersion":"0.2.21","type":"scroll","payload":{"elementTarget":{"label":"Messages","ordinal":1},"direction":"down"}}
+{"buttonHeistVersion":"<calver>","type":"scroll","payload":{"elementTarget":{"label":"Messages","ordinal":1},"direction":"down"}}
 ```
 
 Directions: `"up"`, `"down"`, `"left"`, `"right"`, `"next"`, `"previous"`.
@@ -422,17 +422,17 @@ Scroll a known registry element into view. This is a one-shot recorded-position 
 
 **By heistId:**
 ```json
-{"buttonHeistVersion":"0.2.21","type":"scrollToVisible","payload":{"heistId":"buttonheist.longList.colorPicker"}}
+{"buttonHeistVersion":"<calver>","type":"scrollToVisible","payload":{"heistId":"buttonheist.longList.colorPicker"}}
 ```
 
 **By label:**
 ```json
-{"buttonHeistVersion":"0.2.21","type":"scrollToVisible","payload":{"label":"Color Picker"}}
+{"buttonHeistVersion":"<calver>","type":"scrollToVisible","payload":{"label":"Color Picker"}}
 ```
 
 **Compound matcher:**
 ```json
-{"buttonHeistVersion":"0.2.21","type":"scrollToVisible","payload":{"label":"Settings","traits":["header"]}}
+{"buttonHeistVersion":"<calver>","type":"scrollToVisible","payload":{"label":"Settings","traits":["header"]}}
 ```
 
 **Response** is an `actionResult` with `method: "scrollToVisible"`:
@@ -450,17 +450,17 @@ Search for an element by scrolling through scroll views. Uses an `ElementTarget`
 
 **By label:**
 ```json
-{"buttonHeistVersion":"0.2.21","type":"elementSearch","payload":{"label":"Color Picker"}}
+{"buttonHeistVersion":"<calver>","type":"elementSearch","payload":{"label":"Color Picker"}}
 ```
 
 **Compound matcher with direction:**
 ```json
-{"buttonHeistVersion":"0.2.21","type":"elementSearch","payload":{"label":"Settings","traits":["header"],"direction":"up"}}
+{"buttonHeistVersion":"<calver>","type":"elementSearch","payload":{"label":"Settings","traits":["header"],"direction":"up"}}
 ```
 
-**Response** includes `scrollSearchResult` on the `actionResult`:
+**Response** carries the search result under `actionResult.payload`:
 ```json
-{"type":"actionResult","payload":{"success":true,"method":"elementSearch","scrollSearchResult":{"scrollCount":3,"uniqueElementsSeen":25,"totalItems":80,"exhaustive":false,"foundElement":{...}}}}
+{"type":"actionResult","payload":{"success":true,"method":"elementSearch","payload":{"kind":"scrollSearch","data":{"scrollCount":3,"uniqueElementsSeen":25,"totalItems":80,"exhaustive":false,"foundElement":{...}}}}}
 ```
 
 ### scrollToEdge
@@ -469,7 +469,7 @@ Scroll the nearest scroll view ancestor to an edge (top, bottom, left, right).
 
 **By identifier:**
 ```json
-{"buttonHeistVersion":"0.2.21","type":"scrollToEdge","payload":{"elementTarget":{"identifier":"buttonheist.longList.item-0"},"edge":"bottom"}}
+{"buttonHeistVersion":"<calver>","type":"scrollToEdge","payload":{"elementTarget":{"identifier":"buttonheist.longList.item-0"},"edge":"bottom"}}
 ```
 
 Edges: `"top"`, `"bottom"`, `"left"`, `"right"`.
@@ -481,10 +481,10 @@ Full screen element census. Scrolls every scrollable container to its limits and
 No payload required.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"explore"}
+{"buttonHeistVersion":"<calver>","type":"explore"}
 ```
 
-Returns an `actionResult` with `method: "explore"` and an `exploreResult` containing the complete element list, scroll count, containers explored, and exploration time.
+Returns an `actionResult` with `method: "explore"` and a `payload` of `{"kind": "explore", "data": {...}}` containing the complete element list, scroll count, containers explored, and exploration time.
 
 > **Note**: `explore` is not exposed as a standalone CLI/MCP command. It is dispatched internally by `get_interface` when the `full` parameter is true. See [Element Discovery](#element-discovery) for usage guidance.
 
@@ -493,7 +493,7 @@ Returns an `actionResult` with `method: "explore"` and an `exploreResult` contai
 Perform a standard edit action via the responder chain.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"editAction","payload":{"action":"copy"}}
+{"buttonHeistVersion":"<calver>","type":"editAction","payload":{"action":"copy"}}
 ```
 
 Valid actions: `"copy"`, `"paste"`, `"cut"`, `"select"`, `"selectAll"`.
@@ -503,7 +503,7 @@ Valid actions: `"copy"`, `"paste"`, `"cut"`, `"select"`, `"selectAll"`.
 Write text to the general pasteboard from within the app. Content written by the app itself does not trigger the iOS "Allow Paste" dialog when subsequently read.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"setPasteboard","payload":{"text":"clipboard content"}}
+{"buttonHeistVersion":"<calver>","type":"setPasteboard","payload":{"text":"clipboard content"}}
 ```
 
 | Field | Type | Description |
@@ -515,7 +515,7 @@ Write text to the general pasteboard from within the app. Content written by the
 Read text from the general pasteboard.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"getPasteboard"}
+{"buttonHeistVersion":"<calver>","type":"getPasteboard"}
 ```
 
 No payload. Returns an `actionResult` with `method: "getPasteboard"` and the pasteboard text in `value`.
@@ -525,7 +525,7 @@ No payload. Returns an `actionResult` with `method: "getPasteboard"` and the pas
 Dismiss the keyboard by resigning first responder.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"resignFirstResponder"}
+{"buttonHeistVersion":"<calver>","type":"resignFirstResponder"}
 ```
 
 ### waitForChange
@@ -533,7 +533,7 @@ Dismiss the keyboard by resigning first responder.
 Wait for the UI to change in a way that matches an expectation. With no expectation, returns on any tree change. With `expect`, rides through intermediate states (e.g. spinners) until the expectation is met.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"waitForChange","payload":{"expect":"screen_changed","timeout":10}}
+{"buttonHeistVersion":"<calver>","type":"waitForChange","payload":{"expect":"screen_changed","timeout":10}}
 ```
 
 | Field | Type | Description |
@@ -552,7 +552,7 @@ Returns an `actionResult` with `method: "waitForChange"` and an `interfaceDelta`
 Wait for an element matching a predicate to appear (or disappear). Uses settle-event polling, not busy-waiting.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"waitFor","payload":{"label":"Loading","absent":true,"timeout":5.0}}
+{"buttonHeistVersion":"<calver>","type":"waitFor","payload":{"label":"Loading","absent":true,"timeout":5.0}}
 ```
 
 | Field | Type | Description |
@@ -569,7 +569,7 @@ Returns an `actionResult` with `method: "waitFor"` and an `interfaceDelta` conta
 Keepalive ping.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"ping"}
+{"buttonHeistVersion":"<calver>","type":"ping"}
 ```
 
 ### status
@@ -577,7 +577,7 @@ Keepalive ping.
 Lightweight status probe. Unlike normal driver commands, this message may be sent before authentication and does not claim a session. It is intended for reachability checks and identity discovery.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"status"}
+{"buttonHeistVersion":"<calver>","type":"status"}
 ```
 
 ### watch
@@ -585,7 +585,7 @@ Lightweight status probe. Unlike normal driver commands, this message may be sen
 Connect as a read-only observer. Sent instead of `authenticate` after receiving `authRequired`. Observers receive interface and interaction broadcasts but cannot send commands or claim a session.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"watch","payload":{"token":""}}
+{"buttonHeistVersion":"<calver>","type":"watch","payload":{"token":""}}
 ```
 
 By default, watch connections require a valid token (same as drivers). Set `INSIDEJOB_RESTRICT_WATCHERS=0` to allow unauthenticated observers.
@@ -598,18 +598,18 @@ By default, watch connections require a valid token (same as drivers). Set `INSI
 
 ### serverHello
 
-Sent immediately on connection. The client must verify `buttonHeistVersion` and respond with `clientHello`.
+Sent immediately on connection. The client must verify `buttonHeistVersion` and respond with `clientHello` carrying its own `buttonHeistVersion`.
 
 ```json
-{"buttonHeistVersion":"0.2.21","requestId":null,"type":"serverHello"}
+{"buttonHeistVersion":"<calver>","requestId":null,"type":"serverHello"}
 ```
 
 ### protocolMismatch
 
-Sent when the peer's `buttonHeistVersion` does not exactly match the server's current wire version. The server closes the connection immediately after sending this message.
+Sent when the peer's `buttonHeistVersion` does not exactly match the server's. The server closes the connection immediately after sending this message.
 
 ```json
-{"buttonHeistVersion":"0.2.21","requestId":null,"type":"protocolMismatch","payload":{"expectedProtocolVersion":"9.0","receivedProtocolVersion":"8.0"}}
+{"buttonHeistVersion":"2026.05.09","requestId":null,"type":"protocolMismatch","payload":{"serverButtonHeistVersion":"2026.05.09","clientButtonHeistVersion":"2026.05.08"}}
 ```
 
 ### authRequired
@@ -617,15 +617,15 @@ Sent when the peer's `buttonHeistVersion` does not exactly match the server's cu
 Sent after a successful hello/version handshake. Indicates the client must authenticate before any other interaction.
 
 ```json
-{"buttonHeistVersion":"0.2.21","requestId":null,"type":"authRequired"}
+{"buttonHeistVersion":"<calver>","requestId":null,"type":"authRequired"}
 ```
 
-### authFailed
+### error (auth failure)
 
-Sent when the client provides an invalid token or when a UI approval request is denied. The server disconnects shortly after.
+Auth failures use the same `error` wire type as everything else; `kind: "authFailure"` distinguishes them. The server disconnects shortly after.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"authFailed","payload":"Invalid token"}
+{"buttonHeistVersion":"<calver>","type":"error","payload":{"kind":"authFailure","message":"Invalid token"}}
 ```
 
 ### authApproved
@@ -633,7 +633,7 @@ Sent when the client provides an invalid token or when a UI approval request is 
 Sent when a connection is approved via the on-device UI (see [UI Approval Flow](#ui-approval-flow)). Contains the auth token for future reconnections.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"authApproved","payload":{"token":"auto-generated-uuid-token"}}
+{"buttonHeistVersion":"<calver>","type":"authApproved","payload":{"token":"auto-generated-uuid-token"}}
 ```
 
 After receiving `authApproved`, the client should store the token and use it for future `authenticate` messages to skip the approval flow.
@@ -643,7 +643,7 @@ After receiving `authApproved`, the client should store the token and use it for
 Sent when the server's session is held by a different driver. The server disconnects the client shortly after sending this message. See [Session Locking](#session-locking).
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"sessionLocked","payload":{"message":"Session is locked by another driver","activeConnections":1}}
+{"buttonHeistVersion":"<calver>","type":"sessionLocked","payload":{"message":"Session is locked by another driver","activeConnections":1}}
 ```
 
 | Field | Type | Description |
@@ -656,7 +656,7 @@ Sent when the server's session is held by a different driver. The server disconn
 Sent after successful authentication. Contains device and app metadata.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"info","payload":{
+{"buttonHeistVersion":"<calver>","type":"info","payload":{
   "appName":"MyApp",
   "bundleIdentifier":"com.example.myapp",
   "deviceName":"iPhone 15 Pro",
@@ -677,7 +677,7 @@ Sent after successful authentication. Contains device and app metadata.
 Sent in response to a `status` probe. This response is valid before authentication and returns app identity plus session availability without claiming the session.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"status","payload":{
+{"buttonHeistVersion":"<calver>","type":"status","payload":{
   "identity":{
     "appName":"MyApp",
     "bundleIdentifier":"com.example.myapp",
@@ -699,7 +699,7 @@ Sent in response to a `status` probe. This response is valid before authenticati
 UI element interface. Public JSON output uses a tree structure. Summary detail includes the semantic accessibility surface; full detail adds geometry.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"interface","payload":{
+{"buttonHeistVersion":"<calver>","type":"interface","payload":{
   "screenDescription":"Welcome — 1 button",
   "timestamp":"2026-02-03T10:30:45.123Z",
   "tree":[
@@ -745,7 +745,7 @@ The `tree` is the canonical wire shape — every element appears exactly once at
 Response to `activate`, `one_finger_tap`, `increment`, `decrement`, `typeText`, `performCustomAction`, `handleAlert`, `setPasteboard`, `getPasteboard`, `scroll`, `scrollToVisible`, `elementSearch`, or `scrollToEdge` commands. Also returned internally by `explore` (dispatched via `get_interface` with `full: true`).
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"actionResult","payload":{
+{"buttonHeistVersion":"<calver>","type":"actionResult","payload":{
   "success":true,
   "method":"syntheticTap",
   "message":null
@@ -754,7 +754,7 @@ Response to `activate`, `one_finger_tap`, `increment`, `decrement`, `typeText`, 
 
 For `typeText`, the response includes the current text field value:
 ```json
-{"buttonHeistVersion":"0.2.21","type":"actionResult","payload":{
+{"buttonHeistVersion":"<calver>","type":"actionResult","payload":{
   "success":true,
   "method":"typeText",
   "value":"Hello World"
@@ -793,7 +793,7 @@ Possible methods:
 
 The optional `message` field provides additional context, especially for failures:
 ```json
-{"buttonHeistVersion":"0.2.21","type":"actionResult","payload":{
+{"buttonHeistVersion":"<calver>","type":"actionResult","payload":{
   "success":false,
   "method":"elementNotFound",
   "message":"Element is disabled (has 'notEnabled' trait)"
@@ -805,7 +805,7 @@ The optional `message` field provides additional context, especially for failure
 PNG capture of the current screen.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"screen","payload":{
+{"buttonHeistVersion":"<calver>","type":"screen","payload":{
   "pngData":"iVBORw0KGgo...",
   "width":393.0,
   "height":852.0,
@@ -820,7 +820,7 @@ The `pngData` field is base64-encoded PNG image data.
 Response to `ping`.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"pong"}
+{"buttonHeistVersion":"<calver>","type":"pong"}
 ```
 
 ### recordingStarted
@@ -828,7 +828,7 @@ Response to `ping`.
 Acknowledgement that recording has begun.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"recordingStarted"}
+{"buttonHeistVersion":"<calver>","type":"recordingStarted"}
 ```
 
 ### recordingStopped
@@ -836,7 +836,7 @@ Acknowledgement that recording has begun.
 Lightweight notification that recording stopped without including the video payload. This is sent for automatic stops such as inactivity, max duration, or file size limit. The completed video is cached server-side and returned by the next `stopRecording` request.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"recordingStopped"}
+{"buttonHeistVersion":"<calver>","type":"recordingStopped"}
 ```
 
 ### recording
@@ -844,7 +844,7 @@ Lightweight notification that recording stopped without including the video payl
 Completed screen recording. Contains the H.264/MP4 video as base64-encoded data. Sent as the response to `stopRecording`, not as an unsolicited broadcast.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"recording","payload":{
+{"buttonHeistVersion":"<calver>","type":"recording","payload":{
   "videoData":"AAAAIGZ0eXBpc29t...",
   "width":390,
   "height":844,
@@ -868,12 +868,12 @@ The `videoData` field is base64-encoded MP4 video data. The raw file size is cap
 
 Stop reasons: `"manual"`, `"inactivity"`, `"maxDuration"`, `"fileSizeLimit"`.
 
-### recordingError
+### error (recording failure)
 
-Recording failed with an error.
+Recording-pipeline failures use the same `error` wire type with `kind: "recording"`.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"recordingError","payload":"AVAssetWriter failed to start"}
+{"buttonHeistVersion":"<calver>","type":"error","payload":{"kind":"recording","message":"AVAssetWriter failed to start"}}
 ```
 
 ### interaction
@@ -881,7 +881,7 @@ Recording failed with an error.
 Broadcast to all subscribed clients (including observers) after a driver performs an action. Contains the command, result, and interface delta.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"interaction","payload":{"timestamp":1709472045.123,"command":{"type":"activate","payload":{"identifier":"loginButton"}},"result":{"success":true,"method":"syntheticTap","interfaceDelta":{"kind":"elementsChanged","elementCount":12,"edits":{"updated":[{"heistId":"button·loginButton","changes":[{"property":"value","old":null,"new":"Loading..."}]}]}}}}}
+{"buttonHeistVersion":"<calver>","type":"interaction","payload":{"timestamp":1709472045.123,"command":{"type":"activate","payload":{"identifier":"loginButton"}},"result":{"success":true,"method":"syntheticTap","interfaceDelta":{"kind":"elementsChanged","elementCount":12,"edits":{"updated":[{"heistId":"button·loginButton","changes":[{"property":"value","old":null,"new":"Loading..."}]}]}}}}}
 ```
 
 | Field | Type | Description |
@@ -892,10 +892,10 @@ Broadcast to all subscribed clients (including observers) after a driver perform
 
 ### error
 
-Error message.
+Server-broadcast error. The payload is a `ServerError { kind, message }` so callers can route on `kind` instead of pattern-matching message text. Auth failures use `kind: "authFailure"`, recording failures use `kind: "recording"`, everything else is `"general"`.
 
 ```json
-{"buttonHeistVersion":"0.2.21","type":"error","payload":"Root view not available"}
+{"buttonHeistVersion":"<calver>","type":"error","payload":{"kind":"general","message":"Root view not available"}}
 ```
 
 ## Element Discovery
@@ -976,8 +976,8 @@ Use `get_interface --full` when the screen has deep scrollable content and you n
 
 ### ServerInfo
 
-The wire-level version is carried by `ResponseEnvelope.buttonHeistVersion`
-and is not duplicated on `ServerInfo`.
+The product version is carried by `ResponseEnvelope.buttonHeistVersion` and is
+not duplicated on `ServerInfo`.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -1300,13 +1300,12 @@ A point in unit coordinates (0–1) relative to an element's accessibility frame
 | `success` | `Bool` | Whether action succeeded |
 | `method` | `String` | How action was performed (see method values above) |
 | `message` | `String?` | Additional context or error description |
-| `errorKind` | `String?` | Typed error classification: `"elementNotFound"`, `"timeout"`, `"unsupported"`, `"inputError"`, `"validationError"`, `"actionFailed"`. Nil on success. |
-| `value` | `String?` | Current text field value (populated by `typeText`) |
+| `errorKind` | `String?` | Typed error classification: `"elementNotFound"`, `"timeout"`, `"unsupported"`, `"inputError"`, `"validationError"`, `"actionFailed"`, `"authFailure"`, `"recording"`, `"general"`. Nil on success. |
+| `payload` | `ResultPayload?` | Command-specific payload as a tagged union: `{"kind": "value", "data": "..."}` for `typeText` / `setPasteboard` / `getPasteboard`; `{"kind": "scrollSearch", "data": {...}}` for `elementSearch` / `scrollToVisible`; `{"kind": "explore", "data": {...}}` for `explore`. Omitted when no command-specific payload applies. |
 | `interfaceDelta` | `InterfaceDelta?` | Compact delta describing what changed after the action |
 | `animating` | `Bool?` | `true` if UI was still animating when result was produced; `nil` means idle |
 | `screenName` | `String?` | Label of the first header element in the post-action snapshot (screen name hint) |
 | `screenId` | `String?` | Slugified screen name for machine use (e.g. `"controls_demo"`) |
-| `scrollSearchResult` | `ScrollSearchResult?` | Diagnostics from `elementSearch` — scroll count, unique elements seen, total items, exhaustive flag, matched element |
 
 ### ActionExpectation (Fence-level)
 
@@ -1485,93 +1484,93 @@ A single recorded interaction event captured during a Stakeout recording.
 # Client connects to fd9a:6190:eed7::1 on the Bonjour-advertised port
 
 # Server sends hello immediately after connect
-{"buttonHeistVersion":"0.2.21","requestId":null,"type":"serverHello"}
+{"buttonHeistVersion":"<calver>","requestId":null,"type":"serverHello"}
 
 # Client acknowledges exact protocol match
-{"buttonHeistVersion":"0.2.21","requestId":null,"type":"clientHello"}
+{"buttonHeistVersion":"<calver>","requestId":null,"type":"clientHello"}
 
 # Server sends auth challenge
-{"buttonHeistVersion":"0.2.21","requestId":null,"type":"authRequired"}
+{"buttonHeistVersion":"<calver>","requestId":null,"type":"authRequired"}
 
 # Client authenticates
-{"buttonHeistVersion":"0.2.21","requestId":null,"type":"authenticate","payload":{"token":"my-secret-token"}}
+{"buttonHeistVersion":"<calver>","requestId":null,"type":"authenticate","payload":{"token":"my-secret-token"}}
 
 # Server sends info after successful auth
-{"buttonHeistVersion":"0.2.21","requestId":null,"type":"info","payload":{"appName":"TestApp","bundleIdentifier":"com.buttonheist.testapp","deviceName":"iPhone","systemVersion":"26.2.1","screenWidth":393.0,"screenHeight":852.0,"instanceId":"A1B2C3D4-E5F6-7890-ABCD-EF1234567890","instanceIdentifier":"my-instance","listeningPort":52341,"simulatorUDID":"DEADBEEF-1234-5678-9ABC-DEF012345678","vendorIdentifier":null,"tlsActive":true}}
+{"buttonHeistVersion":"<calver>","requestId":null,"type":"info","payload":{"appName":"TestApp","bundleIdentifier":"com.buttonheist.testapp","deviceName":"iPhone","systemVersion":"26.2.1","screenWidth":393.0,"screenHeight":852.0,"instanceId":"A1B2C3D4-E5F6-7890-ABCD-EF1234567890","instanceIdentifier":"my-instance","listeningPort":52341,"simulatorUDID":"DEADBEEF-1234-5678-9ABC-DEF012345678","vendorIdentifier":null,"tlsActive":true}}
 
 # Client subscribes to updates
-{"buttonHeistVersion":"0.2.21","type":"subscribe"}
+{"buttonHeistVersion":"<calver>","type":"subscribe"}
 
 # Client requests interface
-{"buttonHeistVersion":"0.2.21","type":"requestInterface"}
+{"buttonHeistVersion":"<calver>","type":"requestInterface"}
 
 # Server responds with interface tree
-{"buttonHeistVersion":"0.2.21","type":"interface","payload":{"timestamp":"2026-02-03T14:08:14.123Z","tree":[...]}}
+{"buttonHeistVersion":"<calver>","type":"interface","payload":{"timestamp":"2026-02-03T14:08:14.123Z","tree":[...]}}
 
 # Client requests screen capture
-{"buttonHeistVersion":"0.2.21","type":"requestScreen"}
+{"buttonHeistVersion":"<calver>","type":"requestScreen"}
 
 # Server responds with screen capture
-{"buttonHeistVersion":"0.2.21","type":"screen","payload":{"pngData":"iVBORw0KGgo...","width":393.0,"height":852.0,"timestamp":"2026-02-03T14:08:14.200Z"}}
+{"buttonHeistVersion":"<calver>","type":"screen","payload":{"pngData":"iVBORw0KGgo...","width":393.0,"height":852.0,"timestamp":"2026-02-03T14:08:14.200Z"}}
 
 # Client activates a button
-{"buttonHeistVersion":"0.2.21","type":"activate","payload":{"identifier":"loginButton"}}
+{"buttonHeistVersion":"<calver>","type":"activate","payload":{"identifier":"loginButton"}}
 
 # Server confirms action
-{"buttonHeistVersion":"0.2.21","type":"actionResult","payload":{"success":true,"method":"syntheticTap","message":null}}
+{"buttonHeistVersion":"<calver>","type":"actionResult","payload":{"success":true,"method":"syntheticTap","message":null}}
 
 # Client increments a slider
-{"buttonHeistVersion":"0.2.21","type":"increment","payload":{"identifier":"volumeSlider"}}
+{"buttonHeistVersion":"<calver>","type":"increment","payload":{"identifier":"volumeSlider"}}
 
 # Server confirms
-{"buttonHeistVersion":"0.2.21","type":"actionResult","payload":{"success":true,"method":"increment","message":null}}
+{"buttonHeistVersion":"<calver>","type":"actionResult","payload":{"success":true,"method":"increment","message":null}}
 
 # Client performs custom action
-{"buttonHeistVersion":"0.2.21","type":"performCustomAction","payload":{"elementTarget":{"identifier":"messageCell"},"actionName":"Delete"}}
+{"buttonHeistVersion":"<calver>","type":"performCustomAction","payload":{"elementTarget":{"identifier":"messageCell"},"actionName":"Delete"}}
 
 # Server confirms
-{"buttonHeistVersion":"0.2.21","type":"actionResult","payload":{"success":true,"method":"customAction","message":null}}
+{"buttonHeistVersion":"<calver>","type":"actionResult","payload":{"success":true,"method":"customAction","message":null}}
 
 # Client types text into a field
-{"buttonHeistVersion":"0.2.21","type":"typeText","payload":{"text":"Hello World","elementTarget":{"identifier":"nameField"}}}
+{"buttonHeistVersion":"<calver>","type":"typeText","payload":{"text":"Hello World","elementTarget":{"identifier":"nameField"}}}
 
 # Server confirms with current field value
-{"buttonHeistVersion":"0.2.21","type":"actionResult","payload":{"success":true,"method":"typeText","value":"Hello World"}}
+{"buttonHeistVersion":"<calver>","type":"actionResult","payload":{"success":true,"method":"typeText","payload":{"kind":"value","data":"Hello World"}}}
 
 # Client corrects a typo (delete 5 chars, retype)
-{"buttonHeistVersion":"0.2.21","type":"typeText","payload":{"deleteCount":5,"text":"World","elementTarget":{"identifier":"nameField"}}}
+{"buttonHeistVersion":"<calver>","type":"typeText","payload":{"deleteCount":5,"text":"World","elementTarget":{"identifier":"nameField"}}}
 
 # Server confirms correction
-{"buttonHeistVersion":"0.2.21","type":"actionResult","payload":{"success":true,"method":"typeText","value":"Hello World"}}
+{"buttonHeistVersion":"<calver>","type":"actionResult","payload":{"success":true,"method":"typeText","payload":{"kind":"value","data":"Hello World"}}}
 
 # Client starts recording
-{"buttonHeistVersion":"0.2.21","type":"startRecording","payload":{"fps":8}}
+{"buttonHeistVersion":"<calver>","type":"startRecording","payload":{"fps":8}}
 
 # Server acknowledges
-{"buttonHeistVersion":"0.2.21","type":"recordingStarted"}
+{"buttonHeistVersion":"<calver>","type":"recordingStarted"}
 
 # Client interacts while recording...
-{"buttonHeistVersion":"0.2.21","type":"activate","payload":{"identifier":"loginButton"}}
-{"buttonHeistVersion":"0.2.21","type":"actionResult","payload":{"success":true,"method":"syntheticTap"}}
+{"buttonHeistVersion":"<calver>","type":"activate","payload":{"identifier":"loginButton"}}
+{"buttonHeistVersion":"<calver>","type":"actionResult","payload":{"success":true,"method":"syntheticTap"}}
 
 # Client stops recording
-{"buttonHeistVersion":"0.2.21","type":"stopRecording"}
+{"buttonHeistVersion":"<calver>","type":"stopRecording"}
 
 # Server acknowledges stop command
-{"buttonHeistVersion":"0.2.21","type":"recordingStopped"}
+{"buttonHeistVersion":"<calver>","type":"recordingStopped"}
 
 # Server responds with completed recording
-{"buttonHeistVersion":"0.2.21","type":"recording","payload":{"videoData":"AAAAIGZ0eXBpc29t...","width":390,"height":844,"duration":5.2,"frameCount":42,"fps":8,"startTime":"2026-02-24T10:30:00.000Z","endTime":"2026-02-24T10:30:05.200Z","stopReason":"manual"}}
+{"buttonHeistVersion":"<calver>","type":"recording","payload":{"videoData":"AAAAIGZ0eXBpc29t...","width":390,"height":844,"duration":5.2,"frameCount":42,"fps":8,"startTime":"2026-02-24T10:30:00.000Z","endTime":"2026-02-24T10:30:05.200Z","stopReason":"manual"}}
 
 # Client sends keepalive
-{"buttonHeistVersion":"0.2.21","type":"ping"}
+{"buttonHeistVersion":"<calver>","type":"ping"}
 
 # Server responds
-{"buttonHeistVersion":"0.2.21","type":"pong"}
+{"buttonHeistVersion":"<calver>","type":"pong"}
 
 # Server auto-pushes interface change
-{"buttonHeistVersion":"0.2.21","type":"interface","payload":{"timestamp":"2026-02-03T14:08:15.500Z","tree":[...]}}
-{"buttonHeistVersion":"0.2.21","type":"screen","payload":{"pngData":"...","width":393.0,"height":852.0,"timestamp":"2026-02-03T14:08:15.550Z"}}
+{"buttonHeistVersion":"<calver>","type":"interface","payload":{"timestamp":"2026-02-03T14:08:15.500Z","tree":[...]}}
+{"buttonHeistVersion":"<calver>","type":"screen","payload":{"pngData":"...","width":393.0,"height":852.0,"timestamp":"2026-02-03T14:08:15.550Z"}}
 ```
 
 ### AuthenticatePayload
@@ -1627,11 +1626,11 @@ A single recorded interaction event captured during a Stakeout recording.
 Token-based authentication is required for driver connections:
 
 1. Server sends `serverHello` immediately on TCP connect
-2. Client must respond with `clientHello` using the exact same `buttonHeistVersion`
+2. Client must respond with `clientHello` carrying its own `buttonHeistVersion` (must equal the server's exactly)
 3. Server sends `authRequired`
 4. Client must respond with `authenticate` (for drivers) or `watch` (for observers). The one exception is `status`, which is allowed after the hello handshake but before auth for reachability probes and returns `ServerMessage.status` without claiming a session.
 5. For drivers: on success and session acquired, server sends `info` and the session proceeds normally
-6. On auth failure, server sends `authFailed` and disconnects after a brief delay
+6. On auth failure, server sends `error` with `kind: "authFailure"` and disconnects after a brief delay
 7. On session conflict, server sends `sessionLocked` and disconnects
 8. For observers: token required by default (same as drivers). Set `INSIDEJOB_RESTRICT_WATCHERS=0` to allow unauthenticated observers.
 
@@ -1696,7 +1695,7 @@ When the token is auto-generated (not explicitly set), TheInsideJob supports an 
 2. Client connects and sends `authenticate` with an empty token (`""`)
 3. Server presents a `UIAlertController` with "Allow" and "Deny" buttons
 4. **If approved**: Server sends `authApproved` with the token, then `info` — the session proceeds normally
-5. **If denied**: Server sends `authFailed("Connection denied by user")` and disconnects
+5. **If denied**: Server sends `error` with `kind: "authFailure"` and message `"Connection denied by user"`, then disconnects
 
 ```mermaid
 sequenceDiagram
@@ -1754,50 +1753,36 @@ TheInsideJob uses hash-based change detection during polling:
 3. Only broadcast if hash differs from last broadcast
 4. Screen captures are automatically captured and broadcast alongside interface changes
 
-## Protocol Version Changelog
+## Current Wire Format
 
-Protocol version is SemVer — bump minor for additive changes, major for
-breaking changes. The current version constant lives in
-`ButtonHeist/Sources/TheScore/Messages.swift`.
+There is no separate wire-protocol version. The handshake compares
+`buttonHeistVersion` for exact equality between server and client and rejects
+on any mismatch. The current shape is whatever the latest `buttonHeistVersion`
+ships; older clients are not supported. Clients should always bump in lockstep
+with the server.
 
-### 9.0 (current)
+The current shape, beyond what is described in the message reference above:
 
-Wire-shrink pass on dead bytes.
-
-- `ActionResult` drops the `elementLabel` / `elementValue` / `elementTraits`
-  fields entirely (they had no readers) and stops emitting a stub
-  `exploreResult` for non-explore actions.
-- `ExploreResult` drops `containersSkippedObscured` (zero readers in any
-  formatter / MCP / CLI / client). The custom Codable that existed solely to
-  provide a forward-compat default for that field is gone; synthesized
-  Codable suffices.
-- `ServerInfo` drops the duplicate `buttonHeistVersion` field. The wire-level
-  version lives on `ResponseEnvelope.buttonHeistVersion` (and on
-  `RequestEnvelope.buttonHeistVersion` for client messages); the duplicate
-  copy on `ServerInfo` had zero production readers.
+- Both envelopes carry `buttonHeistVersion` (CalVer). `protocolVersion` is
+  gone everywhere.
+- `ProtocolMismatchPayload` reports `serverButtonHeistVersion` and
+  `clientButtonHeistVersion` — naming the two sides explicitly.
+- `ActionResult.payload` is a tagged union under one key. Encoded as
+  `{"kind": "value" | "scrollSearch" | "explore", "data": ...}` instead of
+  the previous three flat keys. Synthesized Codable on `ActionResult`.
+- Server-broadcast errors collapse to one `error` wire type carrying
+  `ServerError { kind, message }`. The previous separate `authFailed` and
+  `recordingError` wire types are gone; their categories live in
+  `ErrorKind` (`authFailure`, `recording`, `general`, plus the existing
+  action-result kinds).
+- `Interface` ships a single canonical `tree: [InterfaceNode]` with
+  `HeistElement` payloads at the leaves. `Interface.elements` is a computed
+  flatten for source compat but does not appear on the wire.
+- `ActionExpectation` uses an explicit `type` discriminator
+  (`{"type": "element_updated", …}`) rather than Swift-synthesized Codable.
+  String short forms (`"screen_changed"`, `"elements_changed"`) are
+  unaffected.
 - `InterfaceDelta` is a discriminated union with cases `noChange` /
-  `elementsChanged` / `screenChanged`. Element edits live under a shared
-  `ElementEdits` shape that omits empty collections. Both
-  `elementsChanged.edits` and `screenChanged.postEdits` nest the same
-  `ElementEdits` object under their respective keys — the wire shape is
-  symmetric across the two cases. Empty `edits` and empty `postEdits` are
-  omitted; missing keys decode as an empty `ElementEdits`. Old clients that
-  decoded the previous flat-fields shape break.
-
-Old clients that read any of these keys will see them missing.
-
-### 8.0
-
-`Interface` now ships a single canonical `tree: [InterfaceNode]` with
-`HeistElement` payloads at the leaves. The legacy parallel
-`elements: [HeistElement]` array and the index-indirected
-`tree: [ElementNode]?` are gone. `Interface.elements` is a computed flatten
-for backward source compatibility, but on the wire there is no flat array.
-Breaks any consumer that decoded the previous shape.
-
-### 7.0
-
-`ActionExpectation` now uses an explicit `type` discriminator format
-(`{"type": "element_updated", …}`) in place of Swift's compiler-synthesized
-Codable shape. Breaks `wait_for_change` callers that send typed expectations;
-string forms (`"screen_changed"`, `"elements_changed"`) are unaffected.
+  `elementsChanged` / `screenChanged`. `elementsChanged.edits` and
+  `screenChanged.postEdits` both nest the same `ElementEdits` object;
+  empty edits/postEdits are omitted and missing keys decode as empty.
