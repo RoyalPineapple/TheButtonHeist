@@ -68,7 +68,7 @@ final class BookKeeperHeistTests: XCTestCase {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
-        bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Go", "traits": ["button"]])
+        bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Go", "traits": ["button"]], interfaceCache: [:])
         let script = try bookKeeper.stopHeistRecording()
 
         XCTAssertEqual(script.version, 1)
@@ -84,7 +84,7 @@ final class BookKeeperHeistTests: XCTestCase {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
-        bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Go"])
+        bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Go"], interfaceCache: [:])
         _ = try bookKeeper.stopHeistRecording()
         try bookKeeper.startHeistRecording(app: "com.example.second")
         XCTAssertTrue(bookKeeper.isRecordingHeist)
@@ -104,10 +104,10 @@ final class BookKeeperHeistTests: XCTestCase {
             .connect, .listTargets, .startHeist, .stopHeist,
         ]
         for command in excluded {
-            bookKeeper.recordHeistEvidence(command: command, args: ["command": command.rawValue])
+            bookKeeper.recordHeistEvidence(command: command, args: ["command": command.rawValue], interfaceCache: [:])
         }
 
-        bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Go"])
+        bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Go"], interfaceCache: [:])
         let script = try bookKeeper.stopHeistRecording()
         XCTAssertEqual(script.steps.count, 1)
         XCTAssertEqual(script.steps[0].command, "activate")
@@ -117,7 +117,7 @@ final class BookKeeperHeistTests: XCTestCase {
     func testRecordingIgnoredWhenNotRecording() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
-        bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Go"])
+        bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Go"], interfaceCache: [:])
         XCTAssertFalse(bookKeeper.isRecordingHeist)
     }
 
@@ -126,11 +126,15 @@ final class BookKeeperHeistTests: XCTestCase {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
-        bookKeeper.recordHeistEvidence(command: .activate, args: [
-            "command": "activate",
-            "label": "Submit",
-            "traits": ["button"],
-        ])
+        bookKeeper.recordHeistEvidence(
+            command: .activate,
+            args: [
+                "command": "activate",
+                "label": "Submit",
+                "traits": ["button"],
+            ],
+            interfaceCache: [:]
+        )
         let script = try bookKeeper.stopHeistRecording()
 
         XCTAssertEqual(script.steps[0].target?.label, "Submit")
@@ -142,11 +146,15 @@ final class BookKeeperHeistTests: XCTestCase {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
-        bookKeeper.recordHeistEvidence(command: .typeText, args: [
-            "command": "type_text",
-            "text": "hello world",
-            "clearFirst": true,
-        ])
+        bookKeeper.recordHeistEvidence(
+            command: .typeText,
+            args: [
+                "command": "type_text",
+                "text": "hello world",
+                "clearFirst": true,
+            ],
+            interfaceCache: [:]
+        )
         let script = try bookKeeper.stopHeistRecording()
 
         XCTAssertNil(script.steps[0].target)
@@ -181,11 +189,15 @@ final class BookKeeperHeistTests: XCTestCase {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
-        bookKeeper.recordHeistEvidence(command: .oneFingerTap, args: [
-            "command": "one_finger_tap",
-            "x": 100.0,
-            "y": 200.0,
-        ])
+        bookKeeper.recordHeistEvidence(
+            command: .oneFingerTap,
+            args: [
+                "command": "one_finger_tap",
+                "x": 100.0,
+                "y": 200.0,
+            ],
+            interfaceCache: [:]
+        )
         let script = try bookKeeper.stopHeistRecording()
 
         XCTAssertNil(script.steps[0].target)
@@ -197,12 +209,16 @@ final class BookKeeperHeistTests: XCTestCase {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
-        bookKeeper.recordHeistEvidence(command: .activate, args: [
-            "command": "activate",
-            "label": "Save",
-            "pngData": "base64binarydata",
-            "videoData": "morebinarydata",
-        ])
+        bookKeeper.recordHeistEvidence(
+            command: .activate,
+            args: [
+                "command": "activate",
+                "label": "Save",
+                "pngData": "base64binarydata",
+                "videoData": "morebinarydata",
+            ],
+            interfaceCache: [:]
+        )
         let script = try bookKeeper.stopHeistRecording()
 
         XCTAssertNil(script.steps[0].arguments["pngData"])
@@ -221,11 +237,13 @@ final class BookKeeperHeistTests: XCTestCase {
         bookKeeper.recordHeistEvidence(
             command: .activate,
             args: ["command": "activate", "label": "Missing"],
-            succeeded: false
+            succeeded: false,
+            interfaceCache: [:]
         )
         bookKeeper.recordHeistEvidence(
             command: .activate,
-            args: ["command": "activate", "label": "Go"]
+            args: ["command": "activate", "label": "Go"],
+            interfaceCache: [:]
         )
 
         let heist = try bookKeeper.stopHeistRecording()
@@ -242,12 +260,14 @@ final class BookKeeperHeistTests: XCTestCase {
         bookKeeper.recordHeistEvidence(
             command: .activate,
             args: ["command": "activate", "label": "Missing"],
-            succeeded: false
+            succeeded: false,
+            interfaceCache: [:]
         )
 
         bookKeeper.recordHeistEvidence(
             command: .activate,
-            args: ["command": "activate", "label": "Go"]
+            args: ["command": "activate", "label": "Go"],
+            interfaceCache: [:]
         )
 
         let heist = try bookKeeper.stopHeistRecording()
@@ -263,7 +283,8 @@ final class BookKeeperHeistTests: XCTestCase {
 
         bookKeeper.recordHeistEvidence(
             command: .activate,
-            args: ["command": "activate", "label": "Go"]
+            args: ["command": "activate", "label": "Go"],
+            interfaceCache: [:]
         )
 
         let heist = try bookKeeper.stopHeistRecording()
@@ -541,7 +562,7 @@ final class BookKeeperHeistTests: XCTestCase {
         try bookKeeper.startHeistRecording(app: "com.example.app")
 
         // Write a good step through the normal path
-        bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Go"])
+        bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Go"], interfaceCache: [:])
 
         // Inject a malformed line through the BookKeeper's own file handle. A second
         // FileHandle would track its own offset, and the next recorded step would
@@ -554,7 +575,7 @@ final class BookKeeperHeistTests: XCTestCase {
         recording.fileHandle.write(Data("this-is-not-json\n".utf8))
 
         // Record another good step via the book-keeper handle
-        bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Done"])
+        bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Done"], interfaceCache: [:])
 
         // Sanity-check that the malformed bytes survived to disk, so the skip path
         // is actually exercised when stopHeistRecording reads the file.
@@ -577,7 +598,7 @@ final class BookKeeperHeistTests: XCTestCase {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "close-with-heist")
         try bookKeeper.startHeistRecording(app: "com.example.app")
-        bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Go"])
+        bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Go"], interfaceCache: [:])
 
         // Locate the heist file before the phase advances
         guard case .active(let activeSession) = bookKeeper.phase else {

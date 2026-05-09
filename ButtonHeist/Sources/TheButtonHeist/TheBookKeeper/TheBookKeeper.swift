@@ -685,7 +685,7 @@ public final class TheBookKeeper {
         command: TheFence.Command,
         args: [String: Any],
         succeeded: Bool = true,
-        interfaceCache: [String: HeistElement] = [:]
+        interfaceCache: [String: HeistElement]
     ) {
         guard case .active(var session) = phase,
               var recording = session.heistRecording else { return }
