@@ -62,12 +62,12 @@ extension TheFence {
         let artifactRequestId = (args["_requestId"] as? String) ?? UUID().uuidString
         let metadata = ScreenshotMetadata(width: screen.width, height: screen.height)
         do {
-            if let url = try bookKeeper.writeArtifactIfSinkAvailable(
+            if let url = try bookKeeper.writeScreenshotIfSinkAvailable(
                 base64Data: screen.pngData,
                 outputPath: args.string("output"),
                 requestId: artifactRequestId,
                 command: .getScreen,
-                metadata: .screenshot(metadata)
+                metadata: metadata
             ) {
                 return .screenshot(path: url.path, width: screen.width, height: screen.height)
             }
@@ -560,12 +560,12 @@ extension TheFence {
             frameCount: recording.frameCount
         )
         do {
-            if let url = try bookKeeper.writeArtifactIfSinkAvailable(
+            if let url = try bookKeeper.writeRecordingIfSinkAvailable(
                 base64Data: recording.videoData,
                 outputPath: args.string("output"),
                 requestId: artifactRequestId,
                 command: .stopRecording,
-                metadata: .recording(metadata)
+                metadata: metadata
             ) {
                 return .recording(path: url.path, payload: recording)
             }

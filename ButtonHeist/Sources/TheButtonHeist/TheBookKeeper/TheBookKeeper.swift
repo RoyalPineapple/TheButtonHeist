@@ -143,163 +143,6 @@ public final class TheBookKeeper {
         }
     }
 
-    // MARK: - Recovery
-
-    /// Whether an abandoned session carried unflushed heist evidence at
-    /// recovery time. `.present` collapses the previous co-varying optional
-    /// pair so callers can't observe an inconsistent count/path combination.
-    enum RecoveredHeistEvidence: Sendable, Equatable {
-        case absent
-        case present(count: Int, path: URL)
-    }
-
-    /// A session that was recovered from an abandoned state.
-    struct RecoveredSession: Sendable {
-        let sessionId: String
-        let directory: URL
-        let heistEvidence: RecoveredHeistEvidence
-    }
-
-    /// Scan for abandoned sessions and recover them.
-    /// An abandoned session has `session.jsonl` (uncompressed) — meaning it was
-    /// never properly closed. Recovery: write a recovery manifest, compress the log.
-    /// Abandoned heist evidence (heist.jsonl) is preserved and surfaced in the result.
-    ///
-    /// Internal: not yet wired into a production flow. Exposed via `@testable import`
-    /// only. Promote to public when TheFence (or a CLI command) consumes the result.
-    @discardableResult
-    func recoverAbandonedSessions() -> [RecoveredSession] {
-        let fileManager = FileManager.default
-        guard fileManager.fileExists(atPath: baseDirectory.path) else { return [] }
-
-        let contents: [URL]
-        do {
-            contents = try fileManager.contentsOfDirectory(
-                at: baseDirectory,
-                includingPropertiesForKeys: [.isDirectoryKey],
-                options: [.skipsHiddenFiles]
-            )
-        } catch {
-            logger.warning("Failed to list session directories: \(error.localizedDescription)")
-            return []
-        }
-
-        return contents.compactMap { directoryURL in
-            let isDirectory: Bool
-            do {
-                isDirectory = try directoryURL.resourceValues(forKeys: [.isDirectoryKey]).isDirectory ?? false
-            } catch {
-                logger.warning("Failed to read resource values for \(directoryURL.lastPathComponent): \(error.localizedDescription)")
-                return nil
-            }
-            guard isDirectory else { return nil }
-
-            // Abandoned = has raw log but no compressed log
-            let rawLog = directoryURL.appendingPathComponent("session.jsonl")
-            let compressedLog = directoryURL.appendingPathComponent("session.jsonl.gz")
-            guard fileManager.fileExists(atPath: rawLog.path),
-                  !fileManager.fileExists(atPath: compressedLog.path) else { return nil }
-
-            let sessionId = directoryURL.lastPathComponent
-            guard let heistEvidence = recoverSession(directory: directoryURL, sessionId: sessionId) else {
-                return nil
-            }
-            return RecoveredSession(
-                sessionId: sessionId,
-                directory: directoryURL,
-                heistEvidence: heistEvidence
-            )
-        }
-    }
-
-    private func recoverSession(
-        directory: URL,
-        sessionId: String
-    ) -> RecoveredHeistEvidence? {
-        let fileManager = FileManager.default
-        let manifestPath = directory.appendingPathComponent("manifest.json")
-
-        // Compress the raw log before mutating the manifest. If compression fails,
-        // the session directory stays byte-for-byte as we found it so the next
-        // recovery attempt has clean inputs — no stale endTime recording the time
-        // of a failed attempt.
-        let rawLog = directory.appendingPathComponent("session.jsonl")
-        let compressedLog = directory.appendingPathComponent("session.jsonl.gz")
-        let gzipProcess = Process()
-        gzipProcess.executableURL = URL(fileURLWithPath: "/usr/bin/gzip")
-        gzipProcess.arguments = [rawLog.path]
-        gzipProcess.standardOutput = FileHandle.nullDevice
-        gzipProcess.standardError = FileHandle.nullDevice
-        do {
-            try gzipProcess.run()
-        } catch {
-            logger.warning("Failed to compress session log for \(sessionId): \(error.localizedDescription)")
-            return nil
-        }
-        gzipProcess.waitUntilExit()
-        guard gzipProcess.terminationStatus == 0 else {
-            logger.warning(
-                "Failed to recover abandoned session \(sessionId): gzip exited with status \(gzipProcess.terminationStatus)"
-            )
-            return nil
-        }
-        guard fileManager.fileExists(atPath: compressedLog.path) else {
-            logger.warning(
-                "Failed to recover abandoned session \(sessionId): expected compressed log missing at \(compressedLog.path)"
-            )
-            return nil
-        }
-
-        // Compression succeeded — read existing manifest or create a minimal one
-        var manifest: SessionManifest
-        let jsonDecoder = JSONDecoder()
-        jsonDecoder.dateDecodingStrategy = .iso8601
-        do {
-            let manifestData = try Data(contentsOf: manifestPath)
-            manifest = try jsonDecoder.decode(SessionManifest.self, from: manifestData)
-        } catch {
-            logger.warning("Could not read manifest for \(sessionId): \(error.localizedDescription)")
-            manifest = SessionManifest(sessionId: sessionId, startTime: Date())
-        }
-
-        // Mark as recovered with an endTime if missing
-        if manifest.endTime == nil {
-            manifest.endTime = Date()
-        }
-
-        // Write updated manifest
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        do {
-            let manifestData = try encoder.encode(manifest)
-            try manifestData.write(to: manifestPath, options: .atomic)
-        } catch {
-            logger.warning("Failed to write manifest for \(sessionId): \(error.localizedDescription)")
-        }
-
-        // Check for abandoned heist evidence
-        let heistLog = directory.appendingPathComponent("heist.jsonl")
-        var heistEvidence: RecoveredHeistEvidence = .absent
-        if fileManager.fileExists(atPath: heistLog.path) {
-            do {
-                let heistData = try Data(contentsOf: heistLog)
-                if !heistData.isEmpty {
-                    let lineCount = heistData.reduce(0) { count, byte in byte == 0x0A ? count + 1 : count }
-                    heistEvidence = .present(count: lineCount, path: heistLog)
-                    logger.warning(
-                        "Abandoned heist in session \(sessionId) — \(lineCount) evidence entries preserved at \(heistLog.path)"
-                    )
-                }
-            } catch {
-                logger.warning("Failed to read heist log for \(sessionId): \(error.localizedDescription)")
-            }
-        }
-
-        logger.info("Recovered abandoned session: \(sessionId)")
-        return heistEvidence
-    }
-
     // MARK: - Lifecycle
 
     public func beginSession(identifier: String) throws {
@@ -529,34 +372,22 @@ public final class TheBookKeeper {
         return resolvedURL
     }
 
-    /// Metadata carried by an artifact being written — screenshot dimensions or
-    /// recording stats. Used to route to the correct typed write path.
-    public enum ArtifactMetadata: Sendable {
-        case screenshot(ScreenshotMetadata)
-        case recording(RecordingMetadata)
-    }
-
-    /// Write an artifact to whichever sink is available, or return `nil` if
+    /// Write a screenshot to whichever sink is available, or return `nil` if
     /// neither a session is active nor an explicit outputPath was supplied.
     ///
     /// Resolution rules:
     /// - `outputPath` supplied → write raw bytes to that path via
     ///   `writeToPath` (no manifest update).
-    /// - No `outputPath`, session active → write via `writeScreenshot` /
-    ///   `writeRecording` into the session's artifact directory and append
-    ///   to the session manifest.
+    /// - No `outputPath`, session active → write via `writeScreenshot` into
+    ///   the session's artifact directory and append to the session manifest.
     /// - No `outputPath`, no session → return `nil`; caller is expected to
     ///   return the in-memory payload (e.g. `.screenshotData`).
-    ///
-    /// Throws `BookKeeperError.unsafePath` for a malformed `outputPath`,
-    /// `.base64DecodingFailed` for a malformed payload, or the underlying
-    /// filesystem error for I/O failures.
-    public func writeArtifactIfSinkAvailable(
+    public func writeScreenshotIfSinkAvailable(
         base64Data: String,
         outputPath: String?,
         requestId: String,
         command: TheFence.Command,
-        metadata: ArtifactMetadata
+        metadata: ScreenshotMetadata
     ) throws -> URL? {
         if let outputPath {
             guard let data = Data(base64Encoded: base64Data) else {
@@ -567,18 +398,35 @@ public final class TheBookKeeper {
         guard case .active = phase else {
             return nil
         }
-        switch metadata {
-        case .screenshot(let screenshotMetadata):
-            return try writeScreenshot(
-                base64Data: base64Data, requestId: requestId,
-                command: command, metadata: screenshotMetadata
-            )
-        case .recording(let recordingMetadata):
-            return try writeRecording(
-                base64Data: base64Data, requestId: requestId,
-                command: command, metadata: recordingMetadata
-            )
+        return try writeScreenshot(
+            base64Data: base64Data, requestId: requestId,
+            command: command, metadata: metadata
+        )
+    }
+
+    /// Write a recording to whichever sink is available. Resolution rules
+    /// match `writeScreenshotIfSinkAvailable` — outputPath wins, then session,
+    /// then nil.
+    public func writeRecordingIfSinkAvailable(
+        base64Data: String,
+        outputPath: String?,
+        requestId: String,
+        command: TheFence.Command,
+        metadata: RecordingMetadata
+    ) throws -> URL? {
+        if let outputPath {
+            guard let data = Data(base64Encoded: base64Data) else {
+                throw BookKeeperError.base64DecodingFailed
+            }
+            return try writeToPath(data, outputPath: outputPath)
         }
+        guard case .active = phase else {
+            return nil
+        }
+        return try writeRecording(
+            base64Data: base64Data, requestId: requestId,
+            command: command, metadata: metadata
+        )
     }
 
     // MARK: - Heist Recording

@@ -675,17 +675,17 @@ final class TheBookKeeperTests: XCTestCase {
     // MARK: - Artifact Orchestration
 
     @ButtonHeistActor
-    func testWriteArtifactIfSinkAvailableExplicitPath() async throws {
+    func testWriteScreenshotIfSinkAvailableExplicitPath() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         let pngData = Data([0x89, 0x50, 0x4E, 0x47]).base64EncodedString()
         let outputPath = tempDirectory.appendingPathComponent("explicit.png").path
 
-        let result = try bookKeeper.writeArtifactIfSinkAvailable(
+        let result = try bookKeeper.writeScreenshotIfSinkAvailable(
             base64Data: pngData,
             outputPath: outputPath,
             requestId: "r1",
             command: .getScreen,
-            metadata: .screenshot(ScreenshotMetadata(width: 390, height: 844))
+            metadata: ScreenshotMetadata(width: 390, height: 844)
         )
 
         XCTAssertEqual(result?.path, outputPath)
@@ -694,17 +694,17 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testWriteArtifactIfSinkAvailableActiveSession() async throws {
+    func testWriteScreenshotIfSinkAvailableActiveSession() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "orchestrate-session")
         let pngData = Data([0x89, 0x50, 0x4E, 0x47]).base64EncodedString()
 
-        let result = try bookKeeper.writeArtifactIfSinkAvailable(
+        let result = try bookKeeper.writeScreenshotIfSinkAvailable(
             base64Data: pngData,
             outputPath: nil,
             requestId: "r1",
             command: .getScreen,
-            metadata: .screenshot(ScreenshotMetadata(width: 390, height: 844))
+            metadata: ScreenshotMetadata(width: 390, height: 844)
         )
 
         XCTAssertNotNil(result)
@@ -713,33 +713,33 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testWriteArtifactIfSinkAvailableNoSinkReturnsNil() async throws {
+    func testWriteScreenshotIfSinkAvailableNoSinkReturnsNil() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         let pngData = Data([0x89, 0x50, 0x4E, 0x47]).base64EncodedString()
 
-        let result = try bookKeeper.writeArtifactIfSinkAvailable(
+        let result = try bookKeeper.writeScreenshotIfSinkAvailable(
             base64Data: pngData,
             outputPath: nil,
             requestId: "r1",
             command: .getScreen,
-            metadata: .screenshot(ScreenshotMetadata(width: 390, height: 844))
+            metadata: ScreenshotMetadata(width: 390, height: 844)
         )
 
         XCTAssertNil(result, "With no session and no output path, should return nil")
     }
 
     @ButtonHeistActor
-    func testWriteArtifactIfSinkAvailableRoutesRecording() async throws {
+    func testWriteRecordingIfSinkAvailableRoutesRecording() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "orchestrate-recording")
         let mp4Data = Data([0x00, 0x00, 0x00, 0x1C]).base64EncodedString()
 
-        let result = try bookKeeper.writeArtifactIfSinkAvailable(
+        let result = try bookKeeper.writeRecordingIfSinkAvailable(
             base64Data: mp4Data,
             outputPath: nil,
             requestId: "r1",
             command: .stopRecording,
-            metadata: .recording(RecordingMetadata(width: 390, height: 844, duration: 5.0, fps: 8, frameCount: 40))
+            metadata: RecordingMetadata(width: 390, height: 844, duration: 5.0, fps: 8, frameCount: 40)
         )
 
         XCTAssertTrue(result?.lastPathComponent.hasSuffix(".mp4") == true)
