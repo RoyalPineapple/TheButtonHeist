@@ -30,7 +30,7 @@ public struct ActiveSession: Sendable {
 }
 
 @ButtonHeistActor
-struct HeistRecording: @unchecked Sendable {
+struct HeistRecording {
     let app: String
     let startTime: Date
     var evidenceCount: Int

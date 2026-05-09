@@ -627,7 +627,9 @@ public final class TheHandoff {
             if DispatchTime.now().uptimeNanoseconds - connectionStart > connectionTimeout {
                 throw ConnectionError.timeout
             }
-            try await Task.sleep(for: .milliseconds(100))
+            guard await Task.cancellableSleep(for: .milliseconds(100)) else {
+                throw CancellationError()
+            }
         }
     }
 
