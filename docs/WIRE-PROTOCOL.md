@@ -1753,3 +1753,51 @@ TheInsideJob uses hash-based change detection during polling:
 2. Compute hash of the flat elements array
 3. Only broadcast if hash differs from last broadcast
 4. Screen captures are automatically captured and broadcast alongside interface changes
+
+## Protocol Version Changelog
+
+Protocol version is SemVer — bump minor for additive changes, major for
+breaking changes. The current version constant lives in
+`ButtonHeist/Sources/TheScore/Messages.swift`.
+
+### 9.0 (current)
+
+Wire-shrink pass on dead bytes.
+
+- `ActionResult` drops the `elementLabel` / `elementValue` / `elementTraits`
+  fields entirely (they had no readers) and stops emitting a stub
+  `exploreResult` for non-explore actions.
+- `ExploreResult` drops `containersSkippedObscured` (zero readers in any
+  formatter / MCP / CLI / client). The custom Codable that existed solely to
+  provide a forward-compat default for that field is gone; synthesized
+  Codable suffices.
+- `ServerInfo` drops `protocolVersion`. The wire-level version lives on
+  `ResponseEnvelope.protocolVersion` (and on `RequestEnvelope.protocolVersion`
+  for client messages); the duplicate copy on `ServerInfo` had zero
+  production readers.
+- `InterfaceDelta` is a discriminated union with cases `noChange` /
+  `elementsChanged` / `screenChanged`. Element edits live under a shared
+  `ElementEdits` shape that omits empty collections. Both
+  `elementsChanged.edits` and `screenChanged.postEdits` nest the same
+  `ElementEdits` object under their respective keys — the wire shape is
+  symmetric across the two cases. Empty `edits` and empty `postEdits` are
+  omitted; missing keys decode as an empty `ElementEdits`. Old clients that
+  decoded the previous flat-fields shape break.
+
+Old clients that read any of these keys will see them missing.
+
+### 8.0
+
+`Interface` now ships a single canonical `tree: [InterfaceNode]` with
+`HeistElement` payloads at the leaves. The legacy parallel
+`elements: [HeistElement]` array and the index-indirected
+`tree: [ElementNode]?` are gone. `Interface.elements` is a computed flatten
+for backward source compatibility, but on the wire there is no flat array.
+Breaks any consumer that decoded the previous shape.
+
+### 7.0
+
+`ActionExpectation` now uses an explicit `type` discriminator format
+(`{"type": "element_updated", …}`) in place of Swift's compiler-synthesized
+Codable shape. Breaks `wait_for_change` callers that send typed expectations;
+string forms (`"screen_changed"`, `"elements_changed"`) are unaffected.
