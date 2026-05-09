@@ -12,33 +12,33 @@ swift build -c release
 
 ## Tool Surface
 
-ButtonHeistMCP currently exposes 21 tools backed by `TheFence`:
+ButtonHeistMCP currently exposes 23 tools backed by `TheFence`:
 
 - `get_interface`
 - `activate` (accepts optional `action` for increment/decrement/custom actions)
 - `type_text`
-- `swipe`
 - `get_screen`
-- `wait_for_idle`
+- `wait_for`
+- `wait_for_change`
 - `start_recording`
 - `stop_recording`
 - `list_devices`
-- `gesture`
-- `scroll`
-- `scroll_to_visible`
-- `scroll_to_edge`
-- `edit_action`
-- `dismiss_keyboard`
+- `gesture` (grouped: `swipe`, `one_finger_tap`, `drag`, `long_press`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`)
+- `scroll` (grouped: `mode` selects `page`, `to_visible`, `search`, or `to_edge`)
+- `edit_action` (grouped: `copy`, `paste`, `cut`, `select`, `selectAll`, `dismiss`)
 - `set_pasteboard`
 - `get_pasteboard`
 - `run_batch`
 - `get_session_state`
 - `connect`
 - `list_targets`
+- `get_session_log`
+- `archive_session`
+- `start_heist`
+- `stop_heist`
+- `play_heist`
 
-`gesture` is a grouped tool — `gesture.type` maps to canonical Fence commands such as `one_finger_tap`, `long_press`, `pinch`, `rotate`, `draw_path`, and `draw_bezier`.
-
-All other tools map 1:1 to a Fence command name.
+`gesture`, `scroll`, and `edit_action` are grouped tools — their typed selector parameter routes to a canonical Fence command. All other tools map 1:1 to a Fence command name.
 
 ## Runtime Behavior
 
