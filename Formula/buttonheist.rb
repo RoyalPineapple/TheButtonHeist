@@ -30,11 +30,6 @@ class Buttonheist < Formula
 
   def caveats
     <<~EOS
-      To integrate Button Heist into your iOS app:
-
-        cd /path/to/your-ios-project
-        buttonheist integrate
-
       MCP server is installed at:
         #{opt_bin}/buttonheist-mcp
 
