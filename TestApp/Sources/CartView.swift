@@ -9,7 +9,7 @@ struct CartView: View {
     }
 
     private var tax: Decimal {
-        subtotal * (Decimal(string: "0.085") ?? 0)
+        subtotal * (Decimal(85) / Decimal(1000))
     }
 
     private var total: Decimal {
@@ -243,18 +243,18 @@ private struct CartItem: Identifiable, Equatable {
     }
 
     static let defaultCart: [CartItem] = [
-        CartItem(name: "Espresso", price: Decimal(string: "4.50") ?? 0, icon: "cup.and.saucer.fill", color: .brown, quantity: 1),
-        CartItem(name: "Croissant", price: Decimal(string: "3.75") ?? 0, icon: "birthday.cake.fill", color: .orange, quantity: 2),
-        CartItem(name: "Orange Juice", price: Decimal(string: "5.00") ?? 0, icon: "mug.fill", color: .orange, quantity: 1),
-        CartItem(name: "Avocado Toast", price: Decimal(string: "12.00") ?? 0, icon: "leaf.fill", color: .green, quantity: 1),
-        CartItem(name: "Blueberry Muffin", price: Decimal(string: "4.25") ?? 0, icon: "circle.grid.cross.fill", color: .purple, quantity: 1),
+        CartItem(name: "Espresso", price: Decimal(450) / Decimal(100), icon: "cup.and.saucer.fill", color: .brown, quantity: 1),
+        CartItem(name: "Croissant", price: Decimal(375) / Decimal(100), icon: "birthday.cake.fill", color: .orange, quantity: 2),
+        CartItem(name: "Orange Juice", price: Decimal(500) / Decimal(100), icon: "mug.fill", color: .orange, quantity: 1),
+        CartItem(name: "Avocado Toast", price: Decimal(1200) / Decimal(100), icon: "leaf.fill", color: .green, quantity: 1),
+        CartItem(name: "Blueberry Muffin", price: Decimal(425) / Decimal(100), icon: "circle.grid.cross.fill", color: .purple, quantity: 1),
     ]
 
     static let extras: [(name: String, price: Decimal, icon: String, color: Color)] = [
-        (name: "Matcha Latte", price: Decimal(string: "5.50") ?? 0, icon: "leaf.circle.fill", color: .green),
-        (name: "Banana Bread", price: Decimal(string: "4.00") ?? 0, icon: "rectangle.split.1x2.fill", color: .yellow),
-        (name: "Cold Brew", price: Decimal(string: "5.25") ?? 0, icon: "snowflake", color: .cyan),
-        (name: "Açaí Bowl", price: Decimal(string: "9.50") ?? 0, icon: "circle.hexagongrid.fill", color: .indigo),
+        (name: "Matcha Latte", price: Decimal(550) / Decimal(100), icon: "leaf.circle.fill", color: .green),
+        (name: "Banana Bread", price: Decimal(400) / Decimal(100), icon: "rectangle.split.1x2.fill", color: .yellow),
+        (name: "Cold Brew", price: Decimal(525) / Decimal(100), icon: "snowflake", color: .cyan),
+        (name: "Açaí Bowl", price: Decimal(950) / Decimal(100), icon: "circle.hexagongrid.fill", color: .indigo),
     ]
 
     static func == (lhs: CartItem, rhs: CartItem) -> Bool {
