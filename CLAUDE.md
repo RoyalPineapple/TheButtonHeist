@@ -452,9 +452,12 @@ Two type families are the currency for referring to UI elements. Use them everyw
 
 ## Versioning and Releases
 
-- **Product version**: [CalVer](https://calver.org/) `YYYY.MM.DD` (e.g. `2026.03.27`). Same-day patches append `.N` (e.g. `2026.03.27.1`). See `VERSIONING.md` in bh-infra.
-- **Protocol version**: SemVer, lives in `protocolVersion` in `Messages.swift`. Bump only when the wire format or handshake changes. The release script does not touch it.
-- **Canonical product version** lives in `ButtonHeist/Sources/TheScore/Messages.swift` (`buttonHeistVersion`). CLI, MCP, and iOS server all read it via TheScore.
+There is exactly one version: `buttonHeistVersion` in `ButtonHeist/Sources/TheScore/Messages.swift`. CalVer (`YYYY.MM.DD`, same-day patches append `.N`). CLI, MCP, and iOS server all read it via TheScore. There is no separate "protocol version" — do not introduce one. Wire-format changes do not get their own version bump; the release-time CalVer roll is the only version movement.
+
+The handshake requires server and client to report the **exact same** `buttonHeistVersion`. There is no "compatible protocol" laxness: inside (iOS server) and outside (CLI/MCP) must always be the same release. If you change the wire format, both sides must rebuild and ship together.
+
+Commits between releases are not releases — the version constant stays put. Only `scripts/release.sh` moves it. Treat any temptation to bump the version mid-feature as a sign you're working around the release flow rather than with it.
+
 - **Releasing**: Use the release script from a clean `main` branch — never bump version manually:
   ```bash
   ./scripts/release.sh              # Uses today's date
