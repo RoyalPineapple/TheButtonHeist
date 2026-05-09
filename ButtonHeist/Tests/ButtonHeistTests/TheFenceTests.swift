@@ -822,12 +822,11 @@ final class TheFenceTests: XCTestCase {
             startTime: Date(), endTime: Date(), stopReason: .manual
         )
 
-        Task { @ButtonHeistActor in
-            do { try await Task.sleep(nanoseconds: 50_000_000) } catch { return }
+        // afterRegister fires synchronously once the tracker has registered the
+        // recording callback — deliver the payload right then, no sleep needed.
+        let result = try await fence.waitForRecording(timeout: 1.0) {
             fence.handoff.onRecording?(expectedPayload)
         }
-
-        let result = try await fence.waitForRecording(timeout: 1.0)
         XCTAssertEqual(result.videoData, expectedPayload.videoData)
         XCTAssertEqual(result.width, expectedPayload.width)
         XCTAssertEqual(result.duration, expectedPayload.duration)
@@ -837,13 +836,10 @@ final class TheFenceTests: XCTestCase {
     func testWaitForRecordingServerError() async throws {
         let fence = TheFence()
 
-        Task { @ButtonHeistActor in
-            do { try await Task.sleep(nanoseconds: 50_000_000) } catch { return }
-            fence.handoff.onRecordingError?("disk full")
-        }
-
         do {
-            _ = try await fence.waitForRecording(timeout: 1.0)
+            _ = try await fence.waitForRecording(timeout: 1.0) {
+                fence.handoff.onRecordingError?("disk full")
+            }
             XCTFail("Expected FenceError.actionFailed to be thrown")
         } catch let error as FenceError {
             if case .actionFailed(let msg) = error {

@@ -882,7 +882,10 @@ public final class TheFence {
         }
     }
 
-    private func waitForRecording(
+    /// Internal overload exposing `afterRegister` for test injection. The hook
+    /// fires synchronously after the recording callback is registered, letting
+    /// tests deliver a payload deterministically without sleeping.
+    func waitForRecording(
         timeout: TimeInterval,
         afterRegister: (() -> Void)?
     ) async throws -> RecordingPayload {

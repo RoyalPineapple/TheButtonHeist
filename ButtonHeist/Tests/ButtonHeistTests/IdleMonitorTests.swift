@@ -14,40 +14,41 @@ final class IdleMonitorTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testResetPreventsTimeout() async throws {
-        var fired = false
-        // 0.5s to avoid flakiness on CI where scheduling jitter can expire 0.2s prematurely
-        let monitor = IdleMonitor(timeout: 0.5) {
-            fired = true
-        }
+    func testResetReplacesPriorTimer() async {
+        // resetTimer() should cancel any prior timer task and schedule a new one.
+        // Verify deterministically by inspecting `hasPendingTimer` rather than
+        // racing against wall-clock waits.
+        let monitor = IdleMonitor(timeout: 60) { /* never fires within test */ }
+
         monitor.resetTimer()
-        try await Task.sleep(for: .seconds(0.1))
+        XCTAssertTrue(monitor.hasPendingTimer, "First reset should schedule a timer")
+
         monitor.resetTimer()
-        try await Task.sleep(for: .seconds(0.1))
-        XCTAssertFalse(fired)
+        XCTAssertTrue(monitor.hasPendingTimer, "Second reset should schedule a new timer")
+
         monitor.stop()
+        XCTAssertFalse(monitor.hasPendingTimer, "stop() should cancel the timer")
     }
 
     @ButtonHeistActor
-    func testZeroTimeoutNeverFires() async throws {
-        var fired = false
+    func testZeroTimeoutNeverSchedulesTimer() async {
+        // With timeout == 0, resetTimer() short-circuits and never creates a
+        // task. No need to wait — assert directly on the monitor's state.
         let monitor = IdleMonitor(timeout: 0) {
-            fired = true
+            XCTFail("Should not fire when timeout is zero")
         }
         monitor.resetTimer()
-        try await Task.sleep(for: .seconds(0.1))
-        XCTAssertFalse(fired)
+        XCTAssertFalse(monitor.hasPendingTimer, "Zero timeout must not schedule a task")
     }
 
     @ButtonHeistActor
-    func testCancelStopsTimer() async throws {
-        var fired = false
-        let monitor = IdleMonitor(timeout: 0.1) {
-            fired = true
+    func testCancelStopsTimer() async {
+        let monitor = IdleMonitor(timeout: 60) {
+            XCTFail("Should not fire after stop()")
         }
         monitor.resetTimer()
+        XCTAssertTrue(monitor.hasPendingTimer)
         monitor.stop()
-        try await Task.sleep(for: .seconds(0.2))
-        XCTAssertFalse(fired)
+        XCTAssertFalse(monitor.hasPendingTimer)
     }
 }

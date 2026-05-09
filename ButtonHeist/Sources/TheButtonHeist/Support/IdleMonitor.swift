@@ -28,4 +28,12 @@ public final class IdleMonitor {
         timeoutTask?.cancel()
         timeoutTask = nil
     }
+
+    /// Test-only: whether a timeout task is currently scheduled and not yet
+    /// cancelled or completed. Tests use this to assert "did not fire" without
+    /// wall-clock waits.
+    var hasPendingTimer: Bool {
+        guard let task = timeoutTask else { return false }
+        return !task.isCancelled
+    }
 }

@@ -97,29 +97,28 @@ final class WaitForIntegrationTests: XCTestCase {
     // MARK: - 2. Element appears after a delay
 
     func testWaitForElementAppearsAfterDelay() async throws {
-        let result: ActionResult? = await withCheckedContinuation { continuation in
-            Task { @MainActor in
-                // Schedule the label to appear after a short delay
-                let addTask = Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
-                    self.addLabel("WaitFor-Delayed")
-                }
-
-                let response = await self.waitFor(
-                    target: .matcher(ElementMatcher(label: "WaitFor-Delayed")),
-                    timeout: 10.0
-                )
-                addTask.cancel()
-                continuation.resume(returning: response)
-            }
+        // Queue the label-add Task on @MainActor before calling waitFor.
+        // waitFor runs its synchronous prefix (initial hasTarget check returns
+        // false because the label isn't in the tree yet), then suspends on
+        // `tripwire.waitForAllClear`. While suspended the queued addLabel Task
+        // runs; the next pulse tick observes the new label and wait_for resolves
+        // with "matched after …". No wall-clock sleep needed.
+        let addTask = Task { @MainActor in
+            _ = self.addLabel("WaitFor-Delayed")
         }
+
+        let response = await self.waitFor(
+            target: .matcher(ElementMatcher(label: "WaitFor-Delayed")),
+            timeout: 10.0
+        )
+        await addTask.value
 
         // Clean up
         for subview in window.subviews where subview.accessibilityLabel == "WaitFor-Delayed" {
             subview.removeFromSuperview()
         }
 
-        let unwrapped = try XCTUnwrap(result)
+        let unwrapped = try XCTUnwrap(response)
         XCTAssertTrue(unwrapped.success)
         XCTAssertEqual(unwrapped.method, .waitFor)
         let message = try XCTUnwrap(unwrapped.message)
@@ -151,24 +150,21 @@ final class WaitForIntegrationTests: XCTestCase {
     func testWaitForAbsentElementDisappears() async throws {
         let label = addLabel("WaitFor-GoingAway")
 
-        let result: ActionResult? = await withCheckedContinuation { continuation in
-            Task { @MainActor in
-                let removeTask = Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
-                    label.removeFromSuperview()
-                }
-
-                let response = await self.waitFor(
-                    target: .matcher(ElementMatcher(label: "WaitFor-GoingAway")),
-                    absent: true,
-                    timeout: 10.0
-                )
-                removeTask.cancel()
-                continuation.resume(returning: response)
-            }
+        // Queue the removal on @MainActor; it runs once waitFor suspends on
+        // its first tripwire await. The pulse then observes the absence and
+        // resolves the wait deterministically.
+        let removeTask = Task { @MainActor in
+            label.removeFromSuperview()
         }
 
-        let unwrapped = try XCTUnwrap(result)
+        let response = await self.waitFor(
+            target: .matcher(ElementMatcher(label: "WaitFor-GoingAway")),
+            absent: true,
+            timeout: 10.0
+        )
+        await removeTask.value
+
+        let unwrapped = try XCTUnwrap(response)
         XCTAssertTrue(unwrapped.success)
         XCTAssertEqual(unwrapped.method, .waitFor)
         XCTAssertTrue(unwrapped.message?.contains("absent confirmed") == true)
@@ -250,24 +246,18 @@ final class WaitForIntegrationTests: XCTestCase {
             $0.element.label == "WaitFor-HeistId-GoingAway"
         })?.heistId, "Could not find heistId for test label")
 
-        let result: ActionResult? = await withCheckedContinuation { continuation in
-            Task { @MainActor in
-                let removeTask = Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 500_000_000)
-                    label.removeFromSuperview()
-                }
-
-                let response = await self.waitFor(
-                    target: .heistId(heistId),
-                    absent: true,
-                    timeout: 10.0
-                )
-                removeTask.cancel()
-                continuation.resume(returning: response)
-            }
+        let removeTask = Task { @MainActor in
+            label.removeFromSuperview()
         }
 
-        let unwrapped = try XCTUnwrap(result)
+        let response = await self.waitFor(
+            target: .heistId(heistId),
+            absent: true,
+            timeout: 10.0
+        )
+        await removeTask.value
+
+        let unwrapped = try XCTUnwrap(response)
         XCTAssertTrue(unwrapped.success)
         XCTAssertEqual(unwrapped.method, .waitFor)
         XCTAssertTrue(unwrapped.message?.contains("absent confirmed") == true)
