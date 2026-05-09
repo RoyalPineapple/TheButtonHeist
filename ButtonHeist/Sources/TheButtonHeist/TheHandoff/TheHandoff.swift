@@ -248,7 +248,7 @@ public final class TheHandoff {
         DeviceConnection(device: $0, token: $1, driverId: $2)
     }
 
-    // MARK: - Private
+    // MARK: - Discovery / Connection Handles
 
     private var discovery: (any DeviceDiscovering)?
     private var connection: (any DeviceConnecting)?

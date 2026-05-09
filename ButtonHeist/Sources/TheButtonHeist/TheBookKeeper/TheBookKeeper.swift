@@ -7,10 +7,8 @@ private let logger = Logger(subsystem: "com.buttonheist.bookkeeper", category: "
 
 // MARK: - Session Phase State Machine
 
-/// Lifecycle of a BookKeeper session from idle through archive.
-///
-/// Each non-idle case carries the phase-specific data that is valid only during that
-/// phase, making impossible states unrepresentable.
+/// Lifecycle of a BookKeeper session from idle through archive. Each non-idle
+/// case carries the phase-specific data valid for that phase.
 @ButtonHeistActor
 public enum SessionPhase: Sendable {
     case idle
@@ -20,11 +18,6 @@ public enum SessionPhase: Sendable {
     case archived(ArchivedSession)
 }
 
-/// State for an open session that is accepting commands and artifacts.
-///
-/// The manifest, start time, and directory are public for test inspection.
-/// File handles and mutable bookkeeping are module-internal so they can't be
-/// reached or mutated from outside TheBookKeeper.
 @ButtonHeistActor
 public struct ActiveSession: Sendable {
     public let sessionId: String
@@ -33,27 +26,18 @@ public struct ActiveSession: Sendable {
     public var manifest: SessionManifest
     public let startTime: Date
     var nextSequenceNumber: Int
-
-    /// Non-nil while a heist recording is active inside this session.
     var heistRecording: HeistRecording?
 }
 
-/// State for an in-progress heist recording nested inside an `ActiveSession`.
-///
-/// Appends one `HeistEvidence` JSON line per captured step. Not Sendable-checkable
-/// because `FileHandle` is not Sendable, but all access is isolated to
-/// `@ButtonHeistActor`.
 @ButtonHeistActor
 struct HeistRecording: @unchecked Sendable {
     let app: String
     let startTime: Date
     var evidenceCount: Int
-    /// Append-only file handle for durable evidence storage.
     let fileHandle: FileHandle
     let filePath: URL
 }
 
-/// Transient state while a session's log is being flushed and compressed.
 @ButtonHeistActor
 public struct ClosingSession: Sendable {
     public let sessionId: String
@@ -63,7 +47,6 @@ public struct ClosingSession: Sendable {
     public let endTime: Date
 }
 
-/// State for a session whose log has been compressed but not yet archived.
 @ButtonHeistActor
 public struct ClosedSession: Sendable {
     public let sessionId: String
@@ -74,7 +57,6 @@ public struct ClosedSession: Sendable {
     public let endTime: Date
 }
 
-/// Terminal state for a session whose directory has been packaged into a single archive.
 @ButtonHeistActor
 public struct ArchivedSession: Sendable {
     public let archivePath: URL
@@ -538,8 +520,6 @@ public final class TheBookKeeper {
         guard case .active(var session) = phase,
               var recording = session.heistRecording else { return }
         guard !Self.excludedHeistCommands.contains(command) else { return }
-
-        // Skip failed actions — only record successful outcomes
         guard succeeded else { return }
 
         let step = buildStep(
@@ -650,16 +630,8 @@ public final class TheBookKeeper {
         return filtered.isEmpty ? nil : filtered
     }
 
-    /// Build the smallest ElementMatcher that uniquely identifies the element
-    /// among all currently visible elements. Uses only identity fields —
-    /// never value (mutable state) or state traits (selected, notEnabled, etc.).
-    /// Skips identifiers that contain UUIDs (runtime-generated, not stable across sessions).
-    ///
-    /// When no combination of fields yields a unique match, returns the best
-    /// matcher alongside the element's 0-based ordinal among all matches
-    /// (traversal order in the allElements array).
-    ///
-    /// Internal: consumed by `buildStep` and verified directly in tests.
+    /// Smallest unique matcher among `allElements`, falling back to a non-unique
+    /// matcher + ordinal when no field combination distinguishes the element.
     func buildMinimalMatcher(
         element: HeistElement,
         allElements: [HeistElement]
@@ -757,7 +729,7 @@ public final class TheBookKeeper {
         path.validatedOutputURL()
     }
 
-    // MARK: - Private Helpers
+    // MARK: - Phase / Directory / Manifest Helpers
 
     private var phaseName: String {
         switch phase {
