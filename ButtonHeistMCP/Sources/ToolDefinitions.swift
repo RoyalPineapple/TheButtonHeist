@@ -65,19 +65,9 @@ enum ToolDefinitions {
     // Codable encoding, so JSON from a wire log can be pasted into a tool call.
     static let expectProperty: Value = [
         "description": """
-            Inline verification for this action — match the expectation to what the action does. \
-            Navigation (tap a link, back button): "screen_changed". \
-            Insertion or deletion (add item, delete row): "elements_changed". \
-            State change (toggle, picker, text input): \
-            {"type": "element_updated", "heistId": "x", "property": "value", "newValue": "5"} — \
-            proves the specific property changed. All fields optional, omitted = wildcard. \
-            {"type": "element_appeared", "matcher": {"label": "Success"}} — check a matching \
-            element was added. \
-            {"type": "element_disappeared", "matcher": {"label": "Loading"}} — check a matching \
-            element was removed. \
-            Expectations are most valuable inside run_batch: each step declares what should happen, \
-            and a failed expectation stops the batch at the exact step that diverged — the agent \
-            knows immediately what went wrong instead of discovering it turns later.
+            Inline verification for this action. String form: "screen_changed" or "elements_changed". \
+            Object form: {"type": "element_updated"|"element_appeared"|"element_disappeared"|"compound", ...}. \
+            See docs/MCP-AGENT-GUIDE.md for the full expectation vocabulary and recipes.
             """,
         "oneOf": .array([
             [
@@ -158,26 +148,9 @@ enum ToolDefinitions {
     static let getInterface = Tool(
         name: "get_interface",
         description: """
-            Read the full UI element hierarchy. Call once when you arrive on a new screen, \
-            then use deltas from subsequent actions to track changes — don't call again unless \
-            you need elements the delta didn't cover. \
-            \
-            Every action (activate, type_text, scroll, etc.) returns a delta: \
-            + heistId "label" [traits] = appeared, - heistId = disappeared, \
-            ~ heistId: property "old" → "new" = changed, screen changed = new screen \
-            (full interface included, previous heistIds invalidated). \
-            The delta is your primary feedback loop — it tells you what happened without \
-            an extra round trip. \
-            \
-            By default explores the entire screen including off-screen content in scroll views. \
-            Pass full=false for only visible elements (faster). Use detail=full for geometry. \
-            Filter with matcher fields (label, traits, excludeTraits) or a heistId list. \
-            \
-            Targeting: heistId is stable on the current screen — copy from a previous response, \
-            use in the next action. After a screen change, all heistIds reset — use matchers \
-            (label, value, traits) or read from the delta's new interface. Never construct or \
-            predict a heistId. Matcher strings are case-insensitive substrings; traits match exactly. \
-            Zero matches returns suggestions, never a fuzzy guess.
+            Read the UI element hierarchy. Call once on a new screen, then track changes via \
+            action deltas — re-fetch only when you need elements the delta didn't cover. \
+            Filter with matcher fields or heistId list; pass full=false for only visible elements.
             """,
         inputSchema: .object([
             "type": "object",
@@ -208,15 +181,9 @@ enum ToolDefinitions {
     static let activate = Tool(
         name: "activate",
         description: """
-            Activate a UI element — tap buttons, follow links, toggle controls. Returns a delta \
-            showing what changed, so you don't need to call get_interface after every action. \
-            Works like a VoiceOver double-tap: accessibility activation first, synthetic tap fallback. \
-            Only elements with "activate" in their actions array can be activated. \
-            Target by heistId (from get_interface) or by label, value, traits. \
-            If a label matches multiple elements, add traits to disambiguate (e.g. label="Add", traits=["button"]). \
-            If multiple elements still match, the error shows the valid ordinal range — pass ordinal to select \
-            by position (0 = first, 1 = second, etc.). \
-            Pass 'action' to invoke a custom action: "increment", "decrement", "Delete", or any action from the element's actions array.
+            Activate a UI element (VoiceOver-style double-tap): tap buttons, follow links, toggle \
+            controls. Pass 'action' to invoke a named action like "increment", "decrement", or \
+            any entry from the element's actions array.
             """,
         inputSchema: .object([
             "type": "object",
@@ -231,9 +198,8 @@ enum ToolDefinitions {
     static let typeText = Tool(
         name: "type_text",
         description: """
-            Type text and/or delete characters via keyboard injection. Optionally target an element \
-            to focus it first and read back the resulting value. \
-            Target text fields by value (placeholder text, e.g. value="Email") or by heistId.
+            Type text and/or delete characters via keyboard injection. Optionally target an \
+            element to focus it first and read back the resulting value.
             """,
         inputSchema: .object([
             "type": "object",
@@ -250,10 +216,8 @@ enum ToolDefinitions {
     static let waitFor = Tool(
         name: "wait_for",
         description: """
-            Wait for an element matching a predicate to appear (or disappear). \
-            Polls the accessibility tree on UI settle events — no busy-waiting. \
-            Returns the matched element on success, or diagnostic info on timeout. \
-            Use 'absent: true' to wait for an element to disappear.
+            Wait for an element matching a predicate to appear, or to disappear with absent=true. \
+            Polls on UI settle events. Returns the matched element or diagnostic info on timeout.
             """,
         inputSchema: .object([
             "type": "object",
@@ -282,21 +246,9 @@ enum ToolDefinitions {
     static let waitForChange = Tool(
         name: "wait_for_change",
         description: """
-            Wait for the UI to change in a way that matches an expectation. Uses the same \
-            expect vocabulary as action commands — "screen_changed", "elements_changed", \
-            elementAppeared, elementDisappeared, elementUpdated. \
-            \
-            With no expectation, returns on any tree change. With expect, rides through \
-            intermediate states until the expectation is met: spinner appears → keep waiting → \
-            receipt screen loads → return. The server re-evaluates on every settle cycle. \
-            \
-            When to use: after an action whose delta shows a transient state (loading indicator \
-            appeared, interactive elements vanished) and your expectation wasn't met. Pass the \
-            same expectation you used on the action — the server picks up where the action left off. \
-            \
-            Example flow: activate pay_now_button expect="screen_changed" → delta shows spinner, \
-            expectation not met → wait_for_change expect="screen_changed" timeout=10 → receipt \
-            screen arrives, expectation met.
+            Wait for the UI to change. With no expect, returns on any tree change. With expect, \
+            rides through intermediate states (spinners, loading) until the expectation is met. \
+            Use after an action whose delta showed a transient state and the expectation wasn't met yet.
             """,
         inputSchema: [
             "type": "object",
@@ -327,8 +279,8 @@ enum ToolDefinitions {
     static let stopRecording = Tool(
         name: "stop_recording",
         description: """
-            Stop an in-progress screen recording. Video metadata is returned as JSON summary \
-            (raw video is too large for MCP context). Use 'output' to save the MP4 to a file path.
+            Stop an in-progress screen recording. Returns metadata only by default (raw video \
+            is too large for MCP context); pass 'output' to save the MP4 to a file path.
             """,
         inputSchema: [
             "type": "object",
@@ -342,10 +294,8 @@ enum ToolDefinitions {
     static let listDevices = Tool(
         name: "list_devices",
         description: """
-            List iOS devices discovered via Bonjour that are running TheInsideJob. \
-            Also includes named targets from .buttonheist.json config. \
-            If Bonjour is blocked (e.g. MDM stealth mode) and no config targets exist, \
-            this returns empty — use connect(device:token:) with the known address instead.
+            List iOS devices discovered via Bonjour plus named targets from .buttonheist.json. \
+            Empty when Bonjour is blocked and no config targets exist — use connect(device:token:) directly.
             """,
         inputSchema: ["type": "object", "properties": .object([:]), "additionalProperties": false],
         annotations: .init(readOnlyHint: true, idempotentHint: true)
@@ -356,22 +306,9 @@ enum ToolDefinitions {
     static let scroll = Tool(
         name: "scroll",
         description: """
-            Scroll within scroll views. Set 'mode' to control behavior: \
-            \
-            page (default): Scroll by one page in a direction. Requires 'direction' and an element target — \
-            scrolls the nearest scrollable ancestor. The direction determines which axis: "right" on an element \
-            in a horizontal carousel scrolls the carousel, "down" scrolls the outer list. \
-            \
-            to_visible: Jump to a known element's position in its scroll view. The element must already be in \
-            the registry (seen in a previous get_interface or action delta). No-op if already visible. \
-            If the element has never been seen, use mode "search" instead. \
-            \
-            search: Find an element by scrolling through all scrollable containers. Use when the element has \
-            never been seen (not in the registry). Describe it by label, value, and/or traits. Automatically \
-            searches outermost containers first, adapting direction to each container's axis. \
-            \
-            to_edge: Scroll to an edge of a scroll view. Requires 'edge' (top/bottom/left/right) and an \
-            element target. "top"/"bottom" scroll vertically, "left"/"right" scroll horizontally.
+            Scroll within scroll views. mode=page scrolls one page in 'direction'; \
+            mode=to_visible jumps to an element seen previously; mode=search scrolls all \
+            containers to find an unseen element; mode=to_edge scrolls to a top/bottom/left/right edge.
             """,
         inputSchema: .object([
             "type": "object",
@@ -402,22 +339,9 @@ enum ToolDefinitions {
     static let gesture = Tool(
         name: "gesture",
         description: """
-            Perform touch gestures. For element interactions, prefer 'activate' instead. \
-            Set 'type' to one of: swipe, one_finger_tap, drag, long_press, pinch, rotate, \
-            two_finger_tap, draw_path, draw_bezier. \
-            Common params: heistId or matcher fields (element target) or x/y (coordinates). \
-            swipe: 'direction' for cardinal swipes (up/down/left/right), or start/end unit points \
-            (0-1 relative to element frame) for precise control. Also accepts startX/startY/endX/endY \
-            for absolute screen coordinates. \
-            one_finger_tap: synthetic tap at coordinates (use 'activate' for element interactions instead). \
-            drag: endX, endY required. \
-            long_press: duration (seconds, default 0.5). \
-            pinch: scale required (>1 zoom in, <1 zoom out), optional centerX/centerY (default element center or x/y), spread. \
-            rotate: angle required (radians), optional centerX/centerY, radius. \
-            two_finger_tap: optional centerX/centerY, spread. \
-            draw_path: points array of {x, y} objects, optional velocity (points/sec). \
-            draw_bezier: startX, startY required; segments array of {cp1X, cp1Y, cp2X, cp2Y, endX, endY}; \
-            optional samplesPerSegment, velocity.
+            Perform a touch gesture. Prefer 'activate' for element interactions — gestures are for \
+            swipes, drags, pinches, rotates, and free-form path drawing. Set 'type' to one of: \
+            swipe, one_finger_tap, drag, long_press, pinch, rotate, two_finger_tap, draw_path, draw_bezier.
             """,
         inputSchema: .object([
             "type": "object",
@@ -480,8 +404,7 @@ enum ToolDefinitions {
         name: "edit_action",
         description: """
             Perform an edit or keyboard action on the current first responder. \
-            Actions: copy, paste, cut, select, selectAll — standard edit menu actions. \
-            dismiss — dismiss the software keyboard (resign first responder).
+            Actions: copy, paste, cut, select, selectAll, dismiss (dismiss the keyboard).
             """,
         inputSchema: [
             "type": "object",
@@ -502,8 +425,7 @@ enum ToolDefinitions {
         name: "set_pasteboard",
         description: """
             Write text to the general pasteboard from within the app. Content written by the app \
-            itself does not trigger the iOS "Allow Paste" dialog when subsequently read. \
-            Use this for automation workflows that need clipboard content without system prompts.
+            itself does not trigger the iOS "Allow Paste" dialog when subsequently read.
             """,
         inputSchema: [
             "type": "object",
@@ -519,8 +441,8 @@ enum ToolDefinitions {
     static let getPasteboard = Tool(
         name: "get_pasteboard",
         description: """
-            Read text from the general pasteboard. If the content was written by another app, \
-            iOS may show an "Allow Paste" system dialog.
+            Read text from the general pasteboard. iOS may show "Allow Paste" if the content \
+            was written by another app.
             """,
         inputSchema: [
             "type": "object",
@@ -535,22 +457,9 @@ enum ToolDefinitions {
     static let runBatch = Tool(
         name: "run_batch",
         description: """
-            Execute multiple commands in a single call. Each step is a JSON object with \
-            'command' plus that command's parameters. Returns per-step results and a merged \
-            net delta. Use stop_on_error (default) for dependent sequences, continue_on_error \
-            for independent steps. \
-            \
-            Attach 'expect' to each step for inline verification. Without expectations, \
-            a silent failure at step 2 goes unnoticed until the agent re-reads the interface \
-            turns later. With expectations, the batch stops at the exact step that diverged. \
-            Match the expectation to the action: "screen_changed" for navigation, \
-            "elements_changed" for insertions/deletions, {"elementUpdated": {...}} for state \
-            changes like toggles, pickers, and text input. \
-            \
-            Valid commands: activate, increment, decrement, perform_custom_action, type_text, \
-            scroll, scroll_to_visible, scroll_to_edge, swipe, one_finger_tap, long_press, drag, \
-            pinch, rotate, two_finger_tap, draw_path, draw_bezier, edit_action, set_pasteboard, \
-            get_pasteboard, dismiss_keyboard, get_interface, get_screen.
+            Execute multiple commands in one call. Each step is a JSON object with 'command' plus \
+            that command's parameters; attach 'expect' per step to verify inline. Returns per-step \
+            results and a merged net delta. policy=stop_on_error (default) or continue_on_error.
             """,
         inputSchema: [
             "type": "object",
@@ -582,9 +491,8 @@ enum ToolDefinitions {
     static let getSessionState = Tool(
         name: "get_session_state",
         description: """
-            Inspect the current Button Heist session state without performing any actions. \
-            Returns connection status, active device/app identity, recording state, client timeouts, \
-            and a lightweight summary of the last action (if any).
+            Inspect the current Button Heist session: connection status, device/app identity, \
+            recording state, client timeouts, and a lightweight summary of the last action.
             """,
         inputSchema: [
             "type": "object",
@@ -598,12 +506,8 @@ enum ToolDefinitions {
         name: "connect",
         description: """
             Establish or switch the active connection to an iOS device running TheInsideJob. \
-            Three connection patterns: \
-            (1) Named target: connect(target: "my-sim") — reads from .buttonheist.json config. \
-            (2) Direct address: connect(device: "127.0.0.1:{port}", token: "{token}") — port and token \
-            come from the app's launch env vars (SIMCTL_CHILD_INSIDEJOB_PORT, SIMCTL_CHILD_INSIDEJOB_TOKEN). \
-            (3) Environment: set BUTTONHEIST_DEVICE and BUTTONHEIST_TOKEN before starting the MCP server. \
-            Tears down any existing session before connecting to the new target.
+            Three patterns: target=NAME from .buttonheist.json, device=HOST:PORT + token, or \
+            BUTTONHEIST_DEVICE/BUTTONHEIST_TOKEN env vars. Tears down any existing session first.
             """,
         inputSchema: [
             "type": "object",
@@ -628,9 +532,8 @@ enum ToolDefinitions {
     static let listTargets = Tool(
         name: "list_targets",
         description: """
-            List named connection targets from the config file (.buttonheist.json or \
-            ~/.config/buttonheist/config.json). Shows target names, device addresses, \
-            and which target is the default.
+            List named connection targets from .buttonheist.json (or ~/.config/buttonheist/config.json), \
+            including each target's address and which one is the default.
             """,
         inputSchema: [
             "type": "object",
@@ -642,10 +545,7 @@ enum ToolDefinitions {
 
     static let getSessionLog = Tool(
         name: "get_session_log",
-        description: """
-            Get the current session manifest showing all commands executed and \
-            artifacts produced during this session.
-            """,
+        description: "Return the current session manifest: commands executed and artifacts produced.",
         inputSchema: [
             "type": "object",
             "properties": .object([:]),
@@ -656,10 +556,7 @@ enum ToolDefinitions {
 
     static let archiveSession = Tool(
         name: "archive_session",
-        description: """
-            Close and compress the current session into a .tar.gz archive. \
-            Returns the archive file path.
-            """,
+        description: "Close and compress the current session into a .tar.gz archive; returns the path.",
         inputSchema: [
             "type": "object",
             "properties": [
@@ -675,28 +572,9 @@ enum ToolDefinitions {
     static let startHeist = Tool(
         name: "start_heist",
         description: """
-            Start recording a heist. All subsequent successful commands are captured as \
-            steps in a .heist file. Failed actions are silently skipped. \
-            \
-            Targeting during recording: ALWAYS target elements by matcher fields (label, \
-            value, traits) — never by heistId. Matchers are portable across sessions; \
-            heistIds are ephemeral and meaningless on replay. You can call get_interface \
-            to look up an element's full accessibility info (label, traits, value) by \
-            heistId, then use those properties to target it — but the action itself must \
-            use matcher fields. get_interface calls are filtered out of the recording. \
-            \
-            wait_for and wait_for_change are recorded as playback steps. They act as \
-            timing gates during replay — without them, playback fires the next action \
-            before async UI transitions complete. wait_for waits for an element to appear \
-            or disappear (absent=true). \
-            \
-            During recording: attach 'expect' to actions — expectations are recorded with each \
-            step and validated on every replay. Use specific expectations over generic ones: \
-            {"elementUpdated": {"heistId": "toggle", "newValue": "1"}} tells you exactly what \
-            broke on replay; "elements_changed" only tells you something didn't move. \
-            \
-            Read-only commands (get_interface, get_screen, status) and meta-commands \
-            (run_batch, start/stop_recording) are not recorded.
+            Start recording a heist. Successful commands become steps in a .heist file; \
+            read-only and meta-commands are filtered out. Target elements by matcher fields \
+            (label, value, traits) — never by heistId — and attach 'expect' for replay validation.
             """,
         inputSchema: [
             "type": "object",
@@ -717,10 +595,8 @@ enum ToolDefinitions {
     static let stopHeist = Tool(
         name: "stop_heist",
         description: """
-            Stop recording and save the heist to a .heist file. Returns the file path \
-            and number of steps recorded. At least one step must have been recorded. \
-            The output file is a self-contained JSON playback script with matcher-based \
-            element targeting — no heistIds, no coordinates, portable across sessions.
+            Stop recording and save the heist as a self-contained JSON playback script. \
+            Returns the file path and step count. At least one step must have been recorded.
             """,
         inputSchema: [
             "type": "object",
@@ -738,18 +614,9 @@ enum ToolDefinitions {
     static let playHeist = Tool(
         name: "play_heist",
         description: """
-            Play back a .heist file. Steps execute sequentially against the connected app. \
-            Playback stops on the first failed step (action error or unsuccessful result). \
-            Returns completed step count, failed step index (if any), and total timing in ms. \
-            \
-            On failure, the response includes a `failure` object with full diagnostics: \
-            the failed command, its element target, error message, the full action result \
-            (errorKind, scroll search diagnostics), any expectation result, and a complete \
-            interface snapshot at the time of failure — every element on screen. This gives \
-            enough context to diagnose the failure without re-running. \
-            \
-            If the heist was recorded against a different app, a warning is logged but \
-            playback proceeds — the matchers may still resolve correctly.
+            Play back a .heist file. Steps execute sequentially; playback stops on the first \
+            failed step. On failure, returns full diagnostics: command, target, error, action \
+            result, expectation result, and a complete interface snapshot at the failure point.
             """,
         inputSchema: [
             "type": "object",
