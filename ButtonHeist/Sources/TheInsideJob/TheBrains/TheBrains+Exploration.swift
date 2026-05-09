@@ -65,7 +65,6 @@ extension TheBrains {
                    view.window != nil,
                    Self.isObscuredByPresentation(view: view) {
                     manifest.markExplored(container)
-                    manifest.skippedObscuredContainers += 1
                     continue
                 }
 
@@ -75,7 +74,6 @@ extension TheBrains {
                    target == nil {
                     recordDuringExplore(cached.discoveredHeistIds)
                     manifest.markExplored(container)
-                    manifest.skippedContainers += 1
                     continue
                 }
 

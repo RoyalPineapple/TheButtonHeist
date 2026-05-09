@@ -103,20 +103,6 @@ final class PresentationObscuringTests: XCTestCase {
 
         window.isHidden = true
     }
-
-    // MARK: - ScreenManifest skippedObscuredContainers
-
-    func testScreenManifestSkippedObscuredContainersDefaultsToZero() {
-        let manifest = TheBrains.ScreenManifest()
-        XCTAssertEqual(manifest.skippedObscuredContainers, 0)
-    }
-
-    func testScreenManifestSkippedObscuredContainersIncrements() {
-        var manifest = TheBrains.ScreenManifest()
-        manifest.skippedObscuredContainers += 1
-        manifest.skippedObscuredContainers += 1
-        XCTAssertEqual(manifest.skippedObscuredContainers, 2)
-    }
 }
 
 #endif

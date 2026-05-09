@@ -25,8 +25,6 @@ final class ScreenManifestTests: XCTestCase {
         XCTAssertTrue(manifest.pendingContainers.isEmpty)
         XCTAssertTrue(manifest.exploredContainers.isEmpty)
         XCTAssertEqual(manifest.scrollCount, 0)
-        XCTAssertEqual(manifest.skippedContainers, 0)
-        XCTAssertEqual(manifest.skippedObscuredContainers, 0)
     }
 
     // MARK: - markExplored
