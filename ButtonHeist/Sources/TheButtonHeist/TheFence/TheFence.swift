@@ -333,8 +333,14 @@ public final class TheFence {
     }
 
     private struct ResponseCacheUpdate {
-        let evidenceElements: [HeistElement]?
-        let postRecordBookKeeperElements: [HeistElement]?
+        /// Snapshot of the cache to record heist evidence against. Includes
+        /// pre-action elements (so the activated element from the old screen
+        /// survives a screen change) merged with any newly-arrived elements.
+        let evidenceCache: [String: HeistElement]?
+        /// On a screen change, the new screen's elements that should
+        /// replace the cache after evidence is recorded. `nil` when the
+        /// cache should be left as-is.
+        let postRecordReplacement: [HeistElement]?
     }
 
     private func handleImmediateCommand(_ command: Command) -> FenceResponse? {
@@ -430,15 +436,15 @@ public final class TheFence {
         if case .interface(let iface, _, _, _) = response {
             updateInterfaceCache(iface.elements)
             return ResponseCacheUpdate(
-                evidenceElements: lastInterfaceCache.isEmpty ? nil : Array(lastInterfaceCache.values),
-                postRecordBookKeeperElements: nil
+                evidenceCache: lastInterfaceCache.isEmpty ? nil : lastInterfaceCache,
+                postRecordReplacement: nil
             )
         }
         guard let actionResult = response.actionResult,
               case .screenChanged(let payload)? = actionResult.interfaceDelta else {
             return ResponseCacheUpdate(
-                evidenceElements: lastInterfaceCache.isEmpty ? nil : Array(lastInterfaceCache.values),
-                postRecordBookKeeperElements: nil
+                evidenceCache: lastInterfaceCache.isEmpty ? nil : lastInterfaceCache,
+                postRecordReplacement: nil
             )
         }
         return updateInterfaceCache(for: actionResult, newInterface: payload.newInterface, preActionCache: preActionCache)
@@ -455,9 +461,16 @@ public final class TheFence {
         for element in newInterface.elements {
             lastInterfaceCache[element.heistId] = element
         }
+        // Evidence cache is union of pre-action elements + the new screen's
+        // elements so the activated element from the old screen survives long
+        // enough for the recorder to resolve its heistId to a matcher.
+        var evidenceCache = preActionCache
+        for element in newInterface.elements {
+            evidenceCache[element.heistId] = element
+        }
         return ResponseCacheUpdate(
-            evidenceElements: Array(preActionCache.values) + newInterface.elements,
-            postRecordBookKeeperElements: newInterface.elements
+            evidenceCache: evidenceCache.isEmpty ? nil : evidenceCache,
+            postRecordReplacement: newInterface.elements
         )
     }
 
@@ -472,14 +485,16 @@ public final class TheFence {
             command: command,
             args: request,
             succeeded: response.succeededForHeistRecording,
-            interfaceElements: cacheUpdate.evidenceElements
+            interfaceCache: cacheUpdate.evidenceCache ?? [:]
         )
     }
 
     private func applyPostRecordCacheUpdate(_ cacheUpdate: ResponseCacheUpdate) {
-        guard let elements = cacheUpdate.postRecordBookKeeperElements else { return }
-        bookKeeper.clearInterfaceCache()
-        bookKeeper.updateInterfaceCache(elements)
+        guard let elements = cacheUpdate.postRecordReplacement else { return }
+        lastInterfaceCache.removeAll()
+        for element in elements {
+            lastInterfaceCache[element.heistId] = element
+        }
     }
 
     private func validateActionResponse(
@@ -549,7 +564,6 @@ public final class TheFence {
         for element in elements {
             lastInterfaceCache[element.heistId] = element
         }
-        bookKeeper.updateInterfaceCache(elements)
     }
 
     // MARK: - Response Logging

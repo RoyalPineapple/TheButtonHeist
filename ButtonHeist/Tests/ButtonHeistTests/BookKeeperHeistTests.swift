@@ -160,13 +160,15 @@ final class BookKeeperHeistTests: XCTestCase {
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
 
-        let elements = [makeElement(heistId: "button_submit", label: "Submit", traits: [.button])]
-        bookKeeper.updateInterfaceCache(elements)
-
-        bookKeeper.recordHeistEvidence(command: .activate, args: [
-            "command": "activate",
-            "heistId": "button_submit",
-        ])
+        let element = makeElement(heistId: "button_submit", label: "Submit", traits: [.button])
+        bookKeeper.recordHeistEvidence(
+            command: .activate,
+            args: [
+                "command": "activate",
+                "heistId": "button_submit",
+            ],
+            interfaceCache: ["button_submit": element]
+        )
         let script = try bookKeeper.stopHeistRecording()
 
         XCTAssertEqual(script.steps[0].target?.label, "Submit")

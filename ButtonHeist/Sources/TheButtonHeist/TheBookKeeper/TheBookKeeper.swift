@@ -51,9 +51,6 @@ struct HeistRecording: @unchecked Sendable {
     /// Append-only file handle for durable evidence storage.
     let fileHandle: FileHandle
     let filePath: URL
-    /// Snapshot from the most recent `get_interface` response, used to look up
-    /// `heistId` → element properties when building matchers at recording time.
-    var interfaceCache: [String: HeistElement]
 }
 
 /// Transient state while a session's log is being flushed and compressed.
@@ -606,8 +603,7 @@ public final class TheBookKeeper {
             startTime: Date(),
             evidenceCount: 0,
             fileHandle: heistHandle,
-            filePath: heistPath,
-            interfaceCache: [:]
+            filePath: heistPath
         )
         phase = .active(session)
     }
@@ -663,31 +659,6 @@ public final class TheBookKeeper {
         }
     }
 
-    /// Clear the cached interface snapshot (called on screen changes to prevent unbounded growth).
-    public func clearInterfaceCache() {
-        guard case .active(var session) = phase,
-              var recording = session.heistRecording else { return }
-        recording.interfaceCache.removeAll()
-        session.heistRecording = recording
-        phase = .active(session)
-    }
-
-    /// Update the cached interface snapshot for heist recording.
-    ///
-    /// Merges rather than replaces — after a screen change, the activated element
-    /// from the old screen must remain in the cache for the recording step that
-    /// triggered the transition. New elements take priority on heistId collision.
-    public func updateInterfaceCache(_ elements: [HeistElement]) {
-        guard case .active(var session) = phase,
-              var recording = session.heistRecording else { return }
-        recording.interfaceCache.merge(
-            elements.map { ($0.heistId, $0) },
-            uniquingKeysWith: { _, new in new }
-        )
-        session.heistRecording = recording
-        phase = .active(session)
-    }
-
     /// Commands that should not appear in heist playbacks.
     private static let excludedHeistCommands: Set<TheFence.Command> = [
         .help, .status, .quit, .exit,
@@ -702,12 +673,17 @@ public final class TheBookKeeper {
 
     /// Record a successfully executed command for heist playback.
     /// Only records commands that succeeded — failed actions are skipped.
-    /// - Parameter succeeded: Whether the command succeeded. Pass false to skip recording.
+    /// - Parameters:
+    ///   - succeeded: Whether the command succeeded. Pass false to skip recording.
+    ///   - interfaceCache: Snapshot of currently visible elements keyed by
+    ///     heistId. The recorder uses this to resolve `heistId` arguments to
+    ///     stable matchers. Caller is responsible for supplying the cache —
+    ///     TheBookKeeper does not maintain its own copy.
     public func recordHeistEvidence(
         command: TheFence.Command,
         args: [String: Any],
         succeeded: Bool = true,
-        interfaceElements: [HeistElement]? = nil
+        interfaceCache: [String: HeistElement] = [:]
     ) {
         guard case .active(var session) = phase,
               var recording = session.heistRecording else { return }
@@ -716,12 +692,11 @@ public final class TheBookKeeper {
         // Skip failed actions — only record successful outcomes
         guard succeeded else { return }
 
-        let allElements = interfaceElements ?? Array(recording.interfaceCache.values)
         let step = buildStep(
             command: command.rawValue,
             args: args,
-            cache: allElements,
-            interfaceCache: recording.interfaceCache
+            cache: Array(interfaceCache.values),
+            interfaceCache: interfaceCache
         )
 
         // Write evidence to durable file (append-only JSONL)
