@@ -6,7 +6,10 @@ import CoreGraphics
 /// Wraps a server message with the echoed requestId for response correlation.
 /// Push broadcasts (subscription updates) use requestId = nil.
 public struct ResponseEnvelope: Codable, Sendable {
-    public let protocolVersion: String
+    /// Server's `buttonHeistVersion`. The handshake requires exact equality
+    /// with the client's `buttonHeistVersion` — there is no separate wire
+    /// protocol version.
+    public let buttonHeistVersion: String
     public let requestId: String?
     public let message: ServerMessage
 
@@ -17,15 +20,15 @@ public struct ResponseEnvelope: Codable, Sendable {
     public let backgroundDelta: InterfaceDelta?
 
     public init(requestId: String? = nil, message: ServerMessage, backgroundDelta: InterfaceDelta? = nil) {
-        self.init(wireProtocolVersion: TheScore.protocolVersion, requestId: requestId,
+        self.init(buttonHeistVersion: TheScore.buttonHeistVersion, requestId: requestId,
                   message: message, backgroundDelta: backgroundDelta)
     }
 
     public init(
-        wireProtocolVersion: String, requestId: String? = nil,
+        buttonHeistVersion: String, requestId: String? = nil,
         message: ServerMessage, backgroundDelta: InterfaceDelta? = nil
     ) {
-        self.protocolVersion = wireProtocolVersion
+        self.buttonHeistVersion = buttonHeistVersion
         self.requestId = requestId
         self.message = message
         self.backgroundDelta = backgroundDelta
@@ -44,7 +47,7 @@ public enum ServerMessage: Codable, Sendable {
     /// Version-negotiation hello sent immediately on connection.
     case serverHello
 
-    /// Exact protocol version mismatch.
+    /// `buttonHeistVersion` mismatch between server and client.
     case protocolMismatch(ProtocolMismatchPayload)
 
     /// Server requires authentication (sent after successful hello handshake)
@@ -101,14 +104,14 @@ public enum ServerMessage: Codable, Sendable {
     case status(StatusPayload)
 }
 
-/// Sent when the client's protocol version does not match the server's expected version.
+/// Sent when the client's `buttonHeistVersion` does not exactly match the server's.
 public struct ProtocolMismatchPayload: Codable, Sendable {
-    public let expectedProtocolVersion: String
-    public let receivedProtocolVersion: String
+    public let serverButtonHeistVersion: String
+    public let clientButtonHeistVersion: String
 
-    public init(expectedProtocolVersion: String, receivedProtocolVersion: String) {
-        self.expectedProtocolVersion = expectedProtocolVersion
-        self.receivedProtocolVersion = receivedProtocolVersion
+    public init(serverButtonHeistVersion: String, clientButtonHeistVersion: String) {
+        self.serverButtonHeistVersion = serverButtonHeistVersion
+        self.clientButtonHeistVersion = clientButtonHeistVersion
     }
 }
 
@@ -680,7 +683,7 @@ public struct AuthApprovedPayload: Codable, Sendable {
 
 /// Server identity and capabilities sent after a successful handshake.
 ///
-/// Wire-level protocol version is carried by `ResponseEnvelope.protocolVersion`;
+/// `buttonHeistVersion` is carried by `ResponseEnvelope.buttonHeistVersion`;
 /// it is not duplicated here.
 public struct ServerInfo: Codable, Sendable {
     public let appName: String

@@ -277,12 +277,12 @@ public final class DeviceConnection: DeviceConnecting {
             return
         }
 
-        if envelope.protocolVersion != protocolVersion {
-            let message = "expected \(protocolVersion), got \(envelope.protocolVersion)"
-            logger.error("Protocol mismatch: \(message)")
+        if envelope.buttonHeistVersion != buttonHeistVersion {
+            let message = "server=\(envelope.buttonHeistVersion), client=\(buttonHeistVersion)"
+            logger.error("buttonHeistVersion mismatch: \(message)")
             onEvent?(.message(.protocolMismatch(ProtocolMismatchPayload(
-                expectedProtocolVersion: protocolVersion,
-                receivedProtocolVersion: envelope.protocolVersion
+                serverButtonHeistVersion: envelope.buttonHeistVersion,
+                clientButtonHeistVersion: buttonHeistVersion
             )), requestId: envelope.requestId, backgroundDelta: nil))
             disconnect()
             onEvent?(.disconnected(.protocolMismatch(message)))
@@ -294,8 +294,8 @@ public final class DeviceConnection: DeviceConnecting {
             logger.info("Received server hello")
             send(.clientHello)
         case .protocolMismatch(let payload):
-            let message = "expected \(payload.expectedProtocolVersion), got \(payload.receivedProtocolVersion)"
-            logger.error("Protocol mismatch: \(message)")
+            let message = "server=\(payload.serverButtonHeistVersion), client=\(payload.clientButtonHeistVersion)"
+            logger.error("buttonHeistVersion mismatch: \(message)")
             onEvent?(.message(.protocolMismatch(payload), requestId: envelope.requestId, backgroundDelta: nil))
             disconnect()
             onEvent?(.disconnected(.protocolMismatch(message)))

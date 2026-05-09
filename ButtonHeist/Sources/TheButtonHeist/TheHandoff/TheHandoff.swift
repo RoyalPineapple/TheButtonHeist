@@ -515,7 +515,7 @@ public final class TheHandoff {
         case .status(let payload):
             logger.info("Received status payload: appName=\(payload.identity.appName, privacy: .public)")
         case .protocolMismatch(let payload):
-            let message = "Protocol mismatch: expected \(payload.expectedProtocolVersion), got \(payload.receivedProtocolVersion)"
+            let message = "buttonHeistVersion mismatch: server=\(payload.serverButtonHeistVersion), client=\(payload.clientButtonHeistVersion)"
             transitionToFailed(.error(message))
             onError?(message)
         case .pong:

@@ -5,12 +5,13 @@ import Foundation
 /// Bonjour service type for discovery
 public let buttonHeistServiceType = "_buttonheist._tcp"
 
-/// Wire protocol version. Bump per SemVer when the wire format or handshake
-/// changes. See the changelog in `docs/WIRE-PROTOCOL.md`.
-public let protocolVersion = "9.0"
-
 /// Canonical product version shared by CLI, MCP, and the iOS server.
-/// Update this constant when cutting a new release. See VERSIONING.md in bh-infra.
+///
+/// CalVer (`YYYY.MM.DD`); same-day patches append `.N`. There is no separate
+/// "wire protocol version" — the handshake requires exact equality between
+/// the server's and the client's `buttonHeistVersion`. Update this constant
+/// only via `scripts/release.sh`. See `docs/WIRE-PROTOCOL.md` and
+/// `VERSIONING.md` in bh-infra.
 public let buttonHeistVersion = "0.2.21"
 
 /// Explicit wire message discriminator used at JSON boundaries.

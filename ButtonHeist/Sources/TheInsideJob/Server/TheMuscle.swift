@@ -244,15 +244,15 @@ final class TheMuscle {
             return
         }
 
-        guard envelope.protocolVersion == protocolVersion else {
+        guard envelope.buttonHeistVersion == buttonHeistVersion else {
             sendMessage(
                 .protocolMismatch(ProtocolMismatchPayload(
-                    expectedProtocolVersion: protocolVersion,
-                    receivedProtocolVersion: envelope.protocolVersion
+                    serverButtonHeistVersion: buttonHeistVersion,
+                    clientButtonHeistVersion: envelope.buttonHeistVersion
                 )),
                 respond: respond
             )
-            logger.warning("Client \(clientId) protocol mismatch: expected \(protocolVersion), got \(envelope.protocolVersion)")
+            logger.warning("Client \(clientId) buttonHeistVersion mismatch: server=\(buttonHeistVersion), client=\(envelope.buttonHeistVersion)")
             Task { [weak self] in
                 guard await Task.cancellableSleep(for: TheMuscle.disconnectGracePeriod) else { return }
                 self?.disconnectClient?(clientId)

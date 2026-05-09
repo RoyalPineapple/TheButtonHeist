@@ -398,13 +398,13 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testProtocolMismatchPayloadRoundTrip() throws {
         let payload = ProtocolMismatchPayload(
-            expectedProtocolVersion: "6.7",
-            receivedProtocolVersion: "5.0"
+            serverButtonHeistVersion: "2026.05.09",
+            clientButtonHeistVersion: "2026.05.08"
         )
         let data = try encoder.encode(payload)
         let decoded = try decoder.decode(ProtocolMismatchPayload.self, from: data)
-        XCTAssertEqual(decoded.expectedProtocolVersion, "6.7")
-        XCTAssertEqual(decoded.receivedProtocolVersion, "5.0")
+        XCTAssertEqual(decoded.serverButtonHeistVersion, "2026.05.09")
+        XCTAssertEqual(decoded.clientButtonHeistVersion, "2026.05.08")
     }
 
     // MARK: - ContainerInfo

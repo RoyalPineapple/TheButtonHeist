@@ -151,12 +151,12 @@ sequenceDiagram
 ```bash
 # Using netcat (must authenticate first)
 nc -6 "fd9a:6190:eed7::1" <port>   # use port from `buttonheist list --format json`
-# Server sends: {"protocolVersion":"9.0","requestId":null,"type":"serverHello"}
-# Send: {"protocolVersion":"9.0","requestId":null,"type":"clientHello"}
-# Server sends: {"protocolVersion":"9.0","requestId":null,"type":"authRequired"}
-# Send: {"protocolVersion":"9.0","requestId":null,"type":"authenticate","payload":{"token":"your-token"}}
-# Server sends: {"protocolVersion":"9.0","requestId":null,"type":"info","payload":{...}}
-# Send: {"protocolVersion":"9.0","requestId":null,"type":"requestInterface"}
+# Server sends: {"buttonHeistVersion":"<calver>","requestId":null,"type":"serverHello"}
+# Send: {"buttonHeistVersion":"<calver>","requestId":null,"type":"clientHello"}
+# Server sends: {"buttonHeistVersion":"<calver>","requestId":null,"type":"authRequired"}
+# Send: {"buttonHeistVersion":"<calver>","requestId":null,"type":"authenticate","payload":{"token":"your-token"}}
+# Server sends: {"buttonHeistVersion":"<calver>","requestId":null,"type":"info","payload":{...}}
+# Send: {"buttonHeistVersion":"<calver>","requestId":null,"type":"requestInterface"}
 ```
 
 ## Message Protocol

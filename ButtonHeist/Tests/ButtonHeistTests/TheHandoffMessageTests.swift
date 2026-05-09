@@ -200,15 +200,15 @@ final class TheHandoffMessageTests: XCTestCase {
         handoff.onError = { receivedError = $0 }
 
         let payload = ProtocolMismatchPayload(
-            expectedProtocolVersion: "6.7",
-            receivedProtocolVersion: "5.0"
+            serverButtonHeistVersion: "2026.05.09",
+            clientButtonHeistVersion: "2026.05.08"
         )
         handoff.handleServerMessage(.protocolMismatch(payload), requestId: nil)
 
         XCTAssertNotNil(receivedError)
-        XCTAssertTrue(receivedError?.contains("Protocol mismatch") == true)
-        XCTAssertTrue(receivedError?.contains("6.7") == true)
-        XCTAssertTrue(receivedError?.contains("5.0") == true)
+        XCTAssertTrue(receivedError?.contains("buttonHeistVersion mismatch") == true)
+        XCTAssertTrue(receivedError?.contains("2026.05.09") == true)
+        XCTAssertTrue(receivedError?.contains("2026.05.08") == true)
     }
 
     @ButtonHeistActor

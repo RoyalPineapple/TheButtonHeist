@@ -8,7 +8,7 @@ private enum ServerMessageCodingKeys: String, CodingKey {
 }
 
 private enum ResponseEnvelopeCodingKeys: String, CodingKey {
-    case protocolVersion
+    case buttonHeistVersion
     case requestId
     case type
     case payload
@@ -20,7 +20,7 @@ private enum ResponseEnvelopeCodingKeys: String, CodingKey {
 extension ResponseEnvelope {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: ResponseEnvelopeCodingKeys.self)
-        protocolVersion = try container.decode(String.self, forKey: .protocolVersion)
+        buttonHeistVersion = try container.decode(String.self, forKey: .buttonHeistVersion)
         requestId = try container.decodeIfPresent(String.self, forKey: .requestId)
         backgroundDelta = try container.decodeIfPresent(InterfaceDelta.self, forKey: .backgroundDelta)
         let type = try container.decode(WireMessageType.self, forKey: .type)
@@ -32,7 +32,7 @@ extension ResponseEnvelope {
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: ResponseEnvelopeCodingKeys.self)
-        try container.encode(protocolVersion, forKey: .protocolVersion)
+        try container.encode(buttonHeistVersion, forKey: .buttonHeistVersion)
         try container.encodeIfPresent(requestId, forKey: .requestId)
         try container.encodeIfPresent(backgroundDelta, forKey: .backgroundDelta)
         let wire = message.wireRepresentation

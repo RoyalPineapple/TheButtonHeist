@@ -7,16 +7,19 @@ import CoreGraphics
 /// When `requestId` is present, the server echoes it in the corresponding response
 /// so the client can match request-response pairs. Push broadcasts have no requestId.
 public struct RequestEnvelope: Codable, Sendable {
-    public let protocolVersion: String
+    /// Client's `buttonHeistVersion`. The handshake requires exact equality
+    /// with the server's `buttonHeistVersion` — there is no separate wire
+    /// protocol version.
+    public let buttonHeistVersion: String
     public let requestId: String?
     public let message: ClientMessage
 
     public init(requestId: String? = nil, message: ClientMessage) {
-        self.init(wireProtocolVersion: TheScore.protocolVersion, requestId: requestId, message: message)
+        self.init(buttonHeistVersion: TheScore.buttonHeistVersion, requestId: requestId, message: message)
     }
 
-    public init(wireProtocolVersion: String, requestId: String? = nil, message: ClientMessage) {
-        self.protocolVersion = wireProtocolVersion
+    public init(buttonHeistVersion: String, requestId: String? = nil, message: ClientMessage) {
+        self.buttonHeistVersion = buttonHeistVersion
         self.requestId = requestId
         self.message = message
     }

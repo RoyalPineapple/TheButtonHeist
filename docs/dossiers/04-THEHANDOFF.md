@@ -121,7 +121,7 @@ sequenceDiagram
     Note right of S: triggers .connected event
 ```
 
-`protocolVersion` is checked on every inbound envelope. A mismatch disconnects immediately with `.protocolMismatch`.
+`buttonHeistVersion` is checked on every inbound envelope. A mismatch disconnects immediately with `.protocolMismatch`.
 
 ### `DisconnectReason`
 

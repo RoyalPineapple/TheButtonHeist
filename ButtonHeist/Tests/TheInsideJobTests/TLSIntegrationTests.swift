@@ -163,7 +163,7 @@ final class TLSIntegrationTests: XCTestCase {
                         appBuild: "42",
                         deviceName: "Loopback Simulator",
                         systemVersion: "18.0",
-                        buttonHeistVersion: protocolVersion
+                        buttonHeistVersion: buttonHeistVersion
                     ),
                     session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
                 )

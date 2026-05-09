@@ -103,7 +103,7 @@ final class MessageIntegrationTests: XCTestCase {
                     appBuild: "1",
                     deviceName: "Device",
                     systemVersion: "17.0",
-                    buttonHeistVersion: protocolVersion
+                    buttonHeistVersion: buttonHeistVersion
                 ),
                 session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
             )),
