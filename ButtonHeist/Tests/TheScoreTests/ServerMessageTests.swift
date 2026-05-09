@@ -108,7 +108,7 @@ final class ServerMessageTests: XCTestCase {
     // MARK: - ActionResult Tests
 
     func testActionResultWithValue() throws {
-        let result = ActionResult(success: true, method: .typeText, value: "Hello World")
+        let result = ActionResult(success: true, method: .typeText, payload: .value("Hello World"))
         let message = ServerMessage.actionResult(result)
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
@@ -116,7 +116,11 @@ final class ServerMessageTests: XCTestCase {
         if case .actionResult(let decodedResult) = decoded {
             XCTAssertTrue(decodedResult.success)
             XCTAssertEqual(decodedResult.method, .typeText)
-            XCTAssertEqual(decodedResult.value, "Hello World")
+            guard case .value(let string) = decodedResult.payload else {
+                XCTFail("Expected .value payload")
+                return
+            }
+            XCTAssertEqual(string, "Hello World")
             XCTAssertNil(decodedResult.message)
         } else {
             XCTFail("Expected actionResult, got \(decoded)")
@@ -132,7 +136,7 @@ final class ServerMessageTests: XCTestCase {
         if case .actionResult(let decodedResult) = decoded {
             XCTAssertTrue(decodedResult.success)
             XCTAssertEqual(decodedResult.method, .syntheticTap)
-            XCTAssertNil(decodedResult.value)
+            XCTAssertNil(decodedResult.payload)
         } else {
             XCTFail("Expected actionResult, got \(decoded)")
         }
@@ -148,7 +152,7 @@ final class ServerMessageTests: XCTestCase {
         if case .actionResult(let result) = decoded {
             XCTAssertTrue(result.success)
             XCTAssertEqual(result.method, .syntheticTap)
-            XCTAssertNil(result.value)
+            XCTAssertNil(result.payload)
             XCTAssertNil(result.message)
         } else {
             XCTFail("Expected actionResult, got \(decoded)")

@@ -233,7 +233,7 @@ extension FenceResponse {
             "method": result.method.rawValue,
         ]
         if let message = result.message { payload["message"] = message }
-        if let value = result.value { payload["value"] = value }
+        if case .value(let value) = result.payload { payload["value"] = value }
         if result.animating == true { payload["animating"] = true }
         if let delta = result.interfaceDelta {
             payload["delta"] = deltaDictionary(delta)
@@ -242,7 +242,7 @@ extension FenceResponse {
         if let screenName = result.screenName { payload["screenName"] = screenName }
         if let screenId = result.screenId { payload["screenId"] = screenId }
 
-        if let explore = result.exploreResult {
+        if case .explore(let explore) = result.payload {
             payload["explore"] = [
                 "elementCount": explore.elementCount,
                 "scrollCount": explore.scrollCount,

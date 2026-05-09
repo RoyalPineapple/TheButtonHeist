@@ -196,19 +196,22 @@ final class ScrollToVisibleTests: XCTestCase {
         )
         let result = ActionResult(
             success: true, method: .elementSearch,
-            scrollSearchResult: searchResult
+            payload: .scrollSearch(searchResult)
         )
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
-        XCTAssertNotNil(decoded.scrollSearchResult)
-        XCTAssertEqual(decoded.scrollSearchResult?.scrollCount, 3)
-        XCTAssertEqual(decoded.scrollSearchResult?.totalItems, 50)
+        guard case .scrollSearch(let search) = decoded.payload else {
+            XCTFail("Expected .scrollSearch payload, got \(String(describing: decoded.payload))")
+            return
+        }
+        XCTAssertEqual(search.scrollCount, 3)
+        XCTAssertEqual(search.totalItems, 50)
     }
 
     func testActionResultWithoutScrollSearchResult() throws {
         let result = ActionResult(success: true, method: .activate)
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
-        XCTAssertNil(decoded.scrollSearchResult)
+        XCTAssertNil(decoded.payload)
     }
 }

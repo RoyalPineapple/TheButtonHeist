@@ -83,7 +83,9 @@ extension TheBrains {
             errorKind: result.success ? nil : .elementNotFound,
             before: before
         )
-        enriched.scrollSearchResult = result.scrollSearchResult
+        if let scrollSearch = result.scrollSearchResult {
+            enriched.payload = .scrollSearch(scrollSearch)
+        }
         return enriched
     }
 

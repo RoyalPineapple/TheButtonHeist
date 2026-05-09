@@ -73,24 +73,27 @@ extension FenceResponse {
 
     private func compactActionResult(_ result: ActionResult, expectation: ExpectationResult?) -> String {
         guard result.success else {
-            if let search = result.scrollSearchResult {
+            if case .scrollSearch(let search) = result.payload {
                 return Self.compactScrollSearchNotFound(search, screenId: result.screenId)
             }
             return "error: \(result.message ?? result.method.rawValue)"
         }
 
         var text: String
-        if let search = result.scrollSearchResult {
+        switch result.payload {
+        case .scrollSearch(let search):
             text = Self.compactScrollSearchFound(search)
-        } else if let delta = result.interfaceDelta {
-            text = Self.compactDelta(delta, method: result.method.rawValue)
-        } else {
-            text = "\(result.method.rawValue): ok"
+        case .value, .explore, .none:
+            if let delta = result.interfaceDelta {
+                text = Self.compactDelta(delta, method: result.method.rawValue)
+            } else {
+                text = "\(result.method.rawValue): ok"
+            }
         }
         if let screenId = result.screenId {
             text = "\(screenId) | \(text)"
         }
-        if let value = result.value {
+        if case .value(let value) = result.payload {
             text += "\nvalue: \"\(value)\""
         }
         if let expectation {

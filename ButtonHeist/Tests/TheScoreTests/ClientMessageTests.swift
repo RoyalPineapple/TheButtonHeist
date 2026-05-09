@@ -406,23 +406,27 @@ final class ClientMessageTests: XCTestCase {
         let result = ActionResult(
             success: true, method: .explore,
             message: "100 elements, 12 scrolls, 3.50s",
-            exploreResult: exploreResult
+            payload: .explore(exploreResult)
         )
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
         XCTAssertTrue(decoded.success)
         XCTAssertEqual(decoded.method, .explore)
-        XCTAssertEqual(decoded.exploreResult?.elementCount, 100)
-        XCTAssertEqual(decoded.exploreResult?.scrollCount, 12)
-        XCTAssertEqual(decoded.exploreResult?.containersExplored, 2)
-        XCTAssertEqual(decoded.exploreResult?.explorationTime, 3.5)
+        guard case .explore(let explore) = decoded.payload else {
+            XCTFail("Expected .explore payload, got \(String(describing: decoded.payload))")
+            return
+        }
+        XCTAssertEqual(explore.elementCount, 100)
+        XCTAssertEqual(explore.scrollCount, 12)
+        XCTAssertEqual(explore.containersExplored, 2)
+        XCTAssertEqual(explore.explorationTime, 3.5)
     }
 
     func testActionResultWithoutExploreResult() throws {
         let result = ActionResult(success: true, method: .activate)
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
-        XCTAssertNil(decoded.exploreResult)
+        XCTAssertNil(decoded.payload)
     }
 
     // MARK: - ElementTarget Ordinal Tests

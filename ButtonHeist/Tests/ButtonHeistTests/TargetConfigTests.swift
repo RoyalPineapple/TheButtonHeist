@@ -284,10 +284,10 @@ final class TargetConfigTests: XCTestCase {
             case .explore:
                 return .actionResult(ActionResult(
                     success: true, method: .explore,
-                    exploreResult: ExploreResult(
+                    payload: .explore(ExploreResult(
                         elements: [], scrollCount: 0,
                         containersExplored: 0, explorationTime: 0
-                    )
+                    ))
                 ))
             default:
                 return .actionResult(ActionResult(success: true, method: .activate))

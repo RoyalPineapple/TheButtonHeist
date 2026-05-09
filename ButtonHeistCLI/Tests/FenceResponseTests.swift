@@ -83,7 +83,7 @@ final class FenceResponseTests: XCTestCase {
     }
 
     func testActionSuccessWithValueHumanFormatting() {
-        let result = ActionResult(success: true, method: .typeText, value: "Hello")
+        let result = ActionResult(success: true, method: .typeText, payload: .value("Hello"))
         let response = FenceResponse.action(result: result)
         let output = response.humanFormatted()
         XCTAssertTrue(output.contains("value: \"Hello\""))
@@ -285,7 +285,7 @@ final class FenceResponseTests: XCTestCase {
     }
 
     func testActionSuccessJsonFormatting() {
-        let result = ActionResult(success: true, method: .syntheticTap, value: "Hello")
+        let result = ActionResult(success: true, method: .syntheticTap, payload: .value("Hello"))
         let response = FenceResponse.action(result: result)
         let dict = response.jsonDict()!
         XCTAssertEqual(dict["status"] as? String, "ok")

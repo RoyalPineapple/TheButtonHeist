@@ -46,12 +46,12 @@ struct ActionResultBuilder {
             success: true,
             method: method,
             message: message,
-            value: value,
+            payload: Self.makePayload(
+                value: value, scrollSearch: scrollSearchResult, explore: exploreResult
+            ),
             interfaceDelta: interfaceDelta,
             screenName: screenName,
             screenId: screenId,
-            scrollSearchResult: scrollSearchResult,
-            exploreResult: exploreResult,
             settled: settled,
             settleTimeMs: settleTimeMs
         )
@@ -63,13 +63,22 @@ struct ActionResultBuilder {
             method: method,
             message: message,
             errorKind: errorKind,
-            value: value,
+            payload: value.map(ResultPayload.value),
             interfaceDelta: interfaceDelta,
             screenName: screenName,
             screenId: screenId,
             settled: settled,
             settleTimeMs: settleTimeMs
         )
+    }
+
+    private static func makePayload(
+        value: String?, scrollSearch: ScrollSearchResult?, explore: ExploreResult?
+    ) -> ResultPayload? {
+        if let value { return .value(value) }
+        if let scrollSearch { return .scrollSearch(scrollSearch) }
+        if let explore { return .explore(explore) }
+        return nil
     }
 }
 

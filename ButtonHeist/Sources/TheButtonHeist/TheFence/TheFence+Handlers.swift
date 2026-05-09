@@ -17,7 +17,7 @@ extension TheFence {
         if full {
             let result = try await sendAndAwaitAction(.explore, timeout: Timeouts.exploreSeconds)
             lastActionResult = result
-            guard let exploreResult = result.exploreResult else {
+            guard case .explore(let exploreResult) = result.payload else {
                 return .error("Explore failed: \(result.message ?? "unknown error")")
             }
             let detail = (args["detail"] as? String).flatMap(InterfaceDetail.init) ?? .summary
