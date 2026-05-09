@@ -99,27 +99,23 @@ struct ButtonHeistMCPServer {
             return .success(request)
 
         case "gesture":
-            guard let type = request.removeValue(forKey: "type") as? String else {
+            guard let rawType = request.removeValue(forKey: "type") as? String else {
                 return .failure(ToolRoutingError(message: "Missing required parameter: type"))
             }
-            request["command"] = type
+            guard let gestureType = GestureType(rawValue: rawType) else {
+                let valid = GestureType.allCases.map(\.rawValue).joined(separator: ", ")
+                return .failure(ToolRoutingError(message: "Unknown gesture type: \(rawType). Valid: \(valid)"))
+            }
+            request["command"] = gestureType.rawValue
             return .success(request)
 
         case "scroll":
-            let mode = (request.removeValue(forKey: "mode") as? String) ?? "page"
-            switch mode {
-            case "page":
-                request["command"] = "scroll"
-            case "to_visible":
-                request["command"] = "scroll_to_visible"
-            case "search":
-                request["command"] = "element_search"
-            case "to_edge":
-                request["command"] = "scroll_to_edge"
-            default:
-                let message = "Unknown scroll mode: \(mode). Valid: page, to_visible, search, to_edge"
-                return .failure(ToolRoutingError(message: message))
+            let rawMode = (request.removeValue(forKey: "mode") as? String) ?? ScrollMode.page.rawValue
+            guard let scrollMode = ScrollMode(rawValue: rawMode) else {
+                let valid = ScrollMode.allCases.map(\.rawValue).joined(separator: ", ")
+                return .failure(ToolRoutingError(message: "Unknown scroll mode: \(rawMode). Valid: \(valid)"))
             }
+            request["command"] = scrollMode.canonicalCommand
             return .success(request)
 
         case "edit_action":
