@@ -27,20 +27,23 @@ enum ToolDefinitions {
     // Agents that need the actual video file should pass the "output" parameter
     // in stop_recording to write to disk and receive only the file path.
 
-    // Shared element targeting properties — 6-property block used by action/scroll/gesture tools.
-    // Elements are found through real accessibility properties (label, value, traits) — the same
-    // interface VoiceOver users navigate. heistId is the stable shorthand from get_interface.
-    // Avoid identifier — it is a developer escape hatch that real users cannot see.
-    static let elementTargetProperties: [String: Value] = [
-        "heistId": ["type": "string", "description": "Target element by stable heistId from get_interface (preferred for known elements)"],
-        "label": ["type": "string", "description": "Target by accessibility label — the text VoiceOver reads aloud (e.g. \"Sign In\", \"Mountain Sunset\")"],
-        "value": ["type": "string", "description": "Target by accessibility value — current state or placeholder (e.g. \"Email\", \"50%\", \"selected\")"],
+    // Shared element matcher properties — the 5 fields VoiceOver users rely on plus the
+    // accessibilityIdentifier escape hatch. Used directly by get_interface (filtering) and
+    // extended with heistId/ordinal by action tools (targeting). Same vocabulary either way.
+    static let elementMatcherProperties: [String: Value] = [
+        "label": ["type": "string", "description": "Accessibility label — the text VoiceOver reads (e.g. \"Sign In\")"],
+        "value": ["type": "string", "description": "Accessibility value — current state or placeholder (e.g. \"50%\")"],
         "traits": [
             "type": "array", "items": ["type": "string"],
-            "description": "Target by traits — role qualifiers like button, header, selected, textEntry. All must match.",
+            "description": "Required traits (role qualifiers like button, header, selected). All must match.",
         ],
-        "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Exclude elements with any of these traits"],
-        "identifier": ["type": "string", "description": "Target by accessibilityIdentifier (escape hatch — prefer label/value/traits)"],
+        "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Traits that must NOT be present"],
+        "identifier": ["type": "string", "description": "accessibilityIdentifier (escape hatch — prefer label/value/traits)"],
+    ]
+
+    // Element targeting = matcher fields plus heistId and ordinal disambiguation.
+    static let elementTargetProperties: [String: Value] = elementMatcherProperties.merging([
+        "heistId": ["type": "string", "description": "Stable heistId from get_interface (preferred for known elements)"],
         "ordinal": [
             "type": "integer",
             "description": """
@@ -49,16 +52,7 @@ enum ToolDefinitions {
                 Omit to require a unique match — ambiguity errors show the valid range.
                 """,
         ],
-    ]
-
-    // Shared element filter properties — 5-property block used by get_interface (no heistId, uses "Filter" descriptions)
-    static let elementFilterProperties: [String: Value] = [
-        "label": ["type": "string", "description": "Filter by accessibility label (the text VoiceOver reads)"],
-        "value": ["type": "string", "description": "Filter by accessibility value (current state or placeholder)"],
-        "traits": ["type": "array", "items": ["type": "string"], "description": "Filter: all listed traits must be present"],
-        "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Filter: none of these traits may be present"],
-        "identifier": ["type": "string", "description": "Filter by accessibilityIdentifier (escape hatch — prefer label/value/traits)"],
-    ]
+    ] as [String: Value]) { _, new in new }
 
     // Shared expect property for action tools — matches the batch step schema.
     // Wire shape uses a `type` discriminator that matches ActionExpectation's
@@ -172,7 +166,7 @@ enum ToolDefinitions {
                     "items": ["type": "string"],
                     "description": "Optional list of heistIds to filter. Returns only matching elements. Omit for full tree.",
                 ],
-            ] as [String: Value]).merging(elementFilterProperties) { _, new in new }),
+            ] as [String: Value]).merging(elementMatcherProperties) { _, new in new }),
             "additionalProperties": false,
         ]),
         annotations: .init(readOnlyHint: true, idempotentHint: true)
