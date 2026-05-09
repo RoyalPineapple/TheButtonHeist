@@ -104,8 +104,6 @@ struct PlaylistView: View {
         songs.map { String($0.track) }.joined(separator: ",")
     }
 
-    // MARK: - Insert
-
     private func addSong() {
         let song = Song.random(track: nextTrack)
         songs.append(song)
@@ -118,8 +116,6 @@ struct PlaylistView: View {
         for _ in 0..<count { addSong() }
     }
 
-    // MARK: - Remove
-
     private func removeSong(_ song: Song) {
         songs.removeAll { $0.id == song.id }
         if song.id == nowPlayingID { nowPlayingID = songs.first?.id }
@@ -129,8 +125,6 @@ struct PlaylistView: View {
         songs.removeAll()
         nowPlayingID = nil
     }
-
-    // MARK: - Reorder
 
     private func shufflePlaylist() {
         guard songs.count >= 2 else { return }
@@ -146,8 +140,6 @@ struct PlaylistView: View {
         guard let idx = songs.firstIndex(where: { $0.id == song.id }) else { return }
         songs[idx].isLiked.toggle()
     }
-
-    // MARK: - Autoplay
 
     private func startAutoplay() {
         let timer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { _ in

@@ -65,8 +65,6 @@ struct AlbumFlowView: View {
         #endif
     }
 
-    // MARK: - Featured
-
     private var featuredSection: some View {
         let featured = Genre.catalog[2].albums[0] // Binary Sunset - Last Light Protocol
 
@@ -103,8 +101,6 @@ struct AlbumFlowView: View {
         .accessibilityLabel("Featured: \(featured.title) by \(featured.artist)")
     }
 
-    // MARK: - Genre Section
-
     private func genreSection(_ genre: Genre) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
@@ -126,8 +122,6 @@ struct AlbumFlowView: View {
             }
         }
     }
-
-    // MARK: - Album Card
 
     private func albumCard(_ album: Album) -> some View {
         let isSelected = playback.currentAlbum?.id == album.id
@@ -221,8 +215,6 @@ struct AlbumFlowView: View {
         }
     }
 
-    // MARK: - Mini Player
-
     private var miniPlayer: some View {
         VStack(spacing: 0) {
             Divider()
@@ -305,8 +297,6 @@ struct AlbumFlowView: View {
             .accessibilityElement(children: .contain)
         }
     }
-
-    // MARK: - Helpers
 
     private func albumColor(_ album: Album) -> Color {
         let hash = album.id.utf8.reduce(0) { $0 &+ Int($1) }

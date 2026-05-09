@@ -123,8 +123,6 @@ struct LoginView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    // MARK: - Validation
-
     private func validate() -> FieldErrors? {
         var errors = FieldErrors()
         var hasError = false
@@ -144,8 +142,6 @@ struct LoginView: View {
 
         return hasError ? errors : nil
     }
-
-    // MARK: - Sign In
 
     private func signIn() {
         if let errors = validate() {

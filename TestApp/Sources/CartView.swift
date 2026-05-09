@@ -34,8 +34,6 @@ struct CartView: View {
         .animation(.default, value: items.count)
     }
 
-    // MARK: - Sections
-
     private var summarySection: some View {
         Section {
             HStack {
@@ -116,8 +114,6 @@ struct CartView: View {
         }
     }
 
-    // MARK: - Actions
-
     private func updateQuantity(itemID: UUID, quantity: Int) {
         guard let idx = items.firstIndex(where: { $0.id == itemID }) else { return }
 
@@ -147,8 +143,6 @@ struct CartView: View {
     private func clearCart() {
         items.removeAll()
     }
-
-    // MARK: - Formatting
 
     private func formatPrice(_ value: Decimal) -> String {
         value.formatted(.currency(code: "USD"))

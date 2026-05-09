@@ -107,8 +107,6 @@ struct TodoListView: View {
         }
     }
 
-    // MARK: - Add Section
-
     private var addSection: some View {
         Section("Add Todo") {
             HStack {
@@ -130,8 +128,6 @@ struct TodoListView: View {
         }
     }
 
-    // MARK: - Filter Section
-
     private var filterSection: some View {
         Section {
             Picker("Filter", selection: $filter) {
@@ -145,8 +141,6 @@ struct TodoListView: View {
                 .foregroundStyle(.secondary)
         }
     }
-
-    // MARK: - Actions
 
     private func addItem() {
         let text = newItemText.trimmingCharacters(in: .whitespaces)
@@ -193,8 +187,6 @@ struct TodoListView: View {
     private func clearCompleted() {
         items.removeAll { $0.isCompleted }
     }
-
-    // MARK: - Sample Data
 
     // Sample data: deliberate duplicates across categories.
     static let sampleItems: [TodoItem] = [

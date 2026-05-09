@@ -32,8 +32,6 @@ struct DashboardView: View {
         .navigationTitle("Dashboard")
     }
 
-    // MARK: - Activity Tab
-
     private var activityTab: some View {
         List(Array(ActivityItem.defaults.enumerated()), id: \.element.id) { _, item in
             HStack(spacing: 12) {
@@ -51,8 +49,6 @@ struct DashboardView: View {
             }
         }
     }
-
-    // MARK: - Stats Tab
 
     private var statsTab: some View {
         ScrollView {
@@ -82,8 +78,6 @@ struct DashboardView: View {
             .padding()
         }
     }
-
-    // MARK: - Alerts Tab
 
     private var alertsTab: some View {
         Group {
