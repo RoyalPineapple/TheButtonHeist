@@ -184,8 +184,7 @@ public final class TheHandoff {
 
     // MARK: - Discovery Callbacks
 
-    // All callbacks below fire on `@ButtonHeistActor` — encoded in the closure
-    // type so the compiler enforces it instead of relying on docstrings.
+    // All callbacks below fire on `@ButtonHeistActor`.
 
     /// A device matching the filter appeared on the network.
     public var onDeviceFound: (@ButtonHeistActor (DiscoveredDevice) -> Void)?
