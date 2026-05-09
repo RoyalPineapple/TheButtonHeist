@@ -22,6 +22,10 @@ final class TheStakeout {
     }
 
     struct RecordingSession {
+        /// Identity token for this recording. Captured by the capture timer
+        /// and inactivity monitor so a Task scheduled for one recording can
+        /// detect if it's woken up after a new recording has already started.
+        let id: UUID
         let assetWriter: AVAssetWriter
         let videoInput: AVAssetWriterInput
         let pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor
@@ -157,6 +161,7 @@ final class TheStakeout {
 
         let now = Date()
         let session = RecordingSession(
+            id: UUID(),
             assetWriter: writer,
             videoInput: input,
             pixelBufferAdaptor: adaptor,
@@ -256,9 +261,11 @@ final class TheStakeout {
     private func startCaptureTimer() {
         guard case .recording(var session) = stakeoutPhase else { return }
         let interval = Duration.seconds(1) / session.fps
+        let sessionID = session.id
         session.captureTimer = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                self?.captureAndAppendFrame()
+                guard let self, self.currentSessionID == sessionID else { return }
+                self.captureAndAppendFrame()
                 guard await Task.cancellableSleep(for: interval) else { break }
             }
         }
@@ -349,10 +356,13 @@ final class TheStakeout {
 
     private func startInactivityMonitor() {
         guard case .recording(var session) = stakeoutPhase else { return }
+        let sessionID = session.id
         session.inactivityCheckTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 guard await Task.cancellableSleep(for: .seconds(1)) else { break } // Check every second
-                guard let self, case .recording(let currentSession) = self.stakeoutPhase else { continue }
+                guard let self,
+                      case .recording(let currentSession) = self.stakeoutPhase,
+                      currentSession.id == sessionID else { return }
 
                 let elapsed = Date().timeIntervalSince(currentSession.lastActivityTime)
                 if elapsed >= currentSession.inactivityTimeout {
@@ -428,6 +438,15 @@ final class TheStakeout {
     private var currentWriter: AVAssetWriter? {
         guard case .finalizing(let session) = stakeoutPhase else { return nil }
         return session.assetWriter
+    }
+
+    /// Identity of the currently-active recording, or nil if not recording.
+    /// Used by capture/inactivity Tasks to detect a session boundary —
+    /// if the current session ID no longer matches the one captured at
+    /// task spawn, the task bails rather than acting on a fresh session.
+    private var currentSessionID: UUID? {
+        if case .recording(let session) = stakeoutPhase { return session.id }
+        return nil
     }
 
     private func deliverError(_ error: TheStakeoutError) {

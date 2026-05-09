@@ -3,6 +3,7 @@ import SwiftUI
 struct MessagesView: View {
     @State private var messages: [ChatMessage] = []
     @State private var inputText = ""
+    @State private var pendingTask: Task<Void, Never>?
 
     private static let botReplies = [
         "That's a great point!",
@@ -43,6 +44,10 @@ struct MessagesView: View {
                 }
                 .disabled(messages.isEmpty)
             }
+        }
+        .onDisappear {
+            pendingTask?.cancel()
+            pendingTask = nil
         }
     }
 
@@ -104,7 +109,8 @@ struct MessagesView: View {
     }
 
     private func scheduleBotReply() {
-        Task {
+        pendingTask?.cancel()
+        pendingTask = Task {
             do {
                 try await Task.sleep(for: .seconds(1))
             } catch {
