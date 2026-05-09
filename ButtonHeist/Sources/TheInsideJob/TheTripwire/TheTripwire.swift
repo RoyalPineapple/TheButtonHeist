@@ -180,13 +180,11 @@ final class TheTripwire {
         link.preferredFrameRateRange = CAFrameRateRange(minimum: 8, maximum: 12, preferred: 10)
         link.add(to: .main, forMode: .common)
         pulsePhase = .running(RunningContext(link: link, target: target))
-        startNotificationObservation()
     }
 
     func stopPulse() {
         guard let context = runningContext else { return }
         context.link.invalidate()
-        stopNotificationObservation()
 
         for waiter in context.settleWaiters {
             waiter.continuation.resume(returning: false)
@@ -314,16 +312,6 @@ final class TheTripwire {
                 context.settleWaiters.remove(at: index)
             }
         }
-    }
-
-    // MARK: - Notification Observation
-
-    private func startNotificationObservation() {
-        // Reserved for future pulse-relevant notifications
-    }
-
-    private func stopNotificationObservation() {
-        // Reserved for future pulse-relevant notifications
     }
 
     // MARK: - Window Access
