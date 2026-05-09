@@ -69,9 +69,6 @@ struct ButtonHeistApp: AsyncParsableCommand {
             StartHeistCommand.self,
             StopHeistCommand.self,
             PlayHeistCommand.self,
-
-            // Setup
-            IntegrateCommand.self,
         ]
     )
 }

@@ -552,22 +552,20 @@ final class ElementMatcherTests: XCTestCase {
         )
     }
 
-    func testHierarchyMatchFindsLeaf() {
+    func testHierarchyMatchFindsLeaf() throws {
         let leaf = AccessibilityHierarchy.element(element(label: "Target", traits: .button), traversalIndex: 3)
         let matcher = ElementMatcher(label: "Target")
-        let result = [leaf].firstMatch(matcher, mode: .substring)
-        XCTAssertNotNil(result)
-        XCTAssertEqual(result?.element.label, "Target")
+        let result = try XCTUnwrap([leaf].firstMatch(matcher, mode: .substring))
+        XCTAssertEqual(result.element.label, "Target")
     }
 
-    func testHierarchyMatchSkipsContainer() {
+    func testHierarchyMatchSkipsContainer() throws {
         let container = group(children: [
             .element(element(label: "Child", traits: .button), traversalIndex: 0)
         ])
         let matcher = ElementMatcher(label: "Child")
-        let result = [container].firstMatch(matcher, mode: .substring)
-        XCTAssertNotNil(result)
-        XCTAssertEqual(result?.element.label, "Child")
+        let result = try XCTUnwrap([container].firstMatch(matcher, mode: .substring))
+        XCTAssertEqual(result.element.label, "Child")
     }
 
     func testHierarchyMatchReturnsNilWhenNoMatch() {
@@ -599,7 +597,7 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertEqual(results[1].element.label, "C")
     }
 
-    func testHierarchyNestedContainerSearch() {
+    func testHierarchyNestedContainerSearch() throws {
         let tree: [AccessibilityHierarchy] = [
             group(children: [
                 group(children: [
@@ -607,9 +605,8 @@ final class ElementMatcherTests: XCTestCase {
                 ])
             ])
         ]
-        let result = tree.firstMatch(ElementMatcher(identifier: "deep"), mode: .substring)
-        XCTAssertNotNil(result)
-        XCTAssertEqual(result?.element.label, "Deep Target")
+        let result = try XCTUnwrap(tree.firstMatch(ElementMatcher(identifier: "deep"), mode: .substring))
+        XCTAssertEqual(result.element.label, "Deep Target")
     }
 
     func testHierarchyContainerLabelDoesNotMatch() {
@@ -737,13 +734,12 @@ final class ElementMatcherTests: XCTestCase {
         )
     }
 
-    func testHierarchyMatchesLeafElement() {
+    func testHierarchyMatchesLeafElement() throws {
         let tree: [AccessibilityHierarchy] = [
             .element(element(label: "Save"), traversalIndex: 0)
         ]
-        let result = tree.firstMatch(ElementMatcher(label: "Save"), mode: .substring)
-        XCTAssertNotNil(result)
-        XCTAssertEqual(result?.element.label, "Save")
+        let result = try XCTUnwrap(tree.firstMatch(ElementMatcher(label: "Save"), mode: .substring))
+        XCTAssertEqual(result.element.label, "Save")
     }
 
     func testHierarchySkipsContainers() {
@@ -756,18 +752,17 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertNil(tree.firstMatch(ElementMatcher(label: "Nav"), mode: .substring))
     }
 
-    func testHierarchyRecursesIntoContainersToFindLeaves() {
+    func testHierarchyRecursesIntoContainersToFindLeaves() throws {
         let tree: [AccessibilityHierarchy] = [
             labeledGroup(label: "Section", children: [
                 .element(element(label: "Target"), traversalIndex: 0)
             ])
         ]
-        let result = tree.firstMatch(ElementMatcher(label: "Target"), mode: .substring)
-        XCTAssertNotNil(result)
-        XCTAssertEqual(result?.element.label, "Target")
+        let result = try XCTUnwrap(tree.firstMatch(ElementMatcher(label: "Target"), mode: .substring))
+        XCTAssertEqual(result.element.label, "Target")
     }
 
-    func testHierarchyDeepNesting() {
+    func testHierarchyDeepNesting() throws {
         let tree: [AccessibilityHierarchy] = [
             labeledGroup(label: "Outer", children: [
                 labeledGroup(label: "Inner", children: [
@@ -775,9 +770,8 @@ final class ElementMatcherTests: XCTestCase {
                 ])
             ])
         ]
-        let result = tree.firstMatch(ElementMatcher(label: "Leaf"), mode: .substring)
-        XCTAssertNotNil(result)
-        XCTAssertEqual(result?.element.label, "Leaf")
+        let result = try XCTUnwrap(tree.firstMatch(ElementMatcher(label: "Leaf"), mode: .substring))
+        XCTAssertEqual(result.element.label, "Leaf")
     }
 
     func testMatchesFindsMultipleLeavesInContainer() {

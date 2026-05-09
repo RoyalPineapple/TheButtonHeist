@@ -17,7 +17,7 @@ extension TheFence {
         if full {
             let result = try await sendAndAwaitAction(.explore, timeout: Timeouts.exploreSeconds)
             lastActionResult = result
-            guard let exploreResult = result.exploreResult else {
+            guard case .explore(let exploreResult) = result.payload else {
                 return .error("Explore failed: \(result.message ?? "unknown error")")
             }
             let detail = (args["detail"] as? String).flatMap(InterfaceDetail.init) ?? .summary
@@ -62,12 +62,12 @@ extension TheFence {
         let artifactRequestId = (args["_requestId"] as? String) ?? UUID().uuidString
         let metadata = ScreenshotMetadata(width: screen.width, height: screen.height)
         do {
-            if let url = try bookKeeper.writeArtifactIfSinkAvailable(
+            if let url = try bookKeeper.writeScreenshotIfSinkAvailable(
                 base64Data: screen.pngData,
                 outputPath: args.string("output"),
                 requestId: artifactRequestId,
                 command: .getScreen,
-                metadata: .screenshot(metadata)
+                metadata: metadata
             ) {
                 return .screenshot(path: url.path, width: screen.width, height: screen.height)
             }
@@ -560,12 +560,12 @@ extension TheFence {
             frameCount: recording.frameCount
         )
         do {
-            if let url = try bookKeeper.writeArtifactIfSinkAvailable(
+            if let url = try bookKeeper.writeRecordingIfSinkAvailable(
                 base64Data: recording.videoData,
                 outputPath: args.string("output"),
                 requestId: artifactRequestId,
                 command: .stopRecording,
-                metadata: .recording(metadata)
+                metadata: metadata
             ) {
                 return .recording(path: url.path, payload: recording)
             }
@@ -652,7 +652,7 @@ extension TheFence {
         var failure: PlaybackFailure?
         var stepResults: [HeistPlaybackReport.StepResult] = []
 
-        playbackPhase = .playing
+        playbackPhase = .playing(startedAt: Date())
         defer { playbackPhase = .idle }
 
         // Prime the registry before playback — get_interface defaults to full exploration

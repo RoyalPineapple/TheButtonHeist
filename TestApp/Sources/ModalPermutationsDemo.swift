@@ -85,7 +85,6 @@ struct ModalPermutationsDemo: View {
 
     private func trigger(_ perm: Permutation, _ event: String) {
         lastEvent = event
-        NSLog("[ModalPermutations] \(event)")
         switch perm {
         case .uikitFullScreen, .uikitFormSheet, .uikitPageSheet:
             presentUIKit(style: presentationStyle(for: perm))

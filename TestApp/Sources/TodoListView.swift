@@ -34,7 +34,6 @@ struct TodoListView: View {
     @State private var newItemCategory: TaskCategory = .work
     @State private var filter: TodoFilter = .all
     @State private var editingItem: TodoItem?
-    @State private var showingEditSheet = false
     @FocusState private var isNewItemFieldFocused: Bool
 
     enum TodoFilter: String, CaseIterable {
@@ -101,16 +100,12 @@ struct TodoListView: View {
         }
         .scrollDismissesKeyboard(.immediately)
         .navigationTitle("Todo List")
-        .sheet(isPresented: $showingEditSheet) {
-            if let editingItem {
-                TodoEditSheet(item: editingItem) { updatedItem in
-                    applyEdit(updatedItem)
-                }
+        .sheet(item: $editingItem) { item in
+            TodoEditSheet(item: item) { updatedItem in
+                applyEdit(updatedItem)
             }
         }
     }
-
-    // MARK: - Add Section
 
     private var addSection: some View {
         Section("Add Todo") {
@@ -133,8 +128,6 @@ struct TodoListView: View {
         }
     }
 
-    // MARK: - Filter Section
-
     private var filterSection: some View {
         Section {
             Picker("Filter", selection: $filter) {
@@ -148,8 +141,6 @@ struct TodoListView: View {
                 .foregroundStyle(.secondary)
         }
     }
-
-    // MARK: - Actions
 
     private func addItem() {
         let text = newItemText.trimmingCharacters(in: .whitespaces)
@@ -185,13 +176,11 @@ struct TodoListView: View {
 
     private func beginEditing(_ item: TodoItem) {
         editingItem = item
-        showingEditSheet = true
     }
 
     private func applyEdit(_ updatedItem: TodoItem) {
         guard let index = items.firstIndex(where: { $0.id == updatedItem.id }) else { return }
         items[index] = updatedItem
-        showingEditSheet = false
         editingItem = nil
     }
 
@@ -199,12 +188,7 @@ struct TodoListView: View {
         items.removeAll { $0.isCompleted }
     }
 
-    // MARK: - Sample Data
-
-    // Pre-populated with natural duplicates: "Review PR" appears in both Work
-    // and Personal. "Buy groceries" appears twice in Errands (for two different
-    // stores). Same legitimate task names across categories — a VoiceOver user
-    // uses section context to distinguish them, the flat matcher cannot.
+    // Sample data: deliberate duplicates across categories.
     static let sampleItems: [TodoItem] = [
         // Work — mix of active, completed, and duplicates at different priorities
         TodoItem(id: UUID(), title: "Review PR", isCompleted: false, category: .work, priority: .high, notes: "Backend API changes"),
@@ -326,17 +310,11 @@ private struct MoveActionsModifier: ViewModifier {
     let onMove: (TaskCategory) -> Void
 
     func body(content: Content) -> some View {
-        let targets = TaskCategory.allCases.filter { $0 != currentCategory }
-        switch targets.count {
-        case 0:
-            content
-        case 1:
-            content.accessibilityAction(named: "Move to \(targets[0].rawValue)") { onMove(targets[0]) }
-        default:
-            content
-                .accessibilityAction(named: "Move to \(targets[0].rawValue)") { onMove(targets[0]) }
-                .accessibilityAction(named: "Move to \(targets[1].rawValue)") { onMove(targets[1]) }
-        }
+        TaskCategory.allCases
+            .filter { $0 != currentCategory }
+            .reduce(AnyView(content)) { partial, target in
+                AnyView(partial.accessibilityAction(named: "Move to \(target.rawValue)") { onMove(target) })
+            }
     }
 }
 

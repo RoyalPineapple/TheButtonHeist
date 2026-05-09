@@ -4,7 +4,7 @@ Every TCP connection must authenticate before it can send commands. This documen
 
 ## Overview
 
-Authentication is mandatory for driver connections. When a client connects, the server first sends `serverHello`. The client must respond with `clientHello` using the exact same `protocolVersion`, then wait for `authRequired`. After that, it responds with either `authenticate` (for drivers) or `watch` (for observers). Any other message before the handshake completes causes immediate disconnection.
+Authentication is mandatory for driver connections. When a client connects, the server first sends `serverHello`. The client must respond with `clientHello` using the exact same `buttonHeistVersion`, then wait for `authRequired`. After that, it responds with either `authenticate` (for drivers) or `watch` (for observers). Any other message before the handshake completes causes immediate disconnection.
 
 There are three connection modes:
 
@@ -45,10 +45,6 @@ flowchart TD
 ```
 
 When no explicit token is set, a fresh UUID is generated each launch. Previously approved clients must re-authenticate after an app restart.
-
-### Token Invalidation
-
-Call `invalidateToken()` on TheMuscle to rotate the token. This generates a new UUID in memory. All previously approved clients lose access and must re-authenticate on their next connection.
 
 ## Configuration
 
@@ -182,19 +178,19 @@ Auth messages use the standard newline-delimited JSON format wrapped in envelope
 ### Server → Client (ResponseEnvelope)
 
 ```json
-{"protocolVersion":"9.0","requestId":null,"type":"serverHello"}
-{"protocolVersion":"9.0","requestId":null,"type":"authRequired"}
-{"protocolVersion":"9.0","requestId":null,"type":"authApproved","payload":{"token":"A1B2C3D4-E5F6-..."}}
-{"protocolVersion":"9.0","requestId":null,"type":"authFailed","payload":"Invalid token. Retry without a token to request a fresh session."}
+{"buttonHeistVersion":"<calver>","requestId":null,"type":"serverHello"}
+{"buttonHeistVersion":"<calver>","requestId":null,"type":"authRequired"}
+{"buttonHeistVersion":"<calver>","requestId":null,"type":"authApproved","payload":{"token":"A1B2C3D4-E5F6-..."}}
+{"buttonHeistVersion":"<calver>","requestId":null,"type":"error","payload":{"kind":"authFailure","message":"Invalid token. Retry without a token to request a fresh session."}}
 ```
 
 ### Client → Server (RequestEnvelope)
 
 ```json
-{"protocolVersion":"9.0","requestId":null,"type":"clientHello"}
-{"protocolVersion":"9.0","requestId":"req-1","type":"authenticate","payload":{"token":"my-secret-token"}}
-{"protocolVersion":"9.0","requestId":"req-2","type":"authenticate","payload":{"token":""}}
-{"protocolVersion":"9.0","requestId":null,"type":"watch","payload":{"token":""}}
+{"buttonHeistVersion":"<calver>","requestId":null,"type":"clientHello"}
+{"buttonHeistVersion":"<calver>","requestId":"req-1","type":"authenticate","payload":{"token":"my-secret-token"}}
+{"buttonHeistVersion":"<calver>","requestId":"req-2","type":"authenticate","payload":{"token":""}}
+{"buttonHeistVersion":"<calver>","requestId":null,"type":"watch","payload":{"token":""}}
 ```
 
 An empty token string in `authenticate` requests UI approval. A non-empty token attempts direct authentication. The `watch` message establishes a read-only observer connection.
@@ -308,10 +304,10 @@ The real access control is the `ConnectionScope` filter that restricts which net
 
 | Component | Role |
 |-----------|------|
-| **TheMuscle** | Token resolution, validation, UI approval, session locking, observer management, `invalidateToken()`. Presents `UIAlertController` for Allow/Deny approval. Owns `authToken`, `pendingApprovalClients`, `authenticatedClientIDs`, `observerClients`. Routes `watch` messages via `handleWatchRequest`. |
+| **TheMuscle** | Token resolution, validation, UI approval, session locking, observer management. Presents `UIAlertController` for Allow/Deny approval. Owns `authToken`, `pendingApprovalClients`, `authenticatedClientIDs`, `observerClients`. Routes `watch` messages via `handleWatchRequest`. |
 | **SimpleSocketServer** | Tracks per-client auth state via `ClientPhase` enum (`.unauthenticated` / `.authenticated`). Routes messages to `onDataReceived` (authenticated) or `onUnauthenticatedData` (not yet authenticated). |
 | **TheInsideJob** | Wires TheMuscle callbacks to the socket server. Owns the server lifecycle. |
-| **DeviceConnection** | Client-side handshake and auth handling. Verifies `protocolVersion`, sends `clientHello` after `serverHello`, sends token on `authRequired`, stores token from `authApproved`, fires `onConnected` only after receiving `info` (post-auth). |
+| **DeviceConnection** | Client-side handshake and auth handling. Verifies `buttonHeistVersion`, sends `clientHello` after `serverHello`, sends token on `authRequired`, stores token from `authApproved`, fires `onConnected` only after receiving `info` (post-auth). |
 | **TheHandoff** | Passes `token` to DeviceConnection. Stores approved tokens via `onAuthApproved` callback. Tracks `connectionPhase` (including `.failed(.authFailed)` or `.failed(.sessionLocked)` via `ConnectionFailure`). |
 
 ## TLS Certificate Lifecycle

@@ -23,14 +23,6 @@ extension TheBrains {
         /// Total scrollByPage calls during exploration. Surfaced as `ExploreResult.scrollCount`.
         var scrollCount = 0
 
-        /// Containers skipped because their accessibility fingerprint matched the cached value.
-        /// Not surfaced on the wire today; kept for logging and diagnostics inside the server.
-        var skippedContainers = 0
-
-        /// Containers skipped because they are behind a presented view controller.
-        /// Not surfaced on the wire today; kept for logging and diagnostics inside the server.
-        var skippedObscuredContainers = 0
-
         /// Wall-clock time spent exploring, in seconds. Surfaced as `ExploreResult.explorationTime`.
         var explorationTime: TimeInterval = 0
 

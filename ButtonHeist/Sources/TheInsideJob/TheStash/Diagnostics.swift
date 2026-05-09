@@ -64,11 +64,11 @@ extension TheStash {
     /// Format a matcher's predicates as a human-readable query string.
     static func formatMatcher(_ matcher: ElementMatcher) -> String {
         var fields: [String] = []
-        if let l = matcher.label { fields.append("label=\"\(l)\"") }
-        if let id = matcher.identifier { fields.append("identifier=\"\(id)\"") }
-        if let v = matcher.value { fields.append("value=\"\(v)\"") }
-        if let t = matcher.traits { fields.append("traits=[\(t.map(\.rawValue).joined(separator: ","))]") }
-        if let e = matcher.excludeTraits { fields.append("excludeTraits=[\(e.map(\.rawValue).joined(separator: ","))]") }
+        if let label = matcher.label { fields.append("label=\"\(label)\"") }
+        if let identifier = matcher.identifier { fields.append("identifier=\"\(identifier)\"") }
+        if let value = matcher.value { fields.append("value=\"\(value)\"") }
+        if let traits = matcher.traits { fields.append("traits=[\(traits.map(\.rawValue).joined(separator: ","))]") }
+        if let excludeTraits = matcher.excludeTraits { fields.append("excludeTraits=[\(excludeTraits.map(\.rawValue).joined(separator: ","))]") }
         return fields.joined(separator: " ")
     }
 
@@ -170,7 +170,7 @@ extension TheStash {
         return lines.joined(separator: "\n")
     }
     }
-} // extension TheStash
+}
 
 #endif // DEBUG
 #endif // canImport(UIKit)

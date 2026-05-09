@@ -136,8 +136,16 @@ final class TheBrains {
         let settleResult = await settleSession.run(start: start)
         let settleMs = settleResult.outcome.timeMs
         var didSettle = settleResult.outcome.didSettleCleanly
-        if let cancelled = cancelledActionResult(settleResult.outcome, method: method, before: before, value: value) {
-            return cancelled
+        if case .cancelled(let cancelMs) = settleResult.outcome {
+            // Returning here skips the rest of the pipeline (parse/explore/
+            // captureActionFrame) — those would burn main-actor cycles for
+            // a result no one will read.
+            var builder = ActionResultBuilder(method: method, snapshot: before.snapshot)
+            builder.message = "cancelled after \(cancelMs)ms"
+            builder.value = value
+            builder.settled = false
+            builder.settleTimeMs = cancelMs
+            return builder.failure(errorKind: .actionFailed)
         }
         logSettleOutcome(settleResult.outcome)
 
@@ -207,24 +215,6 @@ final class TheBrains {
         case .cancelled(let ms):
             insideJobLogger.info("Post-action settle: cancelled after \(ms)ms")
         }
-    }
-
-    /// Build a minimal failure result when settle is cancelled. Returning
-    /// here skips the rest of the pipeline (parse/explore/captureActionFrame)
-    /// — those would burn main-actor cycles for a result no one will read.
-    private func cancelledActionResult(
-        _ outcome: SettleOutcome,
-        method: ActionMethod,
-        before: BeforeState,
-        value: String?
-    ) -> ActionResult? {
-        guard case .cancelled(let ms) = outcome else { return nil }
-        var builder = ActionResultBuilder(method: method, snapshot: before.snapshot)
-        builder.message = "cancelled after \(ms)ms"
-        builder.value = value
-        builder.settled = false
-        builder.settleTimeMs = ms
-        return builder.failure(errorKind: .actionFailed)
     }
 
     /// Wait for the post-screen-change tree to repopulate. Returns true
@@ -516,22 +506,17 @@ final class TheBrains {
 
     // MARK: - Screen Capture
 
-    /// Capture the screen.
     func captureScreen() -> (image: UIImage, bounds: CGRect)? {
         stash.captureScreen()
     }
 
-    /// Capture the screen including fingerprint overlay (for recordings).
     func captureScreenForRecording() -> UIImage? {
         stash.captureScreenForRecording()
     }
 
     // MARK: - Screen Name (for error messages)
 
-    /// Current screen name.
     var screenName: String? { stash.lastScreenName }
-
-    /// Current screen ID.
     var screenId: String? { stash.lastScreenId }
 
     // MARK: - Recording Wiring

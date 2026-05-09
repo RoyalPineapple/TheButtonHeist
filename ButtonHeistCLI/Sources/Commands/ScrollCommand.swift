@@ -23,9 +23,7 @@ struct ScrollCommand: AsyncParsableCommand {
 
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
-
-    @Option(name: .shortAndLong, help: "Timeout in seconds")
-    var timeout: Double = 10.0
+    @OptionGroup var timeoutOption: TimeoutOption
 
     @ButtonHeistActor
     mutating func run() async throws {
@@ -38,7 +36,7 @@ struct ScrollCommand: AsyncParsableCommand {
         var request: [String: Any] = [
             "command": TheFence.Command.scroll.rawValue,
             "direction": direction.lowercased(),
-            "timeout": timeout,
+            "timeout": timeoutOption.timeout,
         ]
         try element.applyTo(&request)
 

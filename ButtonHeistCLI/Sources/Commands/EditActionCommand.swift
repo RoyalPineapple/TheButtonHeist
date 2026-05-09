@@ -16,43 +16,30 @@ struct EditActionCommand: AsyncParsableCommand {
             """
     )
 
-    @Argument(help: "Edit action: copy, paste, cut, select, selectAll")
+    @Argument(help: "Edit action: \(EditAction.allCases.map(\.rawValue).joined(separator: ", "))")
     var action: String
 
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
 
     func validate() throws {
-        guard parseEditAction(from: action) != nil else {
-            throw ValidationError("Unknown edit action: \(action). Valid: copy, paste, cut, select, selectAll")
+        guard EditAction(rawValue: action) != nil else {
+            throw ValidationError("Unknown edit action: \(action). Valid: \(EditAction.allCases.map(\.rawValue).joined(separator: ", "))")
         }
     }
 
     @ButtonHeistActor
     mutating func run() async throws {
-        guard let editAction = parseEditAction(from: action) else {
-            throw ValidationError("Unknown edit action: \(action)")
-        }
-
         let request: [String: Any] = [
             "command": TheFence.Command.editAction.rawValue,
-            "action": editAction.rawValue,
+            "action": action,
         ]
 
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
             request: request,
-            statusMessage: "Sending \(editAction.rawValue)..."
+            statusMessage: "Sending \(action)..."
         )
-    }
-}
-
-// MARK: - Private Helpers
-
-private func parseEditAction(from string: String) -> EditAction? {
-    let normalized = string.lowercased().replacingOccurrences(of: "_", with: "")
-    return EditAction.allCases.first {
-        $0.rawValue.lowercased().replacingOccurrences(of: "_", with: "") == normalized
     }
 }

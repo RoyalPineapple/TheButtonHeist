@@ -6,7 +6,7 @@ extension TheFence {
 
     // MARK: - Batch Execution and Session State
 
-    enum BatchPolicy: String, CaseIterable {
+    enum BatchPolicy: String {
         case stopOnError = "stop_on_error"
         case continueOnError = "continue_on_error"
     }
@@ -18,8 +18,7 @@ extension TheFence {
         let policyString = (args["policy"] as? String) ?? BatchPolicy.stopOnError.rawValue
         guard let policy = BatchPolicy(rawValue: policyString) else {
             throw FenceError.invalidRequest(
-                "Unknown batch policy: \"\(policyString)\". " +
-                "Valid: \(BatchPolicy.allCases.map(\.rawValue).joined(separator: ", "))"
+                "Unknown batch policy: \"\(policyString)\". Valid: stop_on_error, continue_on_error"
             )
         }
 

@@ -102,7 +102,8 @@ final class TheGetaway {
 
         transport.onRateLimited = { [weak self] _, respond in
             Task { @MainActor in
-                self?.sendMessage(.error("Rate limited: max \(SimpleSocketServer.maxMessagesPerSecond) messages per second"), respond: respond)
+                let message = "Rate limited: max \(SimpleSocketServer.maxMessagesPerSecond) messages per second"
+                self?.sendMessage(.error(ServerError(kind: .general, message: message)), respond: respond)
             }
         }
 
@@ -131,7 +132,7 @@ final class TheGetaway {
 
     func handleClientMessage(_ clientId: Int, data: Data, respond: @escaping (Data) -> Void) async {
         guard let envelope = decodeRequest(data) else {
-            sendMessage(.error("Malformed message — could not decode"), respond: respond)
+            sendMessage(.error(ServerError(kind: .general, message: "Malformed message — could not decode")), respond: respond)
             return
         }
 
@@ -237,7 +238,7 @@ final class TheGetaway {
         if let data = encodeEnvelope(message, requestId: requestId, backgroundDelta: backgroundDelta) {
             insideJobLogger.debug("Sending \(data.count) bytes")
             respond(data)
-        } else if let errorData = encodeEnvelope(.error("Encoding failed"), requestId: requestId) {
+        } else if let errorData = encodeEnvelope(.error(ServerError(kind: .general, message: "Encoding failed")), requestId: requestId) {
             respond(errorData)
         }
     }
@@ -363,7 +364,7 @@ final class TheGetaway {
         _ = await tripwire.waitForAllClear(timeout: 0.5)
 
         guard brains.refresh() != nil else {
-            sendMessage(.error("Could not access root view"), requestId: requestId, respond: respond)
+            sendMessage(.error(ServerError(kind: .general, message: "Could not access root view")), requestId: requestId, respond: respond)
             return
         }
 
@@ -381,12 +382,12 @@ final class TheGetaway {
         insideJobLogger.debug("Screen requested")
 
         guard let (image, bounds) = brains.captureScreen() else {
-            sendMessage(.error("Could not access app window"), requestId: requestId, respond: respond)
+            sendMessage(.error(ServerError(kind: .general, message: "Could not access app window")), requestId: requestId, respond: respond)
             return
         }
 
         guard let pngData = image.pngData() else {
-            sendMessage(.error("Failed to encode screen as PNG"), requestId: requestId, respond: respond)
+            sendMessage(.error(ServerError(kind: .general, message: "Failed to encode screen as PNG")), requestId: requestId, respond: respond)
             return
         }
 

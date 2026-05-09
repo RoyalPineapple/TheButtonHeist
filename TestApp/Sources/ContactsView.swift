@@ -2,28 +2,41 @@ import SwiftUI
 
 struct ContactsView: View {
     @State private var searchText = ""
-    @State private var selectedDepartment: Department = .all
+    @State private var selectedFilter: DepartmentFilter = .all
 
-    enum Department: String, CaseIterable, Identifiable {
-        case all = "All"
-        case engineering = "Engineering"
-        case design = "Design"
-        case marketing = "Marketing"
-        case operations = "Operations"
+    fileprivate enum DepartmentFilter: Hashable, Identifiable, CaseIterable {
+        case all
+        case department(Contact.Department)
 
-        var id: String { rawValue }
+        static var allCases: [DepartmentFilter] {
+            [.all] + Contact.Department.allCases.map(DepartmentFilter.department)
+        }
+
+        var id: String {
+            switch self {
+            case .all: return "All"
+            case .department(let dept): return dept.rawValue
+            }
+        }
+
+        var displayName: String { id }
+
+        func includes(_ contact: Contact) -> Bool {
+            switch self {
+            case .all: return true
+            case .department(let dept): return contact.department == dept
+            }
+        }
     }
 
     private let contacts: [Contact] = Contact.directory
 
     private var filteredContacts: [Contact] {
         contacts.filter { contact in
-            let matchesDepartment = selectedDepartment == .all
-                || contact.department.rawValue == selectedDepartment.rawValue
             let matchesSearch = searchText.isEmpty
                 || contact.name.localizedCaseInsensitiveContains(searchText)
                 || contact.role.localizedCaseInsensitiveContains(searchText)
-            return matchesDepartment && matchesSearch
+            return selectedFilter.includes(contact) && matchesSearch
         }
     }
 
@@ -62,15 +75,12 @@ struct ContactsView: View {
         .navigationTitle("Contacts")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Picker("Department", selection: $selectedDepartment) {
-                    ForEach(Department.allCases) { dept in
-                        Text(dept.rawValue).tag(dept)
+                Picker("Department", selection: $selectedFilter) {
+                    ForEach(DepartmentFilter.allCases) { filter in
+                        Text(filter.displayName).tag(filter)
                     }
                 }
             }
-        }
-        .onChange(of: filteredContacts.count) { _, newCount in
-            NSLog("[Contacts] filtered results changed (showing: %d, total: %d)", newCount, contacts.count)
         }
     }
 }
@@ -111,10 +121,7 @@ private struct Contact: Identifiable {
     let avatarColor: Color
 
     var initials: String {
-        let parts = name.split(separator: " ")
-        let first = parts.first?.prefix(1) ?? ""
-        let last = parts.count > 1 ? (parts.last?.prefix(1) ?? "") : ""
-        return "\(first)\(last)"
+        name.split(separator: " ").compactMap(\.first).prefix(2).map(String.init).joined()
     }
 
     enum Department: String, CaseIterable {

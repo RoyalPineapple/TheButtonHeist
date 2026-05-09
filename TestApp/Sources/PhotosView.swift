@@ -45,7 +45,7 @@ struct PhotosView: View {
                                 isSelected: mode.selectedIDs.contains(photo.id),
                                 onTap: { cellTapped(photo) }
                             )
-                            .accessibilityLabel(cellLabel(for: photo))
+                            .accessibilityLabel(photo.name)
                             .accessibilityAddTraits(mode.isSelecting && mode.selectedIDs.contains(photo.id) ? .isSelected : [])
                             .accessibilityRemoveTraits(mode.isSelecting && !mode.selectedIDs.contains(photo.id) ? .isSelected : [])
                         }
@@ -81,14 +81,12 @@ struct PhotosView: View {
     private func cellTapped(_ photo: Photo) {
         switch mode {
         case .browsing:
-            NSLog("[Photos] Opened: \"%@\"", photo.name)
+            break
         case .selecting(var selected):
             if selected.contains(photo.id) {
                 selected.remove(photo.id)
-                NSLog("[Photos] Deselected: \"%@\" (selected: %d)", photo.name, selected.count)
             } else {
                 selected.insert(photo.id)
-                NSLog("[Photos] Selected: \"%@\" (selected: %d)", photo.name, selected.count)
             }
             mode = .selecting(selected)
         }
@@ -98,36 +96,24 @@ struct PhotosView: View {
         switch mode {
         case .browsing:
             mode = .selecting([])
-            NSLog("[Photos] Entered select mode")
         case .selecting:
             mode = .browsing
-            NSLog("[Photos] Exited select mode")
         }
     }
 
     private func toggleSelectAll() {
         if allSelected {
             mode = .selecting([])
-            NSLog("[Photos] Deselected all")
         } else {
             mode = .selecting(Set(photos.map(\.id)))
-            NSLog("[Photos] Selected all (total: %d)", photos.count)
         }
     }
 
     private func deleteSelected() {
-        let count = selectedCount
         photos.removeAll { mode.selectedIDs.contains($0.id) }
         mode = .browsing
-        NSLog("[Photos] Deleted %d photos (remaining: %d)", count, photos.count)
     }
 
-    private func cellLabel(for photo: Photo) -> String {
-        if mode.isSelecting && mode.selectedIDs.contains(photo.id) {
-            return "\(photo.name), selected"
-        }
-        return photo.name
-    }
 }
 
 // MARK: - Subviews

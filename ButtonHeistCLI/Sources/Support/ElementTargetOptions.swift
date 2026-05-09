@@ -41,36 +41,34 @@ struct ElementTargetOptions: ParsableArguments {
         let hasFields = identifier != nil || label != nil || value != nil
             || !traits.isEmpty || !excludeTraits.isEmpty
         guard hasFields else { return nil }
-        let parsedTraits: [HeistTrait]? = traits.isEmpty ? nil : try traits.map { name in
-            guard let trait = HeistTrait(rawValue: name) else {
-                throw ValidationError("Unknown trait '\(name)'. Valid: \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))")
-            }
-            return trait
-        }
-        let parsedExcludeTraits: [HeistTrait]? = excludeTraits.isEmpty ? nil : try excludeTraits.map { name in
-            guard let trait = HeistTrait(rawValue: name) else {
-                throw ValidationError("Unknown excludeTrait '\(name)'. Valid: \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))")
-            }
-            return trait
-        }
         return ElementMatcher(
             label: label,
             identifier: identifier,
             value: value,
-            traits: parsedTraits,
-            excludeTraits: parsedExcludeTraits
+            traits: try parseTraits(traits, label: "trait"),
+            excludeTraits: try parseTraits(excludeTraits, label: "excludeTrait")
         )
     }
 
-    func actionTarget() throws -> ElementTarget? {
-        ElementTarget(heistId: try resolvedHeistId, matcher: try parsedMatcher() ?? ElementMatcher(), ordinal: ordinal)
-    }
-
     func requireTarget() throws -> ElementTarget {
-        guard let resolvedTarget = try actionTarget() else {
+        guard let elementTarget = ElementTarget(
+            heistId: try resolvedHeistId,
+            matcher: try parsedMatcher() ?? ElementMatcher(),
+            ordinal: ordinal
+        ) else {
             throw ValidationError("Must specify a heistId, -id, or -l")
         }
-        return resolvedTarget
+        return elementTarget
+    }
+
+    private func parseTraits(_ names: [String], label: String) throws -> [HeistTrait]? {
+        guard !names.isEmpty else { return nil }
+        return try names.map { name in
+            guard let trait = HeistTrait(rawValue: name) else {
+                throw ValidationError("Unknown \(label) '\(name)'. Valid: \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))")
+            }
+            return trait
+        }
     }
 
     /// Apply targeting options to a TheFence request dictionary.

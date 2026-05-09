@@ -13,13 +13,13 @@ struct ResponseRenderingTests {
 
         let result = try ButtonHeistMCPServer.renderResponse(
             .ok(message: "done"),
-            backgroundDelta: delta
+            backgroundDeltas: [delta]
         )
-        let text = renderedText(result)
+        let texts = textContents(result)
 
-        #expect(text.contains("[background: no net change (4 elements)]"))
-        #expect(text.contains("+- spinner \"Loading\""))
-        #expect(text.contains("done"))
+        #expect(texts.count == 2)
+        #expect(texts[0] == "[background: no net change (4 elements)]\n  +- spinner \"Loading\" [button]")
+        #expect(texts[1] == FenceResponse.ok(message: "done").compactFormatted())
     }
 
     @Test("MCP includes transients alongside element changes")
@@ -30,13 +30,13 @@ struct ResponseRenderingTests {
 
         let result = try ButtonHeistMCPServer.renderResponse(
             .ok(message: "done"),
-            backgroundDelta: delta
+            backgroundDeltas: [delta]
         )
-        let text = renderedText(result)
+        let texts = textContents(result)
 
-        #expect(text.contains("[background: elements changed +1 +-1 (5 total)]"))
-        #expect(text.contains("+ result \"Result\""))
-        #expect(text.contains("+- spinner \"Loading\""))
+        #expect(texts.count == 2)
+        #expect(texts[0] == "[background: elements changed +1 +-1 (5 total)]\n  + result \"Result\"\n  +- spinner \"Loading\" [button]")
+        #expect(texts[1] == FenceResponse.ok(message: "done").compactFormatted())
     }
 
     @Test("MCP renders every queued background delta")
@@ -52,19 +52,19 @@ struct ResponseRenderingTests {
             .ok(message: "done"),
             backgroundDeltas: deltas
         )
-        let text = renderedText(response)
+        let texts = textContents(response)
 
-        #expect(text.contains("[background: no net change (4 elements)]"))
-        #expect(text.contains("+- spinner \"Loading\""))
-        #expect(text.contains("[background: elements changed +1 (5 total)]"))
-        #expect(text.contains("+ result \"Result\""))
+        #expect(texts.count == 3)
+        #expect(texts[0] == "[background: no net change (4 elements)]\n  +- spinner \"Loading\" [button]")
+        #expect(texts[1] == "[background: elements changed +1 (5 total)]\n  + result \"Result\"")
+        #expect(texts[2] == FenceResponse.ok(message: "done").compactFormatted())
     }
 
-    private func renderedText(_ result: CallTool.Result) -> String {
+    private func textContents(_ result: CallTool.Result) -> [String] {
         result.content.compactMap { content in
             if case .text(let text, _, _) = content { return text }
             return nil
-        }.joined(separator: "\n")
+        }
     }
 
     private func makeElement(heistId: String, label: String) -> HeistElement {

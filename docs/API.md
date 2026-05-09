@@ -671,7 +671,7 @@ With the default `stop_on_error` policy, the batch halts at the first mismet exp
 
 ```swift
 public let buttonHeistServiceType = "_buttonheist._tcp"
-public let protocolVersion = "9.0"  // Protocol v9.0: wire-shrink pass on dead bytes
+public let buttonHeistVersion = "<calver>"  // Single product version; bumped only by scripts/release.sh
 ```
 
 ### ConnectionPhase
@@ -1073,9 +1073,9 @@ A point in unit coordinates (0–1) relative to an element's accessibility frame
 public struct ServerInfo: Codable, Sendable
 ```
 
-Device and app metadata received after connecting. The wire-level
-protocol version is carried by `ResponseEnvelope.protocolVersion` and
-is not duplicated here.
+Device and app metadata received after connecting. The product version
+is carried by `ResponseEnvelope.buttonHeistVersion` and is not duplicated
+here.
 
 #### Properties
 

@@ -507,7 +507,7 @@ final class DiscoveredDeviceTests: XCTestCase {
                 ))
             default:
                 XCTFail("Unexpected probe message: \(message)")
-                return .error("unexpected")
+                return .error(ServerError(kind: .general, message: "unexpected"))
             }
         }
 

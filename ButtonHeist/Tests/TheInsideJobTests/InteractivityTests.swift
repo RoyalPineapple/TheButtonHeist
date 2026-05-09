@@ -115,13 +115,13 @@ final class InteractivityTests: XCTestCase {
         }
     }
 
-    func testStaticOnlyElementStillReturnsInteractive() {
+    func testStaticOnlyElementStillReturnsInteractive() throws {
         let element = makeElement(traits: .staticText)
         let result = TheStash.Interactivity.checkInteractivity(element)
         switch result {
         case .interactive(let warning):
-            XCTAssertNotNil(warning, "Static-only element should surface an advisory warning")
-            XCTAssertTrue(warning?.contains("static traits") ?? false)
+            let warningText = try XCTUnwrap(warning, "Static-only element should surface an advisory warning")
+            XCTAssertTrue(warningText.contains("static traits"))
         case .blocked(let reason):
             XCTFail("Expected interactive (with warning), got blocked: \(reason)")
         }

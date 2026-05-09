@@ -27,32 +27,27 @@ struct AlertsSheetDemo: View {
                 Button("Show Alert") {
                     activePresentation = .simpleAlert
                     lastAction = "Alert shown"
-                    NSLog("[AlertsDemo] Alert presented")
                 }
 
                 Button("Show Two-Button Alert") {
                     activePresentation = .twoButtonAlert
                     lastAction = "Two-button alert shown"
-                    NSLog("[AlertsDemo] Two-button alert presented")
                 }
 
                 Button("Show Destructive Alert") {
                     activePresentation = .destructiveAlert
                     lastAction = "Destructive alert shown"
-                    NSLog("[AlertsDemo] Destructive alert presented")
                 }
 
                 Button("Show Text Field Alert") {
                     alertTextInput = ""
                     activePresentation = .textFieldAlert
                     lastAction = "Text field alert shown"
-                    NSLog("[AlertsDemo] Text field alert presented")
                 }
             }
             .alert("Alert Title", isPresented: isPresented(.simpleAlert)) {
                 Button("OK") {
                     lastAction = "Alert: OK"
-                    NSLog("[AlertsDemo] Alert OK tapped")
                 }
             } message: {
                 Text("This is a simple alert with one button.")
@@ -60,11 +55,9 @@ struct AlertsSheetDemo: View {
             .alert("Confirm Action", isPresented: isPresented(.twoButtonAlert)) {
                 Button("Cancel", role: .cancel) {
                     lastAction = "Two-button: Cancel"
-                    NSLog("[AlertsDemo] Two-button Cancel tapped")
                 }
                 Button("Confirm") {
                     lastAction = "Two-button: Confirm"
-                    NSLog("[AlertsDemo] Two-button Confirm tapped")
                 }
             } message: {
                 Text("Do you want to proceed with this action?")
@@ -72,11 +65,9 @@ struct AlertsSheetDemo: View {
             .alert("Delete Item", isPresented: isPresented(.destructiveAlert)) {
                 Button("Cancel", role: .cancel) {
                     lastAction = "Destructive: Cancel"
-                    NSLog("[AlertsDemo] Destructive Cancel tapped")
                 }
                 Button("Delete", role: .destructive) {
                     lastAction = "Destructive: Delete"
-                    NSLog("[AlertsDemo] Destructive Delete tapped")
                 }
             } message: {
                 Text("This action cannot be undone.")
@@ -85,11 +76,9 @@ struct AlertsSheetDemo: View {
                 TextField("Name", text: $alertTextInput)
                 Button("Cancel", role: .cancel) {
                     lastAction = "TextField: Cancel"
-                    NSLog("[AlertsDemo] TextField Cancel tapped")
                 }
                 Button("Submit") {
                     lastAction = "TextField: Submit (\(alertTextInput))"
-                    NSLog("[AlertsDemo] TextField Submit tapped: \(alertTextInput)")
                 }
             } message: {
                 Text("Please enter your name.")
@@ -99,23 +88,19 @@ struct AlertsSheetDemo: View {
                 Button("Show Confirmation Dialog") {
                     activePresentation = .confirmationDialog
                     lastAction = "Confirmation shown"
-                    NSLog("[AlertsDemo] Confirmation dialog presented")
                 }
 
                 Button("Show Sheet") {
                     activePresentation = .sheet
                     lastAction = "Sheet shown"
-                    NSLog("[AlertsDemo] Sheet presented")
                 }
             }
             .confirmationDialog("Choose Action", isPresented: isPresented(.confirmationDialog)) {
                 Button("Save") {
                     lastAction = "Confirmation: Save"
-                    NSLog("[AlertsDemo] Confirmation: Save")
                 }
                 Button("Discard", role: .destructive) {
                     lastAction = "Confirmation: Discard"
-                    NSLog("[AlertsDemo] Confirmation: Discard")
                 }
                 Button("Cancel", role: .cancel) {
                     lastAction = "Confirmation: Cancel"
@@ -129,7 +114,6 @@ struct AlertsSheetDemo: View {
                     Button("Dismiss") {
                         activePresentation = nil
                         lastAction = "Sheet dismissed"
-                        NSLog("[AlertsDemo] Sheet dismissed")
                     }
                 }
                 .padding()

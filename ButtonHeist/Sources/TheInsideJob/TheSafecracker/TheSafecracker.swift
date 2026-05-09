@@ -227,12 +227,12 @@ final class TheSafecracker {
         // Pre-compute: calculate segment lengths and total path length
         var totalLength: CGFloat = 0
         var segmentLengths: [CGFloat] = []
-        for i in 1..<points.count {
-            let dx = points[i].x - points[i-1].x
-            let dy = points[i].y - points[i-1].y
-            let len = sqrt(dx * dx + dy * dy)
-            segmentLengths.append(len)
-            totalLength += len
+        for index in 1..<points.count {
+            let dx = points[index].x - points[index - 1].x
+            let dy = points[index].y - points[index - 1].y
+            let length = sqrt(dx * dx + dy * dy)
+            segmentLengths.append(length)
+            totalLength += length
         }
 
         guard totalLength > 0 else {
@@ -250,16 +250,16 @@ final class TheSafecracker {
             let targetDist = progress * totalLength
 
             var accumulated: CGFloat = 0
-            for i in 0..<segmentLengths.count {
-                let segLen = segmentLengths[i]
-                if accumulated + segLen >= targetDist {
-                    let segProgress = (targetDist - accumulated) / segLen
+            for index in 0..<segmentLengths.count {
+                let segmentLength = segmentLengths[index]
+                if accumulated + segmentLength >= targetDist {
+                    let segmentProgress = (targetDist - accumulated) / segmentLength
                     return CGPoint(
-                        x: points[i].x + segProgress * (points[i+1].x - points[i].x),
-                        y: points[i].y + segProgress * (points[i+1].y - points[i].y)
+                        x: points[index].x + segmentProgress * (points[index + 1].x - points[index].x),
+                        y: points[index].y + segmentProgress * (points[index + 1].y - points[index].y)
                     )
                 }
-                accumulated += segLen
+                accumulated += segmentLength
             }
             return points[points.count - 1]
         }
@@ -408,9 +408,9 @@ final class TheSafecracker {
         guard !activeTouches.isEmpty, let window = activeWindow else { return false }
         guard points.count == activeTouches.count else { return false }
 
-        for i in activeTouches.indices {
-            let windowPoint = window.convert(points[i], from: nil)
-            activeTouches[i].update(phase: .moved, location: windowPoint)
+        for index in activeTouches.indices {
+            let windowPoint = window.convert(points[index], from: nil)
+            activeTouches[index].update(phase: .moved, location: windowPoint)
         }
 
         guard let event = TouchEvent(touches: activeTouches) else { return false }
@@ -424,8 +424,8 @@ final class TheSafecracker {
     private func sendStationary() -> Bool {
         guard !activeTouches.isEmpty else { return false }
 
-        for i in activeTouches.indices {
-            activeTouches[i].update(phase: .stationary)
+        for index in activeTouches.indices {
+            activeTouches[index].update(phase: .stationary)
         }
 
         guard let event = TouchEvent(touches: activeTouches) else { return false }
@@ -437,8 +437,8 @@ final class TheSafecracker {
     func touchesUp() -> Bool {
         guard !activeTouches.isEmpty else { return false }
 
-        for i in activeTouches.indices {
-            activeTouches[i].update(phase: .ended)
+        for index in activeTouches.indices {
+            activeTouches[index].update(phase: .ended)
         }
 
         guard let event = TouchEvent(touches: activeTouches) else {
@@ -462,7 +462,7 @@ final class TheSafecracker {
         let allWindows = UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .flatMap { $0.windows }
-            .filter { !($0 is any ButtonHeistOverlayWindow) && !$0.isHidden }
+            .filter { !($0 is TheFingerprints.FingerprintWindow) && !$0.isHidden }
             .sorted { $0.windowLevel > $1.windowLevel }
 
         for window in allWindows {

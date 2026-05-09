@@ -7,16 +7,19 @@ import CoreGraphics
 /// When `requestId` is present, the server echoes it in the corresponding response
 /// so the client can match request-response pairs. Push broadcasts have no requestId.
 public struct RequestEnvelope: Codable, Sendable {
-    public let protocolVersion: String
+    /// Client's `buttonHeistVersion`. The handshake requires exact equality
+    /// with the server's `buttonHeistVersion` — there is no separate wire
+    /// protocol version.
+    public let buttonHeistVersion: String
     public let requestId: String?
     public let message: ClientMessage
 
     public init(requestId: String? = nil, message: ClientMessage) {
-        self.init(wireProtocolVersion: TheScore.protocolVersion, requestId: requestId, message: message)
+        self.init(buttonHeistVersion: TheScore.buttonHeistVersion, requestId: requestId, message: message)
     }
 
-    public init(wireProtocolVersion: String, requestId: String? = nil, message: ClientMessage) {
-        self.protocolVersion = wireProtocolVersion
+    public init(buttonHeistVersion: String, requestId: String? = nil, message: ClientMessage) {
+        self.buttonHeistVersion = buttonHeistVersion
         self.requestId = requestId
         self.message = message
     }
@@ -154,6 +157,52 @@ public enum ClientMessage: Codable, Sendable {
     /// Connect as a read-only observer (no session lock)
     case watch(WatchPayload)
 
+    /// Canonical snake-case wire name for this message, suitable for log
+    /// output and command-name diagnostics. Stable across the codebase: the
+    /// same string the CLI accepts on argv and MCP tools advertise as their
+    /// command discriminator.
+    public var canonicalName: String {
+        switch self {
+        case .clientHello: return "client_hello"
+        case .authenticate: return "authenticate"
+        case .requestInterface: return "request_interface"
+        case .subscribe: return "subscribe"
+        case .unsubscribe: return "unsubscribe"
+        case .ping: return "ping"
+        case .status: return "status"
+        case .requestScreen: return "request_screen"
+        case .activate: return "activate"
+        case .increment: return "increment"
+        case .decrement: return "decrement"
+        case .performCustomAction: return "perform_custom_action"
+        case .editAction: return "edit_action"
+        case .setPasteboard: return "set_pasteboard"
+        case .getPasteboard: return "get_pasteboard"
+        case .resignFirstResponder: return "resign_first_responder"
+        case .touchTap: return "touch_tap"
+        case .touchLongPress: return "touch_long_press"
+        case .touchSwipe: return "touch_swipe"
+        case .touchDrag: return "touch_drag"
+        case .touchPinch: return "touch_pinch"
+        case .touchRotate: return "touch_rotate"
+        case .touchTwoFingerTap: return "touch_two_finger_tap"
+        case .touchDrawPath: return "touch_draw_path"
+        case .touchDrawBezier: return "touch_draw_bezier"
+        case .typeText: return "type_text"
+        case .scroll: return "scroll"
+        case .scrollToVisible: return "scroll_to_visible"
+        case .elementSearch: return "element_search"
+        case .scrollToEdge: return "scroll_to_edge"
+        case .waitForIdle: return "wait_for_idle"
+        case .waitFor: return "wait_for"
+        case .waitForChange: return "wait_for_change"
+        case .explore: return "explore"
+        case .startRecording: return "start_recording"
+        case .stopRecording: return "stop_recording"
+        case .watch: return "watch"
+        }
+    }
+
     /// Extract the element target from any action command, if present.
     ///
     /// Returns `nil` for commands that don't carry one directly — either because
@@ -240,10 +289,38 @@ public enum ElementTarget: Sendable, Equatable {
 // MARK: - ElementTarget Codable (flat wire format)
 
 extension ElementTarget: Codable {
-    private enum CodingKeys: String, CodingKey {
+    fileprivate enum CodingKeys: String, CodingKey {
         case heistId
         case label, identifier, value, traits, excludeTraits
         case ordinal
+
+        /// The matcher / heistId keys whose presence in a parent container
+        /// indicates an `ElementTarget` is flattened at that level. Excludes
+        /// `ordinal` because ordinal alone (without any matcher) isn't a
+        /// valid target.
+        static let allInlineKeys: [CodingKeys] = [
+            .heistId, .label, .identifier, .value, .traits, .excludeTraits,
+        ]
+    }
+
+    /// Wire keys whose presence (anywhere on a JSON object) indicates an
+    /// `ElementTarget` is encoded inline at that level. Used by wrapper
+    /// targets (`WaitForTarget`, `ScrollToVisibleTarget`,
+    /// `ElementSearchTarget`) that flatten an `ElementTarget` alongside their
+    /// own fields.
+    public static let inlineWireKeys: [String] = [
+        "heistId", "label", "identifier", "value", "traits", "excludeTraits",
+    ]
+
+    /// Decode an optional `ElementTarget` flattened into the same JSON object
+    /// the decoder is currently reading. Returns `nil` when none of the
+    /// matcher / heistId keys are present; throws if at least one key is
+    /// present but the resulting target fails ElementTarget's own validation.
+    public static func decodeInlineIfPresent(from decoder: Decoder) throws -> ElementTarget? {
+        let probe = try decoder.container(keyedBy: CodingKeys.self)
+        let hasTargetFields = CodingKeys.allInlineKeys.contains { probe.contains($0) }
+        guard hasTargetFields else { return nil }
+        return try ElementTarget(from: decoder)
     }
 
     public init(from decoder: Decoder) throws {
@@ -397,12 +474,13 @@ public struct WaitForTarget: Sendable {
 
 extension WaitForTarget: Codable {
     private enum CodingKeys: String, CodingKey {
-        case heistId, label, identifier, value, traits, excludeTraits
         case absent, timeout
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        // WaitForTarget requires an inline ElementTarget — defer to ElementTarget's
+        // own validation (it throws when no matcher/heistId keys are present).
         self.elementTarget = try ElementTarget(from: decoder)
         self.absent = try container.decodeIfPresent(Bool.self, forKey: .absent)
         self.timeout = try container.decodeIfPresent(Double.self, forKey: .timeout)
@@ -477,35 +555,30 @@ public struct RecordingConfig: Sendable {
 }
 
 extension RecordingConfig: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case fps, scale, inactivityTimeout, maxDuration
+    }
+
     public init(from decoder: Decoder) throws {
-        // Decode into a throwaway bridge struct first so field validation can
-        // run before assignment — this avoids partially-mutating `self` on a
-        // range violation and keeps the error site with the offending field.
-        let container = try decoder.singleValueContainer()
-        let raw = try container.decode(RawRecordingConfig.self)
-        if let fps = raw.fps, fps < 1 || fps > 15 {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let fps = try container.decodeIfPresent(Int.self, forKey: .fps)
+        let scale = try container.decodeIfPresent(Double.self, forKey: .scale)
+        if let fps, fps < 1 || fps > 15 {
             throw DecodingError.dataCorrupted(.init(
                 codingPath: decoder.codingPath,
                 debugDescription: "fps must be between 1 and 15, got \(fps)"
             ))
         }
-        if let scale = raw.scale, scale < 0.25 || scale > 1.0 {
+        if let scale, scale < 0.25 || scale > 1.0 {
             throw DecodingError.dataCorrupted(.init(
                 codingPath: decoder.codingPath,
                 debugDescription: "scale must be between 0.25 and 1.0, got \(scale)"
             ))
         }
-        self.fps = raw.fps
-        self.scale = raw.scale
-        self.inactivityTimeout = raw.inactivityTimeout
-        self.maxDuration = raw.maxDuration
-    }
-
-    private struct RawRecordingConfig: Decodable {
-        let fps: Int?
-        let scale: Double?
-        let inactivityTimeout: Double?
-        let maxDuration: Double?
+        self.fps = fps
+        self.scale = scale
+        self.inactivityTimeout = try container.decodeIfPresent(Double.self, forKey: .inactivityTimeout)
+        self.maxDuration = try container.decodeIfPresent(Double.self, forKey: .maxDuration)
     }
 }
 
@@ -587,19 +660,8 @@ public struct ElementSearchTarget: Sendable {
 }
 
 extension ScrollToVisibleTarget: Codable {
-    private enum CodingKeys: String, CodingKey {
-        case heistId, label, identifier, value, traits, excludeTraits
-    }
-
     public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let hasTargetFields = container.contains(.heistId)
-            || container.contains(.label)
-            || container.contains(.identifier)
-            || container.contains(.value)
-            || container.contains(.traits)
-            || container.contains(.excludeTraits)
-        self.elementTarget = hasTargetFields ? try ElementTarget(from: decoder) : nil
+        self.elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -609,19 +671,12 @@ extension ScrollToVisibleTarget: Codable {
 
 extension ElementSearchTarget: Codable {
     private enum CodingKeys: String, CodingKey {
-        case heistId, label, identifier, value, traits, excludeTraits
         case direction
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let hasTargetFields = container.contains(.heistId)
-            || container.contains(.label)
-            || container.contains(.identifier)
-            || container.contains(.value)
-            || container.contains(.traits)
-            || container.contains(.excludeTraits)
-        self.elementTarget = hasTargetFields ? try ElementTarget(from: decoder) : nil
+        self.elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
         self.direction = try container.decodeIfPresent(ScrollSearchDirection.self, forKey: .direction)
     }
 

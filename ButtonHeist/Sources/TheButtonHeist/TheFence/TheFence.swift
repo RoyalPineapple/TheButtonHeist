@@ -160,10 +160,12 @@ public final class TheFence {
     var config: Configuration
     let handoff = TheHandoff()
     let bookKeeper = TheBookKeeper()
-    /// Playback phase — prevents re-entrant play_heist calls.
+    /// Heist playback re-entrancy state. `.playing` carries the wall-clock
+    /// timestamp playback started so callers can reason about how long the
+    /// current playback has been running.
     enum PlaybackPhase {
         case idle
-        case playing
+        case playing(startedAt: Date)
     }
     var playbackPhase: PlaybackPhase = .idle
 
@@ -177,7 +179,14 @@ public final class TheFence {
     private let interfaceTracker = PendingRequestTracker<Interface>()
     private let screenTracker = PendingRequestTracker<ScreenPayload>()
     private let recordingTracker = PendingRequestTracker<RecordingPayload>()
-    private var recordingWaitInFlight = false
+
+    /// State of the in-flight `stop_recording` wait, if any. `.waiting`
+    /// carries the synthetic request ID used to key the recording tracker.
+    enum RecordingWait {
+        case idle
+        case waiting(syntheticId: String)
+    }
+    private var recordingWait: RecordingWait = .idle
 
     public init(configuration: Configuration = .init()) {
         self.config = configuration
@@ -278,44 +287,47 @@ public final class TheFence {
         handoff.stopDiscovery()
     }
 
-    /// Execute a command from a dictionary request. Auto-connects if not already connected.
+    /// Execute a command from a dictionary request. Auto-connects if not
+    /// already connected.
+    ///
+    /// Reads as a pipeline: parse → short-circuit against background deltas
+    /// → dispatch → record post-dispatch effects → validate against the
+    /// caller's expectation. Each step is its own private method.
     public func execute(request: [String: Any]) async throws -> FenceResponse {
-        guard let commandString = request["command"] as? String else {
-            throw FenceError.invalidRequest("Invalid JSON or missing 'command' field")
-        }
-        guard let command = Command(rawValue: commandString) else {
-            return .error("Unknown command: \(commandString). Use 'help' for available commands.")
-        }
-        if let immediateResponse = handleImmediateCommand(command) { return immediateResponse }
-        let requestId = (request["requestId"] as? String) ?? UUID().uuidString
-        logCommand(requestId: requestId, command: command, request: request)
-        let parsedExpectation = try parseExpectation(request)
+        let parsed = try parseRequest(request)
+        if let immediate = parsed.immediateResponse { return immediate }
 
-        if let backgroundResponse = responseIfBackgroundExpectationMet(parsedExpectation, requestId: requestId) {
+        if let backgroundResponse = responseIfBackgroundExpectationMet(
+            parsed.expectation, requestId: parsed.requestId
+        ) {
             return backgroundResponse
         }
 
-        try await ensureConnectedIfNeeded(for: command)
-
-        var dispatchArgs = request
-        dispatchArgs["_requestId"] = requestId
-
-        let dispatched = try await dispatchWithErrorLogging(
-            command: command,
-            args: dispatchArgs,
-            requestId: requestId
-        )
+        let dispatched = try await dispatchCommand(parsed)
         lastLatencyMs = dispatched.durationMs
+        logResponse(requestId: parsed.requestId, response: dispatched.response, durationMs: dispatched.durationMs)
 
-        logResponse(requestId: requestId, response: dispatched.response, durationMs: lastLatencyMs)
+        let postRecord = recordPostDispatchEffects(
+            parsed: parsed,
+            response: dispatched.response
+        )
+        return validateActionResponse(
+            dispatched.response,
+            expectation: parsed.expectation,
+            preActionCache: postRecord.preActionCache
+        )
+    }
 
-        // Snapshot pre-action elements before updating the cache — elementDisappeared
-        // expectations need to resolve removed heistIds against the pre-action state.
-        let preActionCache = lastInterfaceCache
-        let cacheUpdate = updateInterfaceCache(for: dispatched.response, preActionCache: preActionCache)
-        recordHeistEvidence(command: command, request: request, response: dispatched.response, cacheUpdate: cacheUpdate)
-        applyPostRecordCacheUpdate(cacheUpdate)
-        return validateActionResponse(dispatched.response, expectation: parsedExpectation, preActionCache: preActionCache)
+    // MARK: - Execute Pipeline
+
+    private struct ParsedRequest {
+        let command: Command
+        let requestId: String
+        let originalRequest: [String: Any]
+        let dispatchArgs: [String: Any]
+        let expectation: ActionExpectation?
+        /// Non-nil when the command short-circuits before dispatch (help/quit/exit).
+        let immediateResponse: FenceResponse?
     }
 
     private struct DispatchResult {
@@ -323,9 +335,94 @@ public final class TheFence {
         let durationMs: Int
     }
 
+    private struct PostRecordOutcome {
+        let preActionCache: [String: HeistElement]
+    }
+
+    /// Parse and validate a raw request dictionary into typed fields.
+    /// Returns an ImmediateResponse-bearing `ParsedRequest` for help/quit/exit
+    /// so the caller short-circuits without logging or dispatching.
+    private func parseRequest(_ request: [String: Any]) throws -> ParsedRequest {
+        guard let commandString = request["command"] as? String else {
+            throw FenceError.invalidRequest("Invalid JSON or missing 'command' field")
+        }
+        guard let command = Command(rawValue: commandString) else {
+            return ParsedRequest(
+                command: .help,
+                requestId: "",
+                originalRequest: request,
+                dispatchArgs: request,
+                expectation: nil,
+                immediateResponse: .error("Unknown command: \(commandString). Use 'help' for available commands.")
+            )
+        }
+        if let immediate = handleImmediateCommand(command) {
+            return ParsedRequest(
+                command: command,
+                requestId: "",
+                originalRequest: request,
+                dispatchArgs: request,
+                expectation: nil,
+                immediateResponse: immediate
+            )
+        }
+        let requestId = (request["requestId"] as? String) ?? UUID().uuidString
+        logCommand(requestId: requestId, command: command, request: request)
+        let expectation = try parseExpectation(request)
+
+        var dispatchArgs = request
+        dispatchArgs["_requestId"] = requestId
+
+        return ParsedRequest(
+            command: command,
+            requestId: requestId,
+            originalRequest: request,
+            dispatchArgs: dispatchArgs,
+            expectation: expectation,
+            immediateResponse: nil
+        )
+    }
+
+    /// Ensure the connection is up if the command needs it, then dispatch
+    /// the command and capture wall-clock duration.
+    private func dispatchCommand(_ parsed: ParsedRequest) async throws -> DispatchResult {
+        try await ensureConnectedIfNeeded(for: parsed.command)
+        return try await dispatchWithErrorLogging(
+            command: parsed.command,
+            args: parsed.dispatchArgs,
+            requestId: parsed.requestId
+        )
+    }
+
+    /// Update the interface cache, write heist evidence, and replay any
+    /// post-record cache replacement that follows a screen change.
+    /// Returns the pre-action cache snapshot for downstream expectation
+    /// validation (elementDisappeared resolves removed heistIds against it).
+    private func recordPostDispatchEffects(
+        parsed: ParsedRequest,
+        response: FenceResponse
+    ) -> PostRecordOutcome {
+        let preActionCache = lastInterfaceCache
+        let cacheUpdate = updateInterfaceCache(for: response, preActionCache: preActionCache)
+        recordHeistEvidence(
+            command: parsed.command,
+            request: parsed.originalRequest,
+            response: response,
+            cacheUpdate: cacheUpdate
+        )
+        applyPostRecordCacheUpdate(cacheUpdate)
+        return PostRecordOutcome(preActionCache: preActionCache)
+    }
+
     private struct ResponseCacheUpdate {
-        let evidenceElements: [HeistElement]?
-        let postRecordBookKeeperElements: [HeistElement]?
+        /// Snapshot of the cache to record heist evidence against. Includes
+        /// pre-action elements (so the activated element from the old screen
+        /// survives a screen change) merged with any newly-arrived elements.
+        let evidenceCache: [String: HeistElement]?
+        /// On a screen change, the new screen's elements that should
+        /// replace the cache after evidence is recorded. `nil` when the
+        /// cache should be left as-is.
+        let postRecordReplacement: [HeistElement]?
     }
 
     private func handleImmediateCommand(_ command: Command) -> FenceResponse? {
@@ -421,15 +518,15 @@ public final class TheFence {
         if case .interface(let iface, _, _, _) = response {
             updateInterfaceCache(iface.elements)
             return ResponseCacheUpdate(
-                evidenceElements: lastInterfaceCache.isEmpty ? nil : Array(lastInterfaceCache.values),
-                postRecordBookKeeperElements: nil
+                evidenceCache: lastInterfaceCache.isEmpty ? nil : lastInterfaceCache,
+                postRecordReplacement: nil
             )
         }
         guard let actionResult = response.actionResult,
               case .screenChanged(let payload)? = actionResult.interfaceDelta else {
             return ResponseCacheUpdate(
-                evidenceElements: lastInterfaceCache.isEmpty ? nil : Array(lastInterfaceCache.values),
-                postRecordBookKeeperElements: nil
+                evidenceCache: lastInterfaceCache.isEmpty ? nil : lastInterfaceCache,
+                postRecordReplacement: nil
             )
         }
         return updateInterfaceCache(for: actionResult, newInterface: payload.newInterface, preActionCache: preActionCache)
@@ -446,9 +543,16 @@ public final class TheFence {
         for element in newInterface.elements {
             lastInterfaceCache[element.heistId] = element
         }
+        // Evidence cache is union of pre-action elements + the new screen's
+        // elements so the activated element from the old screen survives long
+        // enough for the recorder to resolve its heistId to a matcher.
+        var evidenceCache = preActionCache
+        for element in newInterface.elements {
+            evidenceCache[element.heistId] = element
+        }
         return ResponseCacheUpdate(
-            evidenceElements: Array(preActionCache.values) + newInterface.elements,
-            postRecordBookKeeperElements: newInterface.elements
+            evidenceCache: evidenceCache.isEmpty ? nil : evidenceCache,
+            postRecordReplacement: newInterface.elements
         )
     }
 
@@ -463,14 +567,16 @@ public final class TheFence {
             command: command,
             args: request,
             succeeded: response.succeededForHeistRecording,
-            interfaceElements: cacheUpdate.evidenceElements
+            interfaceCache: cacheUpdate.evidenceCache ?? [:]
         )
     }
 
     private func applyPostRecordCacheUpdate(_ cacheUpdate: ResponseCacheUpdate) {
-        guard let elements = cacheUpdate.postRecordBookKeeperElements else { return }
-        bookKeeper.clearInterfaceCache()
-        bookKeeper.updateInterfaceCache(elements)
+        guard let elements = cacheUpdate.postRecordReplacement else { return }
+        lastInterfaceCache.removeAll()
+        for element in elements {
+            lastInterfaceCache[element.heistId] = element
+        }
     }
 
     private func validateActionResponse(
@@ -540,7 +646,6 @@ public final class TheFence {
         for element in elements {
             lastInterfaceCache[element.heistId] = element
         }
-        bookKeeper.updateInterfaceCache(elements)
     }
 
     // MARK: - Response Logging
@@ -779,19 +884,19 @@ public final class TheFence {
         timeout: TimeInterval,
         afterRegister: (() -> Void)?
     ) async throws -> RecordingPayload {
-        guard !recordingWaitInFlight else {
+        guard case .idle = recordingWait else {
             throw FenceError.invalidRequest("stop_recording already waiting for completion")
         }
-        recordingWaitInFlight = true
+        let syntheticId = "recording"
+        recordingWait = .waiting(syntheticId: syntheticId)
         let previousOnRecording = handoff.onRecording
         let previousOnRecordingError = handoff.onRecordingError
         defer {
-            recordingWaitInFlight = false
+            recordingWait = .idle
             handoff.onRecording = previousOnRecording
             handoff.onRecordingError = previousOnRecordingError
         }
 
-        let syntheticId = "recording"
         handoff.onRecording = { [weak self] payload in
             self?.recordingTracker.resolve(requestId: syntheticId, result: .success(payload))
         }

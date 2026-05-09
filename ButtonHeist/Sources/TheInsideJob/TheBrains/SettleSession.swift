@@ -114,13 +114,7 @@ extension AccessibilityElement {
 @MainActor
 struct SettleSession {
 
-    /// Hardcoded knobs for the live wiring. Exposing these as user
-    /// configuration would invite "make settle faster/slower" footguns
-    /// without buying real ergonomics for any agent. If a workload
-    /// genuinely needs different timing, use `wait_for_idle` with an
-    /// explicit timeout. The instance fields below default to these
-    /// values; only unit tests override them, to drive scripted loops
-    /// in milliseconds rather than seconds.
+    /// Hardcoded; tests override via init.
     static let defaultCyclesRequired: Int = 3
     static let defaultCycleIntervalMs: Int = 100
     static let defaultTimeoutMs: Int = 5_000

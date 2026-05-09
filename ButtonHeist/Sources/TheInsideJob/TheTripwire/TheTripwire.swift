@@ -180,13 +180,11 @@ final class TheTripwire {
         link.preferredFrameRateRange = CAFrameRateRange(minimum: 8, maximum: 12, preferred: 10)
         link.add(to: .main, forMode: .common)
         pulsePhase = .running(RunningContext(link: link, target: target))
-        startNotificationObservation()
     }
 
     func stopPulse() {
         guard let context = runningContext else { return }
         context.link.invalidate()
-        stopNotificationObservation()
 
         for waiter in context.settleWaiters {
             waiter.continuation.resume(returning: false)
@@ -316,16 +314,6 @@ final class TheTripwire {
         }
     }
 
-    // MARK: - Notification Observation
-
-    private func startNotificationObservation() {
-        // Reserved for future pulse-relevant notifications
-    }
-
-    private func stopNotificationObservation() {
-        // Reserved for future pulse-relevant notifications
-    }
-
     // MARK: - Window Access
 
     /// All visible, non-fingerprint windows in foreground-active scenes, sorted
@@ -339,7 +327,7 @@ final class TheTripwire {
             .filter { $0.activationState == .foregroundActive }
             .flatMap { $0.windows }
             .filter { window in
-                !(window is any ButtonHeistOverlayWindow)
+                !(window is TheFingerprints.FingerprintWindow)
                     && !window.isHidden
                     && window.bounds.size != .zero
             }

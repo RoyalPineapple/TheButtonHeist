@@ -42,7 +42,6 @@ struct GridGalleryView: View {
             }
             .padding(.horizontal, 12)
 
-            // Footer with count
             Text("\(filteredItems.count) items · \(selectedItems.count) selected")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -134,21 +133,23 @@ private struct GridCell: View {
 /// 3 visible cards means the agent sees multiple elements at once, and the
 /// ghost buffer is wider (3 cards on each side instead of 1).
 private struct FeaturedCarousel: View {
+    private enum ScrollSource {
+        case user, programmatic
+    }
+
     @State private var scrolledID: Int?
+    @State private var lastScrollSource: ScrollSource = .user
 
-    /// Suppresses handleScrollChange when advancePage is driving the scroll.
-    @State private var suppressScrollHandler = false
-
-    private let cards = FeaturedCard.sampleCards
+    private static let cards = FeaturedCard.sampleCards
+    private var cards: [FeaturedCard] { Self.cards }
 
     /// Number of ghost cards padded at each end — must be >= visible count
     /// so the user never sees the buffer boundary.
     private static let ghostCount = 3
 
-    /// Buffer: [last N ghosts] + all cards + [first N ghosts].
-    /// Each entry gets a unique buffer ID (offset) for scroll tracking.
-    private var buffer: [BufferEntry] {
-        let ghostCount = Self.ghostCount
+    /// Buffer: [last N ghosts] + all cards + [first N ghosts]. Computed once
+    /// at file scope since `cards` and `ghostCount` are static.
+    private static let buffer: [BufferEntry] = {
         let leadingGhosts = cards.suffix(ghostCount).enumerated().map { index, card in
             BufferEntry(bufferID: index, card: card, logicalIndex: cards.count - ghostCount + index, isGhost: true)
         }
@@ -159,7 +160,9 @@ private struct FeaturedCarousel: View {
             BufferEntry(bufferID: ghostCount + cards.count + index, card: card, logicalIndex: index, isGhost: true)
         }
         return leadingGhosts + realCards + trailingGhosts
-    }
+    }()
+
+    private var buffer: [BufferEntry] { Self.buffer }
 
     /// The buffer ID of the first real card.
     private var firstRealID: Int { Self.ghostCount }
@@ -237,22 +240,16 @@ private struct FeaturedCarousel: View {
 
     private func handleScrollChange(_ newID: Int?) {
         guard let newID else { return }
-        if suppressScrollHandler {
-            suppressScrollHandler = false
+        if lastScrollSource == .programmatic {
+            lastScrollSource = .user
             return
         }
 
-        // Scrolled into the leading ghost region → jump to real equivalent near the end
-        if newID < firstRealID {
+        if newID < firstRealID || newID > lastRealID {
             let logicalIndex = buffer.first { $0.bufferID == newID }?.logicalIndex ?? 0
             let targetID = Self.ghostCount + logicalIndex
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                scrolledID = targetID
-            }
-        } else if newID > lastRealID {
-            let logicalIndex = buffer.first { $0.bufferID == newID }?.logicalIndex ?? 0
-            let targetID = Self.ghostCount + logicalIndex
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                lastScrollSource = .programmatic
                 scrolledID = targetID
             }
         }
@@ -261,7 +258,7 @@ private struct FeaturedCarousel: View {
     private func advancePage(by offset: Int) {
         let newLogical = (currentLogicalIndex + offset + cards.count) % cards.count
         let targetBufferID = Self.ghostCount + newLogical
-        suppressScrollHandler = true
+        lastScrollSource = .programmatic
         withAnimation { scrolledID = targetBufferID }
     }
 }

@@ -201,12 +201,20 @@ nonisolated extension USBDeviceDiscovery {
         }
         guard let outputHandle = FileHandle(forWritingAtPath: outputURL.path) else {
             logger.debug("Failed to open temporary output file for \(path)")
-            try? FileManager.default.removeItem(at: outputURL)
+            do {
+                try FileManager.default.removeItem(at: outputURL)
+            } catch {
+                logger.debug("Failed to remove temporary output file: \(error.localizedDescription)")
+            }
             return nil
         }
         defer {
             outputHandle.closeFile()
-            try? FileManager.default.removeItem(at: outputURL)
+            do {
+                try FileManager.default.removeItem(at: outputURL)
+            } catch {
+                logger.debug("Failed to remove temporary output file: \(error.localizedDescription)")
+            }
         }
 
         process.standardOutput = outputHandle
@@ -216,7 +224,7 @@ nonisolated extension USBDeviceDiscovery {
         // When process exits naturally OR via terminate, the terminationHandler
         // fires exactly once and resumes the continuation below.
         let timeoutTask = Task {
-            try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+            guard await Task<Never, Never>.cancellableSleep(nanoseconds: UInt64(timeout * 1_000_000_000)) else { return }
             if process.isRunning {
                 logger.debug("Timed out running \(path) after \(timeout)s")
                 process.terminate()
@@ -245,7 +253,11 @@ nonisolated extension USBDeviceDiscovery {
         // Safe to read before `outputHandle.closeFile()` runs in the defer: the
         // child has exited and flushed its dup'd fd, and the kernel page cache
         // serves reads from the same file regardless of open write handles.
-        guard let data = try? Data(contentsOf: outputURL) else {
+        let data: Data
+        do {
+            data = try Data(contentsOf: outputURL)
+        } catch {
+            logger.debug("Failed to read output of \(path): \(error.localizedDescription)")
             return nil
         }
 

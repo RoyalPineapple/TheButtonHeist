@@ -14,23 +14,23 @@ final class DocumentationDriftTests: XCTestCase {
             "ButtonHeist/Sources/TheScore/README.md",
         ])
 
+        // The wire envelope no longer carries a separate `protocolVersion` field —
+        // only `buttonHeistVersion`. Any reference to `protocolVersion` (or to the
+        // legacy SemVer wire-protocol versions v6–v9) is stale.
         let staleProtocolPhrases = [
             "Protocol v6",
             "Protocol v7",
             "Protocol v8",
-            "\"protocolVersion\":\"6",
-            "\"protocolVersion\":\"7",
-            "\"protocolVersion\":\"8",
-            "protocolVersion\":\"6",
-            "protocolVersion\":\"7",
-            "protocolVersion\":\"8",
+            "Protocol v9",
+            "\"protocolVersion\"",
+            "protocolVersion\":",
         ]
 
         for (path, content) in docs {
             for phrase in staleProtocolPhrases {
                 XCTAssertFalse(
                     content.contains(phrase),
-                    "\(path) contains stale protocol phrase '\(phrase)'; current protocol is \(protocolVersion)"
+                    "\(path) contains stale protocol phrase '\(phrase)'; current product version is \(buttonHeistVersion)"
                 )
             }
         }

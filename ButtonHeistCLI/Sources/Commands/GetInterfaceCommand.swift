@@ -11,9 +11,7 @@ struct GetInterfaceCommand: AsyncParsableCommand {
     @OptionGroup var connection: ConnectionOptions
 
     @OptionGroup var output: OutputOptions
-
-    @Option(name: .shortAndLong, help: "Timeout in seconds")
-    var timeout: Double = 10.0
+    @OptionGroup var timeoutOption: TimeoutOption
 
     @Flag(help: "Explore the full screen including off-screen content in scroll views")
     var full: Bool = false
@@ -22,7 +20,7 @@ struct GetInterfaceCommand: AsyncParsableCommand {
     mutating func run() async throws {
         var request: [String: Any] = [
             "command": TheFence.Command.getInterface.rawValue,
-            "timeout": timeout,
+            "timeout": timeoutOption.timeout,
         ]
         if full { request["full"] = true }
         try await CLIRunner.run(

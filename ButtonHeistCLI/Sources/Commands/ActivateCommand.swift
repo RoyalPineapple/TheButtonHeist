@@ -30,9 +30,7 @@ struct ActivateCommand: AsyncParsableCommand {
     @OptionGroup var element: ElementTargetOptions
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
-
-    @Option(name: .shortAndLong, help: "Timeout in seconds")
-    var timeout: Double = 10.0
+    @OptionGroup var timeoutOption: TimeoutOption
 
     @Option(name: .long, help: "Named action: increment, decrement, or a custom action name from the element's actions array")
     var action: String?
@@ -41,16 +39,25 @@ struct ActivateCommand: AsyncParsableCommand {
     mutating func run() async throws {
         _ = try element.requireTarget()
 
-        let parsedAction = action.map { ActivateAction(parsing: $0) }
-        let fenceCommand = parsedAction?.fenceCommand ?? .activate
-        var request: [String: Any] = ["command": fenceCommand.rawValue]
-
-        if case .custom(let name) = parsedAction {
-            request["action"] = name
+        var request: [String: Any]
+        switch action.flatMap({ TheFence.Command(rawValue: $0.lowercased()) }) {
+        case .increment:
+            request = ["command": TheFence.Command.increment.rawValue]
+        case .decrement:
+            request = ["command": TheFence.Command.decrement.rawValue]
+        default:
+            if let action {
+                request = [
+                    "command": TheFence.Command.performCustomAction.rawValue,
+                    "action": action,
+                ]
+            } else {
+                request = ["command": TheFence.Command.activate.rawValue]
+            }
         }
 
         try element.applyTo(&request)
-        request["timeout"] = timeout
+        request["timeout"] = timeoutOption.timeout
 
         try await CLIRunner.run(
             connection: connection,
@@ -58,29 +65,5 @@ struct ActivateCommand: AsyncParsableCommand {
             request: request,
             statusMessage: action.map { "Sending \($0)..." } ?? "Activating element..."
         )
-    }
-}
-
-// MARK: - ActivateAction
-
-private enum ActivateAction {
-    case increment
-    case decrement
-    case custom(String)
-
-    init(parsing string: String) {
-        switch TheFence.Command(rawValue: string.lowercased()) {
-        case .increment: self = .increment
-        case .decrement: self = .decrement
-        default: self = .custom(string)
-        }
-    }
-
-    var fenceCommand: TheFence.Command {
-        switch self {
-        case .increment: .increment
-        case .decrement: .decrement
-        case .custom: .performCustomAction
-        }
     }
 }

@@ -13,11 +13,9 @@ struct ModalWindowDemo: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Background catalog — these elements should be filtered out
-            // when the popup is visible.
             List {
                 Section {
-                    ForEach(catalogItems, id: \.self) { item in
+                    ForEach(Self.catalogItems, id: \.self) { item in
                         HStack {
                             Text(item)
                             Spacer()
@@ -36,10 +34,8 @@ struct ModalWindowDemo: View {
             HStack {
                 Button("Create Item") {
                     lastAction = "Popup shown"
-                    NSLog("[ModalWindowDemo] Showing popup")
                     popupController.showPopup { action in
                         lastAction = action
-                        NSLog("[ModalWindowDemo] Popup action: %@", action)
                     }
                 }
                 .buttonStyle(.borderedProminent)
@@ -55,20 +51,18 @@ struct ModalWindowDemo: View {
         .navigationTitle("Modal Window")
     }
 
-    private var catalogItems: [String] {
-        [
-            "Espresso",
-            "Cappuccino",
-            "Latte",
-            "Cold Brew",
-            "Matcha",
-            "Chai Tea",
-            "Hot Chocolate",
-            "Croissant",
-            "Muffin",
-            "Bagel",
-        ]
-    }
+    private static let catalogItems: [String] = [
+        "Espresso",
+        "Cappuccino",
+        "Latte",
+        "Cold Brew",
+        "Matcha",
+        "Chai Tea",
+        "Hot Chocolate",
+        "Croissant",
+        "Muffin",
+        "Bagel",
+    ]
 }
 
 // MARK: - UIWindow-Based Popup
@@ -79,12 +73,15 @@ struct ModalWindowDemo: View {
 /// to ignore all background windows.
 @MainActor
 final class ModalPopupController {
-    private var overlayWindow: UIWindow?
-    private var onAction: ((String) -> Void)?
+    private enum Phase {
+        case idle
+        case presenting(UIWindow, (String) -> Void)
+    }
+
+    private var phase: Phase = .idle
 
     func showPopup(onAction: @escaping (String) -> Void) {
-        guard overlayWindow == nil else { return }
-        self.onAction = onAction
+        guard case .idle = phase else { return }
 
         guard let windowScene = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
@@ -102,14 +99,14 @@ final class ModalPopupController {
         window.rootViewController = viewController
         window.isHidden = false
 
-        overlayWindow = window
+        phase = .presenting(window, onAction)
     }
 
     private func dismiss(action: String) {
-        overlayWindow?.isHidden = true
-        overlayWindow = nil
-        onAction?(action)
-        onAction = nil
+        guard case .presenting(let window, let onAction) = phase else { return }
+        window.isHidden = true
+        phase = .idle
+        onAction(action)
     }
 }
 
@@ -180,7 +177,6 @@ private final class ModalPopupViewController: UIViewController {
 
     @objc private func buttonTapped(_ sender: UIButton) {
         guard let title = sender.configuration?.title else { return }
-        NSLog("[ModalWindowDemo] Button tapped: %@", title)
         onAction?(title)
     }
 }

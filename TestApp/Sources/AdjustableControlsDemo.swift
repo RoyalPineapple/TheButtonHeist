@@ -15,13 +15,11 @@ struct AdjustableControlsDemo: View {
                 .accessibilityValue("\(Int(sliderValue))")
                 .onChange(of: sliderValue) { _, newValue in
                     lastAction = "Slider: \(Int(newValue))"
-                    NSLog("[ControlsDemo] Slider changed to: %d", Int(newValue))
                 }
 
                 Stepper("Quantity: \(stepperValue)", value: $stepperValue, in: 0...10)
                     .onChange(of: stepperValue) { _, newValue in
                         lastAction = "Stepper: \(newValue)"
-                        NSLog("[ControlsDemo] Stepper changed to: %d", newValue)
                     }
 
                 Gauge(value: sliderValue, in: 0...100) {

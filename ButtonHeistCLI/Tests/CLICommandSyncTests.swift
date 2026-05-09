@@ -27,7 +27,7 @@ final class CLICommandSyncTests: XCTestCase {
 
     func testTopLevelSubcommandsMapToCommandCatalogOrCLIOnlyCommands() {
         let commandNames = Set(TheFence.Command.allCases.map(\.rawValue))
-        let cliOnlyCommands: Set<String> = ["integrate", "session"]
+        let cliOnlyCommands: Set<String> = ["session"]
 
         for cliName in topLevelCommandNames() {
             XCTAssertTrue(

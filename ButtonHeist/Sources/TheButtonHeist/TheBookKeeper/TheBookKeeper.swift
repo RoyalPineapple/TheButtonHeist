@@ -7,10 +7,8 @@ private let logger = Logger(subsystem: "com.buttonheist.bookkeeper", category: "
 
 // MARK: - Session Phase State Machine
 
-/// Lifecycle of a BookKeeper session from idle through archive.
-///
-/// Each non-idle case carries the phase-specific data that is valid only during that
-/// phase, making impossible states unrepresentable.
+/// Lifecycle of a BookKeeper session from idle through archive. Each non-idle
+/// case carries the phase-specific data valid for that phase.
 @ButtonHeistActor
 public enum SessionPhase: Sendable {
     case idle
@@ -20,11 +18,6 @@ public enum SessionPhase: Sendable {
     case archived(ArchivedSession)
 }
 
-/// State for an open session that is accepting commands and artifacts.
-///
-/// The manifest, start time, and directory are public for test inspection.
-/// File handles and mutable bookkeeping are module-internal so they can't be
-/// reached or mutated from outside TheBookKeeper.
 @ButtonHeistActor
 public struct ActiveSession: Sendable {
     public let sessionId: String
@@ -33,30 +26,18 @@ public struct ActiveSession: Sendable {
     public var manifest: SessionManifest
     public let startTime: Date
     var nextSequenceNumber: Int
-
-    /// Non-nil while a heist recording is active inside this session.
     var heistRecording: HeistRecording?
 }
 
-/// State for an in-progress heist recording nested inside an `ActiveSession`.
-///
-/// Appends one `HeistEvidence` JSON line per captured step. Not Sendable-checkable
-/// because `FileHandle` is not Sendable, but all access is isolated to
-/// `@ButtonHeistActor`.
 @ButtonHeistActor
 struct HeistRecording: @unchecked Sendable {
     let app: String
     let startTime: Date
     var evidenceCount: Int
-    /// Append-only file handle for durable evidence storage.
     let fileHandle: FileHandle
     let filePath: URL
-    /// Snapshot from the most recent `get_interface` response, used to look up
-    /// `heistId` → element properties when building matchers at recording time.
-    var interfaceCache: [String: HeistElement]
 }
 
-/// Transient state while a session's log is being flushed and compressed.
 @ButtonHeistActor
 public struct ClosingSession: Sendable {
     public let sessionId: String
@@ -66,7 +47,6 @@ public struct ClosingSession: Sendable {
     public let endTime: Date
 }
 
-/// State for a session whose log has been compressed but not yet archived.
 @ButtonHeistActor
 public struct ClosedSession: Sendable {
     public let sessionId: String
@@ -77,7 +57,6 @@ public struct ClosedSession: Sendable {
     public let endTime: Date
 }
 
-/// Terminal state for a session whose directory has been packaged into a single archive.
 @ButtonHeistActor
 public struct ArchivedSession: Sendable {
     public let archivePath: URL
@@ -144,161 +123,6 @@ public final class TheBookKeeper {
         case .archived(let session):
             return session.manifest
         }
-    }
-
-    // MARK: - Recovery
-
-    /// A session that was recovered from an abandoned state.
-    struct RecoveredSession: Sendable {
-        let sessionId: String
-        let directory: URL
-        /// Number of heist evidence entries found, or nil if no heist was in progress.
-        let heistEvidenceCount: Int?
-        /// Path to the heist evidence file, if one exists.
-        let heistFilePath: URL?
-    }
-
-    /// Scan for abandoned sessions and recover them.
-    /// An abandoned session has `session.jsonl` (uncompressed) — meaning it was
-    /// never properly closed. Recovery: write a recovery manifest, compress the log.
-    /// Abandoned heist evidence (heist.jsonl) is preserved and surfaced in the result.
-    ///
-    /// Internal: not yet wired into a production flow. Exposed via `@testable import`
-    /// only. Promote to public when TheFence (or a CLI command) consumes the result.
-    @discardableResult
-    func recoverAbandonedSessions() -> [RecoveredSession] {
-        let fileManager = FileManager.default
-        guard fileManager.fileExists(atPath: baseDirectory.path) else { return [] }
-
-        let contents: [URL]
-        do {
-            contents = try fileManager.contentsOfDirectory(
-                at: baseDirectory,
-                includingPropertiesForKeys: [.isDirectoryKey],
-                options: [.skipsHiddenFiles]
-            )
-        } catch {
-            logger.warning("Failed to list session directories: \(error.localizedDescription)")
-            return []
-        }
-
-        return contents.compactMap { directoryURL in
-            let isDirectory: Bool
-            do {
-                isDirectory = try directoryURL.resourceValues(forKeys: [.isDirectoryKey]).isDirectory ?? false
-            } catch {
-                logger.warning("Failed to read resource values for \(directoryURL.lastPathComponent): \(error.localizedDescription)")
-                return nil
-            }
-            guard isDirectory else { return nil }
-
-            // Abandoned = has raw log but no compressed log
-            let rawLog = directoryURL.appendingPathComponent("session.jsonl")
-            let compressedLog = directoryURL.appendingPathComponent("session.jsonl.gz")
-            guard fileManager.fileExists(atPath: rawLog.path),
-                  !fileManager.fileExists(atPath: compressedLog.path) else { return nil }
-
-            let sessionId = directoryURL.lastPathComponent
-            guard let heistInfo = recoverSession(directory: directoryURL, sessionId: sessionId) else {
-                return nil
-            }
-            return RecoveredSession(
-                sessionId: sessionId,
-                directory: directoryURL,
-                heistEvidenceCount: heistInfo.evidenceCount,
-                heistFilePath: heistInfo.filePath
-            )
-        }
-    }
-
-    private func recoverSession(
-        directory: URL,
-        sessionId: String
-    ) -> (evidenceCount: Int?, filePath: URL?)? {
-        let fileManager = FileManager.default
-        let manifestPath = directory.appendingPathComponent("manifest.json")
-
-        // Compress the raw log before mutating the manifest. If compression fails,
-        // the session directory stays byte-for-byte as we found it so the next
-        // recovery attempt has clean inputs — no stale endTime recording the time
-        // of a failed attempt.
-        let rawLog = directory.appendingPathComponent("session.jsonl")
-        let compressedLog = directory.appendingPathComponent("session.jsonl.gz")
-        let gzipProcess = Process()
-        gzipProcess.executableURL = URL(fileURLWithPath: "/usr/bin/gzip")
-        gzipProcess.arguments = [rawLog.path]
-        gzipProcess.standardOutput = FileHandle.nullDevice
-        gzipProcess.standardError = FileHandle.nullDevice
-        do {
-            try gzipProcess.run()
-        } catch {
-            logger.warning("Failed to compress session log for \(sessionId): \(error.localizedDescription)")
-            return nil
-        }
-        gzipProcess.waitUntilExit()
-        guard gzipProcess.terminationStatus == 0 else {
-            logger.warning(
-                "Failed to recover abandoned session \(sessionId): gzip exited with status \(gzipProcess.terminationStatus)"
-            )
-            return nil
-        }
-        guard fileManager.fileExists(atPath: compressedLog.path) else {
-            logger.warning(
-                "Failed to recover abandoned session \(sessionId): expected compressed log missing at \(compressedLog.path)"
-            )
-            return nil
-        }
-
-        // Compression succeeded — read existing manifest or create a minimal one
-        var manifest: SessionManifest
-        let jsonDecoder = JSONDecoder()
-        jsonDecoder.dateDecodingStrategy = .iso8601
-        do {
-            let manifestData = try Data(contentsOf: manifestPath)
-            manifest = try jsonDecoder.decode(SessionManifest.self, from: manifestData)
-        } catch {
-            logger.warning("Could not read manifest for \(sessionId): \(error.localizedDescription)")
-            manifest = SessionManifest(sessionId: sessionId, startTime: Date())
-        }
-
-        // Mark as recovered with an endTime if missing
-        if manifest.endTime == nil {
-            manifest.endTime = Date()
-        }
-
-        // Write updated manifest
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        do {
-            let manifestData = try encoder.encode(manifest)
-            try manifestData.write(to: manifestPath, options: .atomic)
-        } catch {
-            logger.warning("Failed to write manifest for \(sessionId): \(error.localizedDescription)")
-        }
-
-        // Check for abandoned heist evidence
-        let heistLog = directory.appendingPathComponent("heist.jsonl")
-        var heistEvidenceCount: Int?
-        var heistFilePath: URL?
-        if fileManager.fileExists(atPath: heistLog.path) {
-            do {
-                let heistData = try Data(contentsOf: heistLog)
-                if !heistData.isEmpty {
-                    let lineCount = heistData.reduce(0) { count, byte in byte == 0x0A ? count + 1 : count }
-                    heistEvidenceCount = lineCount
-                    heistFilePath = heistLog
-                    logger.warning(
-                        "Abandoned heist in session \(sessionId) — \(lineCount) evidence entries preserved at \(heistLog.path)"
-                    )
-                }
-            } catch {
-                logger.warning("Failed to read heist log for \(sessionId): \(error.localizedDescription)")
-            }
-        }
-
-        logger.info("Recovered abandoned session: \(sessionId)")
-        return (heistEvidenceCount, heistFilePath)
     }
 
     // MARK: - Lifecycle
@@ -530,34 +354,22 @@ public final class TheBookKeeper {
         return resolvedURL
     }
 
-    /// Metadata carried by an artifact being written — screenshot dimensions or
-    /// recording stats. Used to route to the correct typed write path.
-    public enum ArtifactMetadata: Sendable {
-        case screenshot(ScreenshotMetadata)
-        case recording(RecordingMetadata)
-    }
-
-    /// Write an artifact to whichever sink is available, or return `nil` if
+    /// Write a screenshot to whichever sink is available, or return `nil` if
     /// neither a session is active nor an explicit outputPath was supplied.
     ///
     /// Resolution rules:
     /// - `outputPath` supplied → write raw bytes to that path via
     ///   `writeToPath` (no manifest update).
-    /// - No `outputPath`, session active → write via `writeScreenshot` /
-    ///   `writeRecording` into the session's artifact directory and append
-    ///   to the session manifest.
+    /// - No `outputPath`, session active → write via `writeScreenshot` into
+    ///   the session's artifact directory and append to the session manifest.
     /// - No `outputPath`, no session → return `nil`; caller is expected to
     ///   return the in-memory payload (e.g. `.screenshotData`).
-    ///
-    /// Throws `BookKeeperError.unsafePath` for a malformed `outputPath`,
-    /// `.base64DecodingFailed` for a malformed payload, or the underlying
-    /// filesystem error for I/O failures.
-    public func writeArtifactIfSinkAvailable(
+    public func writeScreenshotIfSinkAvailable(
         base64Data: String,
         outputPath: String?,
         requestId: String,
         command: TheFence.Command,
-        metadata: ArtifactMetadata
+        metadata: ScreenshotMetadata
     ) throws -> URL? {
         if let outputPath {
             guard let data = Data(base64Encoded: base64Data) else {
@@ -568,18 +380,35 @@ public final class TheBookKeeper {
         guard case .active = phase else {
             return nil
         }
-        switch metadata {
-        case .screenshot(let screenshotMetadata):
-            return try writeScreenshot(
-                base64Data: base64Data, requestId: requestId,
-                command: command, metadata: screenshotMetadata
-            )
-        case .recording(let recordingMetadata):
-            return try writeRecording(
-                base64Data: base64Data, requestId: requestId,
-                command: command, metadata: recordingMetadata
-            )
+        return try writeScreenshot(
+            base64Data: base64Data, requestId: requestId,
+            command: command, metadata: metadata
+        )
+    }
+
+    /// Write a recording to whichever sink is available. Resolution rules
+    /// match `writeScreenshotIfSinkAvailable` — outputPath wins, then session,
+    /// then nil.
+    public func writeRecordingIfSinkAvailable(
+        base64Data: String,
+        outputPath: String?,
+        requestId: String,
+        command: TheFence.Command,
+        metadata: RecordingMetadata
+    ) throws -> URL? {
+        if let outputPath {
+            guard let data = Data(base64Encoded: base64Data) else {
+                throw BookKeeperError.base64DecodingFailed
+            }
+            return try writeToPath(data, outputPath: outputPath)
         }
+        guard case .active = phase else {
+            return nil
+        }
+        return try writeRecording(
+            base64Data: base64Data, requestId: requestId,
+            command: command, metadata: metadata
+        )
     }
 
     // MARK: - Heist Recording
@@ -606,8 +435,7 @@ public final class TheBookKeeper {
             startTime: Date(),
             evidenceCount: 0,
             fileHandle: heistHandle,
-            filePath: heistPath,
-            interfaceCache: [:]
+            filePath: heistPath
         )
         phase = .active(session)
     }
@@ -663,31 +491,6 @@ public final class TheBookKeeper {
         }
     }
 
-    /// Clear the cached interface snapshot (called on screen changes to prevent unbounded growth).
-    public func clearInterfaceCache() {
-        guard case .active(var session) = phase,
-              var recording = session.heistRecording else { return }
-        recording.interfaceCache.removeAll()
-        session.heistRecording = recording
-        phase = .active(session)
-    }
-
-    /// Update the cached interface snapshot for heist recording.
-    ///
-    /// Merges rather than replaces — after a screen change, the activated element
-    /// from the old screen must remain in the cache for the recording step that
-    /// triggered the transition. New elements take priority on heistId collision.
-    public func updateInterfaceCache(_ elements: [HeistElement]) {
-        guard case .active(var session) = phase,
-              var recording = session.heistRecording else { return }
-        recording.interfaceCache.merge(
-            elements.map { ($0.heistId, $0) },
-            uniquingKeysWith: { _, new in new }
-        )
-        session.heistRecording = recording
-        phase = .active(session)
-    }
-
     /// Commands that should not appear in heist playbacks.
     private static let excludedHeistCommands: Set<TheFence.Command> = [
         .help, .status, .quit, .exit,
@@ -702,26 +505,28 @@ public final class TheBookKeeper {
 
     /// Record a successfully executed command for heist playback.
     /// Only records commands that succeeded — failed actions are skipped.
-    /// - Parameter succeeded: Whether the command succeeded. Pass false to skip recording.
+    /// - Parameters:
+    ///   - succeeded: Whether the command succeeded. Pass false to skip recording.
+    ///   - interfaceCache: Snapshot of currently visible elements keyed by
+    ///     heistId. The recorder uses this to resolve `heistId` arguments to
+    ///     stable matchers. Caller is responsible for supplying the cache —
+    ///     TheBookKeeper does not maintain its own copy.
     public func recordHeistEvidence(
         command: TheFence.Command,
         args: [String: Any],
         succeeded: Bool = true,
-        interfaceElements: [HeistElement]? = nil
+        interfaceCache: [String: HeistElement]
     ) {
         guard case .active(var session) = phase,
               var recording = session.heistRecording else { return }
         guard !Self.excludedHeistCommands.contains(command) else { return }
-
-        // Skip failed actions — only record successful outcomes
         guard succeeded else { return }
 
-        let allElements = interfaceElements ?? Array(recording.interfaceCache.values)
         let step = buildStep(
             command: command.rawValue,
             args: args,
-            cache: allElements,
-            interfaceCache: recording.interfaceCache
+            cache: Array(interfaceCache.values),
+            interfaceCache: interfaceCache
         )
 
         // Write evidence to durable file (append-only JSONL)
@@ -825,16 +630,8 @@ public final class TheBookKeeper {
         return filtered.isEmpty ? nil : filtered
     }
 
-    /// Build the smallest ElementMatcher that uniquely identifies the element
-    /// among all currently visible elements. Uses only identity fields —
-    /// never value (mutable state) or state traits (selected, notEnabled, etc.).
-    /// Skips identifiers that contain UUIDs (runtime-generated, not stable across sessions).
-    ///
-    /// When no combination of fields yields a unique match, returns the best
-    /// matcher alongside the element's 0-based ordinal among all matches
-    /// (traversal order in the allElements array).
-    ///
-    /// Internal: consumed by `buildStep` and verified directly in tests.
+    /// Smallest unique matcher among `allElements`, falling back to a non-unique
+    /// matcher + ordinal when no field combination distinguishes the element.
     func buildMinimalMatcher(
         element: HeistElement,
         allElements: [HeistElement]
@@ -932,7 +729,7 @@ public final class TheBookKeeper {
         path.validatedOutputURL()
     }
 
-    // MARK: - Private Helpers
+    // MARK: - Phase / Directory / Manifest Helpers
 
     private var phaseName: String {
         switch phase {

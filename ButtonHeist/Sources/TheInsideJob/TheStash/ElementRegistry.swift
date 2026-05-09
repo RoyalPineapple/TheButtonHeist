@@ -223,7 +223,7 @@ extension TheStash {
         weak var scrollView: UIScrollView?
         weak var object: NSObject?
     }
-} // extension TheStash
+}
 
 #endif // DEBUG
 #endif // canImport(UIKit)

@@ -7,10 +7,6 @@ import TheScore
 @Suite("ConnectionScope.classify")
 struct ConnectionScopeClassifyTests {
 
-    private struct MockInterface: NetworkInterfaceNaming {
-        let name: String
-    }
-
     // MARK: - classify (typed NWEndpoint.Host, no interfaces)
 
     @Test func classifiesIPv4Loopback() {
@@ -49,37 +45,31 @@ struct ConnectionScopeClassifyTests {
     // MARK: - classify with loopback interface
 
     @Test func classifiesLoopbackInterfaceAsSimulator() {
-        let lo0 = MockInterface(name: "lo0")
-        #expect(ConnectionScope.classify(host: NWEndpoint.Host("169.254.239.217"), interfaces: [lo0]) == .simulator)
-        #expect(ConnectionScope.classify(host: NWEndpoint.Host("fe80::1"), interfaces: [lo0]) == .simulator)
-        #expect(ConnectionScope.classify(host: NWEndpoint.Host("192.168.1.100"), interfaces: [lo0]) == .simulator)
+        #expect(ConnectionScope.classify(host: NWEndpoint.Host("169.254.239.217"), interfaceNames: ["lo0"]) == .simulator)
+        #expect(ConnectionScope.classify(host: NWEndpoint.Host("fe80::1"), interfaceNames: ["lo0"]) == .simulator)
+        #expect(ConnectionScope.classify(host: NWEndpoint.Host("192.168.1.100"), interfaceNames: ["lo0"]) == .simulator)
     }
 
     // MARK: - classify with interfaces (anpi detection)
 
     @Test func classifiesAnpiInterfaceAsUSB() {
-        let anpi = MockInterface(name: "anpi0")
-        #expect(ConnectionScope.classify(host: NWEndpoint.Host("fd9a:6190:eed7::1"), interfaces: [anpi]) == .usb)
-        #expect(ConnectionScope.classify(host: NWEndpoint.Host("192.168.1.100"), interfaces: [anpi]) == .usb)
-        #expect(ConnectionScope.classify(host: NWEndpoint.Host("2001:db8::1"), interfaces: [anpi]) == .usb)
+        #expect(ConnectionScope.classify(host: NWEndpoint.Host("fd9a:6190:eed7::1"), interfaceNames: ["anpi0"]) == .usb)
+        #expect(ConnectionScope.classify(host: NWEndpoint.Host("192.168.1.100"), interfaceNames: ["anpi0"]) == .usb)
+        #expect(ConnectionScope.classify(host: NWEndpoint.Host("2001:db8::1"), interfaceNames: ["anpi0"]) == .usb)
     }
 
     @Test func classifiesAnpiVariantsAsUSB() {
-        let anpi1 = MockInterface(name: "anpi1")
-        let anpi2 = MockInterface(name: "anpi2")
-        #expect(ConnectionScope.classify(host: NWEndpoint.Host("fe80::1"), interfaces: [anpi1]) == .usb)
-        #expect(ConnectionScope.classify(host: NWEndpoint.Host("fe80::1"), interfaces: [anpi2]) == .usb)
+        #expect(ConnectionScope.classify(host: NWEndpoint.Host("fe80::1"), interfaceNames: ["anpi1"]) == .usb)
+        #expect(ConnectionScope.classify(host: NWEndpoint.Host("fe80::1"), interfaceNames: ["anpi2"]) == .usb)
     }
 
     @Test func nonAnpiInterfaceIsNotUSB() {
-        let en0 = MockInterface(name: "en0")
-        #expect(ConnectionScope.classify(host: NWEndpoint.Host("fd9a:6190:eed7::1"), interfaces: [en0]) == .network)
-        #expect(ConnectionScope.classify(host: NWEndpoint.Host("192.168.1.100"), interfaces: [en0]) == .network)
+        #expect(ConnectionScope.classify(host: NWEndpoint.Host("fd9a:6190:eed7::1"), interfaceNames: ["en0"]) == .network)
+        #expect(ConnectionScope.classify(host: NWEndpoint.Host("192.168.1.100"), interfaceNames: ["en0"]) == .network)
     }
 
     @Test func loopbackStillSimulatorWithAnpiInterface() {
-        let anpi = MockInterface(name: "anpi0")
-        #expect(ConnectionScope.classify(host: .ipv4(.loopback), interfaces: [anpi]) == .simulator)
-        #expect(ConnectionScope.classify(host: .ipv6(.loopback), interfaces: [anpi]) == .simulator)
+        #expect(ConnectionScope.classify(host: .ipv4(.loopback), interfaceNames: ["anpi0"]) == .simulator)
+        #expect(ConnectionScope.classify(host: .ipv6(.loopback), interfaceNames: ["anpi0"]) == .simulator)
     }
 }

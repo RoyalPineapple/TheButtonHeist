@@ -269,7 +269,7 @@ public enum FenceResponse {
     private func formatActionResult(_ result: ActionResult) -> String {
         if result.success {
             var output = "✓ \(result.method.rawValue)"
-            if let value = result.value {
+            if case .value(let value) = result.payload {
                 output += "  value: \"\(value)\""
             }
             if let delta = result.interfaceDelta {

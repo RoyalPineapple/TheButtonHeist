@@ -245,8 +245,6 @@ TheSafecracker (stateful, @MainActor)
 
 **Token Resolution**: When an explicit token is provided via `INSIDEJOB_TOKEN` or `InsideJobToken` plist key, it is used directly. Otherwise a fresh UUID is generated each launch (ephemeral — not persisted).
 
-**Token Invalidation**: `invalidateToken()` generates a new UUID in memory. All previously approved clients lose access and must re-authenticate.
-
 **Responsibilities**:
 - Token resolution: explicit (env var / plist) → generate UUID
 - Token-based authentication (validate incoming tokens)

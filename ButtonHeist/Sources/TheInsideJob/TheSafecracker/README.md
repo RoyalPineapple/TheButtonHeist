@@ -24,7 +24,7 @@ Touch injection, text input, and gesture synthesis. Receives screen coordinates 
    - `longPress(at:duration:)` — touchDown → loop of 10ms stationary events → touchUp
    - `swipe(from:to:duration:)` / `drag(...)` — pre-compute waypoints via linear interpolation, 10ms per step
 
-   `windowForPoint(_:)` finds the frontmost non-overlay window whose `hitTest` succeeds, filtering out `ButtonHeistOverlayWindow` conformers.
+   `windowForPoint(_:)` finds the frontmost non-overlay window whose `hitTest` succeeds, filtering out `TheFingerprints.FingerprintWindow` instances.
 
 5. **`TheSafecracker+MultiTouch.swift`** — `pinch(center:scale:)`, `rotate(center:angle:)`, `twoFingerTap(at:spread:)`. All use `touchesDown(at: [p1, p2])` + interpolated `moveTouches(to:)` steps.
 
@@ -36,7 +36,7 @@ Touch injection, text input, and gesture synthesis. Receives screen coordinates 
 
 9. **`KeyboardBridge.swift`** — Wraps `UIKeyboardImpl` private API. `shared()` resolves via `ObjCRuntime.classMessage("sharedInstance", on: "UIKeyboardImpl")`. `type(_:)` calls `addInputString:` then `drainTaskQueue()` (waits on the impl's task queue to prevent character drops). `deleteBackward()` calls `deleteFromInput`. `hasActiveInput` checks `delegate is UIKeyInput`.
 
-10. **`TheFingerprints.swift`** — Visual feedback overlay. `FingerprintWindow` is a passthrough UIWindow at `.statusBar + 100` implementing `ButtonHeistOverlayWindow`. `showFingerprint(at:)` creates a 40pt white circle, holds 0.5s, fades 0.5s. `beginTrackingFingerprints` / `updateTrackingFingerprints` / `endTrackingFingerprints` manage continuous gesture indicators. Disabled via `INSIDEJOB_DISABLE_FINGERPRINTS` env var.
+10. **`TheFingerprints.swift`** — Visual feedback overlay. `FingerprintWindow` is a passthrough UIWindow at `.statusBar + 100` filtered out of accessibility traversal and hit-testing via `is FingerprintWindow` checks. `showFingerprint(at:)` creates a 40pt white circle, holds 0.5s, fades 0.5s. `beginTrackingFingerprints` / `updateTrackingFingerprints` / `endTrackingFingerprints` manage continuous gesture indicators. Disabled via `INSIDEJOB_DISABLE_FINGERPRINTS` env var.
 
 ## How a tap flows end-to-end
 

@@ -167,8 +167,8 @@ public actor SimpleSocketServer {
         return actualPort
     }
 
-    /// Stop the server (actor-isolated).
-    private func _stop() {
+    /// Stop the server.
+    public func stop() {
         guard case .listening(let listener, _) = serverPhase else { return }
 
         let allClients = clients
@@ -185,12 +185,12 @@ public actor SimpleSocketServer {
         logger.info("Server stopped")
     }
 
-    /// Send data to a specific client (actor-isolated).
+    /// Send data to a specific client.
     ///
     /// Enforces a per-client high-water mark on pending bytes. When a client's
     /// NWConnection send buffer exceeds `maxPendingBytesPerClient`, new sends
     /// are dropped to prevent unbounded memory growth from slow or stalled readers.
-    private func _send(_ data: Data, to clientId: Int) {
+    public func send(_ data: Data, to clientId: Int) {
         guard var state = clients[clientId] else { return }
 
         var dataToSend = data
@@ -222,8 +222,8 @@ public actor SimpleSocketServer {
     }
 
     /// Try to fail the originating request explicitly when a response exceeds the send cap.
-    /// Recording responses get `.recordingError` because they use a recording-specific wait path.
-    /// Other responses get a request-scoped `.error`, allowing the client to fail the pending
+    /// Recording responses get `.recording` kind because they use a recording-specific wait path.
+    /// Other responses get a request-scoped `.general` kind, allowing the client to fail the pending
     /// request directly instead of surfacing a generic timeout.
     private func sendOversizedResponseError(
         clientId: Int,
@@ -239,20 +239,21 @@ public actor SimpleSocketServer {
             return
         }
         let message = "Response too large to send over the socket (\(byteCount) bytes)"
+        let kind: ErrorKind
         switch envelope.message {
-        case .recording, .recordingStarted, .recordingStopped, .recordingError:
-            sendErrorEnvelope(
-                clientId: clientId,
-                envelope: ResponseEnvelope(requestId: envelope.requestId, message: .recordingError(message)),
-                state: state
-            )
+        case .recording, .recordingStarted, .recordingStopped:
+            kind = .recording
         default:
-            sendErrorEnvelope(
-                clientId: clientId,
-                envelope: ResponseEnvelope(requestId: envelope.requestId, message: .error(message)),
-                state: state
-            )
+            kind = .general
         }
+        sendErrorEnvelope(
+            clientId: clientId,
+            envelope: ResponseEnvelope(
+                requestId: envelope.requestId,
+                message: .error(TheScore.ServerError(kind: kind, message: message))
+            ),
+            state: state
+        )
     }
 
     private func sendErrorEnvelope(clientId: Int, envelope: ResponseEnvelope, state: ClientState) {
@@ -281,13 +282,13 @@ public actor SimpleSocketServer {
         clients[clientId] = state
     }
 
-    /// Remove a client and clean up (actor-isolated).
-    private func _disconnect(clientId: Int) {
+    /// Disconnect a client.
+    public func disconnect(clientId: Int) {
         removeClient(clientId)
     }
 
-    /// Mark a client as authenticated (actor-isolated).
-    private func _markAuthenticated(_ clientId: Int) {
+    /// Mark a client as authenticated.
+    public func markAuthenticated(_ clientId: Int) {
         guard var state = clients[clientId], !state.isAuthenticated else { return }
         state.isAuthenticated = true
         clients[clientId] = state
@@ -295,46 +296,16 @@ public actor SimpleSocketServer {
         authDeadlineTasks[clientId] = nil
     }
 
-    /// Check if a client is authenticated (actor-isolated).
-    private func _isAuthenticated(_ clientId: Int) -> Bool {
-        clients[clientId]?.isAuthenticated == true
-    }
-
-    /// Broadcast data to all authenticated clients (actor-isolated).
-    private func _broadcastToAll(_ data: Data) {
-        for (clientId, state) in clients where state.isAuthenticated {
-            _send(data, to: clientId)
-        }
-    }
-
-    /// Stop the server.
-    public func stop() {
-        _stop()
-    }
-
-    /// Send data to a specific client.
-    public func send(_ data: Data, to clientId: Int) {
-        _send(data, to: clientId)
-    }
-
-    /// Disconnect a client.
-    public func disconnect(clientId: Int) {
-        _disconnect(clientId: clientId)
-    }
-
-    /// Mark a client as authenticated.
-    public func markAuthenticated(_ clientId: Int) {
-        _markAuthenticated(clientId)
-    }
-
     /// Check if a client is authenticated.
     public func isAuthenticated(_ clientId: Int) -> Bool {
-        _isAuthenticated(clientId)
+        clients[clientId]?.isAuthenticated == true
     }
 
     /// Broadcast data to all authenticated clients.
     public func broadcastToAll(_ data: Data) {
-        _broadcastToAll(data)
+        for (clientId, state) in clients where state.isAuthenticated {
+            send(data, to: clientId)
+        }
     }
 
     // MARK: - Private
@@ -370,10 +341,10 @@ public actor SimpleSocketServer {
                         Task { await self.removeClient(clientId) }
                         return
                     }
-                    let interfaces = connection.currentPath?.availableInterfaces ?? []
-                    let scope = ConnectionScope.classify(host: host, interfaces: interfaces)
+                    let interfaceNameList = (connection.currentPath?.availableInterfaces ?? []).map(\.name)
+                    let scope = ConnectionScope.classify(host: host, interfaceNames: interfaceNameList)
                     let hostDescription = "\(host)"
-                    let interfaceNames = interfaces.map(\.name).joined(separator: ", ")
+                    let interfaceNames = interfaceNameList.joined(separator: ", ")
                     if !scopeFilter.contains(scope) {
                         logger.warning("Rejecting \(scope.rawValue) connection from \(hostDescription) via [\(interfaceNames)]")
                         Task { await self.removeClient(clientId) }
@@ -452,7 +423,7 @@ public actor SimpleSocketServer {
         clients[clientId] = state
         callbacks.onRateLimited?(clientId) { [weak self] response in
             guard let self else { return }
-            Task { await self._send(response, to: clientId) }
+            Task { await self.send(response, to: clientId) }
         }
     }
 
@@ -506,14 +477,14 @@ public actor SimpleSocketServer {
             messageBuffer = Data(messageBuffer.suffix(from: messageBuffer.index(after: newlineIndex)))
 
             if !messageData.isEmpty {
-                if _isAuthenticated(clientId) {
+                if isAuthenticated(clientId) {
                     if isRateLimited(clientId) {
                         logger.warning("Client \(clientId) rate limited, dropping message")
                         notifyRateLimitIfNeeded(clientId)
                     } else {
                         callbacks.onDataReceived?(clientId, messageData) { [weak self] response in
                             guard let self else { return }
-                            Task { await self._send(response, to: clientId) }
+                            Task { await self.send(response, to: clientId) }
                         }
                     }
                 } else {
@@ -523,7 +494,7 @@ public actor SimpleSocketServer {
                     } else {
                         callbacks.onUnauthenticatedData?(clientId, messageData) { [weak self] response in
                             guard let self else { return }
-                            Task { await self._send(response, to: clientId) }
+                            Task { await self.send(response, to: clientId) }
                         }
                     }
                 }

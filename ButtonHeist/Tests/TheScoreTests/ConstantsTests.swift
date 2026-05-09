@@ -7,8 +7,8 @@ final class ConstantsTests: XCTestCase {
         XCTAssertEqual(buttonHeistServiceType, "_buttonheist._tcp")
     }
 
-    func testProtocolVersion() {
-        XCTAssertEqual(protocolVersion, "9.0")
+    func testButtonHeistVersionIsNonEmpty() {
+        XCTAssertFalse(buttonHeistVersion.isEmpty)
     }
 
     func testServiceTypeFormat() {

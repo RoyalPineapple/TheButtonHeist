@@ -452,16 +452,15 @@ Two type families are the currency for referring to UI elements. Use them everyw
 
 ## Versioning and Releases
 
-- **Product version**: [CalVer](https://calver.org/) `YYYY.MM.DD` (e.g. `2026.03.27`). Same-day patches append `.N` (e.g. `2026.03.27.1`). See `VERSIONING.md` in bh-infra.
-- **Protocol version**: SemVer, lives in `protocolVersion` in `Messages.swift`. Bump only when the wire format or handshake changes. The release script does not touch it.
-- **Canonical product version** lives in `ButtonHeist/Sources/TheScore/Messages.swift` (`buttonHeistVersion`). CLI, MCP, and iOS server all read it via TheScore.
-- **Releasing**: Use the release script from a clean `main` branch — never bump version manually:
-  ```bash
-  ./scripts/release.sh              # Uses today's date
-  ./scripts/release.sh 2026.04.03   # Explicit date
-  ./scripts/release.sh --dry-run    # Preview only
-  ```
-  The script runs the full pipeline: validate (must be on `main`, in sync with origin, clean worktree) → bump 6 files → build all targets → run all tests → commit/tag/push. Pushing the tag triggers `.github/workflows/release.yml` which builds universal binaries, creates the GitHub release, and updates the Homebrew tap.
+There is one version: `buttonHeistVersion` in `ButtonHeist/Sources/TheScore/Messages.swift`. It is [CalVer](https://calver.org/) (`YYYY.MM.DD`, with same-day patches as `.N`), and CLI, MCP, and the iOS server all read it via TheScore. There is no separate "wire protocol version" — the handshake compares the server's and the client's `buttonHeistVersion` for exact equality and rejects on any mismatch. Inside (iOS server) and outside (CLI/MCP) must always be the same release; wire-format changes do not get their own version bump.
+
+`buttonHeistVersion` is bumped only by `scripts/release.sh`. Commits between releases are not releases — the version constant stays put. Treat any temptation to bump the version mid-feature as a sign you're working around the release flow rather than with it. The script runs the full pipeline from a clean `main`: validate → bump → build all targets → run all tests → commit/tag/push. Pushing the tag triggers `.github/workflows/release.yml`, which builds the universal binaries, creates the GitHub release, and updates the Homebrew tap.
+
+```bash
+./scripts/release.sh              # Uses today's date
+./scripts/release.sh 2026.04.03   # Explicit date
+./scripts/release.sh --dry-run    # Preview only
+```
 
 ## CLI-First Development
 

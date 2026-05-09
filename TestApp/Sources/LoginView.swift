@@ -106,12 +106,10 @@ struct LoginView: View {
 
                 VStack(spacing: 12) {
                     Button("Forgot Password?") {
-                        NSLog("[Login] Forgot password tapped")
                     }
                     .font(.subheadline)
 
                     Button("Create Account") {
-                        NSLog("[Login] Create account tapped")
                     }
                     .font(.subheadline)
                 }
@@ -125,49 +123,37 @@ struct LoginView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    // MARK: - Validation
-
     private func validate() -> FieldErrors? {
         var errors = FieldErrors()
-        var hasError = false
 
         if email.trimmingCharacters(in: .whitespaces).isEmpty {
             errors.email = "Email is required"
-            hasError = true
         } else if !email.contains("@") {
             errors.email = "Enter a valid email address"
-            hasError = true
         }
 
         if password.isEmpty {
             errors.password = "Password is required"
-            hasError = true
         }
 
-        return hasError ? errors : nil
+        return (errors.email != nil || errors.password != nil) ? errors : nil
     }
-
-    // MARK: - Sign In
 
     private func signIn() {
         if let errors = validate() {
             submission = .failed(errors)
-            NSLog("[Login] Validation failed")
             return
         }
 
-        NSLog("[Login] Attempting sign in: %@", email)
         submission = .submitting
 
         Task {
             do {
                 try await Task.sleep(for: .seconds(2))
             } catch {
-                NSLog("[Login] Sign in cancelled")
                 return
             }
             submission = .failed(FieldErrors(general: "Invalid email or password"))
-            NSLog("[Login] Sign in failed (demo — always fails)")
         }
     }
 }

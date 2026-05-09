@@ -8,6 +8,15 @@ struct Album: Identifiable {
     let artist: String
     let symbol: String
     let year: Int
+
+    static let featuredID = "last-light-protocol"
+
+    static var featured: Album {
+        Genre.catalog
+            .flatMap(\.albums)
+            .first { $0.id == featuredID }
+            ?? Album(id: "fallback", title: "Featured", artist: "Various", symbol: "music.note", year: 2024)
+    }
 }
 
 struct Genre: Identifiable {
@@ -65,14 +74,11 @@ struct AlbumFlowView: View {
         #endif
     }
 
-    // MARK: - Featured
-
     private var featuredSection: some View {
-        let featured = Genre.catalog[2].albums[0] // Binary Sunset - Last Light Protocol
+        let featured = Album.featured
 
         return Button {
             playback = .playing(featured)
-            NSLog("[Albums] Selected: %@ by %@", featured.title, featured.artist)
         } label: {
             ZStack(alignment: .bottomLeading) {
                 RoundedRectangle(cornerRadius: 16)
@@ -104,8 +110,6 @@ struct AlbumFlowView: View {
         .accessibilityLabel("Featured: \(featured.title) by \(featured.artist)")
     }
 
-    // MARK: - Genre Section
-
     private func genreSection(_ genre: Genre) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
@@ -128,15 +132,12 @@ struct AlbumFlowView: View {
         }
     }
 
-    // MARK: - Album Card
-
     private func albumCard(_ album: Album) -> some View {
         let isSelected = playback.currentAlbum?.id == album.id
         let isQueued = queue.contains { $0.id == album.id }
 
         return Button {
             playback = .playing(album)
-            NSLog("[Albums] Selected: %@ by %@", album.title, album.artist)
         } label: {
             VStack(alignment: .leading, spacing: 6) {
                 ZStack {
@@ -172,10 +173,8 @@ struct AlbumFlowView: View {
                         Button {
                             if isQueued {
                                 queue.removeAll { $0.id == album.id }
-                                NSLog("[Albums] Removed from queue: %@", album.title)
                             } else {
                                 queue.append(album)
-                                NSLog("[Albums] Added to queue: %@", album.title)
                             }
                         } label: {
                             Label(
@@ -186,10 +185,8 @@ struct AlbumFlowView: View {
                         Button {
                             if favorites.contains(album.id) {
                                 favorites.remove(album.id)
-                                NSLog("[Albums] Unfavorited: %@", album.title)
                             } else {
                                 favorites.insert(album.id)
-                                NSLog("[Albums] Favorited: %@", album.title)
                             }
                         } label: {
                             Label(
@@ -214,24 +211,18 @@ struct AlbumFlowView: View {
         .accessibilityAction(named: isQueued ? "Remove from Queue" : "Add to Queue") {
             if isQueued {
                 queue.removeAll { $0.id == album.id }
-                NSLog("[Albums] Removed from queue: %@", album.title)
             } else {
                 queue.append(album)
-                NSLog("[Albums] Added to queue: %@", album.title)
             }
         }
         .accessibilityAction(named: favorites.contains(album.id) ? "Remove from Favorites" : "Add to Favorites") {
             if favorites.contains(album.id) {
                 favorites.remove(album.id)
-                NSLog("[Albums] Unfavorited: %@", album.title)
             } else {
                 favorites.insert(album.id)
-                NSLog("[Albums] Favorited: %@", album.title)
             }
         }
     }
-
-    // MARK: - Mini Player
 
     private var miniPlayer: some View {
         VStack(spacing: 0) {
@@ -300,7 +291,6 @@ struct AlbumFlowView: View {
                         if let next = queue.first {
                             queue.removeFirst()
                             playback = .playing(next)
-                            NSLog("[Albums] Skipped to: %@ by %@", next.title, next.artist)
                         }
                     } label: {
                         Image(systemName: "forward.fill")
@@ -316,8 +306,6 @@ struct AlbumFlowView: View {
             .accessibilityElement(children: .contain)
         }
     }
-
-    // MARK: - Helpers
 
     private func albumColor(_ album: Album) -> Color {
         let hash = album.id.utf8.reduce(0) { $0 &+ Int($1) }

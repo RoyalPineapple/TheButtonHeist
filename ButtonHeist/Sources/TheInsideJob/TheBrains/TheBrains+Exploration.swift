@@ -65,7 +65,6 @@ extension TheBrains {
                    view.window != nil,
                    Self.isObscuredByPresentation(view: view) {
                     manifest.markExplored(container)
-                    manifest.skippedObscuredContainers += 1
                     continue
                 }
 
@@ -75,7 +74,6 @@ extension TheBrains {
                    target == nil {
                     recordDuringExplore(cached.discoveredHeistIds)
                     manifest.markExplored(container)
-                    manifest.skippedContainers += 1
                     continue
                 }
 
@@ -331,13 +329,6 @@ extension TheBrains {
     // MARK: - Presentation Obscuring
 
     /// Returns true if the view is behind a presented view controller.
-    ///
-    /// Walks the entire VC hierarchy (not just rootVC) to find any presentation.
-    /// If a VC anywhere in the tree has a `presentedViewController`, and the view's
-    /// owning VC is not a descendant of the topmost presented VC, the view is obscured.
-    ///
-    /// This handles both root-level presentations (root presents a sheet)
-    /// and nested presentations (nav child presents a modal).
     static func isObscuredByPresentation(view: UIView) -> Bool {
         guard let window = view.window,
               let rootVC = window.rootViewController else {
@@ -408,9 +399,6 @@ extension UIViewController {
     /// checking parent, presenting, navigation, and tab controller chains, as well
     /// as child view controllers of container types.
     func isDescendant(of ancestor: UIViewController) -> Bool {
-        if self === ancestor { return true }
-
-        // Check if we're a child of the ancestor's child hierarchy (nav, tab, children)
         var queue: [UIViewController] = [ancestor]
         while !queue.isEmpty {
             let current = queue.removeFirst()

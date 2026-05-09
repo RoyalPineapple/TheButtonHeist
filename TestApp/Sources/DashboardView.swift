@@ -30,15 +30,10 @@ struct DashboardView: View {
             }
         }
         .navigationTitle("Dashboard")
-        .onChange(of: selectedTab) { _, newValue in
-            NSLog("[Dashboard] Switched to %@", newValue.rawValue)
-        }
     }
 
-    // MARK: - Activity Tab
-
     private var activityTab: some View {
-        List(Array(ActivityItem.defaults.enumerated()), id: \.element.id) { _, item in
+        List(ActivityItem.defaults) { item in
             HStack(spacing: 12) {
                 Image(systemName: item.icon)
                     .font(.title3)
@@ -54,8 +49,6 @@ struct DashboardView: View {
             }
         }
     }
-
-    // MARK: - Stats Tab
 
     private var statsTab: some View {
         ScrollView {
@@ -85,8 +78,6 @@ struct DashboardView: View {
             .padding()
         }
     }
-
-    // MARK: - Alerts Tab
 
     private var alertsTab: some View {
         Group {
@@ -132,7 +123,6 @@ struct DashboardView: View {
         withAnimation {
             alerts.removeAll { $0.id == alert.id }
         }
-        NSLog("[Dashboard] Dismissed alert: %@ (remaining: %d)", alert.message, alerts.count)
     }
 }
 

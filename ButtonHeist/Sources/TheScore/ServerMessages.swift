@@ -6,7 +6,10 @@ import CoreGraphics
 /// Wraps a server message with the echoed requestId for response correlation.
 /// Push broadcasts (subscription updates) use requestId = nil.
 public struct ResponseEnvelope: Codable, Sendable {
-    public let protocolVersion: String
+    /// Server's `buttonHeistVersion`. The handshake requires exact equality
+    /// with the client's `buttonHeistVersion` — there is no separate wire
+    /// protocol version.
+    public let buttonHeistVersion: String
     public let requestId: String?
     public let message: ServerMessage
 
@@ -17,15 +20,15 @@ public struct ResponseEnvelope: Codable, Sendable {
     public let backgroundDelta: InterfaceDelta?
 
     public init(requestId: String? = nil, message: ServerMessage, backgroundDelta: InterfaceDelta? = nil) {
-        self.init(wireProtocolVersion: TheScore.protocolVersion, requestId: requestId,
+        self.init(buttonHeistVersion: TheScore.buttonHeistVersion, requestId: requestId,
                   message: message, backgroundDelta: backgroundDelta)
     }
 
     public init(
-        wireProtocolVersion: String, requestId: String? = nil,
+        buttonHeistVersion: String, requestId: String? = nil,
         message: ServerMessage, backgroundDelta: InterfaceDelta? = nil
     ) {
-        self.protocolVersion = wireProtocolVersion
+        self.buttonHeistVersion = buttonHeistVersion
         self.requestId = requestId
         self.message = message
         self.backgroundDelta = backgroundDelta
@@ -44,14 +47,11 @@ public enum ServerMessage: Codable, Sendable {
     /// Version-negotiation hello sent immediately on connection.
     case serverHello
 
-    /// Exact protocol version mismatch.
+    /// `buttonHeistVersion` mismatch between server and client.
     case protocolMismatch(ProtocolMismatchPayload)
 
     /// Server requires authentication (sent after successful hello handshake)
     case authRequired
-
-    /// Authentication failed (sent before disconnect)
-    case authFailed(String)
 
     /// Authentication approved via on-device UI — includes token for future reconnections
     case authApproved(AuthApprovedPayload)
@@ -65,8 +65,10 @@ public enum ServerMessage: Codable, Sendable {
     /// Pong response
     case pong
 
-    /// Error message
-    case error(String)
+    /// Server-side error broadcast. `ServerError.kind` tags the category
+    /// (auth failure, recording, general) so clients can route without
+    /// pattern-matching on message text.
+    case error(ServerError)
 
     /// Result of an action command
     case actionResult(ActionResult)
@@ -88,9 +90,6 @@ public enum ServerMessage: Codable, Sendable {
     /// Recording complete with video data
     case recording(RecordingPayload)
 
-    /// Recording failed or was not active
-    case recordingError(String)
-
     // MARK: - Observer Broadcasts
 
     /// An action was performed by the driver — broadcast to observers
@@ -101,14 +100,14 @@ public enum ServerMessage: Codable, Sendable {
     case status(StatusPayload)
 }
 
-/// Sent when the client's protocol version does not match the server's expected version.
+/// Sent when the client's `buttonHeistVersion` does not exactly match the server's.
 public struct ProtocolMismatchPayload: Codable, Sendable {
-    public let expectedProtocolVersion: String
-    public let receivedProtocolVersion: String
+    public let serverButtonHeistVersion: String
+    public let clientButtonHeistVersion: String
 
-    public init(expectedProtocolVersion: String, receivedProtocolVersion: String) {
-        self.expectedProtocolVersion = expectedProtocolVersion
-        self.receivedProtocolVersion = receivedProtocolVersion
+    public init(serverButtonHeistVersion: String, clientButtonHeistVersion: String) {
+        self.serverButtonHeistVersion = serverButtonHeistVersion
+        self.clientButtonHeistVersion = clientButtonHeistVersion
     }
 }
 
@@ -172,7 +171,8 @@ public struct StatusSession: Codable, Sendable {
 
 // MARK: - Action Results
 
-/// Typed error classification for failed actions.
+/// Typed error classification used by both `ActionResult.errorKind` and the
+/// server-broadcast `ServerError` payload.
 public enum ErrorKind: String, Codable, Sendable, CaseIterable {
     case elementNotFound
     case timeout
@@ -180,16 +180,80 @@ public enum ErrorKind: String, Codable, Sendable, CaseIterable {
     case inputError
     case validationError
     case actionFailed
+    /// Authentication failed (rejected token, denied UI prompt, rate-limited).
+    case authFailure
+    /// Recording-pipeline failure (start, stop, capture, encode).
+    case recording
+    /// General server error not tied to a specific action or recording.
+    case general
+}
+
+/// Structured payload for server-broadcast error messages.
+public struct ServerError: Codable, Sendable, Equatable {
+    public let kind: ErrorKind
+    public let message: String
+
+    public init(kind: ErrorKind, message: String) {
+        self.kind = kind
+        self.message = message
+    }
+}
+
+/// Command-specific payload carried by an `ActionResult`.
+///
+/// Modeled as an enum so the "at most one" invariant is structural rather than
+/// documented. Encodes natively as a tagged union under the `payload` key on
+/// `ActionResult`: `{"kind": "value", "data": "..."}`,
+/// `{"kind": "scrollSearch", "data": {...}}`, etc.
+///   - `.value`        → typeText / setPasteboard / getPasteboard
+///   - `.scrollSearch` → element_search / scroll_to_visible
+///   - `.explore`      → the explicit `explore` command
+public enum ResultPayload: Codable, Sendable {
+    case value(String)
+    case scrollSearch(ScrollSearchResult)
+    case explore(ExploreResult)
+
+    private enum Kind: String, Codable {
+        case value
+        case scrollSearch
+        case explore
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case kind
+        case data
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let kind = try container.decode(Kind.self, forKey: .kind)
+        switch kind {
+        case .value:
+            self = .value(try container.decode(String.self, forKey: .data))
+        case .scrollSearch:
+            self = .scrollSearch(try container.decode(ScrollSearchResult.self, forKey: .data))
+        case .explore:
+            self = .explore(try container.decode(ExploreResult.self, forKey: .data))
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .value(let string):
+            try container.encode(Kind.value, forKey: .kind)
+            try container.encode(string, forKey: .data)
+        case .scrollSearch(let search):
+            try container.encode(Kind.scrollSearch, forKey: .kind)
+            try container.encode(search, forKey: .data)
+        case .explore(let explore):
+            try container.encode(Kind.explore, forKey: .kind)
+            try container.encode(explore, forKey: .data)
+        }
+    }
 }
 
 /// The outcome of executing an action command, including post-action diagnostics.
-///
-/// The three command-specific fields — `value`, `scrollSearchResult`, and
-/// `exploreResult` — are mutually exclusive: at most one is non-nil, depending
-/// on which command produced the result.
-///   - `value`        → typeText / setPasteboard / getPasteboard
-///   - `scrollSearchResult` → element_search / scroll_to_visible
-///   - `exploreResult`      → the explicit `explore` command
 public struct ActionResult: Codable, Sendable {
     /// Whether the action was delivered and completed normally. `false` means
     /// the action reached the server but the handler reported failure — it is
@@ -202,8 +266,8 @@ public struct ActionResult: Codable, Sendable {
     public var message: String?
     /// Typed error classification (nil on success)
     public var errorKind: ErrorKind?
-    /// Current text field value after a typeText / set/getPasteboard operation
-    public var value: String?
+    /// Command-specific payload. At most one variant per result.
+    public var payload: ResultPayload?
     /// Compact delta describing what changed in the hierarchy after the action
     public var interfaceDelta: InterfaceDelta?
     /// Whether the UI was still animating when this result was produced.
@@ -213,10 +277,6 @@ public struct ActionResult: Codable, Sendable {
     public var screenName: String?
     /// Slugified screen name for machine use (e.g. "controls_demo")
     public var screenId: String?
-    /// Diagnostics from a scroll_to_visible / element_search search operation
-    public var scrollSearchResult: ScrollSearchResult?
-    /// Full element census from the explicit `explore` command
-    public var exploreResult: ExploreResult?
     /// True when the response represents a settled UI state — either the
     /// AX tree reached multi-cycle stability, or a screen transition
     /// preempted the settle loop and the new screen has been observed via
@@ -234,13 +294,11 @@ public struct ActionResult: Codable, Sendable {
         method: ActionMethod,
         message: String? = nil,
         errorKind: ErrorKind? = nil,
-        value: String? = nil,
+        payload: ResultPayload? = nil,
         interfaceDelta: InterfaceDelta? = nil,
         animating: Bool? = nil,
         screenName: String? = nil,
         screenId: String? = nil,
-        scrollSearchResult: ScrollSearchResult? = nil,
-        exploreResult: ExploreResult? = nil,
         settled: Bool? = nil,
         settleTimeMs: Int? = nil
     ) {
@@ -248,13 +306,11 @@ public struct ActionResult: Codable, Sendable {
         self.method = method
         self.message = message
         self.errorKind = errorKind
-        self.value = value
+        self.payload = payload
         self.interfaceDelta = interfaceDelta
         self.animating = animating
         self.screenName = screenName
         self.screenId = screenId
-        self.scrollSearchResult = scrollSearchResult
-        self.exploreResult = exploreResult
         self.settled = settled
         self.settleTimeMs = settleTimeMs
     }
@@ -551,7 +607,7 @@ public struct AuthApprovedPayload: Codable, Sendable {
 
 /// Server identity and capabilities sent after a successful handshake.
 ///
-/// Wire-level protocol version is carried by `ResponseEnvelope.protocolVersion`;
+/// `buttonHeistVersion` is carried by `ResponseEnvelope.buttonHeistVersion`;
 /// it is not duplicated here.
 public struct ServerInfo: Codable, Sendable {
     public let appName: String

@@ -30,9 +30,6 @@ struct TapSubcommand: AsyncParsableCommand {
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
 
-    @Option(name: .shortAndLong, help: "Timeout in seconds")
-    var timeout: Double = 10.0
-
     @ButtonHeistActor
     mutating func run() async throws {
         guard element.hasTarget || (x != nil && y != nil) else {
@@ -71,9 +68,6 @@ struct LongPressSubcommand: AsyncParsableCommand {
 
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
-
-    @Option(name: .shortAndLong, help: "Timeout in seconds")
-    var timeout: Double = 10.0
 
     @ButtonHeistActor
     mutating func run() async throws {
@@ -137,9 +131,6 @@ struct SwipeSubcommand: AsyncParsableCommand {
 
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
-
-    @Option(name: .shortAndLong, help: "Timeout in seconds")
-    var timeout: Double = 10.0
 
     @ButtonHeistActor
     mutating func run() async throws {
@@ -218,9 +209,6 @@ struct DragSubcommand: AsyncParsableCommand {
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
 
-    @Option(name: .shortAndLong, help: "Timeout in seconds")
-    var timeout: Double = 10.0
-
     @ButtonHeistActor
     mutating func run() async throws {
         guard element.hasTarget || (fromX != nil && fromY != nil) else {
@@ -270,9 +258,6 @@ struct PinchSubcommand: AsyncParsableCommand {
 
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
-
-    @Option(name: .shortAndLong, help: "Timeout in seconds")
-    var timeout: Double = 10.0
 
     @ButtonHeistActor
     mutating func run() async throws {
@@ -324,9 +309,6 @@ struct RotateSubcommand: AsyncParsableCommand {
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
 
-    @Option(name: .shortAndLong, help: "Timeout in seconds")
-    var timeout: Double = 10.0
-
     @ButtonHeistActor
     mutating func run() async throws {
         guard element.hasTarget || (x != nil && y != nil) else {
@@ -370,9 +352,6 @@ struct TwoFingerTapSubcommand: AsyncParsableCommand {
 
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
-
-    @Option(name: .shortAndLong, help: "Timeout in seconds")
-    var timeout: Double = 10.0
 
     @ButtonHeistActor
     mutating func run() async throws {

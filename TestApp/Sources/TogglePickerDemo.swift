@@ -14,7 +14,6 @@ struct TogglePickerDemo: View {
                 Toggle("Subscribe to newsletter", isOn: $isSubscribed)
                     .onChange(of: isSubscribed) { _, newValue in
                         lastAction = "Toggle: \(newValue ? "ON" : "OFF")"
-                        NSLog("[ControlsDemo] Toggle changed to: %@", newValue ? "ON" : "OFF")
                     }
 
                 Picker("Frequency", selection: $selectedFrequency) {
@@ -31,9 +30,8 @@ struct TogglePickerDemo: View {
                 .pickerStyle(.segmented)
 
                 DatePicker("Date", selection: $selectedDate, displayedComponents: [.date])
-                    .onChange(of: selectedDate) { _, newValue in
+                    .onChange(of: selectedDate) { _, _ in
                         lastAction = "Date changed"
-                        NSLog("[ControlsDemo] Date changed to: %@", "\(newValue)")
                     }
 
                 ColorPicker("Accent color", selection: $pickedColor)

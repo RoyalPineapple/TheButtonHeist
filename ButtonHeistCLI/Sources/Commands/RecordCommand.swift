@@ -28,9 +28,6 @@ struct RecordCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Save interaction log as JSON to this path")
     var actionLog: String?
 
-    @Option(name: .long, help: "Connection timeout in seconds")
-    var timeout: Double = 10.0
-
     func validate() throws {
         guard fps >= 1 && fps <= 15 else {
             throw ValidationError("fps must be between 1 and 15, got \(fps)")
@@ -44,7 +41,6 @@ struct RecordCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     func run() async throws {
-        // Step 1: Start recording
         var startRequest: [String: Any] = [
             "command": TheFence.Command.startRecording.rawValue,
             "fps": fps,
@@ -60,7 +56,6 @@ struct RecordCommand: AsyncParsableCommand {
         )
         defer { fence.stop() }
 
-        // Step 2: Wait for the device to auto-stop (via inactivity timeout or max duration)
         let payload = try await fence.waitForRecording(timeout: maxDuration + 30)
 
         guard let videoData = Data(base64Encoded: payload.videoData) else {
@@ -92,13 +87,12 @@ struct RecordCommand: AsyncParsableCommand {
     }
 
     private func logRecordingStats(path: String, payload: RecordingPayload) {
-        logStatus("Recording saved: \(path)")
-        logStatus("  Duration: \(String(format: "%.1f", payload.duration))s")
-        logStatus("  Frames: \(payload.frameCount)")
-        logStatus("  Resolution: \(payload.width)x\(payload.height)")
-        logStatus("  Stop reason: \(payload.stopReason.rawValue)")
-        if let log = payload.interactionLog {
-            logStatus("  Interactions: \(log.count)")
-        }
+        let interactions = payload.interactionLog.map { ", interactions: \($0.count)" } ?? ""
+        let duration = String(format: "%.1f", payload.duration)
+        let resolution = "\(payload.width)x\(payload.height)"
+        let stop = payload.stopReason.rawValue
+        logStatus(
+            "Recording saved: \(path) (duration: \(duration)s, frames: \(payload.frameCount), resolution: \(resolution), stop: \(stop)\(interactions))"
+        )
     }
 }

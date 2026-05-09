@@ -2,23 +2,6 @@ import Foundation
 
 // MARK: - Action Expectations
 
-/// The two string-form expectation tiers accepted on the wire.
-/// Parsers translate the incoming string (`"screen_changed"` or
-/// `"elements_changed"`) into the structured `ActionExpectation` enum without
-/// comparing raw string literals deep in the stack.
-public enum ExpectationTier: String, CaseIterable, Sendable {
-    case screenChanged = "screen_changed"
-    case elementsChanged = "elements_changed"
-
-    /// The matching `ActionExpectation` case for this tier.
-    public var expectation: ActionExpectation {
-        switch self {
-        case .screenChanged: return .screenChanged
-        case .elementsChanged: return .elementsChanged
-        }
-    }
-}
-
 /// Outcome signal classifiers for actions.
 /// Attached to a request (not to a target type) so any action can opt in.
 ///
@@ -94,6 +77,27 @@ public enum ActionExpectation: Sendable, Equatable {
     }
 }
 
+extension ActionExpectation {
+    /// Resolve a string-form expectation tier (`"screen_changed"` or
+    /// `"elements_changed"`) to the matching expectation case. Returns `nil`
+    /// for any other input — callers that need a typed-discriminator object
+    /// should use the Codable path instead.
+    public init?(stringTier: String) {
+        switch stringTier {
+        case "screen_changed":
+            self = .screenChanged
+        case "elements_changed":
+            self = .elementsChanged
+        default:
+            return nil
+        }
+    }
+
+    /// The set of valid string-tier inputs accepted by `init(stringTier:)`.
+    /// Used by parsers to surface diagnostics on miss.
+    public static let stringTierValues: [String] = ["screen_changed", "elements_changed"]
+}
+
 // MARK: - ActionExpectation Codable
 
 extension ActionExpectation: Codable {
@@ -101,10 +105,7 @@ extension ActionExpectation: Codable {
         case type
     }
 
-    /// Discriminator strings for the `type` field on the wire. Kept distinct
-    /// from `ExpectationTier` because `ExpectationTier` covers only the two
-    /// string-literal short forms (`screen_changed`, `elements_changed`) for
-    /// backwards compatibility with the inline-string arg shape.
+    /// Discriminator strings for the `type` field on the wire.
     private enum WireType: String {
         case screenChanged = "screen_changed"
         case elementsChanged = "elements_changed"

@@ -33,8 +33,8 @@ class TouchCanvasUIView: UIView {
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         for touch in touches {
-            let color = colors[nextColorIndex % colors.count]
-            nextColorIndex += 1
+            let color = colors[nextColorIndex]
+            nextColorIndex = (nextColorIndex + 1) % colors.count
             let pathIndex = paths.count
             paths.append((color: color, points: [touch.location(in: self)]))
             activeTouches[touch] = pathIndex

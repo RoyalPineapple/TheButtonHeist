@@ -17,7 +17,7 @@ private final class CallOrder: @unchecked Sendable {
 }
 
 /// Tests for auth failure handling using direct message injection.
-/// Validates that authFailed fires correctly and isn't swallowed by the subsequent disconnect.
+/// Validates that the auth-failure error fires correctly and isn't swallowed by the subsequent disconnect.
 final class AuthFailureTests: XCTestCase {
 
     private func makeDummyDevice() -> DiscoveredDevice {
@@ -41,12 +41,15 @@ final class AuthFailureTests: XCTestCase {
 
         var authFailedReason: String?
         conn.onEvent = { event in
-            if case .message(.authFailed(let reason), _, _) = event {
-                authFailedReason = reason
+            if case .message(.error(let serverError), _, _) = event,
+               serverError.kind == .authFailure {
+                authFailedReason = serverError.message
             }
         }
 
-        try conn.handleMessage(encode(.authFailed("Invalid token. Retry without a token to request a fresh session.")))
+        try conn.handleMessage(encode(
+            .error(ServerError(kind: .authFailure, message: "Invalid token. Retry without a token to request a fresh session."))
+        ))
 
         XCTAssertNotNil(authFailedReason)
         XCTAssertTrue(authFailedReason!.contains("Invalid token"))
@@ -60,7 +63,7 @@ final class AuthFailureTests: XCTestCase {
         let callOrder = CallOrder()
         conn.onEvent = { event in
             switch event {
-            case .message(.authFailed, _, _):
+            case .message(.error(let serverError), _, _) where serverError.kind == .authFailure:
                 callOrder.append("authFailed")
             case .disconnected:
                 callOrder.append("disconnected")
@@ -69,7 +72,9 @@ final class AuthFailureTests: XCTestCase {
             }
         }
 
-        try conn.handleMessage(encode(.authFailed("Invalid token. Retry without a token to request a fresh session.")))
+        try conn.handleMessage(encode(
+            .error(ServerError(kind: .authFailure, message: "Invalid token. Retry without a token to request a fresh session."))
+        ))
 
         XCTAssertEqual(callOrder.first, "authFailed", "authFailed should fire before disconnected")
     }

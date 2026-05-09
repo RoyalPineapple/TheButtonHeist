@@ -1,5 +1,13 @@
 import SwiftUI
 
+extension Decimal {
+    /// USD currency formatted for display (`$12.34`).
+    var usdFormatted: String { formatted(.currency(code: "USD")) }
+
+    /// USD currency formatted for VoiceOver (`12 dollars and 34 cents`).
+    var usdSpoken: String { formatted(.currency(code: "USD").presentation(.fullName)) }
+}
+
 struct CartView: View {
     @State private var items: [CartItem] = CartItem.defaultCart
     @State private var addedExtras: Set<String> = []
@@ -9,15 +17,17 @@ struct CartView: View {
     }
 
     private var tax: Decimal {
-        subtotal * (Decimal(string: "0.085") ?? 0)
+        subtotal * (Decimal(85) / Decimal(1000))
     }
 
     private var total: Decimal {
         subtotal + tax
     }
 
-    private var canAddItem: Bool {
-        addedExtras.count < CartItem.extras.count
+    private var availableExtras: [CartItem] {
+        CartItem.extras.filter { extra in
+            !addedExtras.contains(extra.name) && !items.contains(where: { $0.name == extra.name })
+        }
     }
 
     var body: some View {
@@ -34,8 +44,6 @@ struct CartView: View {
         .animation(.default, value: items.count)
     }
 
-    // MARK: - Sections
-
     private var summarySection: some View {
         Section {
             HStack {
@@ -49,29 +57,29 @@ struct CartView: View {
                 Text("Subtotal")
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text(formatPrice(subtotal))
+                Text(subtotal.usdFormatted)
             }
             .accessibilityElement(children: .combine)
-            .accessibilityValue(spokenPrice(subtotal))
+            .accessibilityValue(subtotal.usdSpoken)
 
             HStack {
                 Text("Tax (8.5%)")
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text(formatPrice(tax))
+                Text(tax.usdFormatted)
             }
             .accessibilityElement(children: .combine)
-            .accessibilityValue(spokenPrice(tax))
+            .accessibilityValue(tax.usdSpoken)
 
             HStack {
                 Text("Total")
                     .fontWeight(.semibold)
                 Spacer()
-                Text(formatPrice(total))
+                Text(total.usdFormatted)
                     .fontWeight(.semibold)
             }
             .accessibilityElement(children: .combine)
-            .accessibilityValue(spokenPrice(total))
+            .accessibilityValue(total.usdSpoken)
         }
     }
 
@@ -92,7 +100,7 @@ struct CartView: View {
             } label: {
                 Label("Add Item", systemImage: "plus.circle.fill")
             }
-            .disabled(!canAddItem)
+            .disabled(availableExtras.isEmpty)
 
             Button(role: .destructive) {
                 clearCart()
@@ -116,53 +124,28 @@ struct CartView: View {
         }
     }
 
-    // MARK: - Actions
-
     private func updateQuantity(itemID: UUID, quantity: Int) {
         guard let idx = items.firstIndex(where: { $0.id == itemID }) else { return }
 
         if quantity <= 0 {
-            let name = items[idx].name
             items.remove(at: idx)
-            NSLog("[Cart] Removed: %@ (remaining: %d)", name, items.count)
         } else {
             items[idx].quantity = quantity
-            NSLog("[Cart] Updated: %@ x%d", items[idx].name, quantity)
         }
     }
 
     private func addRandomItem() {
-        let available = CartItem.extras.filter { extra in
-            !addedExtras.contains(extra.name) && !items.contains { $0.name == extra.name }
-        }
-        guard let pick = available.randomElement() else { return }
-        let item = CartItem(
-            name: pick.name,
-            price: pick.price,
-            icon: pick.icon,
-            color: pick.color,
-            quantity: 1
-        )
+        guard let pick = availableExtras.randomElement() else { return }
+        var item = pick
+        item.quantity = 1
         items.append(item)
         addedExtras.insert(pick.name)
-        NSLog("[Cart] Added: %@ (total: %d)", item.name, items.count)
     }
 
     private func clearCart() {
-        let count = items.count
         items.removeAll()
-        NSLog("[Cart] Cleared %d items", count)
     }
 
-    // MARK: - Formatting
-
-    private func formatPrice(_ value: Decimal) -> String {
-        value.formatted(.currency(code: "USD"))
-    }
-
-    private func spokenPrice(_ value: Decimal) -> String {
-        value.formatted(.currency(code: "USD").presentation(.fullName))
-    }
 }
 
 // MARK: - Cart Item Row
@@ -243,18 +226,18 @@ private struct CartItem: Identifiable, Equatable {
     }
 
     static let defaultCart: [CartItem] = [
-        CartItem(name: "Espresso", price: Decimal(string: "4.50") ?? 0, icon: "cup.and.saucer.fill", color: .brown, quantity: 1),
-        CartItem(name: "Croissant", price: Decimal(string: "3.75") ?? 0, icon: "birthday.cake.fill", color: .orange, quantity: 2),
-        CartItem(name: "Orange Juice", price: Decimal(string: "5.00") ?? 0, icon: "mug.fill", color: .orange, quantity: 1),
-        CartItem(name: "Avocado Toast", price: Decimal(string: "12.00") ?? 0, icon: "leaf.fill", color: .green, quantity: 1),
-        CartItem(name: "Blueberry Muffin", price: Decimal(string: "4.25") ?? 0, icon: "circle.grid.cross.fill", color: .purple, quantity: 1),
+        CartItem(name: "Espresso", price: Decimal(450) / Decimal(100), icon: "cup.and.saucer.fill", color: .brown, quantity: 1),
+        CartItem(name: "Croissant", price: Decimal(375) / Decimal(100), icon: "birthday.cake.fill", color: .orange, quantity: 2),
+        CartItem(name: "Orange Juice", price: Decimal(500) / Decimal(100), icon: "mug.fill", color: .orange, quantity: 1),
+        CartItem(name: "Avocado Toast", price: Decimal(1200) / Decimal(100), icon: "leaf.fill", color: .green, quantity: 1),
+        CartItem(name: "Blueberry Muffin", price: Decimal(425) / Decimal(100), icon: "circle.grid.cross.fill", color: .purple, quantity: 1),
     ]
 
-    static let extras: [(name: String, price: Decimal, icon: String, color: Color)] = [
-        (name: "Matcha Latte", price: Decimal(string: "5.50") ?? 0, icon: "leaf.circle.fill", color: .green),
-        (name: "Banana Bread", price: Decimal(string: "4.00") ?? 0, icon: "rectangle.split.1x2.fill", color: .yellow),
-        (name: "Cold Brew", price: Decimal(string: "5.25") ?? 0, icon: "snowflake", color: .cyan),
-        (name: "Açaí Bowl", price: Decimal(string: "9.50") ?? 0, icon: "circle.hexagongrid.fill", color: .indigo),
+    static let extras: [CartItem] = [
+        CartItem(name: "Matcha Latte", price: Decimal(550) / Decimal(100), icon: "leaf.circle.fill", color: .green, quantity: 0),
+        CartItem(name: "Banana Bread", price: Decimal(400) / Decimal(100), icon: "rectangle.split.1x2.fill", color: .yellow, quantity: 0),
+        CartItem(name: "Cold Brew", price: Decimal(525) / Decimal(100), icon: "snowflake", color: .cyan, quantity: 0),
+        CartItem(name: "Açaí Bowl", price: Decimal(950) / Decimal(100), icon: "circle.hexagongrid.fill", color: .indigo, quantity: 0),
     ]
 
     static func == (lhs: CartItem, rhs: CartItem) -> Bool {

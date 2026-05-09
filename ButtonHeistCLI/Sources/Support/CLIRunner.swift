@@ -1,19 +1,16 @@
+import ArgumentParser
 import Foundation
-import Darwin
 import ButtonHeist
 
 /// Shared utility for standalone CLI commands that execute a single TheFence request.
-///
-/// This eliminates the DeviceConnector boilerplate by routing all commands through
-/// `TheFence.execute(request:)` — the same path the session REPL and MCP server use.
 enum CLIRunner {
 
-    /// Execute a single TheFence command and output the formatted response.
+    /// Execute a single TheFence command, format the response, and signal a non-zero
+    /// exit code via `ExitCode.failure` when the action fails.
     ///
-    /// Creates a TheFence, connects to the device, executes the request,
-    /// formats the response, and disconnects. For standalone (non-session) commands.
-    ///
-    /// If the response indicates a failed action, exits with code 1.
+    /// Use this for the common "send one command, print the response, return" path.
+    /// `ExitCode.failure` propagates up through ArgumentParser so the process exits
+    /// with status 1 — but unwinds normally so any caller `defer` blocks still fire.
     @ButtonHeistActor
     static func run(
         connection: ConnectionOptions,
@@ -21,25 +18,24 @@ enum CLIRunner {
         request: [String: Any],
         statusMessage: String? = nil
     ) async throws {
-        let fence = makeFence(connection: connection)
+        let (fence, response) = try await execute(
+            connection: connection,
+            request: request,
+            statusMessage: statusMessage
+        )
         defer { fence.stop() }
 
-        try await fence.start()
-
-        if let statusMessage, !connection.quiet {
-            logStatus(statusMessage)
+        outputResponse(response, format: format ?? .auto)
+        if response.isFailure {
+            throw ExitCode.failure
         }
-
-        let response = try await fence.execute(request: request)
-        let effectiveFormat = format ?? .auto
-        outputResponse(response, format: effectiveFormat)
-        exitOnActionFailure(response)
     }
 
     /// Execute a single TheFence command and return the raw FenceResponse
     /// for commands that need custom post-processing (e.g., saving files).
     ///
-    /// Caller is responsible for calling `fence.stop()` when done.
+    /// Caller is responsible for calling `fence.stop()` when done. The fence is
+    /// stopped automatically if `start` or `execute` throws.
     @ButtonHeistActor
     static func execute(
         connection: ConnectionOptions,
@@ -47,19 +43,11 @@ enum CLIRunner {
         statusMessage: String? = nil
     ) async throws -> (fence: TheFence, response: FenceResponse) {
         let fence = makeFence(connection: connection)
-
         do {
             try await fence.start()
-        } catch {
-            fence.stop()
-            throw error
-        }
-
-        if let statusMessage, !connection.quiet {
-            logStatus(statusMessage)
-        }
-
-        do {
+            if let statusMessage, !connection.quiet {
+                logStatus(statusMessage)
+            }
             let response = try await fence.execute(request: request)
             return (fence, response)
         } catch {
@@ -95,7 +83,7 @@ enum CLIRunner {
         }
     }
 
-    // MARK: - Private
+    // MARK: - Private Helpers
 
     @ButtonHeistActor
     private static func makeFence(connection: ConnectionOptions) -> TheFence {
@@ -110,13 +98,5 @@ enum CLIRunner {
             if !quiet { logStatus(message) }
         }
         return fence
-    }
-
-    /// Exit with code 1 if the command failed, including unmet expectations.
-    @ButtonHeistActor
-    private static func exitOnActionFailure(_ response: FenceResponse) {
-        if response.isFailure {
-            Darwin.exit(1)
-        }
     }
 }

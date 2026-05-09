@@ -107,7 +107,7 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           mkdir -p dist
 
-          # CLI + frameworks (integrate command expects ButtonHeistFrameworks/ next to binary)
+          # CLI + frameworks
           cp ButtonHeistCLI/.build/buttonheist dist/
           tar -czf "dist/buttonheist-${VERSION}-macos.tar.gz" -C dist buttonheist ButtonHeistFrameworks
           rm dist/buttonheist
@@ -176,11 +176,6 @@ jobs:
 
             def caveats
               <<~EOS
-                To integrate Button Heist into your iOS app:
-
-                  cd /path/to/your-ios-project
-                  buttonheist integrate
-
                 MCP server is installed at:
                   #{opt_bin}/buttonheist-mcp
 

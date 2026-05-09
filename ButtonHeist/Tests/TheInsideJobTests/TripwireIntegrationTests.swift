@@ -144,8 +144,8 @@ final class TripwireIntegrationTests: XCTestCase {
         tripwire.startPulse()
         // Give the pulse a few ticks to produce a reading
         try await Task.sleep(nanoseconds: 300_000_000)
-        XCTAssertNotNil(tripwire.latestReading)
-        XCTAssertGreaterThan(tripwire.latestReading?.tick ?? 0, 0)
+        let reading = try XCTUnwrap(tripwire.latestReading)
+        XCTAssertGreaterThan(reading.tick, 0)
     }
 
     func testPulseReadingHasValidWindowCount() async throws {

@@ -29,7 +29,7 @@ TheScore is the shared playbook. It defines:
 
 | File | Contents |
 |------|----------|
-| `Messages.swift` | `buttonHeistServiceType`, `protocolVersion` ("9.0"), `WireMessageType` (51 cases), `ButtonHeistActor` |
+| `Messages.swift` | `buttonHeistServiceType`, `buttonHeistVersion` (CalVer), `WireMessageType` (51 cases), `ButtonHeistActor` |
 | `ClientMessages.swift` | `RequestEnvelope`, `ClientMessage` (37 cases), all action target structs, `UnitPoint`, `RecordingConfig` |
 | `ServerMessages.swift` | `ResponseEnvelope`, `ServerMessage` (18 cases), `ActionResult`, `ErrorKind`, `InterfaceDelta`, `StatusPayload`, `ScreenPayload`, `RecordingPayload`, `InteractionEvent`, `ServerInfo` |
 | `Elements.swift` | `HeistElement`, `HeistTrait` (43 known cases + `unknown(String)`), `Interface`, `InterfaceNode`, `ContainerInfo` (with nested `ContainerType`), `ElementAction`, `HeistCustomContent`, `ElementTarget`, `ElementMatcher` |
@@ -43,7 +43,7 @@ TheScore is the shared playbook. It defines:
 ```mermaid
 graph TD
     subgraph TheScore["TheScore (Cross-Platform)"]
-        Messages["Messages.swift — serviceType, protocolVersion, WireMessageType (51 cases)"]
+        Messages["Messages.swift — serviceType, buttonHeistVersion, WireMessageType (51 cases)"]
         Client["ClientMessages.swift — RequestEnvelope, ClientMessage (37 cases), UnitPoint"]
         Server["ServerMessages.swift — ResponseEnvelope, ServerMessage (18 cases), StatusPayload"]
         Elements["Elements.swift — HeistElement, Interface, ElementTarget, ElementMatcher"]

@@ -99,7 +99,11 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
 
         XCTAssertEqual(result.message, "pasteboard empty")
-        XCTAssertEqual(result.value, "")
+        guard case .value(let value) = result.payload else {
+            XCTFail("Expected .value payload, got \(String(describing: result.payload))")
+            return
+        }
+        XCTAssertEqual(value, "")
     }
 
     // MARK: - SentState

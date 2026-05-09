@@ -13,7 +13,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertNil(handoff.serverInfo)
         XCTAssertNil(handoff.currentInterface)
         XCTAssertFalse(handoff.isDiscovering)
-        XCTAssertEqual(handoff.connectionPhase, .disconnected)
+        assertDisconnected(handoff.connectionPhase)
         XCTAssertEqual(handoff.reconnectPolicy, .disabled)
         XCTAssertEqual(handoff.recordingPhase, .idle)
         XCTAssertFalse(handoff.isRecording)
@@ -28,7 +28,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertNil(handoff.connectedDevice)
         XCTAssertNil(handoff.serverInfo)
         XCTAssertNil(handoff.currentInterface)
-        XCTAssertEqual(handoff.connectionPhase, .disconnected)
+        assertDisconnected(handoff.connectionPhase)
         XCTAssertEqual(handoff.recordingPhase, .idle)
     }
 
@@ -48,9 +48,9 @@ final class TheHandoffStateTests: XCTestCase {
         var receivedError: String?
         handoff.onError = { receivedError = $0 }
 
-        handoff.handleServerMessage(.error("something went wrong"), requestId: nil)
+        handoff.handleServerMessage(.error(ServerError(kind: .general, message: "something went wrong")), requestId: nil)
 
-        XCTAssertEqual(handoff.connectionPhase, .failed(.error("something went wrong")))
+        assertFailed(handoff.connectionPhase, failure: .error("something went wrong"))
         XCTAssertEqual(receivedError, "something went wrong")
     }
 
@@ -62,7 +62,7 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.disconnect()
         handoff.disconnect()
 
-        XCTAssertEqual(handoff.connectionPhase, .disconnected)
+        assertDisconnected(handoff.connectionPhase)
     }
 
     // MARK: - ReconnectPolicy
@@ -237,6 +237,7 @@ final class TheHandoffStateTests: XCTestCase {
     @ButtonHeistActor
     func testRecordingStartedSetsPhaseToRecording() async {
         let handoff = TheHandoff()
+        connectMockHandoff(handoff)
 
         handoff.handleServerMessage(.recordingStarted, requestId: nil)
 
@@ -247,6 +248,7 @@ final class TheHandoffStateTests: XCTestCase {
     @ButtonHeistActor
     func testRecordingCompletedResetsPhaseToIdle() async {
         let handoff = TheHandoff()
+        connectMockHandoff(handoff)
         handoff.handleServerMessage(.recordingStarted, requestId: nil)
 
         handoff.handleServerMessage(.recording(RecordingPayload(
@@ -269,9 +271,13 @@ final class TheHandoffStateTests: XCTestCase {
     @ButtonHeistActor
     func testRecordingErrorResetsPhaseToIdle() async {
         let handoff = TheHandoff()
+        connectMockHandoff(handoff)
         handoff.handleServerMessage(.recordingStarted, requestId: nil)
 
-        handoff.handleServerMessage(.recordingError("disk full"), requestId: nil)
+        handoff.handleServerMessage(
+            .error(ServerError(kind: .recording, message: "disk full")),
+            requestId: nil
+        )
 
         XCTAssertEqual(handoff.recordingPhase, .idle)
         XCTAssertFalse(handoff.isRecording)
@@ -280,6 +286,7 @@ final class TheHandoffStateTests: XCTestCase {
     @ButtonHeistActor
     func testDisconnectResetsRecordingPhase() async {
         let handoff = TheHandoff()
+        connectMockHandoff(handoff)
         handoff.handleServerMessage(.recordingStarted, requestId: nil)
         XCTAssertEqual(handoff.recordingPhase, .recording)
 
@@ -324,7 +331,7 @@ final class TheHandoffStateTests: XCTestCase {
                         ))
                     default:
                         XCTFail("Unexpected probe message: \(message)")
-                        return .error("unexpected")
+                        return .error(ServerError(kind: .general, message: "unexpected"))
                     }
                 }
             }
@@ -401,7 +408,7 @@ final class TheHandoffStateTests: XCTestCase {
                         ))
                     default:
                         XCTFail("Unexpected probe message: \(message)")
-                        return .error("unexpected")
+                        return .error(ServerError(kind: .general, message: "unexpected"))
                     }
                 }
             }
@@ -471,7 +478,7 @@ final class TheHandoffStateTests: XCTestCase {
                             ))
                         default:
                             XCTFail("Unexpected probe message: \(message)")
-                            return .error("unexpected")
+                            return .error(ServerError(kind: .general, message: "unexpected"))
                         }
                     }
                 }
@@ -530,7 +537,7 @@ final class TheHandoffStateTests: XCTestCase {
                     ))
                 default:
                     XCTFail("Unexpected probe message: \(message)")
-                    return .error("unexpected")
+                    return .error(ServerError(kind: .general, message: "unexpected"))
                 }
             }
             return connection

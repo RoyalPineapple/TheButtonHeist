@@ -2,6 +2,7 @@ import Testing
 import MCP
 @testable import ButtonHeistMCP
 import ButtonHeist
+import TheScore
 
 /// Verifies that MCP tool definitions stay in sync with TheFence.Command.
 ///
@@ -63,8 +64,9 @@ struct ToolSyncTests {
 
                 if tool.name == "scroll" {
                     // Scroll modes are synthetic names (page, to_visible, search, to_edge),
-                    // not raw command values. Verify the count matches.
-                    let expectedModes: Set<String> = ["page", "to_visible", "search", "to_edge"]
+                    // not raw command values. The boundary parses them into ScrollMode,
+                    // so the schema enum must match ScrollMode.allCases exactly.
+                    let expectedModes = Set(ScrollMode.allCases.map(\.rawValue))
                     #expect(
                         enumValues == expectedModes,
                         "Scroll tool modes \(enumValues.sorted()) don't match expected \(expectedModes.sorted())"
@@ -229,17 +231,6 @@ struct ToolSyncTests {
     }
 
     // MARK: - Exhaustiveness
-
-    @Test("Command.parameters is exhaustive (no unhandled cases)")
-    func parameterSpecIsExhaustive() {
-        // If a new Command case is added without a parameters entry,
-        // the switch in parameters will fail to compile. This test
-        // verifies every case returns a non-crashing result at runtime.
-        for command in TheFence.Command.allCases {
-            _ = command.parameters
-            _ = command.mcpExposure
-        }
-    }
 
     @Test("ToolDefinitions.all has no duplicate tool names")
     func noDuplicateToolNames() {

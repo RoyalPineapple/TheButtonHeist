@@ -384,13 +384,13 @@ final class ActionExpectationTests: XCTestCase {
             success: success,
             method: .syntheticTap,
             message: message,
-            value: value,
+            payload: value.map { .value($0) },
             interfaceDelta: delta
         )
         // Note: animating param omitted (defaults to nil)
     }
 
-    // MARK: - Wire Format: explicit `type` discriminator (protocol v7.0)
+    // MARK: - Wire Format: explicit `type` discriminator
 
     func testWireFormatScreenChanged() throws {
         let data = try JSONEncoder().encode(ActionExpectation.screenChanged)

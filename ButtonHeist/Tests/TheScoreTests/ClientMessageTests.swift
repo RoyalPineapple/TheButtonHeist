@@ -30,7 +30,6 @@ final class ClientMessageTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .requestInterface = decoded {
-            // Success
         } else {
             XCTFail("Expected requestInterface, got \(decoded)")
         }
@@ -42,7 +41,6 @@ final class ClientMessageTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .subscribe = decoded {
-            // Success
         } else {
             XCTFail("Expected subscribe, got \(decoded)")
         }
@@ -54,7 +52,6 @@ final class ClientMessageTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .unsubscribe = decoded {
-            // Success
         } else {
             XCTFail("Expected unsubscribe, got \(decoded)")
         }
@@ -66,7 +63,6 @@ final class ClientMessageTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .ping = decoded {
-            // Success
         } else {
             XCTFail("Expected ping, got \(decoded)")
         }
@@ -78,7 +74,6 @@ final class ClientMessageTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .status = decoded {
-            // Success
         } else {
             XCTFail("Expected status, got \(decoded)")
         }
@@ -90,7 +85,6 @@ final class ClientMessageTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .requestScreen = decoded {
-            // Success
         } else {
             XCTFail("Expected requestScreen, got \(decoded)")
         }
@@ -363,7 +357,6 @@ final class ClientMessageTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .explore = decoded {
-            // Success
         } else {
             XCTFail("Expected explore, got \(decoded)")
         }
@@ -379,7 +372,6 @@ final class ClientMessageTests: XCTestCase {
 
         XCTAssertEqual(decoded.requestId, "explore-1")
         if case .explore = decoded.message {
-            // Success
         } else {
             XCTFail("Expected explore, got \(decoded.message)")
         }
@@ -414,23 +406,27 @@ final class ClientMessageTests: XCTestCase {
         let result = ActionResult(
             success: true, method: .explore,
             message: "100 elements, 12 scrolls, 3.50s",
-            exploreResult: exploreResult
+            payload: .explore(exploreResult)
         )
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
         XCTAssertTrue(decoded.success)
         XCTAssertEqual(decoded.method, .explore)
-        XCTAssertEqual(decoded.exploreResult?.elementCount, 100)
-        XCTAssertEqual(decoded.exploreResult?.scrollCount, 12)
-        XCTAssertEqual(decoded.exploreResult?.containersExplored, 2)
-        XCTAssertEqual(decoded.exploreResult?.explorationTime, 3.5)
+        guard case .explore(let explore) = decoded.payload else {
+            XCTFail("Expected .explore payload, got \(String(describing: decoded.payload))")
+            return
+        }
+        XCTAssertEqual(explore.elementCount, 100)
+        XCTAssertEqual(explore.scrollCount, 12)
+        XCTAssertEqual(explore.containersExplored, 2)
+        XCTAssertEqual(explore.explorationTime, 3.5)
     }
 
     func testActionResultWithoutExploreResult() throws {
         let result = ActionResult(success: true, method: .activate)
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
-        XCTAssertNil(decoded.exploreResult)
+        XCTAssertNil(decoded.payload)
     }
 
     // MARK: - ElementTarget Ordinal Tests
