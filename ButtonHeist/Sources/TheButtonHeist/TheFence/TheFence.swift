@@ -287,49 +287,131 @@ public final class TheFence {
         handoff.stopDiscovery()
     }
 
-    /// Execute a command from a dictionary request. Auto-connects if not already connected.
+    /// Execute a command from a dictionary request. Auto-connects if not
+    /// already connected.
+    ///
+    /// Reads as a pipeline: parse → short-circuit against background deltas
+    /// → dispatch → record post-dispatch effects → validate against the
+    /// caller's expectation. Each step is its own private method.
     public func execute(request: [String: Any]) async throws -> FenceResponse {
-        guard let commandString = request["command"] as? String else {
-            throw FenceError.invalidRequest("Invalid JSON or missing 'command' field")
-        }
-        guard let command = Command(rawValue: commandString) else {
-            return .error("Unknown command: \(commandString). Use 'help' for available commands.")
-        }
-        if let immediateResponse = handleImmediateCommand(command) { return immediateResponse }
-        let requestId = (request["requestId"] as? String) ?? UUID().uuidString
-        logCommand(requestId: requestId, command: command, request: request)
-        let parsedExpectation = try parseExpectation(request)
+        let parsed = try parseRequest(request)
+        if let immediate = parsed.immediateResponse { return immediate }
 
-        if let backgroundResponse = responseIfBackgroundExpectationMet(parsedExpectation, requestId: requestId) {
+        if let backgroundResponse = responseIfBackgroundExpectationMet(
+            parsed.expectation, requestId: parsed.requestId
+        ) {
             return backgroundResponse
         }
 
-        try await ensureConnectedIfNeeded(for: command)
-
-        var dispatchArgs = request
-        dispatchArgs["_requestId"] = requestId
-
-        let dispatched = try await dispatchWithErrorLogging(
-            command: command,
-            args: dispatchArgs,
-            requestId: requestId
-        )
+        let dispatched = try await dispatchCommand(parsed)
         lastLatencyMs = dispatched.durationMs
+        logResponse(requestId: parsed.requestId, response: dispatched.response, durationMs: dispatched.durationMs)
 
-        logResponse(requestId: requestId, response: dispatched.response, durationMs: lastLatencyMs)
+        let postRecord = recordPostDispatchEffects(
+            parsed: parsed,
+            response: dispatched.response
+        )
+        return validateActionResponse(
+            dispatched.response,
+            expectation: parsed.expectation,
+            preActionCache: postRecord.preActionCache
+        )
+    }
 
-        // Snapshot pre-action elements before updating the cache — elementDisappeared
-        // expectations need to resolve removed heistIds against the pre-action state.
-        let preActionCache = lastInterfaceCache
-        let cacheUpdate = updateInterfaceCache(for: dispatched.response, preActionCache: preActionCache)
-        recordHeistEvidence(command: command, request: request, response: dispatched.response, cacheUpdate: cacheUpdate)
-        applyPostRecordCacheUpdate(cacheUpdate)
-        return validateActionResponse(dispatched.response, expectation: parsedExpectation, preActionCache: preActionCache)
+    // MARK: - Execute Pipeline
+
+    private struct ParsedRequest {
+        let command: Command
+        let requestId: String
+        let originalRequest: [String: Any]
+        let dispatchArgs: [String: Any]
+        let expectation: ActionExpectation?
+        /// Non-nil when the command short-circuits before dispatch (help/quit/exit).
+        let immediateResponse: FenceResponse?
     }
 
     private struct DispatchResult {
         let response: FenceResponse
         let durationMs: Int
+    }
+
+    private struct PostRecordOutcome {
+        let preActionCache: [String: HeistElement]
+    }
+
+    /// Parse and validate a raw request dictionary into typed fields.
+    /// Returns an ImmediateResponse-bearing `ParsedRequest` for help/quit/exit
+    /// so the caller short-circuits without logging or dispatching.
+    private func parseRequest(_ request: [String: Any]) throws -> ParsedRequest {
+        guard let commandString = request["command"] as? String else {
+            throw FenceError.invalidRequest("Invalid JSON or missing 'command' field")
+        }
+        guard let command = Command(rawValue: commandString) else {
+            return ParsedRequest(
+                command: .help,
+                requestId: "",
+                originalRequest: request,
+                dispatchArgs: request,
+                expectation: nil,
+                immediateResponse: .error("Unknown command: \(commandString). Use 'help' for available commands.")
+            )
+        }
+        if let immediate = handleImmediateCommand(command) {
+            return ParsedRequest(
+                command: command,
+                requestId: "",
+                originalRequest: request,
+                dispatchArgs: request,
+                expectation: nil,
+                immediateResponse: immediate
+            )
+        }
+        let requestId = (request["requestId"] as? String) ?? UUID().uuidString
+        logCommand(requestId: requestId, command: command, request: request)
+        let expectation = try parseExpectation(request)
+
+        var dispatchArgs = request
+        dispatchArgs["_requestId"] = requestId
+
+        return ParsedRequest(
+            command: command,
+            requestId: requestId,
+            originalRequest: request,
+            dispatchArgs: dispatchArgs,
+            expectation: expectation,
+            immediateResponse: nil
+        )
+    }
+
+    /// Ensure the connection is up if the command needs it, then dispatch
+    /// the command and capture wall-clock duration.
+    private func dispatchCommand(_ parsed: ParsedRequest) async throws -> DispatchResult {
+        try await ensureConnectedIfNeeded(for: parsed.command)
+        return try await dispatchWithErrorLogging(
+            command: parsed.command,
+            args: parsed.dispatchArgs,
+            requestId: parsed.requestId
+        )
+    }
+
+    /// Update the interface cache, write heist evidence, and replay any
+    /// post-record cache replacement that follows a screen change.
+    /// Returns the pre-action cache snapshot for downstream expectation
+    /// validation (elementDisappeared resolves removed heistIds against it).
+    private func recordPostDispatchEffects(
+        parsed: ParsedRequest,
+        response: FenceResponse
+    ) -> PostRecordOutcome {
+        let preActionCache = lastInterfaceCache
+        let cacheUpdate = updateInterfaceCache(for: response, preActionCache: preActionCache)
+        recordHeistEvidence(
+            command: parsed.command,
+            request: parsed.originalRequest,
+            response: response,
+            cacheUpdate: cacheUpdate
+        )
+        applyPostRecordCacheUpdate(cacheUpdate)
+        return PostRecordOutcome(preActionCache: preActionCache)
     }
 
     private struct ResponseCacheUpdate {
