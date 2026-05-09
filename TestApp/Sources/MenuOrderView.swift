@@ -87,6 +87,7 @@ struct MenuOrderView: View {
     @State private var categories = MenuCategory.defaultMenu
     @State private var expandedItemId: String?
     @State private var checkoutPhase: CheckoutPhase = .browsing
+    @State private var pendingTask: Task<Void, Never>?
 
     private var allItems: [MenuItem] {
         categories.flatMap(\.items)
@@ -126,6 +127,16 @@ struct MenuOrderView: View {
             }
         }
         .navigationTitle(checkoutTitle)
+        .onDisappear {
+            pendingTask?.cancel()
+            pendingTask = nil
+            // If the user navigates away mid-processing, drop back to the
+            // review phase so the next reappearance isn't stuck on a spinner
+            // whose work has been cancelled.
+            if case .processing = checkoutPhase {
+                checkoutPhase = .reviewing
+            }
+        }
     }
 
     private var checkoutTitle: String {
@@ -221,7 +232,8 @@ struct MenuOrderView: View {
             Section {
                 Button {
                     checkoutPhase = .processing
-                    Task {
+                    pendingTask?.cancel()
+                    pendingTask = Task {
                         let roll = Int.random(in: 1...100)
                         let delay: Double = switch roll {
                         case 1...80:  2.5

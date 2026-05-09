@@ -4,6 +4,7 @@ struct LoginView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var submission: SubmissionState = .idle
+    @State private var pendingTask: Task<Void, Never>?
 
     struct FieldErrors {
         var email: String?
@@ -121,6 +122,10 @@ struct LoginView: View {
         .scrollDismissesKeyboard(.interactively)
         .navigationTitle("Sign In")
         .navigationBarTitleDisplayMode(.inline)
+        .onDisappear {
+            pendingTask?.cancel()
+            pendingTask = nil
+        }
     }
 
     private func validate() -> FieldErrors? {
@@ -147,7 +152,8 @@ struct LoginView: View {
 
         submission = .submitting
 
-        Task {
+        pendingTask?.cancel()
+        pendingTask = Task {
             do {
                 try await Task.sleep(for: .seconds(2))
             } catch {

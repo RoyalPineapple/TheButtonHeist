@@ -29,6 +29,7 @@ struct TransientFlowDemo: View {
 
     @State private var phase: Phase = .idle
     @State private var lastOutcome: String = "No flow run yet"
+    @State private var pendingTask: Task<Void, Never>?
 
     var body: some View {
         VStack(spacing: 24) {
@@ -54,6 +55,10 @@ struct TransientFlowDemo: View {
         }
         .padding()
         .navigationTitle("Transient Flow")
+        .onDisappear {
+            pendingTask?.cancel()
+            pendingTask = nil
+        }
     }
 
     // MARK: - Status
@@ -124,7 +129,8 @@ struct TransientFlowDemo: View {
     /// Run loading → success → confirmation → auto-dismiss with
     /// approximately the timing of a real network-backed payment flow.
     private func runFlow() {
-        Task { @MainActor in
+        pendingTask?.cancel()
+        pendingTask = Task {
             do {
                 phase = .loading
                 try await Task.sleep(for: .milliseconds(900))
