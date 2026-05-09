@@ -9,7 +9,6 @@ private let logger = Logger(subsystem: "com.buttonheist.bookkeeper", category: "
 
 /// Lifecycle of a BookKeeper session from idle through archive. Each non-idle
 /// case carries the phase-specific data valid for that phase.
-@ButtonHeistActor
 public enum SessionPhase: Sendable {
     case idle
     case active(ActiveSession)
@@ -18,8 +17,11 @@ public enum SessionPhase: Sendable {
     case archived(ArchivedSession)
 }
 
-@ButtonHeistActor
-public struct ActiveSession: Sendable {
+/// Active session payload. Marked `@unchecked Sendable` because `logHandle`
+/// is a `FileHandle` (not Sendable on Swift 6); access is in practice
+/// confined to the `@ButtonHeistActor`-isolated `TheBookKeeper` that owns
+/// the value.
+public struct ActiveSession: @unchecked Sendable {
     public let sessionId: String
     public let directory: URL
     let logHandle: FileHandle
@@ -29,8 +31,10 @@ public struct ActiveSession: Sendable {
     var heistRecording: HeistRecording?
 }
 
-@ButtonHeistActor
-struct HeistRecording {
+/// Heist recording handle. Marked `@unchecked Sendable` because `fileHandle`
+/// is a `FileHandle`; access is confined to the `@ButtonHeistActor`-isolated
+/// `TheBookKeeper`.
+struct HeistRecording: @unchecked Sendable {
     let app: String
     let startTime: Date
     var evidenceCount: Int
@@ -38,7 +42,6 @@ struct HeistRecording {
     let filePath: URL
 }
 
-@ButtonHeistActor
 public struct ClosingSession: Sendable {
     public let sessionId: String
     public let directory: URL
@@ -47,7 +50,6 @@ public struct ClosingSession: Sendable {
     public let endTime: Date
 }
 
-@ButtonHeistActor
 public struct ClosedSession: Sendable {
     public let sessionId: String
     public let directory: URL
@@ -57,7 +59,6 @@ public struct ClosedSession: Sendable {
     public let endTime: Date
 }
 
-@ButtonHeistActor
 public struct ArchivedSession: Sendable {
     public let archivePath: URL
     public let manifest: SessionManifest
