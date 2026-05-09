@@ -65,7 +65,7 @@ TheStakeout is created in `handleStartRecording`, stored in the `.recording` cas
 TheGetaway follows the same closure-injection pattern as TheMuscle:
 
 - TheMuscle's closures (`sendToClient`, `markClientAuthenticated`, etc.) are set by TheGetaway in `wireTransport`
-- ServerTransport's callbacks (`onDataReceived`, `onClientConnected`, etc.) are set by TheGetaway in `wireTransport`
+- ServerTransport delivers a single ordered `AsyncStream<TransportEvent>` (`transport.events`); TheGetaway runs one long-lived consumer task that awaits each event and dispatches via `handleTransportEvent(_:)`. The optional synchronous ping fast-path is installed via `transport.setSyncDataInterceptor(_:)` before `start()`.
 - TheBrains is called directly (same `@MainActor`, synchronous calls)
 - TheInsideJob calls `getaway.broadcastIfChanged()` and `getaway.wireTransport(_:)` — those are the only entry points from the job
 

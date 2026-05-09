@@ -50,7 +50,7 @@ public enum TransportEvent: Sendable {
 /// Usage:
 /// ```
 /// let transport = ServerTransport()
-/// transport.syncDataInterceptor = { clientId, data in ... }  // optional fast path
+/// transport.setSyncDataInterceptor { clientId, data in ... }  // optional fast path
 /// let port = try await transport.start()
 /// transport.advertise(serviceName: "MyApp#abc")
 /// for await event in transport.events { ... }
@@ -92,9 +92,26 @@ public final class ServerTransport: NSObject {
     /// actor is wedged on long-running work. Returning nil falls through to
     /// the normal `.dataReceived` path.
     ///
-    /// The interceptor is snapshotted at `start()` time; setting it later has
-    /// no effect.
-    public var syncDataInterceptor: (@Sendable (_ clientId: Int, _ data: Data) -> Data?)?
+    /// The interceptor is snapshotted at `start()` time; assigning it after
+    /// `start()` has been called is a programmer error and trips a
+    /// `precondition` rather than being silently dropped. Use
+    /// `setSyncDataInterceptor(_:)` to install one before starting.
+    public private(set) var syncDataInterceptor: (@Sendable (_ clientId: Int, _ data: Data) -> Data?)?
+
+    /// Tracks whether `start()` has been called. Once set, the interceptor is
+    /// frozen; later assignments would be silently captured-by-value at
+    /// `makeCallbacks()` time and have no effect on the running transport.
+    private var hasStarted = false
+
+    /// Install a synchronous data interceptor. Must be called before
+    /// `start()`; calling after start trips a `precondition`.
+    public func setSyncDataInterceptor(_ interceptor: (@Sendable (_ clientId: Int, _ data: Data) -> Data?)?) {
+        precondition(
+            !hasStarted,
+            "ServerTransport.syncDataInterceptor must be set before start(); later assignment is silently dropped because makeCallbacks() snapshots by value"
+        )
+        syncDataInterceptor = interceptor
+    }
 
     /// The port the server is listening on (0 if not started).
     public var listeningPort: UInt16 {
@@ -132,6 +149,7 @@ public final class ServerTransport: NSObject {
 
         let params = await tlsIdentity?.makeTLSParameters()
         let callbacks = makeCallbacks()
+        hasStarted = true
         return try await server.startAsync(port: port, bindToLoopback: bindToLoopback, tlsParameters: params, callbacks: callbacks)
     }
 
@@ -140,9 +158,10 @@ public final class ServerTransport: NSObject {
     /// Each closure is `@Sendable` because `SimpleSocketServer` invokes it on
     /// its own network queue, not the main actor. The continuation is itself
     /// Sendable; `yield` is safe to call from any context. The synchronous
-    /// data interceptor is snapshotted at start time — setting
-    /// `syncDataInterceptor` after `start()` has no effect.
-    private func makeCallbacks() -> SimpleSocketServer.Callbacks {
+    /// data interceptor is snapshotted here at start time — that's why
+    /// `setSyncDataInterceptor(_:)` preconditions on `!hasStarted`: a later
+    /// assignment would not reach the captured `interceptor` constant.
+    internal func makeCallbacks() -> SimpleSocketServer.Callbacks {
         let continuation = eventContinuation
         let interceptor = syncDataInterceptor
         return SimpleSocketServer.Callbacks(

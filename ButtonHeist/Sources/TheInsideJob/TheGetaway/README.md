@@ -8,7 +8,7 @@ The getaway driver — runs all comms between the wire and the crew.
 
 ### Transport wiring
 
-`wireTransport(_:)` installs five closures on TheMuscle (sendToClient, markClientAuthenticated, disconnectClient, onClientAuthenticated, onSessionActiveChanged) and four on ServerTransport (onClientConnected, onClientDisconnected, onDataReceived, onUnauthenticatedData). This is the bridge between auth and networking — TheMuscle and ServerTransport never reference each other directly.
+`wireTransport(_:)` installs five closures on TheMuscle (sendToClient, markClientAuthenticated, disconnectClient, onClientAuthenticated, onSessionActiveChanged), installs a synchronous ping fast-path on the transport via `setSyncDataInterceptor(_:)`, and starts a single long-lived consumer task that awaits `transport.events` (an ordered `AsyncStream<TransportEvent>`) and dispatches each event via `handleTransportEvent(_:)`. This is the bridge between auth and networking — TheMuscle and ServerTransport never reference each other directly. Routing every event through one stream means `clientConnected` always lands before its first `dataReceived`, the race the prior per-event `Task { @MainActor in ... }` callback bridge could lose.
 
 ### Message dispatch
 

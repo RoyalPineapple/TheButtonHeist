@@ -79,7 +79,7 @@ final class TheGetaway {
         // the network queue before the message ever enters the event stream;
         // a `.fastPathHandled` event is yielded so we can still note client
         // activity in order with everything else.
-        transport.syncDataInterceptor = { _, data in
+        transport.setSyncDataInterceptor { _, data in
             PingFastPath.encodedPong(for: data)
         }
 

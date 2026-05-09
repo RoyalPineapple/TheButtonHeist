@@ -95,7 +95,7 @@ sequenceDiagram
     TF->>TH: connectWithDiscovery()
     TH->>DC: connect(to: device)
     DC->>SS: TLS connect (cert fingerprint pinned via Bonjour TXT)
-    SS->>TM2: onClientConnected (via TheGetaway wiring)
+    SS->>TM2: clientConnected event (via TheGetaway's transport.events stream)
     TM2-->>DC: serverHello
     DC->>SS: clientHello
     TM2-->>DC: authRequired
