@@ -133,23 +133,41 @@ public final class TheHandoff {
     }
 
     private func transitionToFailed(_ failure: ConnectionFailure) {
+        let wasActive: Bool
+        switch connectionPhase {
+        case .connecting, .connected:
+            wasActive = true
+        case .disconnected, .failed:
+            wasActive = false
+        }
         if case .connected(let session) = connectionPhase {
             session.keepaliveTask.cancel()
         }
         connectionPhase = .failed(failure)
-        resumePhaseAwaiters(with: .failure(failure.asConnectionError))
+        if wasActive {
+            resumePhaseAwaiters(with: .failure(failure.asConnectionError))
+        }
     }
 
     private func transitionToDisconnected() {
+        let wasActive: Bool
+        switch connectionPhase {
+        case .connecting, .connected:
+            wasActive = true
+        case .disconnected, .failed:
+            wasActive = false
+        }
         if case .connected(let session) = connectionPhase {
             session.keepaliveTask.cancel()
         }
         connectionPhase = .disconnected
-        resumePhaseAwaiters(
-            with: .failure(ConnectionError.connectionFailed(
-                "Disconnected during connection attempt. The app may have been busy, suspended, or restarted before the handshake completed."
-            ))
-        )
+        if wasActive {
+            resumePhaseAwaiters(
+                with: .failure(ConnectionError.connectionFailed(
+                    "Disconnected during connection attempt. The app may have been busy, suspended, or restarted before the handshake completed."
+                ))
+            )
+        }
     }
 
     private func resumePhaseAwaiters(with result: Result<Void, Error>) {
@@ -567,7 +585,8 @@ public final class TheHandoff {
     /// terminal at call time, returns or throws immediately without suspending.
     ///
     /// The `timeout` is enforced by scheduling a cancellable timeout task that
-    /// fails any registered awaiters with `ConnectionError.timeout`.
+    /// fails any registered awaiters with `ConnectionError.timeout`. If
+    /// `timeout` is below 5 seconds, it is clamped to 5.
     /// Cancelling the calling task aborts the wait and propagates
     /// `CancellationError`.
     public func waitForConnectionResult(timeout: TimeInterval) async throws {
@@ -585,7 +604,7 @@ public final class TheHandoff {
             break
         }
 
-        let timeoutDuration: Duration = .nanoseconds(UInt64(max(timeout, 5) * 1_000_000_000))
+        let timeoutDuration: Duration = .seconds(max(timeout, 5))
         let timeoutTask = Task { @ButtonHeistActor [weak self] in
             guard await Task.cancellableSleep(for: timeoutDuration) else { return }
             self?.failPhaseAwaitersWithTimeout()
@@ -593,7 +612,17 @@ public final class TheHandoff {
         defer { timeoutTask.cancel() }
 
         try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { continuation in
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                // Early-cancel guard: if the calling task was already cancelled
+                // before we registered the continuation, the cancellation
+                // handler may have already run against an empty awaiter list.
+                // Resume immediately rather than appending an orphaned
+                // continuation that would only resolve on phase transition or
+                // timeout.
+                if Task.isCancelled {
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
                 phaseAwaiters.append(continuation)
             }
         } onCancel: {
@@ -609,11 +638,26 @@ public final class TheHandoff {
         resumePhaseAwaiters(with: .failure(CancellationError()))
     }
 
-    /// Resume every registered awaiter with `ConnectionError.timeout`.
-    /// Scheduled by `waitForConnectionResult` and runs on the actor when the
-    /// timeout duration elapses without a phase transition.
+    /// Resume every registered awaiter with `ConnectionError.timeout` and
+    /// tear down any in-flight connection. Scheduled by
+    /// `waitForConnectionResult` and runs on the actor when the timeout
+    /// duration elapses without a phase transition.
+    ///
+    /// Tear-down is necessary so the timeout's failure is symmetric with the
+    /// caller's expectation: without it, an in-flight connection could still
+    /// transition to `.connected` after the awaiters have already failed,
+    /// leaving the handoff silently connected with an orphaned keepalive.
     private func failPhaseAwaitersWithTimeout() {
         resumePhaseAwaiters(with: .failure(ConnectionError.timeout))
+        // After resuming awaiters, drop any in-flight connection. The
+        // transitionToDisconnected call is now a no-op for awaiters because
+        // resumePhaseAwaiters cleared the list, but it still tears down the
+        // network connection and updates connectionPhase.
+        if case .connecting = connectionPhase {
+            connection?.disconnect()
+            connection = nil
+            transitionToDisconnected()
+        }
     }
 
     /// Force-close the connection. Use when a timeout suggests the connection
