@@ -340,10 +340,10 @@ public actor SimpleSocketServer {
                         Task { await self.removeClient(clientId) }
                         return
                     }
-                    let interfaces = connection.currentPath?.availableInterfaces ?? []
-                    let scope = ConnectionScope.classify(host: host, interfaces: interfaces)
+                    let interfaceNameList = (connection.currentPath?.availableInterfaces ?? []).map(\.name)
+                    let scope = ConnectionScope.classify(host: host, interfaceNames: interfaceNameList)
                     let hostDescription = "\(host)"
-                    let interfaceNames = interfaces.map(\.name).joined(separator: ", ")
+                    let interfaceNames = interfaceNameList.joined(separator: ", ")
                     if !scopeFilter.contains(scope) {
                         logger.warning("Rejecting \(scope.rawValue) connection from \(hostDescription) via [\(interfaceNames)]")
                         Task { await self.removeClient(clientId) }

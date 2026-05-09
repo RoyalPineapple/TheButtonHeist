@@ -33,7 +33,7 @@ Each `waitForSettle(timeout:requiredQuietFrames:)` caller gets its own `SettleWa
 
 ### Window access
 
-`getTraversableWindows()` — all non-overlay, non-hidden, non-zero-bounds windows from the `foregroundActive` scene, sorted by `windowLevel` descending. Filters out `ButtonHeistOverlayWindow` conformers.
+`getTraversableWindows()` — all non-overlay, non-hidden, non-zero-bounds windows from the `foregroundActive` scene, sorted by `windowLevel` descending. Filters out `TheFingerprints.FingerprintWindow` instances.
 
 `getAccessibleWindows()` — calls `getTraversableWindows()`, then checks for `accessibilityViewIsModal` views (up to 4 levels deep). If a modal view exists, returns only that window — matching AXServer's behavior.
 

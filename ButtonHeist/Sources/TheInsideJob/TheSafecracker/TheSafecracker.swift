@@ -462,7 +462,7 @@ final class TheSafecracker {
         let allWindows = UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .flatMap { $0.windows }
-            .filter { !($0 is any ButtonHeistOverlayWindow) && !$0.isHidden }
+            .filter { !($0 is TheFingerprints.FingerprintWindow) && !$0.isHidden }
             .sorted { $0.windowLevel > $1.windowLevel }
 
         for window in allWindows {

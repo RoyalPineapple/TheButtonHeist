@@ -339,7 +339,7 @@ final class TheTripwire {
             .filter { $0.activationState == .foregroundActive }
             .flatMap { $0.windows }
             .filter { window in
-                !(window is any ButtonHeistOverlayWindow)
+                !(window is TheFingerprints.FingerprintWindow)
                     && !window.isHidden
                     && window.bounds.size != .zero
             }
