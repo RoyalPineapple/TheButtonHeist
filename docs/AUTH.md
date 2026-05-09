@@ -46,10 +46,6 @@ flowchart TD
 
 When no explicit token is set, a fresh UUID is generated each launch. Previously approved clients must re-authenticate after an app restart.
 
-### Token Invalidation
-
-Call `invalidateToken()` on TheMuscle to rotate the token. This generates a new UUID in memory. All previously approved clients lose access and must re-authenticate on their next connection.
-
 ## Configuration
 
 ### Server-side (iOS app)
@@ -308,7 +304,7 @@ The real access control is the `ConnectionScope` filter that restricts which net
 
 | Component | Role |
 |-----------|------|
-| **TheMuscle** | Token resolution, validation, UI approval, session locking, observer management, `invalidateToken()`. Presents `UIAlertController` for Allow/Deny approval. Owns `authToken`, `pendingApprovalClients`, `authenticatedClientIDs`, `observerClients`. Routes `watch` messages via `handleWatchRequest`. |
+| **TheMuscle** | Token resolution, validation, UI approval, session locking, observer management. Presents `UIAlertController` for Allow/Deny approval. Owns `authToken`, `pendingApprovalClients`, `authenticatedClientIDs`, `observerClients`. Routes `watch` messages via `handleWatchRequest`. |
 | **SimpleSocketServer** | Tracks per-client auth state via `ClientPhase` enum (`.unauthenticated` / `.authenticated`). Routes messages to `onDataReceived` (authenticated) or `onUnauthenticatedData` (not yet authenticated). |
 | **TheInsideJob** | Wires TheMuscle callbacks to the socket server. Owns the server lifecycle. |
 | **DeviceConnection** | Client-side handshake and auth handling. Verifies `protocolVersion`, sends `clientHello` after `serverHello`, sends token on `authRequired`, stores token from `authApproved`, fires `onConnected` only after receiving `info` (post-auth). |

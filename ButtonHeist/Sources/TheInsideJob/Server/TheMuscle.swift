@@ -26,13 +26,8 @@ private let logger = Logger(subsystem: "com.buttonheist.theinsidejob", category:
 @MainActor
 final class TheMuscle {
 
-    /// Grace period (100ms) before disconnecting a rejected client, giving them time to read the error.
     private static let disconnectGracePeriod: Duration = .milliseconds(100)
-
-    /// Maximum consecutive failed auth attempts before temporary lockout.
     private static let maxFailedAttempts = 5
-
-    /// Lockout duration after exceeding maxFailedAttempts.
     private static let lockoutDuration: TimeInterval = 30
 
     // MARK: - Properties
@@ -394,11 +389,6 @@ final class TheMuscle {
         clients.removeAll()
         releaseSession()
         dismissAlert()
-    }
-
-    func invalidateToken() {
-        sessionToken = UUID().uuidString
-        logger.info("Session token rotated: \(self.sessionToken, privacy: .public)")
     }
 
     // MARK: - Status Accessors
