@@ -125,12 +125,16 @@ struct TransientFlowDemo: View {
     /// approximately the timing of a real network-backed payment flow.
     private func runFlow() {
         Task { @MainActor in
-            phase = .loading
-            try? await Task.sleep(for: .milliseconds(900))
-            phase = .success
-            try? await Task.sleep(for: .milliseconds(700))
-            phase = .confirmation
-            try? await Task.sleep(for: .milliseconds(1500))
+            do {
+                phase = .loading
+                try await Task.sleep(for: .milliseconds(900))
+                phase = .success
+                try await Task.sleep(for: .milliseconds(700))
+                phase = .confirmation
+                try await Task.sleep(for: .milliseconds(1500))
+            } catch {
+                return
+            }
             phase = .idle
             lastOutcome = "Flow completed at \(Date().formatted(date: .omitted, time: .standard))"
         }
