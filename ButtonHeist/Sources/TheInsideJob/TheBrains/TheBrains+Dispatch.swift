@@ -235,50 +235,8 @@ extension TheBrains {
             screenName: stash.lastScreenName,
             screenId: stash.lastScreenId
         )
-        builder.message = "Unsupported command '\(Self.commandName(for: message))' in \(context)"
+        builder.message = "Unsupported command '\(message.canonicalName)' in \(context)"
         return builder.failure(errorKind: .unsupported)
-    }
-
-    private static func commandName(for message: ClientMessage) -> String {
-        switch message {
-        case .clientHello: return "client_hello"
-        case .authenticate: return "authenticate"
-        case .requestInterface: return "request_interface"
-        case .subscribe: return "subscribe"
-        case .unsubscribe: return "unsubscribe"
-        case .ping: return "ping"
-        case .status: return "status"
-        case .requestScreen: return "request_screen"
-        case .activate: return "activate"
-        case .increment: return "increment"
-        case .decrement: return "decrement"
-        case .performCustomAction: return "perform_custom_action"
-        case .editAction: return "edit_action"
-        case .setPasteboard: return "set_pasteboard"
-        case .getPasteboard: return "get_pasteboard"
-        case .resignFirstResponder: return "resign_first_responder"
-        case .touchTap: return "touch_tap"
-        case .touchLongPress: return "touch_long_press"
-        case .touchSwipe: return "touch_swipe"
-        case .touchDrag: return "touch_drag"
-        case .touchPinch: return "touch_pinch"
-        case .touchRotate: return "touch_rotate"
-        case .touchTwoFingerTap: return "touch_two_finger_tap"
-        case .touchDrawPath: return "touch_draw_path"
-        case .touchDrawBezier: return "touch_draw_bezier"
-        case .typeText: return "type_text"
-        case .scroll: return "scroll"
-        case .scrollToVisible: return "scroll_to_visible"
-        case .elementSearch: return "element_search"
-        case .scrollToEdge: return "scroll_to_edge"
-        case .waitForIdle: return "wait_for_idle"
-        case .waitFor: return "wait_for"
-        case .waitForChange: return "wait_for_change"
-        case .explore: return "explore"
-        case .startRecording: return "start_recording"
-        case .stopRecording: return "stop_recording"
-        case .watch: return "watch"
-        }
     }
 
     /// Map a ClientMessage to the ActionMethod that best identifies it for diagnostic output.
