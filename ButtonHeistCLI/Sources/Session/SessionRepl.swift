@@ -4,12 +4,23 @@ import ButtonHeist
 
 @ButtonHeistActor
 final class ReplSession {
+
+    // MARK: - Nested Types
+
+    private enum State {
+        case running(IdleMonitor?)
+        case exiting
+        case stopped
+    }
+
+    // MARK: - Properties
+
     private let format: OutputFormat
     private let fence: TheFence
     private let sessionTimeout: TimeInterval
-    private var isRunning = true
-    private var shouldExit = false
-    private var idleMonitor: IdleMonitor?
+    private var state: State = .stopped
+
+    // MARK: - Init
 
     init(config: EnvironmentConfig, format: OutputFormat) {
         self.format = format
@@ -19,6 +30,8 @@ final class ReplSession {
             logStatus(message)
         }
     }
+
+    // MARK: - REPL Loop
 
     func run() async throws {
         try await fence.start()
@@ -33,11 +46,10 @@ final class ReplSession {
 
         signal(SIGINT) { _ in Darwin.exit(0) }
 
-        if sessionTimeout > 0 {
-            startTimeoutMonitor()
-        }
+        let monitor = sessionTimeout > 0 ? makeTimeoutMonitor() : nil
+        state = .running(monitor)
 
-        while isRunning {
+        loop: while case .running(let idleMonitor) = state {
             if isTTY {
                 fputs("> ", stderr)
                 fflush(stderr)
@@ -55,21 +67,25 @@ final class ReplSession {
             let (response, requestId) = await processLine(trimmed)
             outputResponse(response, id: requestId)
 
-            if shouldExit { break }
+            if case .exiting = state { break loop }
         }
 
-        idleMonitor?.stop()
+        if case .running(let idleMonitor) = state {
+            idleMonitor?.stop()
+        }
+        state = .stopped
         fence.stop()
     }
 
-    private func startTimeoutMonitor() {
-        idleMonitor = IdleMonitor(timeout: sessionTimeout) { [weak self] in
+    private func makeTimeoutMonitor() -> IdleMonitor {
+        let monitor = IdleMonitor(timeout: sessionTimeout) { [weak self] in
             guard let self else { return }
             logStatus("Session idle timeout (\(Int(self.sessionTimeout))s) — exiting.")
-            self.isRunning = false
+            self.state = .exiting
             close(STDIN_FILENO)
         }
-        idleMonitor?.resetTimer()
+        monitor.resetTimer()
+        return monitor
     }
 
     private func processLine(_ line: String) async -> (FenceResponse, Any?) {
@@ -77,22 +93,16 @@ final class ReplSession {
 
         if line.hasPrefix("{") {
             // JSON mode — machine interface
-            guard let data = line.data(using: .utf8) else {
-                return (.error("Invalid JSON or missing 'command' field"), nil)
-            }
-            let object: [String: Any]
             do {
-                guard let parsed = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                let data = Data(line.utf8)
+                guard let parsed = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      parsed["command"] is String else {
                     return (.error("Invalid JSON or missing 'command' field"), nil)
                 }
-                object = parsed
+                request = parsed
             } catch {
                 return (.error("Invalid JSON: \(error.localizedDescription)"), nil)
             }
-            guard object["command"] is String else {
-                return (.error("Invalid JSON or missing 'command' field"), nil)
-            }
-            request = object
         } else {
             // Human-friendly mode
             request = Self.parseHumanInput(line)
@@ -112,8 +122,10 @@ final class ReplSession {
         do {
             let response = try await fence.execute(request: request)
             if command == TheFence.Command.quit.rawValue || command == TheFence.Command.exit.rawValue {
-                shouldExit = true
-                isRunning = false
+                if case .running(let idleMonitor) = state {
+                    idleMonitor?.stop()
+                }
+                state = .exiting
             }
             return (response, requestId)
         } catch {
