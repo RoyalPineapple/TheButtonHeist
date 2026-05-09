@@ -110,22 +110,6 @@ enum ToolDefinitions {
         ]),
     ]
 
-    // MARK: - Getting Started
-    //
-    // Button Heist navigates iOS apps through the real accessibility interface — the same
-    // labels, values, traits, hints, and actions that VoiceOver users rely on.
-    //
-    // Core workflow:
-    //   1. connect         — establish a session with the iOS app
-    //   2. get_interface   — read the screen (elements with heistId, label, traits)
-    //   3. Act and read deltas — every action returns what changed
-    //   4. run_batch       — multiple actions in one call, with optional expectations
-    //
-    // Finding elements:
-    //   Every element has a heistId (stable on the current screen) plus label, value,
-    //   traits, actions, hints. Use heistId for known elements, label/traits for discovery.
-    //   All matcher fields are AND. Start with just label, add traits if ambiguous.
-
     static let all: [Tool] = [
         getInterface, activate, typeText, getScreen,
         waitForChange, waitFor, startRecording, stopRecording, listDevices,
