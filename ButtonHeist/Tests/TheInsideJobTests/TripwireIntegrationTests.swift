@@ -143,21 +143,23 @@ final class TripwireIntegrationTests: XCTestCase {
     func testPulseProducesReadingAfterStart() async throws {
         // waitForSettle starts the pulse and only returns once at least one
         // tick has produced a reading — observable signal beats wall-clock sleep.
-        let settled = await tripwire.waitForSettle(timeout: 2.0)
+        // requiredQuietFrames: 1 mirrors the old "got a reading" semantic and
+        // keeps the test resilient to host noise.
+        let settled = await tripwire.waitForSettle(timeout: 1.0, requiredQuietFrames: 1)
         XCTAssertTrue(settled, "Pulse should settle within timeout")
         let reading = try XCTUnwrap(tripwire.latestReading)
         XCTAssertGreaterThan(reading.tick, 0)
     }
 
     func testPulseReadingHasValidWindowCount() async throws {
-        let settled = await tripwire.waitForSettle(timeout: 2.0)
+        let settled = await tripwire.waitForSettle(timeout: 1.0, requiredQuietFrames: 1)
         XCTAssertTrue(settled, "Pulse should settle within timeout")
         let reading = try XCTUnwrap(tripwire.latestReading, "No reading produced")
         XCTAssertGreaterThan(reading.windowCount, 0)
     }
 
     func testPulseReadingTracksVCIdentity() async throws {
-        let settled = await tripwire.waitForSettle(timeout: 2.0)
+        let settled = await tripwire.waitForSettle(timeout: 1.0, requiredQuietFrames: 1)
         XCTAssertTrue(settled, "Pulse should settle within timeout")
         let reading = try XCTUnwrap(tripwire.latestReading, "No reading produced")
         // Test host should have a VC
