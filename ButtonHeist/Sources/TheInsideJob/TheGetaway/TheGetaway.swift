@@ -40,6 +40,11 @@ final class TheGetaway {
     /// Current transport — set by `wireTransport`, cleared on teardown.
     private(set) weak var transport: ServerTransport?
 
+    /// Single long-lived consumer Task for `transport.events`. Cancelled on
+    /// `tearDown()`; the for-await loop also exits when the transport finishes
+    /// its event continuation in `stop()`.
+    private var eventConsumerTask: Task<Void, Never>?
+
     var stakeout: TheStakeout? {
         if case .recording(let stakeout) = recordingPhase { return stakeout }
         return nil
@@ -69,59 +74,72 @@ final class TheGetaway {
             transport?.updateTXTRecord([TXTRecordKey.sessionActive.rawValue: isActive ? "1" : "0"])
         }
 
-        transport.onClientConnected = { [weak self] clientId, remoteAddress in
-            Task { @MainActor in
-                insideJobLogger.info("Client \(clientId) connected from \(remoteAddress ?? "unknown"), awaiting hello")
-                if let remoteAddress {
-                    self?.muscle.registerClientAddress(clientId, address: remoteAddress)
-                }
-                self?.muscle.sendServerHello(clientId: clientId)
-            }
+        // Keepalives must be answered even when the main actor is wedged on a
+        // long parse/settle/explore. The interceptor decodes and replies on
+        // the network queue before the message ever enters the event stream;
+        // a `.fastPathHandled` event is yielded so we can still note client
+        // activity in order with everything else.
+        transport.syncDataInterceptor = { _, data in
+            PingFastPath.encodedPong(for: data)
         }
 
-        transport.onClientDisconnected = { [weak self] clientId in
-            Task { @MainActor in
-                insideJobLogger.info("Client \(clientId) disconnected")
-                self?.muscle.handleClientDisconnected(clientId)
-            }
-        }
-
-        transport.onDataReceived = { [weak self] clientId, data, respond in
-            // Keepalives must be answered even when the main actor is wedged
-            // on a long parse/settle/explore. PingFastPath decodes and replies
-            // on the network queue; everything else takes the @MainActor hop.
-            if let pongData = PingFastPath.encodedPong(for: data) {
-                respond(pongData)
-                Task { @MainActor in self?.muscle.noteClientActivity(clientId) }
-                return
-            }
-            Task { @MainActor in
-                await self?.handleClientMessage(clientId, data: data, respond: respond)
-            }
-        }
-
-        transport.onRateLimited = { [weak self] _, respond in
-            Task { @MainActor in
-                let message = "Rate limited: max \(SimpleSocketServer.maxMessagesPerSecond) messages per second"
-                self?.sendMessage(.error(ServerError(kind: .general, message: message)), respond: respond)
-            }
-        }
-
-        transport.onUnauthenticatedData = { [weak self] clientId, data, respond in
-            Task { @MainActor in
+        // Cancel any prior consumer (defensive — a single transport instance
+        // is only wired once in production, but tests reuse `wireTransport`).
+        eventConsumerTask?.cancel()
+        eventConsumerTask = Task { @MainActor [weak self, events = transport.events] in
+            for await event in events {
                 guard let self else { return }
-                if let envelope = self.decodeRequest(data),
-                   case .status = envelope.message,
-                   self.muscle.helloValidatedClients.contains(clientId) {
-                    await self.handleClientMessage(clientId, data: data, respond: respond)
-                } else {
-                    self.muscle.handleUnauthenticatedMessage(clientId, data: data, respond: respond)
-                }
+                await self.handleTransportEvent(event)
             }
         }
     }
 
+    /// Dispatch a single transport event on the main actor.
+    ///
+    /// The consumer awaits this method per event, so `clientConnected` always
+    /// completes before the first `dataReceived` for that client and message
+    /// N+1 cannot start before message N finishes. The previous per-event
+    /// `Task { @MainActor in ... }` bridge could lose ordering: a slow
+    /// connect Task and a fast first-message Task were independently
+    /// scheduled, and the message could observe an unregistered client
+    /// address.
+    func handleTransportEvent(_ event: TransportEvent) async {
+        switch event {
+        case .clientConnected(let clientId, let remoteAddress):
+            insideJobLogger.info("Client \(clientId) connected from \(remoteAddress ?? "unknown"), awaiting hello")
+            if let remoteAddress {
+                muscle.registerClientAddress(clientId, address: remoteAddress)
+            }
+            muscle.sendServerHello(clientId: clientId)
+
+        case .clientDisconnected(let clientId):
+            insideJobLogger.info("Client \(clientId) disconnected")
+            muscle.handleClientDisconnected(clientId)
+
+        case .dataReceived(let clientId, let data, let respond):
+            await handleClientMessage(clientId, data: data, respond: respond)
+
+        case .unauthenticatedData(let clientId, let data, let respond):
+            if let envelope = decodeRequest(data),
+               case .status = envelope.message,
+               muscle.helloValidatedClients.contains(clientId) {
+                await handleClientMessage(clientId, data: data, respond: respond)
+            } else {
+                muscle.handleUnauthenticatedMessage(clientId, data: data, respond: respond)
+            }
+
+        case .rateLimited(_, let respond):
+            let message = "Rate limited: max \(SimpleSocketServer.maxMessagesPerSecond) messages per second"
+            sendMessage(.error(ServerError(kind: .general, message: message)), respond: respond)
+
+        case .fastPathHandled(let clientId):
+            muscle.noteClientActivity(clientId)
+        }
+    }
+
     func tearDown() {
+        eventConsumerTask?.cancel()
+        eventConsumerTask = nil
         transport = nil
         hierarchyInvalidated = false
         completedRecording = nil

@@ -90,13 +90,13 @@ final class PingFastPathTests: XCTestCase {
         }
     }
 
-    /// Proves the closure registered onto `transport.onDataReceived` by
-    /// `TheGetaway.wireTransport` answers a ping without bridging to the
-    /// main actor. We hold the main actor with a long sleep, then invoke
-    /// the wired closure from a detached task; the response must arrive
-    /// while main is still blocked.
+    /// Proves the synchronous ping interceptor that `TheGetaway.wireTransport`
+    /// installs on `transport.syncDataInterceptor` answers a ping without
+    /// bridging to the main actor. We hold the main actor with a long sleep,
+    /// then invoke the interceptor from a detached task; the response must
+    /// arrive while main is still blocked.
     @MainActor
-    func testWiredOnDataReceivedAnswersPingWhileMainIsBusy() async throws {
+    func testWiredSyncInterceptorAnswersPingWhileMainIsBusy() async throws {
         let muscle = TheMuscle(explicitToken: "test")
         let tripwire = TheTripwire()
         let brains = TheBrains(tripwire: tripwire)
@@ -109,19 +109,10 @@ final class PingFastPathTests: XCTestCase {
         let transport = ServerTransport()
         getaway.wireTransport(transport)
 
-        let onDataReceived = try XCTUnwrap(transport.onDataReceived, "wireTransport did not install onDataReceived")
+        let interceptor = try XCTUnwrap(transport.syncDataInterceptor, "wireTransport did not install syncDataInterceptor")
 
         let request = RequestEnvelope(requestId: "req-wired", message: .ping)
         let pingData = try JSONEncoder().encode(request)
-
-        final class ResponseBox: @unchecked Sendable {
-            private let lock = NSLock()
-            private var value: Data?
-            func set(_ data: Data) { lock.lock(); defer { lock.unlock() }; value = data }
-            func get() -> Data? { lock.lock(); defer { lock.unlock() }; return value }
-        }
-        let box = ResponseBox()
-        let respond: @Sendable (Data) -> Void = { data in box.set(data) }
 
         // Hold the main actor for 2s — long enough that any accidental
         // `@MainActor` hop would be observable.
@@ -133,14 +124,14 @@ final class PingFastPathTests: XCTestCase {
         }
 
         let start = Date()
-        await Task.detached(priority: .userInitiated) {
-            onDataReceived(1, pingData, respond)
+        let pongData = await Task.detached(priority: .userInitiated) {
+            interceptor(1, pingData)
         }.value
         let elapsed = Date().timeIntervalSince(start)
 
-        XCTAssertLessThan(elapsed, 0.5, "wired onDataReceived must answer ping without waiting on the main actor")
-        let pongData = try XCTUnwrap(box.get(), "respond was not called synchronously on the network queue")
-        let response = try JSONDecoder().decode(ResponseEnvelope.self, from: pongData)
+        XCTAssertLessThan(elapsed, 0.5, "wired syncDataInterceptor must answer ping without waiting on the main actor")
+        let pong = try XCTUnwrap(pongData, "syncDataInterceptor returned nil for a ping")
+        let response = try JSONDecoder().decode(ResponseEnvelope.self, from: pong)
         XCTAssertEqual(response.requestId, "req-wired")
         guard case .pong = response.message else {
             XCTFail("Expected .pong, got \(response.message)")
