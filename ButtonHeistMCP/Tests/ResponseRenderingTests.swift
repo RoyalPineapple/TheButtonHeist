@@ -13,7 +13,7 @@ struct ResponseRenderingTests {
 
         let result = try ButtonHeistMCPServer.renderResponse(
             .ok(message: "done"),
-            backgroundDelta: delta
+            backgroundDeltas: [delta]
         )
         let texts = textContents(result)
 
@@ -30,7 +30,7 @@ struct ResponseRenderingTests {
 
         let result = try ButtonHeistMCPServer.renderResponse(
             .ok(message: "done"),
-            backgroundDelta: delta
+            backgroundDeltas: [delta]
         )
         let texts = textContents(result)
 

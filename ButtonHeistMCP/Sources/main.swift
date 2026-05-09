@@ -170,10 +170,6 @@ struct ButtonHeistMCPServer {
         }
     }
 
-    static func renderResponse(_ response: FenceResponse, backgroundDelta: InterfaceDelta? = nil) throws -> CallTool.Result {
-        try renderResponse(response, backgroundDeltas: backgroundDelta.map { [$0] } ?? [])
-    }
-
     static func renderResponse(_ response: FenceResponse, backgroundDeltas: [InterfaceDelta]) throws -> CallTool.Result {
         var content: [Tool.Content] = []
 
