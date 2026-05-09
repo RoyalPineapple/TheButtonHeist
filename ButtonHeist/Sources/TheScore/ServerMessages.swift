@@ -182,15 +182,22 @@ public enum ErrorKind: String, Codable, Sendable, CaseIterable {
     case actionFailed
 }
 
-/// The outcome of executing an action command, including post-action diagnostics.
+/// Command-specific payload carried by an `ActionResult`.
 ///
-/// The three command-specific fields — `value`, `scrollSearchResult`, and
-/// `exploreResult` — are mutually exclusive: at most one is non-nil, depending
-/// on which command produced the result.
-///   - `value`        → typeText / setPasteboard / getPasteboard
-///   - `scrollSearchResult` → element_search / scroll_to_visible
-///   - `exploreResult`      → the explicit `explore` command
-public struct ActionResult: Codable, Sendable {
+/// Modeled as an enum so the "at most one" invariant is structural rather than
+/// documented. Wire shape stays flat (custom `ActionResult` Codable encodes
+/// each variant under its historical key).
+///   - `.value`        → typeText / setPasteboard / getPasteboard
+///   - `.scrollSearch` → element_search / scroll_to_visible
+///   - `.explore`      → the explicit `explore` command
+public enum ResultPayload: Sendable {
+    case value(String)
+    case scrollSearch(ScrollSearchResult)
+    case explore(ExploreResult)
+}
+
+/// The outcome of executing an action command, including post-action diagnostics.
+public struct ActionResult: Sendable {
     /// Whether the action was delivered and completed normally. `false` means
     /// the action reached the server but the handler reported failure — it is
     /// not a transport-level error (those surface as thrown errors).
@@ -202,8 +209,8 @@ public struct ActionResult: Codable, Sendable {
     public var message: String?
     /// Typed error classification (nil on success)
     public var errorKind: ErrorKind?
-    /// Current text field value after a typeText / set/getPasteboard operation
-    public var value: String?
+    /// Command-specific payload. At most one variant per result.
+    public var payload: ResultPayload?
     /// Compact delta describing what changed in the hierarchy after the action
     public var interfaceDelta: InterfaceDelta?
     /// Whether the UI was still animating when this result was produced.
@@ -213,10 +220,6 @@ public struct ActionResult: Codable, Sendable {
     public var screenName: String?
     /// Slugified screen name for machine use (e.g. "controls_demo")
     public var screenId: String?
-    /// Diagnostics from a scroll_to_visible / element_search search operation
-    public var scrollSearchResult: ScrollSearchResult?
-    /// Full element census from the explicit `explore` command
-    public var exploreResult: ExploreResult?
     /// True when the response represents a settled UI state — either the
     /// AX tree reached multi-cycle stability, or a screen transition
     /// preempted the settle loop and the new screen has been observed via
@@ -248,15 +251,141 @@ public struct ActionResult: Codable, Sendable {
         self.method = method
         self.message = message
         self.errorKind = errorKind
-        self.value = value
+        self.payload = Self.makePayload(
+            value: value, scrollSearch: scrollSearchResult, explore: exploreResult
+        )
         self.interfaceDelta = interfaceDelta
         self.animating = animating
         self.screenName = screenName
         self.screenId = screenId
-        self.scrollSearchResult = scrollSearchResult
-        self.exploreResult = exploreResult
         self.settled = settled
         self.settleTimeMs = settleTimeMs
+    }
+
+    /// Designated init taking the payload enum directly.
+    public init(
+        success: Bool,
+        method: ActionMethod,
+        message: String? = nil,
+        errorKind: ErrorKind? = nil,
+        payload: ResultPayload? = nil,
+        interfaceDelta: InterfaceDelta? = nil,
+        animating: Bool? = nil,
+        screenName: String? = nil,
+        screenId: String? = nil,
+        settled: Bool? = nil,
+        settleTimeMs: Int? = nil
+    ) {
+        self.success = success
+        self.method = method
+        self.message = message
+        self.errorKind = errorKind
+        self.payload = payload
+        self.interfaceDelta = interfaceDelta
+        self.animating = animating
+        self.screenName = screenName
+        self.screenId = screenId
+        self.settled = settled
+        self.settleTimeMs = settleTimeMs
+    }
+
+    private static func makePayload(
+        value: String?, scrollSearch: ScrollSearchResult?, explore: ExploreResult?
+    ) -> ResultPayload? {
+        if let value { return .value(value) }
+        if let scrollSearch { return .scrollSearch(scrollSearch) }
+        if let explore { return .explore(explore) }
+        return nil
+    }
+
+    // MARK: - Wire-Compat Accessors
+
+    /// Current text field value after a typeText / set/getPasteboard operation.
+    /// Setting replaces the entire payload so the "at most one" invariant
+    /// is preserved.
+    public var value: String? {
+        get {
+            if case .value(let string) = payload { return string }
+            return nil
+        }
+        set { payload = newValue.map(ResultPayload.value) }
+    }
+
+    /// Diagnostics from a scroll_to_visible / element_search search operation.
+    /// Setting replaces the entire payload.
+    public var scrollSearchResult: ScrollSearchResult? {
+        get {
+            if case .scrollSearch(let search) = payload { return search }
+            return nil
+        }
+        set { payload = newValue.map(ResultPayload.scrollSearch) }
+    }
+
+    /// Full element census from the explicit `explore` command.
+    /// Setting replaces the entire payload.
+    public var exploreResult: ExploreResult? {
+        get {
+            if case .explore(let explore) = payload { return explore }
+            return nil
+        }
+        set { payload = newValue.map(ResultPayload.explore) }
+    }
+}
+
+// MARK: - ActionResult Codable
+
+extension ActionResult: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case success, method, message, errorKind
+        case value, scrollSearchResult, exploreResult
+        case interfaceDelta, animating, screenName, screenId
+        case settled, settleTimeMs
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let value = try container.decodeIfPresent(String.self, forKey: .value)
+        let scrollSearch = try container.decodeIfPresent(
+            ScrollSearchResult.self, forKey: .scrollSearchResult
+        )
+        let explore = try container.decodeIfPresent(ExploreResult.self, forKey: .exploreResult)
+        self.init(
+            success: try container.decode(Bool.self, forKey: .success),
+            method: try container.decode(ActionMethod.self, forKey: .method),
+            message: try container.decodeIfPresent(String.self, forKey: .message),
+            errorKind: try container.decodeIfPresent(ErrorKind.self, forKey: .errorKind),
+            payload: Self.makePayload(value: value, scrollSearch: scrollSearch, explore: explore),
+            interfaceDelta: try container.decodeIfPresent(InterfaceDelta.self, forKey: .interfaceDelta),
+            animating: try container.decodeIfPresent(Bool.self, forKey: .animating),
+            screenName: try container.decodeIfPresent(String.self, forKey: .screenName),
+            screenId: try container.decodeIfPresent(String.self, forKey: .screenId),
+            settled: try container.decodeIfPresent(Bool.self, forKey: .settled),
+            settleTimeMs: try container.decodeIfPresent(Int.self, forKey: .settleTimeMs)
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(success, forKey: .success)
+        try container.encode(method, forKey: .method)
+        try container.encodeIfPresent(message, forKey: .message)
+        try container.encodeIfPresent(errorKind, forKey: .errorKind)
+        switch payload {
+        case .value(let string):
+            try container.encode(string, forKey: .value)
+        case .scrollSearch(let search):
+            try container.encode(search, forKey: .scrollSearchResult)
+        case .explore(let explore):
+            try container.encode(explore, forKey: .exploreResult)
+        case .none:
+            break
+        }
+        try container.encodeIfPresent(interfaceDelta, forKey: .interfaceDelta)
+        try container.encodeIfPresent(animating, forKey: .animating)
+        try container.encodeIfPresent(screenName, forKey: .screenName)
+        try container.encodeIfPresent(screenId, forKey: .screenId)
+        try container.encodeIfPresent(settled, forKey: .settled)
+        try container.encodeIfPresent(settleTimeMs, forKey: .settleTimeMs)
     }
 }
 
