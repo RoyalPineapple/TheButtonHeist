@@ -78,25 +78,25 @@ final class WaitForIntegrationTests: XCTestCase {
 
     // MARK: - 1. Element already present — returns immediately
 
-    func testWaitForAlreadyPresentReturnsImmediately() async {
+    func testWaitForAlreadyPresentReturnsImmediately() async throws {
         let label = addLabel("WaitFor-AlreadyPresent")
         defer { label.removeFromSuperview() }
 
-        let result = await waitFor(
+        let response = await waitFor(
             target: .matcher(ElementMatcher(label: "WaitFor-AlreadyPresent")),
             timeout: 5.0
         )
+        let result = try XCTUnwrap(response)
 
-        XCTAssertNotNil(result)
-        XCTAssertTrue(result?.success == true)
-        XCTAssertEqual(result?.method, .waitFor)
-        XCTAssertEqual(result?.message, "matched immediately")
-        XCTAssertNil(result?.errorKind)
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(result.method, .waitFor)
+        XCTAssertEqual(result.message, "matched immediately")
+        XCTAssertNil(result.errorKind)
     }
 
     // MARK: - 2. Element appears after a delay
 
-    func testWaitForElementAppearsAfterDelay() async {
+    func testWaitForElementAppearsAfterDelay() async throws {
         let result: ActionResult? = await withCheckedContinuation { continuation in
             Task { @MainActor in
                 // Schedule the label to appear after a short delay
@@ -105,12 +105,12 @@ final class WaitForIntegrationTests: XCTestCase {
                     self.addLabel("WaitFor-Delayed")
                 }
 
-                let r = await self.waitFor(
+                let response = await self.waitFor(
                     target: .matcher(ElementMatcher(label: "WaitFor-Delayed")),
                     timeout: 10.0
                 )
                 addTask.cancel()
-                continuation.resume(returning: r)
+                continuation.resume(returning: response)
             }
         }
 
@@ -119,36 +119,36 @@ final class WaitForIntegrationTests: XCTestCase {
             subview.removeFromSuperview()
         }
 
-        XCTAssertNotNil(result)
-        XCTAssertTrue(result?.success == true)
-        XCTAssertEqual(result?.method, .waitFor)
-        XCTAssertNotNil(result?.message)
-        XCTAssertTrue(result?.message?.contains("matched after") == true)
-        XCTAssertNil(result?.errorKind)
+        let unwrapped = try XCTUnwrap(result)
+        XCTAssertTrue(unwrapped.success)
+        XCTAssertEqual(unwrapped.method, .waitFor)
+        let message = try XCTUnwrap(unwrapped.message)
+        XCTAssertTrue(message.contains("matched after"))
+        XCTAssertNil(unwrapped.errorKind)
     }
 
     // MARK: - 3. wait_for absent: true on a present element — should timeout
 
-    func testWaitForAbsentOnPresentElementTimesOut() async {
+    func testWaitForAbsentOnPresentElementTimesOut() async throws {
         let label = addLabel("WaitFor-StillHere")
         defer { label.removeFromSuperview() }
 
-        let result = await waitFor(
+        let response = await waitFor(
             target: .matcher(ElementMatcher(label: "WaitFor-StillHere")),
             absent: true,
             timeout: 2.0
         )
+        let result = try XCTUnwrap(response)
 
-        XCTAssertNotNil(result)
-        XCTAssertFalse(result?.success == true)
-        XCTAssertEqual(result?.method, .waitFor)
-        XCTAssertEqual(result?.errorKind, .timeout)
-        XCTAssertTrue(result?.message?.contains("element still present") == true)
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .waitFor)
+        XCTAssertEqual(result.errorKind, .timeout)
+        XCTAssertTrue(result.message?.contains("element still present") == true)
     }
 
     // MARK: - 4. wait_for absent: true on an element that disappears
 
-    func testWaitForAbsentElementDisappears() async {
+    func testWaitForAbsentElementDisappears() async throws {
         let label = addLabel("WaitFor-GoingAway")
 
         let result: ActionResult? = await withCheckedContinuation { continuation in
@@ -158,39 +158,39 @@ final class WaitForIntegrationTests: XCTestCase {
                     label.removeFromSuperview()
                 }
 
-                let r = await self.waitFor(
+                let response = await self.waitFor(
                     target: .matcher(ElementMatcher(label: "WaitFor-GoingAway")),
                     absent: true,
                     timeout: 10.0
                 )
                 removeTask.cancel()
-                continuation.resume(returning: r)
+                continuation.resume(returning: response)
             }
         }
 
-        XCTAssertNotNil(result)
-        XCTAssertTrue(result?.success == true)
-        XCTAssertEqual(result?.method, .waitFor)
-        XCTAssertTrue(result?.message?.contains("absent confirmed") == true)
-        XCTAssertNil(result?.errorKind)
+        let unwrapped = try XCTUnwrap(result)
+        XCTAssertTrue(unwrapped.success)
+        XCTAssertEqual(unwrapped.method, .waitFor)
+        XCTAssertTrue(unwrapped.message?.contains("absent confirmed") == true)
+        XCTAssertNil(unwrapped.errorKind)
     }
 
     // MARK: - 5. wait_for respects timeout value
 
-    func testWaitForRespectsTimeout() async {
+    func testWaitForRespectsTimeout() async throws {
         let start = CFAbsoluteTimeGetCurrent()
 
-        let result = await waitFor(
+        let response = await waitFor(
             target: .matcher(ElementMatcher(label: "WaitFor-NonExistent-Element")),
             timeout: 2.0
         )
+        let result = try XCTUnwrap(response)
 
         let elapsed = CFAbsoluteTimeGetCurrent() - start
 
-        XCTAssertNotNil(result)
-        XCTAssertFalse(result?.success == true)
-        XCTAssertEqual(result?.errorKind, .timeout)
-        XCTAssertTrue(result?.message?.contains("element not found") == true)
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.errorKind, .timeout)
+        XCTAssertTrue(result.message?.contains("element not found") == true)
         // Should complete around 2s — allow generous margin for settle loop overhead
         XCTAssertGreaterThanOrEqual(elapsed, 1.5, "Should wait at least close to the timeout")
         XCTAssertLessThan(elapsed, 5.0, "Should not wait much longer than the timeout")
@@ -198,21 +198,21 @@ final class WaitForIntegrationTests: XCTestCase {
 
     // MARK: - 6. wait_for with heistId vs matcher — both paths resolve
 
-    func testWaitForWithMatcherByIdentifier() async {
+    func testWaitForWithMatcherByIdentifier() async throws {
         let label = addLabel("WaitFor-ById", identifier: "waitfor-test-id")
         defer { label.removeFromSuperview() }
 
-        let result = await waitFor(
+        let response = await waitFor(
             target: .matcher(ElementMatcher(identifier: "waitfor-test-id")),
             timeout: 5.0
         )
+        let result = try XCTUnwrap(response)
 
-        XCTAssertNotNil(result)
-        XCTAssertTrue(result?.success == true)
-        XCTAssertEqual(result?.message, "matched immediately")
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(result.message, "matched immediately")
     }
 
-    func testWaitForWithHeistId() async {
+    func testWaitForWithHeistId() async throws {
         let label = addLabel("WaitFor-HeistId")
         defer { label.removeFromSuperview() }
 
@@ -224,26 +224,21 @@ final class WaitForIntegrationTests: XCTestCase {
         let elements = insideJob.brains.stash.selectElements()
 
         // Find the heistId for our element
-        let heistId = elements.first(where: {
+        let heistId = try XCTUnwrap(elements.first(where: {
             $0.element.label == "WaitFor-HeistId"
-        })?.heistId
+        })?.heistId, "Could not find heistId for test label")
 
-        guard let heistId else {
-            XCTFail("Could not find heistId for test label")
-            return
-        }
-
-        let result = await waitFor(
+        let response = await waitFor(
             target: .heistId(heistId),
             timeout: 5.0
         )
+        let result = try XCTUnwrap(response)
 
-        XCTAssertNotNil(result)
-        XCTAssertTrue(result?.success == true)
-        XCTAssertEqual(result?.message, "matched immediately")
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(result.message, "matched immediately")
     }
 
-    func testWaitForAbsentWithHeistIdSucceedsAfterElementLeavesLiveTree() async {
+    func testWaitForAbsentWithHeistIdSucceedsAfterElementLeavesLiveTree() async throws {
         let label = addLabel("WaitFor-HeistId-GoingAway")
 
         guard insideJob.brains.refresh() != nil else {
@@ -251,14 +246,9 @@ final class WaitForIntegrationTests: XCTestCase {
             return
         }
         let elements = insideJob.brains.stash.selectElements()
-        let heistId = elements.first(where: {
+        let heistId = try XCTUnwrap(elements.first(where: {
             $0.element.label == "WaitFor-HeistId-GoingAway"
-        })?.heistId
-
-        guard let heistId else {
-            XCTFail("Could not find heistId for test label")
-            return
-        }
+        })?.heistId, "Could not find heistId for test label")
 
         let result: ActionResult? = await withCheckedContinuation { continuation in
             Task { @MainActor in
@@ -267,37 +257,37 @@ final class WaitForIntegrationTests: XCTestCase {
                     label.removeFromSuperview()
                 }
 
-                let r = await self.waitFor(
+                let response = await self.waitFor(
                     target: .heistId(heistId),
                     absent: true,
                     timeout: 10.0
                 )
                 removeTask.cancel()
-                continuation.resume(returning: r)
+                continuation.resume(returning: response)
             }
         }
 
-        XCTAssertNotNil(result)
-        XCTAssertTrue(result?.success == true)
-        XCTAssertEqual(result?.method, .waitFor)
-        XCTAssertTrue(result?.message?.contains("absent confirmed") == true)
-        XCTAssertNil(result?.errorKind)
+        let unwrapped = try XCTUnwrap(result)
+        XCTAssertTrue(unwrapped.success)
+        XCTAssertEqual(unwrapped.method, .waitFor)
+        XCTAssertTrue(unwrapped.message?.contains("absent confirmed") == true)
+        XCTAssertNil(unwrapped.errorKind)
     }
 
     // MARK: - Absent already absent returns immediately
 
-    func testWaitForAbsentAlreadyAbsentReturnsImmediately() async {
-        let result = await waitFor(
+    func testWaitForAbsentAlreadyAbsentReturnsImmediately() async throws {
+        let response = await waitFor(
             target: .matcher(ElementMatcher(label: "WaitFor-NeverExisted")),
             absent: true,
             timeout: 5.0
         )
+        let result = try XCTUnwrap(response)
 
-        XCTAssertNotNil(result)
-        XCTAssertTrue(result?.success == true)
-        XCTAssertEqual(result?.method, .waitFor)
-        XCTAssertEqual(result?.message, "absent confirmed after 0.0s")
-        XCTAssertNil(result?.errorKind)
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(result.method, .waitFor)
+        XCTAssertEqual(result.message, "absent confirmed after 0.0s")
+        XCTAssertNil(result.errorKind)
     }
 }
 #endif
