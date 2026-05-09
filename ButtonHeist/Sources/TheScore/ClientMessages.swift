@@ -240,10 +240,38 @@ public enum ElementTarget: Sendable, Equatable {
 // MARK: - ElementTarget Codable (flat wire format)
 
 extension ElementTarget: Codable {
-    private enum CodingKeys: String, CodingKey {
+    fileprivate enum CodingKeys: String, CodingKey {
         case heistId
         case label, identifier, value, traits, excludeTraits
         case ordinal
+
+        /// The matcher / heistId keys whose presence in a parent container
+        /// indicates an `ElementTarget` is flattened at that level. Excludes
+        /// `ordinal` because ordinal alone (without any matcher) isn't a
+        /// valid target.
+        static let allInlineKeys: [CodingKeys] = [
+            .heistId, .label, .identifier, .value, .traits, .excludeTraits,
+        ]
+    }
+
+    /// Wire keys whose presence (anywhere on a JSON object) indicates an
+    /// `ElementTarget` is encoded inline at that level. Used by wrapper
+    /// targets (`WaitForTarget`, `ScrollToVisibleTarget`,
+    /// `ElementSearchTarget`) that flatten an `ElementTarget` alongside their
+    /// own fields.
+    public static let inlineWireKeys: [String] = [
+        "heistId", "label", "identifier", "value", "traits", "excludeTraits",
+    ]
+
+    /// Decode an optional `ElementTarget` flattened into the same JSON object
+    /// the decoder is currently reading. Returns `nil` when none of the
+    /// matcher / heistId keys are present; throws if at least one key is
+    /// present but the resulting target fails ElementTarget's own validation.
+    public static func decodeInlineIfPresent(from decoder: Decoder) throws -> ElementTarget? {
+        let probe = try decoder.container(keyedBy: CodingKeys.self)
+        let hasTargetFields = CodingKeys.allInlineKeys.contains { probe.contains($0) }
+        guard hasTargetFields else { return nil }
+        return try ElementTarget(from: decoder)
     }
 
     public init(from decoder: Decoder) throws {
@@ -397,12 +425,13 @@ public struct WaitForTarget: Sendable {
 
 extension WaitForTarget: Codable {
     private enum CodingKeys: String, CodingKey {
-        case heistId, label, identifier, value, traits, excludeTraits
         case absent, timeout
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        // WaitForTarget requires an inline ElementTarget — defer to ElementTarget's
+        // own validation (it throws when no matcher/heistId keys are present).
         self.elementTarget = try ElementTarget(from: decoder)
         self.absent = try container.decodeIfPresent(Bool.self, forKey: .absent)
         self.timeout = try container.decodeIfPresent(Double.self, forKey: .timeout)
@@ -582,19 +611,8 @@ public struct ElementSearchTarget: Sendable {
 }
 
 extension ScrollToVisibleTarget: Codable {
-    private enum CodingKeys: String, CodingKey {
-        case heistId, label, identifier, value, traits, excludeTraits
-    }
-
     public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let hasTargetFields = container.contains(.heistId)
-            || container.contains(.label)
-            || container.contains(.identifier)
-            || container.contains(.value)
-            || container.contains(.traits)
-            || container.contains(.excludeTraits)
-        self.elementTarget = hasTargetFields ? try ElementTarget(from: decoder) : nil
+        self.elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -604,19 +622,12 @@ extension ScrollToVisibleTarget: Codable {
 
 extension ElementSearchTarget: Codable {
     private enum CodingKeys: String, CodingKey {
-        case heistId, label, identifier, value, traits, excludeTraits
         case direction
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let hasTargetFields = container.contains(.heistId)
-            || container.contains(.label)
-            || container.contains(.identifier)
-            || container.contains(.value)
-            || container.contains(.traits)
-            || container.contains(.excludeTraits)
-        self.elementTarget = hasTargetFields ? try ElementTarget(from: decoder) : nil
+        self.elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
         self.direction = try container.decodeIfPresent(ScrollSearchDirection.self, forKey: .direction)
     }
 
