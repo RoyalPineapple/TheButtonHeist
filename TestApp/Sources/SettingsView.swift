@@ -9,21 +9,21 @@ struct SettingsView: View {
         Form {
             Section("Appearance") {
                 Picker("Color Scheme", selection: $settings.colorScheme) {
-                    ForEach(AppSettings.AppColorScheme.allCases, id: \.self) { scheme in
+                    ForEach(AppColorScheme.allCases, id: \.self) { scheme in
                         Text(scheme.rawValue).tag(scheme)
                     }
                 }
                 .pickerStyle(.segmented)
 
                 Picker("Accent Color", selection: $settings.accentColor) {
-                    ForEach(AppSettings.AppAccentColor.allCases, id: \.self) { color in
+                    ForEach(AppAccentColor.allCases, id: \.self) { color in
                         Text(color.rawValue).tag(color)
                     }
                 }
                 .pickerStyle(.segmented)
 
                 Picker("Text Size", selection: $settings.textSize) {
-                    ForEach(AppSettings.AppTextSize.allCases, id: \.self) { size in
+                    ForEach(AppTextSize.allCases, id: \.self) { size in
                         Text(size.rawValue).tag(size)
                     }
                 }
