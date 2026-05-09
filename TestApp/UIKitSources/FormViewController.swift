@@ -11,7 +11,6 @@ class FormViewController: UIViewController {
         let textField = UITextField()
         textField.placeholder = "Name"
         textField.borderStyle = .roundedRect
-        textField.accessibilityLabel = "Name"
         return textField
     }()
 
@@ -20,15 +19,10 @@ class FormViewController: UIViewController {
         textField.placeholder = "Email"
         textField.borderStyle = .roundedRect
         textField.keyboardType = .emailAddress
-        textField.accessibilityLabel = "Email"
         return textField
     }()
 
-    private let subscribeSwitch: UISwitch = {
-        let toggle = UISwitch()
-        toggle.accessibilityLabel = "Subscribe to newsletter"
-        return toggle
-    }()
+    private let subscribeSwitch = UISwitch()
 
     private let subscribeSwitchLabel: UILabel = {
         let label = UILabel()
@@ -39,7 +33,6 @@ class FormViewController: UIViewController {
     private let frequencySegment: UISegmentedControl = {
         let segmentedControl = UISegmentedControl(items: ["Daily", "Weekly", "Monthly"])
         segmentedControl.selectedSegmentIndex = 0
-        segmentedControl.accessibilityLabel = "Notification frequency"
         return segmentedControl
     }()
 
@@ -101,6 +94,11 @@ class FormViewController: UIViewController {
 
         let switchStack = UIStackView(arrangedSubviews: [subscribeSwitchLabel, subscribeSwitch])
         switchStack.distribution = .equalSpacing
+        // Label provides the spoken name; switch provides the value/state. Pairing
+        // them via accessibilityElements gives VoiceOver one focusable control rather
+        // than announcing "Subscribe to newsletter" twice.
+        switchStack.isAccessibilityElement = false
+        switchStack.accessibilityElements = [subscribeSwitchLabel, subscribeSwitch]
 
         let frequencyStack = UIStackView(arrangedSubviews: [frequencyLabel, frequencySegment])
         frequencyStack.axis = .vertical

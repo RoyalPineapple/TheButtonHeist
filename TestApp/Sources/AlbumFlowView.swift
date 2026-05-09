@@ -8,6 +8,15 @@ struct Album: Identifiable {
     let artist: String
     let symbol: String
     let year: Int
+
+    static let featuredID = "last-light-protocol"
+
+    static var featured: Album {
+        Genre.catalog
+            .flatMap(\.albums)
+            .first { $0.id == featuredID }
+            ?? Album(id: "fallback", title: "Featured", artist: "Various", symbol: "music.note", year: 2024)
+    }
 }
 
 struct Genre: Identifiable {
@@ -66,7 +75,7 @@ struct AlbumFlowView: View {
     }
 
     private var featuredSection: some View {
-        let featured = Genre.catalog[2].albums[0] // Binary Sunset - Last Light Protocol
+        let featured = Album.featured
 
         return Button {
             playback = .playing(featured)

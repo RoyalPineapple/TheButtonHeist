@@ -45,7 +45,7 @@ struct PhotosView: View {
                                 isSelected: mode.selectedIDs.contains(photo.id),
                                 onTap: { cellTapped(photo) }
                             )
-                            .accessibilityLabel(cellLabel(for: photo))
+                            .accessibilityLabel(photo.name)
                             .accessibilityAddTraits(mode.isSelecting && mode.selectedIDs.contains(photo.id) ? .isSelected : [])
                             .accessibilityRemoveTraits(mode.isSelecting && !mode.selectedIDs.contains(photo.id) ? .isSelected : [])
                         }
@@ -114,12 +114,6 @@ struct PhotosView: View {
         mode = .browsing
     }
 
-    private func cellLabel(for photo: Photo) -> String {
-        if mode.isSelecting && mode.selectedIDs.contains(photo.id) {
-            return "\(photo.name), selected"
-        }
-        return photo.name
-    }
 }
 
 // MARK: - Subviews

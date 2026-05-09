@@ -186,7 +186,7 @@ struct MenuOrderView: View {
                         Spacer()
                         Text("\u{00D7}\(item.quantity)")
                             .foregroundStyle(.secondary)
-                        Text(formatPrice(item.lineTotal))
+                        Text(item.lineTotal.usdFormatted)
                             .monospacedDigit()
                     }
                     .accessibilityElement(children: .combine)
@@ -197,25 +197,25 @@ struct MenuOrderView: View {
                 HStack {
                     Text("Subtotal")
                     Spacer()
-                    Text(formatPrice(subtotal))
+                    Text(subtotal.usdFormatted)
                 }
                 HStack {
                     Text("Tax (8%)")
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Text(formatPrice(tax))
+                    Text(tax.usdFormatted)
                         .foregroundStyle(.secondary)
                 }
                 HStack {
                     Text("Total")
                         .fontWeight(.bold)
                     Spacer()
-                    Text(formatPrice(total))
+                    Text(total.usdFormatted)
                         .fontWeight(.bold)
                         .font(.title3)
                 }
                 .accessibilityElement(children: .combine)
-                .accessibilityValue(spokenPrice(total))
+                .accessibilityValue(total.usdSpoken)
             }
 
             Section {
@@ -240,7 +240,7 @@ struct MenuOrderView: View {
                 } label: {
                     HStack {
                         Spacer()
-                        Label("Confirm Payment — \(formatPrice(total))", systemImage: "creditcard")
+                        Label("Confirm Payment — \(total.usdFormatted)", systemImage: "creditcard")
                             .fontWeight(.semibold)
                         Spacer()
                     }
@@ -264,7 +264,7 @@ struct MenuOrderView: View {
                 .accessibilityLabel("Processing payment")
             Text("Processing payment…")
                 .font(.headline)
-            Text(formatPrice(total))
+            Text(total.usdFormatted)
                 .font(.title2)
                 .fontWeight(.bold)
             Spacer()
@@ -287,7 +287,7 @@ struct MenuOrderView: View {
             Text("Order \(orderNumber)")
                 .font(.headline)
                 .foregroundStyle(.secondary)
-            Text(formatPrice(total))
+            Text(total.usdFormatted)
                 .font(.title3)
             Text("\(totalQuantity) item\(totalQuantity == 1 ? "" : "s")")
                 .foregroundStyle(.secondary)
@@ -318,31 +318,31 @@ struct MenuOrderView: View {
                 Text("Subtotal")
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text(formatPrice(subtotal))
+                Text(subtotal.usdFormatted)
             }
             .accessibilityElement(children: .combine)
-            .accessibilityValue(spokenPrice(subtotal))
+            .accessibilityValue(subtotal.usdSpoken)
 
             HStack {
                 Text("Tax (8%)")
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text(formatPrice(tax))
+                Text(tax.usdFormatted)
                     .foregroundStyle(.secondary)
             }
             .accessibilityElement(children: .combine)
-            .accessibilityValue(spokenPrice(tax))
+            .accessibilityValue(tax.usdSpoken)
 
             HStack {
                 Text("Total")
                     .fontWeight(.semibold)
                 Spacer()
-                Text(formatPrice(total))
+                Text(total.usdFormatted)
                     .fontWeight(.semibold)
                     .font(.title3)
             }
             .accessibilityElement(children: .combine)
-            .accessibilityValue(spokenPrice(total))
+            .accessibilityValue(total.usdSpoken)
         } header: {
             Text("Order Summary")
         }
@@ -384,15 +384,6 @@ struct MenuOrderView: View {
         checkoutPhase = .browsing
     }
 
-    // MARK: - Formatting
-
-    private func formatPrice(_ value: Decimal) -> String {
-        value.formatted(.currency(code: "USD"))
-    }
-
-    private func spokenPrice(_ value: Decimal) -> String {
-        value.formatted(.currency(code: "USD").presentation(.fullName))
-    }
 }
 
 // MARK: - Menu Item Row

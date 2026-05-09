@@ -33,7 +33,7 @@ struct DashboardView: View {
     }
 
     private var activityTab: some View {
-        List(Array(ActivityItem.defaults.enumerated()), id: \.element.id) { _, item in
+        List(ActivityItem.defaults) { item in
             HStack(spacing: 12) {
                 Image(systemName: item.icon)
                     .font(.title3)

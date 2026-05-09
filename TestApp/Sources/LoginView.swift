@@ -125,22 +125,18 @@ struct LoginView: View {
 
     private func validate() -> FieldErrors? {
         var errors = FieldErrors()
-        var hasError = false
 
         if email.trimmingCharacters(in: .whitespaces).isEmpty {
             errors.email = "Email is required"
-            hasError = true
         } else if !email.contains("@") {
             errors.email = "Enter a valid email address"
-            hasError = true
         }
 
         if password.isEmpty {
             errors.password = "Password is required"
-            hasError = true
         }
 
-        return hasError ? errors : nil
+        return (errors.email != nil || errors.password != nil) ? errors : nil
     }
 
     private func signIn() {

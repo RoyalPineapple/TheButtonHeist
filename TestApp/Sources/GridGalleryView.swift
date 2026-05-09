@@ -42,7 +42,6 @@ struct GridGalleryView: View {
             }
             .padding(.horizontal, 12)
 
-            // Footer with count
             Text("\(filteredItems.count) items · \(selectedItems.count) selected")
                 .font(.caption)
                 .foregroundStyle(.secondary)

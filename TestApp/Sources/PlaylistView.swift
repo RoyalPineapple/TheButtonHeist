@@ -265,7 +265,7 @@ private struct Song: Identifiable {
     }
 
     static func random(track: Int) -> Song {
-        let pick = catalog.randomElement() ?? catalog[0]
+        let pick = catalog[Int.random(in: catalog.indices)]
         return Song(
             track: track,
             title: pick.title,

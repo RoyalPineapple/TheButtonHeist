@@ -41,7 +41,7 @@ struct CalculatorView: View {
                 HStack(spacing: 12) {
                     ForEach(row, id: \.self) { button in
                         CalcButtonView(button: button, isActive: isActive(button)) {
-                            handleButton(button)
+                            apply(button)
                         }
                     }
                 }
@@ -61,68 +61,41 @@ struct CalculatorView: View {
         }
     }
 
-    private func handleButton(_ button: CalcButton) {
+    private func apply(_ button: CalcButton) {
         switch button {
-        case .digit(let number): handleDigit(number)
-        case .decimal: handleDecimal()
-        case .clear: handleClear()
-        case .negate: handleNegate()
-        case .percent: handlePercent()
-        case .op(let operation): handleOperator(operation)
-        case .equals: handleEquals()
-        }
-    }
-
-    private func handleDigit(_ number: Int) {
-        switch entryState {
-        case .operatorPending(let accumulated, let operation):
-            display = "\(number)"
-            entryState = .enteringOperand(accumulated: accumulated, operation: operation)
-        case .clean, .enteringOperand:
-            if display == "0" {
+        case .digit(let number):
+            switch entryState {
+            case .operatorPending(let accumulated, let operation):
                 display = "\(number)"
-            } else {
-                display += "\(number)"
+                entryState = .enteringOperand(accumulated: accumulated, operation: operation)
+            case .clean, .enteringOperand:
+                display = (display == "0") ? "\(number)" : display + "\(number)"
             }
-        }
-    }
 
-    private func handleDecimal() {
-        switch entryState {
-        case .operatorPending(let accumulated, let operation):
-            display = "0."
-            entryState = .enteringOperand(accumulated: accumulated, operation: operation)
-        case .clean, .enteringOperand:
-            if !display.contains(".") {
-                display += "."
+        case .decimal:
+            switch entryState {
+            case .operatorPending(let accumulated, let operation):
+                display = "0."
+                entryState = .enteringOperand(accumulated: accumulated, operation: operation)
+            case .clean, .enteringOperand:
+                if !display.contains(".") { display += "." }
             }
-        }
-    }
 
-    private func handleClear() {
-        display = "0"
-        entryState = .clean
-    }
+        case .clear:
+            display = "0"
+            entryState = .clean
 
-    private func handleNegate() {
-        if display != "0" {
-            if display.hasPrefix("-") {
-                display.removeFirst()
-            } else {
-                display = "-" + display
+        case .negate:
+            guard display != "0" else { return }
+            display = display.hasPrefix("-") ? String(display.dropFirst()) : "-" + display
+
+        case .percent:
+            if let value = Double(display) {
+                display = formatNumber(value / 100)
             }
-        }
-    }
 
-    private func handlePercent() {
-        if let value = Double(display) {
-            let result = value / 100
-            display = formatNumber(result)
-        }
-    }
-
-    private func handleOperator(_ operation: Operation) {
-        if let displayValue = Double(display) {
+        case .op(let operation):
+            guard let displayValue = Double(display) else { return }
             let accumulated: Double
             switch entryState {
             case .enteringOperand(let current, let pending):
@@ -132,24 +105,20 @@ struct CalculatorView: View {
                 accumulated = displayValue
             }
             entryState = .operatorPending(accumulated: accumulated, operation: operation)
-        }
-    }
 
-    private func handleEquals() {
-        switch entryState {
-        case .enteringOperand(let accumulated, let pending):
-            if let displayValue = Double(display) {
-                let result = calculate(accumulated, displayValue, pending)
-                display = formatNumber(result)
+        case .equals:
+            switch entryState {
+            case .enteringOperand(let accumulated, let pending):
+                guard let displayValue = Double(display) else { return }
+                display = formatNumber(calculate(accumulated, displayValue, pending))
                 entryState = .clean
+            case .operatorPending(let accumulated, let pending):
+                // "5 + =" repeats the operand: 5 + 5 = 10 (matches iOS Calculator).
+                display = formatNumber(calculate(accumulated, accumulated, pending))
+                entryState = .clean
+            case .clean:
+                break
             }
-        case .operatorPending(let accumulated, let pending):
-            // "5 + =" repeats the operand: 5 + 5 = 10 (matches iOS Calculator)
-            let result = calculate(accumulated, accumulated, pending)
-            display = formatNumber(result)
-            entryState = .clean
-        case .clean:
-            break
         }
     }
 

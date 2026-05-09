@@ -76,9 +76,7 @@ struct NotesView: View {
     }
 
     private func deleteNotes(at offsets: IndexSet) {
-        for index in offsets.sorted().reversed() {
-            notes.remove(at: index)
-        }
+        notes.remove(atOffsets: offsets)
     }
 
     private func clearAll() {
@@ -112,11 +110,9 @@ struct NoteRowView: View {
 struct NoteDetailView: View {
     @State private var title: String
     @State private var content: String
-    private let noteId: UUID
     @Environment(\.dismiss) private var dismiss
 
     init(note: NoteItem) {
-        self.noteId = note.id
         self._title = State(initialValue: note.title)
         self._content = State(initialValue: note.body)
     }
