@@ -25,14 +25,14 @@ extension TheFence {
 
     private func parseSingleExpectationValue(_ expect: Any) throws -> ActionExpectation {
         if let str = expect as? String {
-            guard let tier = ExpectationTier(rawValue: str) else {
-                let validTiers = ExpectationTier.allCases.map(\.rawValue).joined(separator: ", ")
+            guard let expectation = ActionExpectation(stringTier: str) else {
+                let validTiers = ActionExpectation.stringTierValues.joined(separator: ", ")
                 throw FenceError.invalidRequest(
                     "Unknown expectation tier: \"\(str)\". " +
                     "Valid: \(validTiers), or {\"type\": \"element_updated\", …}"
                 )
             }
-            return tier.expectation
+            return expectation
         }
         if let dict = expect as? [String: Any] {
             return try parseSingleExpectation(dict)
@@ -53,8 +53,8 @@ extension TheFence {
                 "Got keys: \(dict.keys.sorted())"
             )
         }
-        if let tier = ExpectationTier(rawValue: typeString) {
-            return tier.expectation
+        if let expectation = ActionExpectation(stringTier: typeString) {
+            return expectation
         }
         switch typeString {
         case "element_updated":
