@@ -115,6 +115,12 @@ public final class TheHandoff {
     public private(set) var reconnectPolicy: ReconnectPolicy = .disabled
     private var missedPongCount: Int = 0
 
+    /// Continuations awaiting a terminal connection-phase transition. Each
+    /// continuation is resumed exactly once when the phase next becomes
+    /// `.connected`, `.failed`, or `.disconnected`. Resumption clears the
+    /// list so a subsequent transition sees no stale awaiters.
+    private var phaseAwaiters: [CheckedContinuation<Void, Error>] = []
+
     // MARK: - State Transitions
 
     private func transitionToConnecting(device: DiscoveredDevice) {
@@ -123,20 +129,53 @@ public final class TheHandoff {
 
     private func transitionToConnected(device: DiscoveredDevice, keepaliveTask: Task<Void, Never>) {
         connectionPhase = .connected(ConnectedSession(device: device, keepaliveTask: keepaliveTask))
+        resumePhaseAwaiters(with: .success(()))
     }
 
     private func transitionToFailed(_ failure: ConnectionFailure) {
+        let wasActive: Bool
+        switch connectionPhase {
+        case .connecting, .connected:
+            wasActive = true
+        case .disconnected, .failed:
+            wasActive = false
+        }
         if case .connected(let session) = connectionPhase {
             session.keepaliveTask.cancel()
         }
         connectionPhase = .failed(failure)
+        if wasActive {
+            resumePhaseAwaiters(with: .failure(failure.asConnectionError))
+        }
     }
 
     private func transitionToDisconnected() {
+        let wasActive: Bool
+        switch connectionPhase {
+        case .connecting, .connected:
+            wasActive = true
+        case .disconnected, .failed:
+            wasActive = false
+        }
         if case .connected(let session) = connectionPhase {
             session.keepaliveTask.cancel()
         }
         connectionPhase = .disconnected
+        if wasActive {
+            resumePhaseAwaiters(
+                with: .failure(ConnectionError.connectionFailed(
+                    "Disconnected during connection attempt. The app may have been busy, suspended, or restarted before the handshake completed."
+                ))
+            )
+        }
+    }
+
+    private func resumePhaseAwaiters(with result: Result<Void, Error>) {
+        let waiters = phaseAwaiters
+        phaseAwaiters = []
+        for continuation in waiters {
+            continuation.resume(with: result)
+        }
     }
 
     /// Mutate the connected session in place. No-op when not connected.
@@ -540,6 +579,87 @@ public final class TheHandoff {
         transitionToDisconnected()
     }
 
+    /// Suspend until the connection phase transitions to `.connected` (returns),
+    /// `.failed` (throws the mapped `ConnectionError`), or `.disconnected`
+    /// (throws `ConnectionError.connectionFailed`). If the phase is already
+    /// terminal at call time, returns or throws immediately without suspending.
+    ///
+    /// The `timeout` is enforced by scheduling a cancellable timeout task that
+    /// fails any registered awaiters with `ConnectionError.timeout`. If
+    /// `timeout` is below 5 seconds, it is clamped to 5.
+    /// Cancelling the calling task aborts the wait and propagates
+    /// `CancellationError`.
+    public func waitForConnectionResult(timeout: TimeInterval) async throws {
+        // Fast path: already terminal.
+        switch connectionPhase {
+        case .connected:
+            return
+        case .failed(let failure):
+            throw failure.asConnectionError
+        case .disconnected:
+            throw ConnectionError.connectionFailed(
+                "Disconnected during connection attempt. The app may have been busy, suspended, or restarted before the handshake completed."
+            )
+        case .connecting:
+            break
+        }
+
+        let timeoutDuration: Duration = .seconds(max(timeout, 5))
+        let timeoutTask = Task { @ButtonHeistActor [weak self] in
+            guard await Task.cancellableSleep(for: timeoutDuration) else { return }
+            self?.failPhaseAwaitersWithTimeout()
+        }
+        defer { timeoutTask.cancel() }
+
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                // Early-cancel guard: if the calling task was already cancelled
+                // before we registered the continuation, the cancellation
+                // handler may have already run against an empty awaiter list.
+                // Resume immediately rather than appending an orphaned
+                // continuation that would only resolve on phase transition or
+                // timeout.
+                if Task.isCancelled {
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
+                phaseAwaiters.append(continuation)
+            }
+        } onCancel: {
+            Task { @ButtonHeistActor [weak self] in
+                self?.cancelPhaseAwaiters()
+            }
+        }
+    }
+
+    /// Resume every registered awaiter with a `CancellationError`. Called
+    /// from the cancellation handler of `waitForConnectionResult`.
+    private func cancelPhaseAwaiters() {
+        resumePhaseAwaiters(with: .failure(CancellationError()))
+    }
+
+    /// Resume every registered awaiter with `ConnectionError.timeout` and
+    /// tear down any in-flight connection. Scheduled by
+    /// `waitForConnectionResult` and runs on the actor when the timeout
+    /// duration elapses without a phase transition.
+    ///
+    /// Tear-down is necessary so the timeout's failure is symmetric with the
+    /// caller's expectation: without it, an in-flight connection could still
+    /// transition to `.connected` after the awaiters have already failed,
+    /// leaving the handoff silently connected with an orphaned keepalive.
+    private func failPhaseAwaitersWithTimeout() {
+        resumePhaseAwaiters(with: .failure(ConnectionError.timeout))
+        // After resuming awaiters, drop any in-flight connection. The
+        // transitionToDisconnected call is now a no-op for awaiters because
+        // resumePhaseAwaiters cleared the list, but it still tears down the
+        // network connection and updates connectionPhase.
+        if case .connecting = connectionPhase {
+            connection?.disconnect()
+            connection = nil
+            transitionToDisconnected()
+        }
+    }
+
     /// Force-close the connection. Use when a timeout suggests the connection
     /// is dead but TCP hasn't noticed yet.
     public func forceDisconnect() {
@@ -587,8 +707,8 @@ public final class TheHandoff {
 
     /// Discover a device (optionally matching a filter) and connect to it.
     /// Starts discovery if not already active, polls until a matching device appears
-    /// or the timeout expires. Polls `connectionPhase` directly instead of
-    /// intercepting callbacks — the state machine carries the outcome.
+    /// or the timeout expires. Suspends on `waitForConnectionResult` for the
+    /// connection outcome.
     public func connectWithDiscovery(filter: String?, timeout: TimeInterval = 30) async throws {
         onStatus?("Searching for iOS devices...")
         let startedDiscovery = !hasActiveDiscoverySession
@@ -607,30 +727,8 @@ public final class TheHandoff {
         onStatus?("Connecting...")
 
         connect(to: device)
-
-        let connectionStart = DispatchTime.now().uptimeNanoseconds
-        let connectionTimeout = UInt64(max(timeout, 5) * 1_000_000_000)
-        while true {
-            switch connectionPhase {
-            case .connected:
-                onStatus?("Connected to \(displayName(for: device))")
-                return
-            case .failed(let failure):
-                throw failure.asConnectionError
-            case .disconnected:
-                throw ConnectionError.connectionFailed(
-                    "Disconnected during connection attempt. The app may have been busy, suspended, or restarted before the handshake completed."
-                )
-            case .connecting:
-                break
-            }
-            if DispatchTime.now().uptimeNanoseconds - connectionStart > connectionTimeout {
-                throw ConnectionError.timeout
-            }
-            guard await Task.cancellableSleep(for: .milliseconds(100)) else {
-                throw CancellationError()
-            }
-        }
+        try await waitForConnectionResult(timeout: timeout)
+        onStatus?("Connected to \(displayName(for: device))")
     }
 
     private func resolveReachableDevice(

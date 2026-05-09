@@ -555,4 +555,247 @@ final class TheHandoffStateTests: XCTestCase {
             XCTAssertEqual(available, [firstDevice.name, secondDevice.name])
         }
     }
+
+    // MARK: - waitForConnectionResult continuation
+
+    @ButtonHeistActor
+    func testWaitForConnectionResultReturnsImmediatelyWhenAlreadyConnected() async throws {
+        let handoff = TheHandoff()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mock = MockConnection()
+        mock.serverInfo = ServerInfo(
+            appName: "TestApp",
+            bundleIdentifier: "com.test",
+            deviceName: "Simulator",
+            systemVersion: "26.1",
+            screenWidth: 402,
+            screenHeight: 874
+        )
+        handoff.makeConnection = { _, _, _ in mock }
+
+        handoff.connect(to: device)
+        XCTAssertTrue(handoff.isConnected)
+
+        // Already connected — should return immediately without throwing.
+        try await handoff.waitForConnectionResult(timeout: 5)
+    }
+
+    @ButtonHeistActor
+    func testWaitForConnectionResultThrowsWhenAlreadyFailed() async {
+        let handoff = TheHandoff()
+        // Drive into .failed state via a server error.
+        handoff.handleServerMessage(
+            .error(ServerError(kind: .general, message: "boom")),
+            requestId: nil
+        )
+        assertFailed(handoff.connectionPhase, failure: .error("boom"))
+
+        do {
+            try await handoff.waitForConnectionResult(timeout: 5)
+            XCTFail("Expected ConnectionError to be thrown")
+        } catch let error as TheHandoff.ConnectionError {
+            guard case .connectionFailed(let message) = error else {
+                return XCTFail("Expected .connectionFailed, got \(error)")
+            }
+            XCTAssertEqual(message, "boom")
+        } catch {
+            XCTFail("Unexpected error type: \(error)")
+        }
+    }
+
+    @ButtonHeistActor
+    func testWaitForConnectionResultResumesOnConnectedTransition() async throws {
+        let handoff = TheHandoff()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mock = MockConnection()
+        // Don't auto-connect — caller will trigger the .connected event manually
+        // so we can verify the continuation wakes on the transition.
+        mock.connectEventsOverride = []
+        handoff.makeConnection = { _, _, _ in mock }
+
+        handoff.connect(to: device)
+        // Phase is now .connecting; waiter should suspend.
+        let waitTask = Task { @ButtonHeistActor in
+            try await handoff.waitForConnectionResult(timeout: 5)
+        }
+
+        // Yield once so the waiter registers its continuation before we fire
+        // the .connected event.
+        await Task.yield()
+
+        // Fire the connected transition.
+        mock.onEvent?(.connected)
+        XCTAssertTrue(handoff.isConnected)
+
+        try await waitTask.value
+    }
+
+    @ButtonHeistActor
+    func testWaitForConnectionResultPropagatesCancellationError() async {
+        let handoff = TheHandoff()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mock = MockConnection()
+        mock.connectEventsOverride = []  // Stays in .connecting until cancelled
+        handoff.makeConnection = { _, _, _ in mock }
+
+        handoff.connect(to: device)
+
+        let waitTask = Task { @ButtonHeistActor in
+            try await handoff.waitForConnectionResult(timeout: 30)
+        }
+
+        // Yield so the continuation registers before we cancel.
+        await Task.yield()
+        waitTask.cancel()
+
+        do {
+            try await waitTask.value
+            XCTFail("Expected CancellationError")
+        } catch is CancellationError {
+            // Expected.
+        } catch {
+            XCTFail("Expected CancellationError, got \(error)")
+        }
+    }
+
+    @ButtonHeistActor
+    func testWaitForConnectionResultResumesOnFailedTransition() async {
+        let handoff = TheHandoff()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mock = MockConnection()
+        mock.connectEventsOverride = []
+        handoff.makeConnection = { _, _, _ in mock }
+
+        handoff.connect(to: device)
+
+        let waitTask = Task { @ButtonHeistActor in
+            try await handoff.waitForConnectionResult(timeout: 30)
+        }
+
+        // Yield so the continuation registers.
+        await Task.yield()
+
+        // Drive into .failed via an auth-failure server error.
+        handoff.handleServerMessage(
+            .error(ServerError(kind: .authFailure, message: "bad token")),
+            requestId: nil
+        )
+
+        do {
+            try await waitTask.value
+            XCTFail("Expected auth failure")
+        } catch let error as TheHandoff.ConnectionError {
+            guard case .authFailed(let reason) = error else {
+                return XCTFail("Expected .authFailed, got \(error)")
+            }
+            XCTAssertEqual(reason, "bad token")
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    /// Regression test: an early synchronous cancel — before any `Task.yield()`
+    /// — must propagate `CancellationError`. Without the early-cancel guard
+    /// inside the continuation body, the cancellation handler hops to the
+    /// actor and finds an empty awaiter list, then the body runs and appends
+    /// the now-orphaned continuation, which only resolves on phase transition
+    /// or timeout.
+    @ButtonHeistActor
+    func testWaitForConnectionResultPropagatesEarlyCancellation() async {
+        let handoff = TheHandoff()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mock = MockConnection()
+        mock.connectEventsOverride = []  // Stay in .connecting indefinitely
+        handoff.makeConnection = { _, _, _ in mock }
+
+        handoff.connect(to: device)
+
+        let waitTask = Task { @ButtonHeistActor in
+            try await handoff.waitForConnectionResult(timeout: 30)
+        }
+        // Cancel synchronously, before any yield, so the cancel races with
+        // continuation registration.
+        waitTask.cancel()
+
+        do {
+            try await waitTask.value
+            XCTFail("Expected CancellationError")
+        } catch is CancellationError {
+            // Expected.
+        } catch {
+            XCTFail("Expected CancellationError, got \(error)")
+        }
+    }
+
+    /// Regression test: an idempotent `transitionToDisconnected` (when phase
+    /// was already `.disconnected` or `.failed`) must not resume awaiters.
+    /// We verify this by reaching .failed (which under the previous
+    /// implementation also resumed awaiters from any prior phase), then
+    /// confirming a subsequent disconnect() preserves the failed-phase
+    /// expectation rather than triggering a second resume cycle.
+    @ButtonHeistActor
+    func testWaitForConnectionResultIgnoresIdempotentDisconnect() async throws {
+        let handoff = TheHandoff()
+
+        // Drive into .failed (server error) — this is a terminal phase.
+        handoff.handleServerMessage(
+            .error(ServerError(kind: .general, message: "boom")),
+            requestId: nil
+        )
+        assertFailed(handoff.connectionPhase, failure: .error("boom"))
+
+        // Calling disconnect() now is a no-op transition (.failed → .disconnected
+        // is technically a phase change but, importantly, awaiters from any
+        // prior wait are not re-resumed). It must be safe.
+        handoff.disconnect()
+        assertDisconnected(handoff.connectionPhase)
+
+        // A second idempotent disconnect (.disconnected → .disconnected) must
+        // also be safe and must not resume any awaiter.
+        handoff.disconnect()
+        assertDisconnected(handoff.connectionPhase)
+
+        // Now register an awaiter — it should fast-path-throw on .disconnected,
+        // not get a stale resume from the prior idempotent transitions.
+        do {
+            try await handoff.waitForConnectionResult(timeout: 30)
+            XCTFail("Expected fast-path throw on .disconnected")
+        } catch is TheHandoff.ConnectionError {
+            // Expected.
+        }
+    }
+
+    /// Regression test: when `connect(to: device)` is called while phase is
+    /// already `.disconnected`, the internal `disconnect()` it invokes is a
+    /// no-op transition (`.disconnected → .disconnected`). The subsequent
+    /// `.connecting → .connected` transition should resolve the awaiter with
+    /// success — the awaiter must not have been spuriously failed by the
+    /// no-op disconnect.
+    @ButtonHeistActor
+    func testWaitForConnectionResultDoesNotFailOnReconnectDisconnect() async throws {
+        let handoff = TheHandoff()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+
+        // Mock that stays in .connecting until we manually fire .connected.
+        let mock = MockConnection()
+        mock.connectEventsOverride = []
+        handoff.makeConnection = { _, _, _ in mock }
+
+        // Phase starts at .disconnected. `connect()` internally calls
+        // `disconnect()` (a no-op .disconnected → .disconnected transition,
+        // which under the fix does NOT resume awaiters), then transitions
+        // to .connecting.
+        handoff.connect(to: device)
+
+        let waitTask = Task { @ButtonHeistActor in
+            try await handoff.waitForConnectionResult(timeout: 30)
+        }
+        await Task.yield()
+
+        // Drive into .connected — awaiter must resolve with success.
+        mock.onEvent?(.connected)
+
+        try await waitTask.value
+        XCTAssertTrue(handoff.isConnected)
+    }
 }

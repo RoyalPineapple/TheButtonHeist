@@ -619,27 +619,12 @@ public final class TheFence {
     private func connectDirect(to device: DiscoveredDevice) async throws {
         handoff.onStatus?("Connecting to \(device.name)...")
         handoff.connect(to: device)
-        let start = DispatchTime.now().uptimeNanoseconds
-        let timeout = UInt64(max(config.connectionTimeout, 5) * 1_000_000_000)
-        while true {
-            switch handoff.connectionPhase {
-            case .connected:
-                handoff.onStatus?("Connected to \(device.name)")
-                return
-            case .failed(let failure):
-                throw FenceError(failure.asConnectionError)
-            case .disconnected:
-                throw FenceError(TheHandoff.ConnectionError.connectionFailed("Disconnected during connection attempt"))
-            case .connecting:
-                break
-            }
-            if DispatchTime.now().uptimeNanoseconds - start > timeout {
-                throw FenceError(TheHandoff.ConnectionError.timeout)
-            }
-            guard await Task.cancellableSleep(for: .milliseconds(100)) else {
-                throw CancellationError()
-            }
+        do {
+            try await handoff.waitForConnectionResult(timeout: config.connectionTimeout)
+        } catch let error as TheHandoff.ConnectionError {
+            throw FenceError(error)
         }
+        handoff.onStatus?("Connected to \(device.name)")
     }
 
     // MARK: - Interface Cache

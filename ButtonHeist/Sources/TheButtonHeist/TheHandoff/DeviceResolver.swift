@@ -68,7 +68,9 @@ public struct DeviceResolver {
                 return try await finalSelection()
             }
 
-            try await Task.sleep(nanoseconds: 100_000_000)
+            guard await Task.cancellableSleep(nanoseconds: 100_000_000) else {
+                throw CancellationError()
+            }
         }
     }
 

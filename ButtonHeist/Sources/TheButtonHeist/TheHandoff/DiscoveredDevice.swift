@@ -232,42 +232,79 @@ extension DiscoveredDevice {
     @ButtonHeistActor
     func isReachable(timeout: TimeInterval = 1.5) async -> Bool {
         let connection = makeReachabilityConnection(self)
-        var reachable = false
-        var finished = false
+        let deviceName = name
+        let resolver = ReachabilityResolver()
 
-        connection.onEvent = { [weak connection, name] event in
-            guard let connection else { return }
+        // Wire the connection's onEvent callback to resolve the probe:
+        // `.message(.status)` resolves true; `.disconnected` resolves false.
+        // The resolver is one-shot so a subsequent `.disconnected` after a
+        // successful `.status` is a no-op. `[weak connection]` breaks the
+        // closure→connection→closure cycle so the probe connection deallocates
+        // promptly after `isReachable` returns.
+        connection.onEvent = { [weak connection] event in
             switch event {
             case .transportReady:
-                connection.send(.status)
+                connection?.send(.status)
             case .connected:
                 break
             case .message(let message, _, _):
                 if case .status = message {
-                    reachabilityLogger.debug("Status reachable: \(name, privacy: .public)")
-                    reachable = true
-                    finished = true
-                    connection.disconnect()
+                    reachabilityLogger.debug("Status reachable: \(deviceName, privacy: .public)")
+                    resolver.resolve(true)
                 }
             case .disconnected:
-                if !finished {
-                    finished = true
-                }
+                resolver.resolve(false)
             }
         }
 
         connection.connect()
 
-        let deadline = Date().addingTimeInterval(timeout)
-        while !finished && Date() < deadline {
-            guard await Task.cancellableSleep(nanoseconds: 100_000_000) else { break }
+        // Schedule a timeout that resolves false if the probe hasn't completed.
+        let timeoutTask = Task { @ButtonHeistActor in
+            guard await Task.cancellableSleep(for: .seconds(timeout)) else { return }
+            resolver.resolve(false)
         }
+        defer { timeoutTask.cancel() }
 
-        if !finished {
-            reachabilityLogger.debug("Status probe timeout: \(name, privacy: .public)")
-            connection.disconnect()
+        let reachable = await resolver.value
+        connection.disconnect()
+        if !reachable {
+            reachabilityLogger.debug("Status probe miss: \(deviceName, privacy: .public)")
         }
-
         return reachable
+    }
+}
+
+/// One-shot bool resolver backing `DiscoveredDevice.isReachable`. Holds a
+/// continuation that is resumed exactly once by whichever signal arrives
+/// first: a successful status message, a disconnect, or the timeout.
+@ButtonHeistActor
+private final class ReachabilityResolver {
+    private var continuation: CheckedContinuation<Bool, Never>?
+    private var pendingResult: Bool?
+
+    var value: Bool {
+        get async {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+                if let pendingResult {
+                    continuation.resume(returning: pendingResult)
+                    return
+                }
+                self.continuation = continuation
+            }
+        }
+    }
+
+    func resolve(_ value: Bool) {
+        if let continuation {
+            self.continuation = nil
+            continuation.resume(returning: value)
+            return
+        }
+        // Result arrived before any awaiter registered; remember it so the
+        // first `await value` returns immediately.
+        if pendingResult == nil {
+            pendingResult = value
+        }
     }
 }
