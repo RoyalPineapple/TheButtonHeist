@@ -88,6 +88,11 @@ struct RecordCommand: AsyncParsableCommand {
 
     private func logRecordingStats(path: String, payload: RecordingPayload) {
         let interactions = payload.interactionLog.map { ", interactions: \($0.count)" } ?? ""
-        logStatus("Recording saved: \(path) (duration: \(String(format: "%.1f", payload.duration))s, frames: \(payload.frameCount), resolution: \(payload.width)x\(payload.height), stop: \(payload.stopReason.rawValue)\(interactions))")
+        let duration = String(format: "%.1f", payload.duration)
+        let resolution = "\(payload.width)x\(payload.height)"
+        let stop = payload.stopReason.rawValue
+        logStatus(
+            "Recording saved: \(path) (duration: \(duration)s, frames: \(payload.frameCount), resolution: \(resolution), stop: \(stop)\(interactions))"
+        )
     }
 }

@@ -76,8 +76,8 @@ struct PlaylistView: View {
                     .onDelete { offsets in
                         let removed = offsets.map { songs[$0] }
                         songs.remove(atOffsets: offsets)
-                        for s in removed {
-                            if s.id == nowPlayingID { nowPlayingID = nil }
+                        for song in removed where song.id == nowPlayingID {
+                            nowPlayingID = nil
                         }
                     }
                     .onMove { from, to in

@@ -36,7 +36,8 @@ extension TheGetaway {
                 case .success(let payload):
                     self.sendMessage(.recording(payload), requestId: pending.requestId, respond: pending.respond)
                 case .failure(let error):
-                    self.sendMessage(.error(ServerError(kind: .recording, message: error.localizedDescription)), requestId: pending.requestId, respond: pending.respond)
+                    let serverError = ServerError(kind: .recording, message: error.localizedDescription)
+                    self.sendMessage(.error(serverError), requestId: pending.requestId, respond: pending.respond)
                 }
                 return
             }

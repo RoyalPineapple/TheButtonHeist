@@ -102,7 +102,8 @@ final class TheGetaway {
 
         transport.onRateLimited = { [weak self] _, respond in
             Task { @MainActor in
-                self?.sendMessage(.error(ServerError(kind: .general, message: "Rate limited: max \(SimpleSocketServer.maxMessagesPerSecond) messages per second")), respond: respond)
+                let message = "Rate limited: max \(SimpleSocketServer.maxMessagesPerSecond) messages per second"
+                self?.sendMessage(.error(ServerError(kind: .general, message: message)), respond: respond)
             }
         }
 

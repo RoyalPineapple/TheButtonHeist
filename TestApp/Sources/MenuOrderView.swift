@@ -471,8 +471,6 @@ private struct MenuItemRow: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .onChange(of: item.selectedSize) { _, newValue in
-                }
             }
 
             // Options (toggles)
@@ -544,8 +542,6 @@ private struct MenuItemRow: View {
                     }
                     .accessibilityLabel("\(item.name) quantity")
                     .accessibilityValue(String(item.quantity))
-                    .onChange(of: item.quantity) { _, newValue in
-                    }
 
                     if item.quantity > 0 {
                         Button(role: .destructive) {
