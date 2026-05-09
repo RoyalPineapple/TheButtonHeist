@@ -51,6 +51,16 @@ public enum DisconnectReason: Error, LocalizedError {
     }
 }
 
+/// Single ordered event emitted from an NWConnection's network-queue
+/// callbacks. Routing both state updates and receive callbacks through one
+/// stream means a `.cancelled` cannot land on the actor before a `.ready`
+/// for the same connection — a race the prior per-event Task bridge could
+/// lose during reconnect.
+enum DeviceConnectionEvent: Sendable {
+    case state(NWConnection.State, connection: NWConnection)
+    case received(content: Data?, isComplete: Bool, error: NWError?, connection: NWConnection)
+}
+
 /// Connection client using Network framework.
 @ButtonHeistActor
 public final class DeviceConnection: DeviceConnecting {
@@ -89,6 +99,15 @@ public final class DeviceConnection: DeviceConnecting {
 
     private let expectedFingerprint: String?
 
+    /// Single consumer Task driving NW callbacks into the actor in order.
+    /// Replaced on each `connect()`; cancelled in `disconnect()`. The for-await
+    /// loop also exits when the per-connection event continuation is finished.
+    private var eventConsumerTask: Task<Void, Never>?
+
+    /// Continuation tied to the current connection attempt. Yielded to from
+    /// NWConnection's `.global()` callbacks; finished when we tear down.
+    private var eventContinuation: AsyncStream<DeviceConnectionEvent>.Continuation?
+
     public init(device: DiscoveredDevice, token: String? = nil, driverId: String? = nil) {
         self.device = device
         self.token = token
@@ -114,9 +133,29 @@ public final class DeviceConnection: DeviceConnecting {
 
         let conn = NWConnection(to: device.endpoint, using: parameters)
 
-        conn.stateUpdateHandler = { [weak self] state in
-            Task { [weak self] in
-                await self?.handleStateChange(state)
+        // Tear down any prior consumer (defensive — a fresh connect should
+        // not observe events from the previous attempt).
+        eventConsumerTask?.cancel()
+        eventContinuation?.finish()
+
+        let (stream, continuation) = AsyncStream<DeviceConnectionEvent>.makeStream(
+            bufferingPolicy: .unbounded
+        )
+        eventContinuation = continuation
+
+        conn.stateUpdateHandler = { state in
+            continuation.yield(.state(state, connection: conn))
+        }
+
+        eventConsumerTask = Task { @ButtonHeistActor [weak self] in
+            for await event in stream {
+                guard let self else { return }
+                switch event {
+                case .state(let state, let connection):
+                    self.handleStateChange(state, connection: connection)
+                case .received(let content, let isComplete, let error, let connection):
+                    self.handleReceive(content: content, isComplete: isComplete, error: error, connection: connection)
+                }
             }
         }
 
@@ -134,6 +173,10 @@ public final class DeviceConnection: DeviceConnecting {
             break
         }
         connectionState = .disconnected
+        eventContinuation?.finish()
+        eventContinuation = nil
+        eventConsumerTask?.cancel()
+        eventConsumerTask = nil
     }
 
     public func send(_ message: ClientMessage, requestId: String? = nil) {
@@ -159,12 +202,32 @@ public final class DeviceConnection: DeviceConnecting {
 
     // MARK: - Private
 
-    private func handleStateChange(_ state: NWConnection.State) {
+    /// The NWConnection currently owned by this state machine, regardless of
+    /// phase. Used to filter stale callbacks from prior connect attempts.
+    private var currentConnection: NWConnection? {
+        switch connectionState {
+        case .connecting(let connection): return connection
+        case .connected(let active): return active.connection
+        case .disconnected: return nil
+        }
+    }
+
+    /// Internal for testing: state updates are normally dispatched by the
+    /// AsyncStream consumer in `connect()`. Tests inject states directly.
+    func handleStateChange(_ state: NWConnection.State, connection: NWConnection? = nil) {
+        // If a connection was supplied (production path), ignore callbacks
+        // from a prior connect attempt. The consumer Task is recreated on
+        // every connect, so stale callbacks here would only be possible if NW
+        // flushed events for a previously-cancelled connection before the
+        // continuation finished.
+        if let connection, let current = currentConnection, current !== connection {
+            return
+        }
         switch state {
         case .ready:
-            guard case .connecting(let connection) = connectionState else { return }
+            guard case .connecting(let conn) = connectionState else { return }
             logger.info("Connected")
-            connectionState = .connected(ActiveConnection(connection: connection))
+            connectionState = .connected(ActiveConnection(connection: conn))
             onEvent?(.transportReady)
             startReceiving()
         case .failed(let error):
@@ -199,10 +262,12 @@ public final class DeviceConnection: DeviceConnecting {
     }
 
     private func receiveNext(connection: NWConnection) {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] content, _, isComplete, error in
-            Task { [weak self] in
-                await self?.handleReceive(content: content, isComplete: isComplete, error: error, connection: connection)
-            }
+        // Yield receive callbacks onto the same ordered stream as state
+        // changes; the consumer Task in `connect()` dispatches them back into
+        // the actor in arrival order.
+        let continuation = eventContinuation
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { content, _, isComplete, error in
+            continuation?.yield(.received(content: content, isComplete: isComplete, error: error, connection: connection))
         }
     }
 
