@@ -41,7 +41,6 @@ struct RecordCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     func run() async throws {
-        // Step 1: Start recording
         var startRequest: [String: Any] = [
             "command": TheFence.Command.startRecording.rawValue,
             "fps": fps,
@@ -57,7 +56,6 @@ struct RecordCommand: AsyncParsableCommand {
         )
         defer { fence.stop() }
 
-        // Step 2: Wait for the device to auto-stop (via inactivity timeout or max duration)
         let payload = try await fence.waitForRecording(timeout: maxDuration + 30)
 
         guard let videoData = Data(base64Encoded: payload.videoData) else {
@@ -89,13 +87,7 @@ struct RecordCommand: AsyncParsableCommand {
     }
 
     private func logRecordingStats(path: String, payload: RecordingPayload) {
-        logStatus("Recording saved: \(path)")
-        logStatus("  Duration: \(String(format: "%.1f", payload.duration))s")
-        logStatus("  Frames: \(payload.frameCount)")
-        logStatus("  Resolution: \(payload.width)x\(payload.height)")
-        logStatus("  Stop reason: \(payload.stopReason.rawValue)")
-        if let log = payload.interactionLog {
-            logStatus("  Interactions: \(log.count)")
-        }
+        let interactions = payload.interactionLog.map { ", interactions: \($0.count)" } ?? ""
+        logStatus("Recording saved: \(path) (duration: \(String(format: "%.1f", payload.duration))s, frames: \(payload.frameCount), resolution: \(payload.width)x\(payload.height), stop: \(payload.stopReason.rawValue)\(interactions))")
     }
 }

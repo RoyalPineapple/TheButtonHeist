@@ -17,7 +17,6 @@ struct ScreenshotCommand: AsyncParsableCommand {
     func run() async throws {
         var request: [String: Any] = ["command": TheFence.Command.getScreen.rawValue]
         if let outputPath = output {
-            // When saving to file, TheFence handles the write and returns .screenshot
             request["output"] = outputPath
             try await CLIRunner.run(
                 connection: connection,
@@ -26,7 +25,6 @@ struct ScreenshotCommand: AsyncParsableCommand {
                 statusMessage: "Requesting screenshot..."
             )
         } else {
-            // When writing to stdout, we need the raw PNG data
             let (fence, response) = try await CLIRunner.execute(
                 connection: connection,
                 request: request,

@@ -15,9 +15,6 @@ struct StopRecordingCommand: AsyncParsableCommand {
             "command": TheFence.Command.stopRecording.rawValue,
         ]
 
-        // stop_recording via TheFence sends the stop signal and waits for the
-        // recording payload. Since we have no output path, it returns .recordingData.
-        // For the standalone stop command, we just need to confirm the stop was sent.
         try await CLIRunner.run(
             connection: connection,
             format: .human,
