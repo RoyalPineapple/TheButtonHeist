@@ -102,9 +102,11 @@ final class TheMuscle {
 
     /// Outstanding "wait then disconnect" tasks. Each entry is a Task spawned by
     /// `scheduleDelayedDisconnect(_:)` that will fire `disconnectClient` after
-    /// `disconnectGracePeriod`. Entries remove themselves on completion; on
-    /// `tearDown()` every outstanding task is cancelled so a torn-down
-    /// TheMuscle never disconnects against a stale client ID.
+    /// `disconnectGracePeriod`. Every task self-cleans on completion or
+    /// cancellation by removing its own handle from this set in a `defer`
+    /// block running on the MainActor; on `tearDown()` every outstanding task
+    /// is cancelled so a torn-down TheMuscle never disconnects against a
+    /// stale client ID.
     private var lockoutTasks: Set<Task<Void, Never>> = []
 
     // MARK: - Computed Client Accessors
@@ -383,6 +385,11 @@ final class TheMuscle {
             task.cancel()
         }
         lockoutTasks.removeAll()
+        // Cancel the release timer (if draining) explicitly before tearing down
+        // the rest of the session so a fired timer can't see a half-released
+        // TheMuscle. `releaseSession()` also calls this, but stating it here
+        // documents the intent at the shutdown boundary.
+        cancelTimerIfDraining()
         releaseSession()
         dismissAlert()
     }
@@ -395,19 +402,13 @@ final class TheMuscle {
     /// in `lockoutTasks` until the body completes (or `tearDown()` cancels
     /// it), so a torn-down TheMuscle never fires a stale disconnect.
     private func scheduleDelayedDisconnect(_ clientId: Int) {
-        let task = Task { [weak self] in
+        var task: Task<Void, Never>!
+        task = Task { @MainActor [weak self] in
+            defer { self?.lockoutTasks.remove(task) }
             guard await Task.cancellableSleep(for: TheMuscle.disconnectGracePeriod) else { return }
             self?.disconnectClient?(clientId)
         }
         lockoutTasks.insert(task)
-        // The task removes itself from the tracking set once it finishes
-        // (whether by completion or by cancellation). We can't reference
-        // the handle inside its own closure without a capture cycle, so
-        // chain the cleanup as a sibling Task that simply awaits it.
-        Task { [weak self] in
-            _ = await task.value
-            self?.lockoutTasks.remove(task)
-        }
     }
 
     // MARK: - Status Accessors
