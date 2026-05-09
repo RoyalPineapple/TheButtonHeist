@@ -222,8 +222,8 @@ public actor SimpleSocketServer {
     }
 
     /// Try to fail the originating request explicitly when a response exceeds the send cap.
-    /// Recording responses get `.recordingError` because they use a recording-specific wait path.
-    /// Other responses get a request-scoped `.error`, allowing the client to fail the pending
+    /// Recording responses get `.recording` kind because they use a recording-specific wait path.
+    /// Other responses get a request-scoped `.general` kind, allowing the client to fail the pending
     /// request directly instead of surfacing a generic timeout.
     private func sendOversizedResponseError(
         clientId: Int,
@@ -239,20 +239,21 @@ public actor SimpleSocketServer {
             return
         }
         let message = "Response too large to send over the socket (\(byteCount) bytes)"
+        let kind: ErrorKind
         switch envelope.message {
-        case .recording, .recordingStarted, .recordingStopped, .recordingError:
-            sendErrorEnvelope(
-                clientId: clientId,
-                envelope: ResponseEnvelope(requestId: envelope.requestId, message: .recordingError(message)),
-                state: state
-            )
+        case .recording, .recordingStarted, .recordingStopped:
+            kind = .recording
         default:
-            sendErrorEnvelope(
-                clientId: clientId,
-                envelope: ResponseEnvelope(requestId: envelope.requestId, message: .error(message)),
-                state: state
-            )
+            kind = .general
         }
+        sendErrorEnvelope(
+            clientId: clientId,
+            envelope: ResponseEnvelope(
+                requestId: envelope.requestId,
+                message: .error(ServerError(kind: kind, message: message))
+            ),
+            state: state
+        )
     }
 
     private func sendErrorEnvelope(clientId: Int, envelope: ResponseEnvelope, state: ClientState) {

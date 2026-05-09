@@ -181,7 +181,7 @@ Auth messages use the standard newline-delimited JSON format wrapped in envelope
 {"buttonHeistVersion":"<calver>","requestId":null,"type":"serverHello"}
 {"buttonHeistVersion":"<calver>","requestId":null,"type":"authRequired"}
 {"buttonHeistVersion":"<calver>","requestId":null,"type":"authApproved","payload":{"token":"A1B2C3D4-E5F6-..."}}
-{"buttonHeistVersion":"<calver>","requestId":null,"type":"authFailed","payload":"Invalid token. Retry without a token to request a fresh session."}
+{"buttonHeistVersion":"<calver>","requestId":null,"type":"error","payload":{"kind":"authFailure","message":"Invalid token. Retry without a token to request a fresh session."}}
 ```
 
 ### Client → Server (RequestEnvelope)

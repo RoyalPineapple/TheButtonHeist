@@ -273,7 +273,7 @@ public final class DeviceConnection: DeviceConnecting {
                 logger.error("Failed to decode: \(str.prefix(200))")
             }
             let detail = String(data: data.prefix(200), encoding: .utf8) ?? "<binary data>"
-            onEvent?(.message(.error("Failed to decode server message: \(detail)"), requestId: nil, backgroundDelta: nil))
+            onEvent?(.message(.error(ServerError(kind: .general, message: "Failed to decode server message: \(detail)")), requestId: nil, backgroundDelta: nil))
             return
         }
 
@@ -305,11 +305,11 @@ public final class DeviceConnection: DeviceConnecting {
             } else {
                 onEvent?(.message(.authRequired, requestId: nil, backgroundDelta: nil))
             }
-        case .authFailed(let reason):
-            logger.error("Auth failed: \(reason)")
-            onEvent?(.message(.authFailed(reason), requestId: nil, backgroundDelta: nil))
+        case .error(let serverError) where serverError.kind == .authFailure:
+            logger.error("Auth failed: \(serverError.message)")
+            onEvent?(.message(.error(serverError), requestId: nil, backgroundDelta: nil))
             disconnect()
-            onEvent?(.disconnected(.authFailed(reason)))
+            onEvent?(.disconnected(.authFailed(serverError.message)))
         case .authApproved(let payload):
             logger.info("Auth approved via UI, received token")
             token = payload.token

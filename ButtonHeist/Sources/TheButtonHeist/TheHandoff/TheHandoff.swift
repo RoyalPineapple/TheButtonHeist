@@ -491,15 +491,21 @@ public final class TheHandoff {
         case .recording(let payload):
             mutateConnectedSession { $0.recordingPhase = .idle }
             onRecording?(payload)
-        case .recordingError(let message):
-            mutateConnectedSession { $0.recordingPhase = .idle }
-            onRecordingError?(message)
-        case .error(let message):
-            if let requestId {
-                onRequestError?(message, requestId)
-            } else {
-                transitionToFailed(.error(message))
-                onError?(message)
+        case .error(let serverError):
+            switch serverError.kind {
+            case .recording:
+                mutateConnectedSession { $0.recordingPhase = .idle }
+                onRecordingError?(serverError.message)
+            case .authFailure:
+                transitionToFailed(.authFailed(serverError.message))
+                onAuthFailed?(serverError.message)
+            default:
+                if let requestId {
+                    onRequestError?(serverError.message, requestId)
+                } else {
+                    transitionToFailed(.error(serverError.message))
+                    onError?(serverError.message)
+                }
             }
         case .authApproved(let payload):
             token = payload.token
@@ -507,9 +513,6 @@ public final class TheHandoff {
         case .sessionLocked(let payload):
             transitionToFailed(.sessionLocked(payload.message))
             onSessionLocked?(payload)
-        case .authFailed(let reason):
-            transitionToFailed(.authFailed(reason))
-            onAuthFailed?(reason)
         case .interaction(let event):
             onInteraction?(event)
         case .status(let payload):

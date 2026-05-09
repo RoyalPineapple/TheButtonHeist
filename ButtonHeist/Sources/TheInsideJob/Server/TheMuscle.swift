@@ -293,7 +293,7 @@ final class TheMuscle {
     private func processAuthentication(_ clientId: Int, payload: AuthenticatePayload, respond: @escaping @Sendable (Data) -> Void) {
         guard let phase = clients[clientId] else {
             logger.warning("Client \(clientId) has no registered address, rejecting auth")
-            sendMessage(.authFailed("Connection rejected."), respond: respond)
+            sendMessage(.error(ServerError(kind: .authFailure, message: "Connection rejected.")), respond: respond)
             Task { [weak self] in
                 guard await Task.cancellableSleep(for: TheMuscle.disconnectGracePeriod) else { return }
                 self?.disconnectClient?(clientId)
@@ -302,7 +302,7 @@ final class TheMuscle {
         }
         let address = phase.address
         if isLockedOut(address: address) {
-            sendMessage(.authFailed("Too many failed attempts. Try again later."), respond: respond)
+            sendMessage(.error(ServerError(kind: .authFailure, message: "Too many failed attempts. Try again later.")), respond: respond)
             logger.warning("Client \(clientId) locked out (address: \(address)), rejecting")
             Task { [weak self] in
                 guard await Task.cancellableSleep(for: TheMuscle.disconnectGracePeriod) else { return }
@@ -329,7 +329,7 @@ final class TheMuscle {
             if attempts >= TheMuscle.maxFailedAttempts {
                 logger.warning("Address \(address) locked out after \(attempts) failed attempts")
             }
-            sendMessage(.authFailed("Invalid token. Retry without a token to request a fresh session."), respond: respond)
+            sendMessage(.error(ServerError(kind: .authFailure, message: "Invalid token. Retry without a token to request a fresh session.")), respond: respond)
             logger.warning("Client \(clientId) sent invalid token, rejected (attempt \(attempts))")
             Task { [weak self] in
                 guard await Task.cancellableSleep(for: TheMuscle.disconnectGracePeriod) else { return }
@@ -377,7 +377,7 @@ final class TheMuscle {
     func denyClient(_ clientId: Int) {
         guard case .pendingApproval(let address, let respond, _, _) = clients[clientId] else { return }
         clients[clientId] = .helloValidated(address: address)
-        sendMessage(.authFailed("Connection denied by user"), respond: respond)
+        sendMessage(.error(ServerError(kind: .authFailure, message: "Connection denied by user")), respond: respond)
         logger.info("Client \(clientId) denied via UI")
         Task { [weak self] in
             guard await Task.cancellableSleep(for: TheMuscle.disconnectGracePeriod) else { return }
@@ -418,7 +418,7 @@ final class TheMuscle {
     private func handleWatchRequest(_ clientId: Int, payload: WatchPayload, respond: @escaping @Sendable (Data) -> Void) {
         if restrictWatchers {
             guard let phase = clients[clientId] else {
-                sendMessage(.authFailed("Connection rejected."), respond: respond)
+                sendMessage(.error(ServerError(kind: .authFailure, message: "Connection rejected.")), respond: respond)
                 Task { [weak self] in
                     guard await Task.cancellableSleep(for: TheMuscle.disconnectGracePeriod) else { return }
                     self?.disconnectClient?(clientId)
@@ -427,7 +427,7 @@ final class TheMuscle {
             }
             let address = phase.address
             if isLockedOut(address: address) {
-                sendMessage(.authFailed("Too many failed attempts. Try again later."), respond: respond)
+                sendMessage(.error(ServerError(kind: .authFailure, message: "Too many failed attempts. Try again later.")), respond: respond)
                 logger.warning("Observer \(clientId) locked out (address: \(address)), rejecting")
                 Task { [weak self] in
                     guard await Task.cancellableSleep(for: TheMuscle.disconnectGracePeriod) else { return }
@@ -436,7 +436,7 @@ final class TheMuscle {
                 return
             }
             guard !payload.token.isEmpty else {
-                sendMessage(.authFailed("Watch mode requires a token."), respond: respond)
+                sendMessage(.error(ServerError(kind: .authFailure, message: "Watch mode requires a token.")), respond: respond)
                 logger.warning("Observer \(clientId) sent no token with restrictWatchers=true, rejected")
                 Task { [weak self] in
                     guard await Task.cancellableSleep(for: TheMuscle.disconnectGracePeriod) else { return }
@@ -449,7 +449,7 @@ final class TheMuscle {
                 if attempts >= TheMuscle.maxFailedAttempts {
                     logger.warning("Address \(address) locked out after \(attempts) failed watch attempts")
                 }
-                sendMessage(.authFailed("Invalid token."), respond: respond)
+                sendMessage(.error(ServerError(kind: .authFailure, message: "Invalid token.")), respond: respond)
                 logger.warning("Observer \(clientId) sent invalid token, rejected (attempt \(attempts))")
                 Task { [weak self] in
                     guard await Task.cancellableSleep(for: TheMuscle.disconnectGracePeriod) else { return }

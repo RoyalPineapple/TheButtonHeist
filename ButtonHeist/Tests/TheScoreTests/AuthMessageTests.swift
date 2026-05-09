@@ -23,29 +23,31 @@ final class AuthMessageTests: XCTestCase {
         XCTAssertTrue(json.contains("authRequired"))
     }
 
-    // MARK: - authFailed
+    // MARK: - error(ServerError) — authFailure
 
     func testAuthFailedEncodeDecode() throws {
-        let message = ServerMessage.authFailed("Invalid token")
+        let message = ServerMessage.error(ServerError(kind: .authFailure, message: "Invalid token"))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
 
-        if case .authFailed(let reason) = decoded {
-            XCTAssertEqual(reason, "Invalid token")
+        if case .error(let serverError) = decoded {
+            XCTAssertEqual(serverError.kind, .authFailure)
+            XCTAssertEqual(serverError.message, "Invalid token")
         } else {
-            XCTFail("Expected authFailed, got \(decoded)")
+            XCTFail("Expected error, got \(decoded)")
         }
     }
 
     func testAuthFailedEmptyReason() throws {
-        let message = ServerMessage.authFailed("")
+        let message = ServerMessage.error(ServerError(kind: .authFailure, message: ""))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
 
-        if case .authFailed(let reason) = decoded {
-            XCTAssertEqual(reason, "")
+        if case .error(let serverError) = decoded {
+            XCTAssertEqual(serverError.kind, .authFailure)
+            XCTAssertEqual(serverError.message, "")
         } else {
-            XCTFail("Expected authFailed, got \(decoded)")
+            XCTFail("Expected error, got \(decoded)")
         }
     }
 
@@ -192,14 +194,15 @@ final class AuthMessageTests: XCTestCase {
             XCTFail("Step 3a failed: expected info")
         }
 
-        // Step 3b: Or server sends authFailed
-        let failMsg = ServerMessage.authFailed("Token mismatch")
+        // Step 3b: Or server sends an authFailure error
+        let failMsg = ServerMessage.error(ServerError(kind: .authFailure, message: "Token mismatch"))
         let failData = try JSONEncoder().encode(failMsg)
         let decodedFail = try JSONDecoder().decode(ServerMessage.self, from: failData)
-        if case .authFailed(let reason) = decodedFail {
-            XCTAssertEqual(reason, "Token mismatch")
+        if case .error(let serverError) = decodedFail {
+            XCTAssertEqual(serverError.kind, .authFailure)
+            XCTAssertEqual(serverError.message, "Token mismatch")
         } else {
-            XCTFail("Step 3b failed: expected authFailed")
+            XCTFail("Step 3b failed: expected error(authFailure)")
         }
     }
 
@@ -218,14 +221,15 @@ final class AuthMessageTests: XCTestCase {
 
     func testAuthFailedFromRawJSON() throws {
         let json = """
-        {"type":"authFailed","payload":"Bad token"}
+        {"type":"error","payload":{"kind":"authFailure","message":"Bad token"}}
         """
         let data = Data(json.utf8)
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
-        if case .authFailed(let reason) = decoded {
-            XCTAssertEqual(reason, "Bad token")
+        if case .error(let serverError) = decoded {
+            XCTAssertEqual(serverError.kind, .authFailure)
+            XCTAssertEqual(serverError.message, "Bad token")
         } else {
-            XCTFail("Expected authFailed from raw JSON")
+            XCTFail("Expected error(authFailure) from raw JSON")
         }
     }
 

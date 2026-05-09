@@ -274,7 +274,10 @@ final class TheHandoffStateTests: XCTestCase {
         connectMockHandoff(handoff)
         handoff.handleServerMessage(.recordingStarted, requestId: nil)
 
-        handoff.handleServerMessage(.recordingError("disk full"), requestId: nil)
+        handoff.handleServerMessage(
+            .error(ServerError(kind: .recording, message: "disk full")),
+            requestId: nil
+        )
 
         XCTAssertEqual(handoff.recordingPhase, .idle)
         XCTAssertFalse(handoff.isRecording)

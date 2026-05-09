@@ -159,7 +159,7 @@ final class TheHandoffMessageTests: XCTestCase {
         XCTAssertEqual(receivedPayload?.activeConnections, 2)
     }
 
-    // MARK: - .authFailed
+    // MARK: - .error(authFailure)
 
     @ButtonHeistActor
     func testAuthFailedTransitionsToFailed() async {
@@ -167,7 +167,10 @@ final class TheHandoffMessageTests: XCTestCase {
         var receivedReason: String?
         handoff.onAuthFailed = { receivedReason = $0 }
 
-        handoff.handleServerMessage(.authFailed("bad token"), requestId: nil)
+        handoff.handleServerMessage(
+            .error(ServerError(kind: .authFailure, message: "bad token")),
+            requestId: nil
+        )
 
         assertFailed(handoff.connectionPhase, failure: .authFailed("bad token"))
         XCTAssertEqual(receivedReason, "bad token")
@@ -343,7 +346,10 @@ final class TheHandoffMessageTests: XCTestCase {
         var receivedError: String?
         handoff.onRecordingError = { receivedError = $0 }
 
-        handoff.handleServerMessage(.recordingError("capture failed"), requestId: nil)
+        handoff.handleServerMessage(
+            .error(ServerError(kind: .recording, message: "capture failed")),
+            requestId: nil
+        )
 
         XCTAssertEqual(handoff.recordingPhase, .idle)
         XCTAssertEqual(receivedError, "capture failed")

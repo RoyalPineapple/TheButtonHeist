@@ -178,14 +178,15 @@ final class RecordingPayloadTests: XCTestCase {
     }
 
     func testRecordingErrorEncodeDecode() throws {
-        let message = ServerMessage.recordingError("AVAssetWriter failed")
+        let message = ServerMessage.error(ServerError(kind: .recording, message: "AVAssetWriter failed"))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
 
-        if case .recordingError(let errorMsg) = decoded {
-            XCTAssertEqual(errorMsg, "AVAssetWriter failed")
+        if case .error(let serverError) = decoded {
+            XCTAssertEqual(serverError.kind, .recording)
+            XCTAssertEqual(serverError.message, "AVAssetWriter failed")
         } else {
-            XCTFail("Expected recordingError, got \(decoded)")
+            XCTFail("Expected error(recording), got \(decoded)")
         }
     }
 

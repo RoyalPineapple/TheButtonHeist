@@ -94,12 +94,13 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testErrorEncodeDecode() throws {
-        let message = ServerMessage.error("Connection failed")
+        let message = ServerMessage.error(ServerError(kind: .general, message: "Connection failed"))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
 
-        if case .error(let errorMsg) = decoded {
-            XCTAssertEqual(errorMsg, "Connection failed")
+        if case .error(let serverError) = decoded {
+            XCTAssertEqual(serverError.kind, .general)
+            XCTAssertEqual(serverError.message, "Connection failed")
         } else {
             XCTFail("Expected error, got \(decoded)")
         }

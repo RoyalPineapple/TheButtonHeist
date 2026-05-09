@@ -110,7 +110,9 @@ final class TheMuscleTests: XCTestCase {
         // No error message should have been sent via respond
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         for msg in serverMessages {
-            if case .authFailed = msg { XCTFail("Should not send authFailed for valid token") }
+            if case .error(let serverError) = msg, serverError.kind == .authFailure {
+                XCTFail("Should not send authFailure error for valid token")
+            }
             if case .sessionLocked = msg { XCTFail("Should not send sessionLocked for first connection") }
         }
     }
@@ -125,10 +127,10 @@ final class TheMuscleTests: XCTestCase {
 
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         let hasAuthFailed = serverMessages.contains { msg in
-            if case .authFailed = msg { return true }
+            if case .error(let serverError) = msg, serverError.kind == .authFailure { return true }
             return false
         }
-        XCTAssertTrue(hasAuthFailed, "Should send authFailed for invalid token")
+        XCTAssertTrue(hasAuthFailed, "Should send authFailure error for invalid token")
     }
 
     func testEmptyTokenTriggersPendingApproval() throws {
@@ -309,7 +311,9 @@ final class TheMuscleTests: XCTestCase {
 
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         let hasAuthFailed = serverMessages.contains { msg in
-            if case .authFailed(let reason) = msg { return !reason.contains("Too many") }
+            if case .error(let serverError) = msg, serverError.kind == .authFailure {
+                return !serverError.message.contains("Too many")
+            }
             return false
         }
         XCTAssertTrue(hasAuthFailed, "First failed attempt should get normal authFailed, not lockout")
@@ -328,7 +332,9 @@ final class TheMuscleTests: XCTestCase {
 
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         let hasLockout = serverMessages.contains { msg in
-            if case .authFailed(let reason) = msg { return reason.contains("Too many") }
+            if case .error(let serverError) = msg, serverError.kind == .authFailure {
+                return serverError.message.contains("Too many")
+            }
             return false
         }
         XCTAssertTrue(hasLockout, "Should receive lockout message after exceeding max failed attempts across reconnections")
@@ -373,7 +379,7 @@ final class TheMuscleTests: XCTestCase {
 
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         let hasAuthFailed = serverMessages.contains { msg in
-            if case .authFailed = msg { return true }
+            if case .error(let serverError) = msg, serverError.kind == .authFailure { return true }
             return false
         }
         XCTAssertTrue(hasAuthFailed, "Observer with wrong token should get authFailed")
@@ -393,7 +399,9 @@ final class TheMuscleTests: XCTestCase {
 
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         let hasLockout = serverMessages.contains { msg in
-            if case .authFailed(let reason) = msg { return reason.contains("Too many") }
+            if case .error(let serverError) = msg, serverError.kind == .authFailure {
+                return serverError.message.contains("Too many")
+            }
             return false
         }
         XCTAssertTrue(hasLockout, "Observer should be locked out after 5 failed watch attempts")
@@ -420,7 +428,9 @@ final class TheMuscleTests: XCTestCase {
 
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         let hasLockout = serverMessages.contains { msg in
-            if case .authFailed(let reason) = msg { return reason.contains("Too many") }
+            if case .error(let serverError) = msg, serverError.kind == .authFailure {
+                return serverError.message.contains("Too many")
+            }
             return false
         }
         XCTAssertTrue(hasLockout, "Watch and driver auth should share the same brute-force counter")
@@ -468,7 +478,9 @@ final class TheMuscleTests: XCTestCase {
 
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         let hasLockout = serverMessages.contains { msg in
-            if case .authFailed(let reason) = msg { return reason.contains("Too many") }
+            if case .error(let serverError) = msg, serverError.kind == .authFailure {
+                return serverError.message.contains("Too many")
+            }
             return false
         }
         XCTAssertTrue(hasLockout, "Should lock out again after counter reset and 5 more failures")

@@ -53,9 +53,6 @@ public enum ServerMessage: Codable, Sendable {
     /// Server requires authentication (sent after successful hello handshake)
     case authRequired
 
-    /// Authentication failed (sent before disconnect)
-    case authFailed(String)
-
     /// Authentication approved via on-device UI — includes token for future reconnections
     case authApproved(AuthApprovedPayload)
 
@@ -68,8 +65,10 @@ public enum ServerMessage: Codable, Sendable {
     /// Pong response
     case pong
 
-    /// Error message
-    case error(String)
+    /// Server-side error broadcast. `ServerError.kind` tags the category
+    /// (auth failure, recording, general) so clients can route without
+    /// pattern-matching on message text.
+    case error(ServerError)
 
     /// Result of an action command
     case actionResult(ActionResult)
@@ -90,9 +89,6 @@ public enum ServerMessage: Codable, Sendable {
 
     /// Recording complete with video data
     case recording(RecordingPayload)
-
-    /// Recording failed or was not active
-    case recordingError(String)
 
     // MARK: - Observer Broadcasts
 
@@ -175,7 +171,8 @@ public struct StatusSession: Codable, Sendable {
 
 // MARK: - Action Results
 
-/// Typed error classification for failed actions.
+/// Typed error classification used by both `ActionResult.errorKind` and the
+/// server-broadcast `ServerError` payload.
 public enum ErrorKind: String, Codable, Sendable, CaseIterable {
     case elementNotFound
     case timeout
@@ -183,6 +180,23 @@ public enum ErrorKind: String, Codable, Sendable, CaseIterable {
     case inputError
     case validationError
     case actionFailed
+    /// Authentication failed (rejected token, denied UI prompt, rate-limited).
+    case authFailure
+    /// Recording-pipeline failure (start, stop, capture, encode).
+    case recording
+    /// General server error not tied to a specific action or recording.
+    case general
+}
+
+/// Structured payload for server-broadcast error messages.
+public struct ServerError: Codable, Sendable, Equatable {
+    public let kind: ErrorKind
+    public let message: String
+
+    public init(kind: ErrorKind, message: String) {
+        self.kind = kind
+        self.message = message
+    }
 }
 
 /// Command-specific payload carried by an `ActionResult`.

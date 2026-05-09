@@ -107,7 +107,7 @@ final class MessageIntegrationTests: XCTestCase {
                 ),
                 session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
             )),
-            .error("Test error"),
+            .error(ServerError(kind: .general, message: "Test error")),
             .screen(ScreenPayload(pngData: "base64data", width: 390, height: 844))
         ]
 
@@ -200,12 +200,13 @@ final class MessageIntegrationTests: XCTestCase {
         ]
 
         for errorMsg in errorMessages {
-            let msg = ServerMessage.error(errorMsg)
+            let msg = ServerMessage.error(ServerError(kind: .general, message: errorMsg))
             let data = try JSONEncoder().encode(msg)
             let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
 
-            if case .error(let decodedError) = decoded {
-                XCTAssertEqual(decodedError, errorMsg)
+            if case .error(let serverError) = decoded {
+                XCTAssertEqual(serverError.kind, .general)
+                XCTAssertEqual(serverError.message, errorMsg)
             } else {
                 XCTFail("Expected error message")
             }

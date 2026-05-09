@@ -109,8 +109,8 @@ final class AuthFlowTests: XCTestCase {
         var disconnectReason: DisconnectReason?
         conn.onEvent = { event in
             switch event {
-            case .message(.authFailed(let reason), _, _):
-                authFailedReason = reason
+            case .message(.error(let serverError), _, _) where serverError.kind == .authFailure:
+                authFailedReason = serverError.message
             case .disconnected(let reason):
                 disconnectReason = reason
             default:
@@ -118,7 +118,9 @@ final class AuthFlowTests: XCTestCase {
             }
         }
 
-        try conn.handleMessage(encode(.authFailed("Connection denied by user")))
+        try conn.handleMessage(encode(
+            .error(ServerError(kind: .authFailure, message: "Connection denied by user"))
+        ))
 
         XCTAssertEqual(authFailedReason, "Connection denied by user")
         XCTAssertFalse(conn.isConnected)

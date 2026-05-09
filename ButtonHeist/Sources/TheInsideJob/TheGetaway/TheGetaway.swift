@@ -102,7 +102,7 @@ final class TheGetaway {
 
         transport.onRateLimited = { [weak self] _, respond in
             Task { @MainActor in
-                self?.sendMessage(.error("Rate limited: max \(SimpleSocketServer.maxMessagesPerSecond) messages per second"), respond: respond)
+                self?.sendMessage(.error(ServerError(kind: .general, message: "Rate limited: max \(SimpleSocketServer.maxMessagesPerSecond) messages per second")), respond: respond)
             }
         }
 
@@ -131,7 +131,7 @@ final class TheGetaway {
 
     func handleClientMessage(_ clientId: Int, data: Data, respond: @escaping (Data) -> Void) async {
         guard let envelope = decodeRequest(data) else {
-            sendMessage(.error("Malformed message — could not decode"), respond: respond)
+            sendMessage(.error(ServerError(kind: .general, message: "Malformed message — could not decode")), respond: respond)
             return
         }
 
@@ -363,7 +363,7 @@ final class TheGetaway {
         _ = await tripwire.waitForAllClear(timeout: 0.5)
 
         guard brains.refresh() != nil else {
-            sendMessage(.error("Could not access root view"), requestId: requestId, respond: respond)
+            sendMessage(.error(ServerError(kind: .general, message: "Could not access root view")), requestId: requestId, respond: respond)
             return
         }
 
@@ -381,12 +381,12 @@ final class TheGetaway {
         insideJobLogger.debug("Screen requested")
 
         guard let (image, bounds) = brains.captureScreen() else {
-            sendMessage(.error("Could not access app window"), requestId: requestId, respond: respond)
+            sendMessage(.error(ServerError(kind: .general, message: "Could not access app window")), requestId: requestId, respond: respond)
             return
         }
 
         guard let pngData = image.pngData() else {
-            sendMessage(.error("Failed to encode screen as PNG"), requestId: requestId, respond: respond)
+            sendMessage(.error(ServerError(kind: .general, message: "Failed to encode screen as PNG")), requestId: requestId, respond: respond)
             return
         }
 

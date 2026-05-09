@@ -58,7 +58,6 @@ extension ServerMessage {
         case .recordingStarted: return (.recordingStarted, nil)
         case .recordingStopped: return (.recordingStopped, nil)
         case .protocolMismatch(let payload): return (.protocolMismatch, payload)
-        case .authFailed(let payload): return (.authFailed, payload)
         case .authApproved(let payload): return (.authApproved, payload)
         case .error(let payload): return (.error, payload)
         case .sessionLocked(let payload): return (.sessionLocked, payload)
@@ -69,7 +68,6 @@ extension ServerMessage {
         case .interaction(let payload): return (.interaction, payload)
         case .status(let payload): return (.status, payload)
         case .recording(let payload): return (.recording, payload)
-        case .recordingError(let payload): return (.recordingError, payload)
         }
     }
 
@@ -87,9 +85,8 @@ extension ServerMessage {
         case .recordingStarted: return .recordingStarted
         case .recordingStopped: return .recordingStopped
         case .protocolMismatch: return .protocolMismatch(try ProtocolMismatchPayload(from: try payload()))
-        case .authFailed: return .authFailed(try String(from: try payload()))
         case .authApproved: return .authApproved(try AuthApprovedPayload(from: try payload()))
-        case .error: return .error(try String(from: try payload()))
+        case .error: return .error(try ServerError(from: try payload()))
         case .sessionLocked: return .sessionLocked(try SessionLockedPayload(from: try payload()))
         case .info: return .info(try ServerInfo(from: try payload()))
         case .interface: return .interface(try Interface(from: try payload()))
@@ -98,7 +95,6 @@ extension ServerMessage {
         case .interaction: return .interaction(try InteractionEvent(from: try payload()))
         case .status: return .status(try StatusPayload(from: try payload()))
         case .recording: return .recording(try RecordingPayload(from: try payload()))
-        case .recordingError: return .recordingError(try String(from: try payload()))
         default:
             throw DecodingError.dataCorrupted(.init(
                 codingPath: payloadDecoder?.codingPath ?? [],
