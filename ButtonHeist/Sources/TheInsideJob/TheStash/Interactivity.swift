@@ -56,7 +56,7 @@ extension TheStash {
     }
 
     }
-} // extension TheStash
+}
 
 #endif // DEBUG
 #endif // canImport(UIKit)

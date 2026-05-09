@@ -654,7 +654,7 @@ extension TheStash {
         return ElementUpdate(heistId: heistId ?? new.heistId, changes: changes)
     }
     }
-} // extension TheStash
+}
 
 #endif // DEBUG
 #endif // canImport(UIKit)

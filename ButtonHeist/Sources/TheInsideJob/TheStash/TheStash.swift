@@ -122,7 +122,6 @@ final class TheStash {
 
     // MARK: - Element Actions
 
-    /// Check if the element supports interaction.
     func hasInteractiveObject(_ screenElement: ScreenElement) -> Bool {
         isInteractive(element: screenElement.element)
     }

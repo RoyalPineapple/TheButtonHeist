@@ -506,22 +506,17 @@ final class TheBrains {
 
     // MARK: - Screen Capture
 
-    /// Capture the screen.
     func captureScreen() -> (image: UIImage, bounds: CGRect)? {
         stash.captureScreen()
     }
 
-    /// Capture the screen including fingerprint overlay (for recordings).
     func captureScreenForRecording() -> UIImage? {
         stash.captureScreenForRecording()
     }
 
     // MARK: - Screen Name (for error messages)
 
-    /// Current screen name.
     var screenName: String? { stash.lastScreenName }
-
-    /// Current screen ID.
     var screenId: String? { stash.lastScreenId }
 
     // MARK: - Recording Wiring

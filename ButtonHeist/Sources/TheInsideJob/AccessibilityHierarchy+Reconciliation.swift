@@ -165,10 +165,10 @@ public func findOverlap(
         var currentRunStart = -1
         var currentRunLength = 0
 
-        for i in 0..<overlapLength {
-            if accumulated[accStart + i] == page[pageStart + i] {
+        for index in 0..<overlapLength {
+            if accumulated[accStart + index] == page[pageStart + index] {
                 if currentRunLength == 0 {
-                    currentRunStart = i
+                    currentRunStart = index
                 }
                 currentRunLength += 1
                 if currentRunLength > runLength {

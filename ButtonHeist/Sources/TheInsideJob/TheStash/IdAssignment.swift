@@ -49,12 +49,12 @@ extension TheStash {
         let counts = heistIds.reduce(into: [String: Int]()) { $0[$1, default: 0] += 1 }
 
         var seen: [String: Int] = [:]
-        for i in heistIds.indices {
-            let base = heistIds[i]
+        for index in heistIds.indices {
+            let base = heistIds[index]
             if let count = counts[base], count > 1 {
-                let index = seen[base, default: 0] + 1
-                seen[base] = index
-                heistIds[i] = "\(base)_\(index)"
+                let suffix = seen[base, default: 0] + 1
+                seen[base] = suffix
+                heistIds[index] = "\(base)_\(suffix)"
             }
         }
 
@@ -102,7 +102,7 @@ extension TheStash {
         TheScore.slugify(text)
     }
     }
-} // extension TheStash
+}
 
 #endif // DEBUG
 #endif // canImport(UIKit)
