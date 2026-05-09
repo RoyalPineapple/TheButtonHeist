@@ -555,4 +555,142 @@ final class TheHandoffStateTests: XCTestCase {
             XCTAssertEqual(available, [firstDevice.name, secondDevice.name])
         }
     }
+
+    // MARK: - waitForConnectionResult continuation
+
+    @ButtonHeistActor
+    func testWaitForConnectionResultReturnsImmediatelyWhenAlreadyConnected() async throws {
+        let handoff = TheHandoff()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mock = MockConnection()
+        mock.serverInfo = ServerInfo(
+            appName: "TestApp",
+            bundleIdentifier: "com.test",
+            deviceName: "Simulator",
+            systemVersion: "26.1",
+            screenWidth: 402,
+            screenHeight: 874
+        )
+        handoff.makeConnection = { _, _, _ in mock }
+
+        handoff.connect(to: device)
+        XCTAssertTrue(handoff.isConnected)
+
+        // Already connected — should return immediately without throwing.
+        try await handoff.waitForConnectionResult(timeout: 5)
+    }
+
+    @ButtonHeistActor
+    func testWaitForConnectionResultThrowsWhenAlreadyFailed() async {
+        let handoff = TheHandoff()
+        // Drive into .failed state via a server error.
+        handoff.handleServerMessage(
+            .error(ServerError(kind: .general, message: "boom")),
+            requestId: nil
+        )
+        assertFailed(handoff.connectionPhase, failure: .error("boom"))
+
+        do {
+            try await handoff.waitForConnectionResult(timeout: 5)
+            XCTFail("Expected ConnectionError to be thrown")
+        } catch let error as TheHandoff.ConnectionError {
+            guard case .connectionFailed(let message) = error else {
+                return XCTFail("Expected .connectionFailed, got \(error)")
+            }
+            XCTAssertEqual(message, "boom")
+        } catch {
+            XCTFail("Unexpected error type: \(error)")
+        }
+    }
+
+    @ButtonHeistActor
+    func testWaitForConnectionResultResumesOnConnectedTransition() async throws {
+        let handoff = TheHandoff()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mock = MockConnection()
+        // Don't auto-connect — caller will trigger the .connected event manually
+        // so we can verify the continuation wakes on the transition.
+        mock.connectEventsOverride = []
+        handoff.makeConnection = { _, _, _ in mock }
+
+        handoff.connect(to: device)
+        // Phase is now .connecting; waiter should suspend.
+        let waitTask = Task { @ButtonHeistActor in
+            try await handoff.waitForConnectionResult(timeout: 5)
+        }
+
+        // Yield once so the waiter registers its continuation before we fire
+        // the .connected event.
+        await Task.yield()
+
+        // Fire the connected transition.
+        mock.onEvent?(.connected)
+        XCTAssertTrue(handoff.isConnected)
+
+        try await waitTask.value
+    }
+
+    @ButtonHeistActor
+    func testWaitForConnectionResultPropagatesCancellationError() async {
+        let handoff = TheHandoff()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mock = MockConnection()
+        mock.connectEventsOverride = []  // Stays in .connecting until cancelled
+        handoff.makeConnection = { _, _, _ in mock }
+
+        handoff.connect(to: device)
+
+        let waitTask = Task { @ButtonHeistActor in
+            try await handoff.waitForConnectionResult(timeout: 30)
+        }
+
+        // Yield so the continuation registers before we cancel.
+        await Task.yield()
+        waitTask.cancel()
+
+        do {
+            try await waitTask.value
+            XCTFail("Expected CancellationError")
+        } catch is CancellationError {
+            // Expected.
+        } catch {
+            XCTFail("Expected CancellationError, got \(error)")
+        }
+    }
+
+    @ButtonHeistActor
+    func testWaitForConnectionResultResumesOnFailedTransition() async {
+        let handoff = TheHandoff()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mock = MockConnection()
+        mock.connectEventsOverride = []
+        handoff.makeConnection = { _, _, _ in mock }
+
+        handoff.connect(to: device)
+
+        let waitTask = Task { @ButtonHeistActor in
+            try await handoff.waitForConnectionResult(timeout: 30)
+        }
+
+        // Yield so the continuation registers.
+        await Task.yield()
+
+        // Drive into .failed via an auth-failure server error.
+        handoff.handleServerMessage(
+            .error(ServerError(kind: .authFailure, message: "bad token")),
+            requestId: nil
+        )
+
+        do {
+            try await waitTask.value
+            XCTFail("Expected auth failure")
+        } catch let error as TheHandoff.ConnectionError {
+            guard case .authFailed(let reason) = error else {
+                return XCTFail("Expected .authFailed, got \(error)")
+            }
+            XCTAssertEqual(reason, "bad token")
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
 }
