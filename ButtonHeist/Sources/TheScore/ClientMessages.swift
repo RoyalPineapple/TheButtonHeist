@@ -477,35 +477,30 @@ public struct RecordingConfig: Sendable {
 }
 
 extension RecordingConfig: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case fps, scale, inactivityTimeout, maxDuration
+    }
+
     public init(from decoder: Decoder) throws {
-        // Decode into a throwaway bridge struct first so field validation can
-        // run before assignment — this avoids partially-mutating `self` on a
-        // range violation and keeps the error site with the offending field.
-        let container = try decoder.singleValueContainer()
-        let raw = try container.decode(RawRecordingConfig.self)
-        if let fps = raw.fps, fps < 1 || fps > 15 {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let fps = try container.decodeIfPresent(Int.self, forKey: .fps)
+        let scale = try container.decodeIfPresent(Double.self, forKey: .scale)
+        if let fps, fps < 1 || fps > 15 {
             throw DecodingError.dataCorrupted(.init(
                 codingPath: decoder.codingPath,
                 debugDescription: "fps must be between 1 and 15, got \(fps)"
             ))
         }
-        if let scale = raw.scale, scale < 0.25 || scale > 1.0 {
+        if let scale, scale < 0.25 || scale > 1.0 {
             throw DecodingError.dataCorrupted(.init(
                 codingPath: decoder.codingPath,
                 debugDescription: "scale must be between 0.25 and 1.0, got \(scale)"
             ))
         }
-        self.fps = raw.fps
-        self.scale = raw.scale
-        self.inactivityTimeout = raw.inactivityTimeout
-        self.maxDuration = raw.maxDuration
-    }
-
-    private struct RawRecordingConfig: Decodable {
-        let fps: Int?
-        let scale: Double?
-        let inactivityTimeout: Double?
-        let maxDuration: Double?
+        self.fps = fps
+        self.scale = scale
+        self.inactivityTimeout = try container.decodeIfPresent(Double.self, forKey: .inactivityTimeout)
+        self.maxDuration = try container.decodeIfPresent(Double.self, forKey: .maxDuration)
     }
 }
 
