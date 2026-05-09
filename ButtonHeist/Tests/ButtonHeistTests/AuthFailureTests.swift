@@ -3,6 +3,11 @@ import Network
 @testable import ButtonHeist
 
 /// Thread-safe ordered log for tracking callback invocation order.
+///
+/// `@unchecked Sendable` justification: the class is a value-bag protected by
+/// the internal `NSLock`. All mutations and reads go through `lock.withLock`,
+/// so concurrent access from multiple actor contexts is safe. The
+/// non-Sendable `[String]` storage never escapes the lock.
 private final class CallOrder: @unchecked Sendable {
     private var entries: [String] = []
     private let lock = NSLock()

@@ -44,7 +44,12 @@ final class ReplSession {
             }
         }
 
-        signal(SIGINT) { _ in Darwin.exit(0) }
+        // SIGINT closes stdin to unstick the blocking readLine; the loop sees
+        // a nil line and breaks, then runs the same structured teardown the
+        // idle-timeout path uses (idleMonitor.stop, state = .stopped,
+        // fence.stop). close() is async-signal-safe; we deliberately do NOT
+        // touch Swift state from here.
+        signal(SIGINT) { _ in close(STDIN_FILENO) }
 
         let monitor = sessionTimeout > 0 ? makeTimeoutMonitor() : nil
         state = .running(monitor)
