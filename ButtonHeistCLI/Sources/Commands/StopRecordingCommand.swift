@@ -9,9 +9,6 @@ struct StopRecordingCommand: AsyncParsableCommand {
 
     @OptionGroup var connection: ConnectionOptions
 
-    @Option(name: .long, help: "Connection timeout in seconds")
-    var timeout: Double = 10.0
-
     @ButtonHeistActor
     func run() async throws {
         let request: [String: Any] = [

@@ -5,7 +5,6 @@ import ButtonHeist
 enum SessionDefaults {
     static let connectionTimeout: Double = 30.0
     static let sessionTimeout: Double = 60.0
-    static let timeoutCheckInterval: Double = 5.0
 }
 
 struct SessionCommand: AsyncParsableCommand {

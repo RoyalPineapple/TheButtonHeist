@@ -28,9 +28,6 @@ struct RecordCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Save interaction log as JSON to this path")
     var actionLog: String?
 
-    @Option(name: .long, help: "Connection timeout in seconds")
-    var timeout: Double = 10.0
-
     func validate() throws {
         guard fps >= 1 && fps <= 15 else {
             throw ValidationError("fps must be between 1 and 15, got \(fps)")
