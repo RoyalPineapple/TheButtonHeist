@@ -29,12 +29,8 @@ public struct ActiveSession: Sendable {
     var heistRecording: HeistRecording?
 }
 
-// `@unchecked Sendable` justification: `FileHandle` is not Sendable, but every
-// access to the `fileHandle` field is gated through `@ButtonHeistActor`-isolated
-// code paths on `TheBookKeeper`. The actor enforces serial access; no
-// `HeistRecording` value crosses an actor boundary outside that isolation.
 @ButtonHeistActor
-struct HeistRecording: @unchecked Sendable {
+struct HeistRecording {
     let app: String
     let startTime: Date
     var evidenceCount: Int

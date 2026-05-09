@@ -627,8 +627,8 @@ public final class TheHandoff {
             if DispatchTime.now().uptimeNanoseconds - connectionStart > connectionTimeout {
                 throw ConnectionError.timeout
             }
-            guard await Task<Never, Never>.cancellableSleep(for: .milliseconds(100)) else {
-                throw ConnectionError.connectionFailed("Cancelled")
+            guard await Task.cancellableSleep(for: .milliseconds(100)) else {
+                throw CancellationError()
             }
         }
     }

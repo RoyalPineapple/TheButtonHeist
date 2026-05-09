@@ -636,8 +636,8 @@ public final class TheFence {
             if DispatchTime.now().uptimeNanoseconds - start > timeout {
                 throw FenceError(TheHandoff.ConnectionError.timeout)
             }
-            guard await Task<Never, Never>.cancellableSleep(for: .milliseconds(100)) else {
-                throw FenceError(TheHandoff.ConnectionError.connectionFailed("Cancelled"))
+            guard await Task.cancellableSleep(for: .milliseconds(100)) else {
+                throw CancellationError()
             }
         }
     }
