@@ -106,6 +106,29 @@ final class ServerMessageTests: XCTestCase {
         }
     }
 
+    func testErrorWireShape() throws {
+        let message = ServerMessage.error(ServerError(kind: .recording, message: "disk full"))
+        let data = try JSONEncoder().encode(message)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(json["type"] as? String, "error")
+        let payload = try XCTUnwrap(json["payload"] as? [String: Any])
+        XCTAssertEqual(payload["kind"] as? String, "recording")
+        XCTAssertEqual(payload["message"] as? String, "disk full")
+    }
+
+    func testErrorDecodesFromExplicitJSON() throws {
+        let json = """
+        {"type":"error","payload":{"kind":"general","message":"oops"}}
+        """
+        let decoded = try JSONDecoder().decode(ServerMessage.self, from: Data(json.utf8))
+        guard case .error(let serverError) = decoded else {
+            XCTFail("Expected error message, got \(decoded)")
+            return
+        }
+        XCTAssertEqual(serverError.kind, .general)
+        XCTAssertEqual(serverError.message, "oops")
+    }
+
     // MARK: - ActionResult Tests
 
     func testActionResultWithValue() throws {
@@ -141,6 +164,42 @@ final class ServerMessageTests: XCTestCase {
         } else {
             XCTFail("Expected actionResult, got \(decoded)")
         }
+    }
+
+    func testActionResultPayloadValueWireShape() throws {
+        let result = ActionResult(success: true, method: .typeText, payload: .value("Hi"))
+        let data = try JSONEncoder().encode(result)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let payload = try XCTUnwrap(json["payload"] as? [String: Any])
+        XCTAssertEqual(payload["kind"] as? String, "value")
+        XCTAssertEqual(payload["data"] as? String, "Hi")
+    }
+
+    func testActionResultPayloadScrollSearchWireShape() throws {
+        let search = ScrollSearchResult(
+            scrollCount: 2, uniqueElementsSeen: 10, totalItems: nil, exhaustive: false
+        )
+        let result = ActionResult(success: true, method: .elementSearch, payload: .scrollSearch(search))
+        let data = try JSONEncoder().encode(result)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let payload = try XCTUnwrap(json["payload"] as? [String: Any])
+        XCTAssertEqual(payload["kind"] as? String, "scrollSearch")
+        let inner = try XCTUnwrap(payload["data"] as? [String: Any])
+        XCTAssertEqual(inner["scrollCount"] as? Int, 2)
+    }
+
+    func testActionResultPayloadDecodesFromExplicitJSON() throws {
+        let json = """
+        {"type":"actionResult","payload":{"success":true,"method":"typeText","payload":{"kind":"value","data":"Hello"}}}
+        """
+        let data = Data(json.utf8)
+        let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
+        guard case .actionResult(let result) = decoded,
+              case .value(let string) = result.payload else {
+            XCTFail("Expected actionResult with .value payload, got \(decoded)")
+            return
+        }
+        XCTAssertEqual(string, "Hello")
     }
 
     func testActionResultWithoutOptionalFieldsFromExplicitJSON() throws {
