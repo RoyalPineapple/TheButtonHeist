@@ -54,7 +54,7 @@ Both CLI and MCP are thin shells. All business logic lives in `TheFence` and bel
 
 ## Wire Protocol
 
-Protocol v9.0. Request/response with `requestId` correlation via `RequestEnvelope`/`ResponseEnvelope`; interface payloads use the canonical `InterfaceNode` tree, not a parallel flat element array. Messages are JSON over TLS-encrypted TCP. Push notifications (interface updates, interaction broadcasts) use `requestId: nil`. See `docs/WIRE-PROTOCOL.md` for the full spec.
+JSON-over-TLS request/response with `requestId` correlation via `RequestEnvelope`/`ResponseEnvelope`; envelopes carry `buttonHeistVersion` for exact handshake equality. Interface payloads use the canonical `InterfaceNode` tree, not a parallel flat element array. Push notifications (interface updates, interaction broadcasts) use `requestId: nil`. See `docs/WIRE-PROTOCOL.md` for the full spec.
 
 ## Testing
 
