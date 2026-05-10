@@ -60,3 +60,68 @@ blanket_disable_command:
     - nesting
 
 inclusive_language: {}
+
+# Custom rules: catch canonical agent-code patterns that survived prior cleanups.
+# Each rule has a low-false-positive regex; tune rather than disable inline.
+custom_rules:
+  agent_empty_else_if:
+    name: "Agent: empty else-if branch"
+    regex: '\}\s*else\s+if\s+(?:case\s+)?[^{]+\{\s*//[^\n]*\s*\}'
+    message: "Empty else-if branch with only a comment looks like a stub left by an agent. Either implement the branch or remove it."
+    severity: warning
+
+  agent_xctassert_unwrap_doublet:
+    name: "Agent: XCTAssertNotNil followed by force-unwrap"
+    regex: 'XCTAssertNotNil\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)[^\n]*\n(?:[^\n]*\n){0,2}[^\n]*\b\1!'
+    message: "Force-unwrapping a value right after XCTAssertNotNil is a doublet — use XCTUnwrap or guard let instead."
+    severity: error
+
+  agent_reserved_for_future:
+    name: "Agent: reserved-for-future placeholder"
+    regex: '//\s*[Rr]eserved\s+for\s+future'
+    message: "Reserved-for-future placeholders rarely materialise. Use the symbol now or delete it."
+    severity: warning
+
+  agent_test_task_sleep:
+    name: "Agent: Task.sleep / Thread.sleep in tests"
+    regex: '(?<!cancellable)(?<!\.)\b(?:Task|Thread)\.sleep\b'
+    included: ".*Tests\\.swift"
+    match_kinds:
+      - identifier
+      - typeidentifier
+    message: "Tests must not sleep on wall-clock time. See the test-sleep-avoidance skill for expectation / AsyncStream patterns."
+    severity: warning
+
+  agent_main_actor_value_type:
+    name: "Agent: @MainActor on a value type"
+    regex: '@MainActor\s+(?:public\s+|internal\s+|private\s+|fileprivate\s+)?(?:final\s+)?(?:struct|enum)\s+\w+'
+    message: "Sendable structs and enums must not carry @MainActor. Actor isolation belongs on reference types; values cross actors freely."
+    severity: warning
+
+  agent_unchecked_sendable_no_comment:
+    name: "Agent: @unchecked Sendable without justification"
+    # NSRegularExpression can't reliably inspect preceding-line comments, so
+    # this rule flags every `@unchecked Sendable` token. Mentions inside
+    # comments and strings are filtered by `match_kinds`. Use
+    # `// swiftlint:disable:next agent_unchecked_sendable_no_comment` directly
+    # above the declaration with a rationale for legitimate uses.
+    regex: '@unchecked\s+Sendable'
+    match_kinds:
+      - attribute.builtin
+      - identifier
+      - keyword
+      - typeidentifier
+    message: "@unchecked Sendable requires a justification comment. Either fix the design or add `// swiftlint:disable:next agent_unchecked_sendable_no_comment` with rationale."
+    severity: error
+
+  agent_callback_bridge_task:
+    name: "Agent: single-line MainActor callback bridge"
+    regex: 'Task\s*\{\s*@MainActor\s+in\s+self\??\.\w+\([^)]*\)\s*\}'
+    message: "Single-line `Task { @MainActor in self.foo(...) }` bridges fire-and-forget. Annotate the callback's isolation in its type and call it directly."
+    severity: warning
+
+  agent_unannotated_public_callback:
+    name: "Agent: public callback without isolation annotation"
+    regex: 'public\s+var\s+on\w+:\s*\(\([^)]*\)\s*->\s*Void\)\?'
+    message: "Public `onFoo` callbacks must declare isolation in the closure type (e.g. `(@ButtonHeistActor (X) -> Void)?` or `@Sendable`). Docstring isolation drifts."
+    severity: warning

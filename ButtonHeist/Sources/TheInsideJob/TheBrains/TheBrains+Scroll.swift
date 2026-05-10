@@ -113,7 +113,10 @@ extension TheBrains {
     }
 
     /// A scrollable container discovered from the accessibility hierarchy.
-    @MainActor enum ScrollableTarget {
+    ///
+    /// `@MainActor` justification: holds a UIScrollView reference (non-Sendable);
+    /// MainActor matches where these targets are resolved and consumed.
+    @MainActor enum ScrollableTarget { // swiftlint:disable:this agent_main_actor_value_type
         case uiScrollView(UIScrollView)
         case swipeable(frame: CGRect, contentSize: CGSize)
 

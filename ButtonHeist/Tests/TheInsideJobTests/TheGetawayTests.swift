@@ -126,6 +126,8 @@ final class TheGetawayTests: XCTestCase {
         let deadline = ContinuousClock.now + timeout
         while ContinuousClock.now < deadline {
             if condition() { return }
+            // Polls a MainActor-bound condition; no signal to await on.
+            // swiftlint:disable:next agent_test_task_sleep
             try await Task.sleep(for: .milliseconds(5))
         }
         XCTFail("waitFor timed out after \(timeout)")

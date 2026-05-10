@@ -6,8 +6,10 @@ import UIKit
 /// Resolves the active screen via the key window scene, then any foreground
 /// scene, then the first connected scene, falling back to `UIScreen.main`
 /// only when no scene is available.
-@MainActor
-enum ScreenMetrics {
+///
+/// Caseless namespace enum: reads UIApplication / UIScene state. No instances
+/// are constructed; the `@MainActor` attribute matches caller isolation.
+@MainActor enum ScreenMetrics { // swiftlint:disable:this agent_main_actor_value_type
 
     static var current: UIScreen {
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }

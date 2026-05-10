@@ -5,8 +5,7 @@ import UIKit
 /// Shared helpers for tests that bring up a software keyboard and need to
 /// wait for the iOS-owned `UIRemoteKeyboardWindow` / `UITextEffectsWindow`
 /// to retire from the foreground scene before the next test runs.
-@MainActor
-enum KeyboardWindowTestHelpers {
+@MainActor enum KeyboardWindowTestHelpers { // swiftlint:disable:this agent_main_actor_value_type
 
     /// Polls the foreground-active scenes' window list at 50ms intervals,
     /// up to `maxAttempts` (default 40 = ~2s), returning as soon as no

@@ -111,8 +111,10 @@ extension AccessibilityElement {
 /// Dependencies are injected as closures so unit tests can drive the loop
 /// against a scripted sequence of parse results without standing up a
 /// live UIKit hierarchy.
-@MainActor
-struct SettleSession {
+///
+/// `@MainActor` justification: drives a MainActor-bound parse loop and stores
+/// `@MainActor`-typed provider closures.
+@MainActor struct SettleSession { // swiftlint:disable:this agent_main_actor_value_type
 
     /// Hardcoded; tests override via init.
     static let defaultCyclesRequired: Int = 3

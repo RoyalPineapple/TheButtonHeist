@@ -13,8 +13,11 @@ import TheScore
 ///     builder.message = "Tapped Sign In"
 ///     builder.interfaceDelta = delta
 ///     return builder.success()
-@MainActor
-struct ActionResultBuilder {
+///
+/// `@MainActor` justification: builder reads from MainActor-bound state during
+/// construction; the produced ActionResult is Sendable but the builder itself
+/// stages MainActor data.
+@MainActor struct ActionResultBuilder { // swiftlint:disable:this agent_main_actor_value_type
     let method: ActionMethod
     let screenName: String?
     let screenId: String?

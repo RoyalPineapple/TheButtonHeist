@@ -225,7 +225,9 @@ final class TheHandoffStateTests: XCTestCase {
 
         await fulfillment(of: [disconnected], timeout: 5)
 
-        // Give the reconnect loop time to fire if it were going to (it shouldn't)
+        // Give the reconnect loop time to fire if it were going to (it shouldn't).
+        // Asserts a *negative* — needs wall-clock elapsed time, not a signal to wait on.
+        // swiftlint:disable:next agent_test_task_sleep
         try await Task.sleep(for: .milliseconds(100))
 
         XCTAssertEqual(connectionCount, 1)

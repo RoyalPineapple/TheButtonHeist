@@ -5,8 +5,10 @@ import TheScore
 
 /// Result of resolving a screen coordinate from an element target or explicit point.
 /// Shared between TheStash (resolution) and TheBrains (consumption).
-@MainActor
-enum PointResolution {
+///
+/// `@MainActor` justification: carries `TheSafecracker.InteractionResult` which
+/// references MainActor-bound state — isolation aligns with consumers.
+@MainActor enum PointResolution { // swiftlint:disable:this agent_main_actor_value_type
     case success(CGPoint)
     case failure(TheSafecracker.InteractionResult)
 }

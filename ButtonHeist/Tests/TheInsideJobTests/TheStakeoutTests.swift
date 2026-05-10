@@ -384,8 +384,10 @@ final class TheStakeoutTests: XCTestCase {
             maxDuration: 60.0
         ))
 
-        // Keep poking activity every 1s for 3 seconds — should not time out
+        // Keep poking activity every 1s for 3 seconds — should not time out.
+        // Inactivity-timeout test: needs real elapsed time between activity pokes.
         for _ in 0..<3 {
+            // swiftlint:disable:next agent_test_task_sleep
             try await Task.sleep(for: .seconds(1))
             stakeout.noteActivity()
         }

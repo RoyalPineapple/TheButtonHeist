@@ -136,6 +136,7 @@ final class SettleSessionTests: XCTestCase {
             // Real (small) sleeps so wall clock advances; a no-op sleeper
             // would let the loop reach a finite-script end before the
             // timeout fires.
+            // swiftlint:disable:next agent_test_task_sleep
             sleeper: { try await Task.sleep(nanoseconds: $0) },
             cyclesRequired: 3,
             cycleIntervalMs: 5,

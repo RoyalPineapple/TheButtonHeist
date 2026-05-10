@@ -107,6 +107,9 @@ public final class DeviceDiscovery: DeviceDiscovering {
         }
     }
 
+    // Effective isolation is @ButtonHeistActor (enclosing class is isolated);
+    // explicit annotation pending the public-callback annotation cleanup batch.
+    // swiftlint:disable:next agent_unannotated_public_callback
     public var onEvent: ((DiscoveryEvent) -> Void)?
 
     public init(reachabilityValidationInterval: TimeInterval = 3.0) {
