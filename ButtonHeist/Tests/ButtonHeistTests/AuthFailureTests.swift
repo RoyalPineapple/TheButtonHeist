@@ -8,7 +8,7 @@ import Network
 /// the internal `NSLock`. All mutations and reads go through `lock.withLock`,
 /// so concurrent access from multiple actor contexts is safe. The
 /// non-Sendable `[String]` storage never escapes the lock.
-private final class CallOrder: @unchecked Sendable {
+private final class CallOrder: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
     private var entries: [String] = []
     private let lock = NSLock()
 
@@ -56,8 +56,8 @@ final class AuthFailureTests: XCTestCase {
             .error(ServerError(kind: .authFailure, message: "Invalid token. Retry without a token to request a fresh session."))
         ))
 
-        XCTAssertNotNil(authFailedReason)
-        XCTAssertTrue(authFailedReason!.contains("Invalid token"))
+        let reason = try XCTUnwrap(authFailedReason)
+        XCTAssertTrue(reason.contains("Invalid token"))
     }
 
     @ButtonHeistActor

@@ -51,7 +51,9 @@ extension TheStash {
     /// Converts internal accessibility types to wire format (HeistElement,
     /// InterfaceNode, ContainerInfo) and computes interface deltas.
     /// Pure transformations — no mutable state.
-    @MainActor enum WireConversion {
+    /// Caseless namespace enum: static helpers that touch UIKit accessibility
+    /// APIs (UIView refs, accessibilityFrame). No instances are constructed.
+    @MainActor enum WireConversion { // swiftlint:disable:this agent_main_actor_value_type
 
     // MARK: - Trait Names
 

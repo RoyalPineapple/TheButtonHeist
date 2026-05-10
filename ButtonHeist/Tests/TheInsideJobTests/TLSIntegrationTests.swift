@@ -279,6 +279,8 @@ final class TLSIntegrationTests: XCTestCase {
                 }
             }
             group.addTask {
+                // Group-race timeout against a real network read; needs wall-clock.
+                // swiftlint:disable:next agent_test_task_sleep
                 try await Task.sleep(for: .seconds(timeout))
                 throw NSError(domain: "test", code: -2, userInfo: [
                     NSLocalizedDescriptionKey: "receiveData timed out after \(timeout)s"

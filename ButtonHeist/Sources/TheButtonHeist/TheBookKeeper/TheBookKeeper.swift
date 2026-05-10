@@ -21,7 +21,7 @@ public enum SessionPhase: Sendable {
 /// is a `FileHandle` (not Sendable on Swift 6); access is in practice
 /// confined to the `@ButtonHeistActor`-isolated `TheBookKeeper` that owns
 /// the value.
-public struct ActiveSession: @unchecked Sendable {
+public struct ActiveSession: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
     public let sessionId: String
     public let directory: URL
     let logHandle: FileHandle
@@ -34,7 +34,7 @@ public struct ActiveSession: @unchecked Sendable {
 /// Heist recording handle. Marked `@unchecked Sendable` because `fileHandle`
 /// is a `FileHandle`; access is confined to the `@ButtonHeistActor`-isolated
 /// `TheBookKeeper`.
-struct HeistRecording: @unchecked Sendable {
+struct HeistRecording: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
     let app: String
     let startTime: Date
     var evidenceCount: Int

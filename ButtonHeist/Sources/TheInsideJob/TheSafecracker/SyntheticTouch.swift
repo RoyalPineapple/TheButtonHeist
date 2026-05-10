@@ -30,7 +30,9 @@ extension TheSafecracker {
     /// approach as KIF v3.11.2 (PR #1323).
     ///
     /// The only way to get a `TouchTarget` is through `resolve(at:in:)`.
-    @MainActor struct TouchTarget {
+    ///
+    /// `@MainActor` justification: holds UIWindow + UIResponder references.
+    @MainActor struct TouchTarget { // swiftlint:disable:this agent_main_actor_value_type
         let window: UIWindow
         let windowPoint: CGPoint
         let responder: AnyObject
@@ -98,7 +100,9 @@ extension TheSafecracker {
     /// A configured UITouch with its current location and phase.
     /// Can only be created from a `TouchTarget`, guaranteeing it has
     /// the correct window, view, and gesture target set.
-    @MainActor struct SyntheticTouch {
+    ///
+    /// `@MainActor` justification: wraps a UITouch reference.
+    @MainActor struct SyntheticTouch { // swiftlint:disable:this agent_main_actor_value_type
         let touch: UITouch
         private(set) var location: CGPoint
         private(set) var phase: UITouch.Phase
@@ -135,7 +139,9 @@ extension TheSafecracker {
     /// An assembled UIEvent ready to deliver to UIApplication.
     /// Can only be constructed from `[SyntheticTouch]`, ensuring the
     /// HID finger data always matches the touch array.
-    @MainActor struct TouchEvent {
+    ///
+    /// `@MainActor` justification: wraps a UIEvent reference.
+    @MainActor struct TouchEvent { // swiftlint:disable:this agent_main_actor_value_type
         let event: UIEvent
 
         /// Package touches into a UIEvent with matching IOHIDEvent data.

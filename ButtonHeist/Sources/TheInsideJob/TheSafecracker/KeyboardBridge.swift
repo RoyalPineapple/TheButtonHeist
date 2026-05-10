@@ -11,8 +11,10 @@ import UIKit
 /// Uses `sharedInstance` (not `activeInstance`) so it works with both software
 /// and hardware keyboards — `activeInstance` returns nil when a hardware
 /// keyboard is connected.
-@MainActor
-struct KeyboardBridge {
+///
+/// `@MainActor` justification: wraps a UIKit singleton (`AnyObject`); the
+/// stored impl is non-Sendable.
+@MainActor struct KeyboardBridge { // swiftlint:disable:this agent_main_actor_value_type
 
     private let impl: AnyObject
 

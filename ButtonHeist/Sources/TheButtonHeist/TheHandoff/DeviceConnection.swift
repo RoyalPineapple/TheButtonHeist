@@ -88,6 +88,9 @@ public final class DeviceConnection: DeviceConnecting {
         return false
     }
 
+    // Effective isolation is @ButtonHeistActor (enclosing class is isolated);
+    // explicit annotation pending the public-callback annotation cleanup batch.
+    // swiftlint:disable:next agent_unannotated_public_callback
     public var onEvent: ((ConnectionEvent) -> Void)?
     public var autoRespondToAuthRequired = true
     var onSend: ((ClientMessage, String?) -> Void)?

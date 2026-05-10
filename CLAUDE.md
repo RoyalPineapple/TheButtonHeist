@@ -462,6 +462,77 @@ There is one version: `buttonHeistVersion` in `ButtonHeist/Sources/TheScore/Mess
 ./scripts/release.sh --dry-run    # Preview only
 ```
 
+## Callback Isolation Discipline
+
+Public callback typealiases must declare their isolation in the closure type, not in a docstring. The compiler should enforce the isolation contract; documentation drifts.
+
+```swift
+// Good
+public var onConnected: (@ButtonHeistActor (ServerInfo) -> Void)?
+
+// Bad — isolation lives in a comment
+/// Fires on @ButtonHeistActor.
+public var onConnected: ((ServerInfo) -> Void)?
+```
+
+If a callback fires on a non-actor thread (network queue, ObjC runtime), still annotate explicitly: `@Sendable` for non-isolated, or document with the actor specified.
+
+The custom SwiftLint rule `agent_unannotated_public_callback` flags `public var on*: ((...) -> Void)?` patterns that are missing an isolation attribute.
+
+## Sendable Value Types Without Actor Isolation
+
+Sendable structs and enums must not carry `@MainActor` or `@ButtonHeistActor`. Actor isolation forces every consumer (tests, formatters, off-actor reads) into the actor for fields they're allowed to read concurrently. The `Sendable` conformance is sufficient.
+
+If the type holds a non-Sendable field (e.g. `FileHandle`, a UIKit reference), use `@unchecked Sendable` with an inline comment justifying the serialization invariant — and explain *why* the actor isolation is enforced by the owner, not by the type itself. SwiftLint's `agent_unchecked_sendable_no_comment` rule blocks unjustified `@unchecked Sendable` at PR time.
+
+Actor types (`actor Foo`) are different — those carry isolation by definition. Caseless namespace enums (`enum Foo { static func ... }`) that touch UIKit / scene state are also fine — `@MainActor` on them matches caller isolation, no instances are constructed. Annotate with `// swiftlint:disable:this agent_main_actor_value_type` and a short rationale.
+
+## Task Lifetime Tracking
+
+Every `Task { ... }` whose handle would otherwise be dropped must be stored at a known lifecycle point and cancelled on teardown. The handle being unobservable is the smell — fire-and-forget tasks contend for shared state and survive past the type that spawned them.
+
+SwiftUI:
+
+```swift
+@State private var pendingTask: Task<Void, Never>?
+
+// ...
+.onAppear { pendingTask?.cancel(); pendingTask = Task { ... } }
+.onDisappear { pendingTask?.cancel() }
+```
+
+Actors / `@MainActor` types:
+
+```swift
+private var pendingTasks: Set<Task<Void, Never>> = []
+
+private func schedule() {
+    let task = Task { /* work */ }
+    pendingTasks.insert(task)
+    // Tasks are cancelled in tearDown; if you need a task to remove itself
+    // from the set on completion, factor that into a helper rather than
+    // reaching for an IUO inside the closure.
+}
+
+func tearDown() {
+    for task in pendingTasks { task.cancel() }
+    pendingTasks.removeAll()
+}
+```
+
+The single-line `Task { @MainActor in self.callback(...) }` bridge is its own anti-pattern — the call site has no handle, no cancellation, no ordering guarantee. SwiftLint's `agent_callback_bridge_task` rule flags it; annotate the callback's isolation in its closure type and call it directly.
+
+## One Error Type Per Logical Domain
+
+Don't introduce a new `enum FooError: Error` without first asking whether an existing error type covers the case. The codebase has authoritative error types per layer:
+
+- `TheScore.ServerError` — wire-level errors broadcast from server to client
+- `TheHandoff.ConnectionError` / `ConnectionFailure` — connection lifecycle (these may consolidate; see `.context/audit/post-release-plan.md` program 4)
+- `FenceError` — CLI/MCP-facing dispatch errors
+- `BookKeeperError` — session lifecycle errors
+
+Per-module private errors are acceptable but should be auditable. If a new domain genuinely needs a new error type, document its boundary and what the existing types couldn't carry.
+
 ## CLI-First Development
 
 - **The CLI is the canonical test client.** All features must be usable from the command line.

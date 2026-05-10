@@ -88,7 +88,9 @@ final class TheMuscleTests: XCTestCase {
     }
 
     private func collectResponses() -> (respond: @Sendable (Data) -> Void, responses: () -> [Data]) {
-        final class Box: @unchecked Sendable {
+        // Test-only inspection box. Mutated only from within the @Sendable
+        // closure that captures it; not shared across threads in practice.
+        final class Box: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
             var items: [Data] = []
         }
         let box = Box()

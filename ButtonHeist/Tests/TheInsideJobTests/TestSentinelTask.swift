@@ -20,6 +20,9 @@ func neverEndingTask(
     onCancel: (@Sendable @MainActor () -> Void)? = nil
 ) -> Task<Void, Never> {
     Task { @MainActor in
+        // Intentional cancellable wait: this Task only terminates when the test
+        // cancels it. `.seconds(Int.max)` reads as "never" — no wall-clock semantics.
+        // swiftlint:disable:next agent_test_task_sleep
         try? await Task.sleep(for: .seconds(Int.max))
         if Task.isCancelled {
             onCancel?()

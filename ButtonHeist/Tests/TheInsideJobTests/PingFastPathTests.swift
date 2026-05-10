@@ -68,7 +68,9 @@ final class PingFastPathTests: XCTestCase {
         let request = RequestEnvelope(requestId: "req-async", message: .ping)
         let data = try JSONEncoder().encode(request)
 
+        // Deliberately blocks MainActor so we can prove the encoder runs off it.
         let mainBlocker = Task { @MainActor in
+            // swiftlint:disable:next agent_test_task_sleep
             try? await Task.sleep(for: .seconds(2))
         }
         defer {
@@ -180,6 +182,7 @@ final class PingFastPathTests: XCTestCase {
         // Hold the main actor for 2s — long enough that any accidental
         // `@MainActor` hop would be observable.
         let mainBlocker = Task { @MainActor in
+            // swiftlint:disable:next agent_test_task_sleep
             try? await Task.sleep(for: .seconds(2))
         }
         defer {

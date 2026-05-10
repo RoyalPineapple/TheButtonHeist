@@ -19,6 +19,9 @@ public final class USBDeviceDiscovery: DeviceDiscovering {
     private var pollTask: Task<Void, Never>?
     private var knownDevices: [String: DiscoveredDevice] = [:]
 
+    // Effective isolation is @ButtonHeistActor (the enclosing class is isolated);
+    // explicit annotation pending the public-callback annotation cleanup batch.
+    // swiftlint:disable:next agent_unannotated_public_callback
     public var onEvent: ((DiscoveryEvent) -> Void)?
 
     public var discoveredDevices: [DiscoveredDevice] {

@@ -197,6 +197,8 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
     private func waitForKeyboardBridge() async throws {
         for _ in 0..<20 {
             if KeyboardBridge.shared() != nil { return }
+            // Polls the UIKit keyboard singleton — no signal to await on.
+            // swiftlint:disable:next agent_test_task_sleep
             try await Task.sleep(for: .milliseconds(100))
         }
         guard KeyboardBridge.shared() != nil else {
