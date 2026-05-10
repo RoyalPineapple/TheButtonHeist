@@ -388,10 +388,25 @@ public final class DeviceConnection: DeviceConnecting {
             logger.info("Received server info: \(info.appName)")
             onEvent?(.connected)
             onEvent?(.message(.info(info), requestId: envelope.requestId, backgroundDelta: nil))
-        case .recordingStopped:
-            logger.debug("Recording stop acknowledged")
         case .pong:
+            // Pong must reach TheHandoff so the keepalive task can reset
+            // its missed-pong counter. Earlier code logged the pong here
+            // and stopped, which meant the counter incremented every 5s
+            // but never decremented — TheHandoff would force-disconnect
+            // any connection that stayed idle for 30s, including the
+            // window while the server was finalizing a recording. The
+            // log line stays for diagnostic noise; the message is also
+            // propagated so TheHandoff can mark the connection live.
             logger.debug("Received pong")
+            onEvent?(.message(envelope.message, requestId: envelope.requestId, backgroundDelta: envelope.backgroundDelta))
+        case .recordingStopped:
+            // TheHandoff clears its recording phase on this message;
+            // dropping it here left the client believing a recording
+            // was still in progress after the server had already torn
+            // it down (e.g. a max-duration broadcast with no pending
+            // stop_recording response).
+            logger.debug("Recording stop acknowledged")
+            onEvent?(.message(envelope.message, requestId: envelope.requestId, backgroundDelta: envelope.backgroundDelta))
         default:
             onEvent?(.message(envelope.message, requestId: envelope.requestId, backgroundDelta: envelope.backgroundDelta))
         }

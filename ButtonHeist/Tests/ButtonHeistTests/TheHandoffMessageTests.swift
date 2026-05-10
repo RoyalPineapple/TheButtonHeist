@@ -355,6 +355,90 @@ final class TheHandoffMessageTests: XCTestCase {
         XCTAssertEqual(receivedError, "capture failed")
     }
 
+    // MARK: - Keepalive / pong handling
+    //
+    // Regression: a recording with `--max-duration 5` tore the connection
+    // down ~25s after finalize started because the client was incrementing
+    // its missed-pong counter every keepalive tick but never decrementing
+    // it. Pongs were silently swallowed in DeviceConnection.handleMessage
+    // and never reached TheHandoff. After 6 missed pongs (30s) the
+    // keepalive force-disconnected — exactly when the server was finishing
+    // its AVAssetWriter flush and trying to send the recording payload.
+
+    @ButtonHeistActor
+    func testPongResetsMissedPongCountWhileConnected() async {
+        let handoff = TheHandoff()
+        connectMockHandoff(handoff)
+
+        // Simulate three keepalive ticks without server reply.
+        XCTAssertEqual(handoff.tickKeepalive(), 1)
+        XCTAssertEqual(handoff.tickKeepalive(), 2)
+        XCTAssertEqual(handoff.tickKeepalive(), 3)
+
+        // Server replies. The counter must drop back to zero.
+        handoff.handleServerMessage(.pong, requestId: nil)
+        XCTAssertEqual(handoff.missedPongCount, 0)
+
+        // Subsequent ticks count again from zero.
+        XCTAssertEqual(handoff.tickKeepalive(), 1)
+    }
+
+    @ButtonHeistActor
+    func testKeepaliveCounterClearsAcrossReconnect() async {
+        let handoff = TheHandoff()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mockOne = MockConnection()
+        handoff.makeConnection = { _, _, _ in mockOne }
+        handoff.connect(to: device)
+
+        // Accumulate missed pongs on the first session.
+        XCTAssertEqual(handoff.tickKeepalive(), 1)
+        XCTAssertEqual(handoff.tickKeepalive(), 2)
+        XCTAssertEqual(handoff.missedPongCount, 2)
+
+        // Reconnect (the session is rebuilt). The counter must be back to
+        // zero because it now lives inside ConnectedSession; a stale
+        // top-level field used to leak into the next session.
+        let mockTwo = MockConnection()
+        handoff.makeConnection = { _, _, _ in mockTwo }
+        handoff.connect(to: device)
+        XCTAssertEqual(handoff.missedPongCount, 0)
+    }
+
+    @ButtonHeistActor
+    func testTickKeepaliveIsNoOpWhenNotConnected() async {
+        let handoff = TheHandoff()
+        XCTAssertEqual(handoff.tickKeepalive(), 0)
+        XCTAssertEqual(handoff.missedPongCount, 0)
+    }
+
+    /// Regression: while the server is finalizing a recording it answers
+    /// every ping via the off-MainActor fast path. The client must process
+    /// each pong promptly so its counter can stay below the
+    /// `maxMissedPongs` threshold for the full finalize window. Drives a
+    /// realistic ping/pong cadence and asserts no force-disconnect ever
+    /// fires.
+    @ButtonHeistActor
+    func testKeepaliveSurvivesRecordingFinalizeWindowWhenPongsArrive() async {
+        let handoff = TheHandoff()
+        connectMockHandoff(handoff)
+        var disconnectFired = false
+        handoff.onDisconnected = { _ in disconnectFired = true }
+
+        // Eight ticks across ~40 simulated seconds — well past the
+        // 30-second force-disconnect threshold. A pong arrives between
+        // every ping, exactly mirroring what the server's fast path does.
+        for _ in 0..<8 {
+            let count = handoff.tickKeepalive()
+            XCTAssertLessThan(count, 6, "missedPongCount must never reach the disconnect threshold while pongs are flowing")
+            handoff.handleServerMessage(.pong, requestId: nil)
+            XCTAssertEqual(handoff.missedPongCount, 0)
+        }
+
+        XCTAssertFalse(disconnectFired, "Keepalive must not force-disconnect a connection whose pongs are arriving")
+        XCTAssertTrue(handoff.isConnected)
+    }
+
     // MARK: - forceDisconnect
 
     @ButtonHeistActor
