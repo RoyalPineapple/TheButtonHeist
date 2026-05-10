@@ -23,6 +23,16 @@ import TheScore
 /// - Any connection while a session is active from a different driver → busy signal
 private let logger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "auth")
 
+/// Isolation: pinned to `@MainActor`. Track F (concurrency-cleanup) considered demoting
+/// this type. Only `showApprovalAlert`, `dismissAlert`, and `topViewController()` truly
+/// require MainActor for UIKit. The remaining ~30 methods do not touch UIKit, but they
+/// all mutate the shared client/session/auth state machines (`clients`,
+/// `addressAuthStates`, `sessionPhase`, `lockoutTasks`), and @MainActor is what
+/// serializes mutations of `clients`/`addressAuthStates`/`sessionPhase`/`lockoutTasks`
+/// against the lockout / grace-period / approval-alert Tasks that fire on MainActor.
+/// Demoting without converting to `actor TheMuscle` (with a small @MainActor
+/// `AlertPresenter` collaborator for the UIAlertController bits) would force every
+/// TheGetaway call site onto `await` and is a structural change beyond Track F's scope.
 @MainActor
 final class TheMuscle {
 

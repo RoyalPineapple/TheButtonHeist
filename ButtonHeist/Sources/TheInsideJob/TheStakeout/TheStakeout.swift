@@ -10,6 +10,17 @@ private let logger = Logger(subsystem: "com.buttonheist.theinsidejob", category:
 
 /// Screen recording engine. Captures frames using TheInsideJob's window compositing
 /// and encodes them as H.264/MP4 using AVAssetWriter.
+///
+/// Isolation: pinned to `@MainActor`. Track F (concurrency-cleanup) considered demoting
+/// this type because AVAssetWriter is not MainActor-bound — only `captureFrame` (which
+/// invokes a UIKit hierarchy snapshot via `brains.captureScreenForRecording()`) and
+/// the `ScreenMetrics.current` read in `startRecording` strictly require MainActor.
+/// However, every other public method mutates `stakeoutPhase` (the state machine), and
+/// the @MainActor annotation is what serializes those mutations across the capture
+/// timer Task, the inactivity monitor Task, and the AVAssetWriter `finishWriting`
+/// completion. Demoting without converting to `actor TheStakeout` would force all
+/// callers in TheGetaway / TheStash to switch to `await`, which is out of scope for
+/// Track F. The right structural fix is captured in the audit as a follow-up.
 @MainActor
 final class TheStakeout {
 
