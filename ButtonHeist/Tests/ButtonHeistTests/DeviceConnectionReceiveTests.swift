@@ -45,6 +45,58 @@ final class DeviceConnectionReceiveTests: XCTestCase {
         XCTAssertTrue(active.connection === activeConnection)
     }
 
+    /// Regression: pong responses from the server must reach `onEvent` so
+    /// TheHandoff can reset its missed-pong counter. The previous code
+    /// silently swallowed `.pong` inside DeviceConnection's switch, which
+    /// meant the keepalive incremented every 5s but never decremented and
+    /// every connection that stayed idle for 30s was force-disconnected.
+    /// The recording-during-finalize bug surfaced this — the symptom was
+    /// "Disconnected by client" mid-recording.
+    @ButtonHeistActor
+    func testHandleReceiveForwardsPongToOnEvent() async throws {
+        let activeConnection = NWConnection(host: "127.0.0.1", port: 1111, using: .tcp)
+        let connection = DeviceConnection(device: makeDummyDevice())
+        connection.connectionState = .connected(.init(connection: activeConnection))
+
+        var envelope = try ResponseEnvelope(requestId: nil, message: .pong).encoded()
+        envelope.append(0x0A)
+
+        var receivedPong = false
+        connection.onEvent = { event in
+            if case .message(.pong, _, _) = event {
+                receivedPong = true
+            }
+        }
+
+        connection.handleReceive(content: envelope, isComplete: false, error: nil, connection: activeConnection)
+
+        XCTAssertTrue(receivedPong, "DeviceConnection must forward .pong messages to TheHandoff so the keepalive counter resets")
+    }
+
+    /// Regression: `.recordingStopped` must reach TheHandoff so it can clear
+    /// its recording phase. Dropping it left the client believing a recording
+    /// was still in progress after the server had already torn it down.
+    @ButtonHeistActor
+    func testHandleReceiveForwardsRecordingStoppedToOnEvent() async throws {
+        let activeConnection = NWConnection(host: "127.0.0.1", port: 1111, using: .tcp)
+        let connection = DeviceConnection(device: makeDummyDevice())
+        connection.connectionState = .connected(.init(connection: activeConnection))
+
+        var envelope = try ResponseEnvelope(requestId: nil, message: .recordingStopped).encoded()
+        envelope.append(0x0A)
+
+        var receivedRecordingStopped = false
+        connection.onEvent = { event in
+            if case .message(.recordingStopped, _, _) = event {
+                receivedRecordingStopped = true
+            }
+        }
+
+        connection.handleReceive(content: envelope, isComplete: false, error: nil, connection: activeConnection)
+
+        XCTAssertTrue(receivedRecordingStopped, "DeviceConnection must forward .recordingStopped so TheHandoff can clear its recording phase")
+    }
+
     @ButtonHeistActor
     func testHandleReceiveAcceptsLargeScreenResponse() async throws {
         let activeConnection = NWConnection(host: "127.0.0.1", port: 1111, using: .tcp)

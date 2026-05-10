@@ -111,6 +111,84 @@ final class TheGetawayTests: XCTestCase {
         )
     }
 
+    // MARK: - Recording auto-finish
+
+    /// Regression: when a recording auto-finishes (max duration, file-size
+    /// cap, inactivity) there is no `stop_recording` waiter on the server.
+    /// Earlier code only broadcast `.recordingStopped`, so the originating
+    /// `start_recording` caller — parked on `waitForRecording` — never saw
+    /// the payload and timed out. The fix broadcasts `.recording(payload)`
+    /// in addition to `.recordingStopped`. We assert via state that the
+    /// auto-finish path runs (no pending response is consumed; the result
+    /// is stashed in `completedRecording` for any later collection too).
+    func testAutoFinishWithoutPendingStopBroadcastsRecording() {
+        let (getaway, _, _) = makeGetaway()
+        XCTAssertNil(getaway.pendingRecordingResponse)
+        XCTAssertNil(getaway.completedRecording)
+
+        let payload = RecordingPayload(
+            videoData: "AAAA",
+            width: 100,
+            height: 200,
+            duration: 5.0,
+            frameCount: 40,
+            fps: 8,
+            startTime: Date(),
+            endTime: Date(),
+            stopReason: .maxDuration
+        )
+        getaway.deliverRecordingResult(.success(payload))
+
+        XCTAssertNil(getaway.pendingRecordingResponse, "Auto-finish must not leave a stale pending response")
+        guard case .success(let captured) = getaway.completedRecording else {
+            XCTFail("Auto-finish must keep the result in completedRecording for later collection")
+            return
+        }
+        XCTAssertEqual(captured.frameCount, 40)
+        XCTAssertEqual(captured.stopReason, .maxDuration)
+    }
+
+    /// Regression sibling: when there *is* a pending stop waiter the
+    /// payload must reach that waiter directly via `respond` rather than
+    /// broadcasting. The pending slot must clear and the pending requestId
+    /// must echo back to the originator.
+    func testStopRecordingWaiterReceivesRecordingDirectly() {
+        let (getaway, _, _) = makeGetaway()
+
+        var receivedData: Data?
+        getaway.pendingRecordingResponse = (
+            requestId: "stop-1",
+            respond: { data in receivedData = data }
+        )
+
+        let payload = RecordingPayload(
+            videoData: "AAAA",
+            width: 100, height: 200,
+            duration: 1.0, frameCount: 8, fps: 8,
+            startTime: Date(), endTime: Date(),
+            stopReason: .manual
+        )
+        getaway.deliverRecordingResult(.success(payload))
+
+        XCTAssertNil(getaway.pendingRecordingResponse, "Pending response must clear after delivery")
+        let unwrappedData = try? XCTUnwrap(receivedData)
+        XCTAssertNotNil(unwrappedData, "Pending stop waiter must receive a wire response")
+
+        if let unwrappedData {
+            // Strip trailing newline if present (transport convention).
+            let trimmed = unwrappedData.last == 0x0A
+                ? unwrappedData.dropLast()
+                : unwrappedData
+            let envelope = try? JSONDecoder().decode(ResponseEnvelope.self, from: trimmed)
+            XCTAssertEqual(envelope?.requestId, "stop-1")
+            guard case .recording(let echo)? = envelope?.message else {
+                XCTFail("Expected .recording payload, got \(String(describing: envelope?.message))")
+                return
+            }
+            XCTAssertEqual(echo.frameCount, 8)
+        }
+    }
+
     // MARK: - Helpers
 
     /// Wait for the consumer task on `transport.events` to drain queued events.

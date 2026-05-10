@@ -25,29 +25,7 @@ extension TheGetaway {
             self?.brains.captureScreenForRecording()
         }
         recorder.onRecordingComplete = { [weak self] result in
-            guard let self else { return }
-            self.recordingPhase = .idle
-            self.brains.stakeout = nil
-            self.completedRecording = result
-
-            if let pending = self.pendingRecordingResponse {
-                self.pendingRecordingResponse = nil
-                switch result {
-                case .success(let payload):
-                    self.sendMessage(.recording(payload), requestId: pending.requestId, respond: pending.respond)
-                case .failure(let error):
-                    let serverError = ServerError(kind: .recording, message: error.localizedDescription)
-                    self.sendMessage(.error(serverError), requestId: pending.requestId, respond: pending.respond)
-                }
-                return
-            }
-
-            switch result {
-            case .success:
-                self.broadcastToAll(.recordingStopped)
-            case .failure(let error):
-                self.broadcastToAll(.error(ServerError(kind: .recording, message: error.localizedDescription)))
-            }
+            self?.deliverRecordingResult(result)
         }
 
         do {
@@ -57,6 +35,41 @@ extension TheGetaway {
             sendMessage(.recordingStarted, requestId: requestId, respond: respond)
         } catch {
             sendMessage(.error(ServerError(kind: .recording, message: error.localizedDescription)), requestId: requestId, respond: respond)
+        }
+    }
+
+    /// Internal-for-tests entry point used by `onRecordingComplete`. Either
+    /// returns the payload to a pending `stop_recording` waiter, or — when
+    /// the stop was triggered by the server itself (max duration,
+    /// file-size cap, inactivity) — broadcasts `.recording(payload)` so
+    /// the originating `start_recording` caller, who is parked on
+    /// `waitForRecording`, can pick it up. Without that broadcast a
+    /// `start_recording --max-duration N` hangs until its 35s wait times
+    /// out and the payload sits server-side until a later `stop_recording`
+    /// drains `completedRecording`.
+    func deliverRecordingResult(_ result: Result<RecordingPayload, Error>) {
+        recordingPhase = .idle
+        brains.stakeout = nil
+        completedRecording = result
+
+        if let pending = pendingRecordingResponse {
+            pendingRecordingResponse = nil
+            switch result {
+            case .success(let payload):
+                sendMessage(.recording(payload), requestId: pending.requestId, respond: pending.respond)
+            case .failure(let error):
+                let serverError = ServerError(kind: .recording, message: error.localizedDescription)
+                sendMessage(.error(serverError), requestId: pending.requestId, respond: pending.respond)
+            }
+            return
+        }
+
+        switch result {
+        case .success(let payload):
+            broadcastToAll(.recording(payload))
+            broadcastToAll(.recordingStopped)
+        case .failure(let error):
+            broadcastToAll(.error(ServerError(kind: .recording, message: error.localizedDescription)))
         }
     }
 

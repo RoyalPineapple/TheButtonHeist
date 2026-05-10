@@ -55,6 +55,12 @@ public final class TheHandoff {
     /// session-scoped data that only makes sense during a live connection.
     /// Bundling these into the phase makes "connected but no server info" a
     /// transient inner state rather than a sibling-of-phase race.
+    ///
+    /// `missedPongCount` lives here (and not as a top-level TheHandoff field)
+    /// because it is meaningful only while a connection is live. Tying it to
+    /// `.connected` means the counter is automatically discarded on transition
+    /// to `.disconnected`/`.failed`, so a stale count from a prior connection
+    /// can never feed into a fresh one's keepalive arithmetic.
     public struct ConnectedSession {
         public let device: DiscoveredDevice
         let keepaliveTask: Task<Void, Never>
@@ -62,6 +68,7 @@ public final class TheHandoff {
         public var currentInterface: Interface?
         public var currentScreen: ScreenPayload?
         public var recordingPhase: RecordingPhase
+        var missedPongCount: Int
 
         init(
             device: DiscoveredDevice,
@@ -69,7 +76,8 @@ public final class TheHandoff {
             serverInfo: ServerInfo? = nil,
             currentInterface: Interface? = nil,
             currentScreen: ScreenPayload? = nil,
-            recordingPhase: RecordingPhase = .idle
+            recordingPhase: RecordingPhase = .idle,
+            missedPongCount: Int = 0
         ) {
             self.device = device
             self.keepaliveTask = keepaliveTask
@@ -77,6 +85,7 @@ public final class TheHandoff {
             self.currentInterface = currentInterface
             self.currentScreen = currentScreen
             self.recordingPhase = recordingPhase
+            self.missedPongCount = missedPongCount
         }
     }
 
@@ -113,7 +122,6 @@ public final class TheHandoff {
     public private(set) var isDiscovering: Bool = false
     public private(set) var connectionPhase: ConnectionPhase = .disconnected
     public private(set) var reconnectPolicy: ReconnectPolicy = .disabled
-    private var missedPongCount: Int = 0
 
     /// Continuations awaiting a terminal connection-phase transition. Each
     /// continuation is resumed exactly once when the phase next becomes
@@ -215,6 +223,15 @@ public final class TheHandoff {
     public var recordingPhase: RecordingPhase {
         if case .connected(let session) = connectionPhase { return session.recordingPhase }
         return .idle
+    }
+
+    /// Test seam: how many pings have been sent on the live connection
+    /// without a corresponding `.pong` reply. Resets to zero when a pong
+    /// arrives, and is automatically discarded when the connection phase
+    /// leaves `.connected`. Returns zero in any non-connected phase.
+    var missedPongCount: Int {
+        if case .connected(let session) = connectionPhase { return session.missedPongCount }
+        return 0
     }
 
     public var isRecording: Bool {
@@ -475,7 +492,6 @@ public final class TheHandoff {
             case .transportReady:
                 break
             case .connected:
-                self.missedPongCount = 0
                 let keepaliveTask = self.makeKeepaliveTask()
                 self.transitionToConnected(device: device, keepaliveTask: keepaliveTask)
             case .disconnected(let reason):
@@ -561,7 +577,7 @@ public final class TheHandoff {
             transitionToFailed(.error(message))
             onError?(message)
         case .pong:
-            missedPongCount = 0
+            mutateConnectedSession { $0.missedPongCount = 0 }
         case .recordingStopped:
             mutateConnectedSession { $0.recordingPhase = .idle }
         case .serverHello, .authRequired:
@@ -689,15 +705,29 @@ public final class TheHandoff {
             while !Task.isCancelled {
                 guard await Task.cancellableSleep(for: Self.keepaliveInterval) else { break }
                 guard !Task.isCancelled else { break }
-                self?.connection?.send(.ping)
-                self?.missedPongCount += 1
-                if let count = self?.missedPongCount, count >= Self.maxMissedPongs {
+                guard let self else { return }
+                let count = self.tickKeepalive()
+                if count >= Self.maxMissedPongs {
                     logger.warning("No pong received for \(count) consecutive pings — forcing disconnect")
-                    self?.forceDisconnect()
+                    self.forceDisconnect()
                     break
                 }
             }
         }
+    }
+
+    /// Send a keepalive ping and bump the missed-pong counter. Returns the
+    /// new count so the keepalive task can decide whether to force a
+    /// disconnect. No-op when not connected. Internal to allow tests to drive
+    /// keepalive cycles without waiting on the 5s interval.
+    @discardableResult
+    func tickKeepalive() -> Int {
+        guard case .connected(var session) = connectionPhase else { return 0 }
+        connection?.send(.ping)
+        session.missedPongCount += 1
+        let count = session.missedPongCount
+        connectionPhase = .connected(session)
+        return count
     }
 
     // MARK: - Session Management (discovery → connect → reconnect)
