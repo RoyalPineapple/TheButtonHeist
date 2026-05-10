@@ -21,11 +21,24 @@ public final class IdleMonitor {
             guard await Task.cancellableSleep(for: .seconds(timeout)) else { return }
             guard !Task.isCancelled, let self else { return }
             self.onTimeout()
+            // Clear the stored task so `hasPendingTimer` distinguishes
+            // completed-and-fired from in-flight. Safe: we are already on
+            // @ButtonHeistActor and do not await between fire and clear.
+            self.timeoutTask = nil
         }
     }
 
     public func stop() {
         timeoutTask?.cancel()
         timeoutTask = nil
+    }
+
+    /// Test-only: whether a timeout task is currently scheduled and has not
+    /// yet been cancelled or completed. Tests use this to assert "did not
+    /// fire" without wall-clock waits. The task body nils out `timeoutTask`
+    /// after `onTimeout()` runs, so a fired timer reads `false` here.
+    var hasPendingTimer: Bool {
+        guard let task = timeoutTask else { return false }
+        return !task.isCancelled
     }
 }

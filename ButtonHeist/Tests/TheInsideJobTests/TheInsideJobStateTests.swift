@@ -54,9 +54,8 @@ final class TheInsideJobStateTests: XCTestCase {
     func testStopFromResumingCancelsTaskAndTransitionsToStopped() {
         let job = TheInsideJob()
         let cancellationExpectation = XCTestExpectation(description: "Task cancelled")
-        let resumeTask = Task { @MainActor in
-            do { try await Task.sleep(for: .seconds(60)) } catch {}
-            if Task.isCancelled { cancellationExpectation.fulfill() }
+        let resumeTask = neverEndingTask {
+            cancellationExpectation.fulfill()
         }
         job.serverPhase = .resuming(task: resumeTask)
 
@@ -87,9 +86,8 @@ final class TheInsideJobStateTests: XCTestCase {
     func testSuspendFromResumingCancelsTaskAndSuspends() {
         let job = TheInsideJob()
         let cancellationExpectation = XCTestExpectation(description: "Resume task cancelled")
-        let resumeTask = Task { @MainActor in
-            do { try await Task.sleep(for: .seconds(60)) } catch {}
-            if Task.isCancelled { cancellationExpectation.fulfill() }
+        let resumeTask = neverEndingTask {
+            cancellationExpectation.fulfill()
         }
         job.serverPhase = .resuming(task: resumeTask)
 
@@ -245,9 +243,7 @@ final class TheInsideJobStateTests: XCTestCase {
 
     func testSuspendFromResumingPausesActivePolling() {
         let job = TheInsideJob()
-        let resumeTask = Task { @MainActor in
-            do { try await Task.sleep(for: .seconds(60)) } catch {}
-        }
+        let resumeTask = neverEndingTask()
         job.serverPhase = .resuming(task: resumeTask)
         job.startPolling(interval: 4.0)
 

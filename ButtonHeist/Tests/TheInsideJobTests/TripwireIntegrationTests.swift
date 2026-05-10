@@ -141,32 +141,27 @@ final class TripwireIntegrationTests: XCTestCase {
     // MARK: - Pulse produces readings
 
     func testPulseProducesReadingAfterStart() async throws {
-        tripwire.startPulse()
-        // Give the pulse a few ticks to produce a reading
-        try await Task.sleep(nanoseconds: 300_000_000)
+        // waitForSettle starts the pulse and only returns once at least one
+        // tick has produced a reading — observable signal beats wall-clock sleep.
+        // requiredQuietFrames: 1 mirrors the old "got a reading" semantic and
+        // keeps the test resilient to host noise.
+        let settled = await tripwire.waitForSettle(timeout: 1.0, requiredQuietFrames: 1)
+        XCTAssertTrue(settled, "Pulse should settle within timeout")
         let reading = try XCTUnwrap(tripwire.latestReading)
         XCTAssertGreaterThan(reading.tick, 0)
     }
 
     func testPulseReadingHasValidWindowCount() async throws {
-        tripwire.startPulse()
-        // All signals sampled every tick — a few ticks is enough.
-        try await Task.sleep(nanoseconds: 300_000_000)
-        guard let reading = tripwire.latestReading else {
-            XCTFail("No reading produced")
-            return
-        }
+        let settled = await tripwire.waitForSettle(timeout: 1.0, requiredQuietFrames: 1)
+        XCTAssertTrue(settled, "Pulse should settle within timeout")
+        let reading = try XCTUnwrap(tripwire.latestReading, "No reading produced")
         XCTAssertGreaterThan(reading.windowCount, 0)
     }
 
     func testPulseReadingTracksVCIdentity() async throws {
-        tripwire.startPulse()
-        // All signals sampled every tick — a few ticks is enough.
-        try await Task.sleep(nanoseconds: 300_000_000)
-        guard let reading = tripwire.latestReading else {
-            XCTFail("No reading produced")
-            return
-        }
+        let settled = await tripwire.waitForSettle(timeout: 1.0, requiredQuietFrames: 1)
+        XCTAssertTrue(settled, "Pulse should settle within timeout")
+        let reading = try XCTUnwrap(tripwire.latestReading, "No reading produced")
         // Test host should have a VC
         XCTAssertNotNil(reading.topmostVC)
     }
