@@ -35,6 +35,7 @@
 		27FA940D4EC61C8796791552 /* HeistPlaybackReportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73F7188B4AF419243A2EE76F /* HeistPlaybackReportTests.swift */; };
 		28B7A718F42369C803E58495 /* swift-crypto_CCryptoBoringSSLShims.bundle in Dependencies */ = {isa = PBXBuildFile; fileRef = 6777391A168B3CB3695C0BCF /* swift-crypto_CCryptoBoringSSLShims.bundle */; };
 		28F5CFC5C8490148E35536F5 /* TheFence+Formatting+JSON.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB8D4C2E483F550C29C4FDE2 /* TheFence+Formatting+JSON.swift */; };
+		2918BA7FEFF0BAC8C6159281 /* TheGetawayTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D273546C6C3611F97D0E3CF0 /* TheGetawayTests.swift */; };
 		296CC925AB9F25B737FF1783 /* TheStakeoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20911C376F477524EC4F207 /* TheStakeoutTests.swift */; };
 		2A360A9CAC75AEA9C9993F93 /* AuthMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BE8A7B3A58123142AC5A3C1 /* AuthMessageTests.swift */; };
 		2E0CD071F454D6FD708D52DC /* DeviceResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44278872AF4289E309CD78E2 /* DeviceResolver.swift */; };
@@ -494,6 +495,7 @@
 		CF2F586190CE1CB11AC6617B /* TheSafecracker+TapDiagnostic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+TapDiagnostic.swift"; sourceTree = "<group>"; };
 		D0BAD5A4EB504A85EF99890C /* TheInsideJob-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "TheInsideJob-Info.plist"; sourceTree = "<group>"; };
 		D12CAE8F1C0CE5FAD5BB0B5A /* TheFingerprints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheFingerprints.swift; sourceTree = "<group>"; };
+		D273546C6C3611F97D0E3CF0 /* TheGetawayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheGetawayTests.swift; sourceTree = "<group>"; };
 		D3EA65F009A28CA1D8F7B8F7 /* TheFenceSecurityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheFenceSecurityTests.swift; sourceTree = "<group>"; };
 		D43D24A6682C61D9E2826547 /* DeviceProtocols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceProtocols.swift; sourceTree = "<group>"; };
 		D49CBF2F9D6B021BBD2C282F /* IdAssignmentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdAssignmentTests.swift; sourceTree = "<group>"; };
@@ -928,6 +930,7 @@
 				1BE3551882C8F9FF740EA26B /* TheBurglarApplyTests.swift */,
 				A0E4125D91BDBBE45E6C66F9 /* TheBurglarContainerFramesTests.swift */,
 				FEF358739DC27BF19F7C58C7 /* TheBurglarParseTests.swift */,
+				D273546C6C3611F97D0E3CF0 /* TheGetawayTests.swift */,
 				8704DBF79498D0AAA0EDF20B /* TheInsideJobStateTests.swift */,
 				594A7F8340C7B335C8033319 /* TheMuscleTests.swift */,
 				853859C605E256FDB5707237 /* TheSafecrackerIntegrationTests.swift */,
@@ -1481,6 +1484,7 @@
 				37A3E33799F2C13AF5F9D355 /* TheBurglarApplyTests.swift in Sources */,
 				86AD65304E33955480EAF158 /* TheBurglarContainerFramesTests.swift in Sources */,
 				75784BEDD12A767343FDACC7 /* TheBurglarParseTests.swift in Sources */,
+				2918BA7FEFF0BAC8C6159281 /* TheGetawayTests.swift in Sources */,
 				036A97225C8E6C36CC730DA1 /* TheInsideJobStateTests.swift in Sources */,
 				70645F302E2187171D64E958 /* TheMuscleTests.swift in Sources */,
 				63694CF61DB981B3C4BB0212 /* TheSafecrackerIntegrationTests.swift in Sources */,

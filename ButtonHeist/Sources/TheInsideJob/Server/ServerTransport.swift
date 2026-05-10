@@ -6,18 +6,54 @@ import TheScore
 
 private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "transport")
 
+/// Ordered transport-level event emitted by `ServerTransport`.
+///
+/// Each case mirrors a callback that `SimpleSocketServer` previously fired on
+/// the network queue. Routing every event through one ordered stream means the
+/// consumer cannot observe a `dataReceived` for a client before its
+/// `clientConnected` — a race the prior per-event `Task { @MainActor in ... }`
+/// bridge could lose.
+public enum TransportEvent: Sendable {
+    /// A client TCP connection became `.ready`.
+    case clientConnected(clientId: Int, remoteAddress: String?)
+    /// A client connection was cancelled or failed.
+    case clientDisconnected(clientId: Int)
+    /// An authenticated client sent a complete message. `respond` enqueues a
+    /// reply on the underlying connection's send queue.
+    case dataReceived(clientId: Int, data: Data, respond: @Sendable (Data) -> Void)
+    /// An unauthenticated client sent a complete message; the consumer must
+    /// decide whether the message is allowed in the unauthenticated state.
+    case unauthenticatedData(clientId: Int, data: Data, respond: @Sendable (Data) -> Void)
+    /// The client exceeded the per-second message cap; `respond` lets the
+    /// consumer notify the client once per rate-limit window.
+    case rateLimited(clientId: Int, respond: @Sendable (Data) -> Void)
+    /// A `dataReceived` payload was answered synchronously on the network
+    /// queue by `syncDataInterceptor`. The consumer typically only needs to
+    /// note client activity; the response has already been sent.
+    case fastPathHandled(clientId: Int)
+}
+
 /// Server-side transport layer for TheInsideJob.
 ///
 /// Combines `SimpleSocketServer` (TCP) with Bonjour `NetService` advertisement
 /// into a single type that TheInsideJob can delegate to for all networking concerns.
 ///
+/// Transport events (client connected, data received, rate limited, etc.) are
+/// delivered as a single ordered `AsyncStream<TransportEvent>` consumed via
+/// `events`. Callers run a single `for await` loop and dispatch by case.
+/// Ordering is preserved by construction — there is no per-event `Task` race
+/// that could land out of order on the consumer's actor.
+///
+/// `ServerTransport` is single-use: once `stop()` finishes the event stream,
+/// create a new instance for any subsequent run.
+///
 /// Usage:
 /// ```
 /// let transport = ServerTransport()
-/// transport.onClientConnected = { clientId in ... }
-/// transport.onDataReceived = { clientId, data, respond in ... }
-/// let port = try transport.start()
+/// transport.setSyncDataInterceptor { clientId, data in ... }  // optional fast path
+/// let port = try await transport.start()
 /// transport.advertise(serviceName: "MyApp#abc")
+/// for await event in transport.events { ... }
 /// ```
 @MainActor
 public final class ServerTransport: NSObject {
@@ -37,13 +73,45 @@ public final class ServerTransport: NSObject {
     /// Current TXT record entries (preserved across updates).
     private var currentTXT: [String: Data] = [:]
 
-    // MARK: - Callbacks (set before start, forwarded to actor on start)
+    // MARK: - Event Stream
 
-    public var onClientConnected: (@Sendable (_ clientId: Int, _ remoteAddress: String?) -> Void)?
-    public var onClientDisconnected: (@Sendable (Int) -> Void)?
-    public var onDataReceived: SimpleSocketServer.DataHandler?
-    public var onUnauthenticatedData: (@Sendable (_ clientId: Int, _ data: Data, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
-    public var onRateLimited: (@Sendable (_ clientId: Int, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
+    /// Ordered event stream. Each call returns the same stream; only one
+    /// consumer should `for await` it at a time.
+    public let events: AsyncStream<TransportEvent>
+
+    /// Continuation for `events`. Yielded to from network-queue callbacks
+    /// (`@Sendable`) and finished when the transport is stopped.
+    private let eventContinuation: AsyncStream<TransportEvent>.Continuation
+
+    /// Synchronous interceptor for off-MainActor fast-path responses.
+    ///
+    /// Called on the network queue *before* a `.dataReceived` event is yielded
+    /// for an authenticated client. If it returns non-nil, the transport sends
+    /// the response synchronously and yields a `.fastPathHandled(clientId:)`
+    /// event instead. Used to keep ping/pong responsive when the consumer's
+    /// actor is wedged on long-running work. Returning nil falls through to
+    /// the normal `.dataReceived` path.
+    ///
+    /// The interceptor is snapshotted at `start()` time; assigning it after
+    /// `start()` has been called is a programmer error and trips a
+    /// `precondition` rather than being silently dropped. Use
+    /// `setSyncDataInterceptor(_:)` to install one before starting.
+    public private(set) var syncDataInterceptor: (@Sendable (_ clientId: Int, _ data: Data) -> Data?)?
+
+    /// Tracks whether `start()` has been called. Once set, the interceptor is
+    /// frozen; later assignments would be silently captured-by-value at
+    /// `makeCallbacks()` time and have no effect on the running transport.
+    private var hasStarted = false
+
+    /// Install a synchronous data interceptor. Must be called before
+    /// `start()`; calling after start trips a `precondition`.
+    public func setSyncDataInterceptor(_ interceptor: (@Sendable (_ clientId: Int, _ data: Data) -> Data?)?) {
+        precondition(
+            !hasStarted,
+            "ServerTransport.syncDataInterceptor must be set before start(); later assignment is silently dropped because makeCallbacks() snapshots by value"
+        )
+        syncDataInterceptor = interceptor
+    }
 
     /// The port the server is listening on (0 if not started).
     public var listeningPort: UInt16 {
@@ -55,6 +123,9 @@ public final class ServerTransport: NSObject {
     public init(tlsIdentity: TLSIdentity? = nil, allowedScopes: Set<ConnectionScope> = ConnectionScope.all) {
         self.server = SimpleSocketServer(allowedScopes: allowedScopes)
         self.tlsIdentity = tlsIdentity
+        (self.events, self.eventContinuation) = AsyncStream<TransportEvent>.makeStream(
+            bufferingPolicy: .unbounded
+        )
         super.init()
     }
 
@@ -77,20 +148,51 @@ public final class ServerTransport: NSObject {
         }
 
         let params = await tlsIdentity?.makeTLSParameters()
-        let callbacks = SimpleSocketServer.Callbacks(
-            onClientConnected: onClientConnected,
-            onClientDisconnected: onClientDisconnected,
-            onDataReceived: onDataReceived,
-            onUnauthenticatedData: onUnauthenticatedData,
-            onRateLimited: onRateLimited
-        )
+        let callbacks = makeCallbacks()
+        hasStarted = true
         return try await server.startAsync(port: port, bindToLoopback: bindToLoopback, tlsParameters: params, callbacks: callbacks)
+    }
+
+    /// Build the bridge callbacks that yield onto `eventContinuation`.
+    ///
+    /// Each closure is `@Sendable` because `SimpleSocketServer` invokes it on
+    /// its own network queue, not the main actor. The continuation is itself
+    /// Sendable; `yield` is safe to call from any context. The synchronous
+    /// data interceptor is snapshotted here at start time — that's why
+    /// `setSyncDataInterceptor(_:)` preconditions on `!hasStarted`: a later
+    /// assignment would not reach the captured `interceptor` constant.
+    internal func makeCallbacks() -> SimpleSocketServer.Callbacks {
+        let continuation = eventContinuation
+        let interceptor = syncDataInterceptor
+        return SimpleSocketServer.Callbacks(
+            onClientConnected: { clientId, remoteAddress in
+                continuation.yield(.clientConnected(clientId: clientId, remoteAddress: remoteAddress))
+            },
+            onClientDisconnected: { clientId in
+                continuation.yield(.clientDisconnected(clientId: clientId))
+            },
+            onDataReceived: { clientId, data, respond in
+                if let interceptor, let response = interceptor(clientId, data) {
+                    respond(response)
+                    continuation.yield(.fastPathHandled(clientId: clientId))
+                    return
+                }
+                continuation.yield(.dataReceived(clientId: clientId, data: data, respond: respond))
+            },
+            onUnauthenticatedData: { clientId, data, respond in
+                continuation.yield(.unauthenticatedData(clientId: clientId, data: data, respond: respond))
+            },
+            onRateLimited: { clientId, respond in
+                continuation.yield(.rateLimited(clientId: clientId, respond: respond))
+            }
+        )
     }
 
     /// Stop the TCP server and any Bonjour advertisement.
     @discardableResult
     public func stop() -> Task<Void, Never> {
         stopAdvertising()
+        eventContinuation.finish()
         let task = Task { [server] in
             await server.stop()
         }

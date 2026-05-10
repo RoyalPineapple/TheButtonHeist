@@ -237,9 +237,26 @@ Five closure assignments wire `TheMuscle` ↔ `ServerTransport`:
 - `muscle.onClientAuthenticated` → `sendServerInfo`
 - `muscle.onSessionActiveChanged` → update Bonjour TXT record (`sessionactive` key)
 
-Inbound data paths:
-- **Authenticated path**: `transport.onDataReceived` → `handleClientMessage`
-- **Pre-auth path**: `transport.onUnauthenticatedData` → checks for `status` probe from hello-validated clients → otherwise routes to `muscle.handleUnauthenticatedMessage`
+Inbound events arrive via a single `AsyncStream<TransportEvent>` exposed as
+`transport.events`. TheGetaway runs one long-lived consumer task that awaits
+each event sequentially and dispatches via `handleTransportEvent(_:)`:
+- **Authenticated path**: `.dataReceived(clientId, data, respond)` →
+  `handleClientMessage`
+- **Pre-auth path**: `.unauthenticatedData(clientId, data, respond)` →
+  checks for `status` probe from hello-validated clients → otherwise routes to
+  `muscle.handleUnauthenticatedMessage`
+- **Lifecycle**: `.clientConnected(clientId, address)` registers the address
+  on TheMuscle and sends serverHello; `.clientDisconnected(clientId)` notifies
+  TheMuscle.
+- **Fast path**: `.fastPathHandled(clientId)` is yielded after
+  `syncDataInterceptor` answers a ping on the network queue — TheGetaway just
+  notes client activity. The actual response went out before the event was
+  enqueued.
+
+Routing every event through one ordered stream means the consumer cannot
+observe a `.dataReceived` for a client before its `.clientConnected` — the
+race the prior per-event `Task { @MainActor in ... }` callback bridge could
+lose.
 
 ## Items Flagged for Review
 
