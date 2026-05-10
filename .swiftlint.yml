@@ -85,7 +85,10 @@ custom_rules:
   agent_test_task_sleep:
     name: "Agent: Task.sleep / Thread.sleep in tests"
     regex: '(?<!cancellable)(?<!\.)\b(?:Task|Thread)\.sleep\b'
-    included: ".*Tests\\.swift"
+    # Match any Swift file under a `Tests/` directory, not just files literally
+    # named `*Tests.swift` — helpers (`*Helpers.swift`, `*Task.swift`) live in
+    # the same dirs and the rule must catch their sleeps too.
+    included: ".*/Tests/.*\\.swift"
     match_kinds:
       - identifier
       - typeidentifier

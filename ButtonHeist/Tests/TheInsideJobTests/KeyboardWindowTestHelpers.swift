@@ -21,6 +21,9 @@ import UIKit
         for _ in 0..<maxAttempts {
             if !hasPassthroughWindow() { return }
             do {
+                // Polls UIKit's window list — keyboard window retire is async with no
+                // observable signal to await on (no notification, no delegate callback).
+                // swiftlint:disable:next agent_test_task_sleep
                 try await Task.sleep(for: .milliseconds(50))
             } catch {
                 return

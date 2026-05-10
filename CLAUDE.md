@@ -507,9 +507,11 @@ Actors / `@MainActor` types:
 private var pendingTasks: Set<Task<Void, Never>> = []
 
 private func schedule() {
-    var task: Task<Void, Never>!
-    task = Task { defer { self.pendingTasks.remove(task) } /* ... */ }
+    let task = Task { /* work */ }
     pendingTasks.insert(task)
+    // Tasks are cancelled in tearDown; if you need a task to remove itself
+    // from the set on completion, factor that into a helper rather than
+    // reaching for an IUO inside the closure.
 }
 
 func tearDown() {
