@@ -55,33 +55,39 @@ public enum TransportEvent: Sendable {
 /// transport.advertise(serviceName: "MyApp#abc")
 /// for await event in transport.events { ... }
 /// ```
-@MainActor
+///
+/// Isolation: lifecycle methods (`start`, `stop`, `advertise`, `setSyncDataInterceptor`)
+/// are `@MainActor`-isolated because they mutate Bonjour and lifecycle state that the
+/// owning `TheInsideJob` (also MainActor) reads synchronously. The pass-through helpers
+/// (`send`, `broadcastToAll`, `markAuthenticated`, `disconnect`, `listeningPort`) only
+/// touch the inner `SimpleSocketServer` actor reference and are nonisolated, so callers
+/// on any context can use them without an actor hop.
 public final class ServerTransport: NSObject {
 
     /// The underlying TCP server (actor-isolated).
-    public let server: SimpleSocketServer
+    public nonisolated let server: SimpleSocketServer
 
     /// TLS identity for encrypted transport (nil = plain TCP).
-    private let tlsIdentity: TLSIdentity?
+    private nonisolated let tlsIdentity: TLSIdentity?
 
     /// The Bonjour service, if advertising.
-    private var netService: NetService?
+    @MainActor private var netService: NetService?
 
     /// In-flight stop task for deterministic lifecycle transitions.
-    private var stopTask: Task<Void, Never>?
+    @MainActor private var stopTask: Task<Void, Never>?
 
     /// Current TXT record entries (preserved across updates).
-    private var currentTXT: [String: Data] = [:]
+    @MainActor private var currentTXT: [String: Data] = [:]
 
     // MARK: - Event Stream
 
     /// Ordered event stream. Each call returns the same stream; only one
     /// consumer should `for await` it at a time.
-    public let events: AsyncStream<TransportEvent>
+    public nonisolated let events: AsyncStream<TransportEvent>
 
     /// Continuation for `events`. Yielded to from network-queue callbacks
     /// (`@Sendable`) and finished when the transport is stopped.
-    private let eventContinuation: AsyncStream<TransportEvent>.Continuation
+    private nonisolated let eventContinuation: AsyncStream<TransportEvent>.Continuation
 
     /// Synchronous interceptor for off-MainActor fast-path responses.
     ///
@@ -96,15 +102,16 @@ public final class ServerTransport: NSObject {
     /// `start()` has been called is a programmer error and trips a
     /// `precondition` rather than being silently dropped. Use
     /// `setSyncDataInterceptor(_:)` to install one before starting.
-    public private(set) var syncDataInterceptor: (@Sendable (_ clientId: Int, _ data: Data) -> Data?)?
+    @MainActor public private(set) var syncDataInterceptor: (@Sendable (_ clientId: Int, _ data: Data) -> Data?)?
 
     /// Tracks whether `start()` has been called. Once set, the interceptor is
     /// frozen; later assignments would be silently captured-by-value at
     /// `makeCallbacks()` time and have no effect on the running transport.
-    private var hasStarted = false
+    @MainActor private var hasStarted = false
 
     /// Install a synchronous data interceptor. Must be called before
     /// `start()`; calling after start trips a `precondition`.
+    @MainActor
     public func setSyncDataInterceptor(_ interceptor: (@Sendable (_ clientId: Int, _ data: Data) -> Data?)?) {
         precondition(
             !hasStarted,
@@ -114,13 +121,13 @@ public final class ServerTransport: NSObject {
     }
 
     /// The port the server is listening on (0 if not started).
-    public var listeningPort: UInt16 {
+    public nonisolated var listeningPort: UInt16 {
         server.listeningPort
     }
 
     // MARK: - Init
 
-    public init(tlsIdentity: TLSIdentity? = nil, allowedScopes: Set<ConnectionScope> = ConnectionScope.all) {
+    public nonisolated init(tlsIdentity: TLSIdentity? = nil, allowedScopes: Set<ConnectionScope> = ConnectionScope.all) {
         self.server = SimpleSocketServer(allowedScopes: allowedScopes)
         self.tlsIdentity = tlsIdentity
         (self.events, self.eventContinuation) = AsyncStream<TransportEvent>.makeStream(
@@ -140,6 +147,7 @@ public final class ServerTransport: NSObject {
     ///   - port: Port to listen on (0 = any available)
     ///   - bindToLoopback: If true, bind to loopback only
     /// - Returns: Actual port number bound
+    @MainActor
     @discardableResult
     public func start(port: UInt16 = 0, bindToLoopback: Bool = false) async throws -> UInt16 {
         if let stopTask {
@@ -161,6 +169,7 @@ public final class ServerTransport: NSObject {
     /// data interceptor is snapshotted here at start time — that's why
     /// `setSyncDataInterceptor(_:)` preconditions on `!hasStarted`: a later
     /// assignment would not reach the captured `interceptor` constant.
+    @MainActor
     internal func makeCallbacks() -> SimpleSocketServer.Callbacks {
         let continuation = eventContinuation
         let interceptor = syncDataInterceptor
@@ -189,6 +198,7 @@ public final class ServerTransport: NSObject {
     }
 
     /// Stop the TCP server and any Bonjour advertisement.
+    @MainActor
     @discardableResult
     public func stop() -> Task<Void, Never> {
         stopAdvertising()
@@ -201,6 +211,7 @@ public final class ServerTransport: NSObject {
     }
 
     /// Await completion of any in-flight stop operation.
+    @MainActor
     public func waitForStopped() async {
         if let stopTask {
             await stopTask.value
@@ -218,6 +229,7 @@ public final class ServerTransport: NSObject {
     ///   - installationId: Stable installation identifier (optional)
     ///   - instanceId: Human-readable instance identifier (optional)
     ///   - additionalTXT: Extra TXT record key-value pairs (optional)
+    @MainActor
     public func advertise(
         serviceName: String,
         simulatorUDID: String? = nil,
@@ -275,6 +287,7 @@ public final class ServerTransport: NSObject {
     /// Update the TXT record of the currently advertised service.
     /// Merges entries into the existing TXT record (preserving keys not in `entries`).
     /// - Parameter entries: Key-value pairs to set in the TXT record.
+    @MainActor
     public func updateTXTRecord(_ entries: [String: String]) {
         guard let service = netService else {
             logger.warning("Cannot update TXT record: not advertising")
@@ -290,6 +303,7 @@ public final class ServerTransport: NSObject {
     }
 
     /// Stop Bonjour advertisement without stopping the TCP server.
+    @MainActor
     public func stopAdvertising() {
         netService?.stop()
         netService = nil
@@ -299,22 +313,22 @@ public final class ServerTransport: NSObject {
     // MARK: - Message Sending
 
     /// Send data to a specific client.
-    public func send(_ data: Data, to clientId: Int) {
+    public nonisolated func send(_ data: Data, to clientId: Int) {
         Task { [server] in await server.send(data, to: clientId) }
     }
 
     /// Broadcast data to all authenticated clients.
-    public func broadcastToAll(_ data: Data) {
+    public nonisolated func broadcastToAll(_ data: Data) {
         Task { [server] in await server.broadcastToAll(data) }
     }
 
     /// Mark a client as authenticated.
-    public func markAuthenticated(_ clientId: Int) {
+    public nonisolated func markAuthenticated(_ clientId: Int) {
         Task { [server] in await server.markAuthenticated(clientId) }
     }
 
     /// Disconnect a specific client.
-    public func disconnect(clientId: Int) {
+    public nonisolated func disconnect(clientId: Int) {
         Task { [server] in await server.disconnect(clientId: clientId) }
     }
 }
