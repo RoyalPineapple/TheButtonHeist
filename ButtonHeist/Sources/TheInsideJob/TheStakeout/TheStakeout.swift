@@ -86,10 +86,10 @@ final class TheStakeout {
     }
 
     // Frame provider closure — set by TheInsideJob to provide captureScreenForRecording()
-    var captureFrame: (() -> UIImage?)?
+    var captureFrame: (@MainActor () -> UIImage?)?
 
     // Completion handler — called when recording finishes for any reason
-    var onRecordingComplete: ((Result<RecordingPayload, Error>) -> Void)?
+    var onRecordingComplete: (@MainActor (Result<RecordingPayload, Error>) -> Void)?
 
     // MARK: - Public API
 

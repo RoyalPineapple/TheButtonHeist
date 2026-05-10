@@ -147,15 +147,15 @@ public final class TheFence {
     public static let supportedCommands: [String] = Command.allCases.map(\.rawValue)
 
     /// Fires on informational status strings (e.g. `BUTTONHEIST_TOKEN=<value>`
-    /// on server-generated token, connection events). Fires on `@ButtonHeistActor`.
-    public var onStatus: ((String) -> Void)? {
+    /// on server-generated token, connection events).
+    public var onStatus: (@ButtonHeistActor (String) -> Void)? {
         didSet { handoff.onStatus = onStatus }
     }
 
     /// Fires when the server approves authentication. The parameter is the
     /// approved token, or `nil` when the server accepted a previously-held
-    /// session. Fires on `@ButtonHeistActor`.
-    public var onAuthApproved: ((String?) -> Void)?
+    /// session.
+    public var onAuthApproved: (@ButtonHeistActor (String?) -> Void)?
 
     var config: Configuration
     let handoff = TheHandoff()

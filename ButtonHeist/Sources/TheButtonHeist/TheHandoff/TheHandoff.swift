@@ -226,43 +226,43 @@ public final class TheHandoff {
     // All callbacks below fire on `@ButtonHeistActor`.
 
     /// A device matching the filter appeared on the network.
-    public var onDeviceFound: ((DiscoveredDevice) -> Void)?
+    public var onDeviceFound: (@ButtonHeistActor (DiscoveredDevice) -> Void)?
     /// A previously-known device is no longer advertising.
-    public var onDeviceLost: ((DiscoveredDevice) -> Void)?
+    public var onDeviceLost: (@ButtonHeistActor (DiscoveredDevice) -> Void)?
 
     // MARK: - Connection Callbacks
 
     /// Handshake completed successfully; `ServerInfo` carries server version + capabilities.
-    public var onConnected: ((ServerInfo) -> Void)?
+    public var onConnected: (@ButtonHeistActor (ServerInfo) -> Void)?
     /// The connection has dropped. `DisconnectReason` indicates whether this was local, remote, or error-driven.
-    public var onDisconnected: ((DisconnectReason) -> Void)?
+    public var onDisconnected: (@ButtonHeistActor (DisconnectReason) -> Void)?
     /// A `get_interface` response arrived. The trailing `String?` is the originating requestId (nil for unsolicited pushes).
-    public var onInterface: ((Interface, String?) -> Void)?
+    public var onInterface: (@ButtonHeistActor (Interface, String?) -> Void)?
     /// An action command (tap, swipe, type, etc.) produced a result. Trailing `String?` is the originating requestId.
-    public var onActionResult: ((ActionResult, String?) -> Void)?
+    public var onActionResult: (@ButtonHeistActor (ActionResult, String?) -> Void)?
     /// A `get_screen` response arrived. Trailing `String?` is the originating requestId.
-    public var onScreen: ((ScreenPayload, String?) -> Void)?
+    public var onScreen: (@ButtonHeistActor (ScreenPayload, String?) -> Void)?
     /// The server acknowledged that screen recording has begun.
-    public var onRecordingStarted: (() -> Void)?
+    public var onRecordingStarted: (@ButtonHeistActor () -> Void)?
     /// A completed recording is delivered (as base64 payload + metadata).
-    public var onRecording: ((RecordingPayload) -> Void)?
+    public var onRecording: (@ButtonHeistActor (RecordingPayload) -> Void)?
     /// Recording failed mid-capture; the string is the server-reported reason.
-    public var onRecordingError: ((String) -> Void)?
+    public var onRecordingError: (@ButtonHeistActor (String) -> Void)?
     /// General protocol/transport error reported by the server.
-    public var onError: ((String) -> Void)?
+    public var onError: (@ButtonHeistActor (String) -> Void)?
     /// Error response for a specific in-flight request.
-    public var onRequestError: ((String, String) -> Void)?
+    public var onRequestError: (@ButtonHeistActor (String, String) -> Void)?
     /// Auth approved. The parameter is the approved token, or nil when reusing a persistent session.
-    public var onAuthApproved: ((String?) -> Void)?
+    public var onAuthApproved: (@ButtonHeistActor (String?) -> Void)?
     /// Another agent currently owns the session. Payload carries details for the operator to resolve.
-    public var onSessionLocked: ((SessionLockedPayload) -> Void)?
+    public var onSessionLocked: (@ButtonHeistActor (SessionLockedPayload) -> Void)?
     /// Auth rejected by server; the string is the reason.
-    public var onAuthFailed: ((String) -> Void)?
+    public var onAuthFailed: (@ButtonHeistActor (String) -> Void)?
     /// A user interaction event (tap, swipe) captured on the device.
-    public var onInteraction: ((InteractionEvent) -> Void)?
+    public var onInteraction: (@ButtonHeistActor (InteractionEvent) -> Void)?
     /// The server pushed an interface delta between commands (the UI changed
     /// without a direct action request). Drained by `TheFence` for session state.
-    public var onBackgroundDelta: ((InterfaceDelta) -> Void)?
+    public var onBackgroundDelta: (@ButtonHeistActor (InterfaceDelta) -> Void)?
 
     // MARK: - Configuration
 
@@ -703,7 +703,7 @@ public final class TheHandoff {
     // MARK: - Session Management (discovery → connect → reconnect)
 
     /// Status callback for session management progress messages.
-    public var onStatus: ((String) -> Void)?
+    public var onStatus: (@ButtonHeistActor (String) -> Void)?
 
     /// Discover a device (optionally matching a filter) and connect to it.
     /// Starts discovery if not already active, polls until a matching device appears
