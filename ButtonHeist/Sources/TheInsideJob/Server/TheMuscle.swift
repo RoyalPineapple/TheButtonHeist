@@ -23,16 +23,13 @@ import TheScore
 /// - Any connection while a session is active from a different driver → busy signal
 private let logger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "auth")
 
-/// Isolation: pinned to `@MainActor`. Track F (concurrency-cleanup) considered demoting
-/// this type. Only `showApprovalAlert`, `dismissAlert`, and `topViewController()` truly
-/// require MainActor for UIKit. The remaining ~30 methods do not touch UIKit, but they
-/// all mutate the shared client/session/auth state machines (`clients`,
-/// `addressAuthStates`, `sessionPhase`, `lockoutTasks`), and @MainActor is what
-/// serializes mutations of `clients`/`addressAuthStates`/`sessionPhase`/`lockoutTasks`
-/// against the lockout / grace-period / approval-alert Tasks that fire on MainActor.
-/// Demoting without converting to `actor TheMuscle` (with a small @MainActor
-/// `AlertPresenter` collaborator for the UIAlertController bits) would force every
-/// TheGetaway call site onto `await` and is a structural change beyond Track F's scope.
+/// Isolation: pinned to `@MainActor`. UIKit alert presentation has been extracted
+/// to `AlertPresenter` (a `@MainActor` companion), but the auth state machine
+/// itself remains MainActor-isolated for now — converting to an actor is the
+/// next step (Program 1c in the post-release plan). Until then, @MainActor is
+/// what serializes mutations of `clients`/`addressAuthStates`/`sessionPhase`/
+/// `lockoutTasks` against the lockout / grace-period Tasks that fire on
+/// MainActor.
 @MainActor
 final class TheMuscle {
 
@@ -108,7 +105,7 @@ final class TheMuscle {
     private var clients: [Int: ClientPhase] = [:]
 
     private(set) var sessionToken: String
-    private weak var presentedAlert: UIAlertController?
+    private let alerts: AlertPresenter
 
     /// Outstanding "wait then disconnect" tasks. Each entry is a Task spawned by
     /// `scheduleDelayedDisconnect(_:)` that will fire `disconnectClient` after
@@ -199,8 +196,9 @@ final class TheMuscle {
 
     // MARK: - Init
 
-    init(explicitToken: String?) {
+    init(explicitToken: String?, alerts: AlertPresenter = AlertPresenter()) {
         self.sessionToken = explicitToken ?? UUID().uuidString
+        self.alerts = alerts
         if EnvironmentKey.insideJobRestrictWatchers.value != nil {
             self.restrictWatchers = EnvironmentKey.insideJobRestrictWatchers.boolValue
         } else if let plistValue = Bundle.main.object(forInfoDictionaryKey: "InsideJobRestrictWatchers") as? Bool {
@@ -658,41 +656,11 @@ final class TheMuscle {
         onAllow: @escaping @MainActor () -> Void,
         onDeny: @escaping @MainActor () -> Void
     ) {
-        dismissAlert()
-
-        let alert = UIAlertController(
-            title: "Connection Request",
-            message: "Connection #\(clientId) is requesting access.",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "Deny", style: .destructive) { _ in onDeny() })
-        alert.addAction(UIAlertAction(title: "Allow", style: .default) { _ in onAllow() })
-
-        guard let vc = Self.topViewController() else {
-            logger.warning("No foreground view controller for approval alert — disconnecting client \(clientId)")
-            onDeny()
-            return
-        }
-        vc.present(alert, animated: true)
-        presentedAlert = alert
+        alerts.presentApproval(clientId: clientId, onAllow: onAllow, onDeny: onDeny)
     }
 
     private func dismissAlert() {
-        presentedAlert?.dismiss(animated: false)
-        presentedAlert = nil
-    }
-
-    private static func topViewController() -> UIViewController? {
-        guard let scene = UIApplication.shared.connectedScenes
-                .compactMap({ $0 as? UIWindowScene })
-                .first(where: { $0.activationState == .foregroundActive }),
-              var vc = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else {
-            return nil
-        }
-        while let presented = vc.presentedViewController {
-            vc = presented
-        }
-        return vc
+        alerts.dismiss()
     }
 
     func clientIDs(for driverIdentity: String) -> [Int] {
