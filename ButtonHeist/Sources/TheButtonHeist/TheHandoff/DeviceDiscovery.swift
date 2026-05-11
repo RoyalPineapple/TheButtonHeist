@@ -107,8 +107,7 @@ final class DeviceDiscovery: DeviceDiscovering {
         }
     }
 
-    // Effective isolation is @ButtonHeistActor (enclosing class is isolated).
-    var onEvent: ((DiscoveryEvent) -> Void)?
+    var onEvent: (@ButtonHeistActor (DiscoveryEvent) -> Void)?
 
     init(reachabilityValidationInterval: TimeInterval = 3.0) {
         self.reachabilityValidationInterval = reachabilityValidationInterval

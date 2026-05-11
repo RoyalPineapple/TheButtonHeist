@@ -60,6 +60,8 @@ final class ReplSession {
                 fflush(stderr)
             }
 
+            // Swift.readLine() is a blocking syscall; detaching from MainActor keeps the REPL responsive.
+            // swiftlint:disable:next agent_no_task_detached
             guard let line = await Task.detached(operation: { Swift.readLine() }).value else {
                 break
             }

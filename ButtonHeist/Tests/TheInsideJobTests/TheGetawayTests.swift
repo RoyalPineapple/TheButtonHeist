@@ -64,6 +64,8 @@ final class TheGetawayTests: XCTestCase {
         // originally manifested: events arriving from off-main queue racing
         // each other to bridge onto the main actor.
         let callbacks = transport.makeCallbacks()
+        // Reproduce the production path: SimpleSocketServer invokes these callbacks off-main-actor on its network queue, not from MainActor.
+        // swiftlint:disable:next agent_no_task_detached
         await Task.detached {
             callbacks.onClientConnected?(1, "192.168.1.1")
             callbacks.onUnauthenticatedData?(1, helloData) { _ in }
@@ -99,6 +101,8 @@ final class TheGetawayTests: XCTestCase {
         // Three clients connect and immediately send hello. Each pair must
         // process in order or the helloValidated transition is dropped.
         // Drive from off-main to mirror the production network queue.
+        // Detached intentionally simulates SimpleSocketServer's off-main-actor callback dispatch.
+        // swiftlint:disable:next agent_no_task_detached
         await Task.detached {
             for clientId in 1...3 {
                 callbacks.onClientConnected?(clientId, "addr-\(clientId)")

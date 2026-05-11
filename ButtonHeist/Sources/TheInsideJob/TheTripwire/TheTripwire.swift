@@ -153,7 +153,7 @@ final class TheTripwire {
         set { runningContext?.latestReading = newValue }
     }
 
-    var onTransition: ((PulseTransition) -> Void)?
+    var onTransition: (@MainActor (PulseTransition) -> Void)?
 
     private var pulsePhase: PulsePhase = .idle
 
