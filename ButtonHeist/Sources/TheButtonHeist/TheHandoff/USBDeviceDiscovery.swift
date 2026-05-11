@@ -19,8 +19,7 @@ final class USBDeviceDiscovery: DeviceDiscovering {
     private var pollTask: Task<Void, Never>?
     private var knownDevices: [String: DiscoveredDevice] = [:]
 
-    // Effective isolation is @ButtonHeistActor (the enclosing class is isolated).
-    var onEvent: ((DiscoveryEvent) -> Void)?
+    var onEvent: (@ButtonHeistActor (DiscoveryEvent) -> Void)?
 
     var discoveredDevices: [DiscoveredDevice] {
         Array(knownDevices.values)

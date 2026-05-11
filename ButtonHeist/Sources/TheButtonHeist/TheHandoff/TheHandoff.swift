@@ -482,6 +482,8 @@ final class TheHandoff {
         connection?.onEvent = { [weak self] event in
             guard let self else { return }
             switch event {
+            // Transport-up signal is informational; the `.connected` event drives state transitions and external callbacks.
+            // swiftlint:disable:next agent_wire_message_arm_no_op_break
             case .transportReady:
                 break
             case .connected:
@@ -573,6 +575,8 @@ final class TheHandoff {
             mutateConnectedSession { $0.missedPongCount = 0 }
         case .recordingStopped:
             mutateConnectedSession { $0.recordingPhase = .idle }
+        // Handshake messages are consumed inside DeviceConnection before bubbling here; no caller-visible side effect needed at this layer.
+        // swiftlint:disable:next agent_wire_message_arm_no_op_break
         case .serverHello, .authRequired:
             break
         }
@@ -609,6 +613,8 @@ final class TheHandoff {
             throw ConnectionError.connectionFailed(
                 "Disconnected during connection attempt. The app may have been busy, suspended, or restarted before the handshake completed."
             )
+        // Connection-phase switch, not a wire-message dispatch. Fall through to the await loop below.
+        // swiftlint:disable:next agent_wire_message_arm_no_op_break
         case .connecting:
             break
         }

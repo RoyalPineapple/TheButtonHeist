@@ -79,7 +79,7 @@ func connectMockHandoff(
 final class MockConnection: DeviceConnecting {
     var isConnected = false
     var observeMode = false
-    var onEvent: ((ConnectionEvent) -> Void)?
+    var onEvent: (@ButtonHeistActor (ConnectionEvent) -> Void)?
     var sent: [(ClientMessage, String?)] = []
     var connectCount = 0
     var emitTransportReadyOnConnect = false
@@ -125,7 +125,7 @@ final class MockConnection: DeviceConnecting {
 @ButtonHeistActor
 final class MockDiscovery: DeviceDiscovering {
     var discoveredDevices: [DiscoveredDevice] = []
-    var onEvent: ((DiscoveryEvent) -> Void)?
+    var onEvent: (@ButtonHeistActor (DiscoveryEvent) -> Void)?
     var startCount = 0
     var stopCount = 0
 

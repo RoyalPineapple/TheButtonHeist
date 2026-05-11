@@ -477,7 +477,7 @@ public var onConnected: ((ServerInfo) -> Void)?
 
 If a callback fires on a non-actor thread (network queue, ObjC runtime), still annotate explicitly: `@Sendable` for non-isolated, or document with the actor specified.
 
-The custom SwiftLint rule `agent_unannotated_public_callback` flags `public var on*: ((...) -> Void)?` patterns that are missing an isolation attribute.
+The custom SwiftLint rule `agent_unannotated_callback` flags `var on*: ((...) -> Void)?` patterns (public or internal) that are missing an isolation attribute.
 
 ## Sendable Value Types Without Actor Isolation
 

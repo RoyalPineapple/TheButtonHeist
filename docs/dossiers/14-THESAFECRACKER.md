@@ -180,7 +180,7 @@ graph LR
 
 ## Gesture Move Callback
 
-`var onGestureMove: (([CGPoint]) -> Void)?` — called during every continuous gesture step (swipe, drag, long press, draw path, pinch, rotate) with the current finger positions. Set by TheInsideJob to update recording overlays during gesture execution. Fires alongside `fingerprints.updateTrackingFingerprints` at each 10ms step.
+`var onGestureMove: (@MainActor ([CGPoint]) -> Void)?` — called during every continuous gesture step (swipe, drag, long press, draw path, pinch, rotate) with the current finger positions. Set by TheInsideJob to update recording overlays during gesture execution. Fires alongside `fingerprints.updateTrackingFingerprints` at each 10ms step.
 
 ## Timing Constants
 

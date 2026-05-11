@@ -109,7 +109,7 @@ final class TheSafecracker {
 
     /// Called during continuous gestures with all current finger positions.
     /// Set by TheInsideJob to update recording overlays during gesture execution.
-    var onGestureMove: (([CGPoint]) -> Void)?
+    var onGestureMove: (@MainActor ([CGPoint]) -> Void)?
 
     // MARK: - Public: Single-Finger Gestures
 

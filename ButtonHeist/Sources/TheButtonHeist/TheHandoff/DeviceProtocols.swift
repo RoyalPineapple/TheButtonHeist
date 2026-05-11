@@ -24,7 +24,7 @@ enum DiscoveryEvent {
 protocol DeviceConnecting: AnyObject {
     var isConnected: Bool { get }
     var observeMode: Bool { get set }
-    var onEvent: ((ConnectionEvent) -> Void)? { get set }
+    var onEvent: (@ButtonHeistActor (ConnectionEvent) -> Void)? { get set }
     func connect()
     func disconnect()
     func send(_ message: ClientMessage, requestId: String?)
@@ -40,7 +40,7 @@ extension DeviceConnecting {
 @ButtonHeistActor
 protocol DeviceDiscovering: AnyObject {
     var discoveredDevices: [DiscoveredDevice] { get }
-    var onEvent: ((DiscoveryEvent) -> Void)? { get set }
+    var onEvent: (@ButtonHeistActor (DiscoveryEvent) -> Void)? { get set }
     func start()
     func stop()
 }
