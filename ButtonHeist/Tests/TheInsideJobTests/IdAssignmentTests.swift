@@ -96,6 +96,40 @@ final class IdAssignerTests: XCTestCase {
         XCTAssertEqual(ids[0], "home_tabBar")
     }
 
+    // MARK: - Trait Combinations (priority ordering)
+
+    /// A tab bar item typically carries `.button` in its bitmask. The
+    /// `tabBarItem` trait is the more identifying role and must win, otherwise
+    /// every tab synthesizes as `*_button` and collides ambiguously with any
+    /// regular button bearing the same label (audit Finding 7).
+    func testTabBarItemTraitBeatsButton() {
+        let ids = assign([makeElement(label: "Home", traits: [.button, .tabBarItem])])
+        XCTAssertEqual(ids[0], "home_tabBarItem")
+    }
+
+    /// Section headers that are tappable to expand/collapse carry both
+    /// `.header` and `.button`. The `header` role is more descriptive of the
+    /// element's semantic identity than the generic `button` interaction
+    /// (audit Finding 7).
+    func testHeaderTraitBeatsButton() {
+        let ids = assign([makeElement(label: "Settings", traits: [.header, .button])])
+        XCTAssertEqual(ids[0], "settings_header")
+    }
+
+    /// Header also beats link for the same reason — semantic role over
+    /// interaction role.
+    func testHeaderTraitBeatsLink() {
+        let ids = assign([makeElement(label: "Section", traits: [.header, .link])])
+        XCTAssertEqual(ids[0], "section_header")
+    }
+
+    /// backButton stays at the top of the priority list — a `[.backButton,
+    /// .button]` element synthesizes as `*_backButton`, not `*_button`.
+    func testBackButtonBeatsButton() {
+        let ids = assign([makeElement(label: "Back", traits: [.backButton, .button])])
+        XCTAssertEqual(ids[0], "back_backButton")
+    }
+
     // MARK: - Trait Suffix Deduplication
 
     func testSwitchButtonLabelRedundancyStripped() {

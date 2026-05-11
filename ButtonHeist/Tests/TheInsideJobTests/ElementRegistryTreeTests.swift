@@ -38,9 +38,10 @@ final class ElementRegistryTreeTests: XCTestCase {
         )
     }
 
-    /// Compute the heistId map for a list of (element, id) pairs.
-    private func heistIdMap(_ pairs: [(AccessibilityElement, String)]) -> [AccessibilityElement: String] {
-        Dictionary(pairs, uniquingKeysWith: { _, latest in latest })
+    /// Extract the heistId array (positional, matching `leaves(...)` order)
+    /// from a list of (element, id) pairs.
+    private func heistIdMap(_ pairs: [(AccessibilityElement, String)]) -> [String] {
+        pairs.map { $0.1 }
     }
 
     /// Wrap elements as leaf hierarchy nodes with sequential traversal indices.
@@ -188,7 +189,7 @@ final class ElementRegistryTreeTests: XCTestCase {
 
     func testMergeEmptyHierarchyLeavesEmptyTree() {
         var registry = TheStash.ElementRegistry()
-        registry.merge(hierarchy: [], heistIds: [:], contexts: [:], containerContentFrames: [:])
+        registry.merge(hierarchy: [], heistIds: [], contexts: [:], containerContentFrames: [:])
         XCTAssertTrue(registry.roots.isEmpty)
         XCTAssertTrue(registry.elementByHeistId.isEmpty)
     }
@@ -447,6 +448,79 @@ final class ElementRegistryTreeTests: XCTestCase {
         XCTAssertEqual(Set(registry.flattenElements().map(\.heistId)), ["song_staticText", "song_staticText_at_0_200"])
     }
 
+    // MARK: - Identifier Collision Across Screens (audit Finding 2)
+
+    /// When a developer reuses the same `accessibilityIdentifier` across two
+    /// unrelated screens, and the first screen's element orphans into the
+    /// registry before `clearScreen()` fires (transition overlap), the second
+    /// screen's element must NOT silently overwrite the first heistId mapping.
+    /// Pre-fix: `findElement(heistId:)` resolved to whichever leaf the
+    /// depth-first index walked last, so the agent activated the wrong
+    /// element. Post-fix: the colliding element gets a signature-derived
+    /// suffix and `findElement(heistId: "submit")` resolves to the
+    /// already-registered (still-live) element on the current screen.
+    func testIdentifierCollisionAcrossScreensDoesNotOverwrite() {
+        var registry = TheStash.ElementRegistry()
+
+        // Screen A registers `submit` (a "Submit Order" primary button).
+        let screenAElement = makeElement(
+            label: "Submit Order",
+            identifier: "submit",
+            traits: [.button]
+        )
+        registry.register(
+            parsedElements: [screenAElement],
+            heistIds: ["submit"],
+            contexts: [:],
+            hierarchy: [.element(screenAElement, traversalIndex: 0)],
+            containerContentFrames: [:]
+        )
+        XCTAssertEqual(registry.findElement(heistId: "submit")?.element.label, "Submit Order")
+
+        // Screen B presents with a different element also tagged `submit`
+        // (e.g. a "Submit Feedback" link). The first screen's element has
+        // orphaned into the registry tree; it is not in the live parse.
+        let screenBElement = makeElement(
+            label: "Submit Feedback",
+            identifier: "submit",
+            traits: [.link]
+        )
+        registry.register(
+            parsedElements: [screenBElement],
+            heistIds: ["submit"],
+            contexts: [:],
+            hierarchy: [.element(screenBElement, traversalIndex: 0)],
+            containerContentFrames: [:]
+        )
+
+        // The first screen's element keeps its heistId; the second screen's
+        // element gets a deterministic suffix so both leaves remain
+        // addressable and `findElement` cannot silently confuse them.
+        let allIds = Set(registry.flattenElements().map(\.heistId))
+        XCTAssertTrue(allIds.contains("submit"), "Original `submit` mapping must survive")
+        XCTAssertEqual(
+            allIds.count, 2,
+            "Two leaves must remain distinguishable, got heistIds: \(allIds.sorted())"
+        )
+        let suffixedId = allIds.first { $0 != "submit" }
+        XCTAssertNotNil(suffixedId, "Second element must have a disambiguating suffix")
+        XCTAssertTrue(
+            suffixedId?.hasPrefix("submit_sig_") == true || suffixedId?.hasPrefix("submit_at_") == true,
+            "Suffix must be the documented `_sig_` or `_at_` shape, got \(suffixedId ?? "nil")"
+        )
+
+        // Critical: lookups by the base heistId resolve to a unique element.
+        // Before the fix, `findElement(heistId: "submit")` could resolve to
+        // *either* element depending on tree-walk order.
+        let resolved = registry.findElement(heistId: "submit")
+        XCTAssertNotNil(resolved)
+        XCTAssertEqual(
+            Set([resolved?.element.label, resolved?.element.label]),
+            Set(["Submit Order"]),
+            "findElement must resolve deterministically, not swap with the colliding screen B element"
+        )
+    }
+
     /// Non-scrollable containers (list/landmark/tabBar/dataTable) derive
     /// their `stableId` from the container's content-space frame, so identity
     /// holds through child churn. An orphan whose siblings changed entirely
@@ -570,7 +644,7 @@ final class ElementRegistryTreeTests: XCTestCase {
         // Reparse: same scroll view but row scrolled out (no live children).
         registry.merge(
             hierarchy: [],
-            heistIds: [:],
+            heistIds: [],
             contexts: [:],
             containerContentFrames: [:]
         )
@@ -690,6 +764,38 @@ final class ElementRegistryTreeTests: XCTestCase {
     }
 
     // MARK: - Invariants
+
+    /// pruneTree must leave the registry in a consistent state. Post-Finding 10
+    /// every mutation site asserts invariants in DEBUG; this test re-states the
+    /// contract explicitly so a future regression surfaces here rather than
+    /// downstream in `findElement`.
+    func testPruneTreePreservesInvariants() {
+        var registry = TheStash.ElementRegistry()
+        let alpha = makeElement(label: "Alpha")
+        let beta = makeElement(label: "Beta")
+        let container = AccessibilityContainer(
+            type: .list,
+            frame: CGRect(x: 0, y: 0, width: 320, height: 200)
+        )
+        registry.merge(
+            hierarchy: [
+                .container(container, children: [
+                    .element(alpha, traversalIndex: 0),
+                    .element(beta, traversalIndex: 1),
+                ])
+            ],
+            heistIds: heistIdMap([(alpha, "id-alpha"), (beta, "id-beta")]),
+            contexts: [:],
+            containerContentFrames: [container: container.frame]
+        )
+        XCTAssertNil(registry.validateInvariants(), "Invariants must hold post-merge")
+
+        registry.pruneTree(keeping: ["id-alpha"])
+
+        XCTAssertNil(registry.validateInvariants(), "Invariants must hold post-pruneTree")
+        XCTAssertNotNil(registry.findElement(heistId: "id-alpha"))
+        XCTAssertNil(registry.findElement(heistId: "id-beta"))
+    }
 
     /// The merge implementation must leave the registry in a consistent state:
     /// elementByHeistId matches roots, every leaf is unique, no empty containers.

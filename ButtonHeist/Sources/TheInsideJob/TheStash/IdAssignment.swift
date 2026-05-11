@@ -16,16 +16,25 @@ extension TheStash {
 
     /// Trait priority for heistId prefix — most descriptive wins.
     /// Precomputed bitmasks from AccessibilitySnapshotParser's knownTraits.
+    ///
+    /// Ordering rationale: navigation/role-defining traits (`backButton`,
+    /// `tabBarItem`) win first because they uniquely identify a screen-level
+    /// affordance. Input-shape traits (`searchField`, `textEntry`,
+    /// `switchButton`, `adjustable`) come next — they tell the agent what
+    /// kind of interaction the element accepts. `header` ranks above the
+    /// generic `button`/`link` so a tappable section header synthesizes as
+    /// `*_header` (the more identifying role) rather than `*_button`.
     private static let traitPriority: [(name: String, mask: UIAccessibilityTraits)] = [
         ("backButton", UIAccessibilityTraits.fromNames(["backButton"])),
+        ("tabBarItem", UIAccessibilityTraits.fromNames(["tabBarItem"])),
         ("searchField", UIAccessibilityTraits.fromNames(["searchField"])),
         ("textEntry", UIAccessibilityTraits.fromNames(["textEntry"])),
         ("switchButton", UIAccessibilityTraits.fromNames(["switchButton"])),
         ("adjustable", .adjustable),
+        ("header", .header),
         ("button", .button),
         ("link", .link),
         ("image", .image),
-        ("header", .header),
         ("tabBar", UIAccessibilityTraits.fromNames(["tabBar"])),
     ]
 

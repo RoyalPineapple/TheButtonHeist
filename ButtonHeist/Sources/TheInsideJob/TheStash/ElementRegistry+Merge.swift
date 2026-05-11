@@ -94,7 +94,7 @@ extension TheStash.ElementRegistry {
     /// containers are pruned.
     mutating func merge(
         hierarchy: [AccessibilityHierarchy],
-        heistIds: [AccessibilityElement: String],
+        heistIds: [String],
         contexts: [AccessibilityElement: TheStash.ElementContext],
         containerContentFrames: [AccessibilityContainer: CGRect],
         containersNestedInScrollView: Set<AccessibilityContainer> = [],
@@ -102,7 +102,7 @@ extension TheStash.ElementRegistry {
     ) {
         let oldRoots = roots
         let oldIndex = elementByHeistId
-        let liveHeistIds = Set(heistIds.values)
+        let liveHeistIds = Set(heistIds)
         let orphans = Self.collectOrphans(roots: oldRoots, liveHeistIds: liveHeistIds)
 
         let built = Self.buildNodes(
@@ -121,6 +121,7 @@ extension TheStash.ElementRegistry {
 
         roots = pruned
         elementByHeistId = Self.buildIndex(roots: pruned)
+        assertInvariants(site: "merge")
     }
 
     /// Walk the tree and return all leaf elements in depth-first traversal order.
@@ -156,6 +157,18 @@ extension TheStash.ElementRegistry {
         let pruned = Self.prune(roots: roots, keeping: keeping)
         roots = pruned
         elementByHeistId = Self.buildIndex(roots: pruned)
+        assertInvariants(site: "pruneTree")
+    }
+
+    /// Debug-only invariant guard. Production builds get a single function-call
+    /// cost and an `if` branch (the whole module is `#if DEBUG` anyway). The
+    /// release path stays empty so benchmark timings aren't skewed by the walk.
+    private func assertInvariants(site: String) {
+        #if DEBUG
+        if let violation = validateInvariants() {
+            assertionFailure("ElementRegistry invariant violation at \(site): \(violation)")
+        }
+        #endif
     }
 
     // MARK: - Orphan Collection
@@ -194,7 +207,7 @@ extension TheStash.ElementRegistry {
 
     private static func buildNodes(
         hierarchy: [AccessibilityHierarchy],
-        heistIds: [AccessibilityElement: String],
+        heistIds: [String],
         contexts: [AccessibilityElement: TheStash.ElementContext],
         containerContentFrames: [AccessibilityContainer: CGRect],
         containersNestedInScrollView: Set<AccessibilityContainer>,
@@ -202,20 +215,32 @@ extension TheStash.ElementRegistry {
         oldIndex: [String: TheStash.RegistryPath],
         oldRoots: [TheStash.RegistryNode]
     ) -> [TheStash.RegistryNode] {
-        hierarchy.compactMap { hier in
-            buildNode(
-                hier: hier, heistIds: heistIds, contexts: contexts,
+        // Walk the hierarchy in DFS order and consume `heistIds` positionally.
+        // The matching ordinal — "the Nth element-leaf we encountered" — is
+        // ours to control. Parser-side fields like `traversalIndex` aren't
+        // contract; we never depend on them.
+        var cursor = 0
+        var result: [TheStash.RegistryNode] = []
+        for hier in hierarchy {
+            if let node = buildNode(
+                hier: hier, heistIds: heistIds, cursor: &cursor,
+                contexts: contexts,
                 containerContentFrames: containerContentFrames,
                 containersNestedInScrollView: containersNestedInScrollView,
                 scrollableViews: scrollableViews,
                 oldIndex: oldIndex, oldRoots: oldRoots
-            )
+            ) {
+                result.append(node)
+            }
         }
+        return result
     }
 
+    // swiftlint:disable:next function_parameter_count
     private static func buildNode(
         hier: AccessibilityHierarchy,
-        heistIds: [AccessibilityElement: String],
+        heistIds: [String],
+        cursor: inout Int,
         contexts: [AccessibilityElement: TheStash.ElementContext],
         containerContentFrames: [AccessibilityContainer: CGRect],
         containersNestedInScrollView: Set<AccessibilityContainer>,
@@ -225,7 +250,9 @@ extension TheStash.ElementRegistry {
     ) -> TheStash.RegistryNode? {
         switch hier {
         case .element(let parsedElement, _):
-            guard let heistId = heistIds[parsedElement] else { return nil }
+            guard cursor < heistIds.count else { return nil }
+            let heistId = heistIds[cursor]
+            cursor += 1
             let context = contexts[parsedElement]
             let priorOrigin: CGPoint? = oldIndex[heistId].flatMap { path in
                 Self.element(at: path, in: oldRoots)?.contentSpaceOrigin
@@ -240,14 +267,18 @@ extension TheStash.ElementRegistry {
             return .element(screenElement)
 
         case .container(let container, let children):
-            let childNodes = children.compactMap { child in
-                buildNode(
-                    hier: child, heistIds: heistIds, contexts: contexts,
+            var childNodes: [TheStash.RegistryNode] = []
+            for child in children {
+                if let node = buildNode(
+                    hier: child, heistIds: heistIds, cursor: &cursor,
+                    contexts: contexts,
                     containerContentFrames: containerContentFrames,
                     containersNestedInScrollView: containersNestedInScrollView,
                     scrollableViews: scrollableViews,
                     oldIndex: oldIndex, oldRoots: oldRoots
-                )
+                ) {
+                    childNodes.append(node)
+                }
             }
             let contentFrame = containerContentFrames[container] ?? container.frame
             let stableId = Self.stableId(

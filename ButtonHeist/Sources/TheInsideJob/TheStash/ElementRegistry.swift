@@ -87,7 +87,17 @@ extension TheStash {
         containersNestedInScrollView: Set<AccessibilityContainer> = [],
         scrollableViews: [AccessibilityContainer: UIView] = [:]
     ) {
-        var resolvedHeistIds: [AccessibilityElement: String] = [:]
+        // Pass heistIds positionally — `buildNodes` consumes them by DFS
+        // order through the hierarchy, matching this array's index. Keying
+        // by `AccessibilityElement` would collapse hash-equal duplicates
+        // (same label/traits/frame), silently merging heistIds and producing
+        // duplicate leaves. Keying by parser-side `traversalIndex` is also
+        // not load-bearing — that's parser-internal and not our contract.
+        // The matching ordinal is just "position in parsedElements," which
+        // we own.
+        var resolvedHeistIds: [String] = []
+        resolvedHeistIds.reserveCapacity(parsedElements.count)
+        var resolvedHeistIdsByElement: [AccessibilityElement: String] = [:]
         for (parsedElement, baseHeistId) in zip(parsedElements, heistIds) {
             let context = contexts[parsedElement]
             let resolved = resolveHeistId(
@@ -95,11 +105,12 @@ extension TheStash {
                 element: parsedElement,
                 contentSpaceOrigin: context?.contentSpaceOrigin
             )
-            resolvedHeistIds[parsedElement] = resolved
+            resolvedHeistIds.append(resolved)
+            resolvedHeistIdsByElement[parsedElement] = resolved
         }
 
-        reverseIndex = resolvedHeistIds
-        viewportIds = Set(resolvedHeistIds.values)
+        reverseIndex = resolvedHeistIdsByElement
+        viewportIds = Set(resolvedHeistIds)
 
         merge(
             hierarchy: hierarchy,
@@ -111,18 +122,32 @@ extension TheStash {
         )
     }
 
-    /// Resolve a base heistId, appending a content-space suffix when an
+    /// Resolve a base heistId, appending a disambiguation suffix when an
     /// existing element with the same base id describes a different scroll
-    /// position. Matching label/id/role is not enough for scrollable content:
-    /// repeated rows can have identical accessible text while representing
-    /// different actionable elements.
+    /// position OR a different accessible identity.
+    ///
+    /// Two collision shapes are handled here:
+    /// 1. Same identity, different scroll position (the canonical scrollable-
+    ///    rows case) — append `_at_X_Y` from content-space origin.
+    /// 2. Different identity, same base id (e.g. developer reused
+    ///    `accessibilityIdentifier = "submit"` on a different element across a
+    ///    screen transition; the first orphans before `clearScreen()` fires)
+    ///    — append `_sig_<hash>` derived from the new element's stable matcher
+    ///    fields so the two leaves remain distinguishable in the registry tree.
+    ///
+    /// Without case 2 the merge would land two leaves on the same heistId and
+    /// `findElement(heistId:)` would resolve to whichever leaf the depth-first
+    /// `buildIndex` walked last — silently activating the wrong element.
     private func resolveHeistId(
         _ baseHeistId: String,
         element: AccessibilityElement,
         contentSpaceOrigin: CGPoint?
     ) -> String {
-        if let existing = findElement(heistId: baseHeistId),
-           Self.hasSameMinimumMatcher(existing.element, element) {
+        guard let existing = findElement(heistId: baseHeistId) else {
+            return baseHeistId
+        }
+
+        if Self.hasSameMinimumMatcher(existing.element, element) {
             if let contentSpaceOrigin,
                let existingOrigin = existing.contentSpaceOrigin,
                !Self.sameOrigin(existingOrigin, contentSpaceOrigin) {
@@ -131,17 +156,32 @@ extension TheStash {
             return baseHeistId
         }
 
-        guard let contentSpaceOrigin,
-              let existing = findElement(heistId: baseHeistId),
-              let existingOrigin = existing.contentSpaceOrigin,
-              !Self.sameOrigin(existingOrigin, contentSpaceOrigin) else {
-            return baseHeistId
+        // Different identity collision — prefer content-space disambiguation
+        // when both elements expose an origin and the origins differ; otherwise
+        // fall back to a signature suffix so the two elements stay distinct.
+        if let contentSpaceOrigin,
+           let existingOrigin = existing.contentSpaceOrigin,
+           !Self.sameOrigin(existingOrigin, contentSpaceOrigin) {
+            return Self.contentPositionHeistId(baseHeistId, origin: contentSpaceOrigin)
         }
-        return Self.contentPositionHeistId(baseHeistId, origin: contentSpaceOrigin)
+        return Self.signatureHeistId(baseHeistId, element: element)
     }
 
     private static func contentPositionHeistId(_ baseHeistId: String, origin: CGPoint) -> String {
         "\(baseHeistId)_at_\(Int(origin.x.rounded()))_\(Int(origin.y.rounded()))"
+    }
+
+    /// Deterministic short signature derived from the element's stable matcher
+    /// fields (identifier, label, value, stable trait names). Used to break
+    /// heistId collisions when two elements share a base id but have different
+    /// accessible identities and origin disambiguation is unavailable.
+    private static func signatureHeistId(_ baseHeistId: String, element: AccessibilityElement) -> String {
+        let stableTraits = stableTraitNames(element.traits).sorted().joined(separator: ",")
+        let signature = "\(element.identifier ?? "")|\(element.label ?? "")|\(element.value ?? "")|\(stableTraits)"
+        // Truncate to a short hex suffix. Hash stability across runs is not
+        // required — only within a single registry's lifetime.
+        let hashHex = String(UInt(bitPattern: signature.hashValue) & 0xFFFFFF, radix: 16)
+        return "\(baseHeistId)_sig_\(hashHex)"
     }
 
     private static func hasSameMinimumMatcher(_ lhs: AccessibilityElement, _ rhs: AccessibilityElement) -> Bool {
@@ -210,7 +250,7 @@ extension TheStash {
         )
         merge(
             hierarchy: [.element(element.element, traversalIndex: roots.count)],
-            heistIds: [element.element: element.heistId],
+            heistIds: [element.heistId],
             contexts: [element.element: context],
             containerContentFrames: [:]
         )
