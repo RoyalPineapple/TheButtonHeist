@@ -62,7 +62,7 @@ public enum FenceResponse {
     case heistPlayback(completedSteps: Int, failedIndex: Int?, totalTimingMs: Int, failure: PlaybackFailure? = nil, report: HeistPlaybackReport? = nil)
 
     /// Extract the ActionResult if this response wraps one (for expectation checking).
-    public var actionResult: ActionResult? {
+    var actionResult: ActionResult? {
         if case .action(let result, _) = self { return result }
         return nil
     }

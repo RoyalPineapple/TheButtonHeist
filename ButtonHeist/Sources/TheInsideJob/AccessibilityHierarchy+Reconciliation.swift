@@ -38,7 +38,7 @@ extension AccessibilityElement {
     ///   Stable across scroll positions — the same row always has the same content-space origin
     ///   even when the viewport moves. When nil (element is not inside a scroll view), the
     ///   window-space frame origin is used as fallback.
-    public func fingerprint(contentSpaceOrigin: CGPoint?) -> Int {
+    func fingerprint(contentSpaceOrigin: CGPoint?) -> Int {
         var hasher = Hasher()
         hasher.combine(label)
         hasher.combine(identifier)
@@ -74,7 +74,7 @@ extension AccessibilityElement {
     }
 
     /// Convenience: fingerprint using the window-space frame (for non-scrollable contexts).
-    public var contentFingerprint: Int {
+    var contentFingerprint: Int {
         fingerprint(contentSpaceOrigin: nil)
     }
 }
@@ -87,7 +87,7 @@ extension AccessibilityHierarchy {
     ///
     /// This is the identity used for sliding alignment — two nodes with the same
     /// content fingerprint represent the same UI element regardless of position.
-    public var contentFingerprint: Int {
+    var contentFingerprint: Int {
         folded(
             onElement: { element, _ in
                 var hasher = Hasher()
@@ -111,18 +111,18 @@ extension AccessibilityHierarchy {
 // MARK: - Overlap Detection
 
 /// Result of sliding two fingerprint sequences to find their overlap region.
-public struct OverlapResult: Equatable {
+struct OverlapResult: Equatable {
     /// Index into the accumulated sequence where the overlap begins.
-    public let accumulatedStart: Int
+    let accumulatedStart: Int
 
     /// Index into the page sequence where the overlap begins.
-    public let pageStart: Int
+    let pageStart: Int
 
     /// Number of consecutive matching fingerprints in the overlap.
-    public let length: Int
+    let length: Int
 
     /// True when no overlap was found — the page is entirely new content.
-    public var isEmpty: Bool { length == 0 }
+    var isEmpty: Bool { length == 0 }
 }
 
 /// Slide two fingerprint sequences over each other to find the longest contiguous overlap.
@@ -133,7 +133,7 @@ public struct OverlapResult: Equatable {
 ///
 /// O(n·m) where n = accumulated length, m = page length. For typical screen-sized pages
 /// (20–50 elements) against accumulated histories (100–500 elements), this is sub-millisecond.
-public func findOverlap(
+func findOverlap(
     accumulated: [Int],
     page: [Int]
 ) -> OverlapResult {
@@ -197,24 +197,24 @@ public func findOverlap(
 // MARK: - Page Stitching
 
 /// Content-space axis used when stitching scroll pages with stable origins.
-public enum StitchOrderingAxis: Sendable {
+enum StitchOrderingAxis: Sendable {
     case horizontal
     case vertical
 }
 
 /// Result of merging a new page into the accumulated element sequence.
-public struct StitchResult: Equatable {
+struct StitchResult: Equatable {
     /// The merged element sequence after incorporating the page.
-    public let elements: [AccessibilityElement]
+    let elements: [AccessibilityElement]
 
     /// The overlap region that anchored the merge.
-    public let overlap: OverlapResult
+    let overlap: OverlapResult
 
     /// Elements from the page that were inserted (not present in accumulated).
-    public let inserted: [AccessibilityElement]
+    let inserted: [AccessibilityElement]
 
     /// How many elements were in the accumulated sequence before the merge.
-    public let previousCount: Int
+    let previousCount: Int
 }
 
 /// Stitch a new page of elements into the accumulated sequence.
@@ -240,7 +240,7 @@ public struct StitchResult: Equatable {
 ///     Pass nil entries for elements not inside a scroll view.
 ///
 /// When no overlap is found, the page is appended as entirely new content.
-public func stitchPage(
+func stitchPage(
     accumulated: [AccessibilityElement],
     accumulatedOrigins: [CGPoint?],
     page: [AccessibilityElement],
@@ -422,7 +422,7 @@ private func stitchByContentOrigin(
 }
 
 /// Convenience overload using window-space frames (for non-scrollable contexts or tests).
-public func stitchPage(
+func stitchPage(
     accumulated: [AccessibilityElement],
     page: [AccessibilityElement]
 ) -> StitchResult {
@@ -440,7 +440,7 @@ extension Array where Element == AccessibilityHierarchy {
     /// Flatten to elements, stitch, and report what happened.
     /// This is the convenience entry point for merging a page of hierarchy nodes
     /// into an accumulated hierarchy.
-    public func stitchPage(
+    func stitchPage(
         from page: [AccessibilityHierarchy]
     ) -> StitchResult {
         let accElements = self.sortedElements

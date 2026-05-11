@@ -13,33 +13,31 @@ private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "
 ///
 /// Subprocess execution runs on detached tasks to avoid blocking the actor.
 @ButtonHeistActor
-public final class USBDeviceDiscovery: DeviceDiscovering {
+final class USBDeviceDiscovery: DeviceDiscovering {
 
     private let port: UInt16
     private var pollTask: Task<Void, Never>?
     private var knownDevices: [String: DiscoveredDevice] = [:]
 
-    // Effective isolation is @ButtonHeistActor (the enclosing class is isolated);
-    // explicit annotation pending the public-callback annotation cleanup batch.
-    // swiftlint:disable:next agent_unannotated_public_callback
-    public var onEvent: ((DiscoveryEvent) -> Void)?
+    // Effective isolation is @ButtonHeistActor (the enclosing class is isolated).
+    var onEvent: ((DiscoveryEvent) -> Void)?
 
-    public var discoveredDevices: [DiscoveredDevice] {
+    var discoveredDevices: [DiscoveredDevice] {
         Array(knownDevices.values)
     }
 
     /// - Parameter port: The InsideJob port to connect to on the device
-    public init(port: UInt16) {
+    init(port: UInt16) {
         self.port = port
     }
 
-    public func start() {
+    func start() {
         logger.info("Starting USB device discovery (port \(self.port))")
         onEvent?(.stateChanged(isReady: true))
         startPolling()
     }
 
-    public func stop() {
+    func stop() {
         pollTask?.cancel()
         pollTask = nil
         knownDevices.removeAll()

@@ -3,8 +3,8 @@ import Foundation
 // MARK: - Format Version
 
 /// Version tracking for the session manifest format.
-public enum SessionFormatVersion {
-    public static let current = "0.1.0"
+enum SessionFormatVersion {
+    static let current = "0.1.0"
 }
 
 // MARK: - Artifact Types
@@ -16,7 +16,7 @@ public enum ArtifactType: String, Codable, Sendable, CaseIterable {
 }
 
 /// Success or failure classification for logged command responses.
-public enum ResponseStatus: String, Sendable, CaseIterable {
+enum ResponseStatus: String, Sendable, CaseIterable {
     case ok
     case error
 }
@@ -24,31 +24,18 @@ public enum ResponseStatus: String, Sendable, CaseIterable {
 // MARK: - Metadata Types
 
 /// Dimensions captured alongside a screenshot artifact.
-public struct ScreenshotMetadata: Sendable {
-    public let width: Double
-    public let height: Double
-
-    public init(width: Double, height: Double) {
-        self.width = width
-        self.height = height
-    }
+struct ScreenshotMetadata: Sendable {
+    let width: Double
+    let height: Double
 }
 
 /// Dimensions and timing captured alongside a recording artifact.
-public struct RecordingMetadata: Sendable {
-    public let width: Int
-    public let height: Int
-    public let duration: Double
-    public let fps: Int
-    public let frameCount: Int
-
-    public init(width: Int, height: Int, duration: Double, fps: Int, frameCount: Int) {
-        self.width = width
-        self.height = height
-        self.duration = duration
-        self.fps = fps
-        self.frameCount = frameCount
-    }
+struct RecordingMetadata: Sendable {
+    let width: Int
+    let height: Int
+    let duration: Double
+    let fps: Int
+    let frameCount: Int
 }
 
 // MARK: - Artifact Entry

@@ -18,16 +18,16 @@ public struct TargetConfig: Codable, Sendable, Equatable {
 
 /// Config file schema for `.buttonheist.json` or `~/.config/buttonheist/config.json`.
 /// Contains named targets and an optional default.
-public struct ButtonHeistFileConfig: Codable, Sendable, Equatable {
-    public let targets: [String: TargetConfig]
-    public let defaultTarget: String?
+struct ButtonHeistFileConfig: Codable, Sendable, Equatable {
+    let targets: [String: TargetConfig]
+    let defaultTarget: String?
 
     enum CodingKeys: String, CodingKey {
         case targets
         case defaultTarget = "default"
     }
 
-    public init(targets: [String: TargetConfig], defaultTarget: String? = nil) {
+    init(targets: [String: TargetConfig], defaultTarget: String? = nil) {
         self.targets = targets
         self.defaultTarget = defaultTarget
     }
@@ -35,7 +35,7 @@ public struct ButtonHeistFileConfig: Codable, Sendable, Equatable {
 
 /// Resolves connection parameters from config files and environment variables.
 /// Resolution order: env vars > config file targets.
-public enum TargetConfigResolver {
+enum TargetConfigResolver {
 
     /// Standard search paths for the config file, in priority order.
     static let searchPaths: [String] = [
@@ -44,7 +44,7 @@ public enum TargetConfigResolver {
     ]
 
     /// Load and parse the first config file found in the search paths.
-    public static func loadConfig(from explicitPath: String? = nil) -> ButtonHeistFileConfig? {
+    static func loadConfig(from explicitPath: String? = nil) -> ButtonHeistFileConfig? {
         let paths: [String]
         if let explicitPath {
             paths = [explicitPath]
@@ -88,7 +88,7 @@ public enum TargetConfigResolver {
     /// 1. Env vars (BUTTONHEIST_DEVICE / BUTTONHEIST_TOKEN) override everything
     /// 2. Named target from config file
     /// 3. Default target from config file
-    public static func resolveEffective(
+    static func resolveEffective(
         targetName: String? = nil,
         config: ButtonHeistFileConfig? = nil,
         env: [String: String] = ProcessInfo.processInfo.environment

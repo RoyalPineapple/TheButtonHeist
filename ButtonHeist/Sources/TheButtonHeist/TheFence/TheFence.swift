@@ -98,13 +98,13 @@ extension FenceError {
 }
 
 /// Named timeout constants for TheFence operations.
-public enum Timeouts {
+enum Timeouts {
     /// Standard action timeout (15 seconds)
-    public static let actionSeconds: TimeInterval = 15
+    static let actionSeconds: TimeInterval = 15
     /// Long action timeout (30 seconds)
-    public static let longActionSeconds: TimeInterval = 30
+    static let longActionSeconds: TimeInterval = 30
     /// Explore timeout (60 seconds) — scrolls entire screen, needs headroom
-    public static let exploreSeconds: TimeInterval = 60
+    static let exploreSeconds: TimeInterval = 60
 }
 
 /// Centralized command dispatch layer. Both the CLI and MCP server are thin wrappers over TheFence.
@@ -113,21 +113,21 @@ public final class TheFence {
     /// Connection and session configuration for TheFence.
     public struct Configuration {
         /// Substring filter for Bonjour device names. `nil` matches any device.
-        public var deviceFilter: String?
+        var deviceFilter: String?
         /// Seconds to wait for initial connection before failing `start()`.
-        public var connectionTimeout: TimeInterval
+        var connectionTimeout: TimeInterval
         /// Auth token sent with `client_hello`. Agents use the task slug; omit to
         /// fall back to the `BUTTONHEIST_TOKEN` environment variable.
-        public var token: String?
+        var token: String?
         /// When true, TheHandoff re-establishes the connection on drop.
-        public var autoReconnect: Bool
+        var autoReconnect: Bool
         /// Resolved `.buttonheist.json` config (device filter, token, output paths).
         /// Supplied by the CLI/MCP entry points from discovered config files.
-        public var fileConfig: ButtonHeistFileConfig?
+        var fileConfig: ButtonHeistFileConfig?
         /// Direct host:port target with optional TLS fingerprint from config.
-        public var directDevice: DiscoveredDevice?
+        var directDevice: DiscoveredDevice?
 
-        public init(
+        init(
             deviceFilter: String? = nil,
             connectionTimeout: TimeInterval = 30,
             token: String? = nil,
@@ -144,7 +144,7 @@ public final class TheFence {
         }
     }
 
-    public static let supportedCommands: [String] = Command.allCases.map(\.rawValue)
+    static let supportedCommands: [String] = Command.allCases.map(\.rawValue)
 
     /// Fires on informational status strings (e.g. `BUTTONHEIST_TOKEN=<value>`
     /// on server-generated token, connection events).
@@ -188,7 +188,7 @@ public final class TheFence {
     }
     private var recordingWait: RecordingWait = .idle
 
-    public init(configuration: Configuration = .init()) {
+    public init(configuration: Configuration) {
         self.config = configuration
         self.handoff.token = configuration.token ?? EnvironmentKey.buttonheistToken.value
         self.handoff.driverId = EnvironmentKey.buttonheistDriverId.value
@@ -200,6 +200,12 @@ public final class TheFence {
             self?.onAuthApproved?(token)
         }
         wireUpResponseCallbacks()
+    }
+
+    /// Test-only convenience initializer that creates a TheFence with default configuration.
+    /// Production callers (CLI, MCP) construct an explicit `Configuration` via `EnvironmentConfig`.
+    convenience init() {
+        self.init(configuration: Configuration())
     }
 
     private func wireUpResponseCallbacks() {
@@ -820,7 +826,7 @@ public final class TheFence {
     var lastActionResult: ActionResult?
     /// Round-trip time in milliseconds for the last action command that
     /// completed (request issued → response received).
-    public private(set) var lastLatencyMs: Int = 0
+    private(set) var lastLatencyMs: Int = 0
 
     // Batch execution (`handleRunBatch`, `BatchPolicy`, step-summary building,
     // and `currentSessionState`) lives in TheFence+Batch.swift.

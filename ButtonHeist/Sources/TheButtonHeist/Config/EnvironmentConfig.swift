@@ -5,12 +5,12 @@ import Foundation
 /// to create a `TheFence`.
 public struct EnvironmentConfig: Sendable {
     public let deviceFilter: String?
-    public let token: String?
+    let token: String?
     public let sessionTimeout: TimeInterval
-    public let connectionTimeout: TimeInterval
-    public let fileConfig: ButtonHeistFileConfig?
-    public let directDevice: DiscoveredDevice?
-    public let autoReconnect: Bool
+    let connectionTimeout: TimeInterval
+    let fileConfig: ButtonHeistFileConfig?
+    let directDevice: DiscoveredDevice?
+    let autoReconnect: Bool
 
     /// Build a `TheFence.Configuration` from this resolved config.
     public var fenceConfiguration: TheFence.Configuration {

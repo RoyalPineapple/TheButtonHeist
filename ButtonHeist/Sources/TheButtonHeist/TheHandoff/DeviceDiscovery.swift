@@ -87,7 +87,7 @@ struct DiscoveryRegistry {
 
 /// Discovers Button Heist services via Bonjour and emits device found/lost events.
 @ButtonHeistActor
-public final class DeviceDiscovery: DeviceDiscovering {
+final class DeviceDiscovery: DeviceDiscovering {
 
     private enum DiscoveryPhase {
         case idle
@@ -98,7 +98,7 @@ public final class DeviceDiscovery: DeviceDiscovering {
     private let browserQueue = DispatchQueue(label: "com.buttonheist.thehandoff.discovery.browser")
     private let reachabilityValidationInterval: TimeInterval
 
-    public var discoveredDevices: [DiscoveredDevice] {
+    var discoveredDevices: [DiscoveredDevice] {
         switch discoveryPhase {
         case .idle:
             return []
@@ -107,16 +107,14 @@ public final class DeviceDiscovery: DeviceDiscovering {
         }
     }
 
-    // Effective isolation is @ButtonHeistActor (enclosing class is isolated);
-    // explicit annotation pending the public-callback annotation cleanup batch.
-    // swiftlint:disable:next agent_unannotated_public_callback
-    public var onEvent: ((DiscoveryEvent) -> Void)?
+    // Effective isolation is @ButtonHeistActor (enclosing class is isolated).
+    var onEvent: ((DiscoveryEvent) -> Void)?
 
-    public init(reachabilityValidationInterval: TimeInterval = 3.0) {
+    init(reachabilityValidationInterval: TimeInterval = 3.0) {
         self.reachabilityValidationInterval = reachabilityValidationInterval
     }
 
-    public func start() {
+    func start() {
         logger.info("Starting Bonjour discovery for type: \(buttonHeistServiceType)")
 
         let parameters = NWParameters()
@@ -147,7 +145,7 @@ public final class DeviceDiscovery: DeviceDiscovering {
         logger.info("Browser started")
     }
 
-    public func stop() {
+    func stop() {
         guard case .active(let browser, _, let reachabilityTask) = discoveryPhase else { return }
         reachabilityTask?.cancel()
         browser.cancel()
