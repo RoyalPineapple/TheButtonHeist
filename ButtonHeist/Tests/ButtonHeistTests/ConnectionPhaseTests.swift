@@ -3,16 +3,21 @@ import XCTest
 
 final class ConnectionPhaseTests: XCTestCase {
 
-    func testConnectionFailureAsConnectionError() {
-        let errorFailure = TheHandoff.ConnectionFailure.error("boom")
-        let authFailure = TheHandoff.ConnectionFailure.authFailed("bad token")
-        let lockFailure = TheHandoff.ConnectionFailure.sessionLocked("in use")
-
-        XCTAssertEqual(errorFailure.asConnectionError.errorDescription,
-                       TheHandoff.ConnectionError.connectionFailed("boom").errorDescription)
-        XCTAssertEqual(authFailure.asConnectionError.errorDescription,
-                       TheHandoff.ConnectionError.authFailed("bad token").errorDescription)
-        XCTAssertEqual(lockFailure.asConnectionError.errorDescription,
-                       TheHandoff.ConnectionError.sessionLocked("in use").errorDescription)
+    func testConnectionErrorIsEquatable() {
+        // ConnectionError is used as the associated value in
+        // ConnectionPhase.failed, so Equatable conformance is load-bearing
+        // for phase comparison in tests and assertions.
+        XCTAssertEqual(
+            TheHandoff.ConnectionError.connectionFailed("boom"),
+            TheHandoff.ConnectionError.connectionFailed("boom")
+        )
+        XCTAssertNotEqual(
+            TheHandoff.ConnectionError.connectionFailed("boom"),
+            TheHandoff.ConnectionError.connectionFailed("other")
+        )
+        XCTAssertNotEqual(
+            TheHandoff.ConnectionError.authFailed("bad token"),
+            TheHandoff.ConnectionError.sessionLocked("bad token")
+        )
     }
 }

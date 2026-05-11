@@ -527,7 +527,7 @@ The single-line `Task { @MainActor in self.callback(...) }` bridge is its own an
 Don't introduce a new `enum FooError: Error` without first asking whether an existing error type covers the case. The codebase has authoritative error types per layer:
 
 - `TheScore.ServerError` — wire-level errors broadcast from server to client
-- `TheHandoff.ConnectionError` / `ConnectionFailure` — connection lifecycle (these may consolidate; see `.context/audit/post-release-plan.md` program 4)
+- `TheHandoff.ConnectionError` — connection lifecycle; also the associated value of `ConnectionPhase.failed` (the type is `Equatable` so the phase compares structurally)
 - `FenceError` — CLI/MCP-facing dispatch errors
 - `BookKeeperError` — session lifecycle errors
 
