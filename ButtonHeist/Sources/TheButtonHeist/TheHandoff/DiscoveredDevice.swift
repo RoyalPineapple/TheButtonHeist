@@ -24,13 +24,13 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
     /// TLS certificate fingerprint from Bonjour TXT record (sha256:hex)
     let certFingerprint: String?
 
-    init(id: String, name: String, endpoint: NWEndpoint,
-         simulatorUDID: String? = nil,
-         installationId: String? = nil,
-         displayDeviceName: String? = nil,
-         instanceId: String? = nil,
-         sessionActive: Bool? = nil,
-         certFingerprint: String? = nil) {
+    public init(id: String, name: String, endpoint: NWEndpoint,
+                simulatorUDID: String? = nil,
+                installationId: String? = nil,
+                displayDeviceName: String? = nil,
+                instanceId: String? = nil,
+                sessionActive: Bool? = nil,
+                certFingerprint: String? = nil) {
         self.id = id
         self.name = name
         self.endpoint = endpoint
