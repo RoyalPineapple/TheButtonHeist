@@ -176,14 +176,14 @@ Two protocols form the mock boundary for unit tests:
 ```swift
 DeviceDiscovering (@ButtonHeistActor)
     var discoveredDevices: [DiscoveredDevice]
-    var onEvent: ((DiscoveryEvent) -> Void)?
+    var onEvent: (@ButtonHeistActor (DiscoveryEvent) -> Void)?
     func start()
     func stop()
 
 DeviceConnecting (@ButtonHeistActor)
     var isConnected: Bool
     var observeMode: Bool
-    var onEvent: ((ConnectionEvent) -> Void)?
+    var onEvent: (@ButtonHeistActor (ConnectionEvent) -> Void)?
     func connect()
     func disconnect()
     func send(_ message: ClientMessage, requestId: String?)

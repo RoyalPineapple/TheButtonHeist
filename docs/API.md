@@ -403,13 +403,13 @@ public static let supportedCommands: [String]  // From Command.allCases
 
 ##### onStatus
 ```swift
-public var onStatus: ((String) -> Void)?
+public var onStatus: (@ButtonHeistActor (String) -> Void)?
 ```
 Called with status messages during connection lifecycle (searching, connecting, reconnecting).
 
 ##### onAuthApproved
 ```swift
-public var onAuthApproved: ((String?) -> Void)?
+public var onAuthApproved: (@ButtonHeistActor (String?) -> Void)?
 ```
 Called when the connection is approved. Token is `nil` for observer connections.
 
