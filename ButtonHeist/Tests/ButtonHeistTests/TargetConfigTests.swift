@@ -435,7 +435,7 @@ final class TargetConfigTests: XCTestCase {
 
     @ButtonHeistActor
     func testConnectWithoutTargetOrDeviceReturnsError() async throws {
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
         let response = try await fence.execute(request: ["command": "connect"])
         if case .error(let message) = response {
             XCTAssertTrue(message.contains("Must specify"))
@@ -462,7 +462,7 @@ final class TargetConfigTests: XCTestCase {
 
     @ButtonHeistActor
     func testConnectWithNoConfigFileReturnsError() async throws {
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
         let response = try await fence.execute(request: ["command": "connect", "target": "sim1"])
         if case .error(let message) = response {
             XCTAssertTrue(message.contains("No config file"))
@@ -473,7 +473,7 @@ final class TargetConfigTests: XCTestCase {
 
     @ButtonHeistActor
     func testListTargetsWithNoConfig() async throws {
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
         let response = try await fence.execute(request: ["command": "list_targets"])
         if case .targets(let targets, _) = response {
             XCTAssertTrue(targets.isEmpty)

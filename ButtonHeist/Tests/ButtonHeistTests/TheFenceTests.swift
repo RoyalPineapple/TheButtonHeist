@@ -10,7 +10,7 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     func testElementMatcherRejectsUnknownTrait() async {
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
         let args: [String: Any] = ["traits": ["madeUpTrait"]]
         XCTAssertThrowsError(try fence.elementMatcher(args)) { error in
             guard case FenceError.invalidRequest(let message) = error else {
@@ -23,7 +23,7 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     func testElementMatcherRejectsUnknownExcludeTrait() async {
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
         let args: [String: Any] = ["excludeTraits": ["bogus"]]
         XCTAssertThrowsError(try fence.elementMatcher(args)) { error in
             guard case FenceError.invalidRequest(let message) = error else {
@@ -36,7 +36,7 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     func testElementMatcherAcceptsKnownTraits() async throws {
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
         let args: [String: Any] = ["traits": ["button", "header"], "excludeTraits": ["selected"]]
         let matcher = try fence.elementMatcher(args)
         XCTAssertEqual(matcher.traits, [.button, .header])
@@ -631,7 +631,7 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     func testDisconnectCancelsPendingActionWaitWithReason() async {
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
 
         let waitTask = Task { @ButtonHeistActor in
             try await fence.waitForActionResult(requestId: "pending", timeout: 10)
@@ -652,7 +652,7 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     func testDisconnectCancelsPendingRecordingWaitWithReason() async {
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
 
         let waitTask = Task { @ButtonHeistActor in
             try await fence.waitForRecording(timeout: 10)
@@ -693,7 +693,7 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     func testExecuteWithMissingCommand() async {
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
         do {
             _ = try await fence.execute(request: [:])
             XCTFail("Expected FenceError.invalidRequest")
@@ -710,7 +710,7 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     func testExecuteHelp() async throws {
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
         let response = try await fence.execute(request: ["command": "help"])
         if case .help(let commands) = response {
             XCTAssertFalse(commands.isEmpty)
@@ -722,7 +722,7 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     func testExecuteQuit() async throws {
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
         let response = try await fence.execute(request: ["command": "quit"])
         if case .ok(let message) = response {
             XCTAssertEqual(message, "bye")
@@ -743,7 +743,7 @@ final class TheFenceTests: XCTestCase {
         mockDiscovery.discoveredDevices = [device]
         let mockConnection = MockConnection()
 
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
         fence.handoff.makeDiscovery = { mockDiscovery }
         fence.handoff.makeConnection = { _, _, _ in mockConnection }
 
@@ -763,7 +763,7 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     func testExecuteGetSessionLogReturnsErrorWhenIdle() async throws {
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
         let response = try await fence.execute(request: ["command": "get_session_log"])
         if case .error(let message) = response {
             XCTAssertTrue(message.contains("No active session"))
@@ -774,7 +774,7 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     func testExecuteArchiveSessionReturnsErrorWhenIdle() async throws {
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
         do {
             _ = try await fence.execute(request: ["command": "archive_session"])
             XCTFail("Expected error for archive_session when idle")
@@ -789,7 +789,7 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     func testExecuteArchiveSessionAutoClosesActiveSession() async throws {
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
         try fence.bookKeeper.beginSession(identifier: "archive-auto-close")
         try fence.bookKeeper.logCommand(requestId: "r1", command: .status, arguments: [:])
 
@@ -815,7 +815,7 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     func testWaitForRecordingSuccess() async throws {
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
         let expectedPayload = RecordingPayload(
             videoData: "dGVzdA==", width: 390, height: 844,
             duration: 2.0, frameCount: 16, fps: 8,
@@ -834,7 +834,7 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     func testWaitForRecordingServerError() async throws {
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
 
         do {
             _ = try await fence.waitForRecording(timeout: 1.0) {
@@ -872,7 +872,7 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     func testWaitForRecordingTimeout() async throws {
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
 
         do {
             _ = try await fence.waitForRecording(timeout: 0.05)
@@ -886,7 +886,7 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     func testWaitForRecordingRestoresCallbacks() async throws {
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
         XCTAssertNil(fence.handoff.onRecording)
         XCTAssertNil(fence.handoff.onRecordingError)
 
@@ -902,7 +902,7 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     func testWaitForRecordingRejectsConcurrentWaiters() async {
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
 
         let firstWait = Task { @ButtonHeistActor in
             try await fence.waitForRecording(timeout: 5.0)
@@ -1113,7 +1113,7 @@ final class TheFenceTests: XCTestCase {
         mockDiscovery.discoveredDevices = [reachableDevice, staleDevice]
         let mockConnection = MockConnection()
 
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
         fence.handoff.makeDiscovery = { mockDiscovery }
         fence.handoff.makeConnection = { _, _, _ in mockConnection }
 
@@ -1163,13 +1163,13 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     func testDrainBackgroundDeltaReturnsNilWhenEmpty() async {
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
         XCTAssertNil(fence.drainBackgroundDelta())
     }
 
     @ButtonHeistActor
     func testDrainBackgroundDeltaClearsAfterRead() async {
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
         // Simulate a background delta arriving via the handoff callback
         let delta: InterfaceDelta = .screenChanged(.init(elementCount: 7, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])))
         fence.handoff.onBackgroundDelta?(delta)
@@ -1185,7 +1185,7 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     func testDrainBackgroundDeltaPreservesArrivalOrder() async {
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
         fence.handoff.onBackgroundDelta?(.elementsChanged(.init(elementCount: 2, edits: ElementEdits())))
         fence.handoff.onBackgroundDelta?(.screenChanged(.init(elementCount: 7, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: []))))
 
@@ -1202,7 +1202,7 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     func testDrainBackgroundDeltasReturnsAllQueuedDeltas() async {
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
         fence.handoff.onBackgroundDelta?(.elementsChanged(.init(elementCount: 2, edits: ElementEdits())))
         fence.handoff.onBackgroundDelta?(.screenChanged(.init(elementCount: 7, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: []))))
 
@@ -1257,7 +1257,7 @@ final class TheFenceTests: XCTestCase {
             screenWidth: 390, screenHeight: 844
         )
 
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
         fence.handoff.makeDiscovery = { mockDiscovery }
         fence.handoff.makeConnection = { _, _, _ in mockConnection }
 
@@ -1288,7 +1288,7 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     func testBackgroundDeltaQueueDropsOldestWhenCapacityExceeded() async {
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
         for count in 1...25 {
             fence.handoff.onBackgroundDelta?(.elementsChanged(.init(elementCount: count, edits: ElementEdits())))
         }
@@ -1304,7 +1304,7 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     func testBackgroundDeltaQueueClearsOnDisconnect() async {
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
         fence.handoff.onBackgroundDelta?(.screenChanged(.init(elementCount: 7, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: []))))
 
         fence.handoff.onDisconnected?(.serverClosed)
@@ -1329,7 +1329,7 @@ final class TheFenceTests: XCTestCase {
             screenWidth: 390, screenHeight: 844
         )
 
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
         fence.handoff.makeDiscovery = { mockDiscovery }
         fence.handoff.makeConnection = { _, _, _ in mockConnection }
 
@@ -1364,7 +1364,7 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     func testNoShortCircuitWithoutExpectation() async throws {
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
 
         // Background delta present but no expectation on the action
         let delta: InterfaceDelta = .screenChanged(.init(elementCount: 3, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])))
@@ -1398,7 +1398,7 @@ final class TheFenceTests: XCTestCase {
             certFingerprint: "sha256:mock"
         )
         let mockConnection = MockConnection()
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
         fence.handoff.makeConnection = { _, _, _ in mockConnection }
         fence.handoff.connect(to: device)
 
@@ -1437,7 +1437,7 @@ final class TheFenceTests: XCTestCase {
             certFingerprint: "sha256:mock"
         )
         let mockConnection = MockConnection()
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
         fence.handoff.makeConnection = { _, _, _ in mockConnection }
         fence.handoff.connect(to: device)
 
@@ -1495,7 +1495,7 @@ final class TheFenceTests: XCTestCase {
             certFingerprint: "sha256:mock"
         )
         let mockConnection = MockConnection()
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
         fence.handoff.makeConnection = { _, _, _ in mockConnection }
         fence.handoff.connect(to: device)
 
@@ -1555,7 +1555,7 @@ final class TheFenceTests: XCTestCase {
             certFingerprint: "sha256:mock"
         )
         let mockConnection = MockConnection()
-        let fence = TheFence()
+        let fence = TheFence(configuration: .init())
         fence.handoff.makeConnection = { _, _, _ in mockConnection }
         fence.handoff.connect(to: device)
 

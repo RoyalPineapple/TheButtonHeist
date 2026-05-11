@@ -93,7 +93,8 @@ actor TheStakeout {
 
     /// Completion handler — called when recording finishes for any reason.
     /// Writes are actor-isolated; reads happen on MainActor inside the closure.
-    var onRecordingComplete: (@MainActor @Sendable (Result<RecordingPayload, Error>) -> Void)?
+    /// Use ``setOnRecordingComplete(_:)`` to assign — the property is read-only externally.
+    private(set) var onRecordingComplete: (@MainActor @Sendable (Result<RecordingPayload, Error>) -> Void)?
 
     private var stakeoutPhase: StakeoutPhase = .idle
 
@@ -298,6 +299,20 @@ actor TheStakeout {
         }
         session.interactionLog.append(event)
         stakeoutPhase = .recording(session)
+    }
+
+    /// Atomically record an interaction if the stakeout is currently in the
+    /// `.recording` phase. Combines the phase check, elapsed-time read, and
+    /// log append into a single actor-isolated step so callers can't observe
+    /// a half-transitioned state between the three (the pattern that the
+    /// cross-cutting audit's Finding 3 flagged as a TOCTOU window).
+    ///
+    /// No-ops gracefully when the stakeout is `.idle` or `.finalizing`.
+    func recordInteractionIfRecording(command: ClientMessage, result: ActionResult) {
+        guard case .recording(let session) = stakeoutPhase else { return }
+        let elapsed = Date().timeIntervalSince(session.startTime)
+        let event = InteractionEvent(timestamp: elapsed, command: command, result: result)
+        recordInteraction(event: event)
     }
 
     // MARK: - Frame Capture

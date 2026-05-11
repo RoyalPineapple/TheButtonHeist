@@ -220,6 +220,45 @@ final class TheStakeoutTests: XCTestCase {
         XCTAssertTrue(isEmpty)
     }
 
+    // MARK: - recordInteractionIfRecording
+
+    /// Cross-cutting audit Finding 3: the prior `isRecording` / `recordingElapsed`
+    /// / `recordInteraction` triple-hop opened a TOCTOU window where a recording
+    /// could transition to `.finalizing` between the phase check and the log
+    /// append, silently dropping the interaction. The new combined entry point
+    /// resolves the phase, timestamp, and append in one actor-isolated step.
+    /// This test pins the happy path: a recording-state stakeout records the
+    /// interaction with a sensible timestamp.
+    func testRecordInteractionIfRecordingAppendsDuringRecording() async throws {
+        let stakeout = makeStakeout()
+        try await stakeout.startRecording(config: RecordingConfig(), screen: Self.testScreen)
+
+        await stakeout.recordInteractionIfRecording(
+            command: .requestInterface,
+            result: ActionResult(success: true, method: .activate)
+        )
+
+        let log = await stakeout.interactionLog
+        XCTAssertEqual(log.count, 1, "Interaction must be appended when recording")
+        XCTAssertGreaterThanOrEqual(log.first?.timestamp ?? -1, 0, "Timestamp must be a non-negative offset from the recording start")
+    }
+
+    /// When the stakeout has already transitioned past `.recording`, the
+    /// combined entry point must no-op gracefully. This is the contract that
+    /// lets `recordAndBroadcast` call it unconditionally without a separate
+    /// `isRecording` guard.
+    func testRecordInteractionIfRecordingDuringIdleIsNoOp() async {
+        let stakeout = makeStakeout()
+
+        await stakeout.recordInteractionIfRecording(
+            command: .requestInterface,
+            result: ActionResult(success: true, method: .activate)
+        )
+
+        let isEmpty = await stakeout.interactionLog.isEmpty
+        XCTAssertTrue(isEmpty, "No interaction should be recorded when the stakeout is idle")
+    }
+
     // MARK: - captureActionFrame
 
     func testCaptureActionFrameWhenIdleIsNoOp() async {

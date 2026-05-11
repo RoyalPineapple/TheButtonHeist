@@ -129,7 +129,7 @@ final class TheGetawayTests: XCTestCase {
     /// in addition to `.recordingStopped`. We assert via state that the
     /// auto-finish path runs (no pending response is consumed; the result
     /// is stashed in `completedRecording` for any later collection too).
-    func testAutoFinishWithoutPendingStopBroadcastsRecording() {
+    func testAutoFinishWithoutPendingStopBroadcastsRecording() async {
         let (getaway, _, _) = makeGetaway()
         XCTAssertNil(getaway.pendingRecordingResponse)
         XCTAssertNil(getaway.completedRecording)
@@ -145,7 +145,7 @@ final class TheGetawayTests: XCTestCase {
             endTime: Date(),
             stopReason: .maxDuration
         )
-        getaway.deliverRecordingResult(.success(payload))
+        await getaway.deliverRecordingResult(.success(payload))
 
         XCTAssertNil(getaway.pendingRecordingResponse, "Auto-finish must not leave a stale pending response")
         guard case .success(let captured) = getaway.completedRecording else {
@@ -160,7 +160,7 @@ final class TheGetawayTests: XCTestCase {
     /// payload must reach that waiter directly via `respond` rather than
     /// broadcasting. The pending slot must clear and the pending requestId
     /// must echo back to the originator.
-    func testStopRecordingWaiterReceivesRecordingDirectly() {
+    func testStopRecordingWaiterReceivesRecordingDirectly() async {
         let (getaway, _, _) = makeGetaway()
 
         var receivedData: Data?
@@ -176,7 +176,7 @@ final class TheGetawayTests: XCTestCase {
             startTime: Date(), endTime: Date(),
             stopReason: .manual
         )
-        getaway.deliverRecordingResult(.success(payload))
+        await getaway.deliverRecordingResult(.success(payload))
 
         XCTAssertNil(getaway.pendingRecordingResponse, "Pending response must clear after delivery")
         let unwrappedData = try? XCTUnwrap(receivedData)
