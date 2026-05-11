@@ -28,6 +28,7 @@ struct ButtonHeistApp: AsyncParsableCommand {
             ScrollCommand.self,
             SwipeSubcommand.self,
             SessionCommand.self,
+            ConnectCommand.self,
 
             // Navigation
             ScrollToVisibleCommand.self,
