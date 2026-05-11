@@ -170,6 +170,54 @@ final class WireConverterTests: XCTestCase {
         }
     }
 
+    // MARK: - Unknown Trait Bits (audit Finding 9)
+
+    /// A trait bit not in the parser's `knownTraits` table (e.g. a future iOS
+    /// trait at bit 42, or AXRuntime bit 33 surfaced via XCTest attr 2004)
+    /// must surface on the wire as an `.unknown("unknown(0xHEX)")` entry —
+    /// agents see the bit's presence rather than the parser silently dropping
+    /// it. Mirrors the parser's Codable encode path for forward compat.
+    func testUnknownTraitBitSurfacesOnWire() {
+        let unknownBit: UInt64 = 1 << 42
+        let traits = UIAccessibilityTraits(rawValue: unknownBit)
+        let wire = WireConversion.traitNames(traits)
+        let hasUnknownEntry = wire.contains { trait in
+            if case .unknown(let value) = trait, value.hasPrefix("unknown(0x") { return true }
+            return false
+        }
+        XCTAssertTrue(hasUnknownEntry,
+                      "Unknown trait bit 47 must surface on the wire, got: \(wire)")
+    }
+
+    /// Mixing a known trait with an unknown bit emits both — the known name
+    /// from the table, plus the residual unknown token.
+    func testKnownPlusUnknownTraitMixSurfacesBoth() {
+        let mixed = UIAccessibilityTraits(rawValue: UIAccessibilityTraits.button.rawValue | (1 << 42))
+        let wire = WireConversion.traitNames(mixed)
+        XCTAssertTrue(wire.contains(.button), "Known .button must remain in wire output")
+        let hasUnknownEntry = wire.contains { trait in
+            if case .unknown(let value) = trait, value.hasPrefix("unknown(0x") { return true }
+            return false
+        }
+        XCTAssertTrue(hasUnknownEntry,
+                      "Residual unknown bit must surface alongside known traits, got: \(wire)")
+    }
+
+    /// All known bits produce no unknown residual — the regression guard for
+    /// the common path (every standard accessible element).
+    func testAllKnownTraitsProduceNoUnknownResidual() {
+        for trait in HeistTrait.allCases {
+            let bitmask = UIAccessibilityTraits.fromNames([trait.rawValue])
+            let wire = WireConversion.traitNames(bitmask)
+            let hasUnknownEntry = wire.contains { trait in
+                if case .unknown(let value) = trait, value.hasPrefix("unknown(0x") { return true }
+                return false
+            }
+            XCTAssertFalse(hasUnknownEntry,
+                           "Known trait \(trait.rawValue) must not produce an unknown residual, got: \(wire)")
+        }
+    }
+
     // MARK: - Delta: Identical Snapshots
 
     func testIdenticalSnapshotsReturnNoChange() {

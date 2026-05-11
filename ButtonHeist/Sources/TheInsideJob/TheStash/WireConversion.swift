@@ -59,10 +59,26 @@ extension TheStash {
 
     /// Trait-to-name conversion delegated to AccessibilitySnapshotParser.
     /// The parser's `UIAccessibilityTraits.knownTraits` is the single source of truth
-    /// for trait naming (22 traits including private traits like textEntry, switchButton).
+    /// for trait naming (42 traits including the private and extended-private sets).
     /// Strings are mapped to HeistTrait; unknown names are preserved via .unknown().
+    ///
+    /// Bits not in the parser's `knownTraits` table (e.g. a future iOS trait at
+    /// an unmapped position, or AXRuntime bit 33 surfaced via XCTest attr 2004) would
+    /// otherwise be silently dropped — `traits.traitNames` only iterates the
+    /// known table. We compute the residual rawValue after subtracting all
+    /// known bits and append a single `.unknown("unknown(0xHEX)")` token so
+    /// the wire payload carries forward-compat parity with the parser's
+    /// Codable encode path.
     static func traitNames(_ traits: UIAccessibilityTraits) -> [HeistTrait] {
-        traits.traitNames.map { HeistTrait(rawValue: $0) ?? .unknown($0) }
+        var result = traits.traitNames.map { HeistTrait(rawValue: $0) ?? .unknown($0) }
+        var remaining = traits.rawValue
+        for (trait, _) in UIAccessibilityTraits.knownTraits where traits.contains(trait) {
+            remaining &= ~trait.rawValue
+        }
+        if remaining != 0 {
+            result.append(.unknown("unknown(0x\(String(remaining, radix: 16)))"))
+        }
+        return result
     }
 
     // MARK: - Element Conversion

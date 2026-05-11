@@ -302,8 +302,19 @@ final class TheBurglarApplyTests: XCTestCase {
     }
 
     func testDuplicateLabelsGetDisambiguatedHeistIds() {
-        let buttonA = makeElement(label: "Option", traits: .button)
-        let buttonB = makeElement(label: "Option", traits: .button)
+        // Distinct frames so the two AccessibilityElement values are not
+        // `==`/Hashable-equal. In practice every UIKit-derived element has a
+        // unique frame; identical-frame duplicates would represent the same
+        // accessible thing and the registry's dictionary-keyed merge would
+        // (correctly) collapse them.
+        let buttonA = makeElement(
+            label: "Option", traits: .button,
+            frame: CGRect(x: 0, y: 0, width: 100, height: 44)
+        )
+        let buttonB = makeElement(
+            label: "Option", traits: .button,
+            frame: CGRect(x: 0, y: 60, width: 100, height: 44)
+        )
         let hierarchy: [AccessibilityHierarchy] = [
             .element(buttonA, traversalIndex: 0),
             .element(buttonB, traversalIndex: 1),
