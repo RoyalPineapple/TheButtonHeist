@@ -203,11 +203,13 @@ final class TheGetaway {
 
             switch message {
             case .startRecording(let config):
-                handleStartRecording(config, requestId: requestId, respond: respond)
+                await handleStartRecording(config, requestId: requestId, respond: respond)
             case .stopRecording:
-                handleStopRecording(requestId: requestId, respond: respond)
+                await handleStopRecording(requestId: requestId, respond: respond)
             default:
-                stakeout?.noteActivity()
+                if let stakeout {
+                    await stakeout.noteActivity()
+                }
                 let backgroundDelta = brains.computeBackgroundDelta()
 
                 if let backgroundDelta, backgroundDelta.isScreenChanged,
@@ -220,12 +222,12 @@ final class TheGetaway {
                         + " — action skipped, here is the current state"
                     builder.interfaceDelta = backgroundDelta
                     let actionResult = builder.success()
-                    recordAndBroadcast(command: message, actionResult: actionResult, requestId: requestId, respond: respond)
+                    await recordAndBroadcast(command: message, actionResult: actionResult, requestId: requestId, respond: respond)
                     return
                 }
 
                 let actionResult = await brains.executeCommand(message)
-                recordAndBroadcast(command: message, actionResult: actionResult, requestId: requestId, backgroundDelta: backgroundDelta, respond: respond)
+                await recordAndBroadcast(command: message, actionResult: actionResult, requestId: requestId, backgroundDelta: backgroundDelta, respond: respond)
             }
         }
     }
@@ -333,14 +335,14 @@ final class TheGetaway {
         requestId: String?,
         backgroundDelta: InterfaceDelta? = nil,
         respond: @escaping (Data) -> Void
-    ) {
-        if let stakeout, stakeout.isRecording {
+    ) async {
+        if let stakeout, await stakeout.isRecording {
             let event = InteractionEvent(
-                timestamp: stakeout.recordingElapsed,
+                timestamp: await stakeout.recordingElapsed,
                 command: command,
                 result: actionResult
             )
-            stakeout.recordInteraction(event: event)
+            await stakeout.recordInteraction(event: event)
         }
 
         sendMessage(.actionResult(actionResult), requestId: requestId, backgroundDelta: backgroundDelta, respond: respond)
@@ -373,7 +375,9 @@ final class TheGetaway {
         hierarchyInvalidated = false
 
         broadcastToSubscribed(.interface(payload))
-        stakeout?.noteScreenChange()
+        if let stakeout {
+            Task { await stakeout.noteScreenChange() }
+        }
 
         insideJobLogger.debug("Broadcast hierarchy update to \(self.muscle.subscribedClients.count) subscriber(s)")
     }

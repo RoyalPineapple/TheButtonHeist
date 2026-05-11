@@ -47,8 +47,10 @@ extension TheStash {
     }
 
     /// If recording, capture a bonus frame to ensure the action's visual effect is captured.
-    func captureActionFrame() {
-        stakeout?.captureActionFrame()
+    func captureActionFrame() async {
+        if let stakeout {
+            await stakeout.captureActionFrame()
+        }
     }
 }
 

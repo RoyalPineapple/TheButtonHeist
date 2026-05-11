@@ -13,23 +13,32 @@ extension TheGetaway {
         case recording(stakeout: TheStakeout)
     }
 
-    func handleStartRecording(_ config: RecordingConfig, requestId: String? = nil, respond: @escaping (Data) -> Void) {
+    func handleStartRecording(_ config: RecordingConfig, requestId: String? = nil, respond: @escaping (Data) -> Void) async {
         if case .recording = recordingPhase {
             sendMessage(.error(ServerError(kind: .recording, message: "Recording already in progress")), requestId: requestId, respond: respond)
             return
         }
 
         completedRecording = nil
-        let recorder = TheStakeout()
-        recorder.captureFrame = { [weak self] in
-            self?.brains.captureScreenForRecording()
-        }
-        recorder.onRecordingComplete = { [weak self] result in
+
+        // captureFrame closure — MainActor-bound. Held by the actor as a let,
+        // so it must be set at init.
+        let brains = self.brains
+        let recorder = TheStakeout(captureFrame: { @MainActor [brains] in
+            brains.captureScreenForRecording()
+        })
+        await recorder.setOnRecordingComplete { [weak self] result in
             self?.deliverRecordingResult(result)
         }
 
+        // Capture screen metrics on MainActor (we are the MainActor here) and pass
+        // the value into the actor — TheStakeout is actor-isolated and can't read
+        // MainActor-bound APIs directly.
+        let screen = ScreenMetrics.current
+        let screenInfo = TheStakeout.ScreenInfo(bounds: screen.bounds, scale: screen.scale)
+
         do {
-            try recorder.startRecording(config: config)
+            try await recorder.startRecording(config: config, screen: screenInfo)
             recordingPhase = .recording(stakeout: recorder)
             brains.stakeout = recorder
             sendMessage(.recordingStarted, requestId: requestId, respond: respond)
@@ -73,7 +82,7 @@ extension TheGetaway {
         }
     }
 
-    func handleStopRecording(requestId: String? = nil, respond: @escaping (Data) -> Void) {
+    func handleStopRecording(requestId: String? = nil, respond: @escaping (Data) -> Void) async {
         if let completedRecording {
             self.completedRecording = nil
             switch completedRecording {
@@ -96,8 +105,8 @@ extension TheGetaway {
         }
 
         pendingRecordingResponse = (requestId: requestId, respond: respond)
-        if stakeout.isRecording {
-            stakeout.stopRecording(reason: .manual)
+        if await stakeout.isRecording {
+            await stakeout.stopRecording(reason: .manual)
         }
     }
 }

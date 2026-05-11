@@ -11,22 +11,19 @@ private let logger = Logger(subsystem: "com.buttonheist.theinsidejob", category:
 /// Screen recording engine. Captures frames using TheInsideJob's window compositing
 /// and encodes them as H.264/MP4 using AVAssetWriter.
 ///
-/// Isolation: pinned to `@MainActor`. Track F (concurrency-cleanup) considered demoting
-/// this type because AVAssetWriter is not MainActor-bound — only `captureFrame` (which
-/// invokes a UIKit hierarchy snapshot via `brains.captureScreenForRecording()`) and
-/// the `ScreenMetrics.current` read in `startRecording` strictly require MainActor.
-/// However, every other public method mutates `stakeoutPhase` (the state machine), and
-/// the @MainActor annotation is what serializes those mutations across the capture
-/// timer Task, the inactivity monitor Task, and the AVAssetWriter `finishWriting`
-/// completion. Demoting without converting to `actor TheStakeout` would force all
-/// callers in TheGetaway / TheStash to switch to `await`, which is out of scope for
-/// Track F. The right structural fix is captured in the audit as a follow-up.
-@MainActor
-final class TheStakeout {
+/// Isolation: actor-isolated. The single MainActor escape hatch is `captureFrame`,
+/// the closure that produces a UIImage by snapshotting the window hierarchy. Every
+/// other piece of state (the `stakeoutPhase` state machine, AVAssetWriter, sample
+/// buffers) lives inside the actor — AVAssetWriter and its pixel-buffer adaptor are
+/// thread-safe and do not require MainActor isolation. The AVAssetWriter
+/// `finishWriting` completion handler bridges back into the actor with
+/// `Task { await self.handleFinalize(...) }` rather than the previous
+/// `Task { @MainActor in ... }` shape called out in the concurrency audit.
+actor TheStakeout {
 
-    // MARK: - State Machine
+    // MARK: - Nested Types
 
-    private enum StakeoutPhase {
+    enum StakeoutPhase {
         case idle
         case recording(RecordingSession)
         case finalizing(FinalizingSession)
@@ -56,6 +53,7 @@ final class TheStakeout {
     }
 
     struct FinalizingSession {
+        let id: UUID
         let assetWriter: AVAssetWriter
         let videoInput: AVAssetWriterInput
         let outputURL: URL
@@ -65,6 +63,37 @@ final class TheStakeout {
         let screenBounds: CGRect
         let interactionLog: [InteractionEvent]
     }
+
+    /// Screen metrics captured on MainActor and passed into the actor at startRecording.
+    /// Avoids reaching back through MainActor for layout values that don't change for
+    /// the duration of a recording.
+    struct ScreenInfo: Sendable {
+        let bounds: CGRect
+        let scale: CGFloat
+    }
+
+    enum TheStakeoutError: Error, LocalizedError {
+        case alreadyRecording
+        case writerSetupFailed(String)
+        case finalizationFailed(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .alreadyRecording: return "Recording is already in progress"
+            case .writerSetupFailed(let message): return "Failed to set up video writer: \(message)"
+            case .finalizationFailed(let message): return "Failed to finalize recording: \(message)"
+            }
+        }
+    }
+
+    // MARK: - Properties
+
+    /// The single MainActor-bound thing — UI capture. Set at init, immutable thereafter.
+    private let captureFrame: @MainActor @Sendable () async -> UIImage?
+
+    /// Completion handler — called when recording finishes for any reason.
+    /// Writes are actor-isolated; reads happen on MainActor inside the closure.
+    var onRecordingComplete: (@MainActor @Sendable (Result<RecordingPayload, Error>) -> Void)?
 
     private var stakeoutPhase: StakeoutPhase = .idle
 
@@ -96,15 +125,25 @@ final class TheStakeout {
         }
     }
 
-    // Frame provider closure — set by TheInsideJob to provide captureScreenForRecording()
-    var captureFrame: (@MainActor () -> UIImage?)?
+    /// Elapsed time since recording started, in seconds.
+    var recordingElapsed: Double {
+        guard case .recording(let session) = stakeoutPhase else { return 0 }
+        return Date().timeIntervalSince(session.startTime)
+    }
 
-    // Completion handler — called when recording finishes for any reason
-    var onRecordingComplete: (@MainActor (Result<RecordingPayload, Error>) -> Void)?
+    // MARK: - Init
 
-    // MARK: - Public API
+    init(captureFrame: @escaping @MainActor @Sendable () async -> UIImage?) {
+        self.captureFrame = captureFrame
+    }
 
-    func startRecording(config: RecordingConfig) throws {
+    func setOnRecordingComplete(_ handler: (@MainActor @Sendable (Result<RecordingPayload, Error>) -> Void)?) {
+        self.onRecordingComplete = handler
+    }
+
+    // MARK: - Recording Lifecycle
+
+    func startRecording(config: RecordingConfig, screen: ScreenInfo) throws {
         guard case .idle = stakeoutPhase else {
             throw TheStakeoutError.alreadyRecording
         }
@@ -116,7 +155,6 @@ final class TheStakeout {
         // Determine output dimensions from screen.
         // Default: 1x point resolution (native pixels / screen scale).
         // If caller provides scale, use that fraction of native resolution.
-        let screen = ScreenMetrics.current
         let nativeWidth = screen.bounds.width * screen.scale
         let nativeHeight = screen.bounds.height * screen.scale
         let effectiveScale: CGFloat = if let requestedScale = config.scale {
@@ -201,7 +239,7 @@ final class TheStakeout {
         startInactivityMonitor()
     }
 
-    func stopRecording(reason: RecordingPayload.StopReason = .manual) {
+    func stopRecording(reason: RecordingPayload.StopReason = .manual) async {
         guard case .recording(let session) = stakeoutPhase else { return }
 
         logger.info("Stopping recording: reason=\(reason.rawValue), frames=\(session.frameCount)")
@@ -210,6 +248,7 @@ final class TheStakeout {
         session.inactivityCheckTask.cancel()
 
         let finalizingSession = FinalizingSession(
+            id: session.id,
             assetWriter: session.assetWriter,
             videoInput: session.videoInput,
             outputURL: session.outputURL,
@@ -221,7 +260,7 @@ final class TheStakeout {
         )
         stakeoutPhase = .finalizing(finalizingSession)
 
-        finalizeRecording(session: finalizingSession, reason: reason)
+        await finalizeRecording(session: finalizingSession, reason: reason)
     }
 
     /// Call this whenever client activity occurs (commands received, etc.)
@@ -240,15 +279,9 @@ final class TheStakeout {
 
     /// Capture an extra frame outside the regular timer cadence.
     /// Used to ensure actions are represented in the recording.
-    func captureActionFrame() {
+    func captureActionFrame() async {
         guard case .recording = stakeoutPhase else { return }
-        captureAndAppendFrame()
-    }
-
-    /// Elapsed time since recording started, in seconds.
-    var recordingElapsed: Double {
-        guard case .recording(let session) = stakeoutPhase else { return 0 }
-        return Date().timeIntervalSince(session.startTime)
+        await captureAndAppendFrame()
     }
 
     /// Append an interaction event to the recording log.
@@ -273,22 +306,32 @@ final class TheStakeout {
         guard case .recording(var session) = stakeoutPhase else { return }
         let interval = Duration.seconds(1) / session.fps
         let sessionID = session.id
-        session.captureTimer = Task { @MainActor [weak self] in
+        session.captureTimer = Task { [weak self] in
             while !Task.isCancelled {
-                guard let self, self.currentSessionID == sessionID else { return }
-                self.captureAndAppendFrame()
+                guard let self else { return }
+                guard await self.currentSessionID == sessionID else { return }
+                await self.captureAndAppendFrame()
                 guard await Task.cancellableSleep(for: interval) else { break }
             }
         }
         stakeoutPhase = .recording(session)
     }
 
-    private func captureAndAppendFrame() {
+    private func captureAndAppendFrame() async {
         guard case .recording(var session) = stakeoutPhase,
-              session.videoInput.isReadyForMoreMediaData,
-              let image = captureFrame?() else {
+              session.videoInput.isReadyForMoreMediaData else {
             return
         }
+
+        // Hop to MainActor only for the UI snapshot itself.
+        guard let image = await captureFrame() else { return }
+
+        // After the await, the phase may have changed — re-check that we're
+        // still in the same recording session before appending.
+        guard case .recording(var current) = stakeoutPhase, current.id == session.id else {
+            return
+        }
+        session = current
 
         // Check file size guard (7MB raw = ~9.3MB base64, under 10MB buffer limit)
         // If we can't read the file size, skip the check and continue recording
@@ -302,14 +345,14 @@ final class TheStakeout {
         }
         if let fileSize, fileSize > 7_000_000 {
             logger.warning("File size limit reached: \(fileSize) bytes")
-            stopRecording(reason: .fileSizeLimit)
+            await stopRecording(reason: .fileSizeLimit)
             return
         }
 
         // Check max duration
         if Date().timeIntervalSince(session.startTime) >= session.maxDuration {
             logger.warning("Max duration reached")
-            stopRecording(reason: .maxDuration)
+            await stopRecording(reason: .maxDuration)
             return
         }
 
@@ -318,9 +361,9 @@ final class TheStakeout {
 
         let frameTime = CMTime(value: Int64(session.frameCount), timescale: Int32(session.fps))
         if session.pixelBufferAdaptor.append(pixelBuffer, withPresentationTime: frameTime) {
-            session.frameCount += 1
-            session.lastFrameTime = frameTime
-            stakeoutPhase = .recording(session)
+            current.frameCount = session.frameCount + 1
+            current.lastFrameTime = frameTime
+            stakeoutPhase = .recording(current)
         }
     }
 
@@ -368,17 +411,19 @@ final class TheStakeout {
     private func startInactivityMonitor() {
         guard case .recording(var session) = stakeoutPhase else { return }
         let sessionID = session.id
-        session.inactivityCheckTask = Task { @MainActor [weak self] in
+        session.inactivityCheckTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard await Task.cancellableSleep(for: .seconds(1)) else { break } // Check every second
-                guard let self,
-                      case .recording(let currentSession) = self.stakeoutPhase,
-                      currentSession.id == sessionID else { return }
-
-                let elapsed = Date().timeIntervalSince(currentSession.lastActivityTime)
-                if elapsed >= currentSession.inactivityTimeout {
+                guard let self else { return }
+                guard let elapsed = await self.elapsedSinceLastActivity(sessionID: sessionID) else {
+                    return
+                }
+                guard let timeout = await self.inactivityTimeoutFor(sessionID: sessionID) else {
+                    return
+                }
+                if elapsed >= timeout {
                     logger.info("Inactivity timeout: \(elapsed)s since last activity")
-                    self.stopRecording(reason: .inactivity)
+                    await self.stopRecording(reason: .inactivity)
                     return
                 }
             }
@@ -386,69 +431,93 @@ final class TheStakeout {
         stakeoutPhase = .recording(session)
     }
 
+    private func elapsedSinceLastActivity(sessionID: UUID) -> Double? {
+        guard case .recording(let session) = stakeoutPhase, session.id == sessionID else {
+            return nil
+        }
+        return Date().timeIntervalSince(session.lastActivityTime)
+    }
+
+    private func inactivityTimeoutFor(sessionID: UUID) -> TimeInterval? {
+        guard case .recording(let session) = stakeoutPhase, session.id == sessionID else {
+            return nil
+        }
+        return session.inactivityTimeout
+    }
+
     // MARK: - Finalization
 
-    private func finalizeRecording(session: FinalizingSession, reason: RecordingPayload.StopReason) {
+    private func finalizeRecording(session: FinalizingSession, reason: RecordingPayload.StopReason) async {
         let writer = session.assetWriter
+        let sessionID = session.id
 
         session.videoInput.markAsFinished()
 
-        let endTime = Date()
-        let outputURL = session.outputURL
-        let startTime = session.startTime
-        let frameCount = session.frameCount
-        let fps = session.fps
-        let width = Int(session.screenBounds.width)
-        let height = Int(session.screenBounds.height)
-        let interactions = session.interactionLog
-
-        writer.finishWriting { [weak self] in
-            Task { @MainActor in
-                guard let self else { return }
-                defer { self.cleanup(outputURL: outputURL) }
-                guard let currentWriter = self.currentWriter else {
-                    self.deliverError(.finalizationFailed("Writer deallocated during finalization"))
-                    return
+        // `finishWriting` runs on AVFoundation's internal queue. We bridge
+        // back into the actor with `Task { await self.handleFinalize(...) }`,
+        // replacing the previous `Task { @MainActor in ... }` bridge flagged
+        // by the concurrency audit. `AVAssetWriter` is non-Sendable so it
+        // cannot be captured into the `@Sendable` completion closure of
+        // `finishWriting`; instead `handleFinalize` re-reads the finalizing
+        // session from `stakeoutPhase` after verifying the session ID, which
+        // gives us back the writer plus all the per-recording metadata in one
+        // step.
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            writer.finishWriting { [weak self] in
+                Task { [weak self] in
+                    await self?.handleFinalize(sessionID: sessionID, reason: reason)
+                    continuation.resume()
                 }
-
-                if currentWriter.status == .failed {
-                    self.deliverError(.finalizationFailed(currentWriter.error?.localizedDescription ?? "Unknown"))
-                    return
-                }
-
-                let videoData: Data
-                do {
-                    videoData = try Data(contentsOf: outputURL)
-                } catch {
-                    self.deliverError(.finalizationFailed("Could not read output file: \(error.localizedDescription)"))
-                    return
-                }
-
-                let duration = endTime.timeIntervalSince(startTime)
-
-                let payload = RecordingPayload(
-                    videoData: videoData.base64EncodedString(),
-                    width: width,
-                    height: height,
-                    duration: duration,
-                    frameCount: frameCount,
-                    fps: fps,
-                    startTime: startTime,
-                    endTime: endTime,
-                    stopReason: reason,
-                    interactionLog: interactions.isEmpty ? nil : interactions
-                )
-
-                logger.info("Recording complete: \(frameCount) frames, \(String(format: "%.1f", duration))s, \(videoData.count) bytes")
-                self.onRecordingComplete?(.success(payload))
             }
         }
     }
 
-    /// Access the writer from the current finalizing state for post-completion checks.
-    private var currentWriter: AVAssetWriter? {
-        guard case .finalizing(let session) = stakeoutPhase else { return nil }
-        return session.assetWriter
+    private func handleFinalize(sessionID: UUID, reason: RecordingPayload.StopReason) async {
+        // Verify the finalizing session is still ours — if a new recording
+        // started while we were waiting on `finishWriting`, bail out rather
+        // than acting on a foreign writer. (In practice this can't happen
+        // because `startRecording` requires `.idle` and we hold `.finalizing`
+        // until cleanup, but the check makes the invariant explicit.)
+        guard case .finalizing(let session) = stakeoutPhase, session.id == sessionID else {
+            await deliverError(.finalizationFailed("Finalization for stale session"))
+            return
+        }
+
+        defer { cleanup(outputURL: session.outputURL) }
+
+        let writerStatus = session.assetWriter.status
+        let writerError = session.assetWriter.error
+        if writerStatus == .failed {
+            await deliverError(.finalizationFailed(writerError?.localizedDescription ?? "Unknown"))
+            return
+        }
+
+        let videoData: Data
+        do {
+            videoData = try Data(contentsOf: session.outputURL)
+        } catch {
+            await deliverError(.finalizationFailed("Could not read output file: \(error.localizedDescription)"))
+            return
+        }
+
+        let endTime = Date()
+        let duration = endTime.timeIntervalSince(session.startTime)
+
+        let payload = RecordingPayload(
+            videoData: videoData.base64EncodedString(),
+            width: Int(session.screenBounds.width),
+            height: Int(session.screenBounds.height),
+            duration: duration,
+            frameCount: session.frameCount,
+            fps: session.fps,
+            startTime: session.startTime,
+            endTime: endTime,
+            stopReason: reason,
+            interactionLog: session.interactionLog.isEmpty ? nil : session.interactionLog
+        )
+
+        logger.info("Recording complete: \(session.frameCount) frames, \(String(format: "%.1f", duration))s, \(videoData.count) bytes")
+        await deliverSuccess(payload)
     }
 
     /// Identity of the currently-active recording, or nil if not recording.
@@ -460,9 +529,15 @@ final class TheStakeout {
         return nil
     }
 
-    private func deliverError(_ error: TheStakeoutError) {
+    private func deliverError(_ error: TheStakeoutError) async {
         logger.error("Recording error: \(error)")
-        onRecordingComplete?(.failure(error))
+        guard let handler = onRecordingComplete else { return }
+        await MainActor.run { handler(.failure(error)) }
+    }
+
+    private func deliverSuccess(_ payload: RecordingPayload) async {
+        guard let handler = onRecordingComplete else { return }
+        await MainActor.run { handler(.success(payload)) }
     }
 
     private func cleanup(outputURL: URL) {
@@ -473,20 +548,6 @@ final class TheStakeout {
             try FileManager.default.removeItem(at: outputURL)
         } catch {
             logger.warning("Failed to clean up recording temp file at \(outputURL.path): \(error)")
-        }
-    }
-
-    enum TheStakeoutError: Error, LocalizedError {
-        case alreadyRecording
-        case writerSetupFailed(String)
-        case finalizationFailed(String)
-
-        var errorDescription: String? {
-            switch self {
-            case .alreadyRecording: return "Recording is already in progress"
-            case .writerSetupFailed(let message): return "Failed to set up video writer: \(message)"
-            case .finalizationFailed(let message): return "Failed to finalize recording: \(message)"
-            }
         }
     }
 }

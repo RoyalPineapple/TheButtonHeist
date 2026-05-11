@@ -293,7 +293,7 @@ final class TheInsideJobStateTests: XCTestCase {
 
     func testRecordingPhaseExposesStakeout() {
         let job = TheInsideJob()
-        let recorder = TheStakeout()
+        let recorder = TheStakeout(captureFrame: { nil })
         job.recordingPhase = .recording(stakeout: recorder)
 
         XCTAssertTrue(job.stakeout === recorder)
@@ -301,7 +301,7 @@ final class TheInsideJobStateTests: XCTestCase {
 
     func testIdleRecordingPhaseHidesStakeout() {
         let job = TheInsideJob()
-        let recorder = TheStakeout()
+        let recorder = TheStakeout(captureFrame: { nil })
         job.recordingPhase = .recording(stakeout: recorder)
 
         job.recordingPhase = .idle
