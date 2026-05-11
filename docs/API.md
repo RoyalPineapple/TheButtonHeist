@@ -314,19 +314,27 @@ public enum ConnectionPhase: Equatable {
     case disconnected
     case connecting(device: DiscoveredDevice)
     case connected(device: DiscoveredDevice)
-    case failed(ConnectionFailure)
+    case failed(ConnectionError)
 }
 ```
 
-#### ConnectionFailure
+#### ConnectionError
 
 ```swift
-public enum ConnectionFailure: Equatable {
-    case error(String)
+public enum ConnectionError: Error, LocalizedError, Equatable {
+    case connectionFailed(String)
     case authFailed(String)
     case sessionLocked(String)
+    case timeout
+    case noDeviceFound
+    case noMatchingDevice(filter: String, available: [String])
 }
 ```
+
+Used both as the thrown error type for connect/wait operations and as the
+`.failed` phase payload. Phase-producing cases are `connectionFailed`,
+`authFailed`, and `sessionLocked`; the other cases surface only via thrown
+errors from the resolver and `waitForConnectionResult`.
 
 #### ReconnectPolicy
 
@@ -685,19 +693,22 @@ public enum ConnectionPhase: Equatable
 - `disconnected` - No active connection
 - `connecting(device: DiscoveredDevice)` - Connection in progress to device
 - `connected(device: DiscoveredDevice)` - Connected to a device
-- `failed(ConnectionFailure)` - Connection failed with typed failure
+- `failed(ConnectionError)` - Connection failed with typed error
 
-### ConnectionFailure
+### ConnectionError
 
 ```swift
-public enum ConnectionFailure: Equatable
+public enum ConnectionError: Error, LocalizedError, Equatable
 ```
 
 #### Cases
 
-- `error(String)` - General connection error
+- `connectionFailed(String)` - General connection error
 - `authFailed(String)` - Authentication rejected
 - `sessionLocked(String)` - Session locked by another driver
+- `timeout` - Connection or handshake timed out
+- `noDeviceFound` - Discovery yielded no candidates
+- `noMatchingDevice(filter: String, available: [String])` - Filter matched none of the discovered devices
 
 ### ReconnectPolicy
 

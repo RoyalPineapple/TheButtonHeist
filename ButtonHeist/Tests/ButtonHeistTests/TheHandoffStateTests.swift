@@ -50,7 +50,7 @@ final class TheHandoffStateTests: XCTestCase {
 
         handoff.handleServerMessage(.error(ServerError(kind: .general, message: "something went wrong")), requestId: nil)
 
-        assertFailed(handoff.connectionPhase, failure: .error("something went wrong"))
+        assertFailed(handoff.connectionPhase, failure: .connectionFailed("something went wrong"))
         XCTAssertEqual(receivedError, "something went wrong")
     }
 
@@ -590,7 +590,7 @@ final class TheHandoffStateTests: XCTestCase {
             .error(ServerError(kind: .general, message: "boom")),
             requestId: nil
         )
-        assertFailed(handoff.connectionPhase, failure: .error("boom"))
+        assertFailed(handoff.connectionPhase, failure: .connectionFailed("boom"))
 
         do {
             try await handoff.waitForConnectionResult(timeout: 5)
@@ -744,7 +744,7 @@ final class TheHandoffStateTests: XCTestCase {
             .error(ServerError(kind: .general, message: "boom")),
             requestId: nil
         )
-        assertFailed(handoff.connectionPhase, failure: .error("boom"))
+        assertFailed(handoff.connectionPhase, failure: .connectionFailed("boom"))
 
         // Calling disconnect() now is a no-op transition (.failed → .disconnected
         // is technically a phase change but, importantly, awaiters from any

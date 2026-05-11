@@ -15,7 +15,15 @@ final class TheHandoff {
 
     /// Why a connection attempt failed. TheHandoff's own error type —
     /// callers (TheFence) map this to their error domain at the boundary.
-    enum ConnectionError: Error, LocalizedError {
+    ///
+    /// Also used as the associated value in `ConnectionPhase.failed`, which
+    /// is why this enum is `Equatable`. Not every case can appear in
+    /// `.failed`: the phase-producing cases are `connectionFailed`,
+    /// `authFailed`, and `sessionLocked`; the resolver/timeout cases
+    /// (`timeout`, `noDeviceFound`, `noMatchingDevice`) are thrown directly
+    /// from `DeviceResolver`/`waitForConnectionResult` and never become a
+    /// phase value.
+    enum ConnectionError: Error, LocalizedError, Equatable {
         case connectionFailed(String)
         case authFailed(String)
         case sessionLocked(String)
@@ -32,21 +40,6 @@ final class TheHandoff {
             case .noDeviceFound: return "No device found"
             case .noMatchingDevice(let filter, let available):
                 return "No device matching '\(filter)' (available: \(available.joined(separator: ", ")))"
-            }
-        }
-    }
-
-    /// Why a connection failed — used as the associated value in ConnectionPhase.failed.
-    enum ConnectionFailure: Equatable {
-        case error(String)
-        case authFailed(String)
-        case sessionLocked(String)
-
-        var asConnectionError: ConnectionError {
-            switch self {
-            case .error(let message): return .connectionFailed(message)
-            case .authFailed(let reason): return .authFailed(reason)
-            case .sessionLocked(let message): return .sessionLocked(message)
             }
         }
     }
@@ -98,7 +91,7 @@ final class TheHandoff {
         case disconnected
         case connecting(device: DiscoveredDevice)
         case connected(ConnectedSession)
-        case failed(ConnectionFailure)
+        case failed(ConnectionError)
     }
 
     /// Whether auto-reconnect fires on disconnect. The reconnect task lives
@@ -140,7 +133,7 @@ final class TheHandoff {
         resumePhaseAwaiters(with: .success(()))
     }
 
-    private func transitionToFailed(_ failure: ConnectionFailure) {
+    private func transitionToFailed(_ failure: ConnectionError) {
         let wasActive: Bool
         switch connectionPhase {
         case .connecting, .connected:
@@ -153,7 +146,7 @@ final class TheHandoff {
         }
         connectionPhase = .failed(failure)
         if wasActive {
-            resumePhaseAwaiters(with: .failure(failure.asConnectionError))
+            resumePhaseAwaiters(with: .failure(failure))
         }
     }
 
@@ -558,7 +551,7 @@ final class TheHandoff {
                 if let requestId {
                     onRequestError?(serverError.message, requestId)
                 } else {
-                    transitionToFailed(.error(serverError.message))
+                    transitionToFailed(.connectionFailed(serverError.message))
                     onError?(serverError.message)
                 }
             }
@@ -574,7 +567,7 @@ final class TheHandoff {
             logger.info("Received status payload: appName=\(payload.identity.appName, privacy: .public)")
         case .protocolMismatch(let payload):
             let message = "buttonHeistVersion mismatch: server=\(payload.serverButtonHeistVersion), client=\(payload.clientButtonHeistVersion)"
-            transitionToFailed(.error(message))
+            transitionToFailed(.connectionFailed(message))
             onError?(message)
         case .pong:
             mutateConnectedSession { $0.missedPongCount = 0 }
@@ -611,7 +604,7 @@ final class TheHandoff {
         case .connected:
             return
         case .failed(let failure):
-            throw failure.asConnectionError
+            throw failure
         case .disconnected:
             throw ConnectionError.connectionFailed(
                 "Disconnected during connection attempt. The app may have been busy, suspended, or restarted before the handshake completed."

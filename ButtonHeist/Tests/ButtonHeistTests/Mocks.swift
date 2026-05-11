@@ -46,7 +46,7 @@ func assertConnected(
 @ButtonHeistActor
 func assertFailed(
     _ phase: TheHandoff.ConnectionPhase,
-    failure expected: TheHandoff.ConnectionFailure,
+    failure expected: TheHandoff.ConnectionError,
     file: StaticString = #filePath,
     line: UInt = #line
 ) {
