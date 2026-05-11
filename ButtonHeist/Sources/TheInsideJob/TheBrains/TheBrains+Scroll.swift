@@ -448,7 +448,8 @@ extension TheBrains {
             return .failure(.scrollToVisible, message: "Element not visible after scrolling to recorded position")
         }
 
-        return .failure(.scrollToVisible, message: "Element not in current screen or has no recorded scroll position. Use element_search to find unseen elements.")
+        return .failure(.scrollToVisible,
+                        message: "Element not in current screen or has no recorded scroll position. Use element_search to find unseen elements.")
     }
 
     // MARK: - Element Search (Iterative)
