@@ -3,44 +3,97 @@ import XCTest
 import TheScore
 @testable import TheInsideJob
 
+/// Tests drive `TheMuscle` (an `actor`) directly via `await`. The harness
+/// itself is `@MainActor` so test bookkeeping (`sentMessages`, etc.) can be
+/// read off the main actor without contention. Callbacks installed on the
+/// muscle are `@Sendable` and hop back to the main actor through `Task {}`.
+/// Thread-safe accumulator used by tests to capture callback invocations.
+/// Callbacks installed on `TheMuscle` are `@Sendable` and may fire from any
+/// context, so storage needs a lock. `@unchecked Sendable` justification:
+/// all access goes through `NSLock`.
+private final class CallbackSink: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+    private var sentMessagesStorage: [(data: Data, clientId: Int)] = []
+    private var markedAuthenticatedStorage: [Int] = []
+    private var disconnectedClientsStorage: [Int] = []
+    private var authenticatedCallbacksStorage: [(clientId: Int, respond: @Sendable (Data) -> Void)] = []
+    private var sessionChangesStorage: [Bool] = []
+    private let lock = NSLock()
+
+    var sentMessages: [(data: Data, clientId: Int)] { lock.withLock { sentMessagesStorage } }
+    var markedAuthenticated: [Int] { lock.withLock { markedAuthenticatedStorage } }
+    var disconnectedClients: [Int] { lock.withLock { disconnectedClientsStorage } }
+    var authenticatedCallbacks: [(clientId: Int, respond: @Sendable (Data) -> Void)] {
+        lock.withLock { authenticatedCallbacksStorage }
+    }
+    var sessionChanges: [Bool] { lock.withLock { sessionChangesStorage } }
+
+    func appendSent(_ entry: (Data, Int)) { lock.withLock { sentMessagesStorage.append(entry) } }
+    func appendAuthenticated(_ clientId: Int) { lock.withLock { markedAuthenticatedStorage.append(clientId) } }
+    func appendDisconnected(_ clientId: Int) { lock.withLock { disconnectedClientsStorage.append(clientId) } }
+    func appendAuthenticatedCallback(_ entry: (Int, @Sendable (Data) -> Void)) {
+        lock.withLock { authenticatedCallbacksStorage.append(entry) }
+    }
+    func appendSessionChange(_ value: Bool) { lock.withLock { sessionChangesStorage.append(value) } }
+}
+
 @MainActor
 final class TheMuscleTests: XCTestCase {
 
     // MARK: - Test Helpers
 
     private var muscle: TheMuscle!
-    private var sentMessages: [(data: Data, clientId: Int)] = []
-    private var markedAuthenticated: [Int] = []
-    private var disconnectedClients: [Int] = []
-    private var authenticatedCallbacks: [(clientId: Int, respond: @Sendable (Data) -> Void)] = []
+    private var sink: CallbackSink!
 
     override func setUp() async throws {
         try await super.setUp()
         muscle = TheMuscle(explicitToken: "test-token")
-        sentMessages = []
-        markedAuthenticated = []
-        disconnectedClients = []
-        authenticatedCallbacks = []
-
-        muscle.sendToClient = { [unowned self] data, clientId in
-            self.sentMessages.append((data, clientId))
-        }
-        muscle.markClientAuthenticated = { [unowned self] clientId in
-            self.markedAuthenticated.append(clientId)
-        }
-        muscle.disconnectClient = { [unowned self] clientId in
-            self.disconnectedClients.append(clientId)
-        }
-        muscle.onClientAuthenticated = { [unowned self] clientId, respond in
-            self.authenticatedCallbacks.append((clientId, respond))
-        }
-
+        sink = CallbackSink()
+        await installCallbacks(observeSessionChanges: false)
     }
 
     override func tearDown() async throws {
-        muscle.tearDown()
+        await muscle.tearDown()
         muscle = nil
+        sink = nil
         try await super.tearDown()
+    }
+
+    private var sentMessages: [(data: Data, clientId: Int)] { sink.sentMessages }
+    private var markedAuthenticated: [Int] { sink.markedAuthenticated }
+    private var disconnectedClients: [Int] { sink.disconnectedClients }
+    private var authenticatedCallbacks: [(clientId: Int, respond: @Sendable (Data) -> Void)] {
+        sink.authenticatedCallbacks
+    }
+
+    /// Install test callbacks. Each callback writes to the shared `CallbackSink`,
+    /// which is thread-safe so the closures don't need to hop back to the harness's
+    /// `@MainActor` isolation.
+    private func installCallbacks(observeSessionChanges: Bool) async {
+        let sink = self.sink!
+        let sendToClient: @Sendable (Data, Int) -> Void = { data, clientId in
+            sink.appendSent((data, clientId))
+        }
+        let markAuth: @Sendable (Int) -> Void = { clientId in
+            sink.appendAuthenticated(clientId)
+        }
+        let disconnect: @Sendable (Int) -> Void = { clientId in
+            sink.appendDisconnected(clientId)
+        }
+        let onAuthenticated: @Sendable (Int, @escaping @Sendable (Data) -> Void) -> Void = { clientId, respond in
+            sink.appendAuthenticatedCallback((clientId, respond))
+        }
+        let recordChanges: @Sendable (Bool) -> Void = { value in sink.appendSessionChange(value) }
+        let ignoreChanges: @Sendable (Bool) -> Void = { _ in }
+        let onSessionActiveChanged: @Sendable (Bool) -> Void = observeSessionChanges
+            ? recordChanges
+            : ignoreChanges
+        await muscle.installCallbacks(
+            sendToClient: sendToClient,
+            markClientAuthenticated: markAuth,
+            disconnectClient: disconnect,
+            onClientAuthenticated: onAuthenticated,
+            onSessionActiveChanged: onSessionActiveChanged
+        )
     }
 
     // MARK: - Encoding helpers
@@ -61,12 +114,12 @@ final class TheMuscleTests: XCTestCase {
         }
     }
 
-    private func performHello(clientId: Int, respond: @escaping @Sendable (Data) -> Void) {
+    private func performHello(clientId: Int, respond: @escaping @Sendable (Data) -> Void) async {
         guard let data = try? JSONEncoder().encode(RequestEnvelope(message: .clientHello)) else {
             XCTFail("Failed to encode clientHello")
             return
         }
-        muscle.handleUnauthenticatedMessage(clientId, data: data, respond: respond)
+        await muscle.handleUnauthenticatedMessage(clientId, data: data, respond: respond)
     }
 
     private func authenticate(
@@ -75,10 +128,10 @@ final class TheMuscleTests: XCTestCase {
         driverId: String? = nil,
         address: String = "127.0.0.1",
         respond: @escaping @Sendable (Data) -> Void
-    ) throws {
-        muscle.registerClientAddress(clientId, address: address)
-        performHello(clientId: clientId, respond: respond)
-        muscle.handleUnauthenticatedMessage(clientId, data: try encodeAuth(token: token, driverId: driverId), respond: respond)
+    ) async throws {
+        await muscle.registerClientAddress(clientId, address: address)
+        await performHello(clientId: clientId, respond: respond)
+        await muscle.handleUnauthenticatedMessage(clientId, data: try encodeAuth(token: token, driverId: driverId), respond: respond)
     }
 
     private func respondSink() -> @Sendable (Data) -> Void {
@@ -92,24 +145,32 @@ final class TheMuscleTests: XCTestCase {
         // closure that captures it; not shared across threads in practice.
         final class Box: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
             var items: [Data] = []
+            let lock = NSLock()
         }
         let box = Box()
         let respond: @Sendable (Data) -> Void = { data in
-            box.items.append(data)
+            box.lock.withLock { box.items.append(data) }
         }
-        return (respond, { box.items })
+        return (respond, { box.lock.withLock { box.items } })
     }
+
+    /// No-op: callbacks now write to a thread-safe sink so test assertions
+    /// can read synchronously after the awaited muscle call returns. Kept
+    /// for call-site stability; remove once all tests are inlined.
+    private func flushCallbacks() async {}
 
     // MARK: - Auth Flow Tests
 
-    func testValidTokenAuthenticates() throws {
+    func testValidTokenAuthenticates() async throws {
         let (respond, responses) = collectResponses()
-        try authenticate(clientId: 1, token: "test-token", respond: respond)
+        try await authenticate(clientId: 1, token: "test-token", respond: respond)
+        await flushCallbacks()
 
         XCTAssertTrue(markedAuthenticated.contains(1), "Client should be marked authenticated")
-        XCTAssertTrue(muscle.authenticatedClientIDs.contains(1))
-        XCTAssertEqual(muscle.authenticatedClientCount, 1)
-        // No error message should have been sent via respond
+        let authenticatedIDs = await muscle.authenticatedClientIDs
+        XCTAssertTrue(authenticatedIDs.contains(1))
+        let authenticatedCount = await muscle.authenticatedClientCount
+        XCTAssertEqual(authenticatedCount, 1)
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         for msg in serverMessages {
             if case .error(let serverError) = msg, serverError.kind == .authFailure {
@@ -119,13 +180,16 @@ final class TheMuscleTests: XCTestCase {
         }
     }
 
-    func testInvalidTokenRejected() throws {
+    func testInvalidTokenRejected() async throws {
         let (respond, responses) = collectResponses()
-        try authenticate(clientId: 1, token: "wrong-token", respond: respond)
+        try await authenticate(clientId: 1, token: "wrong-token", respond: respond)
+        await flushCallbacks()
 
         XCTAssertFalse(markedAuthenticated.contains(1), "Client should not be marked authenticated")
-        XCTAssertFalse(muscle.authenticatedClientIDs.contains(1))
-        XCTAssertEqual(muscle.authenticatedClientCount, 0)
+        let authenticatedIDs = await muscle.authenticatedClientIDs
+        XCTAssertFalse(authenticatedIDs.contains(1))
+        let authenticatedCount = await muscle.authenticatedClientCount
+        XCTAssertEqual(authenticatedCount, 0)
 
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         let hasAuthFailed = serverMessages.contains { msg in
@@ -135,52 +199,63 @@ final class TheMuscleTests: XCTestCase {
         XCTAssertTrue(hasAuthFailed, "Should send authFailure error for invalid token")
     }
 
-    func testEmptyTokenTriggersPendingApproval() throws {
+    func testEmptyTokenTriggersPendingApproval() async throws {
         let (respond, _) = collectResponses()
-        try authenticate(clientId: 1, token: "", respond: respond)
+        try await authenticate(clientId: 1, token: "", respond: respond)
+        await flushCallbacks()
 
         // Client should NOT be authenticated yet — waiting for UI approval
         XCTAssertFalse(markedAuthenticated.contains(1))
-        XCTAssertFalse(muscle.authenticatedClientIDs.contains(1))
-        XCTAssertEqual(muscle.authenticatedClientCount, 0)
+        let authenticatedIDs = await muscle.authenticatedClientIDs
+        XCTAssertFalse(authenticatedIDs.contains(1))
+        let authenticatedCount = await muscle.authenticatedClientCount
+        XCTAssertEqual(authenticatedCount, 0)
     }
 
-    func testNonAuthMessageDisconnects() throws {
+    func testNonAuthMessageDisconnects() async throws {
         // Send a ping message before authenticating
         let pingData = try JSONEncoder().encode(RequestEnvelope(message: .ping))
-        muscle.handleUnauthenticatedMessage(1, data: pingData, respond: respondSink())
+        await muscle.handleUnauthenticatedMessage(1, data: pingData, respond: respondSink())
+        await flushCallbacks()
 
         XCTAssertTrue(disconnectedClients.contains(1), "Should disconnect client that sends non-auth message")
     }
 
     // MARK: - Session Rules Tests
 
-    func testNoSessionValidTokenAcquires() throws {
-        try authenticate(clientId: 1, token: "test-token", respond: respondSink())
+    func testNoSessionValidTokenAcquires() async throws {
+        try await authenticate(clientId: 1, token: "test-token", respond: respondSink())
 
-        XCTAssertNotNil(muscle.activeSessionDriverId, "Session should be claimed")
-        XCTAssertTrue(muscle.activeSessionConnections.contains(1))
+        let driverId = await muscle.activeSessionDriverId
+        XCTAssertNotNil(driverId, "Session should be claimed")
+        let connections = await muscle.activeSessionConnections
+        XCTAssertTrue(connections.contains(1))
     }
 
-    func testSameDriverAllowed() throws {
-        try authenticate(clientId: 1, token: "test-token", respond: respondSink())
-        try authenticate(clientId: 2, token: "test-token", respond: respondSink())
+    func testSameDriverAllowed() async throws {
+        try await authenticate(clientId: 1, token: "test-token", respond: respondSink())
+        try await authenticate(clientId: 2, token: "test-token", respond: respondSink())
+        await flushCallbacks()
 
-        XCTAssertTrue(muscle.activeSessionConnections.contains(1))
-        XCTAssertTrue(muscle.activeSessionConnections.contains(2))
-        XCTAssertEqual(muscle.authenticatedClientCount, 2)
+        let connections = await muscle.activeSessionConnections
+        XCTAssertTrue(connections.contains(1))
+        XCTAssertTrue(connections.contains(2))
+        let count = await muscle.authenticatedClientCount
+        XCTAssertEqual(count, 2)
     }
 
-    func testDifferentDriverBusy() throws {
+    func testDifferentDriverBusy() async throws {
         // Driver A connects
-        try authenticate(clientId: 1, token: "test-token", driverId: "driver-a", respond: respondSink())
+        try await authenticate(clientId: 1, token: "test-token", driverId: "driver-a", respond: respondSink())
 
         // Driver B tries to connect
         let (respond, responses) = collectResponses()
-        try authenticate(clientId: 2, token: "test-token", driverId: "driver-b", respond: respond)
+        try await authenticate(clientId: 2, token: "test-token", driverId: "driver-b", respond: respond)
+        await flushCallbacks()
 
         XCTAssertFalse(markedAuthenticated.contains(2), "Driver B should not be authenticated")
-        XCTAssertFalse(muscle.activeSessionConnections.contains(2))
+        let connections = await muscle.activeSessionConnections
+        XCTAssertFalse(connections.contains(2))
 
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         let hasSessionLocked = serverMessages.contains { msg in
@@ -191,62 +266,62 @@ final class TheMuscleTests: XCTestCase {
     }
 
     func testSessionReleasedAfterAllDisconnect() async throws {
-        // Use a very short timeout for test speed
-        muscle = TheMuscle(explicitToken: "test-token")
-        // Re-wire callbacks
-        muscle.sendToClient = { [unowned self] data, clientId in self.sentMessages.append((data, clientId)) }
-        muscle.markClientAuthenticated = { [unowned self] clientId in self.markedAuthenticated.append(clientId) }
-        muscle.disconnectClient = { [unowned self] clientId in self.disconnectedClients.append(clientId) }
-        muscle.onClientAuthenticated = { [unowned self] clientId, respond in self.authenticatedCallbacks.append((clientId, respond)) }
-
         // Authenticate a client
-        try authenticate(clientId: 1, token: "test-token", respond: respondSink())
-        XCTAssertNotNil(muscle.activeSessionDriverId)
+        try await authenticate(clientId: 1, token: "test-token", respond: respondSink())
+        let driverId = await muscle.activeSessionDriverId
+        XCTAssertNotNil(driverId)
 
         // Disconnect the client — session release timer starts (default 30s, too slow for tests)
-        muscle.handleClientDisconnected(1)
+        await muscle.handleClientDisconnected(1)
         // Session should still be active (timer hasn't fired)
-        XCTAssertNotNil(muscle.activeSessionDriverId, "Session should still be active during grace period")
+        let driverIdAfter = await muscle.activeSessionDriverId
+        XCTAssertNotNil(driverIdAfter, "Session should still be active during grace period")
     }
 
-    func testSameDriverRejoinsAfterDisconnect() throws {
+    func testSameDriverRejoinsAfterDisconnect() async throws {
         // Client 1 connects and disconnects
-        try authenticate(clientId: 1, token: "test-token", respond: respondSink())
-        muscle.handleClientDisconnected(1)
+        try await authenticate(clientId: 1, token: "test-token", respond: respondSink())
+        await muscle.handleClientDisconnected(1)
 
         // Client 2 with same driver reconnects before timeout
-        try authenticate(clientId: 2, token: "test-token", respond: respondSink())
+        try await authenticate(clientId: 2, token: "test-token", respond: respondSink())
+        await flushCallbacks()
 
-        XCTAssertTrue(muscle.activeSessionConnections.contains(2), "Same driver should rejoin session")
+        let connections = await muscle.activeSessionConnections
+        XCTAssertTrue(connections.contains(2), "Same driver should rejoin session")
         XCTAssertTrue(markedAuthenticated.contains(2))
     }
 
-    func testDrainingSessionSurvivesForRejoin() throws {
+    func testDrainingSessionSurvivesForRejoin() async throws {
         // Authenticate and disconnect — session enters draining, not idle
-        try authenticate(clientId: 1, token: "test-token", respond: respondSink())
-        muscle.handleClientDisconnected(1)
+        try await authenticate(clientId: 1, token: "test-token", respond: respondSink())
+        await muscle.handleClientDisconnected(1)
 
         // Session is draining: no connections, but driver still owns it
-        XCTAssertTrue(muscle.activeSessionConnections.isEmpty, "No connections during draining")
-        XCTAssertNotNil(muscle.activeSessionDriverId, "Driver should still own session while draining")
+        let connectionsDuringDrain = await muscle.activeSessionConnections
+        XCTAssertTrue(connectionsDuringDrain.isEmpty, "No connections during draining")
+        let driverIdDuringDrain = await muscle.activeSessionDriverId
+        XCTAssertNotNil(driverIdDuringDrain, "Driver should still own session while draining")
 
-        // Same driver reconnects — should rejoin the draining session, not claim a new one
-        var sessionChanges: [Bool] = []
-        muscle.onSessionActiveChanged = { isActive in sessionChanges.append(isActive) }
-        try authenticate(clientId: 2, token: "test-token", respond: respondSink())
+        // Same driver reconnects — should rejoin the draining session, not claim a new one.
+        // Re-install callbacks with the session-change observer enabled.
+        await installCallbacks(observeSessionChanges: true)
+        try await authenticate(clientId: 2, token: "test-token", respond: respondSink())
 
-        XCTAssertTrue(muscle.activeSessionConnections.contains(2), "New client should be in session")
-        XCTAssertTrue(sessionChanges.isEmpty, "Session should not have been released and reclaimed")
+        let connectionsAfter = await muscle.activeSessionConnections
+        XCTAssertTrue(connectionsAfter.contains(2), "New client should be in session")
+        XCTAssertTrue(sink.sessionChanges.isEmpty, "Session should not have been released and reclaimed")
     }
 
-    func testDifferentDriverBlockedDuringGracePeriod() throws {
+    func testDifferentDriverBlockedDuringGracePeriod() async throws {
         // Driver A connects and disconnects (release timer running)
-        try authenticate(clientId: 1, token: "test-token", driverId: "driver-a", respond: respondSink())
-        muscle.handleClientDisconnected(1)
+        try await authenticate(clientId: 1, token: "test-token", driverId: "driver-a", respond: respondSink())
+        await muscle.handleClientDisconnected(1)
 
         // Driver B tries during grace period
         let (respond, responses) = collectResponses()
-        try authenticate(clientId: 2, token: "test-token", driverId: "driver-b", respond: respond)
+        try await authenticate(clientId: 2, token: "test-token", driverId: "driver-b", respond: respond)
+        await flushCallbacks()
 
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         let hasSessionLocked = serverMessages.contains { msg in
@@ -258,58 +333,68 @@ final class TheMuscleTests: XCTestCase {
 
     // MARK: - Token Lifecycle Tests
 
-    func testTokenSurvivesSessionRelease() throws {
-        let originalToken = muscle.sessionToken
+    func testTokenSurvivesSessionRelease() async throws {
+        let originalToken = await muscle.sessionToken
 
         // Authenticate, disconnect, tearDown to force session release
-        try authenticate(clientId: 1, token: "test-token", respond: respondSink())
-        muscle.handleClientDisconnected(1)
+        try await authenticate(clientId: 1, token: "test-token", respond: respondSink())
+        await muscle.handleClientDisconnected(1)
 
         // Token should remain the same after session release path
-        XCTAssertEqual(muscle.sessionToken, originalToken, "Token should not change when session is released")
+        let tokenAfter = await muscle.sessionToken
+        XCTAssertEqual(tokenAfter, originalToken, "Token should not change when session is released")
     }
 
-    func testTokenStableAcrossMultipleCycles() throws {
-        let originalToken = muscle.sessionToken
+    func testTokenStableAcrossMultipleCycles() async throws {
+        let originalToken = await muscle.sessionToken
 
         for i in 1...5 {
-            try authenticate(clientId: i, token: originalToken, respond: respondSink())
-            muscle.handleClientDisconnected(i)
+            try await authenticate(clientId: i, token: originalToken, respond: respondSink())
+            await muscle.handleClientDisconnected(i)
         }
 
-        XCTAssertEqual(muscle.sessionToken, originalToken, "Token should remain stable across connect/disconnect cycles")
+        let tokenAfter = await muscle.sessionToken
+        XCTAssertEqual(tokenAfter, originalToken, "Token should remain stable across connect/disconnect cycles")
     }
 
-    func testExplicitTokenUsed() {
+    func testExplicitTokenUsed() async {
         let muscle = TheMuscle(explicitToken: "my-explicit-token")
-        XCTAssertEqual(muscle.sessionToken, "my-explicit-token")
+        let token = await muscle.sessionToken
+        XCTAssertEqual(token, "my-explicit-token")
     }
 
-    func testAutoGeneratedTokenIsUUID() {
+    func testAutoGeneratedTokenIsUUID() async {
         let muscle = TheMuscle(explicitToken: nil)
-        // Auto-generated token should be a valid UUID format
-        XCTAssertNotNil(UUID(uuidString: muscle.sessionToken), "Auto-generated token should be a valid UUID")
+        let token = await muscle.sessionToken
+        XCTAssertNotNil(UUID(uuidString: token), "Auto-generated token should be a valid UUID")
     }
 
-    func testTearDownClearsState() throws {
-        try authenticate(clientId: 1, token: "test-token", respond: respondSink())
+    func testTearDownClearsState() async throws {
+        try await authenticate(clientId: 1, token: "test-token", respond: respondSink())
+        await flushCallbacks()
 
-        XCTAssertTrue(muscle.helloValidatedClients.contains(1))
+        let helloValidatedBefore = await muscle.helloValidatedClients
+        XCTAssertTrue(helloValidatedBefore.contains(1))
 
-        muscle.tearDown()
+        await muscle.tearDown()
 
-        XCTAssertNil(muscle.activeSessionDriverId)
-        XCTAssertTrue(muscle.activeSessionConnections.isEmpty)
-        XCTAssertTrue(muscle.authenticatedClientIDs.isEmpty)
-        XCTAssertTrue(muscle.helloValidatedClients.isEmpty)
-        XCTAssertEqual(muscle.authenticatedClientCount, 0)
+        let driverId = await muscle.activeSessionDriverId
+        XCTAssertNil(driverId)
+        let connections = await muscle.activeSessionConnections
+        XCTAssertTrue(connections.isEmpty)
+        let authenticatedIDs = await muscle.authenticatedClientIDs
+        XCTAssertTrue(authenticatedIDs.isEmpty)
+        let helloValidatedAfter = await muscle.helloValidatedClients
+        XCTAssertTrue(helloValidatedAfter.isEmpty)
+        let authenticatedCount = await muscle.authenticatedClientCount
+        XCTAssertEqual(authenticatedCount, 0)
     }
 
     // MARK: - Brute-Force Protection Tests
 
-    func testSingleFailedAttemptNotLockedOut() throws {
+    func testSingleFailedAttemptNotLockedOut() async throws {
         let (respond, responses) = collectResponses()
-        try authenticate(clientId: 1, token: "wrong-token", respond: respond)
+        try await authenticate(clientId: 1, token: "wrong-token", respond: respond)
 
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         let hasAuthFailed = serverMessages.contains { msg in
@@ -321,16 +406,16 @@ final class TheMuscleTests: XCTestCase {
         XCTAssertTrue(hasAuthFailed, "First failed attempt should get normal authFailed, not lockout")
     }
 
-    func testLockoutAfterMaxFailedAttempts() throws {
+    func testLockoutAfterMaxFailedAttempts() async throws {
         // Send 5 failed attempts from different clientIds but same address (simulates reconnection)
         for i in 1...5 {
-            try authenticate(clientId: i, token: "wrong-token", address: "192.168.1.100", respond: respondSink())
-            muscle.handleClientDisconnected(i)
+            try await authenticate(clientId: i, token: "wrong-token", address: "192.168.1.100", respond: respondSink())
+            await muscle.handleClientDisconnected(i)
         }
 
         // 6th attempt from same address with new clientId should be locked out
         let (respond, responses) = collectResponses()
-        try authenticate(clientId: 6, token: "wrong-token", address: "192.168.1.100", respond: respond)
+        try await authenticate(clientId: 6, token: "wrong-token", address: "192.168.1.100", respond: respond)
 
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         let hasLockout = serverMessages.contains { msg in
@@ -342,16 +427,17 @@ final class TheMuscleTests: XCTestCase {
         XCTAssertTrue(hasLockout, "Should receive lockout message after exceeding max failed attempts across reconnections")
     }
 
-    func testLockoutDoesNotAffectOtherAddresses() throws {
+    func testLockoutDoesNotAffectOtherAddresses() async throws {
         // Lock out address 192.168.1.100
         for i in 1...5 {
-            try authenticate(clientId: i, token: "wrong-token", address: "192.168.1.100", respond: respondSink())
-            muscle.handleClientDisconnected(i)
+            try await authenticate(clientId: i, token: "wrong-token", address: "192.168.1.100", respond: respondSink())
+            await muscle.handleClientDisconnected(i)
         }
 
         // Client from different address should still be able to authenticate
         let (respond, _) = collectResponses()
-        try authenticate(clientId: 10, token: "test-token", address: "192.168.1.200", respond: respond)
+        try await authenticate(clientId: 10, token: "test-token", address: "192.168.1.200", respond: respond)
+        await flushCallbacks()
 
         XCTAssertTrue(markedAuthenticated.contains(10), "Clients from other addresses should not be affected by lockout")
     }
@@ -369,15 +455,16 @@ final class TheMuscleTests: XCTestCase {
         token: String,
         address: String = "127.0.0.1",
         respond: @escaping @Sendable (Data) -> Void
-    ) throws {
-        muscle.registerClientAddress(clientId, address: address)
-        performHello(clientId: clientId, respond: respond)
-        muscle.handleUnauthenticatedMessage(clientId, data: try encodeWatch(token: token), respond: respond)
+    ) async throws {
+        await muscle.registerClientAddress(clientId, address: address)
+        await performHello(clientId: clientId, respond: respond)
+        await muscle.handleUnauthenticatedMessage(clientId, data: try encodeWatch(token: token), respond: respond)
     }
 
-    func testObserverInvalidTokenTracksFailedAttempts() throws {
+    func testObserverInvalidTokenTracksFailedAttempts() async throws {
         let (respond, responses) = collectResponses()
-        try watchAuthenticate(clientId: 1, token: "wrong-token", address: "10.0.0.1", respond: respond)
+        try await watchAuthenticate(clientId: 1, token: "wrong-token", address: "10.0.0.1", respond: respond)
+        await flushCallbacks()
 
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         let hasAuthFailed = serverMessages.contains { msg in
@@ -388,16 +475,16 @@ final class TheMuscleTests: XCTestCase {
         XCTAssertFalse(markedAuthenticated.contains(1))
     }
 
-    func testObserverLockoutAfterMaxFailedAttempts() throws {
+    func testObserverLockoutAfterMaxFailedAttempts() async throws {
         let address = "10.0.0.50"
 
         for i in 1...5 {
-            try watchAuthenticate(clientId: i, token: "wrong-token", address: address, respond: respondSink())
-            muscle.handleClientDisconnected(i)
+            try await watchAuthenticate(clientId: i, token: "wrong-token", address: address, respond: respondSink())
+            await muscle.handleClientDisconnected(i)
         }
 
         let (respond, responses) = collectResponses()
-        try watchAuthenticate(clientId: 6, token: "wrong-token", address: address, respond: respond)
+        try await watchAuthenticate(clientId: 6, token: "wrong-token", address: address, respond: respond)
 
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         let hasLockout = serverMessages.contains { msg in
@@ -409,24 +496,24 @@ final class TheMuscleTests: XCTestCase {
         XCTAssertTrue(hasLockout, "Observer should be locked out after 5 failed watch attempts")
     }
 
-    func testObserverLockoutSharedWithDriverAuth() throws {
+    func testObserverLockoutSharedWithDriverAuth() async throws {
         let address = "10.0.0.60"
 
         // Fail 3 times via watch path
         for i in 1...3 {
-            try watchAuthenticate(clientId: i, token: "wrong-token", address: address, respond: respondSink())
-            muscle.handleClientDisconnected(i)
+            try await watchAuthenticate(clientId: i, token: "wrong-token", address: address, respond: respondSink())
+            await muscle.handleClientDisconnected(i)
         }
 
         // Fail 2 more times via driver auth path
         for i in 4...5 {
-            try authenticate(clientId: i, token: "wrong-token", address: address, respond: respondSink())
-            muscle.handleClientDisconnected(i)
+            try await authenticate(clientId: i, token: "wrong-token", address: address, respond: respondSink())
+            await muscle.handleClientDisconnected(i)
         }
 
         // 6th attempt via watch should be locked out (shared counter)
         let (respond, responses) = collectResponses()
-        try watchAuthenticate(clientId: 6, token: "wrong-token", address: address, respond: respond)
+        try await watchAuthenticate(clientId: 6, token: "wrong-token", address: address, respond: respond)
 
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         let hasLockout = serverMessages.contains { msg in
@@ -438,45 +525,47 @@ final class TheMuscleTests: XCTestCase {
         XCTAssertTrue(hasLockout, "Watch and driver auth should share the same brute-force counter")
     }
 
-    func testObserverSuccessfulAuthClearsFailedAttempts() throws {
+    func testObserverSuccessfulAuthClearsFailedAttempts() async throws {
         let address = "10.0.0.70"
 
         // Fail 3 times via watch
         for i in 1...3 {
-            try watchAuthenticate(clientId: i, token: "wrong-token", address: address, respond: respondSink())
-            muscle.handleClientDisconnected(i)
+            try await watchAuthenticate(clientId: i, token: "wrong-token", address: address, respond: respondSink())
+            await muscle.handleClientDisconnected(i)
         }
 
         // Succeed with correct token
-        try watchAuthenticate(clientId: 4, token: "test-token", address: address, respond: respondSink())
+        try await watchAuthenticate(clientId: 4, token: "test-token", address: address, respond: respondSink())
+        await flushCallbacks()
         XCTAssertTrue(markedAuthenticated.contains(4), "Observer with correct token should authenticate")
     }
 
-    func testSuccessfulAuthClearsFailedAttempts() throws {
+    func testSuccessfulAuthClearsFailedAttempts() async throws {
         let address = "192.168.1.100"
 
         // Fail 3 times from same address with different clientIds
         for i in 1...3 {
-            try authenticate(clientId: i, token: "wrong-token", address: address, respond: respondSink())
-            muscle.handleClientDisconnected(i)
+            try await authenticate(clientId: i, token: "wrong-token", address: address, respond: respondSink())
+            await muscle.handleClientDisconnected(i)
         }
 
         // Succeed from same address
-        try authenticate(clientId: 4, token: "test-token", address: address, respond: respondSink())
+        try await authenticate(clientId: 4, token: "test-token", address: address, respond: respondSink())
+        await flushCallbacks()
         XCTAssertTrue(markedAuthenticated.contains(4), "Should authenticate after failed attempts below threshold")
 
         // Disconnect and try failing again — counter should be reset
-        muscle.handleClientDisconnected(4)
+        await muscle.handleClientDisconnected(4)
 
         // Should get 5 more attempts before lockout (counter was cleared on successful auth)
         for i in 5...9 {
-            try authenticate(clientId: i, token: "wrong-token", address: address, respond: respondSink())
-            muscle.handleClientDisconnected(i)
+            try await authenticate(clientId: i, token: "wrong-token", address: address, respond: respondSink())
+            await muscle.handleClientDisconnected(i)
         }
 
         // 6th attempt after reset should be locked out
         let (respond, responses) = collectResponses()
-        try authenticate(clientId: 10, token: "wrong-token", address: address, respond: respond)
+        try await authenticate(clientId: 10, token: "wrong-token", address: address, respond: respond)
 
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         let hasLockout = serverMessages.contains { msg in
@@ -488,4 +577,5 @@ final class TheMuscleTests: XCTestCase {
         XCTAssertTrue(hasLockout, "Should lock out again after counter reset and 5 more failures")
     }
 }
+
 #endif // canImport(UIKit)

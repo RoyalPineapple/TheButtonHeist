@@ -64,14 +64,44 @@ final class TheGetaway {
     func wireTransport(_ transport: ServerTransport) {
         self.transport = transport
 
-        muscle.sendToClient = { [weak transport] data, clientId in transport?.send(data, to: clientId) }
-        muscle.markClientAuthenticated = { [weak transport] clientId in transport?.markAuthenticated(clientId) }
-        muscle.disconnectClient = { [weak transport] clientId in transport?.disconnect(clientId: clientId) }
-        muscle.onClientAuthenticated = { [weak self] clientId, respond in
-            self?.handleClientConnected(clientId, respond: respond)
+        // Install actor-isolated callbacks on TheMuscle. Each callback is
+        // `@Sendable`. We capture the inner `SimpleSocketServer` actor (which
+        // is Sendable) rather than the `ServerTransport` wrapper (NSObject,
+        // non-Sendable) so the closures don't drag a non-Sendable type into
+        // actor-isolated storage. `onSessionActiveChanged` updates Bonjour
+        // TXT state — which is `@MainActor` on the transport — so it hops to
+        // MainActor and keeps `[weak transport]` (the hop makes the capture
+        // safe). `handleClientConnected` is `@MainActor`, so the
+        // onClientAuthenticated bridge hops through an unstructured Task too.
+        let muscle = self.muscle
+        let server = transport.server
+        let sendToClient: @Sendable (Data, Int) -> Void = { data, clientId in
+            Task { await server.send(data, to: clientId) }
         }
-        muscle.onSessionActiveChanged = { [weak transport] isActive in
-            transport?.updateTXTRecord([TXTRecordKey.sessionActive.rawValue: isActive ? "1" : "0"])
+        let markAuth: @Sendable (Int) -> Void = { clientId in
+            Task { await server.markAuthenticated(clientId) }
+        }
+        let disconnect: @Sendable (Int) -> Void = { clientId in
+            Task { await server.disconnect(clientId: clientId) }
+        }
+        let onAuthenticated: @Sendable (Int, @escaping @Sendable (Data) -> Void) -> Void = { [weak self] clientId, respond in
+            Task { @MainActor [weak self] in
+                self?.handleClientConnected(clientId, respond: respond)
+            }
+        }
+        let onSessionActiveChanged: @Sendable (Bool) -> Void = { [weak self] isActive in
+            Task { @MainActor [weak self] in
+                self?.transport?.updateTXTRecord([TXTRecordKey.sessionActive.rawValue: isActive ? "1" : "0"])
+            }
+        }
+        Task {
+            await muscle.installCallbacks(
+                sendToClient: sendToClient,
+                markClientAuthenticated: markAuth,
+                disconnectClient: disconnect,
+                onClientAuthenticated: onAuthenticated,
+                onSessionActiveChanged: onSessionActiveChanged
+            )
         }
 
         // Keepalives must be answered even when the main actor is wedged on a
@@ -108,13 +138,13 @@ final class TheGetaway {
         case .clientConnected(let clientId, let remoteAddress):
             insideJobLogger.info("Client \(clientId) connected from \(remoteAddress ?? "unknown"), awaiting hello")
             if let remoteAddress {
-                muscle.registerClientAddress(clientId, address: remoteAddress)
+                await muscle.registerClientAddress(clientId, address: remoteAddress)
             }
-            muscle.sendServerHello(clientId: clientId)
+            await muscle.sendServerHello(clientId: clientId)
 
         case .clientDisconnected(let clientId):
             insideJobLogger.info("Client \(clientId) disconnected")
-            muscle.handleClientDisconnected(clientId)
+            await muscle.handleClientDisconnected(clientId)
 
         case .dataReceived(let clientId, let data, let respond):
             await handleClientMessage(clientId, data: data, respond: respond)
@@ -122,10 +152,10 @@ final class TheGetaway {
         case .unauthenticatedData(let clientId, let data, let respond):
             if let envelope = decodeRequest(data),
                case .status = envelope.message,
-               muscle.helloValidatedClients.contains(clientId) {
+               await muscle.helloValidatedClients.contains(clientId) {
                 await handleClientMessage(clientId, data: data, respond: respond)
             } else {
-                muscle.handleUnauthenticatedMessage(clientId, data: data, respond: respond)
+                await muscle.handleUnauthenticatedMessage(clientId, data: data, respond: respond)
             }
 
         case .rateLimited(_, let respond):
@@ -133,7 +163,7 @@ final class TheGetaway {
             sendMessage(.error(ServerError(kind: .general, message: message)), respond: respond)
 
         case .fastPathHandled(let clientId):
-            muscle.noteClientActivity(clientId)
+            await muscle.noteClientActivity(clientId)
         }
     }
 
@@ -159,7 +189,7 @@ final class TheGetaway {
 
         insideJobLogger.debug("Received from client \(clientId): \(String(describing: message).prefix(40))")
 
-        let isObserver = muscle.observerClients.contains(clientId)
+        let isObserver = await muscle.observerClients.contains(clientId)
 
         switch message {
         // Protocol messages
@@ -169,14 +199,14 @@ final class TheGetaway {
             insideJobLogger.debug("Interface requested by client \(clientId)")
             await sendInterface(requestId: requestId, respond: respond)
         case .subscribe:
-            muscle.subscribe(clientId: clientId)
+            await muscle.subscribe(clientId: clientId)
         case .unsubscribe:
-            muscle.unsubscribe(clientId: clientId)
+            await muscle.unsubscribe(clientId: clientId)
         case .ping:
-            muscle.noteClientActivity(clientId)
+            await muscle.noteClientActivity(clientId)
             sendMessage(.pong, requestId: requestId, respond: respond)
         case .status:
-            sendMessage(.status(makeStatusPayload()), requestId: requestId, respond: respond)
+            sendMessage(.status(await makeStatusPayload()), requestId: requestId, respond: respond)
 
         // Observation
         case .requestScreen:
@@ -269,7 +299,8 @@ final class TheGetaway {
             return
         }
         guard let data = encodeEnvelope(message) else { return }
-        muscle.broadcastToSubscribed(data)
+        let muscle = self.muscle
+        Task { await muscle.broadcastToSubscribed(data) }
     }
 
     func broadcastToAll(_ message: ServerMessage) {
@@ -306,7 +337,7 @@ final class TheGetaway {
         sendMessage(.info(info), respond: respond)
     }
 
-    private func makeStatusPayload() -> StatusPayload {
+    private func makeStatusPayload() async -> StatusPayload {
         let appName = Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "App"
         let bundleId = Bundle.main.bundleIdentifier ?? ""
         let appBuild = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
@@ -320,10 +351,13 @@ final class TheGetaway {
             buttonHeistVersion: buttonHeistVersion
         )
 
+        let isActive = await muscle.isSessionActive
+        let watchersAllowed = await muscle.watchersAllowed
+        let connectionCount = await muscle.activeSessionConnectionCount
         let session = StatusSession(
-            active: muscle.isSessionActive,
-            watchersAllowed: muscle.isSessionActive && muscle.watchersAllowed,
-            activeConnections: muscle.activeSessionConnectionCount
+            active: isActive,
+            watchersAllowed: isActive && watchersAllowed,
+            activeConnections: connectionCount
         )
 
         return StatusPayload(identity: identity, session: session)
@@ -348,7 +382,7 @@ final class TheGetaway {
         sendMessage(.actionResult(actionResult), requestId: requestId, backgroundDelta: backgroundDelta, respond: respond)
         brains.recordSentState()
 
-        if muscle.hasSubscribers {
+        if await muscle.hasSubscribers {
             let event = InteractionEvent(
                 timestamp: Date().timeIntervalSince1970,
                 command: command,
@@ -360,8 +394,8 @@ final class TheGetaway {
 
     // MARK: - Hierarchy Broadcast
 
-    func broadcastIfChanged() {
-        guard muscle.hasSubscribers else {
+    func broadcastIfChanged() async {
+        guard await muscle.hasSubscribers else {
             // Still clear the invalidation flag — the hierarchy may have changed
             // but no one is listening so skip the expensive refresh/wire work.
             hierarchyInvalidated = false
@@ -379,7 +413,8 @@ final class TheGetaway {
             Task { await stakeout.noteScreenChange() }
         }
 
-        insideJobLogger.debug("Broadcast hierarchy update to \(self.muscle.subscribedClients.count) subscriber(s)")
+        let subscriberCount = await muscle.subscribedClients.count
+        insideJobLogger.debug("Broadcast hierarchy update to \(subscriberCount) subscriber(s)")
     }
 
     func sendInterface(requestId: String? = nil, respond: @escaping (Data) -> Void) async {

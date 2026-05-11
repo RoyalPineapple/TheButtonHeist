@@ -108,6 +108,7 @@
 		7DE9C29580D34C57826B3ED0 /* USBDeviceDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFE165B7F4612979A10F917F /* USBDeviceDiscovery.swift */; };
 		7E12A24AF6AB9194E21C2DE2 /* ConnectionScope.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B00E3ADE91F58C1FDF40089 /* ConnectionScope.swift */; };
 		7FB26FEC3688200253566165 /* swift-crypto_CCryptoBoringSSL.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 13D30AC92A982F4FC9F47B71 /* swift-crypto_CCryptoBoringSSL.bundle */; };
+		811C5A658B1041D0CFC38E33 /* AlertPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40D0B9AC0DBF760F3B655629 /* AlertPresenter.swift */; };
 		81D404D32B637C1A1CE69D10 /* ElementRegistry+Merge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A33F684672F99BB922FDD9C4 /* ElementRegistry+Merge.swift */; };
 		83B29D2A5A9726FCFBCC1062 /* TheHandoffStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCE478B1B9A069FD64C5BD2E /* TheHandoffStateTests.swift */; };
 		856D3288A1E027D75B1EB28C /* TestSentinelTask.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23AABE85FC77329552681A4C /* TestSentinelTask.swift */; };
@@ -384,6 +385,7 @@
 		3D60707DDB4D8CF78ED74748 /* KeyboardWindowTestHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardWindowTestHelpers.swift; sourceTree = "<group>"; };
 		3F7FFF3C83178165F90D0E35 /* TheScore-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "TheScore-Info.plist"; sourceTree = "<group>"; };
 		3FEBFC658B72A791C1BFEF2B /* HierarchyPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HierarchyPayloadTests.swift; sourceTree = "<group>"; };
+		40D0B9AC0DBF760F3B655629 /* AlertPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertPresenter.swift; sourceTree = "<group>"; };
 		424717FB3ECFCCEA52B1971B /* TheSafecrackerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheSafecrackerTests.swift; sourceTree = "<group>"; };
 		439B35798F06B42BE1C978A6 /* ServerMessages+WireCoding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ServerMessages+WireCoding.swift"; sourceTree = "<group>"; };
 		44278872AF4289E309CD78E2 /* DeviceResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceResolver.swift; sourceTree = "<group>"; };
@@ -800,6 +802,7 @@
 		52572EFE2B2D64A6A314B074 /* Server */ = {
 			isa = PBXGroup;
 			children = (
+				40D0B9AC0DBF760F3B655629 /* AlertPresenter.swift */,
 				65D6561D2711191607CCA9E5 /* ConnectionScope+Classify.swift */,
 				A4221380A912B191A3EA490D /* ServerTransport.swift */,
 				FC9A012737B11E7628103EAA /* SimpleSocketServer.swift */,
@@ -1332,6 +1335,7 @@
 				3CDB64482D830F2220EA28E1 /* AccessibilityHierarchy+Reconciliation.swift in Sources */,
 				276E01C107AB4FDE2E7A141D /* AccessibilityHierarchy+TreeOperations.swift in Sources */,
 				CC03176EAE7C196E8DC9257E /* AutoStart.swift in Sources */,
+				811C5A658B1041D0CFC38E33 /* AlertPresenter.swift in Sources */,
 				524DE1B6B146ECBC15B951E9 /* ConnectionScope+Classify.swift in Sources */,
 				5579466D90EA049E32DAFA53 /* ServerTransport.swift in Sources */,
 				778C5650B71031770160D6BF /* SimpleSocketServer.swift in Sources */,
