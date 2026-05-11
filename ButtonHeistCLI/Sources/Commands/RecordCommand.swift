@@ -41,22 +41,26 @@ struct RecordCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     func run() async throws {
-        var startRequest: [String: Any] = [
-            "command": TheFence.Command.startRecording.rawValue,
-            "fps": fps,
-            "inactivity_timeout": inactivityTimeout,
-            "max_duration": maxDuration,
-        ]
-        if let scale { startRequest["scale"] = scale }
-
-        let (fence, _) = try await CLIRunner.execute(
+        let fence = try await CLIRunner.connect(
             connection: connection,
-            request: startRequest,
             statusMessage: "Starting recording..."
         )
         defer { fence.stop() }
 
-        let payload = try await fence.waitForRecording(timeout: maxDuration + 30)
+        let config = RecordingConfig(
+            fps: fps,
+            scale: scale,
+            inactivityTimeout: inactivityTimeout,
+            maxDuration: maxDuration
+        )
+
+        // recordToCompletion owns start+wait+cleanup atomically: a Ctrl-C
+        // (CancellationError) propagates a stop_recording to the iOS device,
+        // so the recording never strands without a drainer.
+        let payload = try await fence.recordToCompletion(
+            config: config,
+            timeout: maxDuration + 30
+        )
 
         guard let videoData = Data(base64Encoded: payload.videoData) else {
             throw ValidationError("Failed to decode video data")
