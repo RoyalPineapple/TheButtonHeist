@@ -12,7 +12,7 @@ TLS/TCP server infrastructure — listener, transport, authentication, and conne
 
    `listeningPort` is `nonisolated` via an `OSAllocatedUnfairLock<UInt16>` — readable without actor hop.
 
-2. **`TheMuscle.swift`** — `@MainActor final class`. Authentication and session locking.
+2. **`TheMuscle.swift`** — `actor`. Authentication and session locking. UI alert presentation lives in `AlertPresenter` (`@MainActor` companion); the auth state machine itself runs on its own actor.
 
    **`ClientPhase`**: `.connected` → `.helloValidated` → `.pendingApproval` or `.authenticated` or `.observer`.
 

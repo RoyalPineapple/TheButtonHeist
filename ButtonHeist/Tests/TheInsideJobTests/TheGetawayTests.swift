@@ -73,10 +73,14 @@ final class TheGetawayTests: XCTestCase {
         // runs each `handleTransportEvent` to completion before pulling the
         // next; we poll the observable side effect rather than counting hops
         // because XCTest's main-actor scheduling can interleave variably.
-        try await waitFor { muscle.helloValidatedClients.contains(1) }
+        try await waitFor {
+            let validated = await muscle.helloValidatedClients
+            return validated.contains(1)
+        }
 
+        let validated = await muscle.helloValidatedClients
         XCTAssertTrue(
-            muscle.helloValidatedClients.contains(1),
+            validated.contains(1),
             "Client 1 should have transitioned to helloValidated, which means clientConnected was observed before the dataReceived/clientHello"
         )
     }
@@ -102,10 +106,14 @@ final class TheGetawayTests: XCTestCase {
             }
         }.value
 
-        try await waitFor { muscle.helloValidatedClients == Set([1, 2, 3]) }
+        try await waitFor {
+            let validated = await muscle.helloValidatedClients
+            return validated == Set([1, 2, 3])
+        }
 
+        let validated = await muscle.helloValidatedClients
         XCTAssertEqual(
-            muscle.helloValidatedClients,
+            validated,
             Set([1, 2, 3]),
             "All three clients must reach helloValidated; if any clientConnected lost its race against its dataReceived, that client would be missing"
         )
@@ -199,11 +207,11 @@ final class TheGetawayTests: XCTestCase {
     /// flake or slow the suite.
     private func waitFor(
         timeout: Duration = .seconds(2),
-        condition: @MainActor () -> Bool
+        condition: @MainActor () async -> Bool
     ) async throws {
         let deadline = ContinuousClock.now + timeout
         while ContinuousClock.now < deadline {
-            if condition() { return }
+            if await condition() { return }
             // Polls a MainActor-bound condition; no signal to await on.
             // swiftlint:disable:next agent_test_task_sleep
             try await Task.sleep(for: .milliseconds(5))

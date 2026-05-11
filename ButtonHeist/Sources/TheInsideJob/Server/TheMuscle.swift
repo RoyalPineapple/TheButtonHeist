@@ -23,15 +23,14 @@ import TheScore
 /// - Any connection while a session is active from a different driver → busy signal
 private let logger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "auth")
 
-/// Isolation: pinned to `@MainActor`. UIKit alert presentation has been extracted
-/// to `AlertPresenter` (a `@MainActor` companion), but the auth state machine
-/// itself remains MainActor-isolated for now — converting to an actor is the
-/// next step (Program 1c in the post-release plan). Until then, @MainActor is
-/// what serializes mutations of `clients`/`addressAuthStates`/`sessionPhase`/
-/// `lockoutTasks` against the lockout / grace-period Tasks that fire on
-/// MainActor.
-@MainActor
-final class TheMuscle {
+/// Isolation: `actor`. All auth state — `clients`, `addressAuthStates`,
+/// `sessionPhase`, `lockoutTasks` — is mutated exclusively on TheMuscle's
+/// own actor. UI alert presentation lives in a `@MainActor AlertPresenter`
+/// companion (see `AlertPresenter.swift`); callbacks installed by TheGetaway
+/// (`sendToClient`, `markClientAuthenticated`, `disconnectClient`,
+/// `onClientAuthenticated`, `onSessionActiveChanged`) are `@Sendable` and
+/// hop to the appropriate context inside their implementations.
+actor TheMuscle {
 
     private static let disconnectGracePeriod: Duration = .milliseconds(100)
     private static let maxFailedAttempts = 5
@@ -110,11 +109,14 @@ final class TheMuscle {
     /// Outstanding "wait then disconnect" tasks. Each entry is a Task spawned by
     /// `scheduleDelayedDisconnect(_:)` that will fire `disconnectClient` after
     /// `disconnectGracePeriod`. Every task self-cleans on completion or
-    /// cancellation by removing its own handle from this set in a `defer`
-    /// block running on the MainActor; on `tearDown()` every outstanding task
-    /// is cancelled so a torn-down TheMuscle never disconnects against a
-    /// stale client ID.
-    private var lockoutTasks: Set<Task<Void, Never>> = []
+    /// cancellation by removing its own handle from this dictionary; on
+    /// `tearDown()` every outstanding task is cancelled so a torn-down
+    /// TheMuscle never disconnects against a stale client ID. We key by an
+    /// internal monotonic ID so the Task closure doesn't need to capture
+    /// its own handle (which would create a "variable captured before
+    /// initialization" issue under strict concurrency).
+    private var lockoutTasks: [UInt64: Task<Void, Never>] = [:]
+    private var nextLockoutId: UInt64 = 0
 
     // MARK: - Computed Client Accessors
 
@@ -187,18 +189,23 @@ final class TheMuscle {
 
     // MARK: - Callbacks (set by TheInsideJob)
 
-    var sendToClient: ((_ data: Data, _ clientId: Int) -> Void)?
-    var markClientAuthenticated: ((_ clientId: Int) -> Void)?
-    var disconnectClient: ((_ clientId: Int) -> Void)?
-    var onClientAuthenticated: ((_ clientId: Int, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
+    var sendToClient: (@Sendable (_ data: Data, _ clientId: Int) -> Void)?
+    var markClientAuthenticated: (@Sendable (_ clientId: Int) -> Void)?
+    var disconnectClient: (@Sendable (_ clientId: Int) -> Void)?
+    var onClientAuthenticated: (@Sendable (_ clientId: Int, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
     /// Called when the session active state changes (true = session claimed, false = released)
-    var onSessionActiveChanged: ((_ isActive: Bool) -> Void)?
+    var onSessionActiveChanged: (@Sendable (_ isActive: Bool) -> Void)?
 
     // MARK: - Init
 
-    init(explicitToken: String?, alerts: AlertPresenter = AlertPresenter()) {
+    /// Caller must be on `@MainActor` (the alert presenter is `@MainActor`-isolated
+    /// and is constructed eagerly when none is provided). Both production
+    /// (`TheInsideJob.init`) and the tests today satisfy this. Pass a custom
+    /// presenter when you need to construct from outside MainActor.
+    @MainActor
+    init(explicitToken: String?, alerts: AlertPresenter? = nil) {
         self.sessionToken = explicitToken ?? UUID().uuidString
-        self.alerts = alerts
+        self.alerts = alerts ?? AlertPresenter()
         if EnvironmentKey.insideJobRestrictWatchers.value != nil {
             self.restrictWatchers = EnvironmentKey.insideJobRestrictWatchers.boolValue
         } else if let plistValue = Bundle.main.object(forInfoDictionaryKey: "InsideJobRestrictWatchers") as? Bool {
@@ -212,6 +219,25 @@ final class TheMuscle {
         } else {
             self.sessionReleaseTimeout = 30.0
         }
+    }
+
+    // MARK: - Callback Wiring
+
+    /// Install transport-facing callbacks. Called once by `TheGetaway.wireTransport`.
+    /// Bundles assignment into a single actor hop so the consumer doesn't pay
+    /// five `await`s.
+    func installCallbacks(
+        sendToClient: @escaping @Sendable (Data, Int) -> Void,
+        markClientAuthenticated: @escaping @Sendable (Int) -> Void,
+        disconnectClient: @escaping @Sendable (Int) -> Void,
+        onClientAuthenticated: @escaping @Sendable (Int, @escaping @Sendable (Data) -> Void) -> Void,
+        onSessionActiveChanged: @escaping @Sendable (Bool) -> Void
+    ) {
+        self.sendToClient = sendToClient
+        self.markClientAuthenticated = markClientAuthenticated
+        self.disconnectClient = disconnectClient
+        self.onClientAuthenticated = onClientAuthenticated
+        self.onSessionActiveChanged = onSessionActiveChanged
     }
 
     // MARK: - Public API
@@ -323,11 +349,7 @@ final class TheMuscle {
             // No token → request UI approval (Allow/Deny prompt on device)
             logger.info("Client \(clientId) requesting UI approval (no token)")
             clients[clientId] = .pendingApproval(address: address, respond: respond, isObserver: false, driverId: payload.driverId)
-            showApprovalAlert(
-                clientId: clientId,
-                onAllow: { [weak self] in self?.approveClient(clientId) },
-                onDeny: { [weak self] in self?.denyClient(clientId) }
-            )
+            showApprovalAlert(clientId: clientId)
             return
         }
 
@@ -389,7 +411,7 @@ final class TheMuscle {
 
     func tearDown() {
         clients.removeAll()
-        for task in lockoutTasks {
+        for task in lockoutTasks.values {
             task.cancel()
         }
         lockoutTasks.removeAll()
@@ -410,13 +432,30 @@ final class TheMuscle {
     /// in `lockoutTasks` until the body completes (or `tearDown()` cancels
     /// it), so a torn-down TheMuscle never fires a stale disconnect.
     private func scheduleDelayedDisconnect(_ clientId: Int) {
-        var task: Task<Void, Never>!
-        task = Task { @MainActor [weak self] in
-            defer { self?.lockoutTasks.remove(task) }
-            guard await Task.cancellableSleep(for: TheMuscle.disconnectGracePeriod) else { return }
-            self?.disconnectClient?(clientId)
+        nextLockoutId &+= 1
+        let lockoutId = nextLockoutId
+        let task = Task { [weak self] in
+            // Sleep returns false on cancellation; whether cancelled or not,
+            // we still want to detach our own handle from `lockoutTasks` so
+            // it doesn't accumulate.
+            let proceed = await Task.cancellableSleep(for: TheMuscle.disconnectGracePeriod)
+            if proceed {
+                await self?.fireDisconnect(clientId)
+            }
+            await self?.removeLockoutTask(id: lockoutId)
         }
-        lockoutTasks.insert(task)
+        lockoutTasks[lockoutId] = task
+    }
+
+    /// Called from the delayed-disconnect Task body to actually fire the
+    /// `disconnectClient` callback while inside actor isolation.
+    private func fireDisconnect(_ clientId: Int) {
+        disconnectClient?(clientId)
+    }
+
+    /// Drop a finished/cancelled lockout task from the tracking dictionary.
+    private func removeLockoutTask(id: UInt64) {
+        lockoutTasks.removeValue(forKey: id)
     }
 
     // MARK: - Status Accessors
@@ -580,7 +619,7 @@ final class TheMuscle {
         Task { [weak self, sessionReleaseTimeout] in
             guard await Task.cancellableSleep(for: .seconds(sessionReleaseTimeout)) else { return }
             guard !Task.isCancelled else { return }
-            self?.releaseSession()
+            await self?.releaseSession()
         }
     }
 
@@ -651,17 +690,37 @@ final class TheMuscle {
         addressAuthStates.removeValue(forKey: address)
     }
 
-    private func showApprovalAlert(
-        clientId: Int,
-        onAllow: @escaping @MainActor () -> Void,
-        onDeny: @escaping @MainActor () -> Void
-    ) {
-        alerts.presentApproval(clientId: clientId, onAllow: onAllow, onDeny: onDeny)
+    // MARK: - Alert Presentation
+
+    /// Present the connection-approval UI for `clientId`. The `onAllow` /
+    /// `onDeny` callbacks hop back into actor isolation to mutate auth state.
+    private func showApprovalAlert(clientId: Int) {
+        let presenter = alerts
+        Task { @MainActor [weak self] in
+            presenter.presentApproval(
+                clientId: clientId,
+                onAllow: { [weak self] in
+                    Task { await self?.approveClient(clientId) }
+                },
+                onDeny: { [weak self] in
+                    Task { await self?.denyClient(clientId) }
+                }
+            )
+            // Silence the unused-self warning: `self` is captured to anchor
+            // the alert presentation to TheMuscle's lifetime, but the alert
+            // outlives the immediate scope through `presenter`.
+            _ = self
+        }
     }
 
     private func dismissAlert() {
-        alerts.dismiss()
+        let presenter = alerts
+        Task { @MainActor in
+            presenter.dismiss()
+        }
     }
+
+    // MARK: - Helpers
 
     func clientIDs(for driverIdentity: String) -> [Int] {
         clients.compactMap { clientId, phase in

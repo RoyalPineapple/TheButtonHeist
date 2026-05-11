@@ -209,7 +209,8 @@ public final class TheInsideJob {
             insideJobLogger.info("Scroll strategy override: force swipe scrolling")
         }
         insideJobLogger.info("Server listening on port \(actualPort)")
-        insideJobLogger.info("Connect with session token: \(self.muscle.sessionToken, privacy: .public)")
+        let token = await muscle.sessionToken
+        insideJobLogger.info("Connect with session token: \(token, privacy: .public)")
         insideJobLogger.info("Instance ID: \(self.effectiveInstanceId)")
         advertiseService(port: actualPort)
 
@@ -243,7 +244,8 @@ public final class TheInsideJob {
         tripwire.onTransition = nil
         brains.stopKeyboardObservation()
 
-        muscle.tearDown()
+        let muscle = self.muscle
+        Task { await muscle.tearDown() }
         getaway.tearDown()
 
         stopAccessibilityObservation()
@@ -279,7 +281,8 @@ public final class TheInsideJob {
 
     private func handlePulseTransition(_ transition: TheTripwire.PulseTransition) {
         if case .settled = transition, getaway.hierarchyInvalidated {
-            getaway.broadcastIfChanged()
+            let getaway = self.getaway
+            Task { await getaway.broadcastIfChanged() }
         }
     }
 
@@ -290,7 +293,7 @@ public final class TheInsideJob {
                 let settled = await self.tripwire.waitForAllClear(timeout: interval)
                 guard !Task.isCancelled, self.isPollingEnabled else { break }
                 if settled {
-                    self.getaway.broadcastIfChanged()
+                    await self.getaway.broadcastIfChanged()
                 }
             }
         }
@@ -414,7 +417,8 @@ public final class TheInsideJob {
         tripwire.stopPulse()
         brains.stopKeyboardObservation()
 
-        muscle.tearDown()
+        let muscle = self.muscle
+        Task { await muscle.tearDown() }
         getaway.tearDown()
 
         stopAccessibilityObservation()
