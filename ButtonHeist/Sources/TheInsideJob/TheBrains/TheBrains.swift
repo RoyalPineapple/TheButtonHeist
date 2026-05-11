@@ -10,9 +10,9 @@ import AccessibilitySnapshotParser
 /// The brains of the operation — plans the play, sequences the crew.
 ///
 /// TheBrains takes a command and works it through to a result by coordinating
-/// TheStash (registry), TheSafecracker (gestures), and TheTripwire (timing).
-/// He owns action execution, scroll orchestration, screen exploration,
-/// and the post-action delta cycle.
+/// TheStash (the screen value), TheSafecracker (gestures), and TheTripwire
+/// (timing). He owns action execution, scroll orchestration, screen
+/// exploration, and the post-action delta cycle.
 @MainActor
 final class TheBrains {
 
@@ -29,38 +29,6 @@ final class TheBrains {
     /// Cached state from the last explore of each scrollable container.
     var containerExploreStates: [AccessibilityContainer: ContainerExploreState] = [:]
 
-    /// Explicit state for the explore cycle. `.idle` outside of `exploreAndPrune()`;
-    /// `.active(seen:)` while a cycle is running. Accumulators only record into `seen`
-    /// when the phase is active, which is checked at compile time by the pattern match
-    /// in `recordDuringExplore(_:)` — callers cannot accidentally accumulate while idle.
-    enum ExplorePhase: Equatable {
-        case idle
-        case active(seen: Set<String>)
-    }
-
-    private(set) var explorePhase: ExplorePhase = .idle
-
-    /// Record heistIds into the active explore cycle. No-op when idle.
-    func recordDuringExplore(_ ids: some Sequence<String>) {
-        guard case .active(var seen) = explorePhase else { return }
-        seen.formUnion(ids)
-        explorePhase = .active(seen: seen)
-    }
-
-    /// Begin an explore cycle seeded with the current viewport ids. Returns the
-    /// previous phase so nested calls can restore it (nested calls are not expected
-    /// but the cycle is not re-entrant safe if we overwrite blindly).
-    func beginExploreCycle() {
-        explorePhase = .active(seen: stash.registry.viewportIds)
-    }
-
-    /// End the explore cycle and return the accumulated ids, or nil if not active.
-    func endExploreCycle() -> Set<String>? {
-        guard case .active(let seen) = explorePhase else { return nil }
-        explorePhase = .idle
-        return seen
-    }
-
     init(tripwire: TheTripwire, forceSwipeScrolling: Bool = false) {
         self.tripwire = tripwire
         self.forceSwipeScrolling = forceSwipeScrolling
@@ -70,12 +38,13 @@ final class TheBrains {
 
     // MARK: - Refresh Convenience
 
-    /// Refresh the accessibility tree into the stash.
+    /// Refresh the accessibility tree into the stash. Returns the new Screen
+    /// or nil if the parser couldn't produce one. Callers in an exploration
+    /// cycle should use `stash.parse()` directly and accumulate into a local
+    /// union — TheStash has no mode flag.
     @discardableResult
-    func refresh() -> TheStash.ParseResult? {
-        guard let result = stash.refresh() else { return nil }
-        recordDuringExplore(stash.registry.viewportIds)
-        return result
+    func refresh() -> Screen? {
+        stash.refresh()
     }
 
     func treeUnavailableResult(method: ActionMethod) -> ActionResult {
@@ -88,7 +57,7 @@ final class TheBrains {
 
     /// State captured before an action for delta computation.
     struct BeforeState {
-        let snapshot: [TheStash.ScreenElement]
+        let snapshot: [Screen.ScreenElement]
         let elements: [AccessibilityElement]
         let hierarchy: [AccessibilityHierarchy]
         let tree: [InterfaceNode]
@@ -137,9 +106,6 @@ final class TheBrains {
         let settleMs = settleResult.outcome.timeMs
         var didSettle = settleResult.outcome.didSettleCleanly
         if case .cancelled(let cancelMs) = settleResult.outcome {
-            // Returning here skips the rest of the pipeline (parse/explore/
-            // captureActionFrame) — those would burn main-actor cycles for
-            // a result no one will read.
             var builder = ActionResultBuilder(method: method, snapshot: before.snapshot)
             builder.message = "cancelled after \(cancelMs)ms"
             builder.value = value
@@ -149,27 +115,27 @@ final class TheBrains {
         }
         logSettleOutcome(settleResult.outcome)
 
-        var afterResult = stash.parse()
+        var afterScreen = stash.parse()
 
         let afterVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
+        let afterElements = afterScreen?.hierarchy.sortedElements ?? []
+        let afterHierarchy = afterScreen?.hierarchy ?? []
         let isScreenChange = tripwire.isScreenChange(before: before.viewController, after: afterVC)
             || stash.isTopologyChanged(
-                before: before.elements, after: afterResult?.elements ?? [],
-                beforeHierarchy: before.hierarchy, afterHierarchy: afterResult?.hierarchy ?? []
+                before: before.elements, after: afterElements,
+                beforeHierarchy: before.hierarchy, afterHierarchy: afterHierarchy
             )
         if isScreenChange {
-            stash.registry.clearScreen()
             containerExploreStates.removeAll()
         }
 
-        if isScreenChange && (afterResult?.elements ?? []).isEmpty {
-            let repopulated = await repopulateAfterScreenChange(into: &afterResult)
+        if isScreenChange && afterElements.isEmpty {
+            let repopulated = await repopulateAfterScreenChange(into: &afterScreen)
             if !repopulated { didSettle = false }
         }
 
-        if let afterResult {
-            let heistIds = stash.apply(afterResult)
-            recordDuringExplore(heistIds)
+        if let afterScreen {
+            stash.currentScreen = afterScreen
         }
 
         _ = await exploreAndPrune()
@@ -184,7 +150,7 @@ final class TheBrains {
         let transientElements = SettleSession.transientElements(
             seenByKey: settleResult.elementsByKey,
             baseline: before.elements,
-            final: afterResult?.elements ?? []
+            final: afterScreen?.hierarchy.sortedElements ?? []
         )
         let delta = transientElements.isEmpty
             ? baseDelta
@@ -219,12 +185,12 @@ final class TheBrains {
 
     /// Wait for the post-screen-change tree to repopulate. Returns true
     /// if a non-empty parse landed within the attempt budget.
-    private func repopulateAfterScreenChange(into afterResult: inout TheStash.ParseResult?) async -> Bool {
+    private func repopulateAfterScreenChange(into afterScreen: inout Screen?) async -> Bool {
         let repopStart = CFAbsoluteTimeGetCurrent()
         for attempt in 1...10 {
             _ = await tripwire.waitForAllClear(timeout: 0.2)
-            afterResult = stash.parse()
-            if let elements = afterResult?.elements, !elements.isEmpty {
+            afterScreen = stash.parse()
+            if !(afterScreen?.elements.isEmpty ?? true) {
                 let repopMs = Int((CFAbsoluteTimeGetCurrent() - repopStart) * 1000)
                 insideJobLogger.info("Screen re-populated after \(attempt) re-parse(s) in \(repopMs)ms")
                 return true
@@ -279,7 +245,6 @@ final class TheBrains {
     func clearCache() {
         stash.clearCache()
         containerExploreStates.removeAll()
-        explorePhase = .idle
         lastSentState = nil
         lastSwipeDirectionByTarget.removeAll()
     }
@@ -287,7 +252,6 @@ final class TheBrains {
     // MARK: - Response State Tracking
 
     /// State captured after each response sent to the driver.
-    /// Owned by TheBrains — TheInsideJob never reads the individual fields.
     struct SentState {
         let treeHash: Int
         let beforeState: BeforeState
@@ -295,7 +259,6 @@ final class TheBrains {
     }
 
     /// The state of the last response sent to the driver.
-    /// Used by `computeBackgroundDelta` and `broadcastInterfaceIfChanged`.
     private(set) var lastSentState: SentState?
 
     /// Snapshot current state as "last sent" — call after every response to the driver.
@@ -319,7 +282,6 @@ final class TheBrains {
     // MARK: - Broadcast Support
 
     /// Refresh and return an Interface if the tree changed since the last broadcast.
-    /// Returns nil if refresh fails or the tree is unchanged. Updates the broadcast hash.
     func broadcastInterfaceIfChanged() -> Interface? {
         guard refresh() != nil else { return nil }
 
@@ -339,7 +301,6 @@ final class TheBrains {
     // MARK: - Background Delta
 
     /// Check if the accessibility tree changed since the last response.
-    /// Returns nil if unchanged or no prior response was sent.
     func computeBackgroundDelta() -> InterfaceDelta? {
         guard let sent = lastSentState, sent.treeHash != 0 else { return nil }
         guard refresh() != nil else { return nil }
@@ -386,9 +347,6 @@ final class TheBrains {
     func executeWaitForChange(timeout: TimeInterval, expectation: ActionExpectation?) async -> ActionResult {
         let start = CFAbsoluteTimeGetCurrent()
 
-        // Capture baseline BEFORE refresh — this corresponds to the tree state
-        // at the time of the last response, giving us a proper before-state for
-        // element-level diffs on both the fast and slow paths.
         let before = captureBeforeState()
 
         guard let initial = refreshAndSnapshot() else {
@@ -448,11 +406,9 @@ final class TheBrains {
         return builder.failure(errorKind: .timeout)
     }
 
-    /// Evaluate whether a wait-for-change result meets the expectation.
-    /// Returns nil if the expectation is not met (caller should continue polling).
     private func evaluateWaitForChange(
         delta: InterfaceDelta,
-        afterSnapshot: [TheStash.ScreenElement],
+        afterSnapshot: [Screen.ScreenElement],
         expectation: ActionExpectation?,
         start: CFAbsoluteTime,
         round: Int,
@@ -475,18 +431,16 @@ final class TheBrains {
 
     // MARK: - Private Helpers
 
-    /// Refresh, snapshot, and compute wire hash in one call.
-    private func refreshAndSnapshot() -> (snapshot: [TheStash.ScreenElement], wireHash: Int)? {
+    private func refreshAndSnapshot() -> (snapshot: [Screen.ScreenElement], wireHash: Int)? {
         guard refresh() != nil else { return nil }
         let snapshot = stash.selectElements()
         let wireHash = stash.wireTreeHash()
         return (snapshot, wireHash)
     }
 
-    /// Compute delta between a before-state and an after-snapshot.
     private func computeDelta(
         before: BeforeState,
-        afterSnapshot: [TheStash.ScreenElement]
+        afterSnapshot: [Screen.ScreenElement]
     ) -> InterfaceDelta {
         let afterElements = stash.currentHierarchy.sortedElements
         let isScreenChange = tripwire.isScreenChange(

@@ -33,22 +33,71 @@ struct Screen: Equatable {
     /// scroll-target discovery, and wire tree construction.
     let hierarchy: [AccessibilityHierarchy]
 
+    /// Stable id for every container reachable from `hierarchy`. Computed
+    /// once during parse so wire-tree construction and tree-edit detection
+    /// can ask for a container's identity without recomputing.
+    let containerStableIds: [AccessibilityContainer: String]
+
+    /// HeistId assigned to each `AccessibilityElement` in this parse. Allows
+    /// wire-tree construction to walk `hierarchy` and resolve each leaf to
+    /// its heistId without rebuilding the assignment.
+    let heistIdByElement: [AccessibilityElement: String]
+
     /// HeistId of the element whose live object is currently first responder.
     let firstResponderHeistId: String?
 
     /// Maps scrollable containers from the hierarchy to their backing UIView.
-    /// Rebuilt on each parse. Stored as `ScrollableViewRef` so `Screen` can be
-    /// `Equatable` and `Sendable` — UIView itself is neither — while keeping
-    /// the live reference available for scroll dispatch.
+    /// Stored as `ScrollableViewRef` so `Screen` can be `Equatable` — UIView
+    /// itself isn't — while keeping the live reference available for scroll
+    /// dispatch.
     let scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
 
     static var empty: Screen {
         Screen(
             elements: [:],
             hierarchy: [],
+            containerStableIds: [:],
+            heistIdByElement: [:],
             firstResponderHeistId: nil,
             scrollableContainerViews: [:]
         )
+    }
+
+    // MARK: - Init
+
+    /// Convenience init for tests and call sites that don't have container /
+    /// element index data — defaults the new indices to empty maps.
+    init(
+        elements: [String: ScreenElement],
+        hierarchy: [AccessibilityHierarchy],
+        firstResponderHeistId: String?,
+        scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
+    ) {
+        self.init(
+            elements: elements,
+            hierarchy: hierarchy,
+            containerStableIds: [:],
+            heistIdByElement: [:],
+            firstResponderHeistId: firstResponderHeistId,
+            scrollableContainerViews: scrollableContainerViews
+        )
+    }
+
+    /// Memberwise init. Explicit so the convenience overload above can call it.
+    init(
+        elements: [String: ScreenElement],
+        hierarchy: [AccessibilityHierarchy],
+        containerStableIds: [AccessibilityContainer: String],
+        heistIdByElement: [AccessibilityElement: String],
+        firstResponderHeistId: String?,
+        scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
+    ) {
+        self.elements = elements
+        self.hierarchy = hierarchy
+        self.containerStableIds = containerStableIds
+        self.heistIdByElement = heistIdByElement
+        self.firstResponderHeistId = firstResponderHeistId
+        self.scrollableContainerViews = scrollableContainerViews
     }
 
     // MARK: - Element Entry
@@ -83,8 +132,8 @@ struct Screen: Equatable {
     }
 
     // Wrapper around a weak `UIView` so we can store the map in an `Equatable`
-    // / `Sendable` value type. Equality compares the live view's object
-    // identity; equal if both are nil.
+    // value type. Equality compares the live view's object identity; equal if
+    // both are nil.
     // `@unchecked Sendable` rationale: UIView is non-Sendable but the wrapper
     // is only touched on `@MainActor`.
     // swiftlint:disable:next agent_unchecked_sendable_no_comment
@@ -142,16 +191,18 @@ struct Screen: Equatable {
     /// to preserve a previously-recorded `contentSpaceOrigin`. The most recent
     /// observation is the source of truth.
     ///
-    /// `hierarchy` and `firstResponderHeistId` take `other`'s. `hierarchy` is
-    /// the live snapshot, not a unionable tree — accumulating it across
-    /// scrolled pages would mix stale geometry with live geometry. Code that
-    /// needs the "all elements ever seen on this screen" view reads
-    /// `elements`, not `hierarchy`.
+    /// `hierarchy`, `firstResponderHeistId`, container indices, and live-view
+    /// refs all take `other`'s. `hierarchy` is the live snapshot, not a
+    /// unionable tree — accumulating it across scrolled pages would mix stale
+    /// geometry with live geometry. Code that needs the "all elements ever
+    /// seen on this screen" view reads `elements`, not `hierarchy`.
     func merging(_ other: Screen) -> Screen {
         let mergedElements = elements.merging(other.elements) { _, new in new }
         return Screen(
             elements: mergedElements,
             hierarchy: other.hierarchy,
+            containerStableIds: other.containerStableIds,
+            heistIdByElement: other.heistIdByElement,
             firstResponderHeistId: other.firstResponderHeistId,
             scrollableContainerViews: other.scrollableContainerViews
         )

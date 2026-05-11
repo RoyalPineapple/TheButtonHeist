@@ -140,14 +140,7 @@ final class TheBrainsActionTests: XCTestCase {
     func testCaptureBeforeStateIncludesRegisteredElements() {
         let element = makeElement(label: "Title", traits: .header)
         let heistId = "header_title"
-        brains.stash.registry.insertForTesting(TheStash.ScreenElement(
-            heistId: heistId,
-            contentSpaceOrigin: nil,
-            element: element,
-            object: nil,
-            scrollView: nil
-        ))
-        brains.stash.currentHierarchy = [.element(element, traversalIndex: 0)]
+        installScreen(elements: [(element, heistId)])
 
         let before = brains.captureBeforeState()
         XCTAssertEqual(before.snapshot.count, 1)
@@ -223,14 +216,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     func testClearCacheResetsStashAndExploreState() {
         let element = makeElement(label: "Item")
-        brains.stash.registry.insertForTesting(TheStash.ScreenElement(
-            heistId: "test_id",
-            contentSpaceOrigin: nil,
-            element: element,
-            object: nil,
-            scrollView: nil
-        ))
-        brains.beginExploreCycle()
+        installScreen(elements: [(element, "test_id")])
         brains.containerExploreStates[
             AccessibilityContainer(
                 type: .scrollable(contentSize: CGSize(width: 375, height: 2000)),
@@ -243,63 +229,8 @@ final class TheBrainsActionTests: XCTestCase {
 
         brains.clearCache()
 
-        XCTAssertEqual(brains.explorePhase, .idle)
         XCTAssertTrue(brains.containerExploreStates.isEmpty)
-    }
-
-    // MARK: - ExplorePhase state machine
-
-    func testExplorePhaseStartsIdle() {
-        XCTAssertEqual(brains.explorePhase, .idle)
-    }
-
-    func testRecordDuringExploreIsNoOpWhenIdle() {
-        brains.recordDuringExplore(["abc"])
-        XCTAssertEqual(brains.explorePhase, .idle,
-                       "recordDuringExplore must not transition out of .idle")
-    }
-
-    func testBeginExploreCycleSeedsWithViewport() {
-        brains.stash.registry.viewportIds = ["viewport_a", "viewport_b"]
-        brains.beginExploreCycle()
-        guard case .active(let seen) = brains.explorePhase else {
-            XCTFail("Expected .active phase after beginExploreCycle")
-            return
-        }
-        XCTAssertEqual(seen, ["viewport_a", "viewport_b"])
-    }
-
-    func testRecordDuringExploreAccumulatesWhenActive() {
-        brains.stash.registry.viewportIds = ["seed"]
-        brains.beginExploreCycle()
-        brains.recordDuringExplore(["discovered_a", "discovered_b"])
-        guard case .active(let seen) = brains.explorePhase else {
-            XCTFail("Expected .active phase")
-            return
-        }
-        XCTAssertEqual(seen, ["seed", "discovered_a", "discovered_b"])
-    }
-
-    func testEndExploreCycleReturnsAccumulatedAndTransitionsToIdle() {
-        brains.stash.registry.viewportIds = ["seed"]
-        brains.beginExploreCycle()
-        brains.recordDuringExplore(["extra"])
-        let result = brains.endExploreCycle()
-        XCTAssertEqual(result, ["seed", "extra"])
-        XCTAssertEqual(brains.explorePhase, .idle)
-    }
-
-    func testEndExploreCycleReturnsNilWhenIdle() {
-        XCTAssertNil(brains.endExploreCycle())
-    }
-
-    // MARK: - refresh integrates with ExplorePhase
-
-    func testRefreshDoesNotAccumulateWhenIdle() {
-        XCTAssertEqual(brains.explorePhase, .idle)
-        brains.refresh()
-        XCTAssertEqual(brains.explorePhase, .idle,
-                       "refresh() must not transition the phase")
+        XCTAssertEqual(brains.stash.currentScreen, .empty)
     }
 
     // MARK: - Accessibility Tree Availability
@@ -347,14 +278,36 @@ final class TheBrainsActionTests: XCTestCase {
         element: AccessibilityElement,
         object: NSObject?
     ) {
-        brains.stash.registry.insertForTesting(TheStash.ScreenElement(
-            heistId: heistId,
-            contentSpaceOrigin: nil,
-            element: element,
-            object: object,
-            scrollView: nil
-        ))
-        brains.stash.registry.viewportIds.insert(heistId)
+        installScreen(elements: [(element, heistId)], objects: [heistId: object])
+    }
+
+    private func installScreen(
+        elements: [(AccessibilityElement, String)],
+        objects: [String: NSObject?] = [:]
+    ) {
+        var screenElements: [String: Screen.ScreenElement] = [:]
+        var hierarchy: [AccessibilityHierarchy] = []
+        var heistIdByElement: [AccessibilityElement: String] = [:]
+        for (index, pair) in elements.enumerated() {
+            let entry = Screen.ScreenElement(
+                heistId: pair.1,
+                contentSpaceOrigin: nil,
+                element: pair.0,
+                object: objects[pair.1] ?? nil,
+                scrollView: nil
+            )
+            screenElements[pair.1] = entry
+            hierarchy.append(.element(pair.0, traversalIndex: index))
+            heistIdByElement[pair.0] = pair.1
+        }
+        brains.stash.currentScreen = Screen(
+            elements: screenElements,
+            hierarchy: hierarchy,
+            containerStableIds: [:],
+            heistIdByElement: heistIdByElement,
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
     }
 
     private func makeElement(

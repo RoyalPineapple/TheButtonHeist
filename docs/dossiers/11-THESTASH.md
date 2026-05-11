@@ -1,38 +1,66 @@
 # TheStash - The Score Handler
 
-> **Files:** `TheStash.swift`, `TheStash+Matching.swift`, `TheStash+Capture.swift`, `TheStash/WireConversion.swift`, `TheStash/IdAssignment.swift`, `TheStash/ElementRegistry.swift`, `TheStash/Diagnostics.swift`, `TheStash/Interactivity.swift`, `TheStash/ArrayHelpers.swift`
+> **Files:** `TheStash.swift`, `TheStash+Matching.swift`, `TheStash+Capture.swift`, `TheStash/WireConversion.swift`, `TheStash/IdAssignment.swift`, `TheStash/Screen.swift`, `TheStash/Diagnostics.swift`, `TheStash/Interactivity.swift`, `TheStash/ArrayHelpers.swift`
 > **Platform:** iOS 17.0+ (UIKit, DEBUG builds only)
-> **Role:** Element registry, target resolution, wire conversion, screen capture
+> **Role:** Resolution layer, target dispatch, wire conversion, screen capture
 
 ## Responsibilities
 
-TheStash holds the goods — sole custodian of the live UIKit/accessibility object boundary. Value semantics at the API edge; all weak→strong promotion and NSObject touching happens inside:
+TheStash holds the goods — sole custodian of the live UIKit/accessibility object boundary. Value semantics at the API edge; all weak→strong promotion and NSObject touching happens inside.
 
-1. **Screen-lifetime element registry** — a persistent tree of element/container nodes (`registry.roots: [RegistryNode]`) plus an O(1) heistId → tree path index (`registry.elementByHeistId`). Survives across refreshes within the same screen; off-screen elements are retained at their last-known tree position.
-2. **Target resolution** — `resolveTarget(_:)` is the single entry point: `.heistId` → O(1) path lookup via `registry.elementByHeistId` followed by tree walk, `.matcher` → `uniqueMatch` tree walk + O(1) reverse index lookup via `registry.reverseIndex`. Returns `TargetResolution` enum (`.resolved(ResolvedTarget)`, `.notFound(diagnostics:)`, `.ambiguous(candidates:diagnostics:)`). See [12-UNIFIED-TARGETING.md](12-UNIFIED-TARGETING.md) for the full targeting system.
-3. **Element matching** — `findMatch(_:)`, `hasMatch(_:)`, `resolveFirstMatch(_:)` search the canonical accessibility hierarchy using `ElementMatcher` predicates with AND semantics and case-insensitive equality (typography-folded — smart quotes, dashes, ellipsis fold to ASCII; emoji/accents/CJK preserved). Matching is exact or miss; substring is reserved for the diagnostic suggestion path (`Diagnostics.findNearMiss`).
-4. **HeistId synthesis** — `IdAssignment` assigns stable, deterministic `heistId` identifiers directly from `AccessibilityElement` (developer identifier preferred, else synthesized from traits+label; value excluded for stability), with suffix disambiguation for duplicates
-5. **Wire conversion at boundary** — `WireConversion.toWire()` converts `ScreenElement` → `HeistElement` only at serialization boundaries (Pulse broadcast, sendInterface, ExploreResult). All internal code operates on `AccessibilityElement`.
-6. **Delta computation** — `WireConversion.computeDelta()` computes interface deltas from before/after snapshots
+Post-0.2.25 the resolution layer is **a single immutable value**, `Screen`. TheStash has exactly one mutable field — `var currentScreen: Screen = .empty` — and a single discipline: **parse-then-assign**. Callers obtain a `Screen` via `stash.parse()`, decide what to do with it (commit directly, or merge into an exploration accumulator), then write back into `stash.currentScreen`. The persistent element registry, orphan retention, invariant-checking merge pipeline, and explore-cycle mode flag are gone.
+
+1. **Resolution layer as a value type** — `Screen` bundles `elements: [String: ScreenElement]`, `hierarchy`, `containerStableIds`, `heistIdByElement`, `firstResponderHeistId`, and `scrollableContainerViews` into one immutable struct. `Screen.merging(_:)` is pure last-read-wins on heistId collision. Derived values (`name`, `id`, `heistIds`) are computed on access so they cannot drift from the hierarchy.
+2. **Target resolution** — `resolveTarget(_:)` looks only in `currentScreen.elements` / `currentScreen.hierarchy`. The off-screen rule is **strict**: an heistId not in `currentScreen.elements` returns `.notFound` with a near-miss suggestion. No fallback to a recorded scroll position from a previous parse. See [12-UNIFIED-TARGETING.md](12-UNIFIED-TARGETING.md) for the full targeting system.
+3. **Element matching** — `matchScreenElements(_:limit:)` walks `currentScreen.hierarchy` using `ElementMatcher` predicates with AND semantics and case-insensitive equality (typography-folded — smart quotes, dashes, ellipsis fold to ASCII; emoji/accents/CJK preserved). Matching is exact or miss; substring is reserved for the diagnostic suggestion path (`Diagnostics.findNearMiss`).
+4. **HeistId synthesis** — `IdAssignment` assigns stable, deterministic `heistId` identifiers directly from `AccessibilityElement` (developer identifier preferred, else synthesized from traits+label; value excluded for stability), with suffix disambiguation for duplicates and `_at_X_Y` content-position suffixes for spatially-distinct same-content elements seen within one parse. Synthesis is wire format — see CLAUDE.md.
+5. **Wire conversion at boundary** — `WireConversion.toWire()` converts `Screen.ScreenElement` → `HeistElement` at serialization boundaries. `WireConversion.toWireTree(from:)` walks the live hierarchy and emits `[InterfaceNode]` for the full tree payload.
+6. **Delta computation** — `WireConversion.computeDelta()` computes interface deltas from before/after snapshots.
 7. **Element actions** — thin wrappers over `accessibilityActivate()`, `accessibilityIncrement()`, `accessibilityDecrement()`, `accessibilityCustomActions` on the live UIKit object. `performCustomAction` returns a `CustomActionOutcome` enum so callers can distinguish "view deallocated" from "no such action" without a raw NSObject check.
 8. **Scroll-position primitives** — `jumpToRecordedPosition(_:)`, `restoreScrollPosition(_:to:)`, and `scrollTargetOffset(for:in:)` set `contentOffset` on an element's owning scroll view from a recorded `contentSpaceOrigin`. The stash decides nothing (callers still orchestrate when to jump); it just encapsulates the UIScrollView write so the scroll view handle doesn't leak.
 9. **Live geometry readout** — `liveGeometry(for:)` promotes the weak NSObject ref internally and returns a value-typed `(frame, activationPoint, scrollView)` snapshot for callers that need to make viewport decisions.
-10. **Screen capture** — renders traversable windows via `UIGraphicsImageRenderer` (TheStash+Capture.swift)
-11. **Resolution diagnostics** — near-miss suggestions, similar heistId hints, compact element summaries (`Diagnostics`)
+10. **Screen capture** — renders traversable windows via `UIGraphicsImageRenderer` (TheStash+Capture.swift).
+11. **Resolution diagnostics** — near-miss suggestions, similar heistId hints, compact element summaries (`Diagnostics`).
 
 **Not TheStash's job** (moved to other crew members):
-- Parse pipeline (hierarchy parsing, element context building) → [TheBurglar](10-THEBURGLAR.md)
-- Action execution pipelines, scroll orchestration, delta cycle, explore → [TheBrains](13-THEBRAINS.md)
+- Parse pipeline (hierarchy parsing, element context building, heistId assignment, container stableId computation) → [TheBurglar](10-THEBURGLAR.md). `TheBurglar.buildScreen(from:)` is a pure function from a parsed accessibility tree to a `Screen` value.
+- Action execution pipelines, scroll orchestration, delta cycle, explore-and-prune → [TheBrains](13-THEBRAINS.md). The exploration accumulator is a local `var union: Screen` in `TheBrains+Exploration` — TheStash has no mode flag.
 
 ## Custody Contract
 
 TheStash is the custodian of the live accessibility/UI object world.
 
-- **Exclusive ownership of live object references** — if a subsystem needs to get from a parsed element back to a live `NSObject`, it goes through TheStash
-- **Weak references only** — live objects are stored in `ScreenElement.object` and `ScreenElement.scrollView` as `weak` references; TheStash never prolongs the lifetime of app UI objects
-- **No exported live handles** — other subsystems work through TheStash APIs that return values, frames, points, or perform actions on their behalf
-- **Parser boundary** — TheBurglar owns `AccessibilityHierarchyParser` usage and populates TheStash via `apply()`
-- **Fail closed on staleness** — if the weak object is gone, TheStash treats it as stale state and re-resolves from a fresh parse instead of pretending the handle is still valid
+- **Exclusive ownership of live object references** — if a subsystem needs to get from a parsed element back to a live `NSObject`, it goes through TheStash.
+- **Weak references only** — live objects are stored in `Screen.ScreenElement.object` and `.scrollView` as `weak` references; TheStash never prolongs the lifetime of app UI objects.
+- **No exported live handles** — other subsystems work through TheStash APIs that return values, frames, points, or perform actions on their behalf.
+- **Parser boundary** — TheBurglar owns `AccessibilityHierarchyParser` usage and produces `Screen` values via `buildScreen(from:)`.
+- **Fail closed on staleness** — if the weak object is gone, TheStash treats it as stale state. If an heistId is not in `currentScreen.elements`, it's unreachable — agents must scroll or refetch.
+
+## Parse-then-Assign Discipline
+
+```swift
+// Standard refresh path (TheBrains.refresh, post-action settle):
+let screen = stash.parse()        // pure read — does not touch currentScreen
+stash.currentScreen = screen      // commit
+
+// Exploration path (TheBrains+Exploration.exploreAndPrune):
+var union = stash.currentScreen   // seed with current viewport
+for container in scrollableContainers {
+    await scrollToTop(container)
+    if let parsed = stash.refresh() {
+        union = union.merging(parsed)
+    }
+    while await scrollOnePageAndSettle(container) {
+        if let parsed = stash.parse() {
+            stash.currentScreen = parsed     // mid-cycle live viewport for termination heuristics
+            union = union.merging(parsed)
+        }
+    }
+}
+stash.currentScreen = union       // commit final union
+```
+
+Mid-exploration writes to `currentScreen` keep in-cycle termination checks ("did the viewport change after this scroll?") working without exposing the in-flight union to other code. The agent-visible screen state is always either "viewport from the most recent parse" or "union from the most recent exploration commit" — never a partial in-flight blend.
 
 ## Crew Responsibility Boundaries
 
@@ -43,12 +71,12 @@ flowchart LR
         BR1["Action execution<br/>(activate, increment,<br/>decrement, customAction)"]
         BR2["Scroll orchestration<br/>(scroll, scrollToEdge,<br/>scrollToVisible, elementSearch)"]
         BR3["Delta cycle<br/>(before/after, settle, delta)"]
-        BR4["Screen exploration<br/>(exploreAndPrune)"]
+        BR4["Screen exploration<br/>(exploreAndPrune,<br/>local union: Screen)"]
     end
 
-    subgraph TheStash ["TheStash (data + resolution)"]
+    subgraph TheStash ["TheStash (resolution + value)"]
         direction TB
-        B1["Element registry<br/>(screenElements)"]
+        B1["currentScreen: Screen<br/>(one mutable field)"]
         B2["Target resolution<br/>(heistId / matcher)"]
         B3["Wire conversion<br/>(toWire, computeDelta)"]
         B6["Screen capture<br/>+ recording frames"]
@@ -56,8 +84,9 @@ flowchart LR
 
     subgraph TheBurglar ["TheBurglar (acquisition)"]
         direction TB
-        BG1["Parse pipeline<br/>(parse → apply)"]
-        BG2["Topology detection<br/>(screen change)"]
+        BG1["parse() → ParseResult"]
+        BG2["buildScreen(from:) → Screen"]
+        BG3["Topology detection<br/>(screen change)"]
     end
 
     subgraph TheSafecracker ["TheSafecracker (fingers on glass)"]
@@ -69,121 +98,89 @@ flowchart LR
     BR1 -->|"resolve target"| B2
     BR2 -->|"resolve target"| B2
     BR3 -->|"selectElements"| B1
-    BR4 -->|"registry state"| B1
-    BG1 -->|"populates"| B1
+    BR4 -->|"parse + merge"| B1
+    BG1 -->|"buildScreen"| BG2
+    BG2 -->|"returns Screen"| B1
     BR1 -->|"fallback tap"| S1
     BR2 -->|"page / edge"| S3
 ```
 
-## Architecture Diagram
+## Screen Value Layout
 
-```mermaid
-graph TD
-    subgraph TheStash["TheStash (@MainActor, internal)"]
-        subgraph Stores["Instance State"]
-            Registry["registry.roots: [RegistryNode]<br/>Persistent tree, screen-lifetime"]
-            Index["registry.elementByHeistId: [String: RegistryPath]<br/>O(1) heistId → tree path lookup"]
-            Viewport["registry.viewportIds: Set&lt;String&gt;<br/>Currently visible in device viewport"]
-            Hierarchy["currentHierarchy: [AccessibilityHierarchy]<br/>Tree for matchers + scroll discovery"]
-            ScrollViews["scrollableContainerViews<br/>[Container: UIView]"]
-            ReverseIdx["elementToHeistId: [AccessibilityElement: String]<br/>O(1) matcher → heistId lookup"]
-            Hash["lastHierarchyHash: Int"]
-        end
+```swift
+struct Screen: Equatable {
+    let elements: [String: ScreenElement]              // heistId → entry
+    let hierarchy: [AccessibilityHierarchy]            // live parsed tree
+    let containerStableIds: [AccessibilityContainer: String]
+    let heistIdByElement: [AccessibilityElement: String]
+    let firstResponderHeistId: String?
+    let scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
 
-        subgraph Resolution["Element Resolution"]
-            ResolveTarget["resolveTarget(_:) → TargetResolution"]
-            ResolveFirstMatch["resolveFirstMatch(_:)"]
-            HasTarget["hasTarget(_:)"]
-        end
+    static var empty: Screen { ... }
+    func findElement(heistId: String) -> ScreenElement?
+    func merging(_ other: Screen) -> Screen      // last-read-wins on heistId collision
 
-        subgraph Wire["Wire Boundary (static)"]
-            ToWire["WireConversion.toWire() → [HeistElement]"]
-            Delta["WireConversion.computeDelta()"]
-            IDs["IdAssignment.assign() → [String]"]
-        end
-    end
+    var name: String? { /* first header label, computed */ }
+    var id: String? { /* slugified name */ }
+    var heistIds: Set<String> { Set(elements.keys) }
+}
 
-    TheBurglar["TheBurglar"] -->|"apply(result, to: stash)"| TheStash
-    TheBrains["TheBrains"] -->|"resolveTarget, selectElements"| TheStash
-    TheInsideJob["TheInsideJob"] --> TheBrains
-    TheTripwire["TheTripwire"] -.->|injected via init| TheStash
-    TheStash -.->|"weak var stakeout"| TheStakeout["TheStakeout"]
+struct ScreenElement: @unchecked Sendable, Equatable {
+    let heistId: String
+    let contentSpaceOrigin: CGPoint?    // position within scroll container
+    let element: AccessibilityElement   // refreshed each parse
+    weak var object: NSObject?          // live UIKit object for actions
+    weak var scrollView: UIScrollView?  // parent scroll view
+}
 ```
 
-## Data Flow: Snapshot → Wire
-
-```mermaid
-flowchart LR
-    Sel["selectElements()<br/>(pure read)"] --> SE["[ScreenElement]"]
-    SE -->|"At wire boundary"| TW["WireConversion.toWire()<br/>→ [HeistElement]"]
-    TW --> Interface["Interface payload<br/>(Pulse, sendInterface,<br/>ExploreResult)"]
-```
+**Conflict rule for `merging`:** last-read-always-wins. When the same heistId appears in both `self` and `other`, the entire `ScreenElement` from `other` replaces the one from `self` — no field-level merging, no special case to preserve a previously-recorded `contentSpaceOrigin`. The most recent observation is the source of truth. Codified by `ScreenTests`.
 
 ## Element Target Resolution
 
-Two resolution strategies: O(1) dictionary lookup for heistIds, predicate search + O(1) reverse index for matchers.
+Two resolution strategies: O(1) dictionary lookup for heistIds, predicate search via `heistIdByElement` for matchers.
 
 ```mermaid
 flowchart TD
     A["resolveTarget(ElementTarget)"] --> B{Target type?}
-    B -->|".heistId(id)"| C["registry.findElement(heistId:)<br/>(elementByHeistId path → tree walk)"]
+    B -->|".heistId(id)"| C["currentScreen.findElement(heistId:)<br/>(O(1) dict lookup)"]
     C --> D{Entry exists?}
     D -->|Yes| E["Return .resolved(ResolvedTarget)"]
     D -->|No| F["Return .notFound(diagnostics)"]
 
     B -->|".matcher(m, ordinal)"| G{ordinal set?}
-    G -->|Yes| ORD["matches(matcher, limit: ordinal+1)<br/>Early-exit collection"]
+    G -->|Yes| ORD["matchScreenElements(matcher, limit: ordinal+1)<br/>(walks hierarchy, looks up heistIdByElement)"]
     ORD --> ORDCHK{ordinal < hits.count?}
-    ORDCHK -->|Yes| I["elementToHeistId[element]<br/>→ screenElements[heistId]<br/>(O(1) reverse index)"]
-    I --> E
+    ORDCHK -->|Yes| E
     ORDCHK -->|No| F
 
-    G -->|No| H["matches(matcher, limit: 2)"]
+    G -->|No| H["matchScreenElements(matcher, limit: 2)"]
     H --> K{Result?}
-    K -->|Exactly 1| I
+    K -->|Exactly 1| E
     K -->|0 matches| F
     K -->|2+ matches| AMB["Return .ambiguous(candidates, diagnostics)<br/>Hint: use ordinal 0–N"]
 ```
 
-## ScreenElement Structure
-
-```swift
-struct ScreenElement {
-    let heistId: String
-    let contentSpaceOrigin: CGPoint?    // position within scroll container (frozen at creation)
-    var element: AccessibilityElement   // updated each refresh when visible
-    weak var object: NSObject?          // live UIKit object for actions
-    weak var scrollView: UIScrollView?  // parent scroll view (outlives children)
-}
-```
-
-**5 fields, clear separation:**
-- `heistId` and `contentSpaceOrigin` are **immutable identity** — set once when the element is first discovered
-- `element`, `object`, `scrollView` are **mutable live state** — updated each refresh when the element is visible
-
-**Lifetime rules:**
-- UIKit guarantees the scroll view outlives its children, so if `object != nil` then `scrollView != nil` (when originally set)
-- If `object == nil` but `scrollView != nil`, the element was deallocated (cell reuse) but the scroll view is still alive — you can still scroll to its content-space position
-- Any element in `registry.elementByHeistId` is resolvable by heistId
-
 ## Instance State Inventory
+
+Post-0.2.25, TheStash has effectively two pieces of mutable state. Everything else lives inside `Screen`.
 
 | Store | Lifetime | Purpose |
 |-------|----------|---------|
-| `currentHierarchy` | Refresh | Tree for matcher resolution + scroll target discovery |
-| `scrollableContainerViews` | Refresh | Container → UIView for scroll operations |
-| `registry.roots` | Screen | The persistent registry tree — every element ever observed for the current screen, including scrolled-out leaves |
-| `registry.elementByHeistId` | Screen | O(1) heistId → tree path lookup; rebuilt on every mutation |
-| `registry.viewportIds` | Refresh | HeistIds visible in the device viewport |
-| `registry.reverseIndex` | Refresh | O(1) reverse index: AccessibilityElement → heistId (live parse only) |
-| `registry.firstResponderHeistId` | Refresh | HeistId of the element whose live object is first responder (set by TheBurglar in `apply`, consumed by scroll) |
-| `lastHierarchyHash` | Screen | Pulse polling dedup memo |
-| `lastScreenName` | Screen | First header element label, computed once in `apply()` |
-| `lastScreenId` | Screen | Slugified `lastScreenName` (e.g. "controls_demo"), computed alongside it |
+| `currentScreen` | Parse-or-explore-cycle | The latest committed screen value — holds elements, hierarchy, container ids, and live-view refs. |
+| `lastHierarchyHash` | Broadcast tracker | Hash of the last tree sent to subscribers (Pulse polling dedup memo). Separate field because it tracks *broadcast*, which is orthogonal to *current*. |
+| `stakeout` (weak) | Application lifetime | Back-reference for recording frame capture. |
 
-**Data flows down through two tiers:**
-- **Tier 1 (live parse)**: `currentHierarchy`, `scrollableContainerViews`, `registry.viewportIds`, `registry.reverseIndex` — volatile, rebuilt each refresh
-- **Tier 2 (persistent tree)**: `registry.roots`, `registry.elementByHeistId` — survive across parses; merge logic interleaves new parse results with retained orphans
+Computed accessors proxy through `currentScreen`:
+
+| Accessor | Source |
+|----------|--------|
+| `currentHierarchy` | `currentScreen.hierarchy` |
+| `viewportIds` | `currentScreen.heistIds` (all-known after union; live-viewport after refresh) |
+| `liveViewportIds` | `Set(currentScreen.heistIdByElement.values)` (strictly on-screen now) |
+| `firstResponderHeistId` | `currentScreen.firstResponderHeistId` |
+| `lastScreenName`, `lastScreenId` | derived from `currentScreen.hierarchy` |
+| `scrollableContainerViews` | unwraps the weak-view wrappers from `currentScreen.scrollableContainerViews` |
 
 No store writes to another store. No circular dependencies.
 
@@ -191,22 +188,22 @@ No store writes to another store. No circular dependencies.
 
 | File | Responsibility |
 |------|----------------|
-| `TheStash.swift` | Core: registry state, resolution, element actions, point/frame resolution, element selection |
-| `TheStash+Matching.swift` | Element matching against ElementMatcher predicates |
+| `TheStash.swift` | Core: `currentScreen` field, resolution, element actions, point/frame resolution, element selection, parse facades |
+| `TheStash+Matching.swift` | Element matching against ElementMatcher predicates over `currentScreen.hierarchy` |
 | `TheStash+Capture.swift` | Screen capture (clean + recording overlay) |
-| `TheStash/WireConversion.swift` | Caseless enum with static methods: toWire(), delta computation, tree conversion |
-| `TheStash/IdAssignment.swift` | Caseless enum with static methods: deterministic heistId synthesis from traits/labels |
-| `TheStash/ElementRegistry.swift` | Element registry storage: elements, viewportIds, reverseIndex |
-| `TheStash/Diagnostics.swift` | Caseless enum with static methods: resolution error formatting |
+| `TheStash/Screen.swift` | `Screen` struct + `ScreenElement` + `ScrollableViewRef` + `merging(_:)` |
+| `TheStash/WireConversion.swift` | Caseless enum with static methods: toWire(), delta computation, hierarchy → InterfaceNode tree conversion |
+| `TheStash/IdAssignment.swift` | Caseless enum with static methods: deterministic heistId synthesis from traits/labels (wire-format-stable) |
+| `TheStash/Diagnostics.swift` | Caseless enum with static methods: resolution error formatting, near-miss suggestions |
 | `TheStash/Interactivity.swift` | Interactivity predicates (shared by WireConversion and ActionExecution) |
-| `TheStash/ArrayHelpers.swift` | [HeistElement] screen name/id helpers |
+| `TheStash/ArrayHelpers.swift` | `[Screen.ScreenElement]` screen name/id helpers |
 
 ## Dependencies
 
-- **TheTripwire** (injected via `init(tripwire:)`) — provides window access for screen capture
-- **TheBurglar** (created in `init`) — populates the registry via `apply()`
-- **TheStakeout** (`weak var stakeout: TheStakeout?`) — TheStash calls `stakeout?.captureActionFrame()` for recording frame capture
+- **TheTripwire** (injected via `init(tripwire:)`) — provides window access for screen capture.
+- **TheBurglar** (created in `init`) — produces `Screen` values via `buildScreen(from:)`.
+- **TheStakeout** (`weak var stakeout: TheStakeout?`) — TheStash calls `stakeout?.captureActionFrame()` for recording frame capture.
 
 ## Architectural Rule
 
-TheStash owns the NSObject boundary — value semantics at its API edge. It holds elements, resolves targets, converts to wire format, and exposes primitive single-op actions and scroll writes against the stored weak refs it alone holds. It does not *orchestrate* — it does not decide when to scroll, when to refresh, or when to dispatch an action. Those decisions belong to TheBrains, which coordinates TheStash, TheBurglar, TheSafecracker, and TheTripwire. No NSObject escapes the stash after TheBurglar deposits it: callers pass `ScreenElement` tokens and receive CGRects, CGPoints, Bools, and typed outcome enums. Wire conversion and ID assignment are static methods on caseless enums (`TheStash.WireConversion`, `TheStash.IdAssignment`); TheStash exposes thin instance facades (`toWire`, `convertTree`, `computeDelta`, `traitNames`) for ergonomics — both forms are valid, the statics are the source of truth.
+TheStash owns the NSObject boundary — value semantics at its API edge. It holds exactly one piece of resolution state, `currentScreen`, and exposes thin facades for parse, refresh, resolve, match, wire-convert, and act. It does not *orchestrate* — it does not decide when to scroll, when to refresh, or when to dispatch an action. Those decisions belong to TheBrains, which coordinates TheStash, TheBurglar, TheSafecracker, and TheTripwire. No NSObject escapes the stash after TheBurglar deposits it: callers pass `ScreenElement` tokens and receive CGRects, CGPoints, Bools, and typed outcome enums. Wire conversion and ID assignment are static methods on caseless enums (`TheStash.WireConversion`, `TheStash.IdAssignment`); TheStash exposes thin instance facades (`toWire`, `wireTree`, `computeDelta`, `traitNames`) for ergonomics — both forms are valid, the statics are the source of truth.

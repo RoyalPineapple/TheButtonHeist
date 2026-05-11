@@ -178,7 +178,7 @@ extension TheBrains {
         direction: UIAccessibilityScrollDirection,
         animated: Bool = true
     ) async -> (moved: Bool, previousOnScreen: Set<String>) {
-        let before = stash.registry.viewportIds
+        let before = stash.viewportIds
         let beforeAnchor = viewportAnchorSignature()
 
         switch target {
@@ -229,16 +229,16 @@ extension TheBrains {
             previousViewport: previousOnScreen,
             previousAnchor: previousAnchor
         )
-        var knownHeistIds = Set(stash.registry.elementByHeistId.keys)
+        var knownHeistIds = stash.viewportIds
 
         while true {
             refresh()
-            let currentHeistIds = Set(stash.registry.elementByHeistId.keys)
+            let currentHeistIds = stash.viewportIds
             let newHeistIds = currentHeistIds.subtracting(knownHeistIds)
             knownHeistIds.formUnion(newHeistIds)
 
             let step = state.advance(
-                viewportIds: stash.registry.viewportIds,
+                viewportIds: stash.viewportIds,
                 anchorSignature: viewportAnchorSignature(),
                 newHeistIds: newHeistIds
             )
@@ -255,8 +255,8 @@ extension TheBrains {
     /// randomized per launch, so never persist, log, or compare these values
     /// across processes.
     private func viewportAnchorSignature() -> Int? {
-        let anchors = stash.registry.viewportIds.compactMap { heistId -> String? in
-            guard let entry = stash.registry.findElement(heistId: heistId),
+        let anchors = stash.viewportIds.compactMap { heistId -> String? in
+            guard let entry = stash.currentScreen.findElement(heistId: heistId),
                   let origin = entry.contentSpaceOrigin else { return nil }
             return "\(heistId):\(Int(origin.x.rounded())):\(Int(origin.y.rounded()))"
         }.sorted()
@@ -391,7 +391,7 @@ extension TheBrains {
                 )
                 if !stepped { break }
                 didMove = true
-                if stash.registry.viewportIds == before { break }
+                if stash.viewportIds == before { break }
             }
             moved = didMove
         }
@@ -433,7 +433,7 @@ extension TheBrains {
 
         // Known element with recorded position — one-shot jump
         if case .heistId(let heistId) = elementTarget,
-           let entry = stash.registry.findElement(heistId: heistId),
+           let entry = stash.currentScreen.findElement(heistId: heistId),
            stash.jumpToRecordedPosition(entry) != nil {
             await tripwire.yieldRealFrames(20)
             refresh()
@@ -471,7 +471,7 @@ extension TheBrains {
 
         // If we have a recorded position, try the one-shot path first
         if case .heistId(let heistId) = searchTarget,
-           let entry = stash.registry.findElement(heistId: heistId),
+           let entry = stash.currentScreen.findElement(heistId: heistId),
            let savedOffset = stash.jumpToRecordedPosition(entry) {
             await tripwire.yieldRealFrames(20)
             refresh()
@@ -508,7 +508,7 @@ extension TheBrains {
                 return searchFoundResult(found, scrollCount: scrollCount)
             }
 
-            if stash.registry.viewportIds == before { exhausted.insert(container) }
+            if stash.viewportIds == before { exhausted.insert(container) }
         }
 
         return searchNotFoundResult(scrollCount: scrollCount)
@@ -573,7 +573,7 @@ extension TheBrains {
             success: false, method: .elementSearch,
             message: "Element not found after \(scrollCount) scrolls", value: nil,
             scrollSearchResult: ScrollSearchResult(
-                scrollCount: scrollCount, uniqueElementsSeen: stash.registry.elementByHeistId.count,
+                scrollCount: scrollCount, uniqueElementsSeen: stash.currentScreen.elements.count,
                 totalItems: nil, exhaustive: true
             )
         )
@@ -584,7 +584,7 @@ extension TheBrains {
         return TheSafecracker.InteractionResult(
             success: true, method: .elementSearch, message: nil, value: nil,
             scrollSearchResult: ScrollSearchResult(
-                scrollCount: scrollCount, uniqueElementsSeen: stash.registry.elementByHeistId.count,
+                scrollCount: scrollCount, uniqueElementsSeen: stash.currentScreen.elements.count,
                 totalItems: nil, exhaustive: false, foundElement: wire
             )
         )
@@ -622,8 +622,8 @@ extension TheBrains {
     }
 
     func ensureFirstResponderOnScreen() async {
-        guard let heistId = stash.registry.firstResponderHeistId,
-              let entry = stash.registry.findElement(heistId: heistId),
+        guard let heistId = stash.firstResponderHeistId,
+              let entry = stash.currentScreen.findElement(heistId: heistId),
               let geometry = stash.liveGeometry(for: entry),
               !ScreenMetrics.current.bounds.contains(geometry.frame),
               !Self.interactionComfortZone.contains(geometry.activationPoint) else { return }
@@ -648,19 +648,23 @@ extension TheBrains {
 
     // MARK: - Off-Viewport Registry Lookup
 
-    /// Find a registry element that matches `target` but is NOT in the current viewport.
-    /// For `.heistId`, looks up the registry directly. For `.matcher`, uses the same
-    /// resolver as final action targeting so exact/substring, ordinal, and ambiguity
-    /// semantics stay aligned. Returns nil if the selected element is already visible
-    /// or cannot resolve unambiguously.
-    func offViewportRegistryEntry(for target: ElementTarget) -> TheStash.ScreenElement? {
+    /// Find a known element that matches `target` but is NOT in the live
+    /// viewport. Used by `scroll_to_visible` and `element_search` to jump to a
+    /// recorded position when an element scrolled out of view since the last
+    /// exploration committed.
+    ///
+    /// Returns nil if the element is already on-screen or unknown. Post-0.2.25
+    /// the screen value is the only source of truth — once a refresh evicts
+    /// the heistId from `currentScreen`, it's unreachable.
+    func offViewportRegistryEntry(for target: ElementTarget) -> Screen.ScreenElement? {
+        let live = stash.liveViewportIds
         switch target {
         case .heistId(let heistId):
-            guard !stash.registry.viewportIds.contains(heistId) else { return nil }
-            return stash.registry.findElement(heistId: heistId)
+            guard !live.contains(heistId) else { return nil }
+            return stash.currentScreen.findElement(heistId: heistId)
         case .matcher:
             guard let resolved = stash.resolveTarget(target).resolved,
-                  !stash.registry.viewportIds.contains(resolved.screenElement.heistId)
+                  !live.contains(resolved.screenElement.heistId)
             else { return nil }
             return resolved.screenElement
         }

@@ -4,6 +4,10 @@ import XCTest
 @testable import TheInsideJob
 @testable import TheScore
 
+/// Tests for `TheBurglar.buildScreen(from:)` — the lifted body of the old
+/// `apply(_:)` pipeline. Validates that a `ParseResult` is converted into a
+/// `Screen` value with the same semantics: heistId assignment, content-space
+/// origins, first-responder detection, and screen-name derivation.
 @MainActor
 final class TheBurglarApplyTests: XCTestCase {
 
@@ -19,174 +23,122 @@ final class TheBurglarApplyTests: XCTestCase {
         try await super.tearDown()
     }
 
-    // MARK: - apply() populates registry
+    // MARK: - buildScreen populates elements
 
-    func testApplyPopulatesRegistryElements() {
+    func testBuildScreenPopulatesElements() {
         let elementA = makeElement(label: "Save", traits: .button)
         let elementB = makeElement(label: "Cancel", traits: .button)
-        let hierarchy: [AccessibilityHierarchy] = [
-            .element(elementA, traversalIndex: 0),
-            .element(elementB, traversalIndex: 1),
-        ]
-        let result = TheStash.ParseResult(
+        let result = TheBurglar.ParseResult(
             elements: [elementA, elementB],
-            hierarchy: hierarchy,
+            hierarchy: [
+                .element(elementA, traversalIndex: 0),
+                .element(elementB, traversalIndex: 1),
+            ],
             objects: [:],
             scrollViews: [:]
         )
 
-        let heistIds = stash.apply(result)
+        let screen = TheBurglar.buildScreen(from: result)
 
-        XCTAssertEqual(heistIds.count, 2)
-        XCTAssertEqual(stash.registry.elementByHeistId.count, 2,
-                       "Registry should have one entry per element")
-        for heistId in heistIds {
-            XCTAssertNotNil(stash.registry.findElement(heistId: heistId),
-                           "Each heistId should map to a registry entry")
+        XCTAssertEqual(screen.elements.count, 2, "Screen should have one entry per parsed element")
+        for heistId in screen.elements.keys {
+            XCTAssertNotNil(screen.findElement(heistId: heistId),
+                            "Each heistId should map to an entry")
         }
     }
 
-    func testApplyRebuildsViewportIds() {
+    func testBuildScreenPopulatesHeistIdByElement() {
         let element = makeElement(label: "OK", traits: .button)
-        let hierarchy: [AccessibilityHierarchy] = [
-            .element(element, traversalIndex: 0),
-        ]
-        let result = TheStash.ParseResult(
+        let result = TheBurglar.ParseResult(
             elements: [element],
-            hierarchy: hierarchy,
+            hierarchy: [.element(element, traversalIndex: 0)],
             objects: [:],
             scrollViews: [:]
         )
 
-        let heistIds = stash.apply(result)
+        let screen = TheBurglar.buildScreen(from: result)
 
-        XCTAssertEqual(stash.registry.viewportIds, Set(heistIds),
-                       "viewportIds should be the set of all heistIds from the apply")
+        XCTAssertEqual(screen.heistIdByElement[element], "ok_button")
     }
 
-    func testApplyRebuildsReverseIndex() {
-        let element = makeElement(label: "Title", traits: .header)
-        let hierarchy: [AccessibilityHierarchy] = [
-            .element(element, traversalIndex: 0),
-        ]
-        let result = TheStash.ParseResult(
-            elements: [element],
-            hierarchy: hierarchy,
-            objects: [:],
-            scrollViews: [:]
-        )
-
-        stash.apply(result)
-
-        let heistId = stash.registry.reverseIndex[element]
-        XCTAssertNotNil(heistId, "reverseIndex should map element → heistId")
-        XCTAssertNotNil(stash.registry.findElement(heistId: heistId ?? ""),
-                       "Reverse-indexed heistId should exist in registry")
-    }
-
-    // MARK: - apply() sets currentHierarchy
-
-    func testApplySetsCurrentHierarchy() {
+    func testBuildScreenSetsHierarchy() {
         let element = makeElement(label: "Item")
-        let hierarchy: [AccessibilityHierarchy] = [
-            .element(element, traversalIndex: 0),
-        ]
-        let result = TheStash.ParseResult(
-            elements: [element],
-            hierarchy: hierarchy,
-            objects: [:],
-            scrollViews: [:]
+        let hierarchy: [AccessibilityHierarchy] = [.element(element, traversalIndex: 0)]
+        let result = TheBurglar.ParseResult(
+            elements: [element], hierarchy: hierarchy, objects: [:], scrollViews: [:]
         )
 
-        stash.apply(result)
+        let screen = TheBurglar.buildScreen(from: result)
 
-        XCTAssertEqual(stash.currentHierarchy.count, 1,
-                       "apply should set currentHierarchy from the parse result")
+        XCTAssertEqual(screen.hierarchy.count, 1)
     }
 
-    // MARK: - Screen name caching
+    // MARK: - Screen name derivation
 
-    func testApplyCachesScreenNameFromFirstHeader() {
+    func testScreenNameFromFirstHeader() {
         let header = makeElement(label: "Settings", traits: .header)
         let button = makeElement(label: "Save", traits: .button)
-        let hierarchy: [AccessibilityHierarchy] = [
-            .element(header, traversalIndex: 0),
-            .element(button, traversalIndex: 1),
-        ]
-        let result = TheStash.ParseResult(
+        let result = TheBurglar.ParseResult(
             elements: [header, button],
-            hierarchy: hierarchy,
-            objects: [:],
-            scrollViews: [:]
+            hierarchy: [
+                .element(header, traversalIndex: 0),
+                .element(button, traversalIndex: 1),
+            ],
+            objects: [:], scrollViews: [:]
         )
 
-        stash.apply(result)
+        let screen = TheBurglar.buildScreen(from: result)
 
-        XCTAssertEqual(stash.lastScreenName, "Settings",
-                       "Screen name should be the first header's label")
+        XCTAssertEqual(screen.name, "Settings")
     }
 
-    func testApplySetsScreenIdAsSlugifiedName() {
+    func testScreenIdIsSlugifiedName() {
         let header = makeElement(label: "My Profile", traits: .header)
-        let hierarchy: [AccessibilityHierarchy] = [
-            .element(header, traversalIndex: 0),
-        ]
-        let result = TheStash.ParseResult(
+        let result = TheBurglar.ParseResult(
             elements: [header],
-            hierarchy: hierarchy,
-            objects: [:],
-            scrollViews: [:]
+            hierarchy: [.element(header, traversalIndex: 0)],
+            objects: [:], scrollViews: [:]
         )
 
-        stash.apply(result)
+        let screen = TheBurglar.buildScreen(from: result)
 
-        XCTAssertNotNil(stash.lastScreenId)
-        XCTAssertEqual(stash.lastScreenId, TheStash.IdAssignment.slugify("My Profile"),
-                       "screenId should be the slugified screen name")
+        XCTAssertEqual(screen.id, TheStash.IdAssignment.slugify("My Profile"))
     }
 
-    func testApplyScreenNameNilWhenNoHeaders() {
+    func testScreenNameNilWhenNoHeaders() {
         let button = makeElement(label: "OK", traits: .button)
-        let hierarchy: [AccessibilityHierarchy] = [
-            .element(button, traversalIndex: 0),
-        ]
-        let result = TheStash.ParseResult(
+        let result = TheBurglar.ParseResult(
             elements: [button],
-            hierarchy: hierarchy,
-            objects: [:],
-            scrollViews: [:]
+            hierarchy: [.element(button, traversalIndex: 0)],
+            objects: [:], scrollViews: [:]
         )
 
-        stash.apply(result)
+        let screen = TheBurglar.buildScreen(from: result)
 
-        XCTAssertNil(stash.lastScreenName,
-                     "Screen name should be nil when no header elements exist")
-        XCTAssertNil(stash.lastScreenId)
+        XCTAssertNil(screen.name)
+        XCTAssertNil(screen.id)
     }
 
-    func testApplyScreenNameIgnoresHeaderWithNilLabel() {
+    func testScreenNameIgnoresHeaderWithNilLabel() {
         let headerNoLabel = makeElement(label: nil, traits: .header)
         let button = makeElement(label: "OK", traits: .button)
-        let hierarchy: [AccessibilityHierarchy] = [
-            .element(headerNoLabel, traversalIndex: 0),
-            .element(button, traversalIndex: 1),
-        ]
-        let result = TheStash.ParseResult(
+        let result = TheBurglar.ParseResult(
             elements: [headerNoLabel, button],
-            hierarchy: hierarchy,
-            objects: [:],
-            scrollViews: [:]
+            hierarchy: [
+                .element(headerNoLabel, traversalIndex: 0),
+                .element(button, traversalIndex: 1),
+            ],
+            objects: [:], scrollViews: [:]
         )
 
-        stash.apply(result)
+        let screen = TheBurglar.buildScreen(from: result)
 
-        XCTAssertNil(stash.lastScreenName,
-                     "Header with nil label should not set screen name")
+        XCTAssertNil(screen.name)
     }
 
     // MARK: - First responder detection
 
-    func testApplyDetectsFirstResponder() async {
+    func testDetectsFirstResponder() async {
         let textField = UITextField()
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 375, height: 667))
         window.addSubview(textField)
@@ -194,119 +146,55 @@ final class TheBurglarApplyTests: XCTestCase {
         textField.becomeFirstResponder()
 
         let element = makeElement(label: "Email", traits: .none)
-        let hierarchy: [AccessibilityHierarchy] = [
-            .element(element, traversalIndex: 0),
-        ]
-        let result = TheStash.ParseResult(
+        let result = TheBurglar.ParseResult(
             elements: [element],
-            hierarchy: hierarchy,
+            hierarchy: [.element(element, traversalIndex: 0)],
             objects: [element: textField],
             scrollViews: [:]
         )
 
-        stash.apply(result)
+        let screen = TheBurglar.buildScreen(from: result)
 
-        XCTAssertNotNil(stash.registry.firstResponderHeistId,
-                        "Should detect the text field as first responder")
+        XCTAssertNotNil(screen.firstResponderHeistId)
 
         textField.resignFirstResponder()
         window.isHidden = true
-        // Wait for the iOS keyboard windows (UIRemoteKeyboardWindow,
-        // UITextEffectsWindow) to retire from the foreground scene so they
-        // don't leak into the next test's window list.
         await KeyboardWindowTestHelpers.waitForKeyboardWindowsToRetire()
     }
 
-    func testApplyFirstResponderNilWhenNoneActive() {
+    func testFirstResponderNilWhenNoneActive() {
         let element = makeElement(label: "Label")
         let label = UILabel()
-        let hierarchy: [AccessibilityHierarchy] = [
-            .element(element, traversalIndex: 0),
-        ]
-        let result = TheStash.ParseResult(
+        let result = TheBurglar.ParseResult(
             elements: [element],
-            hierarchy: hierarchy,
+            hierarchy: [.element(element, traversalIndex: 0)],
             objects: [element: label],
             scrollViews: [:]
         )
 
-        stash.apply(result)
+        let screen = TheBurglar.buildScreen(from: result)
 
-        XCTAssertNil(stash.registry.firstResponderHeistId,
-                     "Should be nil when no element is first responder")
+        XCTAssertNil(screen.firstResponderHeistId)
     }
 
-    // MARK: - apply() updates existing entries
-
-    func testApplyUpdatesExistingRegistryEntry() {
-        // First apply: create the initial entry with a content-space origin
-        let elementV1 = makeElement(label: "Count", value: "0")
-        let hierarchyV1: [AccessibilityHierarchy] = [
-            .element(elementV1, traversalIndex: 0),
-        ]
-        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 375, height: 667))
-        scrollView.contentSize = CGSize(width: 375, height: 5000)
-        let resultV1 = TheStash.ParseResult(
-            elements: [elementV1],
-            hierarchy: hierarchyV1,
-            objects: [:],
-            scrollViews: [:]
-        )
-        let heistIdsV1 = stash.apply(resultV1)
-        let heistId = heistIdsV1.first
-        guard let heistId else {
-            XCTFail("First apply should produce a heistId")
-            return
-        }
-
-        // Second apply: same label, different value — entry should be updated
-        let elementV2 = makeElement(label: "Count", value: "5")
-        let hierarchyV2: [AccessibilityHierarchy] = [
-            .element(elementV2, traversalIndex: 0),
-        ]
-        let resultV2 = TheStash.ParseResult(
-            elements: [elementV2],
-            hierarchy: hierarchyV2,
-            objects: [:],
-            scrollViews: [:]
-        )
-
-        stash.apply(resultV2)
-
-        let entry = stash.registry.findElement(heistId: heistId)
-        XCTAssertNotNil(entry, "Entry should still exist under the same heistId")
-        XCTAssertEqual(entry?.element.value, "5",
-                       "Element value should be updated to new value")
-    }
-
-    // MARK: - HeistId assignment via apply
+    // MARK: - HeistId determinism
 
     func testHeistIdsAreAssignedDeterministically() {
         let button = makeElement(label: "Submit", traits: .button)
-        let hierarchy: [AccessibilityHierarchy] = [
-            .element(button, traversalIndex: 0),
-        ]
-        let result = TheStash.ParseResult(
+        let result = TheBurglar.ParseResult(
             elements: [button],
-            hierarchy: hierarchy,
-            objects: [:],
-            scrollViews: [:]
+            hierarchy: [.element(button, traversalIndex: 0)],
+            objects: [:], scrollViews: [:]
         )
 
-        let heistIds1 = stash.apply(result)
-        stash.registry = TheStash.ElementRegistry()
-        let heistIds2 = stash.apply(result)
+        let first = TheBurglar.buildScreen(from: result)
+        let second = TheBurglar.buildScreen(from: result)
 
-        XCTAssertEqual(heistIds1, heistIds2,
+        XCTAssertEqual(Set(first.elements.keys), Set(second.elements.keys),
                        "Same elements should produce same heistIds")
     }
 
     func testDuplicateLabelsGetDisambiguatedHeistIds() {
-        // Distinct frames so the two AccessibilityElement values are not
-        // `==`/Hashable-equal. In practice every UIKit-derived element has a
-        // unique frame; identical-frame duplicates would represent the same
-        // accessible thing and the registry's dictionary-keyed merge would
-        // (correctly) collapse them.
         let buttonA = makeElement(
             label: "Option", traits: .button,
             frame: CGRect(x: 0, y: 0, width: 100, height: 44)
@@ -315,27 +203,25 @@ final class TheBurglarApplyTests: XCTestCase {
             label: "Option", traits: .button,
             frame: CGRect(x: 0, y: 60, width: 100, height: 44)
         )
-        let hierarchy: [AccessibilityHierarchy] = [
-            .element(buttonA, traversalIndex: 0),
-            .element(buttonB, traversalIndex: 1),
-        ]
-        let result = TheStash.ParseResult(
+        let result = TheBurglar.ParseResult(
             elements: [buttonA, buttonB],
-            hierarchy: hierarchy,
-            objects: [:],
-            scrollViews: [:]
+            hierarchy: [
+                .element(buttonA, traversalIndex: 0),
+                .element(buttonB, traversalIndex: 1),
+            ],
+            objects: [:], scrollViews: [:]
         )
 
-        let heistIds = stash.apply(result)
+        let screen = TheBurglar.buildScreen(from: result)
 
-        XCTAssertEqual(heistIds.count, 2)
-        XCTAssertNotEqual(heistIds[0], heistIds[1],
-                          "Duplicate labels should produce disambiguated heistIds")
+        XCTAssertEqual(screen.elements.count, 2)
+        XCTAssertEqual(screen.elements.count, 2,
+                       "Duplicate labels should produce two distinct entries")
     }
 
-    // MARK: - buildElementContexts (contentSpaceOrigin via scroll view)
+    // MARK: - Content space origin
 
-    func testApplyPropagatesContentSpaceOriginForScrollableContainerChild() {
+    func testPropagatesContentSpaceOriginForScrollableContainerChild() {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 100, width: 320, height: 500))
         scrollView.contentSize = CGSize(width: 320, height: 2000)
 
@@ -346,50 +232,43 @@ final class TheBurglarApplyTests: XCTestCase {
         let childFrame = CGRect(x: 10, y: 150, width: 50, height: 30)
         let child = makeElement(label: "Cell", traits: .button, frame: childFrame)
 
-        let hierarchy: [AccessibilityHierarchy] = [
-            .container(scrollableContainer, children: [.element(child, traversalIndex: 0)]),
-        ]
-        let result = TheStash.ParseResult(
+        let result = TheBurglar.ParseResult(
             elements: [child],
-            hierarchy: hierarchy,
+            hierarchy: [.container(scrollableContainer, children: [.element(child, traversalIndex: 0)])],
             objects: [:],
             scrollViews: [scrollableContainer: scrollView]
         )
 
-        let heistIds = stash.apply(result)
-        guard let heistId = heistIds.first else {
+        let screen = TheBurglar.buildScreen(from: result)
+        guard let heistId = screen.elements.keys.first else {
             XCTFail("Expected one heistId")
             return
         }
 
-        XCTAssertNotNil(stash.registry.findElement(heistId: heistId)?.contentSpaceOrigin,
+        XCTAssertNotNil(screen.findElement(heistId: heistId)?.contentSpaceOrigin,
                         "Element inside a scrollable container should receive a contentSpaceOrigin")
     }
 
-    func testApplyLeavesContentSpaceOriginNilOutsideScrollableContainer() {
+    func testLeavesContentSpaceOriginNilOutsideScrollableContainer() {
         let element = makeElement(label: "Plain",
                                   frame: CGRect(x: 0, y: 0, width: 10, height: 10))
-        let hierarchy: [AccessibilityHierarchy] = [
-            .element(element, traversalIndex: 0),
-        ]
-        let result = TheStash.ParseResult(
+        let result = TheBurglar.ParseResult(
             elements: [element],
-            hierarchy: hierarchy,
-            objects: [:],
-            scrollViews: [:]
+            hierarchy: [.element(element, traversalIndex: 0)],
+            objects: [:], scrollViews: [:]
         )
 
-        let heistIds = stash.apply(result)
-        guard let heistId = heistIds.first else {
+        let screen = TheBurglar.buildScreen(from: result)
+        guard let heistId = screen.elements.keys.first else {
             XCTFail("Expected one heistId")
             return
         }
 
-        XCTAssertNil(stash.registry.findElement(heistId: heistId)?.contentSpaceOrigin,
+        XCTAssertNil(screen.findElement(heistId: heistId)?.contentSpaceOrigin,
                      "Element with no enclosing scroll view should have nil contentSpaceOrigin")
     }
 
-    // MARK: - isTopologyChanged (via burglar)
+    // MARK: - isTopologyChanged (via stash)
 
     func testTopologyChangedOnBackButtonAppearing() {
         let before = [makeElement(label: "Home", traits: .header)]

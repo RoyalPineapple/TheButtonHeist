@@ -8,10 +8,12 @@ import AccessibilitySnapshotParser
 
 /// The stash — holds the goods and answers questions about them.
 ///
-/// TheStash is the element registry. It holds every known accessibility element,
-/// resolves targets by heistId or matcher, produces wire format, and computes
-/// deltas. Pure data — no side effects, no gestures, no scrolling.
-/// TheBurglar populates it. TheBrains queries it.
+/// TheStash holds the latest committed `Screen` and exposes lookup, matcher
+/// resolution, and wire-conversion facades. The persistent element registry
+/// is gone — there's exactly one mutable field, `currentScreen`, and a single
+/// rule: parse-then-assign. Callers call `parse()` to obtain a Screen value,
+/// then decide when to write it back via `currentScreen = ...`. The
+/// exploration accumulator lives in TheBrains as a local `var union`.
 @MainActor
 final class TheStash {
 
@@ -20,70 +22,79 @@ final class TheStash {
         self.burglar = TheBurglar(tripwire: tripwire)
     }
 
-    // MARK: - Volatile State (rebuilt each refresh)
+    // MARK: - Mutable State
 
-    /// Accessibility hierarchy from the last refresh. Used for matcher resolution,
-    /// scroll target discovery, and wire tree construction.
-    /// Set by apply(). Tests inject via @testable.
-    var currentHierarchy: [AccessibilityHierarchy] = []
-
-    /// Maps scrollable containers from the hierarchy to their backing UIView.
-    /// Rebuilt on each accessibility refresh. Check `as? UIScrollView` at point of use.
-    var scrollableContainerViews: [AccessibilityContainer: UIView] = [:]
-
-    // MARK: - Screen-Lifetime Element Registry
-
-    /// An element tracked for the current screen's lifetime.
-    /// Holds weak references to the live UIKit objects — the element for action dispatch,
-    /// the scroll view for coordinate conversion. UIKit guarantees the scroll view outlives
-    /// its children, so if `object != nil` then `scrollView != nil` (when originally set).
-    /// If `object == nil` but `scrollView != nil`, the element was deallocated (cell reuse)
-    /// but the scroll view is still alive — you can still scroll to its content-space position.
-    struct ScreenElement {
-        let heistId: String
-        /// Content-space position within nearest scrollable container (nil if not scrollable).
-        var contentSpaceOrigin: CGPoint?
-        /// Parsed accessibility element (updated each refresh if element is visible).
-        var element: AccessibilityElement
-        /// Live UIKit object for action dispatch. Weak — nils on cell reuse.
-        weak var object: NSObject?
-        /// Parent scroll view for coordinate conversion. Weak — outlives children.
-        weak var scrollView: UIScrollView?
-    }
-
-    /// The element registry — all known elements, viewport visibility, presentation state.
-    var registry = ElementRegistry()
+    /// The one piece of mutable state — the latest committed screen value.
+    /// Set by callers after `parse()`, or seeded from `merging(_:)` at the
+    /// end of an exploration cycle.
+    var currentScreen: Screen = .empty
 
     /// Hash of the last hierarchy sent to subscribers (for polling comparison).
-    /// Read/written by Pulse for change detection.
+    /// Read/written by broadcast paths. Kept as a separate field — it tracks
+    /// what was *broadcast*, which is orthogonal to what's *current*.
     var lastHierarchyHash: Int = 0
-
-    /// Screen name from the registry (first header element by traversal order).
-    /// Computed once in `apply()` from the hierarchy's traversal order.
-    var lastScreenName: String?
-
-    /// Slugified screen name for machine use (e.g. "controls_demo").
-    /// Computed alongside `lastScreenName` in `apply()`.
-    var lastScreenId: String?
 
     /// Back-reference to the stakeout for recording frame capture.
     weak var stakeout: TheStakeout?
 
-    // MARK: - Traversal Order Index
+    // MARK: - Aliases
 
-    /// Build a heistId→traversal-order lookup. The registry tree IS the
-    /// canonical traversal order — depth-first walk yields elements in
-    /// VoiceOver order, with off-screen orphans interleaved by their
-    /// content-space Y. Diagnostics still need a `[heistId: Int]` map for
-    /// formatting, so we serialize the walk here.
-    func buildTraversalOrderIndex() -> [String: Int] {
-        let flattened = registry.flattenElements()
-        return Dictionary(
-            uniqueKeysWithValues: flattened.enumerated().map { ($0.element.heistId, $0.offset) }
-        )
+    typealias ScreenElement = Screen.ScreenElement
+
+    // MARK: - Computed Accessors
+
+    /// Live hierarchy from the most recent parse. Proxy for call-site clarity —
+    /// reads, matchers, scroll dispatch, and tab-bar geometry all need it
+    /// without spelling out `currentScreen.hierarchy` every time.
+    var currentHierarchy: [AccessibilityHierarchy] {
+        currentScreen.hierarchy
     }
 
-    // MARK: - Element Interactivity (forwarded to Interactivity)
+    /// Scrollable containers paired with their backing UIView.
+    /// Unwraps the weak ref wrapper for call sites that need a live UIView.
+    var scrollableContainerViews: [AccessibilityContainer: UIView] {
+        var result: [AccessibilityContainer: UIView] = [:]
+        for (container, ref) in currentScreen.scrollableContainerViews {
+            if let view = ref.view {
+                result[container] = view
+            }
+        }
+        return result
+    }
+
+    /// HeistIds of all elements in the current screen value.
+    ///
+    /// After an exploration commit this includes elements that were observed
+    /// during scrolling and are no longer on-screen; after a plain `refresh()`
+    /// this is the live viewport. Use `liveViewportIds` when you specifically
+    /// need "what's on screen right now".
+    var viewportIds: Set<String> {
+        currentScreen.heistIds
+    }
+
+    /// HeistIds of elements present in the live hierarchy from the most
+    /// recent parse — i.e. on-screen right now. Strictly a subset of
+    /// `viewportIds` after an exploration union has been committed.
+    var liveViewportIds: Set<String> {
+        Set(currentScreen.heistIdByElement.values)
+    }
+
+    /// HeistId of the element whose live object is currently first responder.
+    var firstResponderHeistId: String? {
+        currentScreen.firstResponderHeistId
+    }
+
+    /// Screen name from the current screen (first header element by traversal order).
+    var lastScreenName: String? {
+        currentScreen.name
+    }
+
+    /// Slugified screen name for machine use (e.g. "controls_demo").
+    var lastScreenId: String? {
+        currentScreen.id
+    }
+
+    // MARK: - Element Interactivity
 
     func isInteractive(element: AccessibilityElement) -> Bool {
         Interactivity.isInteractive(element: element)
@@ -92,7 +103,6 @@ final class TheStash {
     // MARK: - Unified Element Resolution
 
     /// Result of resolving an ElementTarget to a concrete element.
-    /// All data lives on `screenElement` — element, wire, spatial, UIKit refs.
     struct ResolvedTarget {
         let screenElement: ScreenElement
 
@@ -107,15 +117,15 @@ final class TheStash {
         case ambiguous(candidates: [String], diagnostics: String)
 
         var resolved: ResolvedTarget? {
-            if case .resolved(let r) = self { return r }
+            if case .resolved(let resolved) = self { return resolved }
             return nil
         }
 
         var diagnostics: String {
             switch self {
             case .resolved: return ""
-            case .notFound(let d): return d
-            case .ambiguous(_, let d): return d
+            case .notFound(let message): return message
+            case .ambiguous(_, let message): return message
             }
         }
     }
@@ -126,23 +136,18 @@ final class TheStash {
         isInteractive(element: screenElement.element)
     }
 
-    /// Outcome of `activate(_:)`. Distinguishes "live object deallocated"
-    /// (cell reuse, screen torn down) from "live object refused to activate"
-    /// (accessibilityActivate returned false on a non-nil object) so callers
-    /// can build precise failure diagnostics.
+    /// Outcome of `activate(_:)`.
     enum ActivateOutcome {
         case success
         case objectDeallocated
         case refused
     }
 
-    /// Perform accessibilityActivate, distinguishing deallocated-vs-refused.
     func activate(_ screenElement: ScreenElement) -> ActivateOutcome {
         guard let object = screenElement.object else { return .objectDeallocated }
         return object.accessibilityActivate() ? .success : .refused
     }
 
-    /// Perform accessibilityIncrement.
     @discardableResult
     func increment(_ screenElement: ScreenElement) -> Bool {
         guard let object = screenElement.object else { return false }
@@ -150,7 +155,6 @@ final class TheStash {
         return true
     }
 
-    /// Perform accessibilityDecrement.
     @discardableResult
     func decrement(_ screenElement: ScreenElement) -> Bool {
         guard let object = screenElement.object else { return false }
@@ -158,22 +162,12 @@ final class TheStash {
         return true
     }
 
-    /// Outcome of a custom-action dispatch.
-    ///
-    /// Lets callers distinguish "view deallocated before dispatch" from
-    /// "view is alive but has no action by that name" without exposing the
-    /// underlying NSObject.
     enum CustomActionOutcome {
         case succeeded
         case deallocated
         case noSuchAction
     }
 
-    /// Live geometry derived from the element's backing NSObject.
-    ///
-    /// Value-typed snapshot so callers can make scroll/viewport decisions
-    /// without touching the underlying NSObject. Returned by `liveGeometry(for:)`,
-    /// which promotes the weak ref internally.
     struct LiveGeometry {
         let frame: CGRect
         let activationPoint: CGPoint
@@ -181,13 +175,7 @@ final class TheStash {
     }
 
     /// Jump a recorded element into view by setting its owning scroll view's
-    /// content offset to the clamped, centered target derived from the
-    /// recorded `contentSpaceOrigin`.
-    ///
-    /// Returns the scroll view's previous content offset so the caller can
-    /// revert the jump if the recorded position doesn't produce a usable
-    /// match. Returns `nil` if the element has no recorded position, no
-    /// owning scroll view, or the scroll view has deallocated.
+    /// content offset to the clamped, centered target.
     @discardableResult
     func jumpToRecordedPosition(_ screenElement: ScreenElement, animated: Bool = true) -> CGPoint? {
         guard let origin = screenElement.contentSpaceOrigin,
@@ -200,15 +188,12 @@ final class TheStash {
     }
 
     /// Restore the element's owning scroll view to a previously saved offset.
-    /// No-op if the scroll view has deallocated.
     func restoreScrollPosition(_ screenElement: ScreenElement, to offset: CGPoint, animated: Bool = true) {
         guard let scrollView = screenElement.scrollView,
               !scrollView.bhIsUnsafeForProgrammaticScrolling else { return }
         scrollView.setContentOffset(offset, animated: animated)
     }
 
-    /// Clamped, centered content offset for a point in scroll-view content space.
-    /// Pure math — exposed for testability, used by `jumpToRecordedPosition`.
     static func scrollTargetOffset(for contentOrigin: CGPoint, in scrollView: UIScrollView) -> CGPoint {
         let visibleSize = scrollView.bounds.size
         let insets = scrollView.adjustedContentInset
@@ -220,13 +205,6 @@ final class TheStash {
         return CGPoint(x: targetX, y: targetY)
     }
 
-    /// Promote the element's weak object ref to strong, read live geometry,
-    /// and pair it with the owning scroll view.
-    ///
-    /// Returns `nil` if the underlying NSObject has deallocated, the element
-    /// has no owning scroll view, or the accessibility frame is null/empty.
-    /// Keeps all weak→strong handling inside the stash so callers never touch
-    /// the raw NSObject.
     func liveGeometry(for screenElement: ScreenElement) -> LiveGeometry? {
         guard let object = screenElement.object,
               let scrollView = screenElement.scrollView else { return nil }
@@ -239,12 +217,6 @@ final class TheStash {
         )
     }
 
-    /// Perform a named custom action on the element's live object.
-    ///
-    /// Promotes the weak ref to a local strong ref for the duration of dispatch
-    /// so the view cannot deallocate mid-call. Returns `.deallocated` if the
-    /// view was already gone, `.noSuchAction` if no matching action exists or
-    /// the handler declined, and `.succeeded` otherwise.
     func performCustomAction(named name: String, on screenElement: ScreenElement) -> CustomActionOutcome {
         guard let object = screenElement.object else { return .deallocated }
         guard let action = object.accessibilityCustomActions?
@@ -263,12 +235,18 @@ final class TheStash {
 
     /// Resolve a target to a unique element. Returns `.resolved` on success,
     /// `.notFound` or `.ambiguous` with diagnostics on failure.
+    ///
+    /// Off-screen behaviour: heistId-targeted lookups are strict. If the id
+    /// is not in `currentScreen.elements`, resolution fails with a near-miss
+    /// suggestion. There is no fall-back to a previously-seen position.
     func resolveTarget(_ target: ElementTarget) -> TargetResolution {
         switch target {
         case .heistId(let heistId):
-            guard let entry = registry.findElement(heistId: heistId) else {
+            guard let entry = currentScreen.findElement(heistId: heistId) else {
                 return .notFound(diagnostics: Diagnostics.heistIdNotFound(
-                    heistId, knownIds: registry.elementByHeistId.keys, viewportCount: registry.viewportIds.count
+                    heistId,
+                    knownIds: currentScreen.elements.keys,
+                    viewportCount: currentScreen.elements.count
                 ))
             }
             return .resolved(ResolvedTarget(screenElement: entry))
@@ -277,8 +255,6 @@ final class TheStash {
         }
     }
 
-    /// Single matcher resolution path. Hierarchy-first for traversal order,
-    /// registry fallback for off-screen elements, one set of resolution semantics.
     private func resolveMatcher(_ matcher: ElementMatcher, ordinal: Int?) -> TargetResolution {
         if let ordinal {
             guard ordinal >= 0 else {
@@ -291,7 +267,6 @@ final class TheStash {
             }
             return .resolved(ResolvedTarget(screenElement: matches[ordinal]))
         }
-        // No ordinal — require unique match
         let matches = matchScreenElements(matcher, limit: 2)
         switch matches.count {
         case 0:
@@ -305,8 +280,6 @@ final class TheStash {
     }
 
     /// Resolve a target using first-match semantics (no ambiguity check).
-    /// Used by scroll_to_visible where finding ANY match is success.
-    /// Thin wrapper over resolveTarget that forces ordinal 0 for matchers.
     func resolveFirstMatch(_ target: ElementTarget) -> ResolvedTarget? {
         let effectiveTarget: ElementTarget
         switch target {
@@ -319,18 +292,12 @@ final class TheStash {
     }
 
     /// Live existence check — does any current accessibility-tree element match this target?
-    /// Unlike resolveTarget, does NOT require uniqueness for matchers.
-    /// For heistId: checks the live viewport set, not the persistent registry.
-    /// For matcher: checks currentHierarchy only (not registry). The registry
-    /// caches previously-seen elements and would defeat wait_for absent checks.
-    /// Uses the same exact-or-miss semantics as `resolveTarget` so wait_for
-    /// presence/absence and `activate` agree about what's on screen.
     func hasTarget(_ target: ElementTarget) -> Bool {
         switch target {
         case .heistId(let heistId):
-            return registry.viewportIds.contains(heistId)
+            return currentScreen.elements[heistId] != nil
         case .matcher(let matcher, _):
-            return currentHierarchy.hasMatch(matcher, mode: .exact)
+            return currentScreen.hierarchy.hasMatch(matcher, mode: .exact)
         }
     }
 
@@ -338,7 +305,6 @@ final class TheStash {
         Interactivity.checkInteractivity(element)
     }
 
-    /// Resolve a screen point from an element target or explicit coordinates.
     func resolvePoint(
         from elementTarget: ElementTarget?,
         pointX: Double?,
@@ -350,25 +316,41 @@ final class TheStash {
                 return .failure(.failure(.elementNotFound, message: resolution.diagnostics))
             }
             return .success(resolved.element.activationPoint)
-        } else if let x = pointX, let y = pointY {
-            return .success(CGPoint(x: x, y: y))
+        } else if let xCoord = pointX, let yCoord = pointY {
+            return .success(CGPoint(x: xCoord, y: yCoord))
         } else {
             return .failure(.failure(.elementNotFound, message: "No target specified"))
         }
     }
 
-    /// Resolve the accessibility frame for an element target.
     func resolveFrame(for elementTarget: ElementTarget) -> CGRect? {
         resolveTarget(elementTarget).resolved?.element.shape.frame
+    }
+
+    // MARK: - Traversal Order Index
+
+    /// Build a heistId→traversal-order lookup for diagnostics formatting.
+    /// Walks the live hierarchy in DFS order — this matches the order the
+    /// agent sees in `get_interface` payloads.
+    func buildTraversalOrderIndex() -> [String: Int] {
+        var index: [String: Int] = [:]
+        var counter = 0
+        for (element, _) in currentScreen.hierarchy.elements {
+            if let heistId = currentScreen.heistIdByElement[element] {
+                index[heistId] = counter
+                counter += 1
+            }
+        }
+        return index
     }
 
     // MARK: - Diagnostics Forwarding
 
     func matcherNotFoundMessage(_ matcher: ElementMatcher) -> String {
         Diagnostics.matcherNotFound(
-            matcher, hierarchy: currentHierarchy,
-            screenElements: registry.flattenElements(),
-            viewportHeistIds: registry.viewportIds,
+            matcher, hierarchy: currentScreen.hierarchy,
+            screenElements: selectElements(),
+            viewportHeistIds: currentScreen.heistIds,
             traversalOrder: buildTraversalOrderIndex()
         )
     }
@@ -377,8 +359,6 @@ final class TheStash {
         Diagnostics.formatMatcher(matcher)
     }
 
-    /// Build an ambiguous resolution from a list of matching elements.
-    /// Shared by both hierarchy and registry matcher paths.
     private func ambiguousResolution(
         _ matcher: ElementMatcher,
         elements: [AccessibilityElement]
@@ -403,50 +383,68 @@ final class TheStash {
 
     // MARK: - Element Selection
 
-    /// All elements in the registry, in tree (depth-first) order. The tree
-    /// itself encodes traversal order — visible elements in their incoming
-    /// order, off-screen elements interleaved with their last-known siblings
-    /// by content-space Y for scrollable containers.
+    /// All elements in the current screen.
+    ///
+    /// Live elements appear first in hierarchy (depth-first) traversal order;
+    /// any heistIds present in `currentScreen.elements` but not in the live
+    /// hierarchy (post-exploration union) appear after, sorted by heistId so
+    /// the snapshot order is stable across runs.
     func selectElements() -> [ScreenElement] {
-        registry.flattenElements()
+        var seen = Set<String>()
+        var ordered: [ScreenElement] = []
+        ordered.reserveCapacity(currentScreen.elements.count)
+        for (element, _) in currentScreen.hierarchy.elements {
+            guard let heistId = currentScreen.heistIdByElement[element],
+                  let entry = currentScreen.elements[heistId],
+                  seen.insert(heistId).inserted else { continue }
+            ordered.append(entry)
+        }
+        let remaining = currentScreen.elements
+            .filter { !seen.contains($0.key) }
+            .map(\.value)
+            .sorted { $0.heistId < $1.heistId }
+        ordered.append(contentsOf: remaining)
+        return ordered
     }
 
-    // MARK: - Refresh Pipeline
+    // MARK: - Cache Control
 
-    /// Clear all cached element data (used on suspend).
+    /// Clear cached element data (used on suspend).
     func clearCache() {
-        currentHierarchy.removeAll()
-        registry.clear()
+        currentScreen = .empty
         lastHierarchyHash = 0
+    }
+
+    /// Clear screen-level state on screen change. Screens are values, so
+    /// "clear screen" is identical to "clear everything" — the next parse
+    /// produces a fresh screen.
+    func clearScreen() {
+        currentScreen = .empty
     }
 
     /// TheTripwire handles window access and animation detection.
     let tripwire: TheTripwire
 
-    /// TheBurglar handles parsing and populating the registry.
+    /// TheBurglar handles parsing.
     private let burglar: TheBurglar
 
     // MARK: - Parse Pipeline
 
-    /// Parsed accessibility snapshot. Opaque to callers — TheBurglar is an
-    /// implementation detail of TheStash.
-    typealias ParseResult = TheBurglar.ParseResult
-
-    /// Parse and apply in one step. Most callers use this.
-    @discardableResult
-    func refresh() -> ParseResult? {
-        burglar.refresh(into: self)
+    /// Read the live accessibility tree and produce a Screen value.
+    /// Pure: does not touch `currentScreen`. Returns nil if no accessible
+    /// windows exist (loading screen, app backgrounded, etc.).
+    func parse() -> Screen? {
+        guard let result = burglar.parse() else { return nil }
+        return TheBurglar.buildScreen(from: result)
     }
 
-    /// Read the live accessibility tree without mutating state.
-    func parse() -> ParseResult? {
-        burglar.parse()
-    }
-
-    /// Apply a parse result to the registry. Returns assigned heistIds.
+    /// Parse and commit in one step. Most callers use this — exploration
+    /// is the one place that wants the value back to merge before committing.
     @discardableResult
-    func apply(_ result: ParseResult) -> [String] {
-        burglar.apply(result, to: self)
+    func refresh() -> Screen? {
+        guard let screen = parse() else { return nil }
+        currentScreen = screen
+        return screen
     }
 
     /// Did the accessibility topology change between two snapshots?
@@ -464,23 +462,21 @@ final class TheStash {
 
     // MARK: - Wire Conversion Facades
 
-    /// Convert a snapshot to wire format.
     func toWire(_ entries: [ScreenElement]) -> [HeistElement] {
         WireConversion.toWire(entries)
     }
 
-    /// Convert a single element to wire format.
     func toWire(_ entry: ScreenElement) -> HeistElement {
         WireConversion.toWire(entry)
     }
 
-    /// Convert the persistent registry tree to its canonical wire form.
+    /// Convert the current screen's hierarchy to canonical wire form. Every
+    /// element on screen appears at its tree position; containers carry
+    /// stable ids derived once during parse.
     func wireTree() -> [InterfaceNode] {
-        WireConversion.toWireTree(registry.roots)
+        WireConversion.toWireTree(from: currentScreen)
     }
 
-    /// Hash of the canonical wire tree, including container topology and
-    /// metadata as well as leaf element payloads.
     func wireTreeHash() -> Int {
         wireTree().hashValue
     }
@@ -497,15 +493,14 @@ final class TheStash {
             before: before, after: after,
             beforeTree: beforeTree,
             beforeTreeHash: beforeTreeHash,
-            afterTree: registry.roots, isScreenChange: isScreenChange
+            afterTree: wireTree(),
+            isScreenChange: isScreenChange
         )
     }
 
-    /// Get trait names for a trait bitmask.
     func traitNames(_ traits: UIAccessibilityTraits) -> [HeistTrait] {
         WireConversion.traitNames(traits)
     }
-
 }
 
 #endif // DEBUG
