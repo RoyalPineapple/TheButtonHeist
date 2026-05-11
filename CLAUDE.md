@@ -236,6 +236,12 @@ Before pushing any commit, verify the following:
   tuist test ButtonHeistTests --no-selective-testing
   tuist test TheInsideJobTests --platform ios --device "iPhone 16 Pro" --os 26.1 --no-selective-testing
   ```
+- **For any visibility-changing PR** (`public` → `internal`, `internal` → `private`, type/member demotions): also run the standalone SwiftPM package tests:
+  ```bash
+  cd ButtonHeistCLI && swift test && cd ..
+  cd ButtonHeistMCP && swift test && cd ..
+  ```
+  `@testable import` does not cross package boundaries — `ButtonHeistCLI` and `ButtonHeistMCP` consume `ButtonHeist` as an external SPM dependency, so anything internal-only is invisible to their test targets. CI's `macos-tests` job runs these automatically; locally they are the missing step that lets a visibility regression slip through. PRs #357 and #358 are the cautionary tale.
 - If tests fail, fix the code or update tests to reflect intentional changes.
 
 ### 4. Documentation Up to Date
@@ -522,6 +528,8 @@ func tearDown() {
 
 The single-line `Task { @MainActor in self.callback(...) }` bridge is its own anti-pattern — the call site has no handle, no cancellation, no ordering guarantee. SwiftLint's `agent_callback_bridge_task` rule flags it; annotate the callback's isolation in its closure type and call it directly.
 
+Don't use `Task.detached`. Detached Tasks escape the calling isolation context — almost every fire-and-forget we've found has been a `Task { ... }` that should be `await`, never `.detached`. The `agent_no_task_detached` lint rule blocks new uses; existing exceptions (SessionRepl's blocking `readLine`, two tests asserting off-MainActor execution) are documented at the disable sites.
+
 ## One Error Type Per Logical Domain
 
 Don't introduce a new `enum FooError: Error` without first asking whether an existing error type covers the case. The codebase has authoritative error types per layer:
@@ -530,8 +538,35 @@ Don't introduce a new `enum FooError: Error` without first asking whether an exi
 - `TheHandoff.ConnectionError` — connection lifecycle; also the associated value of `ConnectionPhase.failed` (the type is `Equatable` so the phase compares structurally)
 - `FenceError` — CLI/MCP-facing dispatch errors
 - `BookKeeperError` — session lifecycle errors
+- `SocketServerError` — `SimpleSocketServer` lifecycle (bind, double-start); module-private to TheInsideJob
 
 Per-module private errors are acceptable but should be auditable. If a new domain genuinely needs a new error type, document its boundary and what the existing types couldn't carry.
+
+**Per-module private errors auditable here:**
+
+- `TheStakeoutError` (recording lifecycle) — recording-specific state-machine errors (already recording, no active recording, finalize race). Stays distinct because the recording subsystem is internal to TheInsideJob and never crosses the wire — surfacing it as `ServerError` would conflate a local lifecycle error with a wire-level diagnostic.
+- `TLSIdentityError` (TLS identity setup) — Keychain access, certificate generation, and identity selection failures. Stays distinct because callers can only act on the structured cases (regenerate, prompt for permission); collapsing into `ConnectionError` would erase that signal.
+- `DisconnectReason` (observed via callback, not thrown) — note this distinction: it's a value reported through the `onDisconnect` callback, not an `Error` raised from a throwing function. The disconnect path is non-throwing by design, so adding it to an `Error` family would mis-shape the surface.
+
+## State Machine Atomicity
+
+Builds on Explicit State Machines: the *temporal* half. Once a state-enum has its cases right, the order of reads and writes around `await` boundaries determines whether a re-entrant observer can see stale state.
+
+Rule: **if you need an `await` between checking a state-enum's current case and writing the next one, introduce a transitional sentinel case** (`.starting`, `.draining`, `.finalizing`) so a re-entrant observer sees in-progress state, not the prior steady state. Claim the sentinel synchronously before the first `await`; roll it back to `.idle` on any thrown error. Wrap the body in `do/catch` so the rollback is structural, not dependent on which `await` throws.
+
+Canonical example: `TheGetaway.handleStartRecording` used to read `recordingPhase`, then `await TheStakeout.startRecording`, then write `.recording`. A second `start_recording` arriving during the await could observe `.idle` and create a competing TheStakeout. PR #356 introduced `.starting` claimed before the first await; the second caller now sees `.starting` and is rejected. Fixed at `ButtonHeist/Sources/TheInsideJob/TheGetaway/TheGetaway+Recording.swift`. This pattern generalizes to any actor or `@MainActor` type with a multi-phase lifecycle.
+
+## Wire-Message Exhaustivity Discipline
+
+The implicit contract on every wire-message switch (`ServerMessage`, `ClientMessage`, `ConnectionEvent`, transport-layer enums): **every case either broadcasts to the canonical observer (`onEvent`, `onSend`, etc.) or carries an explicit `// no-op: consumed at $level because $reason` comment.** A `case .X: break` with no comment is a code smell.
+
+Canonical bug: PR #348's `case .pong: logger.debug(...)` had no fall-through, silently swallowing every pong before it could reach `onEvent`. The recording-during-finalize false-disconnect bug existed across two releases because the contract was implicit. Now `case .X: break` in `DeviceConnection.swift`, `TheHandoff.swift`, and `SimpleSocketServer.swift` is flagged by the `agent_wire_message_arm_no_op_break` lint rule. New wire-dispatch sites need to be added to that rule's `included:` regex in `.swiftlint.yml`.
+
+## Smoke-Test Reflex
+
+Process discipline, not a lint rule. **PRs that touch `TheFence.Command` dispatch, CLI commands, MCP tools, or wire types require a smoke test against BH Demo, with results posted in the PR body.** Internal refactors (visibility-only, comment cleanup, structural moves with no behavior change) are exempt.
+
+Why: PR #348 (recording-during-finalize false-disconnect) was a real shipped bug. The vibe-code structural audit didn't find it. The concurrency cleanup audit didn't find it. The pattern-matching audits look for stereotypes; novel bugs need someone driving the code end-to-end. The smoke test is the durable defense against the next class of #348-shape bug. Its value depends entirely on enforcement at review time — call it out when a user-facing PR ships without one.
 
 ## CLI-First Development
 
@@ -612,13 +647,33 @@ Recordings are saved to `demos/` with timestamped filenames. Default settings: `
 
 ## AccessibilitySnapshotBH Submodule
 
-The `AccessibilitySnapshotBH` submodule points at our fork (`RoyalPineapple/AccessibilitySnapshotBH`) on `main`. Upstream is `cashapp/AccessibilitySnapshot` (default branch: `main`). Our `main` is rebased on upstream `main` and carries five targeted commits:
+The `AccessibilitySnapshotBH` submodule points at our fork (`RoyalPineapple/AccessibilitySnapshotBH`) on `main`. Upstream is `cashapp/AccessibilitySnapshot` (default branch: `main`). Our `main` is rebased on upstream `main` and carries sixteen targeted commits, grouped by theme:
 
-1. `elementVisitor` closure on the hierarchy parser + xcodegen project support
-2. `Hashable` conformance on `AccessibilityElement`
-3. `traitNames` computed property and `fromNames` static method on UIAccessibilityTraits
-4. `containerVisitor` closure on the hierarchy parser + `.scrollable(contentSize:)` container type
-5. Popover modal sibling fix: traverse from the last modal subview onward (`subviews[lastModalIndex...]`) so popover content presented as a sibling after an empty dismiss region is not dropped
+**Parser callbacks (extend traversal without forking the parser):**
+1. `elementVisitor` closure on the hierarchy parser + xcodegen project support (`7bc066b`)
+2. `containerVisitor` closure on the hierarchy parser + `.scrollable(contentSize:)` container type (`ca1dab4`)
+
+**Hashability / API surface:**
+3. `Hashable` conformance on `AccessibilityElement` (`21a185e`)
+4. `Hashable` conformance on `AccessibilityContainer` (`b860f72`)
+5. `traitNames` computed property and `fromNames` static method on `UIAccessibilityTraits` (`3095337`)
+6. `knownTraitNames` set as authoritative trait-name API (`0e1e08e`)
+
+**Scrollable container discovery:**
+7. Discover inner HostingScrollViews inside PlatformContainers (`410c58d`)
+8. Narrow `_accessibilityIsScrollable` detection to avoid false positives (`5b64d56`)
+9. Rename scrollable trait → textArea at bit 47 (`413f0e1`)
+
+**Defensive parser hardening:**
+10. Stop pruning zero-frame views in accessibility tree walk (`f6093b7`)
+11. Scope tab-bar memoization cache to parse-call lifetime (`8f399f4`)
+12. Guard `accessibilityPath` against degenerate bounds (`17d2266`)
+13. Don't crash the host process when the parser hits an unexpected hierarchy (`5b2a9f9`)
+
+**Targeted fixes:**
+14. Fix popover modal hierarchy parsing (`dd30d24`)
+15. Remove broken parser resilience test (`83d29ef`)
+16. Remove duplicate `secureTextField` entry from `knownTraits` table (`5551c6b` — was shipping `["secureTextField", "secureTextField"]` on every secure text field; Program 5 audit Finding #1)
 
 **Rules for this submodule:**
 - Only touch files in the hierarchy parser (`Sources/AccessibilitySnapshot/Parser/`).

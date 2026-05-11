@@ -35,7 +35,7 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
         do {
             _ = try await server.startAsync(port: 0, bindToLoopback: true)
             XCTFail("Expected alreadyRunning error on double start")
-        } catch let error as SimpleSocketServer.ServerError {
+        } catch let error as SimpleSocketServer.SocketServerError {
             XCTAssertEqual(error, .alreadyRunning)
         }
     }

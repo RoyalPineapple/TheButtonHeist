@@ -105,7 +105,7 @@ actor SimpleSocketServer {
         callbacks: Callbacks? = nil
     ) async throws -> UInt16 {
         guard case .stopped = serverPhase else {
-            throw ServerError.alreadyRunning
+            throw SocketServerError.alreadyRunning
         }
 
         if let callbacks { self.callbacks = callbacks }
@@ -136,7 +136,7 @@ actor SimpleSocketServer {
                         logger.info("Listening on port \(port)")
                         continuation.resume(returning: port)
                     } else {
-                        continuation.resume(throwing: ServerError.failedToBindPort)
+                        continuation.resume(throwing: SocketServerError.failedToBindPort)
                     }
                 case .failed(let error):
                     let shouldResume = resumed.withLock { flag -> Bool in
@@ -522,7 +522,7 @@ actor SimpleSocketServer {
 
     // MARK: - Errors
 
-    enum ServerError: Error, LocalizedError, Equatable {
+    enum SocketServerError: Error, LocalizedError, Equatable {
         case failedToBindPort
         case alreadyRunning
 
