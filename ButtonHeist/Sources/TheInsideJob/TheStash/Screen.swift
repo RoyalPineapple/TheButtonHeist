@@ -1,0 +1,179 @@
+#if canImport(UIKit)
+#if DEBUG
+import UIKit
+
+import TheScore
+
+import AccessibilitySnapshotParser
+
+// MARK: - Screen Value Type
+
+/// Immutable snapshot of one screen state. Pure value semantics.
+///
+/// `Screen` is the currency type for the resolution layer post-0.2.25. It
+/// replaces the dozen mutable fields previously held on TheStash
+/// (`heistIdIndex`, `currentHierarchy`, `reverseIndex`, `viewportIds`,
+/// `currentContainers`, `firstResponderHeistId`, `lastScreenName`, ...) with
+/// a single immutable value. TheStash holds exactly one mutable field of
+/// this type — `currentScreen` — and rebinds it on every parse / merge.
+///
+/// Exploration accumulates a local `var union: Screen` in the caller; the
+/// final union is committed by writing it back into `stash.currentScreen`.
+/// TheStash never knows whether an exploration is in progress.
+///
+/// `name` and `id` are derived from the hierarchy on demand — never stored
+/// — so they cannot drift from the underlying tree.
+struct Screen: Equatable {
+
+    /// HeistId → element entry. `Set(elements.keys)` is the viewport heistId
+    /// set — there's no separate `viewportIds` field.
+    let elements: [String: ScreenElement]
+
+    /// The parsed accessibility hierarchy. Used for matcher resolution,
+    /// scroll-target discovery, and wire tree construction.
+    let hierarchy: [AccessibilityHierarchy]
+
+    /// HeistId of the element whose live object is currently first responder.
+    let firstResponderHeistId: String?
+
+    /// Maps scrollable containers from the hierarchy to their backing UIView.
+    /// Rebuilt on each parse. Stored as `ScrollableViewRef` so `Screen` can be
+    /// `Equatable` and `Sendable` — UIView itself is neither — while keeping
+    /// the live reference available for scroll dispatch.
+    let scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
+
+    static var empty: Screen {
+        Screen(
+            elements: [:],
+            hierarchy: [],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
+    }
+
+    // MARK: - Element Entry
+
+    // An element entry for the current screen. Holds the parsed
+    // `AccessibilityElement`, the assigned heistId, the content-space origin
+    // for scroll-target maths, and weak references to the live UIKit objects.
+    //
+    // `@unchecked Sendable` rationale: holds `weak NSObject` / `weak UIScrollView`
+    // refs. The type lives behind `@MainActor` (TheStash) at every runtime
+    // touchpoint, so weak refs are only observed on the main actor. Equatable
+    // compares heistId + parsed element + origin only; weak object identity is
+    // intentionally excluded.
+    // swiftlint:disable:next agent_unchecked_sendable_no_comment
+    struct ScreenElement: @unchecked Sendable, Equatable {
+        let heistId: String
+        /// Content-space position within nearest scrollable container.
+        /// nil if not inside a scrollable.
+        let contentSpaceOrigin: CGPoint?
+        /// Parsed accessibility element (refreshed on every parse).
+        let element: AccessibilityElement
+        /// Live UIKit object for action dispatch. Weak — nils on cell reuse.
+        weak var object: NSObject?
+        /// Parent scroll view for coordinate conversion. Weak — outlives children.
+        weak var scrollView: UIScrollView?
+
+        static func == (lhs: ScreenElement, rhs: ScreenElement) -> Bool {
+            lhs.heistId == rhs.heistId
+                && lhs.contentSpaceOrigin == rhs.contentSpaceOrigin
+                && lhs.element == rhs.element
+        }
+    }
+
+    // Wrapper around a weak `UIView` so we can store the map in an `Equatable`
+    // / `Sendable` value type. Equality compares the live view's object
+    // identity; equal if both are nil.
+    // `@unchecked Sendable` rationale: UIView is non-Sendable but the wrapper
+    // is only touched on `@MainActor`.
+    // swiftlint:disable:next agent_unchecked_sendable_no_comment
+    struct ScrollableViewRef: @unchecked Sendable, Equatable {
+        weak var view: UIView?
+
+        static func == (lhs: ScrollableViewRef, rhs: ScrollableViewRef) -> Bool {
+            switch (lhs.view, rhs.view) {
+            case (nil, nil):
+                return true
+            case let (left?, right?):
+                return left === right
+            default:
+                return false
+            }
+        }
+    }
+
+    // MARK: - Derived Properties
+
+    /// Derive the screen name from the first header element in traversal
+    /// order. Not stored — recomputed on access so it cannot drift from
+    /// `hierarchy`.
+    var name: String? {
+        hierarchy.sortedElements.first {
+            $0.traits.contains(.header) && $0.label != nil
+        }?.label
+    }
+
+    /// Slugified screen name for machine use (e.g. "controls_demo").
+    var id: String? {
+        TheScore.slugify(name)
+    }
+
+    /// The heistId set of every element on screen.
+    var heistIds: Set<String> {
+        Set(elements.keys)
+    }
+
+    // MARK: - Lookup
+
+    /// O(1) heistId lookup.
+    func findElement(heistId: String) -> ScreenElement? {
+        elements[heistId]
+    }
+
+    // MARK: - Merge
+
+    /// Union two screens. Used by exploration to accumulate the full tree
+    /// across many parses.
+    ///
+    /// Conflict rule (heistId in both `self` and `other`):
+    /// - `element` (the parsed AccessibilityElement): take `other`'s — newer
+    ///   parse, more current state.
+    /// - `contentSpaceOrigin`: take `other`'s when non-nil; otherwise preserve
+    ///   `self`'s. A page that scrolled out of a scroll view retains its
+    ///   recorded origin.
+    /// - `object` / `scrollView` weak refs: take `other`'s — newer is more
+    ///   current.
+    ///
+    /// `hierarchy` and `firstResponderHeistId` take `other`'s. `hierarchy` is
+    /// the live snapshot, not a unionable tree — accumulating it across
+    /// scrolled pages would mix stale geometry with live geometry. Code that
+    /// needs the "all elements ever seen on this screen" view reads
+    /// `elements`, not `hierarchy`.
+    func merging(_ other: Screen) -> Screen {
+        var mergedElements = elements
+        for (heistId, otherEntry) in other.elements {
+            if let existing = mergedElements[heistId] {
+                let mergedOrigin = otherEntry.contentSpaceOrigin ?? existing.contentSpaceOrigin
+                mergedElements[heistId] = ScreenElement(
+                    heistId: otherEntry.heistId,
+                    contentSpaceOrigin: mergedOrigin,
+                    element: otherEntry.element,
+                    object: otherEntry.object ?? existing.object,
+                    scrollView: otherEntry.scrollView ?? existing.scrollView
+                )
+            } else {
+                mergedElements[heistId] = otherEntry
+            }
+        }
+        return Screen(
+            elements: mergedElements,
+            hierarchy: other.hierarchy,
+            firstResponderHeistId: other.firstResponderHeistId,
+            scrollableContainerViews: other.scrollableContainerViews
+        )
+    }
+}
+
+#endif // DEBUG
+#endif // canImport(UIKit)

@@ -15,7 +15,9 @@
 		040064927E639E4DD26A5D5E /* String+PathValidation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B81B7B89A758E15463329565 /* String+PathValidation.swift */; };
 		04912A64AC25EE9FBAF9E407 /* ClientMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6D73BFA5255C8A2DF49F8F9 /* ClientMessageTests.swift */; };
 		075005209685BC2EAE669585 /* RecordingPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EB78C05290143B3FE6E3F55 /* RecordingPayloadTests.swift */; };
+		09987A8680B07DB479C74267 /* Screen.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD54BF184FD9589D4A4A9804 /* Screen.swift */; };
 		0B727DFA33963386D57AA5BD /* AuthFailureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FABF374ED46E8B26F4A831C2 /* AuthFailureTests.swift */; };
+		0DB249CA4805D5D002B7E9FF /* ScreenTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD60080E4BE14A994AC72411 /* ScreenTests.swift */; };
 		0E433A911382DEAA1212EDD7 /* ClientMessages+TouchTargets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46B5611AC70709F078B75945 /* ClientMessages+TouchTargets.swift */; };
 		12AC8757F939E21B034993A9 /* TheFence+Formatting+Compact.swift in Sources */ = {isa = PBXBuildFile; fileRef = 767DEE6FAE03706BA7D58223 /* TheFence+Formatting+Compact.swift */; };
 		14FD6C0CDE2EE60E1805F245 /* TheFingerprints.swift in Sources */ = {isa = PBXBuildFile; fileRef = D12CAE8F1C0CE5FAD5BB0B5A /* TheFingerprints.swift */; };
@@ -154,6 +156,7 @@
 		AFD104EF34BC1E4ED6307F06 /* TheStashTopologyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30CD02372F0B9944AC144EC6 /* TheStashTopologyTests.swift */; };
 		B259D7CF0E8D1620C5E8746B /* TargetConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = D658B41B7C2302B143935342 /* TargetConfig.swift */; };
 		B3B60CEE70503F5540175694 /* InterfaceNodeWireShapeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59167F6D075D3BE45EFAD87F /* InterfaceNodeWireShapeTests.swift */; };
+		B3CE3A23E2692549AA000FCB /* SynthesisDeterminismTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78915572C3F6D6F56146906D /* SynthesisDeterminismTests.swift */; };
 		B54E9C9ABD76E906EAEECFD1 /* DeviceConnectionReceiveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D1CD4282C3885E93C6D8CA /* DeviceConnectionReceiveTests.swift */; };
 		B567A9FA76509594564D7D3B /* swift-crypto_CCryptoBoringSSLShims.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 6777391A168B3CB3695C0BCF /* swift-crypto_CCryptoBoringSSLShims.bundle */; };
 		B95536B7E5A8E22D64FD70D7 /* TheFenceTestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14CA15622C9C76309BC21D90 /* TheFenceTestHelpers.swift */; };
@@ -434,6 +437,7 @@
 		71E06AB2C57CE2C760F6BF8F /* TheStashResolutionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheStashResolutionTests.swift; sourceTree = "<group>"; };
 		73F7188B4AF419243A2EE76F /* HeistPlaybackReportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistPlaybackReportTests.swift; sourceTree = "<group>"; };
 		767DEE6FAE03706BA7D58223 /* TheFence+Formatting+Compact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+Formatting+Compact.swift"; sourceTree = "<group>"; };
+		78915572C3F6D6F56146906D /* SynthesisDeterminismTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynthesisDeterminismTests.swift; sourceTree = "<group>"; };
 		78E08CC045CD0C77114CCCD5 /* TheSafecracker+Bezier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+Bezier.swift"; sourceTree = "<group>"; };
 		797239827C8461DA6F51C8DB /* DiagnosticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsTests.swift; sourceTree = "<group>"; };
 		7A759CD7776997CD4951BF16 /* TheBrains.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheBrains.swift; sourceTree = "<group>"; };
@@ -492,6 +496,8 @@
 		C879C6DB96F32E5D65B8BBB4 /* TheBookKeeper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheBookKeeper.swift; sourceTree = "<group>"; };
 		C9506D9D84CD17AEC619D171 /* DiscoveredDeviceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveredDeviceTests.swift; sourceTree = "<group>"; };
 		C9D1CD4282C3885E93C6D8CA /* DeviceConnectionReceiveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceConnectionReceiveTests.swift; sourceTree = "<group>"; };
+		CD54BF184FD9589D4A4A9804 /* Screen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screen.swift; sourceTree = "<group>"; };
+		CD60080E4BE14A994AC72411 /* ScreenTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenTests.swift; sourceTree = "<group>"; };
 		CDD59EB8684A62ABBB0EFEF4 /* TheTripwireTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheTripwireTests.swift; sourceTree = "<group>"; };
 		CE34C2217F0FC3C805F20ED3 /* TheStash+Capture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheStash+Capture.swift"; sourceTree = "<group>"; };
 		CF2F586190CE1CB11AC6617B /* TheSafecracker+TapDiagnostic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+TapDiagnostic.swift"; sourceTree = "<group>"; };
@@ -768,6 +774,7 @@
 				BEF65E26EF4959C85C071973 /* IdAssignment.swift */,
 				10D4AA78D802F6F18119E5F4 /* Interactivity.swift */,
 				019DA0BC7B9EF8136B777588 /* RegistryNode+Walks.swift */,
+				CD54BF184FD9589D4A4A9804 /* Screen.swift */,
 				951C56AB163FAFB179DFDA9B /* TheStash.swift */,
 				CE34C2217F0FC3C805F20ED3 /* TheStash+Capture.swift */,
 				0108809EB5567BB0C5665090 /* TheStash+Matching.swift */,
@@ -924,8 +931,10 @@
 				ACA020DEAF0DB6FFA0BB3B27 /* PingFastPathTests.swift */,
 				C3471869CA78AB09EF66258C /* PresentationObscuringTests.swift */,
 				EB3D029B36F545CDF36A7BE5 /* ScreenManifestTests.swift */,
+				CD60080E4BE14A994AC72411 /* ScreenTests.swift */,
 				F70806BEB61DC6949980DC78 /* SettleSessionTests.swift */,
 				4678F3C0E9535AC77ABF6CAB /* SimpleSocketServerIntegrationTests.swift */,
+				78915572C3F6D6F56146906D /* SynthesisDeterminismTests.swift */,
 				23AABE85FC77329552681A4C /* TestSentinelTask.swift */,
 				4ED50A9A94649523608BDE72 /* TheBrainsActionTests.swift */,
 				A63CE2190936B721E21C76CE /* TheBrainsPipelineTests.swift */,
@@ -1376,6 +1385,7 @@
 				663B7AFA3CFAA5E5C89911F9 /* IdAssignment.swift in Sources */,
 				4E025AADAFC3705425334617 /* Interactivity.swift in Sources */,
 				8C8119AE3B0BA5B2851A5F03 /* RegistryNode+Walks.swift in Sources */,
+				09987A8680B07DB479C74267 /* Screen.swift in Sources */,
 				475C23DE0FA87D9D78D1DB5A /* TheStash+Capture.swift in Sources */,
 				871194C060FF486DFB34A4C6 /* TheStash+Matching.swift in Sources */,
 				97376AD47CD2A760A727ABE8 /* TheStash.swift in Sources */,
@@ -1477,8 +1487,10 @@
 				47404E80361396D5585D1421 /* PingFastPathTests.swift in Sources */,
 				F27EFB3BFD5F772ACEB4BAE6 /* PresentationObscuringTests.swift in Sources */,
 				15E21D8057F2471052C0CE95 /* ScreenManifestTests.swift in Sources */,
+				0DB249CA4805D5D002B7E9FF /* ScreenTests.swift in Sources */,
 				FE72B37DE95E9832FD509DCB /* SettleSessionTests.swift in Sources */,
 				3F45E437D048808E37C101C9 /* SimpleSocketServerIntegrationTests.swift in Sources */,
+				B3CE3A23E2692549AA000FCB /* SynthesisDeterminismTests.swift in Sources */,
 				ADEBEB61F1B3DE1E04595B5F /* TLSIdentityTests.swift in Sources */,
 				A1DBD280620BA4EE8B43FAD8 /* TLSIntegrationTests.swift in Sources */,
 				856D3288A1E027D75B1EB28C /* TestSentinelTask.swift in Sources */,
@@ -1757,6 +1769,10 @@
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
 					"$(SRCROOT)/submodules/AccessibilitySnapshotBH/Sources/AccessibilitySnapshot/Parser/ObjC/include",
+					"$(inherited)",
+					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
+					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
+					"$(SRCROOT)/submodules/AccessibilitySnapshotBH/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 				);
 				INFOPLIST_FILE = "Derived/InfoPlists/TheInsideJobTests-Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -1804,6 +1820,10 @@
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
+					"$(inherited)",
+					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
+					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
+					"$(SRCROOT)/submodules/AccessibilitySnapshotBH/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 					"$(inherited)",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
@@ -1858,6 +1878,10 @@
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
+					"$(inherited)",
+					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
+					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
+					"$(SRCROOT)/submodules/AccessibilitySnapshotBH/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 					"$(inherited)",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
@@ -2037,6 +2061,7 @@
 				LastSwiftMigration = 2620;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SRCROOT = "/Users/aodawa/Development/accra/.claude/worktrees/agent-a40fbf83";
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 				SWIFT_VERSION = 6;
 				VALIDATE_PRODUCT = YES;
@@ -2100,6 +2125,7 @@
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SRCROOT = "/Users/aodawa/Development/accra/.claude/worktrees/agent-a40fbf83";
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 				SWIFT_VERSION = 6;
 			};
@@ -2131,6 +2157,10 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
+					"$(inherited)",
+					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
+					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
+					"$(SRCROOT)/submodules/AccessibilitySnapshotBH/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 					"$(inherited)",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
