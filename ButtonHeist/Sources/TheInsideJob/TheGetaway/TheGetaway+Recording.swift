@@ -45,8 +45,16 @@ extension TheGetaway {
             let recorder = TheStakeout(captureFrame: { @MainActor [brains] in
                 brains.captureScreenForRecording()
             })
+            // The completion handler signature is sync (@MainActor @Sendable).
+            // `deliverRecordingResult` is async because it awaits the two
+            // outbound broadcasts in FIFO order. Bridge with a Task hop on
+            // MainActor: there is only one recording-complete event per
+            // session, so unlike the broadcast pipeline there is no FIFO
+            // contention to lose between handler invocations.
             await recorder.setOnRecordingComplete { [weak self] result in
-                self?.deliverRecordingResult(result)
+                Task { @MainActor [weak self] in
+                    await self?.deliverRecordingResult(result)
+                }
             }
 
             // Capture screen metrics on MainActor (we are the MainActor here) and pass
@@ -75,7 +83,7 @@ extension TheGetaway {
     /// `start_recording --max-duration N` hangs until its 35s wait times
     /// out and the payload sits server-side until a later `stop_recording`
     /// drains `completedRecording`.
-    func deliverRecordingResult(_ result: Result<RecordingPayload, Error>) {
+    func deliverRecordingResult(_ result: Result<RecordingPayload, Error>) async {
         recordingPhase = .idle
         brains.stakeout = nil
         completedRecording = result
@@ -94,10 +102,10 @@ extension TheGetaway {
 
         switch result {
         case .success(let payload):
-            broadcastToAll(.recording(payload))
-            broadcastToAll(.recordingStopped)
+            await broadcastToAll(.recording(payload))
+            await broadcastToAll(.recordingStopped)
         case .failure(let error):
-            broadcastToAll(.error(ServerError(kind: .recording, message: error.localizedDescription)))
+            await broadcastToAll(.error(ServerError(kind: .recording, message: error.localizedDescription)))
         }
     }
 

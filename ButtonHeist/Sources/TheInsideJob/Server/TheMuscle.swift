@@ -194,9 +194,9 @@ actor TheMuscle {
 
     // MARK: - Callbacks (set by TheInsideJob)
 
-    var sendToClient: (@Sendable (_ data: Data, _ clientId: Int) -> Void)?
-    var markClientAuthenticated: (@Sendable (_ clientId: Int) -> Void)?
-    var disconnectClient: (@Sendable (_ clientId: Int) -> Void)?
+    var sendToClient: (@Sendable (_ data: Data, _ clientId: Int) async -> Void)?
+    var markClientAuthenticated: (@Sendable (_ clientId: Int) async -> Void)?
+    var disconnectClient: (@Sendable (_ clientId: Int) async -> Void)?
     var onClientAuthenticated: (@Sendable (_ clientId: Int, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
     /// Called when the session active state changes (true = session claimed, false = released)
     var onSessionActiveChanged: (@Sendable (_ isActive: Bool) -> Void)?
@@ -232,9 +232,9 @@ actor TheMuscle {
     /// Bundles assignment into a single actor hop so the consumer doesn't pay
     /// five `await`s.
     func installCallbacks(
-        sendToClient: @escaping @Sendable (Data, Int) -> Void,
-        markClientAuthenticated: @escaping @Sendable (Int) -> Void,
-        disconnectClient: @escaping @Sendable (Int) -> Void,
+        sendToClient: @escaping @Sendable (Data, Int) async -> Void,
+        markClientAuthenticated: @escaping @Sendable (Int) async -> Void,
+        disconnectClient: @escaping @Sendable (Int) async -> Void,
         onClientAuthenticated: @escaping @Sendable (Int, @escaping @Sendable (Data) -> Void) -> Void,
         onSessionActiveChanged: @escaping @Sendable (Bool) -> Void
     ) {
@@ -252,9 +252,9 @@ actor TheMuscle {
         clients[clientId] = .connected(address: address)
     }
 
-    func sendServerHello(clientId: Int) {
+    func sendServerHello(clientId: Int) async {
         guard let data = encodeEnvelope(.serverHello) else { return }
-        sendToClient?(data, clientId)
+        await sendToClient?(data, clientId)
     }
 
     /// Called when a ping is received from an authenticated client.
@@ -279,16 +279,23 @@ actor TheMuscle {
     }
 
     /// Send data to all subscribed clients.
-    func broadcastToSubscribed(_ data: Data) {
+    ///
+    /// Awaits each per-client send so the subscribers receive the data in
+    /// the iteration order, and so two back-to-back `broadcastToSubscribed`
+    /// calls deliver in FIFO order. The previous shape spawned an
+    /// independent Task per subscriber, which Swift makes no ordering
+    /// guarantee for — the broadcast-FIFO risk that the cross-cutting audit
+    /// Finding 5 called out.
+    func broadcastToSubscribed(_ data: Data) async {
         for (clientId, phase) in clients where phase.isSubscribed {
-            sendToClient?(data, clientId)
+            await sendToClient?(data, clientId)
         }
     }
 
-    func handleUnauthenticatedMessage(_ clientId: Int, data: Data, respond: @escaping @Sendable (Data) -> Void) {
+    func handleUnauthenticatedMessage(_ clientId: Int, data: Data, respond: @escaping @Sendable (Data) -> Void) async {
         guard let envelope = decodeRequest(data) else {
             logger.warning("Client \(clientId) sent unparsable message before authenticating, disconnecting")
-            disconnectClient?(clientId)
+            await disconnectClient?(clientId)
             return
         }
 
@@ -315,27 +322,27 @@ actor TheMuscle {
         case .watch(let payload):
             guard clients[clientId]?.hasCompletedHello == true else {
                 logger.warning("Client \(clientId) attempted watch before hello")
-                disconnectClient?(clientId)
+                await disconnectClient?(clientId)
                 return
             }
-            handleWatchRequest(clientId, payload: payload, respond: respond)
+            await handleWatchRequest(clientId, payload: payload, respond: respond)
             return
         case .authenticate(let payload):
             guard clients[clientId]?.hasCompletedHello == true else {
                 logger.warning("Client \(clientId) attempted auth before hello")
-                disconnectClient?(clientId)
+                await disconnectClient?(clientId)
                 return
             }
-            processAuthentication(clientId, payload: payload, respond: respond)
+            await processAuthentication(clientId, payload: payload, respond: respond)
             return
         default:
             logger.warning("Client \(clientId) sent invalid pre-auth message, disconnecting")
-            disconnectClient?(clientId)
+            await disconnectClient?(clientId)
             return
         }
     }
 
-    private func processAuthentication(_ clientId: Int, payload: AuthenticatePayload, respond: @escaping @Sendable (Data) -> Void) {
+    private func processAuthentication(_ clientId: Int, payload: AuthenticatePayload, respond: @escaping @Sendable (Data) -> Void) async {
         guard let phase = clients[clientId] else {
             logger.warning("Client \(clientId) has no registered address, rejecting auth")
             sendMessage(.error(ServerError(kind: .authFailure, message: "Connection rejected.")), respond: respond)
@@ -378,20 +385,20 @@ actor TheMuscle {
         }
 
         clients[clientId] = .authenticated(address: address, driverIdentity: driverIdentity, subscribed: false)
-        markClientAuthenticated?(clientId)
+        await markClientAuthenticated?(clientId)
         logger.info("Client \(clientId) authenticated with token")
         onClientAuthenticated?(clientId, respond)
     }
 
-    func handleClientDisconnected(_ clientId: Int) {
+    func handleClientDisconnected(_ clientId: Int) async {
         let removed = clients.removeValue(forKey: clientId)
         if case .pendingApproval = removed {
-            dismissAlert()
+            await dismissAlert()
         }
         removeSessionConnection(clientId)
     }
 
-    func approveClient(_ clientId: Int) {
+    func approveClient(_ clientId: Int) async {
         guard case .pendingApproval(let address, let respond, _, let driverId) = clients[clientId] else { return }
 
         let driverIdentity = effectiveDriverId(driverId: driverId, token: sessionToken)
@@ -400,7 +407,7 @@ actor TheMuscle {
         }
 
         clients[clientId] = .authenticated(address: address, driverIdentity: driverIdentity, subscribed: false)
-        markClientAuthenticated?(clientId)
+        await markClientAuthenticated?(clientId)
         logger.info("Client \(clientId) approved via UI")
         sendMessage(.authApproved(AuthApprovedPayload(token: sessionToken)), respond: respond)
         onClientAuthenticated?(clientId, respond)
@@ -414,7 +421,7 @@ actor TheMuscle {
         scheduleDelayedDisconnect(clientId)
     }
 
-    func tearDown() {
+    func tearDown() async {
         clients.removeAll()
         for task in lockoutTasks.values {
             task.cancel()
@@ -426,7 +433,7 @@ actor TheMuscle {
         // documents the intent at the shutdown boundary.
         cancelTimerIfDraining()
         releaseSession()
-        dismissAlert()
+        await dismissAlert()
     }
 
     // MARK: - Delayed Disconnect
@@ -454,8 +461,8 @@ actor TheMuscle {
 
     /// Called from the delayed-disconnect Task body to actually fire the
     /// `disconnectClient` callback while inside actor isolation.
-    private func fireDisconnect(_ clientId: Int) {
-        disconnectClient?(clientId)
+    private func fireDisconnect(_ clientId: Int) async {
+        await disconnectClient?(clientId)
     }
 
     /// Drop a finished/cancelled lockout task from the tracking dictionary.
@@ -487,7 +494,7 @@ actor TheMuscle {
     /// Handle a watch request from an unauthenticated client.
     /// Observers require token authentication by default. Set INSIDEJOB_RESTRICT_WATCHERS=0
     /// to allow unauthenticated observers. Observers never claim a session.
-    private func handleWatchRequest(_ clientId: Int, payload: WatchPayload, respond: @escaping @Sendable (Data) -> Void) {
+    private func handleWatchRequest(_ clientId: Int, payload: WatchPayload, respond: @escaping @Sendable (Data) -> Void) async {
         if restrictWatchers {
             guard let phase = clients[clientId] else {
                 sendMessage(.error(ServerError(kind: .authFailure, message: "Connection rejected.")), respond: respond)
@@ -519,14 +526,14 @@ actor TheMuscle {
             }
             clearFailedAttempts(address: address)
         }
-        approveObserver(clientId, respond: respond)
+        await approveObserver(clientId, respond: respond)
     }
 
     /// Approve an observer directly (no UI needed)
-    private func approveObserver(_ clientId: Int, respond: @escaping @Sendable (Data) -> Void) {
+    private func approveObserver(_ clientId: Int, respond: @escaping @Sendable (Data) -> Void) async {
         guard let phase = clients[clientId] else { return }
         clients[clientId] = .observer(address: phase.address, subscribed: true)
-        markClientAuthenticated?(clientId)
+        await markClientAuthenticated?(clientId)
         sendMessage(.authApproved(AuthApprovedPayload()), respond: respond)
         logger.info("Observer \(clientId) approved (no session lock)")
         onClientAuthenticated?(clientId, respond)
@@ -718,11 +725,8 @@ actor TheMuscle {
         }
     }
 
-    private func dismissAlert() {
-        let presenter = alerts
-        Task { @MainActor in
-            presenter.dismiss()
-        }
+    private func dismissAlert() async {
+        await alerts.dismiss()
     }
 
     // MARK: - Helpers

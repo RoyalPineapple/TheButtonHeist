@@ -75,14 +75,20 @@ final class TheGetaway {
         // onClientAuthenticated bridge hops through an unstructured Task too.
         let muscle = self.muscle
         let server = transport.server
-        let sendToClient: @Sendable (Data, Int) -> Void = { data, clientId in
-            Task { await server.send(data, to: clientId) }
+        // These closures are awaited inline at every TheMuscle call site so
+        // back-to-back sends/disconnects from one logical operation execute
+        // in FIFO order on the SimpleSocketServer actor. The previous
+        // fire-and-forget `Task { await server.foo(...) }` shape relied on
+        // Swift's unstructured-Task scheduling, which makes no FIFO
+        // guarantee — the cross-cutting audit's Finding 5.
+        let sendToClient: @Sendable (Data, Int) async -> Void = { data, clientId in
+            await server.send(data, to: clientId)
         }
-        let markAuth: @Sendable (Int) -> Void = { clientId in
-            Task { await server.markAuthenticated(clientId) }
+        let markAuth: @Sendable (Int) async -> Void = { clientId in
+            await server.markAuthenticated(clientId)
         }
-        let disconnect: @Sendable (Int) -> Void = { clientId in
-            Task { await server.disconnect(clientId: clientId) }
+        let disconnect: @Sendable (Int) async -> Void = { clientId in
+            await server.disconnect(clientId: clientId)
         }
         let onAuthenticated: @Sendable (Int, @escaping @Sendable (Data) -> Void) -> Void = { [weak self] clientId, respond in
             Task { @MainActor [weak self] in
@@ -293,23 +299,36 @@ final class TheGetaway {
         }
     }
 
-    func broadcastToSubscribed(_ message: ServerMessage) {
+    /// Broadcast a server message to every subscribed client.
+    ///
+    /// Awaits the per-subscriber sends so two back-to-back
+    /// `broadcastToSubscribed` calls deliver in FIFO order — the
+    /// outbound-broadcast risk that the cross-cutting audit's
+    /// Finding 5 called out.
+    func broadcastToSubscribed(_ message: ServerMessage) async {
         guard !message.isScreenshot else {
             insideJobLogger.error("Refusing to broadcast screenshot payload; screenshots must be requested explicitly")
             return
         }
         guard let data = encodeEnvelope(message) else { return }
-        let muscle = self.muscle
-        Task { await muscle.broadcastToSubscribed(data) }
+        await muscle.broadcastToSubscribed(data)
     }
 
-    func broadcastToAll(_ message: ServerMessage) {
+    /// Broadcast a server message to every authenticated client.
+    ///
+    /// Awaits the transport so two back-to-back `broadcastToAll` calls from
+    /// the same caller deliver in FIFO order. The previous sync shape used
+    /// fire-and-forget Tasks under the hood, which made no FIFO guarantee.
+    func broadcastToAll(_ message: ServerMessage) async {
         guard !message.isScreenshot else {
             insideJobLogger.error("Refusing to broadcast screenshot payload; screenshots must be requested explicitly")
             return
         }
         guard let data = encodeEnvelope(message) else { return }
-        transport?.broadcastToAll(data)
+        // Capture the Sendable SimpleSocketServer actor across the hop —
+        // ServerTransport itself is NSObject and non-Sendable.
+        guard let server = transport?.server else { return }
+        await server.broadcastToAll(data)
     }
 
     // MARK: - Response Helpers
@@ -370,13 +389,8 @@ final class TheGetaway {
         backgroundDelta: InterfaceDelta? = nil,
         respond: @escaping (Data) -> Void
     ) async {
-        if let stakeout, await stakeout.isRecording {
-            let event = InteractionEvent(
-                timestamp: await stakeout.recordingElapsed,
-                command: command,
-                result: actionResult
-            )
-            await stakeout.recordInteraction(event: event)
+        if let stakeout {
+            await stakeout.recordInteractionIfRecording(command: command, result: actionResult)
         }
 
         sendMessage(.actionResult(actionResult), requestId: requestId, backgroundDelta: backgroundDelta, respond: respond)
@@ -388,7 +402,7 @@ final class TheGetaway {
                 command: command,
                 result: actionResult
             )
-            broadcastToSubscribed(.interaction(event))
+            await broadcastToSubscribed(.interaction(event))
         }
     }
 
@@ -408,7 +422,7 @@ final class TheGetaway {
         }
         hierarchyInvalidated = false
 
-        broadcastToSubscribed(.interface(payload))
+        await broadcastToSubscribed(.interface(payload))
         if let stakeout {
             Task { await stakeout.noteScreenChange() }
         }

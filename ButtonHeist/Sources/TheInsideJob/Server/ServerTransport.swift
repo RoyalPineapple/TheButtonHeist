@@ -313,23 +313,30 @@ final class ServerTransport: NSObject {
     // MARK: - Message Sending
 
     /// Send data to a specific client.
-    nonisolated func send(_ data: Data, to clientId: Int) {
-        Task { [server] in await server.send(data, to: clientId) }
+    ///
+    /// Awaits the underlying actor send so two back-to-back `send`s issued
+    /// from the same caller execute in the order they were issued. The
+    /// previous fire-and-forget `Task { await server.send(...) }` shape
+    /// offered no FIFO guarantee — Swift does not order unstructured Tasks
+    /// targeting the same actor — which the cross-cutting audit's
+    /// Finding 5 called out as the broadcast-ordering risk.
+    nonisolated func send(_ data: Data, to clientId: Int) async {
+        await server.send(data, to: clientId)
     }
 
     /// Broadcast data to all authenticated clients.
-    nonisolated func broadcastToAll(_ data: Data) {
-        Task { [server] in await server.broadcastToAll(data) }
+    nonisolated func broadcastToAll(_ data: Data) async {
+        await server.broadcastToAll(data)
     }
 
     /// Mark a client as authenticated.
-    nonisolated func markAuthenticated(_ clientId: Int) {
-        Task { [server] in await server.markAuthenticated(clientId) }
+    nonisolated func markAuthenticated(_ clientId: Int) async {
+        await server.markAuthenticated(clientId)
     }
 
     /// Disconnect a specific client.
-    nonisolated func disconnect(clientId: Int) {
-        Task { [server] in await server.disconnect(clientId: clientId) }
+    nonisolated func disconnect(clientId: Int) async {
+        await server.disconnect(clientId: clientId)
     }
 }
 
