@@ -417,7 +417,7 @@ extension TheBrains {
     /// One-shot scroll: jump directly to a known element's position.
     /// If already visible, no-op. If the element has a recorded content-space
     /// position, computes the target offset and scrolls there in one shot.
-    /// Fails if the element is not in the registry or has no scroll position.
+    /// Fails if the element is not in the current screen or has no scroll position.
     func executeScrollToVisible(_ target: ScrollToVisibleTarget) async -> TheSafecracker.InteractionResult {
         guard let elementTarget = target.elementTarget else {
             return .failure(.scrollToVisible, message: "Element target required for scroll_to_visible")
@@ -448,13 +448,13 @@ extension TheBrains {
             return .failure(.scrollToVisible, message: "Element not visible after scrolling to recorded position")
         }
 
-        return .failure(.scrollToVisible, message: "Element not in registry or has no recorded scroll position. Use element_search to find unseen elements.")
+        return .failure(.scrollToVisible, message: "Element not in current screen or has no recorded scroll position. Use element_search to find unseen elements.")
     }
 
     // MARK: - Element Search (Iterative)
 
     /// Iterative search: page through scroll content looking for an element.
-    /// Used when the element has never been seen (not in the registry).
+    /// Used when the element has never been seen (not in the current screen).
     func executeElementSearch(_ target: ElementSearchTarget) async -> TheSafecracker.InteractionResult {
         guard let searchTarget = target.elementTarget else {
             return .failure(.elementSearch, message: "Element target required for element_search")

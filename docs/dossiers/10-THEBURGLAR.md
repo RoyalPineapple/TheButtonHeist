@@ -2,7 +2,9 @@
 
 > **File:** `TheBurglar.swift`
 > **Platform:** iOS 17.0+ (UIKit, DEBUG builds only)
-> **Role:** Reads the live accessibility tree and populates TheStash's registry
+> **Role:** Reads the live accessibility tree and produces a `Screen` value.
+
+> **⚠️ Dossier stale after 0.2.25.** This document still describes the pre-0.2.25 registry-mutating pipeline (`apply(_:to:)` setting `currentHierarchy`, calling `registry.register(...)`, etc). The current shape is: `parse()` returns a `ParseResult`, `buildScreen(from:)` returns a `Screen` value, and the caller (TheStash for single-shot, TheBrains+Exploration for accumulated union) decides when to commit. The registry no longer exists. See `ButtonHeist/Sources/TheInsideJob/TheBurglar/README.md` for the current shape and `.context/audit/0.2.25-screen-value-type.md` for the design rationale. **Full dossier rewrite is a tracked follow-up.**
 
 ## Responsibilities
 
