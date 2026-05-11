@@ -12,7 +12,7 @@ extension ConnectionScope {
     ///
     /// Pass `interfaceNames` from `NWConnection.currentPath?.availableInterfaces.map(\.name)`
     /// after the connection reaches `.ready` for precise classification.
-    public static func classify(host: NWEndpoint.Host, interfaceNames: [String] = []) -> ConnectionScope {
+    static func classify(host: NWEndpoint.Host, interfaceNames: [String] = []) -> ConnectionScope {
         // Loopback address = simulator
         switch host {
         case .ipv4(let addr):

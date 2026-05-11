@@ -9,28 +9,28 @@ private let reachabilityLogger = Logger(subsystem: "com.buttonheist.thehandoff",
 /// A discovered iOS device running TheInsideJob
 public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
     public let id: String
-    public let name: String
-    public let endpoint: NWEndpoint
+    let name: String
+    let endpoint: NWEndpoint
     /// Simulator UDID from Bonjour TXT record (nil on physical devices)
-    public let simulatorUDID: String?
+    let simulatorUDID: String?
     /// Stable installation identifier from Bonjour TXT record
-    public let installationId: String?
+    let installationId: String?
     /// Human-readable device name from Bonjour TXT record
-    public let displayDeviceName: String?
+    let displayDeviceName: String?
     /// Instance identifier from Bonjour TXT record (human-readable label)
-    public let instanceId: String?
+    let instanceId: String?
     /// Whether the device has an active session (from Bonjour TXT record)
-    public let sessionActive: Bool?
+    let sessionActive: Bool?
     /// TLS certificate fingerprint from Bonjour TXT record (sha256:hex)
-    public let certFingerprint: String?
+    let certFingerprint: String?
 
-    public init(id: String, name: String, endpoint: NWEndpoint,
-                simulatorUDID: String? = nil,
-                installationId: String? = nil,
-                displayDeviceName: String? = nil,
-                instanceId: String? = nil,
-                sessionActive: Bool? = nil,
-                certFingerprint: String? = nil) {
+    init(id: String, name: String, endpoint: NWEndpoint,
+         simulatorUDID: String? = nil,
+         installationId: String? = nil,
+         displayDeviceName: String? = nil,
+         instanceId: String? = nil,
+         sessionActive: Bool? = nil,
+         certFingerprint: String? = nil) {
         self.id = id
         self.name = name
         self.endpoint = endpoint
@@ -43,7 +43,7 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
     }
 
     /// Parse a "host:port" string and create a device. Returns nil on invalid input.
-    public static func fromHostPort(
+    static func fromHostPort(
         _ value: String,
         id: String? = nil,
         name: String? = nil,
@@ -61,7 +61,7 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
     }
 
     /// Convenience init for direct host:port connections (no Bonjour).
-    public init(host: String, port: UInt16) {
+    init(host: String, port: UInt16) {
         let endpoint = NWEndpoint.hostPort(
             host: NWEndpoint.Host(host),
             port: NWEndpoint.Port(integerLiteral: port)
@@ -71,7 +71,7 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
 
     /// Parse a direct loopback connection target from a filter string.
     /// Accepts `localhost`, `127.x.x.x`, and IPv6 loopback forms with a port.
-    public static func directConnectTarget(from filter: String?) -> DiscoveredDevice? {
+    static func directConnectTarget(from filter: String?) -> DiscoveredDevice? {
         guard let filter else { return nil }
         let trimmed = filter.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let (host, port) = parseHostPort(from: trimmed), isLoopbackHost(host) else {
@@ -80,7 +80,7 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
         return DiscoveredDevice(host: host, port: port)
     }
 
-    public var connectionType: ConnectionScope {
+    var connectionType: ConnectionScope {
         if simulatorUDID != nil { return .simulator }
         if id.hasPrefix("usb-") { return .usb }
         return .network
@@ -134,7 +134,7 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
 
     /// Short instance ID parsed from service name (e.g., "a1b2c3d4")
     /// Service name format: "AppName-DeviceName#shortId"
-    public var shortId: String? {
+    var shortId: String? {
         guard let hashIndex = name.firstIndex(of: "#") else { return nil }
         let id = String(name[name.index(after: hashIndex)...])
         return id.isEmpty ? nil : id
@@ -150,7 +150,7 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
 
     /// Parse the service name to extract app name and device name
     /// Service name format: "AppName#instanceId" (v3) or "AppName-DeviceName#shortId" (v2)
-    public var parsedName: (appName: String, deviceName: String)? {
+    var parsedName: (appName: String, deviceName: String)? {
         let baseName = nameWithoutId
         guard let lastDashIndex = baseName.lastIndex(of: "-") else { return nil }
         let appName = String(baseName[..<lastDashIndex])
@@ -161,12 +161,12 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
 
     /// App name extracted from service name
     /// For v3 format "AppName#id", returns the part before #
-    public var appName: String {
+    var appName: String {
         parsedName?.appName ?? nameWithoutId
     }
 
     /// Device name extracted from service name (empty for v3 format)
-    public var deviceName: String {
+    var deviceName: String {
         displayDeviceName ?? parsedName?.deviceName ?? ""
     }
 
@@ -182,7 +182,7 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
 
     /// Check if this device matches a filter string.
     /// Matches case-insensitively: contains on name/appName/deviceName, prefix on shortId/instanceId/simulatorUDID.
-    public func matches(filter: String) -> Bool {
+    func matches(filter: String) -> Bool {
         let low = filter.lowercased()
         return name.lowercased().contains(low) ||
             appName.lowercased().contains(low) ||
@@ -196,7 +196,7 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
 
 extension Array where Element == DiscoveredDevice {
     /// Return the first device matching the filter, or the first device if filter is nil.
-    public func first(matching filter: String?) -> DiscoveredDevice? {
+    func first(matching filter: String?) -> DiscoveredDevice? {
         guard let filter else { return first }
         return first { $0.matches(filter: filter) }
     }
@@ -204,7 +204,7 @@ extension Array where Element == DiscoveredDevice {
     /// Probe all devices in parallel and return only those that are reachable.
     /// Uses the Inside Job status RPC as a lightweight liveness check; devices
     /// that fail to respond with a valid status payload are treated as stale.
-    public func reachable(timeout: TimeInterval = 1.5) async -> [DiscoveredDevice] {
+    func reachable(timeout: TimeInterval = 1.5) async -> [DiscoveredDevice] {
         await withTaskGroup(of: (Int, DiscoveredDevice?).self) { group in
             for (index, device) in self.enumerated() {
                 group.addTask {

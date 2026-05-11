@@ -3,12 +3,12 @@ import Foundation
 /// Encapsulates the stabilize-then-probe device resolution algorithm.
 /// Used by both TheHandoff (framework) and DeviceConnector (CLI) to avoid duplication.
 @ButtonHeistActor
-public struct DeviceResolver {
-    public let filter: String?
-    public let discoveryTimeout: UInt64
-    public let getDiscoveredDevices: () -> [DiscoveredDevice]
+struct DeviceResolver {
+    let filter: String?
+    let discoveryTimeout: UInt64
+    let getDiscoveredDevices: () -> [DiscoveredDevice]
 
-    public init(
+    init(
         filter: String?,
         discoveryTimeout: UInt64,
         getDiscoveredDevices: @escaping () -> [DiscoveredDevice]
@@ -27,7 +27,7 @@ public struct DeviceResolver {
     /// is supplied with no matches. Throws `.noDeviceFound` if nothing appears
     /// before `discoveryTimeout` elapses. A `127.0.0.1:PORT` filter bypasses
     /// discovery entirely via `DiscoveredDevice.directConnectTarget`.
-    public func resolve() async throws -> DiscoveredDevice {
+    func resolve() async throws -> DiscoveredDevice {
         if let directDevice = DiscoveredDevice.directConnectTarget(from: filter) {
             return directDevice
         }

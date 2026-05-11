@@ -16,7 +16,7 @@ private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "
 /// through the callback to decide whether to reconnect. FenceError is
 /// the single thrown error type for all of TheFence, TheHandoff, and
 /// DeviceResolver.
-public enum DisconnectReason: Error, LocalizedError {
+enum DisconnectReason: Error, LocalizedError {
     case networkError(Error)
     case bufferOverflow
     case serverClosed
@@ -27,7 +27,7 @@ public enum DisconnectReason: Error, LocalizedError {
     case certificateMismatch
     case missingFingerprint
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .networkError(let error):
             return "Network error: \(error.localizedDescription)"
@@ -63,7 +63,7 @@ enum DeviceConnectionEvent: Sendable {
 
 /// Connection client using Network framework.
 @ButtonHeistActor
-public final class DeviceConnection: DeviceConnecting {
+final class DeviceConnection: DeviceConnecting {
 
     private static let maxBufferSize = 64 * 1024 * 1024
 
@@ -83,22 +83,20 @@ public final class DeviceConnection: DeviceConnecting {
     private let device: DiscoveredDevice
     private(set) var token: String?
 
-    public var isConnected: Bool {
+    var isConnected: Bool {
         if case .connected = connectionState { return true }
         return false
     }
 
-    // Effective isolation is @ButtonHeistActor (enclosing class is isolated);
-    // explicit annotation pending the public-callback annotation cleanup batch.
-    // swiftlint:disable:next agent_unannotated_public_callback
-    public var onEvent: ((ConnectionEvent) -> Void)?
-    public var autoRespondToAuthRequired = true
+    // Effective isolation is @ButtonHeistActor (enclosing class is isolated).
+    var onEvent: ((ConnectionEvent) -> Void)?
+    var autoRespondToAuthRequired = true
     var onSend: ((ClientMessage, String?) -> Void)?
 
     /// When true, send .watch instead of .authenticate on authRequired
-    public var observeMode: Bool = false
+    var observeMode: Bool = false
     /// Driver identity for session locking (set via BUTTONHEIST_DRIVER_ID)
-    public var driverId: String?
+    var driverId: String?
 
     private let expectedFingerprint: String?
 
@@ -111,14 +109,14 @@ public final class DeviceConnection: DeviceConnecting {
     /// NWConnection's `.global()` callbacks; finished when we tear down.
     private var eventContinuation: AsyncStream<DeviceConnectionEvent>.Continuation?
 
-    public init(device: DiscoveredDevice, token: String? = nil, driverId: String? = nil) {
+    init(device: DiscoveredDevice, token: String? = nil, driverId: String? = nil) {
         self.device = device
         self.token = token
         self.driverId = driverId
         self.expectedFingerprint = device.certFingerprint
     }
 
-    public func connect() {
+    func connect() {
         logger.info("Connecting to \(self.device.name)...")
 
         let parameters: NWParameters
@@ -166,7 +164,7 @@ public final class DeviceConnection: DeviceConnecting {
         conn.start(queue: .global())
     }
 
-    public func disconnect() {
+    func disconnect() {
         switch connectionState {
         case .connecting(let connection):
             connection.cancel()
@@ -182,7 +180,7 @@ public final class DeviceConnection: DeviceConnecting {
         eventConsumerTask = nil
     }
 
-    public func send(_ message: ClientMessage, requestId: String? = nil) {
+    func send(_ message: ClientMessage, requestId: String? = nil) {
         onSend?(message, requestId)
         guard case .connected(let active) = connectionState else { return }
         let envelope = RequestEnvelope(requestId: requestId, message: message)

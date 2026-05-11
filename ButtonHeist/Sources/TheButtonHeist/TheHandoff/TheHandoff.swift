@@ -9,13 +9,13 @@ private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "
 /// TheFence owns a TheHandoff and delegates connection management here.
 /// All discovery, connection, keepalive, and reconnect logic lives here.
 @ButtonHeistActor
-public final class TheHandoff {
+final class TheHandoff {
 
     // MARK: - State Machine Types
 
     /// Why a connection attempt failed. TheHandoff's own error type —
     /// callers (TheFence) map this to their error domain at the boundary.
-    public enum ConnectionError: Error, LocalizedError {
+    enum ConnectionError: Error, LocalizedError {
         case connectionFailed(String)
         case authFailed(String)
         case sessionLocked(String)
@@ -23,7 +23,7 @@ public final class TheHandoff {
         case noDeviceFound
         case noMatchingDevice(filter: String, available: [String])
 
-        public var errorDescription: String? {
+        var errorDescription: String? {
             switch self {
             case .connectionFailed(let message): return message
             case .authFailed(let reason): return "Authentication failed: \(reason)"
@@ -37,7 +37,7 @@ public final class TheHandoff {
     }
 
     /// Why a connection failed — used as the associated value in ConnectionPhase.failed.
-    public enum ConnectionFailure: Equatable {
+    enum ConnectionFailure: Equatable {
         case error(String)
         case authFailed(String)
         case sessionLocked(String)
@@ -61,13 +61,13 @@ public final class TheHandoff {
     /// `.connected` means the counter is automatically discarded on transition
     /// to `.disconnected`/`.failed`, so a stale count from a prior connection
     /// can never feed into a fresh one's keepalive arithmetic.
-    public struct ConnectedSession {
-        public let device: DiscoveredDevice
+    struct ConnectedSession {
+        let device: DiscoveredDevice
         let keepaliveTask: Task<Void, Never>
-        public var serverInfo: ServerInfo?
-        public var currentInterface: Interface?
-        public var currentScreen: ScreenPayload?
-        public var recordingPhase: RecordingPhase
+        var serverInfo: ServerInfo?
+        var currentInterface: Interface?
+        var currentScreen: ScreenPayload?
+        var recordingPhase: RecordingPhase
         var missedPongCount: Int
 
         init(
@@ -94,7 +94,7 @@ public final class TheHandoff {
     /// the phase — impossible states like "connected but no device" are
     /// unrepresentable. `.connected` carries the full session payload so
     /// session-scoped data clears automatically on transition.
-    public enum ConnectionPhase {
+    enum ConnectionPhase {
         case disconnected
         case connecting(device: DiscoveredDevice)
         case connected(ConnectedSession)
@@ -104,24 +104,24 @@ public final class TheHandoff {
     /// Whether auto-reconnect fires on disconnect. The reconnect task lives
     /// inside `.enabled` because it only runs when the policy is active and
     /// a disconnect has occurred.
-    public enum ReconnectPolicy {
+    enum ReconnectPolicy {
         case disabled
         case enabled(filter: String?, reconnectTask: Task<Void, Never>?)
     }
 
     /// Recording lifecycle state machine. Replaces the old `isRecording: Bool`
     /// so the type system distinguishes idle from active recording.
-    public enum RecordingPhase: Equatable {
+    enum RecordingPhase: Equatable {
         case idle
         case recording
     }
 
     // MARK: - State
 
-    public private(set) var discoveredDevices: [DiscoveredDevice] = []
-    public private(set) var isDiscovering: Bool = false
-    public private(set) var connectionPhase: ConnectionPhase = .disconnected
-    public private(set) var reconnectPolicy: ReconnectPolicy = .disabled
+    private(set) var discoveredDevices: [DiscoveredDevice] = []
+    private(set) var isDiscovering: Bool = false
+    private(set) var connectionPhase: ConnectionPhase = .disconnected
+    private(set) var reconnectPolicy: ReconnectPolicy = .disabled
 
     /// Continuations awaiting a terminal connection-phase transition. Each
     /// continuation is resumed exactly once when the phase next becomes
@@ -195,32 +195,32 @@ public final class TheHandoff {
 
     // MARK: - Derived State
 
-    public var isConnected: Bool {
+    var isConnected: Bool {
         if case .connected = connectionPhase { return true }
         return false
     }
 
-    public var connectedDevice: DiscoveredDevice? {
+    var connectedDevice: DiscoveredDevice? {
         if case .connected(let session) = connectionPhase { return session.device }
         return nil
     }
 
-    public var serverInfo: ServerInfo? {
+    var serverInfo: ServerInfo? {
         if case .connected(let session) = connectionPhase { return session.serverInfo }
         return nil
     }
 
-    public var currentInterface: Interface? {
+    var currentInterface: Interface? {
         if case .connected(let session) = connectionPhase { return session.currentInterface }
         return nil
     }
 
-    public var currentScreen: ScreenPayload? {
+    var currentScreen: ScreenPayload? {
         if case .connected(let session) = connectionPhase { return session.currentScreen }
         return nil
     }
 
-    public var recordingPhase: RecordingPhase {
+    var recordingPhase: RecordingPhase {
         if case .connected(let session) = connectionPhase { return session.recordingPhase }
         return .idle
     }
@@ -234,7 +234,7 @@ public final class TheHandoff {
         return 0
     }
 
-    public var isRecording: Bool {
+    var isRecording: Bool {
         recordingPhase == .recording
     }
 
@@ -243,52 +243,52 @@ public final class TheHandoff {
     // All callbacks below fire on `@ButtonHeistActor`.
 
     /// A device matching the filter appeared on the network.
-    public var onDeviceFound: (@ButtonHeistActor (DiscoveredDevice) -> Void)?
+    var onDeviceFound: (@ButtonHeistActor (DiscoveredDevice) -> Void)?
     /// A previously-known device is no longer advertising.
-    public var onDeviceLost: (@ButtonHeistActor (DiscoveredDevice) -> Void)?
+    var onDeviceLost: (@ButtonHeistActor (DiscoveredDevice) -> Void)?
 
     // MARK: - Connection Callbacks
 
     /// Handshake completed successfully; `ServerInfo` carries server version + capabilities.
-    public var onConnected: (@ButtonHeistActor (ServerInfo) -> Void)?
+    var onConnected: (@ButtonHeistActor (ServerInfo) -> Void)?
     /// The connection has dropped. `DisconnectReason` indicates whether this was local, remote, or error-driven.
-    public var onDisconnected: (@ButtonHeistActor (DisconnectReason) -> Void)?
+    var onDisconnected: (@ButtonHeistActor (DisconnectReason) -> Void)?
     /// A `get_interface` response arrived. The trailing `String?` is the originating requestId (nil for unsolicited pushes).
-    public var onInterface: (@ButtonHeistActor (Interface, String?) -> Void)?
+    var onInterface: (@ButtonHeistActor (Interface, String?) -> Void)?
     /// An action command (tap, swipe, type, etc.) produced a result. Trailing `String?` is the originating requestId.
-    public var onActionResult: (@ButtonHeistActor (ActionResult, String?) -> Void)?
+    var onActionResult: (@ButtonHeistActor (ActionResult, String?) -> Void)?
     /// A `get_screen` response arrived. Trailing `String?` is the originating requestId.
-    public var onScreen: (@ButtonHeistActor (ScreenPayload, String?) -> Void)?
+    var onScreen: (@ButtonHeistActor (ScreenPayload, String?) -> Void)?
     /// The server acknowledged that screen recording has begun.
-    public var onRecordingStarted: (@ButtonHeistActor () -> Void)?
+    var onRecordingStarted: (@ButtonHeistActor () -> Void)?
     /// A completed recording is delivered (as base64 payload + metadata).
-    public var onRecording: (@ButtonHeistActor (RecordingPayload) -> Void)?
+    var onRecording: (@ButtonHeistActor (RecordingPayload) -> Void)?
     /// Recording failed mid-capture; the string is the server-reported reason.
-    public var onRecordingError: (@ButtonHeistActor (String) -> Void)?
+    var onRecordingError: (@ButtonHeistActor (String) -> Void)?
     /// General protocol/transport error reported by the server.
-    public var onError: (@ButtonHeistActor (String) -> Void)?
+    var onError: (@ButtonHeistActor (String) -> Void)?
     /// Error response for a specific in-flight request.
-    public var onRequestError: (@ButtonHeistActor (String, String) -> Void)?
+    var onRequestError: (@ButtonHeistActor (String, String) -> Void)?
     /// Auth approved. The parameter is the approved token, or nil when reusing a persistent session.
-    public var onAuthApproved: (@ButtonHeistActor (String?) -> Void)?
+    var onAuthApproved: (@ButtonHeistActor (String?) -> Void)?
     /// Another agent currently owns the session. Payload carries details for the operator to resolve.
-    public var onSessionLocked: (@ButtonHeistActor (SessionLockedPayload) -> Void)?
+    var onSessionLocked: (@ButtonHeistActor (SessionLockedPayload) -> Void)?
     /// Auth rejected by server; the string is the reason.
-    public var onAuthFailed: (@ButtonHeistActor (String) -> Void)?
+    var onAuthFailed: (@ButtonHeistActor (String) -> Void)?
     /// A user interaction event (tap, swipe) captured on the device.
-    public var onInteraction: (@ButtonHeistActor (InteractionEvent) -> Void)?
+    var onInteraction: (@ButtonHeistActor (InteractionEvent) -> Void)?
     /// The server pushed an interface delta between commands (the UI changed
     /// without a direct action request). Drained by `TheFence` for session state.
-    public var onBackgroundDelta: (@ButtonHeistActor (InterfaceDelta) -> Void)?
+    var onBackgroundDelta: (@ButtonHeistActor (InterfaceDelta) -> Void)?
 
     // MARK: - Configuration
 
-    public var token: String?
-    public var observeMode: Bool = false
+    var token: String?
+    var observeMode: Bool = false
     /// Explicit driver ID override (e.g. from BUTTONHEIST_DRIVER_ID env var).
     /// When nil, a persistent auto-generated ID is used instead.
-    public var driverId: String?
-    public var autoSubscribe: Bool = true
+    var driverId: String?
+    var autoSubscribe: Bool = true
 
     // MARK: - Internal Reconnect Settings
 
@@ -371,11 +371,11 @@ public final class TheHandoff {
 
     // MARK: - Init
 
-    public init() {}
+    init() {}
 
     // MARK: - Discovery
 
-    public func startDiscovery() {
+    func startDiscovery() {
         logger.info("startDiscovery called, hasSession=\(self.hasActiveDiscoverySession)")
         guard discovery == nil else {
             logger.info("Already discovering, skipping")
@@ -404,7 +404,7 @@ public final class TheHandoff {
         logger.info("Discovery started")
     }
 
-    public func stopDiscovery() {
+    func stopDiscovery() {
         discovery?.stop()
         discovery = nil
         isDiscovering = false
@@ -414,7 +414,7 @@ public final class TheHandoff {
     // MARK: - Reachability Probing
 
     /// Discover devices and validate each deduped advertisement as it appears.
-    public func discoverReachableDevices(
+    func discoverReachableDevices(
         timeout: TimeInterval = 3.0,
         probeTimeout: TimeInterval = 0.5,
         retryInterval: TimeInterval = 0.2
@@ -479,7 +479,7 @@ public final class TheHandoff {
 
     // MARK: - Connection
 
-    public func connect(to device: DiscoveredDevice) {
+    func connect(to device: DiscoveredDevice) {
         disconnect()
         transitionToConnecting(device: device)
 
@@ -585,7 +585,7 @@ public final class TheHandoff {
         }
     }
 
-    public func disconnect() {
+    func disconnect() {
         if case .enabled(let filter, let reconnectTask) = reconnectPolicy {
             reconnectTask?.cancel()
             reconnectPolicy = .enabled(filter: filter, reconnectTask: nil)
@@ -605,7 +605,7 @@ public final class TheHandoff {
     /// `timeout` is below 5 seconds, it is clamped to 5.
     /// Cancelling the calling task aborts the wait and propagates
     /// `CancellationError`.
-    public func waitForConnectionResult(timeout: TimeInterval) async throws {
+    func waitForConnectionResult(timeout: TimeInterval) async throws {
         // Fast path: already terminal.
         switch connectionPhase {
         case .connected:
@@ -678,7 +678,7 @@ public final class TheHandoff {
 
     /// Force-close the connection. Use when a timeout suggests the connection
     /// is dead but TCP hasn't noticed yet.
-    public func forceDisconnect() {
+    func forceDisconnect() {
         guard isConnected else { return }
         logger.warning("Force-disconnecting stale connection")
         disconnect()
@@ -694,7 +694,7 @@ public final class TheHandoff {
 
     // MARK: - Commands
 
-    public func send(_ message: ClientMessage, requestId: String? = nil) {
+    func send(_ message: ClientMessage, requestId: String? = nil) {
         connection?.send(message, requestId: requestId)
     }
 
@@ -733,13 +733,13 @@ public final class TheHandoff {
     // MARK: - Session Management (discovery → connect → reconnect)
 
     /// Status callback for session management progress messages.
-    public var onStatus: (@ButtonHeistActor (String) -> Void)?
+    var onStatus: (@ButtonHeistActor (String) -> Void)?
 
     /// Discover a device (optionally matching a filter) and connect to it.
     /// Starts discovery if not already active, polls until a matching device appears
     /// or the timeout expires. Suspends on `waitForConnectionResult` for the
     /// connection outcome.
-    public func connectWithDiscovery(filter: String?, timeout: TimeInterval = 30) async throws {
+    func connectWithDiscovery(filter: String?, timeout: TimeInterval = 30) async throws {
         onStatus?("Searching for iOS devices...")
         let startedDiscovery = !hasActiveDiscoverySession
         if startedDiscovery { startDiscovery() }
@@ -775,7 +775,7 @@ public final class TheHandoff {
 
     /// Set up auto-reconnect: when disconnected, poll for the device and reconnect.
     /// Makes 60 attempts at 1s intervals before giving up.
-    public func setupAutoReconnect(filter: String?) {
+    func setupAutoReconnect(filter: String?) {
         guard case .disabled = reconnectPolicy else { return }
         reconnectPolicy = .enabled(filter: filter, reconnectTask: nil)
     }
@@ -815,7 +815,7 @@ public final class TheHandoff {
     // MARK: - Display Names
 
     /// Compute display name with disambiguation when multiple devices have the same app
-    public func displayName(for device: DiscoveredDevice) -> String {
+    func displayName(for device: DiscoveredDevice) -> String {
         let appName = device.appName
 
         let sameAppDevices = discoveredDevices.filter { $0.appName == appName }
@@ -835,7 +835,7 @@ public final class TheHandoff {
 // MARK: - ReconnectPolicy Equatable (filter-only, tasks excluded)
 
 extension TheHandoff.ReconnectPolicy: Equatable {
-    public static func == (lhs: Self, rhs: Self) -> Bool {
+    static func == (lhs: Self, rhs: Self) -> Bool {
         switch (lhs, rhs) {
         case (.disabled, .disabled):
             return true

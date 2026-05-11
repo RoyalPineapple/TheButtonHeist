@@ -38,7 +38,7 @@ public enum PlaybackFailure: Sendable {
     }
 
     /// Return a copy with the interface snapshot attached.
-    public func withInterface(_ interface: Interface?) -> PlaybackFailure {
+    func withInterface(_ interface: Interface?) -> PlaybackFailure {
         switch self {
         case .fenceError(let step, let message, _):
             return .fenceError(step: step, message: message, interface: interface)

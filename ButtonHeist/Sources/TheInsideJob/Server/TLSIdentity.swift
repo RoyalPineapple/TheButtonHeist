@@ -9,11 +9,11 @@ import X509
 
 private let logger = Logger(subsystem: "com.buttonheist.thegetaway", category: "tls")
 
-public actor TLSIdentity {
+actor TLSIdentity {
     private let identity: SecIdentity
     private let certificate: SecCertificate
-    public nonisolated let fingerprint: String
-    public nonisolated let expiryDate: Date
+    nonisolated let fingerprint: String
+    nonisolated let expiryDate: Date
 
     /// Number of days before expiry at which the certificate is auto-renewed.
     static let renewalThresholdDays: Int = 30
@@ -32,7 +32,7 @@ public actor TLSIdentity {
     /// If the loaded certificate expires within ``renewalThresholdDays`` days, it is
     /// deleted and a fresh one is generated. A warning is logged if expiry is within
     /// ``warningThresholdDays`` days.
-    public static func getOrCreate(label: String = "com.buttonheist.tls") throws -> TLSIdentity {
+    static func getOrCreate(label: String = "com.buttonheist.tls") throws -> TLSIdentity {
         if let existing = try loadFromKeychain(label: label) {
             let daysRemaining = existing.daysUntilExpiry
             if daysRemaining <= renewalThresholdDays {
@@ -69,7 +69,7 @@ public actor TLSIdentity {
 
     /// Create an ephemeral identity by temporarily storing items in the Keychain
     /// for `SecIdentity` creation, then immediately removing them.
-    public static func createEphemeral() throws -> TLSIdentity {
+    static func createEphemeral() throws -> TLSIdentity {
         let (privateKey, derBytes) = try generateCertificate()
         let secCert = try makeSecCertificate(derBytes: derBytes)
         let fp = computeFingerprint(derBytes: derBytes)
@@ -80,7 +80,7 @@ public actor TLSIdentity {
     }
 
     /// Remove a stored identity from the Keychain.
-    public static func delete(label: String = "com.buttonheist.tls") throws(TLSIdentityError) {
+    static func delete(label: String = "com.buttonheist.tls") throws(TLSIdentityError) {
         let classes: [CFString] = [kSecClassKey, kSecClassCertificate, kSecClassIdentity]
         for secClass in classes {
             let query: [String: Any] = [
@@ -98,7 +98,7 @@ public actor TLSIdentity {
 
     /// Build NWParameters configured for TLS using this identity.
     /// Actor-isolated so SecIdentity never crosses isolation boundaries.
-    public func makeTLSParameters() -> NWParameters? {
+    func makeTLSParameters() -> NWParameters? {
         let tlsOptions = NWProtocolTLS.Options()
         guard let secIdentity = sec_identity_create(identity) else {
             logger.warning("sec_identity_create failed for TLS identity")
@@ -164,7 +164,7 @@ public actor TLSIdentity {
     }
 
     /// Number of whole days until this certificate expires (negative if already expired).
-    public nonisolated var daysUntilExpiry: Int {
+    nonisolated var daysUntilExpiry: Int {
         let interval = expiryDate.timeIntervalSinceNow
         return Int(interval / (24 * 3600))
     }
@@ -344,12 +344,12 @@ public actor TLSIdentity {
 
 // MARK: - Errors
 
-public enum TLSIdentityError: Error, LocalizedError {
+enum TLSIdentityError: Error, LocalizedError {
     case invalidCertificateData
     case keychainError(OSStatus)
     case keyCreationFailed(CFError?)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .invalidCertificateData:
             return "Generated certificate DER data was rejected by SecCertificateCreateWithData"

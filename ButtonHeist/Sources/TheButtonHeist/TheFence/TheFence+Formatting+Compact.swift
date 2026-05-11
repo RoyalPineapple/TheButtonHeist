@@ -177,7 +177,7 @@ extension FenceResponse {
     }
 
     /// Compact one-line element format for LLM agents. Geometry is omitted.
-    public static func compactElementLine(
+    static func compactElementLine(
         _ element: HeistElement,
         displayIndex: Int? = nil,
         detail: InterfaceDetail = .summary
@@ -229,7 +229,7 @@ extension FenceResponse {
         return parts.joined(separator: " ")
     }
 
-    public static func compactInterface(_ interface: Interface) -> String {
+    static func compactInterface(_ interface: Interface) -> String {
         var lines: [String] = ["\(interface.elements.count) elements"]
         lines.append(contentsOf: compactTreeLines(interface, detail: .summary))
         return lines.joined(separator: "\n")
@@ -291,7 +291,7 @@ extension FenceResponse {
         return parts.joined(separator: " ")
     }
 
-    public static func compactDelta(_ delta: InterfaceDelta, method: String) -> String {
+    static func compactDelta(_ delta: InterfaceDelta, method: String) -> String {
         switch delta {
         case .noChange(let payload):
             // Auto-settle can produce a no-change delta carrying transients

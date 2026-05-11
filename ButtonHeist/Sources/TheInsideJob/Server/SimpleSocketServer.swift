@@ -9,8 +9,8 @@ import TheScore
 /// Actor-isolated — all mutable state is protected by Swift concurrency.
 private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "server")
 
-public actor SimpleSocketServer {
-    public typealias DataHandler = @Sendable (Int, Data, @escaping @Sendable (Data) -> Void) -> Void
+actor SimpleSocketServer {
+    typealias DataHandler = @Sendable (Int, Data, @escaping @Sendable (Data) -> Void) -> Void
 
     private static let maxBufferSize = 10_000_000 // 10 MB
     private static let maxConnections = 5
@@ -50,20 +50,20 @@ public actor SimpleSocketServer {
 
     private let _syncListeningPort = OSAllocatedUnfairLock<UInt16>(initialState: 0)
 
-    public nonisolated var listeningPort: UInt16 {
+    nonisolated var listeningPort: UInt16 {
         _syncListeningPort.withLock { $0 }
     }
 
     // MARK: - Callbacks
 
-    public struct Callbacks: Sendable {
-        public var onClientConnected: (@Sendable (_ clientId: Int, _ remoteAddress: String?) -> Void)?
-        public var onClientDisconnected: (@Sendable (Int) -> Void)?
-        public var onDataReceived: DataHandler?
-        public var onUnauthenticatedData: (@Sendable (_ clientId: Int, _ data: Data, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
-        public var onRateLimited: (@Sendable (_ clientId: Int, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
+    struct Callbacks: Sendable {
+        var onClientConnected: (@Sendable (_ clientId: Int, _ remoteAddress: String?) -> Void)?
+        var onClientDisconnected: (@Sendable (Int) -> Void)?
+        var onDataReceived: DataHandler?
+        var onUnauthenticatedData: (@Sendable (_ clientId: Int, _ data: Data, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
+        var onRateLimited: (@Sendable (_ clientId: Int, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
 
-        public init(
+        init(
             onClientConnected: (@Sendable (_ clientId: Int, _ remoteAddress: String?) -> Void)? = nil,
             onClientDisconnected: (@Sendable (Int) -> Void)? = nil,
             onDataReceived: DataHandler? = nil,
@@ -85,7 +85,7 @@ public actor SimpleSocketServer {
 
     private let queue = DispatchQueue(label: "com.buttonheist.thehandoff.server")
 
-    public init(allowedScopes: Set<ConnectionScope> = ConnectionScope.all) {
+    init(allowedScopes: Set<ConnectionScope> = ConnectionScope.all) {
         self.allowedScopes = allowedScopes
     }
 
@@ -98,7 +98,7 @@ public actor SimpleSocketServer {
     ///   - bindToLoopback: If true, bind to loopback only (simulator builds)
     ///   - callbacks: Optional callbacks to install before starting
     /// - Returns: Actual port number bound
-    public func startAsync(
+    func startAsync(
         port: UInt16 = 0,
         bindToLoopback: Bool = false,
         tlsParameters: NWParameters? = nil,
@@ -168,7 +168,7 @@ public actor SimpleSocketServer {
     }
 
     /// Stop the server.
-    public func stop() {
+    func stop() {
         guard case .listening(let listener, _) = serverPhase else { return }
 
         let allClients = clients
@@ -190,7 +190,7 @@ public actor SimpleSocketServer {
     /// Enforces a per-client high-water mark on pending bytes. When a client's
     /// NWConnection send buffer exceeds `maxPendingBytesPerClient`, new sends
     /// are dropped to prevent unbounded memory growth from slow or stalled readers.
-    public func send(_ data: Data, to clientId: Int) {
+    func send(_ data: Data, to clientId: Int) {
         guard var state = clients[clientId] else { return }
 
         var dataToSend = data
@@ -283,12 +283,12 @@ public actor SimpleSocketServer {
     }
 
     /// Disconnect a client.
-    public func disconnect(clientId: Int) {
+    func disconnect(clientId: Int) {
         removeClient(clientId)
     }
 
     /// Mark a client as authenticated.
-    public func markAuthenticated(_ clientId: Int) {
+    func markAuthenticated(_ clientId: Int) {
         guard var state = clients[clientId], !state.isAuthenticated else { return }
         state.isAuthenticated = true
         clients[clientId] = state
@@ -297,12 +297,12 @@ public actor SimpleSocketServer {
     }
 
     /// Check if a client is authenticated.
-    public func isAuthenticated(_ clientId: Int) -> Bool {
+    func isAuthenticated(_ clientId: Int) -> Bool {
         clients[clientId]?.isAuthenticated == true
     }
 
     /// Broadcast data to all authenticated clients.
-    public func broadcastToAll(_ data: Data) {
+    func broadcastToAll(_ data: Data) {
         for (clientId, state) in clients where state.isAuthenticated {
             send(data, to: clientId)
         }

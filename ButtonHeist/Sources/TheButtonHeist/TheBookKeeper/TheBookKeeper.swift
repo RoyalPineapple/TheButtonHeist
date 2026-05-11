@@ -9,7 +9,7 @@ private let logger = Logger(subsystem: "com.buttonheist.bookkeeper", category: "
 
 /// Lifecycle of a BookKeeper session from idle through archive. Each non-idle
 /// case carries the phase-specific data valid for that phase.
-public enum SessionPhase: Sendable {
+enum SessionPhase: Sendable {
     case idle
     case active(ActiveSession)
     case closing(ClosingSession)
@@ -21,12 +21,12 @@ public enum SessionPhase: Sendable {
 /// is a `FileHandle` (not Sendable on Swift 6); access is in practice
 /// confined to the `@ButtonHeistActor`-isolated `TheBookKeeper` that owns
 /// the value.
-public struct ActiveSession: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
-    public let sessionId: String
-    public let directory: URL
+struct ActiveSession: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+    let sessionId: String
+    let directory: URL
     let logHandle: FileHandle
-    public var manifest: SessionManifest
-    public let startTime: Date
+    var manifest: SessionManifest
+    let startTime: Date
     var nextSequenceNumber: Int
     var heistRecording: HeistRecording?
 }
@@ -42,34 +42,34 @@ struct HeistRecording: @unchecked Sendable { // swiftlint:disable:this agent_unc
     let filePath: URL
 }
 
-public struct ClosingSession: Sendable {
-    public let sessionId: String
-    public let directory: URL
-    public var manifest: SessionManifest
-    public let startTime: Date
-    public let endTime: Date
+struct ClosingSession: Sendable {
+    let sessionId: String
+    let directory: URL
+    var manifest: SessionManifest
+    let startTime: Date
+    let endTime: Date
 }
 
-public struct ClosedSession: Sendable {
-    public let sessionId: String
-    public let directory: URL
-    public let compressedLogPath: URL
-    public let manifest: SessionManifest
-    public let startTime: Date
-    public let endTime: Date
+struct ClosedSession: Sendable {
+    let sessionId: String
+    let directory: URL
+    let compressedLogPath: URL
+    let manifest: SessionManifest
+    let startTime: Date
+    let endTime: Date
 }
 
-public struct ArchivedSession: Sendable {
-    public let archivePath: URL
-    public let manifest: SessionManifest
-    public let startTime: Date
-    public let endTime: Date
+struct ArchivedSession: Sendable {
+    let archivePath: URL
+    let manifest: SessionManifest
+    let startTime: Date
+    let endTime: Date
 }
 
 // MARK: - BookKeeper Errors
 
 /// Errors thrown by TheBookKeeper during session and artifact operations.
-public enum BookKeeperError: Error, LocalizedError {
+enum BookKeeperError: Error, LocalizedError {
     case invalidPhase(expected: String, actual: String)
     case unsafePath(String)
     case base64DecodingFailed
@@ -78,7 +78,7 @@ public enum BookKeeperError: Error, LocalizedError {
     case noStepsRecorded
     case notRecordingHeist
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case .invalidPhase(let expected, let actual):
             return "Invalid session phase: expected \(expected), currently \(actual)"
@@ -102,16 +102,16 @@ public enum BookKeeperError: Error, LocalizedError {
 
 /// Manages session lifecycle, command logging, artifact storage, and heist recording.
 @ButtonHeistActor
-public final class TheBookKeeper {
+final class TheBookKeeper {
 
-    public private(set) var phase: SessionPhase = .idle
+    private(set) var phase: SessionPhase = .idle
     private let baseDirectory: URL
 
-    public init(baseDirectory: URL? = nil) {
+    init(baseDirectory: URL? = nil) {
         self.baseDirectory = baseDirectory ?? Self.resolveBaseDirectory()
     }
 
-    public var manifest: SessionManifest? {
+    var manifest: SessionManifest? {
         switch phase {
         case .idle:
             return nil
@@ -128,7 +128,7 @@ public final class TheBookKeeper {
 
     // MARK: - Lifecycle
 
-    public func beginSession(identifier: String) throws {
+    func beginSession(identifier: String) throws {
         switch phase {
         case .idle, .closing, .closed, .archived:
             break
@@ -168,7 +168,7 @@ public final class TheBookKeeper {
         ))
     }
 
-    public func closeSession() async throws {
+    func closeSession() async throws {
         guard case .active(var session) = phase else {
             throw BookKeeperError.invalidPhase(expected: "active", actual: phaseName)
         }
@@ -203,7 +203,7 @@ public final class TheBookKeeper {
         ))
     }
 
-    public func archiveSession(deleteSource: Bool = false) async throws -> (URL, SessionManifest) {
+    func archiveSession(deleteSource: Bool = false) async throws -> (URL, SessionManifest) {
         guard case .closed(let session) = phase else {
             throw BookKeeperError.invalidPhase(expected: "closed", actual: phaseName)
         }
@@ -227,7 +227,7 @@ public final class TheBookKeeper {
 
     // MARK: - Logging
 
-    public func logCommand(
+    func logCommand(
         requestId: String,
         command: TheFence.Command,
         arguments: [String: Any]
@@ -243,7 +243,7 @@ public final class TheBookKeeper {
         phase = .active(session)
     }
 
-    public func logResponse(
+    func logResponse(
         requestId: String,
         status: ResponseStatus,
         durationMilliseconds: Int,
@@ -267,7 +267,7 @@ public final class TheBookKeeper {
 
     // MARK: - Artifact Storage
 
-    public func writeScreenshot(
+    func writeScreenshot(
         base64Data: String,
         requestId: String,
         command: TheFence.Command,
@@ -304,7 +304,7 @@ public final class TheBookKeeper {
         return fileURL
     }
 
-    public func writeRecording(
+    func writeRecording(
         base64Data: String,
         requestId: String,
         command: TheFence.Command,
@@ -347,7 +347,7 @@ public final class TheBookKeeper {
         return fileURL
     }
 
-    public func writeToPath(_ data: Data, outputPath: String) throws -> URL {
+    func writeToPath(_ data: Data, outputPath: String) throws -> URL {
         guard let resolvedURL = validateOutputPath(outputPath) else {
             throw BookKeeperError.unsafePath(outputPath)
         }
@@ -365,7 +365,7 @@ public final class TheBookKeeper {
     ///   the session's artifact directory and append to the session manifest.
     /// - No `outputPath`, no session → return `nil`; caller is expected to
     ///   return the in-memory payload (e.g. `.screenshotData`).
-    public func writeScreenshotIfSinkAvailable(
+    func writeScreenshotIfSinkAvailable(
         base64Data: String,
         outputPath: String?,
         requestId: String,
@@ -390,7 +390,7 @@ public final class TheBookKeeper {
     /// Write a recording to whichever sink is available. Resolution rules
     /// match `writeScreenshotIfSinkAvailable` — outputPath wins, then session,
     /// then nil.
-    public func writeRecordingIfSinkAvailable(
+    func writeRecordingIfSinkAvailable(
         base64Data: String,
         outputPath: String?,
         requestId: String,
@@ -414,12 +414,12 @@ public final class TheBookKeeper {
 
     // MARK: - Heist Recording
 
-    public var isRecordingHeist: Bool {
+    var isRecordingHeist: Bool {
         guard case .active(let session) = phase else { return false }
         return session.heistRecording != nil
     }
 
-    public func startHeistRecording(app: String) throws {
+    func startHeistRecording(app: String) throws {
         guard case .active(var session) = phase else {
             throw BookKeeperError.invalidPhase(expected: "active", actual: phaseName)
         }
@@ -441,7 +441,7 @@ public final class TheBookKeeper {
         phase = .active(session)
     }
 
-    public func stopHeistRecording() throws -> HeistPlayback {
+    func stopHeistRecording() throws -> HeistPlayback {
         guard case .active(var session) = phase else {
             throw BookKeeperError.invalidPhase(expected: "active", actual: phaseName)
         }
@@ -512,7 +512,7 @@ public final class TheBookKeeper {
     ///     heistId. The recorder uses this to resolve `heistId` arguments to
     ///     stable matchers. Caller is responsible for supplying the cache —
     ///     TheBookKeeper does not maintain its own copy.
-    public func recordHeistEvidence(
+    func recordHeistEvidence(
         command: TheFence.Command,
         args: [String: Any],
         succeeded: Bool = true,
@@ -709,7 +709,7 @@ public final class TheBookKeeper {
 
     // MARK: - Heist File I/O
 
-    public static func writeHeist(_ script: HeistPlayback, to path: URL) throws {
+    static func writeHeist(_ script: HeistPlayback, to path: URL) throws {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -717,7 +717,7 @@ public final class TheBookKeeper {
         try data.write(to: path, options: .atomic)
     }
 
-    public static func readHeist(from path: URL) throws -> HeistPlayback {
+    static func readHeist(from path: URL) throws -> HeistPlayback {
         let data = try Data(contentsOf: path)
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -726,7 +726,7 @@ public final class TheBookKeeper {
 
     // MARK: - Path Safety
 
-    public func validateOutputPath(_ path: String) -> URL? {
+    func validateOutputPath(_ path: String) -> URL? {
         path.validatedOutputURL()
     }
 

@@ -6,12 +6,12 @@ import Foundation
 /// Used to generate MCP tool schemas and verify CLI/MCP sync.
 ///
 /// Declared at module scope (not nested in TheFence) to avoid inheriting @ButtonHeistActor isolation.
-public struct FenceParameterSpec: Sendable, Equatable {
+struct FenceParameterSpec: Sendable, Equatable {
 
     // MARK: - Nested Types
 
     /// JSON-level type of a parameter value.
-    public enum ParamType: String, Sendable, Equatable {
+    enum ParamType: String, Sendable, Equatable {
         case string
         case integer
         case number       // double
@@ -23,13 +23,13 @@ public struct FenceParameterSpec: Sendable, Equatable {
 
     // MARK: - Properties
 
-    public let key: String
-    public let type: ParamType
-    public let required: Bool
+    let key: String
+    let type: ParamType
+    let required: Bool
 
     // MARK: - Init
 
-    public init(key: String, type: ParamType, required: Bool = false) {
+    init(key: String, type: ParamType, required: Bool = false) {
         self.key = key
         self.type = type
         self.required = required
@@ -41,7 +41,7 @@ public struct FenceParameterSpec: Sendable, Equatable {
 /// How a command is surfaced in the MCP tool list.
 ///
 /// Declared at module scope to avoid inheriting @ButtonHeistActor isolation.
-public enum MCPExposure: Sendable, Equatable {
+enum MCPExposure: Sendable, Equatable {
     /// Tool name equals command rawValue (1:1 mapping).
     case directTool
     /// Command is routed through a grouped tool (e.g. gestures via the "gesture" tool).
@@ -56,7 +56,7 @@ public enum MCPExposure: Sendable, Equatable {
 ///
 /// Declared next to `MCPExposure` so command-surface contracts live with the
 /// command catalog instead of being reverse-engineered from docs.
-public enum CLIExposure: Sendable, Equatable {
+enum CLIExposure: Sendable, Equatable {
     /// Top-level CLI command name equals the command raw value.
     case directCommand
     /// Command is routed through another top-level command.
@@ -71,11 +71,11 @@ public enum CLIExposure: Sendable, Equatable {
 
 /// Reusable parameter groups shared across command specs.
 /// At module scope so they're not actor-isolated.
-public enum FenceParameterBlocks: Sendable {
+enum FenceParameterBlocks: Sendable {
 
     /// Element targeting: heistId, label, value, traits, excludeTraits, identifier, ordinal.
     /// Used by action/gesture/scroll commands that call `elementTarget(args)`.
-    public static let elementTarget: [FenceParameterSpec] = [
+    static let elementTarget: [FenceParameterSpec] = [
         .init(key: "heistId", type: .string),
         .init(key: "label", type: .string),
         .init(key: "value", type: .string),
@@ -87,7 +87,7 @@ public enum FenceParameterBlocks: Sendable {
 
     /// Element filtering: label, value, traits, excludeTraits, identifier (no heistId/ordinal).
     /// Used by get_interface when filtering visible elements.
-    public static let elementFilter: [FenceParameterSpec] = [
+    static let elementFilter: [FenceParameterSpec] = [
         .init(key: "label", type: .string),
         .init(key: "value", type: .string),
         .init(key: "traits", type: .stringArray),
@@ -96,14 +96,14 @@ public enum FenceParameterBlocks: Sendable {
     ]
 
     /// Inline expectation for action commands.
-    public static let expect: FenceParameterSpec = .init(key: "expect", type: .object)
+    static let expect: FenceParameterSpec = .init(key: "expect", type: .object)
 }
 
 // MARK: - Per-Command Specs
 
 extension TheFence.Command {
 
-    public var cliExposure: CLIExposure {
+    var cliExposure: CLIExposure {
         switch self {
         case .help, .quit, .exit, .status:
             return .sessionOnly
@@ -116,7 +116,7 @@ extension TheFence.Command {
         }
     }
 
-    public var mcpExposure: MCPExposure {
+    var mcpExposure: MCPExposure {
         switch self {
         // REPL-only
         case .help, .quit, .exit, .status:
@@ -147,7 +147,7 @@ extension TheFence.Command {
 
     /// All parameter keys this command extracts from the request dictionary.
     /// Does not include the "command" key itself or internal keys like "_requestId".
-    public var parameters: [FenceParameterSpec] {
+    var parameters: [FenceParameterSpec] {
         let target = FenceParameterBlocks.elementTarget
         let filter = FenceParameterBlocks.elementFilter
         let expect = FenceParameterBlocks.expect
