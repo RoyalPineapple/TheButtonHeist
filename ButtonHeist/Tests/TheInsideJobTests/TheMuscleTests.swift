@@ -11,7 +11,7 @@ import TheScore
 /// Callbacks installed on `TheMuscle` are `@Sendable` and may fire from any
 /// context, so storage needs a lock. `@unchecked Sendable` justification:
 /// all access goes through `NSLock`.
-private final class CallbackSink: @unchecked Sendable {
+private final class CallbackSink: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
     private var sentMessagesStorage: [(data: Data, clientId: Int)] = []
     private var markedAuthenticatedStorage: [Int] = []
     private var disconnectedClientsStorage: [Int] = []
