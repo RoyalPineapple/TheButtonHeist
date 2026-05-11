@@ -9,7 +9,7 @@ import UIKit
 /// writes are serialized in practice; the test framework's expectation barrier is
 /// the synchronization point. `@unchecked Sendable` here mirrors the established
 /// `Box` pattern in `TheMuscleTests` / `WaitForIntegrationTests`.
-private final class Box<Value>: @unchecked Sendable {
+private final class Box<Value>: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
     var value: Value
     init(_ value: Value) { self.value = value }
 }
