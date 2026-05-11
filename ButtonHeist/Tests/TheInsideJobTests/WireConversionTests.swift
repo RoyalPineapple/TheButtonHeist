@@ -138,6 +138,38 @@ final class WireConverterTests: XCTestCase {
                        "HeistTrait.allCases must match parser's knownTraitNames")
     }
 
+    /// Guards against duplicate `(trait, name)` rows in the parser's `knownTraits` table.
+    /// `traitNames` iterates the array (not the deduplicated `knownTraitNames` set), so a
+    /// duplicate row would silently double-emit on the wire — invisible to the `Set`-based
+    /// `testHeistTraitAllCasesMatchParser` above. Asserts row count equals name-set count.
+    func testParserKnownTraitsHasNoDuplicateRows() {
+        let rowCount = UIAccessibilityTraits.knownTraits.count
+        let uniqueNameCount = UIAccessibilityTraits.knownTraitNames.count
+        XCTAssertEqual(rowCount, uniqueNameCount,
+                       "knownTraits table contains duplicate (trait, name) rows")
+    }
+
+    /// Wire payload regression: a secure text field must emit `"secureTextField"` exactly once
+    /// in its `traits` array. A duplicate row in the parser's `knownTraits` table caused
+    /// `traits: ["secureTextField", "secureTextField"]` to ship to every client.
+    func testSecureTextFieldEmitsSecureTraitOnce() {
+        let traits = WireConversion.traitNames(.secureTextField)
+        let secureCount = traits.filter { $0 == .secureTextField }.count
+        XCTAssertEqual(secureCount, 1,
+                       "secureTextField must appear exactly once in wire trait list, got \(traits)")
+    }
+
+    /// Every known trait in `HeistTrait.allCases` must round-trip through `WireConversion.traitNames`
+    /// without duplication. Generalises the secure-text-field regression across the table.
+    func testAllKnownTraitsRoundTripWithoutDuplicates() {
+        for trait in HeistTrait.allCases {
+            let bitmask = UIAccessibilityTraits.fromNames([trait.rawValue])
+            let wire = WireConversion.traitNames(bitmask)
+            XCTAssertEqual(wire.count, Set(wire).count,
+                           "Trait \(trait.rawValue) produced duplicates on the wire: \(wire)")
+        }
+    }
+
     // MARK: - Delta: Identical Snapshots
 
     func testIdenticalSnapshotsReturnNoChange() {

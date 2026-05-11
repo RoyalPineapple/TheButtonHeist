@@ -113,7 +113,7 @@ final class ModalPopupController {
 // MARK: - Popup View Controller
 
 private final class ModalPopupViewController: UIViewController {
-    var onAction: ((String) -> Void)?
+    var onAction: (@MainActor (String) -> Void)?
 
     override func viewDidLoad() {
         super.viewDidLoad()

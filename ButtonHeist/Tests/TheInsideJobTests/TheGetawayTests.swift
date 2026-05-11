@@ -64,6 +64,8 @@ final class TheGetawayTests: XCTestCase {
         // originally manifested: events arriving from off-main queue racing
         // each other to bridge onto the main actor.
         let callbacks = transport.makeCallbacks()
+        // Reproduce the production path: SimpleSocketServer invokes these callbacks off-main-actor on its network queue, not from MainActor.
+        // swiftlint:disable:next agent_no_task_detached
         await Task.detached {
             callbacks.onClientConnected?(1, "192.168.1.1")
             callbacks.onUnauthenticatedData?(1, helloData) { _ in }
@@ -99,6 +101,8 @@ final class TheGetawayTests: XCTestCase {
         // Three clients connect and immediately send hello. Each pair must
         // process in order or the helloValidated transition is dropped.
         // Drive from off-main to mirror the production network queue.
+        // Detached intentionally simulates SimpleSocketServer's off-main-actor callback dispatch.
+        // swiftlint:disable:next agent_no_task_detached
         await Task.detached {
             for clientId in 1...3 {
                 callbacks.onClientConnected?(clientId, "addr-\(clientId)")
@@ -129,7 +133,7 @@ final class TheGetawayTests: XCTestCase {
     /// in addition to `.recordingStopped`. We assert via state that the
     /// auto-finish path runs (no pending response is consumed; the result
     /// is stashed in `completedRecording` for any later collection too).
-    func testAutoFinishWithoutPendingStopBroadcastsRecording() {
+    func testAutoFinishWithoutPendingStopBroadcastsRecording() async {
         let (getaway, _, _) = makeGetaway()
         XCTAssertNil(getaway.pendingRecordingResponse)
         XCTAssertNil(getaway.completedRecording)
@@ -145,7 +149,7 @@ final class TheGetawayTests: XCTestCase {
             endTime: Date(),
             stopReason: .maxDuration
         )
-        getaway.deliverRecordingResult(.success(payload))
+        await getaway.deliverRecordingResult(.success(payload))
 
         XCTAssertNil(getaway.pendingRecordingResponse, "Auto-finish must not leave a stale pending response")
         guard case .success(let captured) = getaway.completedRecording else {
@@ -160,7 +164,7 @@ final class TheGetawayTests: XCTestCase {
     /// payload must reach that waiter directly via `respond` rather than
     /// broadcasting. The pending slot must clear and the pending requestId
     /// must echo back to the originator.
-    func testStopRecordingWaiterReceivesRecordingDirectly() {
+    func testStopRecordingWaiterReceivesRecordingDirectly() async {
         let (getaway, _, _) = makeGetaway()
 
         var receivedData: Data?
@@ -176,7 +180,7 @@ final class TheGetawayTests: XCTestCase {
             startTime: Date(), endTime: Date(),
             stopReason: .manual
         )
-        getaway.deliverRecordingResult(.success(payload))
+        await getaway.deliverRecordingResult(.success(payload))
 
         XCTAssertNil(getaway.pendingRecordingResponse, "Pending response must clear after delivery")
         let unwrappedData = try? XCTUnwrap(receivedData)

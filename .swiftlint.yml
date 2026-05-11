@@ -123,8 +123,32 @@ custom_rules:
     message: "Single-line `Task { @MainActor in self.foo(...) }` bridges fire-and-forget. Annotate the callback's isolation in its type and call it directly."
     severity: warning
 
-  agent_unannotated_public_callback:
-    name: "Agent: public callback without isolation annotation"
-    regex: 'public\s+var\s+on\w+:\s*\(\([^)]*\)\s*->\s*Void\)\?'
-    message: "Public `onFoo` callbacks must declare isolation in the closure type (e.g. `(@ButtonHeistActor (X) -> Void)?` or `@Sendable`). Docstring isolation drifts."
+  agent_unannotated_callback:
+    name: "Agent: callback without isolation annotation"
+    # Match `var onFoo: ((...) -> Void)?` at any visibility. Post-#353 demotions,
+    # the canonical onEvent/onSend/onTransition callbacks are `internal`, so the
+    # rule covers them too — class-level isolation inference is not a substitute
+    # for an explicit annotation in the closure type.
+    regex: '\bvar\s+on\w+:\s*\(\([^)]*\)\s*->\s*Void\)\?'
+    message: "`onFoo` callbacks must declare isolation in the closure type (e.g. `(@ButtonHeistActor (X) -> Void)?` or `@Sendable`). Class-level actor inference and docstring isolation both drift."
+    severity: warning
+
+  agent_no_task_detached:
+    name: "Agent: Task.detached banned"
+    # Match both `Task.detached(...)` and `Task.detached { ... }` (trailing closure).
+    regex: 'Task\.detached\s*[({]'
+    message: "Task.detached escapes the calling isolation context. Use Task { ... } (inherits caller isolation) or refactor to structured concurrency. If you genuinely need to escape isolation, document why with `// swiftlint:disable:next agent_no_task_detached` and a rationale comment."
+    severity: error
+
+  agent_wire_message_arm_no_op_break:
+    name: "Agent: wire-message switch arm with bare `break`"
+    # A `case .X: break` in a wire-message dispatch silently drops the message.
+    # Recording bug #348's root cause was exactly this: a `.pong` arm broke
+    # without flowing through `onEvent`. Scoped to the known wire-message
+    # dispatch files so the rule has a meaningful denominator. Files outside
+    # the include list are not checked — a future wire-dispatch site needs to
+    # be added here when it lands.
+    regex: 'case\s+\.[A-Za-z_][A-Za-z0-9_]*(?:\s*,\s*\.[A-Za-z_][A-Za-z0-9_]*)*\s*:[ \t]*\n[ \t]+break[ \t]*(?://[^\n]*)?\n'
+    included: ".*(DeviceConnection|TheHandoff|SimpleSocketServer)\\.swift$"
+    message: "Wire-message switch arms that `break` silently drop messages. Either flow the message through `onEvent` (or the equivalent dispatch), or annotate with `// swiftlint:disable:next agent_wire_message_arm_no_op_break` and explain who consumes this case elsewhere."
     severity: warning

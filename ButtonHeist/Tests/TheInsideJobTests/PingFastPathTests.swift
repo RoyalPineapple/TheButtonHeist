@@ -78,6 +78,8 @@ final class PingFastPathTests: XCTestCase {
         }
 
         let start = Date()
+        // Detached is the assertion: encodedPong must complete off the main actor while a main-actor blocker is in flight.
+        // swiftlint:disable:next agent_no_task_detached
         let pongData = await Task.detached(priority: .userInitiated) {
             PingFastPath.encodedPong(for: data)
         }.value
@@ -190,6 +192,8 @@ final class PingFastPathTests: XCTestCase {
         }
 
         let start = Date()
+        // Detached is the assertion: the wired interceptor must answer ping off the main actor while a blocker is in flight.
+        // swiftlint:disable:next agent_no_task_detached
         let pongData = await Task.detached(priority: .userInitiated) {
             interceptor(1, pingData)
         }.value

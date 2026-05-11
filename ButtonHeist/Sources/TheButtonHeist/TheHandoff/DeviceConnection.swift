@@ -88,10 +88,9 @@ final class DeviceConnection: DeviceConnecting {
         return false
     }
 
-    // Effective isolation is @ButtonHeistActor (enclosing class is isolated).
-    var onEvent: ((ConnectionEvent) -> Void)?
+    var onEvent: (@ButtonHeistActor (ConnectionEvent) -> Void)?
     var autoRespondToAuthRequired = true
-    var onSend: ((ClientMessage, String?) -> Void)?
+    var onSend: (@ButtonHeistActor (ClientMessage, String?) -> Void)?
 
     /// When true, send .watch instead of .authenticate on authRequired
     var observeMode: Bool = false
@@ -170,6 +169,8 @@ final class DeviceConnection: DeviceConnecting {
             connection.cancel()
         case .connected(let active):
             active.connection.cancel()
+        // Already disconnected — connection-state switch, not a wire-message dispatch.
+        // swiftlint:disable:next agent_wire_message_arm_no_op_break
         case .disconnected:
             break
         }

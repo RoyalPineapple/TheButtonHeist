@@ -70,13 +70,13 @@ final class TheMuscleTests: XCTestCase {
     /// `@MainActor` isolation.
     private func installCallbacks(observeSessionChanges: Bool) async {
         let sink = self.sink!
-        let sendToClient: @Sendable (Data, Int) -> Void = { data, clientId in
+        let sendToClient: @Sendable (Data, Int) async -> Void = { data, clientId in
             sink.appendSent((data, clientId))
         }
-        let markAuth: @Sendable (Int) -> Void = { clientId in
+        let markAuth: @Sendable (Int) async -> Void = { clientId in
             sink.appendAuthenticated(clientId)
         }
-        let disconnect: @Sendable (Int) -> Void = { clientId in
+        let disconnect: @Sendable (Int) async -> Void = { clientId in
             sink.appendDisconnected(clientId)
         }
         let onAuthenticated: @Sendable (Int, @escaping @Sendable (Data) -> Void) -> Void = { clientId, respond in
@@ -575,6 +575,47 @@ final class TheMuscleTests: XCTestCase {
             return false
         }
         XCTAssertTrue(hasLockout, "Should lock out again after counter reset and 5 more failures")
+    }
+
+    // MARK: - Broadcast FIFO ordering
+
+    /// Cross-cutting audit Finding 5: the prior `broadcastToSubscribed`
+    /// implementation spawned an unstructured `Task { await server.send(...) }`
+    /// per subscriber, and Swift makes no FIFO guarantee for unstructured
+    /// Tasks targeting the same actor. Two back-to-back broadcasts could
+    /// land on a single subscriber in either order. The fix awaits each
+    /// per-subscriber send inline so the iteration order is preserved on
+    /// every subscriber. This test asserts that contract by issuing two
+    /// distinct payloads across three subscribers and verifying each
+    /// subscriber sees them in the issue order.
+    func testBroadcastToSubscribedDeliversInFIFOOrder() async throws {
+        // Three subscribers, each authenticated with a watch token (no
+        // session claim) and subscribed to the hierarchy stream.
+        let token = "test-token"
+        for clientId in 1...3 {
+            try await watchAuthenticate(clientId: clientId, token: token, address: "addr-\(clientId)", respond: respondSink())
+            await muscle.subscribe(clientId: clientId)
+        }
+        let preBroadcastCount = sentMessages.count
+
+        let firstPayload = Data("first".utf8)
+        let secondPayload = Data("second".utf8)
+        await muscle.broadcastToSubscribed(firstPayload)
+        await muscle.broadcastToSubscribed(secondPayload)
+
+        let recorded = sentMessages.dropFirst(preBroadcastCount)
+        // Group by clientId and verify each subscriber received both payloads
+        // and `firstPayload` precedes `secondPayload` in arrival order.
+        for clientId in 1...3 {
+            let perClient = recorded.filter { $0.clientId == clientId }.map(\.data)
+            let firstIndex = perClient.firstIndex(of: firstPayload)
+            let secondIndex = perClient.firstIndex(of: secondPayload)
+            XCTAssertNotNil(firstIndex, "Subscriber \(clientId) must receive the first broadcast")
+            XCTAssertNotNil(secondIndex, "Subscriber \(clientId) must receive the second broadcast")
+            if let firstIndex, let secondIndex {
+                XCTAssertLessThan(firstIndex, secondIndex, "Subscriber \(clientId) must observe broadcasts in FIFO order")
+            }
+        }
     }
 }
 

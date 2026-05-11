@@ -202,12 +202,6 @@ public final class TheFence {
         wireUpResponseCallbacks()
     }
 
-    /// Test-only convenience initializer that creates a TheFence with default configuration.
-    /// Production callers (CLI, MCP) construct an explicit `Configuration` via `EnvironmentConfig`.
-    convenience init() {
-        self.init(configuration: Configuration())
-    }
-
     private func wireUpResponseCallbacks() {
         handoff.onInterface = { [weak self] payload, requestId in
             guard let self, let requestId else { return }
