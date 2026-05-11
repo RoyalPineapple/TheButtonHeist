@@ -56,7 +56,7 @@ enum MCPExposure: Sendable, Equatable {
 ///
 /// Declared next to `MCPExposure` so command-surface contracts live with the
 /// command catalog instead of being reverse-engineered from docs.
-enum CLIExposure: Sendable, Equatable {
+public enum CLIExposure: Sendable, Equatable {
     /// Top-level CLI command name equals the command raw value.
     case directCommand
     /// Command is routed through another top-level command.
@@ -103,7 +103,7 @@ enum FenceParameterBlocks: Sendable {
 
 extension TheFence.Command {
 
-    var cliExposure: CLIExposure {
+    public var cliExposure: CLIExposure {
         switch self {
         case .help, .quit, .exit, .status:
             return .sessionOnly
