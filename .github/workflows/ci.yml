@@ -87,55 +87,9 @@ jobs:
         timeout-minutes: 5
         run: swift build --target ButtonHeist
 
-  cli-tests:
-    runs-on: macos-15
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          submodules: recursive
-
-      - name: Resolve dependencies
-        timeout-minutes: 5
-        run: cd ButtonHeistCLI && swift package resolve
-
-      - name: Build CLI
-        timeout-minutes: 5
-        run: cd ButtonHeistCLI && swift build
-
-      - name: Run CLI tests
-        timeout-minutes: 5
-        run: cd ButtonHeistCLI && swift test
-
-  mcp-tests:
-    runs-on: macos-15
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          submodules: recursive
-
-      - name: Resolve dependencies
-        timeout-minutes: 5
-        run: cd ButtonHeistMCP && swift package resolve
-
-      - name: Build MCP server
-        timeout-minutes: 5
-        run: cd ButtonHeistMCP && swift build
-
-      - name: Run MCP tests
-        timeout-minutes: 5
-        run: cd ButtonHeistMCP && swift test
-
   macos-tests:
     runs-on: macos-15
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     steps:
       - name: Checkout repository
@@ -196,6 +150,22 @@ jobs:
           set -eo pipefail
           xcodebuild test -workspace ButtonHeist.xcworkspace -scheme ButtonHeistTests \
             -destination 'platform=macOS'
+
+      - name: Build & test CLI (SwiftPM)
+        timeout-minutes: 5
+        run: |
+          cd ButtonHeistCLI
+          swift package resolve
+          swift build
+          swift test
+
+      - name: Build & test MCP (SwiftPM)
+        timeout-minutes: 5
+        run: |
+          cd ButtonHeistMCP
+          swift package resolve
+          swift build
+          swift test
 
   ios-tests:
     runs-on: macos-15
