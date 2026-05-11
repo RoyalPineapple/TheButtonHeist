@@ -117,7 +117,7 @@ final class TheBurglarParseTests: XCTestCase {
             return
         }
 
-        let labels = result.elements.compactMap(\.label)
+        let labels = result.hierarchy.sortedElements.compactMap(\.label)
         XCTAssertTrue(
             labels.contains("Popover Action"),
             "Popover content presented as a sibling after the dismiss region should be parsed"

@@ -40,12 +40,15 @@ final class SettleSessionTests: XCTestCase {
         )
     }
 
-    private func makeParseResult(_ elements: [AccessibilityElement]) -> TheStash.ParseResult {
-        TheBurglar.ParseResult(
-            elements: elements,
-            hierarchy: [],
-            objects: [:],
-            scrollViews: [:]
+    private func makeParseResult(_ elements: [AccessibilityElement]) -> Screen {
+        let hierarchy: [AccessibilityHierarchy] = elements.enumerated().map { index, element in
+            .element(element, traversalIndex: index)
+        }
+        return Screen(
+            elements: [:],
+            hierarchy: hierarchy,
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
         )
     }
 
@@ -54,7 +57,7 @@ final class SettleSessionTests: XCTestCase {
     /// entries feed the post-sleep parses. The last entry is repeated
     /// indefinitely if the loop runs longer than the script.
     private func makeSession(
-        script: [TheStash.ParseResult?],
+        script: [Screen?],
         cyclesRequired: Int = 3,
         cycleIntervalMs: Int = 1,
         timeoutMs: Int = 200,

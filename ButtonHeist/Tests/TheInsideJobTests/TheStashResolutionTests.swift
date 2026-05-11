@@ -19,13 +19,21 @@ final class TheStashResolutionTests: XCTestCase {
 
     // MARK: - Helpers
 
+    private var nextElementYOffset: CGFloat = 0
+
     private func element(
         label: String? = nil,
         value: String? = nil,
         identifier: String? = nil,
         traits: UIAccessibilityTraits = .none
     ) -> AccessibilityElement {
-        AccessibilityElement(
+        // Every constructed element gets a unique frame so duplicates are
+        // distinguishable at the AccessibilityElement (Hashable) level — the
+        // tests rely on registering multiple "same-label" elements that the
+        // current Screen value treats as distinct.
+        let frame = CGRect(x: 0, y: nextElementYOffset, width: 100, height: 44)
+        nextElementYOffset += 50
+        return AccessibilityElement(
             description: label ?? "",
             label: label,
             value: value,
@@ -33,7 +41,7 @@ final class TheStashResolutionTests: XCTestCase {
             identifier: identifier,
             hint: nil,
             userInputLabels: nil,
-            shape: .frame(.zero),
+            shape: .frame(frame),
             activationPoint: .zero,
             usesDefaultActivationPoint: true,
             customActions: [],
@@ -46,35 +54,51 @@ final class TheStashResolutionTests: XCTestCase {
 
     /// Accumulated hierarchy nodes for matcher resolution.
     private var hierarchyNodes: [AccessibilityHierarchy] = []
+    /// Accumulated elements (in registration order).
+    private var registeredEntries: [(element: AccessibilityElement, heistId: String)] = []
 
-    /// Register an element in the registry, currentHierarchy, and reverse index.
+    /// Register an element into the current Screen. Rebuilds the screen value
+    /// on every call so individual tests don't have to think about the
+    /// memberwise init. Post-0.2.25 this also serves the matcher path (the
+    /// registry is gone — Screen.heistIdByElement is the lookup).
     private func register(_ element: AccessibilityElement, heistId: String, index: Int) {
-        bagman.registry.insertForTesting(TheStash.ScreenElement(
-            heistId: heistId,
-            contentSpaceOrigin: nil,
-            element: element,
-            object: nil,
-            scrollView: nil
-        ))
-        // Add to hierarchy and reverse index for matcher resolution
         hierarchyNodes.append(.element(element, traversalIndex: index))
-        bagman.currentHierarchy = hierarchyNodes
-        bagman.registry.reverseIndex[element] = heistId
-        bagman.registry.viewportIds.insert(heistId)
+        registeredEntries.append((element, heistId))
+        rebuildScreen()
     }
 
-    /// Register an element in the registry ONLY (not in currentHierarchy).
-    /// Simulates an explored off-screen element that was discovered by full explore
-    /// but is not currently visible in the viewport.
+    /// Element registration that only adds the leaf to the heistId→entry map
+    /// without putting it in the live hierarchy. Off-screen entries are now
+    /// strictly notFound through `resolveTarget` (the strict off-screen rule)
+    /// so the only places this still matters are `selectElements()` and
+    /// `findElement(heistId:)` tests asserting the union shape.
     private func registerOffScreen(_ element: AccessibilityElement, heistId: String) {
-        bagman.registry.insertForTesting(TheStash.ScreenElement(
-            heistId: heistId,
-            contentSpaceOrigin: nil,
-            element: element,
-            object: nil,
-            scrollView: nil
-        ))
-        bagman.registry.reverseIndex[element] = heistId
+        registeredEntries.append((element, heistId))
+        rebuildScreen()
+    }
+
+    private func rebuildScreen() {
+        var elements: [String: Screen.ScreenElement] = [:]
+        var heistIdByElement: [AccessibilityElement: String] = [:]
+        for entry in registeredEntries {
+            let screenElement = Screen.ScreenElement(
+                heistId: entry.heistId,
+                contentSpaceOrigin: nil,
+                element: entry.element,
+                object: nil,
+                scrollView: nil
+            )
+            elements[entry.heistId] = screenElement
+            heistIdByElement[entry.element] = entry.heistId
+        }
+        bagman.currentScreen = Screen(
+            elements: elements,
+            hierarchy: hierarchyNodes,
+            containerStableIds: [:],
+            heistIdByElement: heistIdByElement,
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
     }
 
     // MARK: - heistId Resolution
@@ -357,128 +381,31 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(result[0].heistId, "button_save")
     }
 
-    func testSelectElementsIncludesOffScreenElements() {
-        let visible = element(label: "Visible", traits: .button)
-        let offScreen = element(label: "OffScreen", traits: .button)
-        register(visible, heistId: "button_visible", index: 0)
-        register(offScreen, heistId: "button_offscreen", index: 1)
+    // MARK: - Strict Off-Screen Rule (post-0.2.25)
 
-        // Simulate off-viewport: only "button_visible" is in the viewport set
-        bagman.registry.viewportIds = Set(["button_visible"])
-
-        let all = bagman.selectElements()
-        XCTAssertEqual(all.count, 2, "Should return both visible and off-screen elements")
-        let heistIds = all.map(\.heistId)
-        XCTAssertTrue(heistIds.contains("button_visible"))
-        XCTAssertTrue(heistIds.contains("button_offscreen"))
-    }
-
-    // MARK: - Off-Screen Matcher Fallback
-
-    func testMatcherFallsBackToRegistryForOffScreenElement() {
+    /// After the registry was deleted, matcher-based resolution looks only at
+    /// the live hierarchy. An off-screen entry no longer participates in
+    /// matching, so the resolution must miss with a useful diagnostic.
+    func testMatcherDoesNotFallBackToOffScreenEntry() {
         let onScreen = element(label: "Visible", traits: .button)
         let offScreen = element(label: "Long List", traits: .button)
         register(onScreen, heistId: "button_visible", index: 0)
         registerOffScreen(offScreen, heistId: "long_list_button")
 
         let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Long List", traits: [.button])))
-        guard let resolved = result.resolved else {
-            XCTFail("Expected .resolved from registry fallback, got \(result)")
+        guard case .notFound = result else {
+            XCTFail("Expected .notFound under strict off-screen rule, got \(result)")
             return
         }
-        XCTAssertEqual(resolved.element.label, "Long List")
     }
 
-    func testMatcherPrefersHierarchyOverRegistry() {
-        let onScreen = element(label: "Save", traits: .button)
-        let offScreen = element(label: "Save Offscreen", traits: .button)
-        register(onScreen, heistId: "button_save", index: 0)
-        registerOffScreen(offScreen, heistId: "button_save_offscreen")
-
-        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save")))
-        guard let resolved = result.resolved else {
-            XCTFail("Expected .resolved, got \(result)")
-            return
-        }
-        XCTAssertEqual(resolved.element.label, "Save", "Should prefer on-screen hierarchy match")
-    }
-
-    func testMatcherRegistryFallbackAmbiguous() {
-        let offScreen1 = element(label: "Item", value: "one", traits: .button)
-        let offScreen2 = element(label: "Item", value: "two", traits: .button)
-        registerOffScreen(offScreen1, heistId: "item_1")
-        registerOffScreen(offScreen2, heistId: "item_2")
-
-        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Item")))
-        guard case .ambiguous(let candidates, let diagnostics) = result else {
-            XCTFail("Expected .ambiguous from registry fallback, got \(result)")
-            return
-        }
-        XCTAssertEqual(candidates.count, 2)
-        XCTAssertTrue(diagnostics.contains("2 elements match"))
-    }
-
-    func testMatcherRegistryFallbackWithOrdinal() {
-        let offScreen1 = element(label: "Item", value: "first")
-        let offScreen2 = element(label: "Item", value: "second")
-        registerOffScreen(offScreen1, heistId: "item_1")
-        registerOffScreen(offScreen2, heistId: "item_2")
-
-        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Item"), ordinal: 0))
-        XCTAssertNotNil(result.resolved, "Should resolve off-screen element with ordinal 0")
-    }
-
-    func testMatcherRegistryFallbackOrdinalUsesDeterministicHeistIdOrder() {
-        let offScreenB = element(label: "Item", value: "b")
-        let offScreenA = element(label: "Item", value: "a")
-        registerOffScreen(offScreenB, heistId: "item_b")
-        registerOffScreen(offScreenA, heistId: "item_a")
-
-        let first = bagman.resolveTarget(.matcher(ElementMatcher(label: "Item"), ordinal: 0)).resolved
-        let second = bagman.resolveTarget(.matcher(ElementMatcher(label: "Item"), ordinal: 1)).resolved
-
-        XCTAssertEqual(first?.screenElement.heistId, "item_a")
-        XCTAssertEqual(second?.screenElement.heistId, "item_b")
-    }
-
-    func testMatcherRegistryFallbackOrdinalOutOfBounds() {
-        let offScreen = element(label: "Item", value: "only")
-        registerOffScreen(offScreen, heistId: "item_1")
-
-        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Item"), ordinal: 5))
-        guard case .notFound(let diagnostics) = result else {
-            XCTFail("Expected .notFound, got \(result)")
-            return
-        }
-        XCTAssertTrue(diagnostics.contains("ordinal 5 requested"))
-    }
-
-    func testOffScreenMatcherResolvesViaRegistryFallback() {
-        let offScreen = element(label: "Hidden Button", traits: .button)
-        registerOffScreen(offScreen, heistId: "hidden_button")
-
-        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Hidden Button")))
-        XCTAssertEqual(result.resolved?.element.label, "Hidden Button")
-        XCTAssertEqual(result.resolved?.screenElement.heistId, "hidden_button")
-    }
-
-    func testHasTargetIgnoresOffScreenMatcherInRegistry() {
+    /// hasTarget — and wait_for absent by extension — must report off-screen
+    /// matchers as absent. The live hierarchy is the only source of truth.
+    func testHasTargetIgnoresOffScreenMatcher() {
         let offScreen = element(label: "Below Fold", traits: .button)
         registerOffScreen(offScreen, heistId: "below_fold_button")
 
-        // hasTarget checks live hierarchy only — registry-only elements are invisible
-        // so wait_for absent works correctly when elements leave the screen
         XCTAssertFalse(bagman.hasTarget(.matcher(ElementMatcher(label: "Below Fold"))))
-    }
-
-    func testHasTargetIgnoresOffScreenHeistIdInRegistry() {
-        let offScreen = element(label: "Below Fold", traits: .button)
-        registerOffScreen(offScreen, heistId: "below_fold_button")
-
-        // heistId target resolution can still use persistent registry memory, but
-        // wait_for presence/absence must reflect the current live accessibility tree.
-        XCTAssertNotNil(bagman.resolveTarget(.heistId("below_fold_button")).resolved)
-        XCTAssertFalse(bagman.hasTarget(.heistId("below_fold_button")))
     }
 
     func testHasTargetFindsLiveHeistIdInViewport() {

@@ -68,7 +68,8 @@ final class TheBrainsScrollTests: XCTestCase {
             throw XCTSkip("UIPageViewController did not expose _UIQueuingScrollView on this OS")
         }
 
-        let manifest = await brains.exploreScreen()
+        var union = brains.stash.currentScreen
+        let manifest = await brains.exploreScreen(union: &union)
 
         for container in unsafeContainers {
             XCTAssertTrue(
@@ -77,7 +78,7 @@ final class TheBrainsScrollTests: XCTestCase {
             )
         }
         XCTAssertTrue(
-            brains.stash.registry.flattenElements().contains {
+            union.elements.values.contains {
                 $0.element.label == "Page One Visible Label"
             },
             "Visible page content should remain discoverable without scrolling the queuing scroll view"
@@ -311,122 +312,92 @@ final class TheBrainsScrollTests: XCTestCase {
 
     // MARK: - offViewportRegistryEntry
 
-    func testOffViewportEntryByHeistIdReturnsWhenOffScreen() {
-        let element = makeElement(label: "Item")
-        let heistId = "button_item"
-        brains.stash.registry.insertForTesting(TheStash.ScreenElement(
-            heistId: heistId,
-            contentSpaceOrigin: CGPoint(x: 0, y: 2000),
-            element: element,
-            object: nil,
-            scrollView: nil
-        ))
-        brains.stash.registry.viewportIds = ["other_element"]
+    /// Install a Screen whose `elements` includes an entry that's not in the
+    /// live hierarchy — simulating an element retained from a previous
+    /// exploration commit that has since scrolled off.
+    private func installScreenWithOffViewportEntry(
+        liveHierarchy: [(AccessibilityElement, String)],
+        offViewport: [(AccessibilityElement, String, CGPoint?)]
+    ) {
+        var elements: [String: Screen.ScreenElement] = [:]
+        var heistIdByElement: [AccessibilityElement: String] = [:]
+        var hierarchy: [AccessibilityHierarchy] = []
+        for (index, pair) in liveHierarchy.enumerated() {
+            elements[pair.1] = Screen.ScreenElement(
+                heistId: pair.1, contentSpaceOrigin: nil, element: pair.0,
+                object: nil, scrollView: nil
+            )
+            heistIdByElement[pair.0] = pair.1
+            hierarchy.append(.element(pair.0, traversalIndex: index))
+        }
+        for entry in offViewport {
+            elements[entry.1] = Screen.ScreenElement(
+                heistId: entry.1, contentSpaceOrigin: entry.2,
+                element: entry.0, object: nil, scrollView: nil
+            )
+        }
+        brains.stash.currentScreen = Screen(
+            elements: elements,
+            hierarchy: hierarchy,
+            containerStableIds: [:],
+            heistIdByElement: heistIdByElement,
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
+    }
 
-        let entry = brains.offViewportRegistryEntry(for: .heistId(heistId))
-        XCTAssertNotNil(entry, "Should return entry when heistId is not in viewport")
-        XCTAssertEqual(entry?.heistId, heistId)
+    func testOffViewportEntryByHeistIdReturnsWhenOffScreen() {
+        let other = makeElement(label: "Other")
+        let element = makeElement(label: "Item")
+        installScreenWithOffViewportEntry(
+            liveHierarchy: [(other, "other_element")],
+            offViewport: [(element, "button_item", CGPoint(x: 0, y: 2000))]
+        )
+
+        let entry = brains.offViewportRegistryEntry(for: .heistId("button_item"))
+        XCTAssertNotNil(entry, "Should return entry when heistId is not in live viewport")
+        XCTAssertEqual(entry?.heistId, "button_item")
     }
 
     func testOffViewportEntryByHeistIdReturnsNilWhenOnScreen() {
         let element = makeElement(label: "Item")
-        let heistId = "button_item"
-        brains.stash.registry.insertForTesting(TheStash.ScreenElement(
-            heistId: heistId,
-            contentSpaceOrigin: nil,
-            element: element,
-            object: nil,
-            scrollView: nil
-        ))
-        brains.stash.registry.viewportIds = [heistId]
+        installScreenWithOffViewportEntry(
+            liveHierarchy: [(element, "button_item")],
+            offViewport: []
+        )
 
-        let entry = brains.offViewportRegistryEntry(for: .heistId(heistId))
-        XCTAssertNil(entry, "Should return nil when heistId is in viewport")
+        let entry = brains.offViewportRegistryEntry(for: .heistId("button_item"))
+        XCTAssertNil(entry, "Should return nil when heistId is in live viewport")
     }
 
-    func testOffViewportEntryByMatcherReturnsOffScreenMatch() {
+    /// Matcher resolution no longer falls back to off-viewport entries
+    /// (the registry is gone — matchers walk the live hierarchy only).
+    /// `offViewportRegistryEntry(for:.matcher)` therefore only returns a
+    /// hit when the live hierarchy resolves the matcher *and* the resolved
+    /// element is not in the live viewport, which is impossible.
+    func testOffViewportEntryByMatcherReturnsNilForOffScreenOnlyEntry() {
+        let other = makeElement(label: "Other")
         let element = makeElement(label: "Target Button", traits: .button)
-        let heistId = "button_target_button"
-        brains.stash.registry.insertForTesting(TheStash.ScreenElement(
-            heistId: heistId,
-            contentSpaceOrigin: CGPoint(x: 0, y: 3000),
-            element: element,
-            object: nil,
-            scrollView: nil
-        ))
-        brains.stash.registry.viewportIds = ["other_element"]
+        installScreenWithOffViewportEntry(
+            liveHierarchy: [(other, "other_element")],
+            offViewport: [(element, "button_target_button", CGPoint(x: 0, y: 3000))]
+        )
 
         let matcher = ElementMatcher(label: "Target Button")
         let entry = brains.offViewportRegistryEntry(for: .matcher(matcher))
-        XCTAssertNotNil(entry, "Should find off-viewport element by matcher")
-        XCTAssertEqual(entry?.heistId, heistId)
+        XCTAssertNil(entry, "Matcher resolution does not reach off-viewport entries post-0.2.25")
     }
 
     func testOffViewportEntryByMatcherReturnsNilWhenOnScreen() {
         let element = makeElement(label: "Visible Item", traits: .button)
-        let heistId = "button_visible_item"
-        brains.stash.registry.insertForTesting(TheStash.ScreenElement(
-            heistId: heistId,
-            contentSpaceOrigin: nil,
-            element: element,
-            object: nil,
-            scrollView: nil
-        ))
-        brains.stash.registry.viewportIds = [heistId]
+        installScreenWithOffViewportEntry(
+            liveHierarchy: [(element, "button_visible_item")],
+            offViewport: []
+        )
 
         let matcher = ElementMatcher(label: "Visible Item")
         let entry = brains.offViewportRegistryEntry(for: .matcher(matcher))
-        XCTAssertNil(entry, "Should return nil when matched element is in viewport")
-    }
-
-    func testOffViewportEntryByMatcherHonorsOrdinal() {
-        let first = makeElement(label: "Item", shape: .frame(CGRect(x: 0, y: 0, width: 100, height: 44)))
-        let second = makeElement(label: "Item", shape: .frame(CGRect(x: 0, y: 44, width: 100, height: 44)))
-        brains.stash.registry.insertForTesting(TheStash.ScreenElement(
-            heistId: "item_first",
-            contentSpaceOrigin: CGPoint(x: 0, y: 100),
-            element: first,
-            object: nil,
-            scrollView: nil
-        ))
-        brains.stash.registry.insertForTesting(TheStash.ScreenElement(
-            heistId: "item_second",
-            contentSpaceOrigin: CGPoint(x: 0, y: 200),
-            element: second,
-            object: nil,
-            scrollView: nil
-        ))
-        brains.stash.registry.viewportIds = []
-
-        let matcher = ElementMatcher(label: "Item")
-        let entry = brains.offViewportRegistryEntry(for: .matcher(matcher, ordinal: 1))
-
-        XCTAssertEqual(entry?.heistId, "item_second")
-    }
-
-    func testOffViewportEntryByMatcherDoesNotPreScrollAmbiguousMatcher() {
-        let first = makeElement(label: "Item", shape: .frame(CGRect(x: 0, y: 0, width: 100, height: 44)))
-        let second = makeElement(label: "Item", shape: .frame(CGRect(x: 0, y: 44, width: 100, height: 44)))
-        brains.stash.registry.insertForTesting(TheStash.ScreenElement(
-            heistId: "item_first",
-            contentSpaceOrigin: CGPoint(x: 0, y: 100),
-            element: first,
-            object: nil,
-            scrollView: nil
-        ))
-        brains.stash.registry.insertForTesting(TheStash.ScreenElement(
-            heistId: "item_second",
-            contentSpaceOrigin: CGPoint(x: 0, y: 200),
-            element: second,
-            object: nil,
-            scrollView: nil
-        ))
-        brains.stash.registry.viewportIds = []
-
-        let matcher = ElementMatcher(label: "Item")
-        let entry = brains.offViewportRegistryEntry(for: .matcher(matcher))
-
-        XCTAssertNil(entry)
+        XCTAssertNil(entry, "Should return nil when matched element is in live viewport")
     }
 
     // MARK: - ContainerExploreState
@@ -441,12 +412,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(state.discoveredHeistIds.contains("id_a"))
     }
 
-    // MARK: - ExplorePhase lifecycle
-
-    func testExplorePhaseIdleOutsideExplore() {
-        XCTAssertEqual(brains.explorePhase, .idle,
-                       "explorePhase should be .idle when no explore cycle is active")
-    }
+    // MARK: - Clear Cache Resets Explore State
 
     func testClearCacheResetsExploreState() {
         brains.containerExploreStates[
@@ -458,14 +424,11 @@ final class TheBrainsScrollTests: XCTestCase {
             visibleSubtreeFingerprint: 1,
             discoveredHeistIds: ["x"]
         )
-        brains.beginExploreCycle()
 
         brains.clearCache()
 
         XCTAssertTrue(brains.containerExploreStates.isEmpty,
                       "clearCache should empty containerExploreStates")
-        XCTAssertEqual(brains.explorePhase, .idle,
-                       "clearCache should reset explorePhase to .idle")
     }
 
     // MARK: - resolveScrollTarget
@@ -683,12 +646,13 @@ final class TheBrainsScrollTests: XCTestCase {
         // bottom clear line. A swipe rectangle that overlaps the tab bar
         // must be clipped to end at its top edge.
         let tabBarFrame = CGRect(x: 0, y: 700, width: 400, height: 80)
-        brains.stash.currentHierarchy = [
-            .container(
-                AccessibilityContainer(type: .tabBar, frame: tabBarFrame),
-                children: []
-            )
-        ]
+        let tabBarContainer = AccessibilityContainer(type: .tabBar, frame: tabBarFrame)
+        brains.stash.currentScreen = Screen(
+            elements: [:],
+            hierarchy: [.container(tabBarContainer, children: [])],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
         let result = brains.safeSwipeFrame(from: CGRect(x: 100, y: 400, width: 200, height: 500))
         XCTAssertEqual(
             result.maxY, tabBarFrame.minY,

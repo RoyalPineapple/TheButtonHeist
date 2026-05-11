@@ -83,8 +83,8 @@ final class WireConverterTests: XCTestCase {
         activationPointX: Double = 0,
         activationPointY: Double = 0,
         customContent: [AccessibilityElement.CustomContent] = []
-    ) -> TheStash.ScreenElement {
-        TheStash.ScreenElement(
+    ) -> Screen.ScreenElement {
+        Screen.ScreenElement(
             heistId: heistId,
             contentSpaceOrigin: nil,
             element: makeElement(
@@ -97,6 +97,29 @@ final class WireConverterTests: XCTestCase {
             object: nil,
             scrollView: nil
         )
+    }
+
+    /// Build a wire tree node from a ScreenElement leaf.
+    private func wireLeaf(_ element: Screen.ScreenElement) -> InterfaceNode {
+        .element(WireConversion.toWire(element))
+    }
+
+    /// Build a wire tree container node with a fixed stableId.
+    private func wireContainer(
+        stableId: String,
+        type: ContainerInfo.ContainerType = .list,
+        frame: CGRect = .zero,
+        children: [InterfaceNode]
+    ) -> InterfaceNode {
+        let info = ContainerInfo(
+            type: type,
+            stableId: stableId,
+            frameX: Double(frame.origin.x),
+            frameY: Double(frame.origin.y),
+            frameWidth: Double(frame.size.width),
+            frameHeight: Double(frame.size.height)
+        )
+        return .container(info, children: children)
     }
 
     // MARK: - Trait Mapping
@@ -421,9 +444,9 @@ final class WireConverterTests: XCTestCase {
         let before = [makeScreenElement(heistId: "button_ok")]
         let afterElement = makeScreenElement(heistId: "header_settings", label: "Settings", traits: [.header])
         let after = [afterElement]
-        // The new wire shape derives newInterface from the registry tree, not
+        // The new wire shape derives newInterface from the screen's tree, not
         // the flat snapshot — so the tree must reflect after.
-        let afterTree: [TheStash.RegistryNode] = [.element(afterElement)]
+        let afterTree: [InterfaceNode] = [wireLeaf(afterElement)]
 
         let delta = WireConversion.computeDelta(
             before: before, after: after, afterTree: afterTree, isScreenChange: true
@@ -438,13 +461,13 @@ final class WireConverterTests: XCTestCase {
     func testTreeOnlyChangeReturnsStructuralInsertion() {
         let element = makeScreenElement(heistId: "button_ok", label: "OK", traits: [.button])
         let beforeTree = [InterfaceNode.element(WireConversion.toWire(element))]
-        let container = AccessibilityContainer(
-            type: .list,
-            frame: CGRect(x: 0, y: 0, width: 320, height: 100)
-        )
-        let entry = TheStash.RegistryContainerEntry(stableId: "list_0", container: container)
-        let afterTree: [TheStash.RegistryNode] = [
-            .container(entry, children: [.element(element)])
+        let afterTree: [InterfaceNode] = [
+            wireContainer(
+                stableId: "list_0",
+                type: .list,
+                frame: CGRect(x: 0, y: 0, width: 320, height: 100),
+                children: [wireLeaf(element)]
+            )
         ]
 
         let delta = WireConversion.computeDelta(
@@ -482,9 +505,9 @@ final class WireConverterTests: XCTestCase {
             InterfaceNode.element(WireConversion.toWire(first)),
             InterfaceNode.element(WireConversion.toWire(second)),
         ]
-        let afterTree: [TheStash.RegistryNode] = [
-            .element(second),
-            .element(first),
+        let afterTree: [InterfaceNode] = [
+            wireLeaf(second),
+            wireLeaf(first),
         ]
 
         let delta = WireConversion.computeDelta(
@@ -533,9 +556,9 @@ final class WireConverterTests: XCTestCase {
             InterfaceNode.element(WireConversion.toWire(beforeElement)),
             InterfaceNode.element(WireConversion.toWire(other)),
         ]
-        let afterTree: [TheStash.RegistryNode] = [
-            .element(other),
-            .element(afterElement),
+        let afterTree: [InterfaceNode] = [
+            wireLeaf(other),
+            wireLeaf(afterElement),
         ]
 
         let delta = WireConversion.computeDelta(
@@ -582,9 +605,9 @@ final class WireConverterTests: XCTestCase {
             InterfaceNode.element(WireConversion.toWire(beforeElement)),
             InterfaceNode.element(WireConversion.toWire(other)),
         ]
-        let afterTree: [TheStash.RegistryNode] = [
-            .element(other),
-            .element(afterElement),
+        let afterTree: [InterfaceNode] = [
+            wireLeaf(other),
+            wireLeaf(afterElement),
         ]
 
         let delta = WireConversion.computeDelta(
@@ -629,7 +652,7 @@ final class WireConverterTests: XCTestCase {
             activationPointY: 222
         )
         let beforeTree = [InterfaceNode.element(WireConversion.toWire(beforeElement))]
-        let afterTree: [TheStash.RegistryNode] = [.element(afterElement)]
+        let afterTree: [InterfaceNode] = [wireLeaf(afterElement)]
 
         let delta = WireConversion.computeDelta(
             before: [beforeElement],
@@ -656,7 +679,7 @@ final class WireConverterTests: XCTestCase {
             InterfaceNode.element(WireConversion.toWire(first)),
             InterfaceNode.element(WireConversion.toWire(second)),
         ]
-        let afterTree: [TheStash.RegistryNode] = [.element(first)]
+        let afterTree: [InterfaceNode] = [wireLeaf(first)]
 
         let delta = WireConversion.computeDelta(
             before: [first, second],

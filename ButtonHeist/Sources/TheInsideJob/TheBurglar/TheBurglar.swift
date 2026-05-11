@@ -8,13 +8,13 @@ import AccessibilitySnapshotParser
 
 /// The crew member who breaks in and takes what he finds.
 ///
-/// TheBurglar reads the live accessibility tree, assigns heistIds, detects
-/// screen changes, and populates TheStash's registry. He owns the parse
-/// pipeline — the work of acquisition. TheStash owns the registry and
-/// answers questions about it.
+/// TheBurglar reads the live accessibility tree, assigns heistIds, and detects
+/// screen changes. Pure helpers — he has no mutable state. TheStash invokes
+/// him via `parse()` to obtain a `Screen` value, then commits or merges it on
+/// its own schedule.
 ///
-/// Intentionally module-internal so TheInsideJob unit tests can validate parse/apply behavior.
-/// Production call sites should always go through TheStash facades.
+/// Intentionally module-internal so TheInsideJob unit tests can validate parse
+/// behavior. Production call sites should always go through TheStash facades.
 @MainActor
 final class TheBurglar {
 
@@ -30,10 +30,10 @@ final class TheBurglar {
         self.tripwire = tripwire
     }
 
-    // MARK: - Parse Result
+    // MARK: - Parse Result (internal)
 
-    /// Everything the parser produces in a single read. Value type — no mutation,
-    /// no instance state. Created by `parse()`, consumed by `apply(_:)`.
+    /// Internal parse intermediate — raw output from the AccessibilitySnapshotParser
+    /// walk before heistId assignment. Tests use it to inject pre-parsed data.
     struct ParseResult {
         let elements: [AccessibilityElement]
         let hierarchy: [AccessibilityHierarchy]
@@ -44,8 +44,7 @@ final class TheBurglar {
     // MARK: - Parse (read-only)
 
     /// Read the live accessibility tree without mutating any state.
-    /// Returns a ParseResult value that can be inspected (e.g., for topology comparison)
-    /// before deciding whether to apply it.
+    /// Returns a ParseResult value or nil if no accessible windows exist.
     func parse() -> ParseResult? {
         let windows = tripwire.getAccessibleWindows()
         guard !windows.isEmpty else {
@@ -114,66 +113,6 @@ final class TheBurglar {
         )
     }
 
-    // MARK: - Apply (mutates registry)
-
-    /// Apply a parse result to the registry. Sets `currentHierarchy`,
-    /// `scrollableContainerViews`, merges the parsed hierarchy into the
-    /// persistent registry tree, refreshes viewport / reverseIndex.
-    /// Returns the assigned heistIds so callers can track them (e.g. for
-    /// explore cycle accumulation).
-    @discardableResult
-    func apply(_ result: ParseResult, to stash: TheStash) -> [String] {
-        stash.currentHierarchy = result.hierarchy
-        stash.scrollableContainerViews = result.scrollViews
-
-        let contexts = buildElementContexts(
-            hierarchy: result.hierarchy,
-            scrollableContainerViews: result.scrollViews,
-            elementObjects: result.objects
-        )
-
-        let containerIdentityContext = Self.buildContainerIdentityContext(
-            hierarchy: result.hierarchy,
-            scrollableContainerViews: result.scrollViews
-        )
-
-        let heistIds = TheStash.IdAssignment.assign(result.elements)
-        stash.registry.register(
-            parsedElements: result.elements,
-            heistIds: heistIds,
-            contexts: contexts,
-            hierarchy: result.hierarchy,
-            containerContentFrames: containerIdentityContext.contentFrames,
-            containersNestedInScrollView: containerIdentityContext.nestedInScrollView,
-            scrollableViews: result.scrollViews
-        )
-
-        // Detect first responder among parsed elements — no view hierarchy walk.
-        let firstResponders = zip(result.elements, heistIds).filter { element, _ in
-            (result.objects[element] as? UIView)?.isFirstResponder == true
-        }
-        if firstResponders.count > 1 {
-            insideJobLogger.warning("Multiple first responders detected: \(firstResponders.map(\.1).joined(separator: ", "))")
-        }
-        stash.registry.firstResponderHeistId = firstResponders.first?.1
-
-        // Cache screen name — first header element in traversal order.
-        stash.lastScreenName = result.elements.first {
-            $0.traits.contains(.header) && $0.label != nil
-        }?.label
-        stash.lastScreenId = TheStash.IdAssignment.slugify(stash.lastScreenName)
-
-        return heistIds
-    }
-
-    /// Parse and apply in one step. Most callers use this.
-    @discardableResult
-    func refresh(into stash: TheStash) -> ParseResult? {
-        guard let result = parse() else { return nil }
-        apply(result, to: stash)
-        return result
-    }
-
     // MARK: - Topology-Based Screen Change
 
     /// Did the accessibility topology change between two element snapshots?
@@ -204,10 +143,6 @@ final class TheBurglar {
     }
 
     /// Returns true when the content outside a tab bar container changed between snapshots.
-    ///
-    /// Partitions each hierarchy into tab bar elements (inside `.tabBar` containers) and
-    /// content elements (everything else). If both snapshots have a tab bar and the content
-    /// elements are mostly different, the user switched tabs.
     private func isTabBarContentChanged(
         beforeHierarchy: [AccessibilityHierarchy],
         afterHierarchy: [AccessibilityHierarchy]
@@ -220,8 +155,6 @@ final class TheBurglar {
         let afterContent = afterPartition.contentLabels
         guard !beforeContent.isEmpty, !afterContent.isEmpty else { return false }
 
-        // Multiset intersection via per-label frequency: the overlap between
-        // the two lists is the sum over all labels of min(beforeCount, afterCount).
         let beforeCounts = beforeContent.reduce(into: [:]) { counts, label in counts[label, default: 0] += 1 }
         let afterCounts = afterContent.reduce(into: [:]) { counts, label in counts[label, default: 0] += 1 }
         let matchedCount = beforeCounts.reduce(0) { running, pair in
@@ -265,11 +198,6 @@ final class TheBurglar {
     /// Walk the hierarchy tree to compute each container's frame expressed in
     /// the nearest enclosing scrollable's content space. Top-level containers
     /// (no enclosing scrollable) keep their screen-space frame.
-    ///
-    /// The result feeds `ElementRegistry.stableId` so a container nested in a
-    /// scroll view keeps its identity as the outer view scrolls, and reusable
-    /// cell-embedded containers at distinct logical positions get distinct
-    /// ids (no UIView-instance ambiguity from the cell pool).
     struct ContainerIdentityContext {
         let contentFrames: [AccessibilityContainer: CGRect]
         let nestedInScrollView: Set<AccessibilityContainer>
@@ -337,13 +265,19 @@ final class TheBurglar {
 
     // MARK: - Element Context Building
 
+    struct ElementContext {
+        let contentSpaceOrigin: CGPoint?
+        weak var scrollView: UIScrollView?
+        weak var object: NSObject?
+    }
+
     /// Walk the hierarchy tree to gather per-element context: content-space origins,
     /// scroll view refs, and live element objects.
-    private func buildElementContexts(
+    static func buildElementContexts(
         hierarchy: [AccessibilityHierarchy],
         scrollableContainerViews: [AccessibilityContainer: UIView],
         elementObjects: [AccessibilityElement: NSObject]
-    ) -> [AccessibilityElement: TheStash.ElementContext] {
+    ) -> [AccessibilityElement: ElementContext] {
         Dictionary(
             hierarchy.compactMap(
                 context: nil as UIScrollView?,
@@ -363,7 +297,7 @@ final class TheBurglar {
                     }
                     return (
                         element,
-                        TheStash.ElementContext(
+                        ElementContext(
                             contentSpaceOrigin: origin,
                             scrollView: scrollView,
                             object: elementObjects[element]
@@ -373,6 +307,215 @@ final class TheBurglar {
             ),
             uniquingKeysWith: { _, latest in latest }
         )
+    }
+
+    // MARK: - Stable Container Identity
+
+    /// Compute a stable identifier for a parser container, derived from its
+    /// own exposed values. Identifiers persist across parses so callers that
+    /// compare container identity across reads (wire tree edits, exploration
+    /// caching) survive normal layout drift.
+    static func stableId(
+        for container: AccessibilityContainer,
+        contentFrame: CGRect,
+        isNestedInScrollView: Bool = false,
+        scrollableView: UIView? = nil
+    ) -> String {
+        let frameHash = coarseFrameHash(contentFrame)
+        switch container.type {
+        case .scrollable:
+            if let scrollableView, !isNestedInScrollView {
+                let oid = ObjectIdentifier(scrollableView)
+                return "scrollable_\(String(oid.hashValue, radix: 16))"
+            }
+            return "scrollable_\(frameHash)"
+        case .semanticGroup(let label, let value, let identifier):
+            let labelSlug = TheScore.slugify(label) ?? "anon"
+            let valueSlug = TheScore.slugify(value) ?? ""
+            let identifierSlug = identifier ?? ""
+            return "semantic_\(identifierSlug)_\(labelSlug)_\(valueSlug)"
+        case .list:
+            return "list_\(frameHash)"
+        case .landmark:
+            return "landmark_\(frameHash)"
+        case .tabBar:
+            return "tabBar_\(frameHash)"
+        case .dataTable(let rows, let columns):
+            return "table_\(rows)x\(columns)_\(frameHash)"
+        }
+    }
+
+    private static func coarseFrameHash(_ frame: CGRect) -> String {
+        let xCoord = Int((frame.origin.x.sanitizedForJSON / 8).rounded())
+        let yCoord = Int((frame.origin.y.sanitizedForJSON / 8).rounded())
+        let width = Int((frame.size.width.sanitizedForJSON / 8).rounded())
+        let height = Int((frame.size.height.sanitizedForJSON / 8).rounded())
+        return "\(xCoord)_\(yCoord)_\(width)_\(height)"
+    }
+
+    // MARK: - Build Screen From Parse
+
+    /// Build a Screen value from a ParseResult. Pure: no mutable state.
+    /// This is the lifted body of the old `apply(_:to:)` — heistId assignment
+    /// (with content-position disambiguation), context resolution, container
+    /// stable-id computation, and first-responder detection, all in one pass.
+    static func buildScreen(from result: ParseResult) -> Screen {
+        let contexts = buildElementContexts(
+            hierarchy: result.hierarchy,
+            scrollableContainerViews: result.scrollViews,
+            elementObjects: result.objects
+        )
+        let identityContext = buildContainerIdentityContext(
+            hierarchy: result.hierarchy,
+            scrollableContainerViews: result.scrollViews
+        )
+
+        let baseHeistIds = TheStash.IdAssignment.assign(result.elements)
+        let resolvedHeistIds = resolveHeistIds(
+            base: baseHeistIds, elements: result.elements, contexts: contexts
+        )
+
+        var screenElements: [String: Screen.ScreenElement] = [:]
+        screenElements.reserveCapacity(result.elements.count)
+        var heistIdByElement: [AccessibilityElement: String] = [:]
+        heistIdByElement.reserveCapacity(result.elements.count)
+        for (parsedElement, heistId) in zip(result.elements, resolvedHeistIds) {
+            let context = contexts[parsedElement]
+            let entry = Screen.ScreenElement(
+                heistId: heistId,
+                contentSpaceOrigin: context?.contentSpaceOrigin,
+                element: parsedElement,
+                object: context?.object,
+                scrollView: context?.scrollView
+            )
+            screenElements[heistId] = entry
+            heistIdByElement[parsedElement] = heistId
+        }
+
+        let firstResponders = zip(result.elements, resolvedHeistIds).filter { element, _ in
+            (result.objects[element] as? UIView)?.isFirstResponder == true
+        }
+        if firstResponders.count > 1 {
+            insideJobLogger.warning("Multiple first responders detected: \(firstResponders.map(\.1).joined(separator: ", "))")
+        }
+
+        let containerStableIds = buildContainerStableIds(
+            hierarchy: result.hierarchy,
+            identityContext: identityContext,
+            scrollableViews: result.scrollViews
+        )
+
+        let scrollableViewRefs = Dictionary(
+            uniqueKeysWithValues: result.scrollViews.map { (container, view) in
+                (container, Screen.ScrollableViewRef(view: view))
+            }
+        )
+
+        return Screen(
+            elements: screenElements,
+            hierarchy: result.hierarchy,
+            containerStableIds: containerStableIds,
+            heistIdByElement: heistIdByElement,
+            firstResponderHeistId: firstResponders.first?.1,
+            scrollableContainerViews: scrollableViewRefs
+        )
+    }
+
+    // MARK: - HeistId Disambiguation (in-parse only)
+
+    /// Resolve a parallel-array of base heistIds, appending `_at_X_Y` content-
+    /// space disambiguation when the same base id appears twice within a single
+    /// parse with distinct content-space origins. Cross-parse disambiguation no
+    /// longer exists — each parse is self-contained.
+    private static func resolveHeistIds(
+        base: [String],
+        elements: [AccessibilityElement],
+        contexts: [AccessibilityElement: ElementContext]
+    ) -> [String] {
+        var resolved: [String] = []
+        resolved.reserveCapacity(base.count)
+        var seen: [String: (element: AccessibilityElement, origin: CGPoint?)] = [:]
+
+        for (heistId, element) in zip(base, elements) {
+            let origin = contexts[element]?.contentSpaceOrigin
+            guard let existing = seen[heistId] else {
+                resolved.append(heistId)
+                seen[heistId] = (element, origin)
+                continue
+            }
+
+            if hasSameMinimumMatcher(existing.element, element),
+               let origin,
+               let existingOrigin = existing.origin,
+               !sameOrigin(existingOrigin, origin) {
+                let disambiguated = contentPositionHeistId(heistId, origin: origin)
+                resolved.append(disambiguated)
+                seen[disambiguated] = (element, origin)
+                continue
+            }
+
+            // Fall back: take the base id (IdAssignment.assign already adds
+            // `_N` suffixes for duplicates; if we're still seeing a collision
+            // here it's because the prior pass collapsed unique elements).
+            resolved.append(heistId)
+        }
+
+        return resolved
+    }
+
+    private static func contentPositionHeistId(_ baseHeistId: String, origin: CGPoint) -> String {
+        "\(baseHeistId)_at_\(Int(origin.x.rounded()))_\(Int(origin.y.rounded()))"
+    }
+
+    private static func hasSameMinimumMatcher(_ lhs: AccessibilityElement, _ rhs: AccessibilityElement) -> Bool {
+        guard lhs.identifier == rhs.identifier,
+              lhs.label == rhs.label,
+              stableTraitNames(lhs.traits) == stableTraitNames(rhs.traits) else {
+            return false
+        }
+        if lhs.identifier?.isEmpty == false || lhs.label?.isEmpty == false {
+            return true
+        }
+        return lhs.value == rhs.value
+    }
+
+    private static func stableTraitNames(_ traits: UIAccessibilityTraits) -> Set<String> {
+        Set(traits.traitNames).subtracting(transientTraitNames)
+    }
+
+    private static let transientTraitNames: Set<String> = [
+        HeistTrait.selected.rawValue,
+        HeistTrait.notEnabled.rawValue,
+        HeistTrait.isEditing.rawValue,
+        HeistTrait.inactive.rawValue,
+        HeistTrait.visited.rawValue,
+        HeistTrait.updatesFrequently.rawValue,
+    ]
+
+    private static func sameOrigin(_ lhs: CGPoint, _ rhs: CGPoint) -> Bool {
+        abs(lhs.x - rhs.x) < 0.5 && abs(lhs.y - rhs.y) < 0.5
+    }
+
+    // MARK: - Container StableId Index
+
+    private static func buildContainerStableIds(
+        hierarchy: [AccessibilityHierarchy],
+        identityContext: ContainerIdentityContext,
+        scrollableViews: [AccessibilityContainer: UIView]
+    ) -> [AccessibilityContainer: String] {
+        var result: [AccessibilityContainer: String] = [:]
+        for container in hierarchy.containers {
+            let contentFrame = identityContext.contentFrames[container] ?? container.frame
+            let isNested = identityContext.nestedInScrollView.contains(container)
+            let stableId = stableId(
+                for: container,
+                contentFrame: contentFrame,
+                isNestedInScrollView: isNested,
+                scrollableView: scrollableViews[container]
+            )
+            result[container] = stableId
+        }
+        return result
     }
 
     // MARK: - Search Bar Reveal
@@ -407,9 +550,6 @@ final class TheBurglar {
         }
     }
 
-    /// Walk the UIKit view controller tree from `root`, returning every leaf
-    /// (non-container) view controller reachable through nav topViewController,
-    /// tab selectedViewController, and modal presentedViewController edges.
     private static func allVisibleViewControllers(from root: UIViewController) -> [UIViewController] {
         let presentedChain = root.presentedViewController.map { allVisibleViewControllers(from: $0) } ?? []
         if let nav = root as? UINavigationController {

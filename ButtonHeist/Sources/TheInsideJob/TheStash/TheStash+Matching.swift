@@ -175,40 +175,18 @@ extension TheStash {
     /// matching ScreenElements using exact-or-miss semantics: case-insensitive
     /// equality with typography folding on string fields, exact bitmask comparison
     /// on traits. There is no substring fallback — a miss is a miss, and the agent
-    /// gets structured suggestions through the `.notFound` diagnostic path. Hierarchy
-    /// (visible) elements come first in traversal order, then off-screen registry
-    /// elements in content-space order.
+    /// gets structured suggestions through the `.notFound` diagnostic path. Matches
+    /// are returned in hierarchy traversal order; off-screen lookup is gone with
+    /// the registry (post-0.2.25 the screen value is the only source of truth).
     func matchScreenElements(_ matcher: ElementMatcher, limit: Int) -> [ScreenElement] {
         guard limit > 0 else { return [] }
-        let hierarchyHits = currentHierarchy.matches(matcher, mode: .exact, limit: limit)
+        let hierarchyHits = currentScreen.hierarchy.matches(matcher, mode: .exact, limit: limit)
         var seenIds = Set<String>()
-        var matches = hierarchyHits.compactMap { match -> ScreenElement? in
-            guard let heistId = registry.reverseIndex[match.element],
-                  let element = registry.findElement(heistId: heistId),
+        return hierarchyHits.compactMap { match -> ScreenElement? in
+            guard let heistId = currentScreen.heistIdByElement[match.element],
+                  let element = currentScreen.findElement(heistId: heistId),
                   seenIds.insert(heistId).inserted else { return nil }
             return element
-        }
-        if matches.count >= limit { return Array(matches.prefix(limit)) }
-
-        let offscreen = registry.flattenElements()
-            .filter { !seenIds.contains($0.heistId) && $0.element.matches(matcher, mode: .exact) }
-            .sorted(by: registryOrder)
-        matches.append(contentsOf: offscreen.prefix(limit - matches.count))
-        return matches
-    }
-
-    private func registryOrder(_ lhs: ScreenElement, _ rhs: ScreenElement) -> Bool {
-        switch (lhs.contentSpaceOrigin, rhs.contentSpaceOrigin) {
-        case let (left?, right?):
-            if abs(left.y - right.y) >= 0.5 { return left.y < right.y }
-            if abs(left.x - right.x) >= 0.5 { return left.x < right.x }
-            return lhs.heistId < rhs.heistId
-        case (_?, nil):
-            return true
-        case (nil, _?):
-            return false
-        case (nil, nil):
-            return lhs.heistId < rhs.heistId
         }
     }
 

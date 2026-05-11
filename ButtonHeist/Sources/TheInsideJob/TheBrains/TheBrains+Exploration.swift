@@ -10,6 +10,13 @@ import AccessibilitySnapshotParser
 //
 // Scrolls every scrollable container to discover all elements on screen.
 // Container fingerprint caching skips unchanged containers on re-explore.
+//
+// Post-0.2.25: TheStash has no exploration mode. The accumulator is a local
+// `var union: Screen` in exploreAndPrune; the final union is committed by
+// writing it back into `stash.currentScreen`. Mid-exploration writes to
+// `currentScreen` keep in-cycle scroll-termination checks (viewport change
+// detection) working — they read `stash.viewportIds`, which mirrors the
+// latest page-only parse, not the in-flight union.
 
 extension TheBrains {
 
@@ -24,22 +31,29 @@ extension TheBrains {
         let discoveredHeistIds: Set<String>
     }
 
-    /// Explore and prune: track heistIds across all apply() calls, then remove unseen.
+    /// Explore and accumulate the unioned screen. The local `union: Screen`
+    /// holds every element seen during this exploration; the final union is
+    /// committed to `stash.currentScreen` so subsequent operations can act on
+    /// off-screen content (with the documented strict-by-default activation
+    /// rule for later refreshes).
     func exploreAndPrune(target: ElementTarget? = nil) async -> ScreenManifest {
-        beginExploreCycle()
-        let manifest = await exploreScreen(target: target)
-        if let seen = endExploreCycle() {
-            stash.registry.prune(keeping: seen)
-        }
+        var union = stash.currentScreen
+        let manifest = await exploreScreen(target: target, union: &union)
+        stash.currentScreen = union
         return manifest
     }
 
     /// Scroll all scrollable containers to discover every element on screen.
-    func exploreScreen(target: ElementTarget? = nil) async -> ScreenManifest {
+    /// Accumulates discovered elements into `union`. Mid-exploration writes
+    /// to `stash.currentScreen` happen as scrolls land — those are the live
+    /// viewport, used by termination heuristics.
+    func exploreScreen(target: ElementTarget? = nil, union: inout Screen) async -> ScreenManifest {
         let startTime = CACurrentMediaTime()
         var manifest = ScreenManifest()
 
-        refresh()
+        if let parsed = stash.refresh() {
+            union = union.merging(parsed)
+        }
 
         if let target, stash.resolveFirstMatch(target) != nil {
             manifest.explorationTime = CACurrentMediaTime() - startTime
@@ -72,7 +86,6 @@ extension TheBrains {
                 if let cached = containerExploreStates[container],
                    cached.visibleSubtreeFingerprint == currentFingerprint,
                    target == nil {
-                    recordDuringExplore(cached.discoveredHeistIds)
                     manifest.markExplored(container)
                     continue
                 }
@@ -102,7 +115,8 @@ extension TheBrains {
                     container: container, scrollTarget: scrollTarget,
                     hasHOverflow: hasHOverflow, hasVOverflow: hasVOverflow,
                     target: target, manifest: &manifest,
-                    containerFingerprints: &containerFingerprints
+                    containerFingerprints: &containerFingerprints,
+                    union: &union
                 )
                 if found {
                     manifest.explorationTime = CACurrentMediaTime() - startTime
@@ -124,7 +138,8 @@ extension TheBrains {
         hasVOverflow: Bool,
         target: ElementTarget?,
         manifest: inout ScreenManifest,
-        containerFingerprints: inout [AccessibilityContainer: Int]
+        containerFingerprints: inout [AccessibilityContainer: Int],
+        union: inout Screen
     ) async -> Bool {
         let savedVisualOrigin: CGPoint? = {
             guard case .uiScrollView(let scrollView) = scrollTarget else { return nil }
@@ -140,7 +155,9 @@ extension TheBrains {
         case .uiScrollView(let scrollView):
             if safecracker.scrollToEdge(scrollView, edge: leadingEdge, animated: false) {
                 await tripwire.yieldFrames(2)
-                refresh()
+                if let parsed = stash.refresh() {
+                    union = union.merging(parsed)
+                }
             }
         case .swipeable:
             let toLeading = Self.edgeDirection(for: leadingEdge)
@@ -148,7 +165,11 @@ extension TheBrains {
                 let (moved, before) = await scrollOnePageAndSettle(
                     scrollTarget, direction: toLeading, animated: false
                 )
-                if !moved || stash.registry.viewportIds == before { break }
+                if moved, let parsed = stash.parse() {
+                    stash.currentScreen = parsed
+                    union = union.merging(parsed)
+                }
+                if !moved || stash.viewportIds == before { break }
             }
         }
 
@@ -164,6 +185,10 @@ extension TheBrains {
             )
             guard moved else { break }
             manifest.scrollCount += 1
+            if let parsed = stash.parse() {
+                stash.currentScreen = parsed
+                union = union.merging(parsed)
+            }
             originByElement = buildOriginIndex()
 
             let page = visibleElementsInContainer(container)
@@ -184,7 +209,8 @@ extension TheBrains {
                     scrollTarget: scrollTarget, savedVisualOrigin: savedVisualOrigin,
                     container: container,
                     discoveredElements: accumulated,
-                    manifest: &manifest, containerFingerprints: &containerFingerprints
+                    manifest: &manifest, containerFingerprints: &containerFingerprints,
+                    union: &union
                 )
                 return true
             }
@@ -194,7 +220,8 @@ extension TheBrains {
             scrollTarget: scrollTarget, savedVisualOrigin: savedVisualOrigin,
             container: container,
             discoveredElements: accumulated,
-            manifest: &manifest, containerFingerprints: &containerFingerprints
+            manifest: &manifest, containerFingerprints: &containerFingerprints,
+            union: &union
         )
 
         let newContainers = stash.currentHierarchy.scrollableContainers
@@ -211,13 +238,16 @@ extension TheBrains {
         container: AccessibilityContainer,
         discoveredElements: [AccessibilityElement],
         manifest: inout ScreenManifest,
-        containerFingerprints: inout [AccessibilityContainer: Int]
+        containerFingerprints: inout [AccessibilityContainer: Int],
+        union: inout Screen
     ) async {
         if case .uiScrollView(let scrollView) = scrollTarget,
            let savedVisualOrigin {
             Self.restoreVisualOrigin(savedVisualOrigin, in: scrollView)
             await tripwire.yieldFrames(2)
-            refresh()
+            if let parsed = stash.refresh() {
+                union = union.merging(parsed)
+            }
         }
         containerFingerprints = stash.currentHierarchy.containerFingerprints
         manifest.markExplored(container)
@@ -235,9 +265,9 @@ extension TheBrains {
             container: { isInside, current in isInside || current == container },
             element: { element, _, isInside -> (element: AccessibilityElement, origin: CGPoint?)? in
                 guard isInside,
-                      let heistId = self.stash.registry.reverseIndex[element],
-                      self.stash.registry.viewportIds.contains(heistId),
-                      let entry = self.stash.registry.findElement(heistId: heistId) else { return nil }
+                      let heistId = self.stash.currentScreen.heistIdByElement[element],
+                      self.stash.viewportIds.contains(heistId),
+                      let entry = self.stash.currentScreen.findElement(heistId: heistId) else { return nil }
                 return (element: entry.element, origin: entry.contentSpaceOrigin)
             }
         )
@@ -246,17 +276,13 @@ extension TheBrains {
 
     private func buildOriginIndex() -> [AccessibilityElement: CGPoint?] {
         Dictionary(
-            stash.registry.flattenElements().map { ($0.element, $0.contentSpaceOrigin) },
+            stash.currentScreen.elements.values.map { ($0.element, $0.contentSpaceOrigin) },
             uniquingKeysWith: { first, _ in first }
         )
     }
 
     private func resolveHeistIds(for elements: [AccessibilityElement]) -> Set<String> {
-        let heistIdByElement = Dictionary(
-            stash.registry.flattenElements().map { ($0.element, $0.heistId) },
-            uniquingKeysWith: { first, _ in first }
-        )
-        return Set(elements.compactMap { heistIdByElement[$0] })
+        Set(elements.compactMap { stash.currentScreen.heistIdByElement[$0] })
     }
 
     private static func restoreVisualOrigin(_ visualOrigin: CGPoint, in scrollView: UIScrollView) {
@@ -297,11 +323,6 @@ extension TheBrains {
 
     /// Returns true if any accessibility-element descendant of `container` has a
     /// frame extending past `container.frame` by more than `tolerance` points.
-    ///
-    /// This is the AX-tree authority on "is there content beyond the fold". It is
-    /// stricter than the `contentSize > frame` check because UIKit/SwiftUI hosting
-    /// scroll views can report inflated `contentSize` driven by safe-area, nav-bar,
-    /// or scroll-edge geometry — not by actual off-screen content.
     static func hasContentBeyondFrame(
         of container: AccessibilityContainer,
         in hierarchy: [AccessibilityHierarchy],
@@ -345,12 +366,6 @@ extension TheBrains {
         return !viewVC.isDescendant(of: topPresented)
     }
 
-    /// Walks the full VC tree (children + presentations) to find the topmost
-    /// presented view controller. Returns nil if no presentation exists.
-    ///
-    /// Assumes a single active presentation chain per window (UIKit's default behavior).
-    /// If multiple VCs independently present modals, the last one visited wins —
-    /// acceptable because UIKit enforces a single presentation chain from the root.
     private static func topmostPresentedViewController(
         from root: UIViewController
     ) -> UIViewController? {
@@ -361,7 +376,6 @@ extension TheBrains {
             let current = queue.removeFirst()
 
             if let presented = current.presentedViewController {
-                // Walk the presentation chain to the top.
                 var top = presented
                 while let next = top.presentedViewController {
                     top = next

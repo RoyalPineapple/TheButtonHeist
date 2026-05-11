@@ -121,7 +121,7 @@ extension AccessibilityElement {
     static let defaultCycleIntervalMs: Int = 100
     static let defaultTimeoutMs: Int = 5_000
 
-    typealias ParseProvider = @MainActor () -> TheStash.ParseResult?
+    typealias ParseProvider = @MainActor () -> Screen?
     typealias TopVCProvider = @MainActor () -> ObjectIdentifier?
     typealias Sleeper = @Sendable (UInt64) async throws -> Void
 
@@ -180,10 +180,11 @@ extension AccessibilityElement {
         // this seed, a static screen pays cyclesRequired+1 cycles.
         var previousFingerprint: Int? = {
             guard let initial = parseProvider() else { return nil }
-            for element in initial.elements {
+            let initialElements = initial.hierarchy.sortedElements
+            for element in initialElements {
                 elementsByKey[element.timelineKey] = element
             }
-            return Self.fingerprint(of: initial.elements)
+            return Self.fingerprint(of: initialElements)
         }()
 
         while CFAbsoluteTimeGetCurrent() < deadline {
@@ -210,11 +211,12 @@ extension AccessibilityElement {
             }
 
             guard let parse = parseProvider() else { continue }
-            for element in parse.elements {
+            let parsedElements = parse.hierarchy.sortedElements
+            for element in parsedElements {
                 elementsByKey[element.timelineKey] = element
             }
 
-            let fingerprint = Self.fingerprint(of: parse.elements)
+            let fingerprint = Self.fingerprint(of: parsedElements)
             if let previousFingerprint, fingerprint == previousFingerprint {
                 stableCycles += 1
                 if stableCycles >= cyclesRequired {

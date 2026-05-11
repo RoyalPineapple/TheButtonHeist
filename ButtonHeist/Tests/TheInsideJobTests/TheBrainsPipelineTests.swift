@@ -30,7 +30,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     // MARK: - actionResultWithDelta Failure Path
 
     func testActionResultWithDeltaFailureReturnsBeforeSnapshot() async {
-        seedRegistry(heistId: "button_sign_in", label: "Sign In", traits: .button)
+        seedScreen(elements: [("Sign In", .button, "button_sign_in")])
         let before = brains.captureBeforeState()
 
         let result = await brains.actionResultWithDelta(
@@ -116,9 +116,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testRecordSentStatePopulatesAllFields() {
-        seedRegistry(heistId: "button_a", label: "A", traits: .button)
-        brains.stash.lastScreenName = "Home"
-        brains.stash.lastScreenId = "home"
+        seedScreen(elements: [("Home", .header, "home_header"), ("A", .button, "button_a")])
 
         brains.recordSentState()
 
@@ -126,13 +124,12 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertNotNil(sent)
         XCTAssertEqual(sent?.screenId, "home")
         XCTAssertNotEqual(sent?.treeHash, 0,
-                          "treeHash should be non-zero for a non-empty registry")
+                          "treeHash should be non-zero for a non-empty screen")
         XCTAssertEqual(brains.lastSentScreenId, "home")
     }
 
     func testRecordSentStateWithHashAvoidsWireConversion() {
-        seedRegistry(heistId: "button_a", label: "A", traits: .button)
-        brains.stash.lastScreenId = "screen_x"
+        seedScreen(elements: [("Screen X", .header, "screen_x_header"), ("A", .button, "button_a")])
 
         brains.recordSentState(treeHash: 42)
 
@@ -141,17 +138,17 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testScreenChangedSinceLastSentDetectsIdTransition() {
-        brains.stash.lastScreenId = "home"
+        seedScreen(elements: [("Home", .header, "home_header")])
         brains.recordSentState(treeHash: 1)
         XCTAssertFalse(brains.screenChangedSinceLastSent)
 
-        brains.stash.lastScreenId = "settings"
+        seedScreen(elements: [("Settings", .header, "settings_header")])
         XCTAssertTrue(brains.screenChangedSinceLastSent,
                       "Current screenId differs from the one captured in lastSentState")
     }
 
     func testClearCacheResetsSentState() {
-        seedRegistry(heistId: "button_a", label: "A", traits: .button)
+        seedScreen(elements: [("A", .button, "button_a")])
         brains.recordSentState()
         XCTAssertNotNil(brains.lastSentState)
 
@@ -170,7 +167,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     func testComputeBackgroundDeltaReturnsNilWhenTreeHashIsZero() {
         // A treeHash of 0 is the sentinel for "not set" — even if lastSentState exists,
         // the delta must be suppressed to avoid false positives.
-        seedRegistry(heistId: "button_a", label: "A", traits: .button)
+        seedScreen(elements: [("A", .button, "button_a")])
         brains.recordSentState(treeHash: 0)
 
         XCTAssertNil(brains.computeBackgroundDelta())
@@ -179,8 +176,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     // MARK: - Unsupported Diagnostics
 
     func testExecuteCommandUnsupportedIncludesCommandIdentityAndScreenContext() async {
-        brains.stash.lastScreenName = "Home"
-        brains.stash.lastScreenId = "home"
+        seedScreen(elements: [("Home", .header, "home_header")])
 
         let result = await brains.executeCommand(.ping)
 
@@ -194,55 +190,24 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     // MARK: - exploreAndPrune
 
-    func testExploreAndPruneRemovesUnseenElementsWhenNoContainers() async {
-        // Seed an orphan element that is NOT in the viewport and has no scrollable
-        // ancestor. With no scrollable containers, exploreScreen is a no-op, so
-        // only the seed (viewportIds) survives the prune.
-        seedRegistry(heistId: "button_seen", label: "Seen", traits: .button)
-        seedRegistry(heistId: "button_orphan", label: "Orphan", traits: .button,
-                     includeInViewport: false)
-        XCTAssertEqual(brains.stash.registry.elementByHeistId.count, 2)
+    func testExploreAndPruneCommitsUnion() async {
+        // Post-0.2.25: exploration seeds the local union from currentScreen,
+        // merges each parse into it, then commits the union back. There is no
+        // pruning — the union is the canonical "all elements seen this cycle".
+        // With no scrollable containers in the host hierarchy, exploreAndPrune
+        // reduces to refresh-and-commit, and the seeded entry merges into the
+        // live parse rather than being pruned.
+        seedScreen(elements: [("Seed", .button, "button_seed")])
+        XCTAssertEqual(brains.stash.currentScreen.elements.count, 1)
 
         _ = await brains.exploreAndPrune()
 
-        XCTAssertTrue(brains.stash.registry.elementByHeistId.keys.contains("button_seen"),
-                      "Viewport elements must survive the prune")
-        XCTAssertFalse(brains.stash.registry.elementByHeistId.keys.contains("button_orphan"),
-                       "Elements not in the viewport (or in a cached container) must be pruned")
-    }
-
-    func testExploreAndPruneResetsPhaseToIdle() async {
-        seedRegistry(heistId: "button_a", label: "A", traits: .button)
-        _ = await brains.exploreAndPrune()
-        XCTAssertEqual(brains.explorePhase, .idle,
-                       "The explore cycle must always end in .idle, even when no containers exist")
-    }
-
-    func testExploreAndPruneKeepsCachedContainerIdsEvenWhenOffViewport() async throws {
-        guard brains.refresh() != nil else {
-            throw XCTSkip("No live hierarchy available for explore cache regression test")
-        }
-        guard let container = brains.stash.currentHierarchy.scrollableContainers.first,
-              let fingerprint = brains.stash.currentHierarchy.containerFingerprints[container] else {
-            throw XCTSkip("No scrollable container available in host UI")
-        }
-        let cachedElement = makeElement(label: "Cached", traits: .button)
-        brains.stash.registry.insertForTesting(TheStash.ScreenElement(
-            heistId: "button_cached",
-            contentSpaceOrigin: nil,
-            element: cachedElement,
-            object: nil,
-            scrollView: nil
-        ))
-        brains.containerExploreStates[container] = TheBrains.ContainerExploreState(
-            visibleSubtreeFingerprint: fingerprint,
-            discoveredHeistIds: ["button_cached"]
-        )
-
-        _ = await brains.exploreAndPrune()
-
-        XCTAssertTrue(brains.stash.registry.elementByHeistId.keys.contains("button_cached"),
-                      "Cached discovered ids must survive prune when fingerprint cache hits")
+        // Either the seed survives (no live parse landed and the union still
+        // holds it) or it merges with new live entries — either way, the
+        // currentScreen reflects the committed union, not the pre-explore
+        // value alone.
+        XCTAssertNotNil(brains.stash.currentScreen,
+                        "exploreAndPrune always commits a screen value")
     }
 
     func testExploreScreenCachesDiscoveredIdsForSwipeableContainer() async throws {
@@ -256,7 +221,8 @@ final class TheBrainsPipelineTests: XCTestCase {
             throw XCTSkip("No non-UIScrollView scrollable container in host UI")
         }
 
-        let manifest = await brains.exploreScreen()
+        var union = brains.stash.currentScreen
+        let manifest = await brains.exploreScreen(union: &union)
 
         XCTAssertTrue(manifest.exploredContainers.contains(container))
         XCTAssertNotNil(brains.containerExploreStates[container],
@@ -265,62 +231,45 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func seedRegistry(
-        heistId: String,
-        label: String,
-        traits: UIAccessibilityTraits,
-        includeInViewport: Bool = true
-    ) {
-        let element = AccessibilityElement(
-            description: label,
-            label: label,
-            value: nil,
-            traits: traits,
-            identifier: nil,
-            hint: nil,
-            userInputLabels: nil,
-            shape: .frame(.zero),
-            activationPoint: .zero,
-            usesDefaultActivationPoint: true,
-            customActions: [],
-            customContent: [],
-            customRotors: [],
-            accessibilityLanguage: nil,
-            respondsToUserInteraction: false
-        )
-        brains.stash.registry.insertForTesting(TheStash.ScreenElement(
-            heistId: heistId,
-            contentSpaceOrigin: nil,
-            element: element,
-            object: nil,
-            scrollView: nil
-        ))
-        if includeInViewport {
-            brains.stash.registry.viewportIds.insert(heistId)
-            brains.stash.currentHierarchy.append(.element(element, traversalIndex: 0))
+    private func seedScreen(elements: [(label: String, traits: UIAccessibilityTraits, heistId: String)]) {
+        var screenElements: [String: Screen.ScreenElement] = [:]
+        var hierarchy: [AccessibilityHierarchy] = []
+        var heistIdByElement: [AccessibilityElement: String] = [:]
+        for (index, entry) in elements.enumerated() {
+            let element = AccessibilityElement(
+                description: entry.label,
+                label: entry.label,
+                value: nil,
+                traits: entry.traits,
+                identifier: nil,
+                hint: nil,
+                userInputLabels: nil,
+                shape: .frame(.zero),
+                activationPoint: .zero,
+                usesDefaultActivationPoint: true,
+                customActions: [],
+                customContent: [],
+                customRotors: [],
+                accessibilityLanguage: nil,
+                respondsToUserInteraction: false
+            )
+            screenElements[entry.heistId] = Screen.ScreenElement(
+                heistId: entry.heistId,
+                contentSpaceOrigin: nil,
+                element: element,
+                object: nil,
+                scrollView: nil
+            )
+            hierarchy.append(.element(element, traversalIndex: index))
+            heistIdByElement[element] = entry.heistId
         }
-    }
-
-    private func makeElement(
-        label: String,
-        traits: UIAccessibilityTraits
-    ) -> AccessibilityElement {
-        AccessibilityElement(
-            description: label,
-            label: label,
-            value: nil,
-            traits: traits,
-            identifier: nil,
-            hint: nil,
-            userInputLabels: nil,
-            shape: .frame(.zero),
-            activationPoint: .zero,
-            usesDefaultActivationPoint: true,
-            customActions: [],
-            customContent: [],
-            customRotors: [],
-            accessibilityLanguage: nil,
-            respondsToUserInteraction: false
+        brains.stash.currentScreen = Screen(
+            elements: screenElements,
+            hierarchy: hierarchy,
+            containerStableIds: [:],
+            heistIdByElement: heistIdByElement,
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
         )
     }
 

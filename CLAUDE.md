@@ -437,18 +437,30 @@ Two type families are the currency for referring to UI elements. Use them everyw
 
 **Canonical element types** (from AccessibilitySnapshotParser):
 - `AccessibilityElement` — a leaf element with label, identifier, value, traits, frame, activation point, and custom actions. This is the parsed representation of a live UIKit accessibility element.
-- `AccessibilityHierarchy` — the tree: `.element(AccessibilityElement, traversalIndex)` or `.container(AccessibilityContainer, children)`. TheBagman owns and caches these after each accessibility refresh.
+- `AccessibilityHierarchy` — the tree: `.element(AccessibilityElement, traversalIndex)` or `.container(AccessibilityContainer, children)`. TheStash holds the latest version inside the current `Screen` value after each accessibility refresh.
+
+**Screen value** (TheInsideJob):
+- `Screen` — immutable snapshot of one screen state. Bundles `elements: [String: ScreenElement]` (heistId → entry), `hierarchy`, `containerStableIds`, `heistIdByElement`, `firstResponderHeistId`, and `scrollableContainerViews`. Pure value semantics — TheStash holds exactly one mutable field of this type (`currentScreen`) and rebinds it on every parse. Exploration uses a local `var union: Screen` that's `merging(_:)`'d across page parses and committed back to `stash.currentScreen` at the end of the cycle. **Conflict rule**: `Screen.merging` is pure last-read-wins — `other`'s entry replaces `self`'s on heistId conflict; no field-level preservation. `name`/`id`/`heistIds` are derived on demand so they cannot drift from `hierarchy`.
 
 **Target types** (TheScore wire types):
-- `ElementTarget` — how callers refer to an element: `.heistId(String)` for stable ID lookup, `.matcher(ElementMatcher)` for predicate-based search. This is the currency type passed through TheFence, TheSafecracker, MCP, and CLI. Only TheBagman resolves it to a live element.
+- `ElementTarget` — how callers refer to an element: `.heistId(String)` for stable ID lookup, `.matcher(ElementMatcher)` for predicate-based search. This is the currency type passed through TheFence, TheSafecracker, MCP, and CLI. Only TheStash resolves it to a live element.
 - `ElementMatcher` — the predicate struct: label, identifier, value, traits, excludeTraits. String fields use case-insensitive equality with typography folding (smart quotes/dashes/ellipsis fold to ASCII; emoji/accents/CJK pass through). Traits use exact bitmask comparison. Matching is **exact or miss** — on a miss the resolver returns structured suggestions through the diagnostic path; there is no substring fallback. The same semantics are evaluated by `HeistElement.matches` on the client (TheScore) and `AccessibilityElement.matches` on the server (TheInsideJob), via the shared `ElementMatcher.stringEquals` helper.
-- `HeistElement` — the wire representation sent to clients via `get_interface`. Contains heistId, label, value, traits, actions, frame, etc. Built by TheBagman from `AccessibilityElement` + heistId assignment. This is a progressive-disclosure view for external consumers.
+- `HeistElement` — the wire representation sent to clients via `get_interface`. Contains heistId, label, value, traits, actions, frame, etc. Built by TheStash from `AccessibilityElement` + heistId assignment. This is a progressive-disclosure view for external consumers.
 
 **Rules:**
 - Pass `AccessibilityElement` and `AccessibilityHierarchy` internally when working with parsed accessibility data.
-- Pass `ElementTarget` when referring to an element abstractly (all layers above TheBagman).
+- Pass `Screen` when working with a committed snapshot of the resolution layer.
+- Pass `ElementTarget` when referring to an element abstractly (all layers above TheStash).
 - Do not create wrapper structs, snapshot types, or intermediate representations to hold subsets of these types. If you need a subset, pass the original and read what you need.
-- Wire types (`HeistElement`, `ElementMatcher`, `ElementTarget`) live in TheScore and cross the Codable boundary. Internal types (`AccessibilityElement`, `AccessibilityHierarchy`) stay inside TheInsideJob.
+- Wire types (`HeistElement`, `ElementMatcher`, `ElementTarget`) live in TheScore and cross the Codable boundary. Internal types (`AccessibilityElement`, `AccessibilityHierarchy`, `Screen`) stay inside TheInsideJob.
+
+**Strict off-screen rule**: `resolveTarget(.heistId(_:))` looks only in `currentScreen.elements`. If an heistId scrolled out of the viewport since the last commit, resolution returns `.notFound` with a near-miss suggestion — there is no fallback to a recorded position from a previous parse. Agents that want to act on an off-screen element must explicitly scroll first or refetch the interface.
+
+## heistId synthesis is wire-format-stable
+
+`synthesizeBaseId(_:)` in `TheStash.IdAssignment` produces deterministic heistIds derived from element content. **Synthesis is wire format.** Modifications are equivalent to changes to the JSON schema — they break recorded heists and the agent's predict-the-heistId pattern that benchmarks rely on. Treat any change to the synthesis rule like a wire-protocol bump.
+
+The contract is locked by `SynthesisDeterminismTests` (property test across 200+ random permutations, plus a regression table of known input → known output). If you find yourself wanting to "improve" the heistId format, run `tuist test TheInsideJobTests` first — that test exists to make the contract auditable. Any change requires updating the regression table in the same PR.
 
 ## Versioning and Releases
 
