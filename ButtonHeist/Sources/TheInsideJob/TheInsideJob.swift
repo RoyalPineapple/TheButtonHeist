@@ -82,6 +82,11 @@ public final class TheInsideJob {
     private let allowedScopes: Set<ConnectionScope>
     private let forceSwipeScrolling: Bool
     private var pendingTransportStopTask: Task<Void, Never>?
+    /// Tracks Tasks that wrap `await stop()` / `await suspend()` for callers
+    /// that must stay synchronous (notably the @objc UIApplication lifecycle
+    /// observers). Cancelled and drained inside `start()` / `resume()` so a
+    /// fresh start cannot interleave with a still-running shutdown.
+    private var pendingLifecycleTasks: Set<Task<Void, Never>> = []
     private var idleTimerBaseline: Bool?
 
     // MARK: - Computed State
@@ -174,6 +179,11 @@ public final class TheInsideJob {
     // MARK: - Public API
 
     public func start() async throws {
+        // Drain any in-flight stop/suspend Tasks spawned by @objc lifecycle
+        // observers before we re-check serverPhase — a terminate-then-launch
+        // race must observe the post-stop state.
+        await awaitPendingLifecycleTasks()
+
         guard case .stopped = serverPhase else {
             insideJobLogger.info("start() called while already running — ignoring")
             return
@@ -228,7 +238,7 @@ public final class TheInsideJob {
         insideJobLogger.info("Server started successfully")
     }
 
-    public func stop() {
+    public func stop() async {
         if case .resuming(let task) = serverPhase {
             task.cancel()
         }
@@ -244,8 +254,7 @@ public final class TheInsideJob {
         tripwire.onTransition = nil
         brains.stopKeyboardObservation()
 
-        let muscle = self.muscle
-        Task { await muscle.tearDown() }
+        await muscle.tearDown()
         getaway.tearDown()
 
         stopAccessibilityObservation()
@@ -384,7 +393,9 @@ public final class TheInsideJob {
 
     @objc private func appDidEnterBackground() {
         insideJobLogger.info("App entering background, suspending server")
-        suspend()
+        spawnLifecycleTask { [weak self] in
+            await self?.suspend()
+        }
     }
 
     @objc private func appWillEnterForeground() {
@@ -394,12 +405,43 @@ public final class TheInsideJob {
 
     @objc private func appWillTerminate() {
         insideJobLogger.info("App will terminate, stopping server")
-        stop()
+        spawnLifecycleTask { [weak self] in
+            await self?.stop()
+        }
+    }
+
+    /// Spawn a Task that wraps an async lifecycle transition. The handle is
+    /// retained in `pendingLifecycleTasks` so callers that resume the server
+    /// (`start()` / `resume()`) can await prior shutdowns before they begin.
+    ///
+    /// Completed handles stay in the set until the next drain in
+    /// `awaitPendingLifecycleTasks()`. Awaiting a completed `Task.value`
+    /// returns immediately, so a few stale entries are harmless. They cannot
+    /// accumulate: every lifecycle transition that follows an @objc-spawned
+    /// shutdown is itself a `start()` or `resume()` and drains the set.
+    private func spawnLifecycleTask(_ body: @escaping @MainActor () async -> Void) {
+        let task = Task { @MainActor in
+            await body()
+        }
+        pendingLifecycleTasks.insert(task)
+    }
+
+    /// Wait for any in-flight lifecycle tasks (suspend/stop wrappers spawned
+    /// from @objc handlers) to finish before mutating server phase. Loops so
+    /// observer-spawned Tasks that arrive during the drain are also awaited.
+    private func awaitPendingLifecycleTasks() async {
+        while !pendingLifecycleTasks.isEmpty {
+            let tasks = pendingLifecycleTasks
+            pendingLifecycleTasks.removeAll()
+            for task in tasks {
+                await task.value
+            }
+        }
     }
 
     // MARK: - Suspend / Resume
 
-    func suspend() {
+    func suspend() async {
         switch serverPhase {
         case .running(let activeTransport):
             pendingTransportStopTask = activeTransport.stop()
@@ -417,8 +459,7 @@ public final class TheInsideJob {
         tripwire.stopPulse()
         brains.stopKeyboardObservation()
 
-        let muscle = self.muscle
-        Task { await muscle.tearDown() }
+        await muscle.tearDown()
         getaway.tearDown()
 
         stopAccessibilityObservation()
@@ -438,6 +479,10 @@ public final class TheInsideJob {
 
         let task = Task { @MainActor [weak self] in
             guard let self else { return }
+            // Drain any in-flight suspend Task spawned from @objc background
+            // observers — its tearDown may still be cancelling lockoutTasks
+            // when foreground fires immediately after background.
+            await self.awaitPendingLifecycleTasks()
             var startedTransport: ServerTransport?
             do {
                 try Task.checkCancellation()

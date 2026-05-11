@@ -118,6 +118,11 @@ actor TheMuscle {
     private var lockoutTasks: [UInt64: Task<Void, Never>] = [:]
     private var nextLockoutId: UInt64 = 0
 
+    /// Test seam: how many delayed-disconnect Tasks are currently tracked.
+    /// Used by lifetime tests to assert that `tearDown()` cancelled and
+    /// drained every outstanding lockout Task before returning.
+    var pendingLockoutTaskCount: Int { lockoutTasks.count }
+
     // MARK: - Computed Client Accessors
 
     /// IDs of all authenticated clients (drivers + observers).
