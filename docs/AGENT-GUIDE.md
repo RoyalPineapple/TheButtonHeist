@@ -190,7 +190,7 @@ When you don't have a heistId — because you haven't seen the screen yet, becau
 {"tool": "activate", "arguments": {"label": "Sign In", "traits": ["button"]}}
 ```
 
-Matcher fields: `label`, `identifier`, `value`, `traits`, `excludeTraits`. Strings match as case-insensitive substrings. Traits match exactly (all listed traits must be present). Matching is strict — if the matcher hits zero elements, you get a miss with suggestions, not a fuzzy guess.
+Matcher fields: `label`, `identifier`, `value`, `traits`, `excludeTraits`. Strings must equal the matcher value, compared case-insensitively after typography folding (smart quotes/dashes/ellipsis fold to ASCII; emoji, accents, and CJK pass through). Traits match exactly (all listed traits must be present). Matching is **exact or miss** — partial labels miss. If the matcher hits zero elements you get a structured near-miss with suggestions ("did you mean 'Save Draft', 'Save All', 'Save As'?"), so you can refine the matcher with the actual label.
 
 Matchers are the right tool when:
 - You're targeting an element you haven't seen yet (`wait_for` with a label)

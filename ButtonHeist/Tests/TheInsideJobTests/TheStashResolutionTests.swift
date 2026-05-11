@@ -496,6 +496,127 @@ final class TheStashResolutionTests: XCTestCase {
         let result = bagman.resolveTarget(.heistId("button_combobox"))
         XCTAssertNotNil(result.resolved)
     }
+
+    // MARK: - Exact-or-Miss Contract (Task 1, Findings 4/5/8)
+
+    /// A partial label that would have matched via the old substring fallback
+    /// must now return `.notFound` with a near-miss suggestion. This is the
+    /// product decision codified in the matcher contract: "exact or miss",
+    /// suggestions on miss.
+    func testSubstringPartialLabelReturnsNotFoundWithSuggestion() {
+        let save = element(label: "Save Draft", traits: .button)
+        register(save, heistId: "button_save_draft", index: 0)
+
+        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save")))
+        guard case .notFound(let diagnostics) = result else {
+            XCTFail("Substring partial must not auto-resolve to exact-or-miss; got \(result)")
+            return
+        }
+        XCTAssertTrue(diagnostics.contains("Save Draft"),
+                      "Near-miss should surface the actual label as a suggestion: \(diagnostics)")
+        XCTAssertTrue(diagnostics.contains("did you mean") || diagnostics.contains("near miss"),
+                      "Diagnostic should look like a suggestion: \(diagnostics)")
+    }
+
+    /// Exact equality (after case-insensitive comparison) still resolves.
+    func testExactLabelCaseInsensitiveResolves() {
+        let save = element(label: "Save", traits: .button)
+        register(save, heistId: "button_save", index: 0)
+
+        XCTAssertNotNil(bagman.resolveTarget(.matcher(ElementMatcher(label: "Save"))).resolved)
+        XCTAssertNotNil(bagman.resolveTarget(.matcher(ElementMatcher(label: "save"))).resolved)
+        XCTAssertNotNil(bagman.resolveTarget(.matcher(ElementMatcher(label: "SAVE"))).resolved)
+    }
+
+    /// Typography folding still works under exact-or-miss: a label with a smart
+    /// apostrophe resolves against an ASCII apostrophe matcher.
+    func testTypographyFoldingPreservedUnderExactSemantics() {
+        let dontSkip = element(label: "Don\u{2019}t skip", traits: .button)
+        register(dontSkip, heistId: "button_dont_skip", index: 0)
+
+        XCTAssertNotNil(bagman.resolveTarget(.matcher(ElementMatcher(label: "Don't skip"))).resolved)
+    }
+
+    /// When two labels share a partial substring, exact must win outright
+    /// (no ambiguity). This was Finding 5's regression case.
+    func testExactMatchWinsOverPartialSiblings() {
+        let save = element(label: "Save")
+        let saveDraft = element(label: "Save Draft")
+        register(save, heistId: "button_save", index: 0)
+        register(saveDraft, heistId: "button_save_draft", index: 1)
+
+        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save")))
+        guard let resolved = result.resolved else {
+            XCTFail("Exact match should resolve uniquely, got \(result)")
+            return
+        }
+        XCTAssertEqual(resolved.element.label, "Save")
+    }
+
+    /// Near-miss surface for `wait_for absent` semantics: a substring-only match
+    /// must NOT be considered present.
+    func testHasTargetReportsAbsentForSubstringOnlyMatch() {
+        let save = element(label: "Save Draft", traits: .button)
+        register(save, heistId: "button_save_draft", index: 0)
+
+        // "Save" is a substring of "Save Draft" but not equal — hasTarget must
+        // return false so wait_for absent doesn't lie about the screen state.
+        XCTAssertFalse(bagman.hasTarget(.matcher(ElementMatcher(label: "Save"))))
+        // Exact label still resolves to present.
+        XCTAssertTrue(bagman.hasTarget(.matcher(ElementMatcher(label: "Save Draft"))))
+    }
+
+    /// Server-side and client-side matchers must agree on the same input.
+    /// Regression for Finding 4 (matcher contract drift).
+    func testServerAndClientMatchersAgreeOnSameInput() {
+        let element = element(label: "Save Draft", value: "x", identifier: "save_btn", traits: .button)
+        let matcher = ElementMatcher(label: "Save Draft", traits: [.button])
+
+        // Server-side: AccessibilityElement.matches with mode .exact
+        let serverHit = element.matches(matcher, mode: .exact)
+
+        // Client-side: HeistElement.matches (no mode — exact-or-miss is the only mode).
+        let heistElement = HeistElement(
+            heistId: "button_save_draft",
+            description: "Save Draft",
+            label: "Save Draft",
+            value: "x",
+            identifier: "save_btn",
+            traits: [.button],
+            frameX: 0, frameY: 0, frameWidth: 0, frameHeight: 0,
+            actions: []
+        )
+        let clientHit = heistElement.matches(matcher)
+
+        XCTAssertEqual(serverHit, clientHit, "Server and client must agree on the same matcher input")
+        XCTAssertTrue(serverHit, "Both sides must hit on exact label+trait match")
+
+        // Substring partial should miss on BOTH sides now.
+        let partial = ElementMatcher(label: "Save")
+        XCTAssertFalse(element.matches(partial, mode: .exact))
+        XCTAssertFalse(heistElement.matches(partial))
+    }
+
+    /// Smart-quote labels must produce the same answer on both sides
+    /// (Finding 4's typography divergence).
+    func testServerAndClientAgreeOnSmartQuoteLabel() {
+        let smart = element(label: "Don\u{2019}t skip")
+        let heist = HeistElement(
+            heistId: "btn",
+            description: "x",
+            label: "Don\u{2019}t skip",
+            value: nil,
+            identifier: nil,
+            traits: [],
+            frameX: 0, frameY: 0, frameWidth: 0, frameHeight: 0,
+            actions: []
+        )
+        let asciiMatcher = ElementMatcher(label: "Don't skip")
+
+        XCTAssertTrue(smart.matches(asciiMatcher, mode: .exact))
+        XCTAssertTrue(heist.matches(asciiMatcher),
+                      "Client-side must fold typography just like server-side")
+    }
 }
 
 #endif

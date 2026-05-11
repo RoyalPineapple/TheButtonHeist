@@ -10,7 +10,7 @@ Unified targeting turns a caller's intent ("tap the Submit button") into a concr
 There are exactly **two targeting strategies**, encoded as cases of the `ElementTarget` enum:
 
 1. **`.heistId(String)`** — "you gave me this token, I hand it back." Assigned by `get_interface`, presumed stable while the element is on screen. O(1) lookup via `screenElements` dictionary.
-2. **`.matcher(ElementMatcher)`** — "I'm describing the element by its accessibility properties." A predicate-based search on label, identifier, value, and traits with case-insensitive substring matching. Callers can embed expectations (e.g. `value="6"`) so stale state fails early instead of acting on the wrong element.
+2. **`.matcher(ElementMatcher)`** — "I'm describing the element by its accessibility properties." A predicate-based search on label, identifier, value, and traits with **case-insensitive equality** (typography-folded — smart quotes, dashes, ellipsis fold to ASCII) and exact trait bitmask comparison. Matching is **exact or miss** — there is no substring fallback. On a miss the resolver returns structured suggestions through the diagnostic path. Callers can embed expectations (e.g. `value="6"`) so stale state fails early instead of acting on the wrong element.
 
 A single method, `TheStash.resolveTarget(_:)`, implements this and returns a `TargetResolution` enum (`.resolved(ResolvedTarget)`, `.notFound(diagnostics:)`, `.ambiguous(candidates:diagnostics:)`). `ResolvedTarget` has a single field: `screenElement: ScreenElement`. Every action executor calls this method — there are no alternative resolution paths.
 
@@ -90,10 +90,10 @@ Exactly one strategy per target — no invalid states. Custom flat-wire Codable 
 
 ```swift
 struct ElementMatcher: Codable, Sendable, Equatable {
-    let label: String?              // case-insensitive substring match on element label
-    let identifier: String?         // case-insensitive substring match on accessibility identifier
-    let value: String?              // case-insensitive substring match on element value
-    let traits: [HeistTrait]?       // all must be present (AND)
+    let label: String?              // case-insensitive equality match (typography-folded)
+    let identifier: String?         // case-insensitive equality match (typography-folded)
+    let value: String?              // case-insensitive equality match (typography-folded)
+    let traits: [HeistTrait]?       // all must be present (AND, exact bitmask)
     let excludeTraits: [HeistTrait]? // none may be present
 }
 ```
@@ -123,7 +123,7 @@ flowchart TD
     J --> E
     ORDCHK -->|No| F
 
-    G -->|No| H["matches(matcher, limit: 2)<br/>Case-insensitive substring<br/>on label, identifier, value"]
+    G -->|No| H["matches(matcher, limit: 2)<br/>Case-insensitive equality<br/>(typography-folded)<br/>on label, identifier, value"]
     H --> I{Result?}
     I -->|Exactly 1 match| J
     I -->|0 matches| F
@@ -136,7 +136,7 @@ When `resolveTarget` returns `.notFound`, the `diagnostics` associated value con
 
 ### Tier 1: Ambiguous — "too many matches"
 
-When 2+ elements match the substring predicate, lists all candidates (up to 10):
+When 2+ elements match the exact predicate, lists all candidates (up to 10):
 
 ```
 3 elements match: label="Save"
@@ -147,14 +147,14 @@ When 2+ elements match the substring predicate, lists all candidates (up to 10):
 
 ### Tier 2: Near-miss — "you're right but something changed"
 
-Progressively relaxes one predicate at a time (value first, then traits, label, identifier). When a relaxed matcher finds an element, reports what diverged:
+Progressively relaxes one predicate at a time (value first, then traits, label, identifier) and runs a **substring** match against the remaining predicate set. When a relaxed matcher hits, reports up to three candidates so the agent can pick the actual label they meant:
 
 ```
-No match for: label="Volume" traits=[adjustable] value="6"
-near miss: matched all fields except value — actual value=8
+No match for: label="Sav" traits=[button]
+near miss: matched all fields except label — did you mean label="Save", label="Save Draft", label="Save As"?
 ```
 
-Value is relaxed first because it's the most likely to drift (slider moved, text changed). Only relaxations that leave at least one remaining predicate are tried — dropping the only predicate matches everything, which isn't useful.
+The substring search is reserved for the suggestion path; resolution itself never falls back to substring. Value is relaxed first because it's the most likely to drift (slider moved, text changed). Only relaxations that leave at least one remaining predicate are tried — dropping the only predicate matches everything, which isn't useful.
 
 ### Tier 3: Total miss — "here's what I see"
 
@@ -185,13 +185,15 @@ The hierarchy tree is the primary surface. `findMatch(_:)` searches `currentHier
 
 ### Match evaluation (AccessibilityElement.matches)
 
-1. `label` — case-insensitive substring via `localizedCaseInsensitiveContains`
-2. `identifier` — case-insensitive substring via `localizedCaseInsensitiveContains`
-3. `value` — case-insensitive substring via `localizedCaseInsensitiveContains`
+The same `MatchMode.exact` semantics are shared with `HeistElement.matches` on the client (TheScore), so the same `ElementMatcher` resolves identically server-side and client-side.
+
+1. `label` — case-insensitive equality after typography folding (smart quotes/dashes/ellipsis fold to ASCII; emoji, accents, CJK pass through)
+2. `identifier` — case-insensitive equality after typography folding
+3. `value` — case-insensitive equality after typography folding
 4. `traits` — resolve names to bitmask, check `traits.contains(mask)`. Unknown names → miss.
 5. `excludeTraits` — resolve names to bitmask, check `traits.isDisjoint(with: mask)`. Unknown names → miss.
 
-All checks are AND — first failure short-circuits to false. String matching is single-pass with no separate fuzzy tier.
+All checks are AND — first failure short-circuits to false. There is no substring fallback in the resolution path; substring matching is reserved for the diagnostic suggestion path (`Diagnostics.findNearMiss`).
 
 ## Callers
 

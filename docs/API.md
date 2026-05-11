@@ -999,13 +999,15 @@ public struct ElementMatcher: Codable, Sendable, Equatable
 
 Composable predicate for matching elements in the accessibility tree. All specified fields use AND semantics. Used by `scrollToVisible`, `wait_for`, `get_interface` filtering, and action commands through flat `ElementTarget` matcher fields.
 
+Matching is **exact or miss**: string fields are compared case-insensitively after typography folding (smart quotes/dashes/ellipsis fold to ASCII; emoji, accents, and CJK pass through). Traits compare as exact bitmasks. There is no substring fallback. On a miss the resolver returns `.notFound` with a structured near-miss diagnostic that lists up to three substring suggestions (e.g. "did you mean 'Save Draft', 'Save All', 'Save As'?"). The same semantics are evaluated by `HeistElement.matches` on the client and `AccessibilityElement.matches` on the server so the same matcher input produces the same outcome on both sides.
+
 #### Properties
 
-- `label: String?` - Exact match on accessibility label
-- `identifier: String?` - Exact match on accessibility identifier
-- `value: String?` - Exact match on accessibility value
-- `traits: [String]?` - All listed traits must be present
-- `excludeTraits: [String]?` - None of the listed traits may be present
+- `label: String?` - Case-insensitive equality match on accessibility label (typography-folded)
+- `identifier: String?` - Case-insensitive equality match on accessibility identifier (typography-folded)
+- `value: String?` - Case-insensitive equality match on accessibility value (typography-folded)
+- `traits: [String]?` - All listed traits must be present (exact bitmask)
+- `excludeTraits: [String]?` - None of the listed traits may be present (exact bitmask)
 
 ### ScrollToVisibleTarget
 

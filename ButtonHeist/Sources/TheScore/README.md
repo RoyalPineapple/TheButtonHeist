@@ -9,7 +9,7 @@ Shared wire protocol. Every type that crosses the TCP boundary lives here. No UI
 2. **`Elements.swift`** — The element model. Nearly everything else references these types.
    - `HeistElement` — wire representation of one accessibility element (heistId, label, value, traits, frame, actions, etc.)
    - `HeistTrait` — 43 named cases plus `.unknown(String)` for forward compatibility. Any unrecognized trait string round-trips correctly.
-   - `ElementMatcher` — search predicate: label, identifier, value, traits, excludeTraits. All optional, AND semantics, case-insensitive substring matching.
+   - `ElementMatcher` — search predicate: label, identifier, value, traits, excludeTraits. All optional, AND semantics, case-insensitive equality with typography folding (smart quotes/dashes/ellipsis fold to ASCII; emoji/accents/CJK pass through). Matching is exact or miss — no substring fallback in resolution. The static helpers `ElementMatcher.stringEquals` / `ElementMatcher.stringContains` are the shared comparison primitives used by both `HeistElement.matches` (client) and `AccessibilityElement.matches` (server) so the same input produces the same outcome on both sides.
    - `ElementTarget` — two cases: `.heistId(String)` for exact lookup, `.matcher(ElementMatcher, ordinal: Int?)` for predicate search. Wire format is flat — matcher fields sit at the same JSON level as heistId, no nesting.
    - `Interface` — timestamp + canonical `[InterfaceNode]` tree. Computed properties derive the flat element list, `screenName`, `screenId`, and `navigation` context from that tree.
    - `ElementAction` — four cases with dual encoding: built-in actions are bare strings, `.custom(String)` is `{"custom": "name"}`.

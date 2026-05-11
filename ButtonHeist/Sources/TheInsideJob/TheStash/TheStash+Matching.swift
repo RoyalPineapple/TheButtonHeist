@@ -58,10 +58,20 @@ extension AccessibilityHierarchy {
 
 /// String-comparison strategy for matcher fields (label/identifier/value).
 /// Trait predicates ignore this — they always compare bitmasks exactly.
+///
+/// The product contract is "exact or miss": all matcher resolution paths
+/// (`matchScreenElements`, `hasTarget`, `HeistElement.matches`) use `.exact`.
+/// `.substring` is reserved for the diagnostic / near-miss / suggestion path
+/// — `Diagnostics.findNearMiss` uses it to surface "did you mean X?" hints
+/// when an exact match fails. It must not leak back into the resolution path.
 enum MatchMode {
-    /// Case-insensitive equality. Used as the primary pass; matches must be exact.
+    /// Case-insensitive equality with typography folding (smart quotes/dashes/
+    /// ellipsis fold to ASCII; emoji/accents/CJK pass through). The single
+    /// matcher-resolution semantics.
     case exact
-    /// Case-insensitive substring. Used as the fallback pass when no exact match exists.
+    /// Case-insensitive substring with typography folding. Suggestion-only —
+    /// used by `Diagnostics.findNearMiss` to look up near-miss candidates that
+    /// failed exact matching, never by resolution.
     case substring
 }
 
@@ -143,66 +153,18 @@ extension AccessibilityElement {
         return true
     }
 
+    /// Single source of truth for string comparison — delegates to the helpers
+    /// on `ElementMatcher` in TheScore so client-side `HeistElement.matches` and
+    /// server-side `AccessibilityElement.matches` agree about typography folding
+    /// and exact-vs-substring behaviour.
     private static func stringMatches(_ candidate: String, _ pattern: String, mode: MatchMode) -> Bool {
-        let candidate = normalizeTypography(candidate)
-        let pattern = normalizeTypography(pattern)
         switch mode {
         case .exact:
-            return candidate.localizedCaseInsensitiveCompare(pattern) == .orderedSame
+            return ElementMatcher.stringEquals(candidate, pattern)
         case .substring:
-            return candidate.localizedCaseInsensitiveContains(pattern)
+            return ElementMatcher.stringContains(candidate, pattern)
         }
     }
-
-    /// Folds typographic punctuation that has an ASCII equivalent so labels carrying
-    /// smart quotes/dashes/ellipsis still match patterns typed with straight ASCII
-    /// (and vice versa). Real Unicode without an ASCII equivalent — emoji, accents,
-    /// CJK — is left untouched: this is about giving ASCII input a fair chance, not
-    /// about stripping non-ASCII characters.
-    private static func normalizeTypography(_ string: String) -> String {
-        guard string.unicodeScalars.contains(where: { typographicAsciiFold[$0] != nil }) else {
-            return string
-        }
-        var result = ""
-        result.reserveCapacity(string.count)
-        for scalar in string.unicodeScalars {
-            if let replacement = typographicAsciiFold[scalar] {
-                result.append(replacement)
-            } else {
-                result.unicodeScalars.append(scalar)
-            }
-        }
-        return result
-    }
-
-    private static let typographicAsciiFold: [Unicode.Scalar: String] = [
-        // Single quotes / apostrophes
-        "\u{2018}": "'",  // ' LEFT SINGLE QUOTATION MARK
-        "\u{2019}": "'",  // ' RIGHT SINGLE QUOTATION MARK / typographic apostrophe
-        "\u{201A}": "'",  // ‚ SINGLE LOW-9 QUOTATION MARK
-        "\u{201B}": "'",  // ‛ SINGLE HIGH-REVERSED-9 QUOTATION MARK
-        "\u{2032}": "'",  // ′ PRIME
-        // Double quotes
-        "\u{201C}": "\"", // " LEFT DOUBLE QUOTATION MARK
-        "\u{201D}": "\"", // " RIGHT DOUBLE QUOTATION MARK
-        "\u{201E}": "\"", // „ DOUBLE LOW-9 QUOTATION MARK
-        "\u{201F}": "\"", // ‟ DOUBLE HIGH-REVERSED-9 QUOTATION MARK
-        "\u{2033}": "\"", // ″ DOUBLE PRIME
-        // Dashes / hyphens
-        "\u{2010}": "-",  // ‐ HYPHEN
-        "\u{2011}": "-",  // ‑ NON-BREAKING HYPHEN
-        "\u{2012}": "-",  // ‒ FIGURE DASH
-        "\u{2013}": "-",  // – EN DASH
-        "\u{2014}": "-",  // — EM DASH
-        "\u{2015}": "-",  // ― HORIZONTAL BAR
-        "\u{2212}": "-",  // − MINUS SIGN
-        // Ellipsis
-        "\u{2026}": "...", // … HORIZONTAL ELLIPSIS
-        // Non-breaking / typographic spaces
-        "\u{00A0}": " ",  // NO-BREAK SPACE
-        "\u{2007}": " ",  // FIGURE SPACE
-        "\u{202F}": " ",  // NARROW NO-BREAK SPACE
-    ]
 }
 
 // MARK: - TheStash Match Pipeline
@@ -210,24 +172,15 @@ extension AccessibilityElement {
 extension TheStash {
 
     /// Single entry point for matcher-based element lookup. Returns up to `limit`
-    /// matching ScreenElements. Runs an exact (case-insensitive) match pass across
-    /// hierarchy and registry first; if any element matches exactly, those win.
-    /// Otherwise falls back to substring matching. Within either pass the hierarchy
+    /// matching ScreenElements using exact-or-miss semantics: case-insensitive
+    /// equality with typography folding on string fields, exact bitmask comparison
+    /// on traits. There is no substring fallback — a miss is a miss, and the agent
+    /// gets structured suggestions through the `.notFound` diagnostic path. Hierarchy
     /// (visible) elements come first in traversal order, then off-screen registry
     /// elements in content-space order.
     func matchScreenElements(_ matcher: ElementMatcher, limit: Int) -> [ScreenElement] {
         guard limit > 0 else { return [] }
-        let exact = matchScreenElements(matcher, mode: .exact, limit: limit)
-        if !exact.isEmpty { return exact }
-        return matchScreenElements(matcher, mode: .substring, limit: limit)
-    }
-
-    private func matchScreenElements(
-        _ matcher: ElementMatcher,
-        mode: MatchMode,
-        limit: Int
-    ) -> [ScreenElement] {
-        let hierarchyHits = currentHierarchy.matches(matcher, mode: mode, limit: limit)
+        let hierarchyHits = currentHierarchy.matches(matcher, mode: .exact, limit: limit)
         var seenIds = Set<String>()
         var matches = hierarchyHits.compactMap { match -> ScreenElement? in
             guard let heistId = registry.reverseIndex[match.element],
@@ -238,7 +191,7 @@ extension TheStash {
         if matches.count >= limit { return Array(matches.prefix(limit)) }
 
         let offscreen = registry.flattenElements()
-            .filter { !seenIds.contains($0.heistId) && $0.element.matches(matcher, mode: mode) }
+            .filter { !seenIds.contains($0.heistId) && $0.element.matches(matcher, mode: .exact) }
             .sorted(by: registryOrder)
         matches.append(contentsOf: offscreen.prefix(limit - matches.count))
         return matches

@@ -148,11 +148,11 @@ Rapid sequential actions can outrun the UI. If you activate a button that trigge
 
 **Fix:** Use `wait_for` to wait for the expected result, or `wait_for_idle` to let animations complete before checking state.
 
-### You activated the wrong element
+### Matcher missed an element you expected
 
-With matchers, a substring match might hit a different element than intended. `"label": "Sign"` matches both "Sign In" and "Sign Up".
+Matchers are **exact or miss**. `"label": "Sign"` does not match "Sign In" — the matcher value must equal the element's label (case-insensitive, typography-folded). If you typed a partial, the error returns a near-miss with the actual labels: "did you mean 'Sign In', 'Sign Up'?".
 
-**Fix:** Use more specific matchers. Add `traits` to narrow the match. Or use heistIds from a prior `get_interface` call for zero ambiguity.
+**Fix:** Use the full label from the suggestion list, or read it from `get_interface`. If two elements share the exact same label (a real ambiguity, not a partial), the error will list them with ordinals — pick the one you want with `"ordinal": 0` or `"ordinal": 1`. Or use a heistId from a prior `get_interface` for zero ambiguity.
 
 ## Expectation failed
 
