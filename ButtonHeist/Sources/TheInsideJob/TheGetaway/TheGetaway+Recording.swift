@@ -10,15 +10,29 @@ extension TheGetaway {
 
     enum RecordingPhase {
         case idle
+        /// Transient sentinel between accepting a `start_recording` request
+        /// and the `TheStakeout` instance reaching `.recording`. Prevents a
+        /// second `start_recording` from interleaving on the actor during
+        /// the awaits inside `handleStartRecording` and orphaning a stakeout.
+        case starting
         case recording(stakeout: TheStakeout)
     }
 
     func handleStartRecording(_ config: RecordingConfig, requestId: String? = nil, respond: @escaping (Data) -> Void) async {
-        if case .recording = recordingPhase {
+        switch recordingPhase {
+        case .recording:
             sendMessage(.error(ServerError(kind: .recording, message: "Recording already in progress")), requestId: requestId, respond: respond)
             return
+        case .starting:
+            sendMessage(.error(ServerError(kind: .recording, message: "Recording start already in progress")), requestId: requestId, respond: respond)
+            return
+        case .idle:
+            break
         }
 
+        // Claim the phase synchronously before the first await so a second
+        // start_recording landing on the actor sees `.starting` and is rejected.
+        recordingPhase = .starting
         completedRecording = nil
 
         // captureFrame closure — MainActor-bound. Held by the actor as a let,
@@ -43,6 +57,8 @@ extension TheGetaway {
             brains.stakeout = recorder
             sendMessage(.recordingStarted, requestId: requestId, respond: respond)
         } catch {
+            // Roll back the claim so the next start_recording can proceed.
+            recordingPhase = .idle
             sendMessage(.error(ServerError(kind: .recording, message: error.localizedDescription)), requestId: requestId, respond: respond)
         }
     }
