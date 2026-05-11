@@ -6,12 +6,12 @@ import Foundation
 /// Used to generate MCP tool schemas and verify CLI/MCP sync.
 ///
 /// Declared at module scope (not nested in TheFence) to avoid inheriting @ButtonHeistActor isolation.
-struct FenceParameterSpec: Sendable, Equatable {
+public struct FenceParameterSpec: Sendable, Equatable {
 
     // MARK: - Nested Types
 
     /// JSON-level type of a parameter value.
-    enum ParamType: String, Sendable, Equatable {
+    public enum ParamType: String, Sendable, Equatable {
         case string
         case integer
         case number       // double
@@ -23,13 +23,13 @@ struct FenceParameterSpec: Sendable, Equatable {
 
     // MARK: - Properties
 
-    let key: String
-    let type: ParamType
-    let required: Bool
+    public let key: String
+    public let type: ParamType
+    public let required: Bool
 
     // MARK: - Init
 
-    init(key: String, type: ParamType, required: Bool = false) {
+    public init(key: String, type: ParamType, required: Bool = false) {
         self.key = key
         self.type = type
         self.required = required
@@ -41,7 +41,7 @@ struct FenceParameterSpec: Sendable, Equatable {
 /// How a command is surfaced in the MCP tool list.
 ///
 /// Declared at module scope to avoid inheriting @ButtonHeistActor isolation.
-enum MCPExposure: Sendable, Equatable {
+public enum MCPExposure: Sendable, Equatable {
     /// Tool name equals command rawValue (1:1 mapping).
     case directTool
     /// Command is routed through a grouped tool (e.g. gestures via the "gesture" tool).
@@ -116,7 +116,7 @@ extension TheFence.Command {
         }
     }
 
-    var mcpExposure: MCPExposure {
+    public var mcpExposure: MCPExposure {
         switch self {
         // REPL-only
         case .help, .quit, .exit, .status:
@@ -147,7 +147,7 @@ extension TheFence.Command {
 
     /// All parameter keys this command extracts from the request dictionary.
     /// Does not include the "command" key itself or internal keys like "_requestId".
-    var parameters: [FenceParameterSpec] {
+    public var parameters: [FenceParameterSpec] {
         let target = FenceParameterBlocks.elementTarget
         let filter = FenceParameterBlocks.elementFilter
         let expect = FenceParameterBlocks.expect
