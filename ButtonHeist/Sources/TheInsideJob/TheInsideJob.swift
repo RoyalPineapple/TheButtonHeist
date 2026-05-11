@@ -427,12 +427,15 @@ public final class TheInsideJob {
     }
 
     /// Wait for any in-flight lifecycle tasks (suspend/stop wrappers spawned
-    /// from @objc handlers) to finish before mutating server phase.
+    /// from @objc handlers) to finish before mutating server phase. Loops so
+    /// observer-spawned Tasks that arrive during the drain are also awaited.
     private func awaitPendingLifecycleTasks() async {
-        let tasks = pendingLifecycleTasks
-        pendingLifecycleTasks.removeAll()
-        for task in tasks {
-            await task.value
+        while !pendingLifecycleTasks.isEmpty {
+            let tasks = pendingLifecycleTasks
+            pendingLifecycleTasks.removeAll()
+            for task in tasks {
+                await task.value
+            }
         }
     }
 

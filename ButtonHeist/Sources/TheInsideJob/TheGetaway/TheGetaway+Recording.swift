@@ -35,23 +35,26 @@ extension TheGetaway {
         recordingPhase = .starting
         completedRecording = nil
 
-        // captureFrame closure — MainActor-bound. Held by the actor as a let,
-        // so it must be set at init.
-        let brains = self.brains
-        let recorder = TheStakeout(captureFrame: { @MainActor [brains] in
-            brains.captureScreenForRecording()
-        })
-        await recorder.setOnRecordingComplete { [weak self] result in
-            self?.deliverRecordingResult(result)
-        }
-
-        // Capture screen metrics on MainActor (we are the MainActor here) and pass
-        // the value into the actor — TheStakeout is actor-isolated and can't read
-        // MainActor-bound APIs directly.
-        let screen = ScreenMetrics.current
-        let screenInfo = TheStakeout.ScreenInfo(bounds: screen.bounds, scale: screen.scale)
-
+        // Wrap the entire startup pipeline in do-catch so the .starting claim is
+        // always rolled back on any thrown error — including any future throwing
+        // await inserted between the claim and `startRecording`.
         do {
+            // captureFrame closure — MainActor-bound. Held by the actor as a let,
+            // so it must be set at init.
+            let brains = self.brains
+            let recorder = TheStakeout(captureFrame: { @MainActor [brains] in
+                brains.captureScreenForRecording()
+            })
+            await recorder.setOnRecordingComplete { [weak self] result in
+                self?.deliverRecordingResult(result)
+            }
+
+            // Capture screen metrics on MainActor (we are the MainActor here) and pass
+            // the value into the actor — TheStakeout is actor-isolated and can't read
+            // MainActor-bound APIs directly.
+            let screen = ScreenMetrics.current
+            let screenInfo = TheStakeout.ScreenInfo(bounds: screen.bounds, scale: screen.scale)
+
             try await recorder.startRecording(config: config, screen: screenInfo)
             recordingPhase = .recording(stakeout: recorder)
             brains.stakeout = recorder
