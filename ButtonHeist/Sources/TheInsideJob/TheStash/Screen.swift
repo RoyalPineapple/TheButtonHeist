@@ -136,14 +136,11 @@ struct Screen: Equatable {
     /// Union two screens. Used by exploration to accumulate the full tree
     /// across many parses.
     ///
-    /// Conflict rule (heistId in both `self` and `other`):
-    /// - `element` (the parsed AccessibilityElement): take `other`'s — newer
-    ///   parse, more current state.
-    /// - `contentSpaceOrigin`: take `other`'s when non-nil; otherwise preserve
-    ///   `self`'s. A page that scrolled out of a scroll view retains its
-    ///   recorded origin.
-    /// - `object` / `scrollView` weak refs: take `other`'s — newer is more
-    ///   current.
+    /// Conflict rule: **last read always wins.** When the same heistId appears
+    /// in both `self` and `other`, the entire `ScreenElement` from `other`
+    /// replaces the one from `self` — no field-level merging, no special case
+    /// to preserve a previously-recorded `contentSpaceOrigin`. The most recent
+    /// observation is the source of truth.
     ///
     /// `hierarchy` and `firstResponderHeistId` take `other`'s. `hierarchy` is
     /// the live snapshot, not a unionable tree — accumulating it across
@@ -151,21 +148,7 @@ struct Screen: Equatable {
     /// needs the "all elements ever seen on this screen" view reads
     /// `elements`, not `hierarchy`.
     func merging(_ other: Screen) -> Screen {
-        var mergedElements = elements
-        for (heistId, otherEntry) in other.elements {
-            if let existing = mergedElements[heistId] {
-                let mergedOrigin = otherEntry.contentSpaceOrigin ?? existing.contentSpaceOrigin
-                mergedElements[heistId] = ScreenElement(
-                    heistId: otherEntry.heistId,
-                    contentSpaceOrigin: mergedOrigin,
-                    element: otherEntry.element,
-                    object: otherEntry.object ?? existing.object,
-                    scrollView: otherEntry.scrollView ?? existing.scrollView
-                )
-            } else {
-                mergedElements[heistId] = otherEntry
-            }
-        }
+        let mergedElements = elements.merging(other.elements) { _, new in new }
         return Screen(
             elements: mergedElements,
             hierarchy: other.hierarchy,

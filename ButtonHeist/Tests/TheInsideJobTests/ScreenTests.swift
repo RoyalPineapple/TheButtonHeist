@@ -201,14 +201,17 @@ final class ScreenTests: XCTestCase {
                        "Conflict resolver should take `other`'s element payload")
     }
 
-    func testMergingPreservesContentSpaceOriginWhenOtherLostIt() {
+    func testMergingTakesOtherOriginEvenWhenOtherIsNil() {
+        // Last-read-always-wins: no field-level preservation. If `other`
+        // reports nil contentSpaceOrigin for this heistId, that's the new
+        // truth, even if `self` had a non-nil value previously.
         let lhsEntry = makeEntry(
             heistId: "scrolled_row",
             contentSpaceOrigin: CGPoint(x: 0, y: 400)
         )
         let rhsEntry = makeEntry(
             heistId: "scrolled_row",
-            contentSpaceOrigin: nil // scrolled off the live viewport, origin missing
+            contentSpaceOrigin: nil
         )
         let lhs = Screen(
             elements: ["scrolled_row": lhsEntry],
@@ -225,9 +228,8 @@ final class ScreenTests: XCTestCase {
 
         let merged = lhs.merging(rhs)
 
-        XCTAssertEqual(merged.findElement(heistId: "scrolled_row")?.contentSpaceOrigin,
-                       CGPoint(x: 0, y: 400),
-                       "When `other` lost the content-space origin, preserve `self`'s")
+        XCTAssertNil(merged.findElement(heistId: "scrolled_row")?.contentSpaceOrigin,
+                     "Last-read-wins: `other`'s nil origin replaces `self`'s value")
     }
 
     func testMergingTakesOtherOriginWhenBothPresent() {
