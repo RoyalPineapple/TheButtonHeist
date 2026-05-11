@@ -935,6 +935,165 @@ final class TheFenceTests: XCTestCase {
         }
     }
 
+    // MARK: - recordToCompletion
+
+    @ButtonHeistActor
+    func testRecordToCompletionReturnsPayloadOnSuccess() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        try await fence.start()
+        let expectedPayload = RecordingPayload(
+            videoData: "dGVzdA==", width: 390, height: 844,
+            duration: 2.0, frameCount: 16, fps: 8,
+            startTime: Date(), endTime: Date(), stopReason: .manual
+        )
+        // When the start_recording message is observed, deliver the payload via
+        // the recording callback so the wait resolves immediately.
+        mockConn.autoResponse = { message in
+            if case .startRecording = message {
+                Task { @ButtonHeistActor in
+                    fence.handoff.onRecording?(expectedPayload)
+                }
+            }
+            return .actionResult(ActionResult(success: true, method: .activate))
+        }
+
+        let result = try await fence.recordToCompletion(
+            config: RecordingConfig(fps: 8, maxDuration: 60),
+            timeout: 5.0
+        )
+
+        XCTAssertEqual(result.videoData, expectedPayload.videoData)
+        XCTAssertEqual(result.duration, expectedPayload.duration)
+        XCTAssertTrue(mockConn.sent.contains { sent in
+            if case .startRecording = sent.0 { return true }
+            return false
+        }, "Expected startRecording to have been sent")
+    }
+
+    @ButtonHeistActor
+    func testRecordToCompletionCancelMidWaitTriggersStop() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        try await fence.start()
+        // Do not deliver a payload — the wait should hang until cancelled.
+        mockConn.autoResponse = { _ in
+            .actionResult(ActionResult(success: true, method: .activate))
+        }
+
+        let task = Task { @ButtonHeistActor in
+            try await fence.recordToCompletion(
+                config: RecordingConfig(fps: 8, maxDuration: 60),
+                timeout: 60.0
+            )
+        }
+
+        // Wait until the start_recording message has actually been observed by
+        // the mock — that's the only deterministic signal that the task has
+        // progressed past the start send and into the wait.
+        for _ in 0..<200 {
+            let started = mockConn.sent.contains { sent in
+                if case .startRecording = sent.0 { return true }
+                return false
+            }
+            if started { break }
+            await Task.yield()
+        }
+
+        task.cancel()
+
+        do {
+            _ = try await task.value
+            XCTFail("Expected CancellationError")
+        } catch is CancellationError {
+            // expected
+        } catch {
+            XCTFail("Expected CancellationError, got \(error)")
+        }
+
+        let stopSent = mockConn.sent.contains { sent in
+            if case .stopRecording = sent.0 { return true }
+            return false
+        }
+        XCTAssertTrue(stopSent, "Expected stop_recording to be sent on cancel-mid-wait")
+    }
+
+    @ButtonHeistActor
+    func testRecordToCompletionCancelMidStartDoesNotStop() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        try await fence.start()
+        mockConn.autoResponse = { _ in
+            .actionResult(ActionResult(success: true, method: .activate))
+        }
+
+        let task = Task { @ButtonHeistActor in
+            try await fence.recordToCompletion(
+                config: RecordingConfig(fps: 8, maxDuration: 60),
+                timeout: 5.0
+            )
+        }
+        // Cancel before the task gets to run — the cancellation check at the
+        // top of recordToCompletion should fire before the start send.
+        task.cancel()
+
+        do {
+            _ = try await task.value
+            XCTFail("Expected CancellationError")
+        } catch is CancellationError {
+            // expected
+        } catch {
+            XCTFail("Expected CancellationError, got \(error)")
+        }
+
+        // Pre-start cancellation must not send anything.
+        let startSent = mockConn.sent.contains { sent in
+            if case .startRecording = sent.0 { return true }
+            return false
+        }
+        let stopSent = mockConn.sent.contains { sent in
+            if case .stopRecording = sent.0 { return true }
+            return false
+        }
+        XCTAssertFalse(startSent, "Expected no start_recording when cancelled before start")
+        XCTAssertFalse(stopSent, "Expected no stop_recording when cancelled before start")
+    }
+
+    @ButtonHeistActor
+    func testRecordToCompletionPropagatesNonCancelErrors() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        try await fence.start()
+        // On startRecording, deliver a recording-error so the wait fails
+        // synchronously with FenceError.actionFailed.
+        mockConn.autoResponse = { message in
+            if case .startRecording = message {
+                Task { @ButtonHeistActor in
+                    fence.handoff.onRecordingError?("disk full")
+                }
+            }
+            return .actionResult(ActionResult(success: true, method: .activate))
+        }
+
+        do {
+            _ = try await fence.recordToCompletion(
+                config: RecordingConfig(fps: 8, maxDuration: 60),
+                timeout: 5.0
+            )
+            XCTFail("Expected FenceError.actionFailed")
+        } catch let error as FenceError {
+            guard case .actionFailed(let message) = error else {
+                return XCTFail("Expected actionFailed, got \(error)")
+            }
+            XCTAssertTrue(message.contains("disk full"), "Expected message to mention 'disk full', got: \(message)")
+        } catch {
+            XCTFail("Expected FenceError.actionFailed, got \(error)")
+        }
+
+        // Cleanup branch must still fire on non-cancel error.
+        let stopSent = mockConn.sent.contains { sent in
+            if case .stopRecording = sent.0 { return true }
+            return false
+        }
+        XCTAssertTrue(stopSent, "Expected stop_recording on non-cancel error")
+    }
+
     @ButtonHeistActor
     func testListDevicesFiltersOutUnreachableDevicesWithoutConnecting() async throws {
         let reachableDevice = DiscoveredDevice(

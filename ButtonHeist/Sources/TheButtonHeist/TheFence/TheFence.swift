@@ -867,6 +867,51 @@ public final class TheFence {
         }
     }
 
+    /// Run a recording from start to completion as a single async unit.
+    ///
+    /// Sends `start_recording`, awaits the resulting `RecordingPayload`, and on
+    /// any error path (including `CancellationError` from a parent task) sends
+    /// `stop_recording` so the iOS-side recording is not stranded. Cleanup is
+    /// best-effort: if it fails, the original error still propagates.
+    public func recordToCompletion(
+        config: RecordingConfig,
+        timeout: TimeInterval
+    ) async throws -> RecordingPayload {
+        guard handoff.isConnected else { throw FenceError.notConnected }
+        guard !handoff.isRecording else {
+            throw FenceError.invalidRequest("Recording already in progress — use stop_recording first")
+        }
+
+        // Cancellation that arrived before we could send the start request: do
+        // nothing to clean up server-side, since nothing was started.
+        try Task.checkCancellation()
+
+        var didStart = false
+        do {
+            handoff.send(.startRecording(config))
+            didStart = true
+            return try await waitForRecording(timeout: timeout)
+        } catch is CancellationError {
+            if didStart {
+                cleanUpServerRecording()
+            }
+            throw CancellationError()
+        } catch {
+            if didStart {
+                cleanUpServerRecording()
+            }
+            throw error
+        }
+    }
+
+    /// Best-effort drain of an in-flight server-side recording. Used as the
+    /// cleanup branch of `recordToCompletion` — failures are intentionally
+    /// swallowed so the caller's original error still surfaces.
+    private func cleanUpServerRecording() {
+        guard handoff.isConnected else { return }
+        handoff.send(.stopRecording, requestId: UUID().uuidString)
+    }
+
     /// Internal overload exposing `afterRegister` for test injection. The hook
     /// fires synchronously after the recording callback is registered, letting
     /// tests deliver a payload deterministically without sleeping.

@@ -42,14 +42,33 @@ enum CLIRunner {
         request: [String: Any],
         statusMessage: String? = nil
     ) async throws -> (fence: TheFence, response: FenceResponse) {
+        let fence = try await connect(connection: connection, statusMessage: statusMessage)
+        do {
+            let response = try await fence.execute(request: request)
+            return (fence, response)
+        } catch {
+            fence.stop()
+            throw error
+        }
+    }
+
+    /// Connect a fence without dispatching any command, for callers that drive
+    /// TheFence's higher-level primitives directly (e.g. `recordToCompletion`).
+    ///
+    /// Caller is responsible for calling `fence.stop()` when done. The fence is
+    /// stopped automatically if `start` throws.
+    @ButtonHeistActor
+    static func connect(
+        connection: ConnectionOptions,
+        statusMessage: String? = nil
+    ) async throws -> TheFence {
         let fence = makeFence(connection: connection)
         do {
             try await fence.start()
             if let statusMessage, !connection.quiet {
                 logStatus(statusMessage)
             }
-            let response = try await fence.execute(request: request)
-            return (fence, response)
+            return fence
         } catch {
             fence.stop()
             throw error
