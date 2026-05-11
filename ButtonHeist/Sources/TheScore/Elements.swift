@@ -647,19 +647,27 @@ public struct HeistCustomContent: Codable, Equatable, Hashable, Sendable {
 // MARK: - Element Matcher
 
 /// Composable predicate for scanning the accessibility tree.
-/// All non-nil fields must match (AND semantics). Wire type — the matching
-/// logic itself lives as an extension on AccessibilityHierarchy in TheInsideJob,
-/// where it operates on the canonical tree directly.
+/// All non-nil fields must match (AND semantics).
+///
+/// Matching is **exact or miss**: string fields (`label`, `identifier`, `value`)
+/// must equal the matcher value, compared case-insensitively after typography
+/// folding (smart quotes/dashes/ellipsis fold to ASCII; emoji, accents, and
+/// CJK pass through). Trait fields use exact bitmask comparison.
+///
+/// There is no substring fallback. On miss, the resolver returns `.notFound`
+/// with structured suggestions ("did you mean 'Save Draft' or 'Save All'?")
+/// produced by the diagnostic / near-miss path. Agents who relied on substring
+/// fallback must use the full label.
 ///
 /// Trait values use the HeistTrait enum (e.g. .button, .header, .selected).
 /// The hierarchy-level matcher bridges these to UIAccessibilityTraits bitmasks
 /// via AccessibilitySnapshotParser's knownTraits.
 public struct ElementMatcher: Codable, Sendable, Equatable {
-    /// Case-insensitive substring match against element label
+    /// Case-insensitive equality match against element label (typography-folded)
     public let label: String?
-    /// Case-insensitive substring match against accessibility identifier
+    /// Case-insensitive equality match against accessibility identifier (typography-folded)
     public let identifier: String?
-    /// Case-insensitive substring match against element value
+    /// Case-insensitive equality match against element value (typography-folded)
     public let value: String?
     /// All listed traits must be present on the element (AND)
     public let traits: [HeistTrait]?
@@ -711,32 +719,112 @@ extension HeistElement {
     private static let knownTraits = Set(HeistTrait.allCases)
 
     /// Match this wire element against an ElementMatcher predicate.
-    /// Used for client-side filtering of serialized interface data (get_interface).
-    /// String fields use case-insensitive substring matching, consistent with
-    /// AccessibilityElement.matches in TheStash+Matching.
-    /// Unknown traits in required/excluded cause a miss (fail-safe).
+    ///
+    /// Exact-or-miss semantics: string fields (`label`, `identifier`, `value`)
+    /// must equal the matcher value, compared case-insensitively after typography
+    /// folding (smart quotes/dashes/ellipsis fold to ASCII; emoji, accents, and
+    /// CJK pass through). Trait fields use exact bitmask comparison. This is
+    /// identical to the server-side `AccessibilityElement.matches` so the same
+    /// `ElementMatcher` evaluated client-side and server-side produces the same
+    /// answer.
+    ///
+    /// Used for client-side filtering of serialized interface data (`get_interface`)
+    /// and for action-expectation matchers (`elementAppeared`, `elementDisappeared`).
+    /// Unknown traits in `traits` or `excludeTraits` cause a miss (fail-safe).
     public func matches(_ matcher: ElementMatcher) -> Bool {
         if let matchLabel = matcher.label {
             if matchLabel.isEmpty { return false }
-            guard let label, label.localizedCaseInsensitiveContains(matchLabel) else { return false }
+            guard let label, ElementMatcher.stringEquals(label, matchLabel) else { return false }
         }
         if let matchId = matcher.identifier {
             if matchId.isEmpty { return false }
-            guard let identifier, identifier.localizedCaseInsensitiveContains(matchId) else { return false }
+            guard let identifier, ElementMatcher.stringEquals(identifier, matchId) else { return false }
         }
         if let matchVal = matcher.value {
             if matchVal.isEmpty { return false }
-            guard let value, value.localizedCaseInsensitiveContains(matchVal) else { return false }
+            guard let value, ElementMatcher.stringEquals(value, matchVal) else { return false }
         }
         let traitSet = matcher.hasTraitPredicates ? Set(traits) : []
         if let required = matcher.traits, !required.isEmpty {
-            for t in required where !Self.knownTraits.contains(t) { return false }
-            for t in required where !traitSet.contains(t) { return false }
+            for trait in required where !Self.knownTraits.contains(trait) { return false }
+            for trait in required where !traitSet.contains(trait) { return false }
         }
         if let excluded = matcher.excludeTraits, !excluded.isEmpty {
-            for t in excluded where !Self.knownTraits.contains(t) { return false }
-            for t in excluded where traitSet.contains(t) { return false }
+            for trait in excluded where !Self.knownTraits.contains(trait) { return false }
+            for trait in excluded where traitSet.contains(trait) { return false }
         }
         return true
     }
+}
+
+// MARK: - String Comparison Helpers
+
+extension ElementMatcher {
+    /// Case-insensitive equality with typography folding. The canonical comparison
+    /// used by both client-side `HeistElement.matches` and server-side
+    /// `AccessibilityElement.matches`. Folding turns smart quotes / dashes /
+    /// ellipsis / non-breaking spaces into their ASCII equivalents so labels
+    /// authored with typographic punctuation match patterns typed with ASCII
+    /// (and vice versa). Real Unicode without an ASCII equivalent — emoji,
+    /// accents, CJK — is left untouched.
+    public static func stringEquals(_ candidate: String, _ pattern: String) -> Bool {
+        normalizeTypography(candidate)
+            .localizedCaseInsensitiveCompare(normalizeTypography(pattern)) == .orderedSame
+    }
+
+    /// Case-insensitive substring with typography folding. Suggestion-only —
+    /// used by the diagnostic / near-miss path to surface "did you mean X?"
+    /// hints when an exact match fails. Never used by resolution.
+    public static func stringContains(_ candidate: String, _ pattern: String) -> Bool {
+        normalizeTypography(candidate)
+            .localizedCaseInsensitiveContains(normalizeTypography(pattern))
+    }
+
+    /// Fold typographic punctuation that has an ASCII equivalent.
+    /// Shared between client-side and server-side matchers so the same input
+    /// produces the same comparison on both sides.
+    public static func normalizeTypography(_ string: String) -> String {
+        guard string.unicodeScalars.contains(where: { typographicAsciiFold[$0] != nil }) else {
+            return string
+        }
+        var result = ""
+        result.reserveCapacity(string.count)
+        for scalar in string.unicodeScalars {
+            if let replacement = typographicAsciiFold[scalar] {
+                result.append(replacement)
+            } else {
+                result.unicodeScalars.append(scalar)
+            }
+        }
+        return result
+    }
+
+    private static let typographicAsciiFold: [Unicode.Scalar: String] = [
+        // Single quotes / apostrophes
+        "\u{2018}": "'",  // ' LEFT SINGLE QUOTATION MARK
+        "\u{2019}": "'",  // ' RIGHT SINGLE QUOTATION MARK / typographic apostrophe
+        "\u{201A}": "'",  // ‚ SINGLE LOW-9 QUOTATION MARK
+        "\u{201B}": "'",  // ‛ SINGLE HIGH-REVERSED-9 QUOTATION MARK
+        "\u{2032}": "'",  // ′ PRIME
+        // Double quotes
+        "\u{201C}": "\"", // " LEFT DOUBLE QUOTATION MARK
+        "\u{201D}": "\"", // " RIGHT DOUBLE QUOTATION MARK
+        "\u{201E}": "\"", // „ DOUBLE LOW-9 QUOTATION MARK
+        "\u{201F}": "\"", // ‟ DOUBLE HIGH-REVERSED-9 QUOTATION MARK
+        "\u{2033}": "\"", // ″ DOUBLE PRIME
+        // Dashes / hyphens
+        "\u{2010}": "-",  // ‐ HYPHEN
+        "\u{2011}": "-",  // ‑ NON-BREAKING HYPHEN
+        "\u{2012}": "-",  // ‒ FIGURE DASH
+        "\u{2013}": "-",  // – EN DASH
+        "\u{2014}": "-",  // — EM DASH
+        "\u{2015}": "-",  // ― HORIZONTAL BAR
+        "\u{2212}": "-",  // − MINUS SIGN
+        // Ellipsis
+        "\u{2026}": "...", // … HORIZONTAL ELLIPSIS
+        // Non-breaking / typographic spaces
+        "\u{00A0}": " ",  // NO-BREAK SPACE
+        "\u{2007}": " ",  // FIGURE SPACE
+        "\u{202F}": " ",  // NARROW NO-BREAK SPACE
+    ]
 }

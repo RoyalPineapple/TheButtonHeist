@@ -74,8 +74,8 @@ Each step is a flat JSON object compatible with `TheFence.execute(request:)` —
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `command` | `String` | Yes | TheFence command name (`activate`, `type_text`, `swipe`, etc.) |
-| `label` | `String` | No | Element matcher: case-insensitive substring match on accessibility label |
-| `identifier` | `String` | No | Element matcher: match on accessibility identifier |
+| `label` | `String` | No | Element matcher: case-insensitive equality (typography-folded) on accessibility label |
+| `identifier` | `String` | No | Element matcher: case-insensitive equality (typography-folded) on accessibility identifier |
 | `traits` | `[String]` | No | Element matcher: all listed traits must be present |
 | `excludeTraits` | `[String]` | No | Element matcher: none of these traits may be present |
 | `expect` | `String \| Object \| Array` | No | Expected outcome — validated on playback |
@@ -111,7 +111,7 @@ Matchers describe elements by **identity**, not state:
 - **UUID-containing identifiers** (runtime-generated) are detected and skipped in favor of labels
 - **Value** is never used for identification
 
-The matcher algorithm tries progressively:
+Matching is exact (case-insensitive, typography-folded); the recorder builds the matcher progressively:
 1. Identifier alone (if stable — no UUIDs)
 2. Label + identity traits
 3. Label + identity traits + identifier

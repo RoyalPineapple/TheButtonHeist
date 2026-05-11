@@ -76,7 +76,13 @@ extension TheStash {
     /// to drift — e.g. slider moved), then traits, label, identifier.
     /// Only considers relaxations that still have at least one remaining predicate —
     /// dropping the only predicate matches everything, which isn't a useful near-miss.
-    /// Returns a diagnostic line or nil if no near-miss found.
+    /// Returns a diagnostic line listing up to three near-miss candidates (so an
+    /// agent who typed a partial label sees the actual labels they could have
+    /// meant), or nil if no near-miss was found.
+    ///
+    /// The relaxed predicate is matched with `.substring` semantics deliberately —
+    /// the suggestion path is the only place where substring matching is allowed.
+    /// Resolution itself is exact-or-miss.
     static func findNearMiss(
         for matcher: ElementMatcher,
         in hierarchy: [AccessibilityHierarchy]
@@ -128,11 +134,34 @@ extension TheStash {
             },
         ].compactMap { $0 }
 
+        let suggestionCap = 3
         for relaxation in relaxations {
-            guard relaxation.relaxed.hasPredicates,
-                  let found = hierarchy.firstMatch(relaxation.relaxed, mode: .substring)?.element else { continue }
-            let actualValue = relaxation.actual(found)
-            return "near miss: matched all fields except \(relaxation.field) — actual \(relaxation.field)=\(actualValue)"
+            guard relaxation.relaxed.hasPredicates else { continue }
+            let hits = hierarchy.matches(relaxation.relaxed, mode: .substring, limit: suggestionCap + 1)
+            guard !hits.isEmpty else { continue }
+            let candidates = hits.prefix(suggestionCap).map { relaxation.actual($0.element) }
+            let suggestion = candidates
+                .map { "\(relaxation.field)=\"\($0)\"" }
+                .joined(separator: ", ")
+            let suffix = hits.count > suggestionCap ? ", ..." : ""
+            return "near miss: matched all fields except \(relaxation.field) — did you mean \(suggestion)\(suffix)?"
+        }
+
+        // Fallback: when the matcher only has one predicate (or every relaxation
+        // empties out), retry the original matcher with substring semantics
+        // against the single remaining field so the agent who typed a partial
+        // still gets concrete suggestions. This is the only place where
+        // substring search reaches user-visible output; resolution itself
+        // remains strictly exact-or-miss.
+        for relaxation in relaxations where !relaxation.relaxed.hasPredicates {
+            let substringHits = hierarchy.matches(matcher, mode: .substring, limit: suggestionCap + 1)
+            guard !substringHits.isEmpty else { continue }
+            let candidates = substringHits.prefix(suggestionCap).map { relaxation.actual($0.element) }
+            let suggestion = candidates
+                .map { "\(relaxation.field)=\"\($0)\"" }
+                .joined(separator: ", ")
+            let suffix = substringHits.count > suggestionCap ? ", ..." : ""
+            return "near miss: \(relaxation.field) matched as substring only — did you mean \(suggestion)\(suffix)?"
         }
         return nil
     }

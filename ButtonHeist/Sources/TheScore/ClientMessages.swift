@@ -261,7 +261,9 @@ public enum ClientMessage: Codable, Sendable {
 /// priority when both are present.
 /// How to target an element: by stable heistId or by predicate matcher.
 /// HeistId is preferred when available (fast, exact). Matcher fields use
-/// case-insensitive substring matching with ambiguity detection.
+/// case-insensitive equality with typography folding — exact-or-miss.
+/// On miss, the resolver returns structured suggestions; there is no
+/// substring fallback.
 public enum ElementTarget: Sendable, Equatable {
     /// Stable ID assigned by get_interface — fast O(1) lookup.
     case heistId(String)

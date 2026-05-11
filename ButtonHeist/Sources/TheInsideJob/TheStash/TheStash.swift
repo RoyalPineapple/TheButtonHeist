@@ -323,14 +323,14 @@ final class TheStash {
     /// For heistId: checks the live viewport set, not the persistent registry.
     /// For matcher: checks currentHierarchy only (not registry). The registry
     /// caches previously-seen elements and would defeat wait_for absent checks.
+    /// Uses the same exact-or-miss semantics as `resolveTarget` so wait_for
+    /// presence/absence and `activate` agree about what's on screen.
     func hasTarget(_ target: ElementTarget) -> Bool {
         switch target {
         case .heistId(let heistId):
             return registry.viewportIds.contains(heistId)
         case .matcher(let matcher, _):
-            // Exact matches are a subset of substring matches, so a single substring
-            // pass answers "does any element match" for the exact-then-substring fallback.
-            return currentHierarchy.hasMatch(matcher, mode: .substring)
+            return currentHierarchy.hasMatch(matcher, mode: .exact)
         }
     }
 

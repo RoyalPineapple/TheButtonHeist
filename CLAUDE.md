@@ -441,7 +441,7 @@ Two type families are the currency for referring to UI elements. Use them everyw
 
 **Target types** (TheScore wire types):
 - `ElementTarget` — how callers refer to an element: `.heistId(String)` for stable ID lookup, `.matcher(ElementMatcher)` for predicate-based search. This is the currency type passed through TheFence, TheSafecracker, MCP, and CLI. Only TheBagman resolves it to a live element.
-- `ElementMatcher` — the predicate struct: label, identifier, value, traits, excludeTraits. String fields use case-insensitive substring matching. Traits use exact bitmask comparison.
+- `ElementMatcher` — the predicate struct: label, identifier, value, traits, excludeTraits. String fields use case-insensitive equality with typography folding (smart quotes/dashes/ellipsis fold to ASCII; emoji/accents/CJK pass through). Traits use exact bitmask comparison. Matching is **exact or miss** — on a miss the resolver returns structured suggestions through the diagnostic path; there is no substring fallback. The same semantics are evaluated by `HeistElement.matches` on the client (TheScore) and `AccessibilityElement.matches` on the server (TheInsideJob), via the shared `ElementMatcher.stringEquals` helper.
 - `HeistElement` — the wire representation sent to clients via `get_interface`. Contains heistId, label, value, traits, actions, frame, etc. Built by TheBagman from `AccessibilityElement` + heistId assignment. This is a progressive-disclosure view for external consumers.
 
 **Rules:**
