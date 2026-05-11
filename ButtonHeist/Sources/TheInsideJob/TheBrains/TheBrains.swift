@@ -190,7 +190,7 @@ final class TheBrains {
             ? baseDelta
             : enriching(baseDelta, transient: transientElements)
 
-        stash.captureActionFrame()
+        await stash.captureActionFrame()
 
         var builder = ActionResultBuilder(method: method, snapshot: afterSnapshot)
         builder.message = message
