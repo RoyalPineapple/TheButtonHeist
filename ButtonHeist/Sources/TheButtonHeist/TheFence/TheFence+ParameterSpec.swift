@@ -105,7 +105,7 @@ extension TheFence.Command {
 
     public var cliExposure: CLIExposure {
         switch self {
-        case .help, .quit, .exit, .status, .connect:
+        case .help, .quit, .exit, .status:
             return .sessionOnly
 
         case .increment, .decrement, .performCustomAction:
