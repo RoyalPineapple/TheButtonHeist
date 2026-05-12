@@ -108,7 +108,7 @@ flowchart TD
 
     H --> I["navigation.exploreAndPrune()<br/>(fingerprint-cached re-explore)"]
     I --> J["stash.selectElements()"]
-    J --> K["stash.computeDelta(before, after)"]
+    J --> K["InterfaceDiff.computeDelta(before, after, afterTree)"]
     K --> L["Return ActionResult<br/>with delta + explore stats"]
 ```
 

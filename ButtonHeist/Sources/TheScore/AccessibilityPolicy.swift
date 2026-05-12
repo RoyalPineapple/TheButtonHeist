@@ -28,7 +28,7 @@ public enum AccessibilityPolicy {
     /// same heistId — these traits do not contribute to element identity.
     /// Consumed by:
     /// - `TheBurglar.hasSameMinimumMatcher` (content-space disambiguation)
-    /// - `TheStash.WireConversion.identitySignature` (functional-move pairing)
+    /// - `InterfaceDiff.identitySignature` (functional-move pairing)
     /// - `TheBookKeeper.buildMinimalMatcher` (recording-time matcher
     ///   construction — strips state from minimal matchers)
     public static let transientTraits: Set<HeistTrait> = [
