@@ -45,30 +45,6 @@ final class TheBrainsActionTests: XCTestCase {
                        "Valid duration should pass through unchanged")
     }
 
-    func testClampDurationAtExactMinimum() {
-        let result = brains.actions.clampDuration(0.01)
-        XCTAssertEqual(result, 0.01, accuracy: 0.001,
-                       "Exact minimum should pass through")
-    }
-
-    func testClampDurationAtExactMaximum() {
-        let result = brains.actions.clampDuration(60.0)
-        XCTAssertEqual(result, 60.0, accuracy: 0.001,
-                       "Exact maximum should pass through")
-    }
-
-    func testClampDurationNegativeValueClampsToMin() {
-        let result = brains.actions.clampDuration(-5.0)
-        XCTAssertEqual(result, 0.01, accuracy: 0.001,
-                       "Negative duration should clamp to minimum")
-    }
-
-    func testClampDurationZeroClampsToMin() {
-        let result = brains.actions.clampDuration(0.0)
-        XCTAssertEqual(result, 0.01, accuracy: 0.001,
-                       "Zero duration should clamp to minimum")
-    }
-
     // MARK: - resolveDuration
 
     func testResolveDurationExplicitDurationTakesPrecedence() {

@@ -49,8 +49,7 @@ final class TheStashResolutionTests: XCTestCase {
 
     /// Register an element into the current Screen. Rebuilds the screen value
     /// on every call so individual tests don't have to think about the
-    /// memberwise init. Post-0.2.25 this also serves the matcher path (the
-    /// registry is gone — Screen.heistIdByElement is the lookup).
+    /// memberwise init. `Screen.heistIdByElement` is the matcher path lookup.
     private func register(_ element: AccessibilityElement, heistId: String, index: Int) {
         hierarchyNodes.append(.element(element, traversalIndex: index))
         registeredEntries.append((element, heistId))
@@ -58,10 +57,10 @@ final class TheStashResolutionTests: XCTestCase {
     }
 
     /// Element registration that only adds the leaf to the heistId→entry map
-    /// without putting it in the live hierarchy. Off-screen entries are now
-    /// strictly notFound through `resolveTarget` (the strict off-screen rule)
-    /// so the only places this still matters are `selectElements()` and
-    /// `findElement(heistId:)` tests asserting the union shape.
+    /// without putting it in the live hierarchy. Off-screen entries return
+    /// `.notFound` through `resolveTarget`; this helper is used by
+    /// `selectElements()` and `findElement(heistId:)` tests that assert the
+    /// union shape across viewport and off-viewport entries.
     private func registerOffScreen(_ element: AccessibilityElement, heistId: String) {
         registeredEntries.append((element, heistId))
         rebuildScreen()
@@ -371,11 +370,11 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(result[0].heistId, "button_save")
     }
 
-    // MARK: - Strict Off-Screen Rule (post-0.2.25)
+    // MARK: - Strict Off-Screen Rule
 
-    /// After the registry was deleted, matcher-based resolution looks only at
-    /// the live hierarchy. An off-screen entry no longer participates in
-    /// matching, so the resolution must miss with a useful diagnostic.
+    /// Matcher-based resolution looks only at the live hierarchy. An off-screen
+    /// entry does not participate in matching, so the resolution must miss with
+    /// a useful diagnostic.
     func testMatcherDoesNotFallBackToOffScreenEntry() {
         let onScreen = element(label: "Visible", traits: .button)
         let offScreen = element(label: "Long List", traits: .button)

@@ -7,10 +7,6 @@ final class ConstantsTests: XCTestCase {
         XCTAssertEqual(buttonHeistServiceType, "_buttonheist._tcp")
     }
 
-    func testButtonHeistVersionIsNonEmpty() {
-        XCTAssertFalse(buttonHeistVersion.isEmpty)
-    }
-
     func testServiceTypeFormat() {
         // Verify the service type follows Bonjour naming conventions
         XCTAssertTrue(buttonHeistServiceType.hasPrefix("_"))

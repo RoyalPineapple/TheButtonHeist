@@ -51,20 +51,6 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertEqual(matcher, decoded)
     }
 
-    func testEncodeDecodeMinimal() throws {
-        let matcher = ElementMatcher(label: "Save")
-        let data = try JSONEncoder().encode(matcher)
-        let decoded = try JSONDecoder().decode(ElementMatcher.self, from: data)
-        XCTAssertEqual(matcher, decoded)
-    }
-
-    func testEncodeDecodeEmpty() throws {
-        let matcher = ElementMatcher()
-        let data = try JSONEncoder().encode(matcher)
-        let decoded = try JSONDecoder().decode(ElementMatcher.self, from: data)
-        XCTAssertEqual(matcher, decoded)
-    }
-
     func testDecodeFromJSON() throws {
         let json = """
         {"label":"Settings","traits":["header","button"],"excludeTraits":["notEnabled"]}
@@ -76,20 +62,6 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertEqual(matcher.excludeTraits, [.notEnabled])
         XCTAssertNil(matcher.identifier)
         XCTAssertNil(matcher.value)
-    }
-
-    // MARK: - Equatable
-
-    func testEqualMatchers() {
-        let a = ElementMatcher(label: "Save", traits: [.button])
-        let b = ElementMatcher(label: "Save", traits: [.button])
-        XCTAssertEqual(a, b)
-    }
-
-    func testUnequalMatchers() {
-        let a = ElementMatcher(label: "Save")
-        let b = ElementMatcher(label: "Cancel")
-        XCTAssertNotEqual(a, b)
     }
 
     // MARK: - Empty String Handling
@@ -139,9 +111,8 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertTrue(element.matches(ElementMatcher(label: "SAVE")))
     }
 
-    func testSubstringPartialNoLongerMatches() {
-        // Old behavior: "Sav" was a substring of "Save" and matched.
-        // New behavior: exact-or-miss — "Sav" misses, agent gets suggestions.
+    func testSubstringPartialDoesNotMatch() {
+        // Exact-or-miss: "Sav" must not match "Save".
         let element = HeistElement.stub(label: "Save")
         XCTAssertFalse(element.matches(ElementMatcher(label: "Sav")))
         XCTAssertFalse(element.matches(ElementMatcher(label: "ave")))

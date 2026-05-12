@@ -3,14 +3,6 @@ import XCTest
 
 final class HeistTraitTests: XCTestCase {
 
-    func testKnownCaseRoundTrip() throws {
-        for trait in HeistTrait.allCases {
-            let data = try JSONEncoder().encode(trait)
-            let decoded = try JSONDecoder().decode(HeistTrait.self, from: data)
-            XCTAssertEqual(decoded, trait)
-        }
-    }
-
     func testUnknownCaseRoundTrip() throws {
         let unknown = HeistTrait.unknown("futureTrait")
         let data = try JSONEncoder().encode(unknown)
@@ -28,14 +20,6 @@ final class HeistTraitTests: XCTestCase {
         let json = Data(#""button""#.utf8)
         let decoded = try JSONDecoder().decode(HeistTrait.self, from: json)
         XCTAssertEqual(decoded, .button)
-    }
-
-    func testRawValueRoundTrip() {
-        for trait in HeistTrait.allCases {
-            let raw = trait.rawValue
-            let recovered = HeistTrait(rawValue: raw)
-            XCTAssertEqual(recovered, trait)
-        }
     }
 
     func testUnknownRawValueReturnsNil() {

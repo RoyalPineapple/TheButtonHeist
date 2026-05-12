@@ -6,7 +6,7 @@ import UIKit
 @testable import TheScore
 
 /// Deterministic tests for the pipelines on TheBrains that operate purely against
-/// the stash registry: the failure branch of `actionResultWithDelta`, the
+/// the current `Screen` snapshot: the failure branch of `actionResultWithDelta`, the
 /// `SentState` accessors, the `computeBackgroundDelta` guards, the
 /// `broadcastInterfaceIfChanged` cache-miss, and `exploreAndPrune` pruning.
 ///
