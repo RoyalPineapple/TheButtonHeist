@@ -78,13 +78,13 @@ final class TheBrains {
     /// Capture the current state for delta computation before an action.
     /// Caller must have called `refresh()` already this frame.
     func captureBeforeState() -> BeforeState {
-        let tree = stash.wireTree()
+        let (tree, treeHash) = stash.wireTreeWithHash()
         return BeforeState(
             snapshot: stash.selectElements(),
             elements: stash.currentHierarchy.sortedElements,
             hierarchy: stash.currentHierarchy,
             tree: tree,
-            treeHash: tree.hashValue,
+            treeHash: treeHash,
             viewController: tripwire.topmostViewController().map(ObjectIdentifier.init)
         )
     }
@@ -308,12 +308,12 @@ final class TheBrains {
     func broadcastInterfaceIfChanged() -> Interface? {
         guard refresh() != nil else { return nil }
 
-        let currentHash = stash.wireTreeHash()
+        let (tree, currentHash) = stash.wireTreeWithHash()
 
         guard currentHash != stash.lastHierarchyHash else { return nil }
         stash.lastHierarchyHash = currentHash
 
-        return Interface(timestamp: Date(), tree: stash.wireTree())
+        return Interface(timestamp: Date(), tree: tree)
     }
 
     /// Build a full Interface payload from current state.

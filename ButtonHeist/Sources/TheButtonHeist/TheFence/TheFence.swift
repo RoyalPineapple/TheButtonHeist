@@ -169,8 +169,13 @@ public final class TheFence {
     }
     var playbackPhase: PlaybackPhase = .idle
 
-    /// Cached interface elements from the most recent get_interface response, keyed by heistId.
-    /// Used by TheBookKeeper for heist recording and by expectation validation for elementDisappeared.
+    /// Durable post-action snapshot of the most recently observed interface,
+    /// keyed by heistId. This is the only mirror of post-action interface
+    /// state on the client — the request trackers above are scoped to
+    /// in-flight requests and don't retain the last delivered value. The
+    /// cache feeds heist-evidence recording (so the activated element from
+    /// the old screen survives a screen change) and `elementDisappeared`
+    /// expectation validation (which resolves removed heistIds against it).
     private var lastInterfaceCache: [String: HeistElement] = [:]
 
     // MARK: - Pending Request Tracking
