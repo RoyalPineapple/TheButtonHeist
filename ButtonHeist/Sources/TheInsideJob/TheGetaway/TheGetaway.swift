@@ -48,9 +48,9 @@ final class TheGetaway {
 
     /// Pending Tasks spawned to bridge MainActor-bound recording callbacks
     /// back into TheGetaway. There is at most one in-flight delivery per
-    /// recording session, but storing the handle in a set keeps the
+    /// recording session, but storing the handle in a tracker keeps the
     /// lifecycle-tracking pattern uniform with the rest of TheGetaway.
-    private var pendingRecordingTasks: Set<Task<Void, Never>> = []
+    private let pendingRecordingTasks = TaskTracker()
 
     var stakeout: TheStakeout? {
         if case .recording(let stakeout) = recordingPhase { return stakeout }
@@ -179,10 +179,7 @@ final class TheGetaway {
     func tearDown() {
         eventConsumerTask?.cancel()
         eventConsumerTask = nil
-        for task in pendingRecordingTasks {
-            task.cancel()
-        }
-        pendingRecordingTasks.removeAll()
+        pendingRecordingTasks.cancelAll()
         transport = nil
         hierarchyInvalidated = false
         completedRecording = .none
@@ -192,8 +189,7 @@ final class TheGetaway {
     /// Insert a Task into `pendingRecordingTasks` and prune already-completed
     /// handles so the set does not grow across many recordings.
     func trackRecordingTask(_ task: Task<Void, Never>) {
-        pendingRecordingTasks = pendingRecordingTasks.filter { !$0.isCancelled }
-        pendingRecordingTasks.insert(task)
+        pendingRecordingTasks.record(task)
     }
 
     // MARK: - Message Dispatch
