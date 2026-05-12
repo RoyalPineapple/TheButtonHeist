@@ -435,7 +435,7 @@ extension Navigation {
             if let scrollView = view as? UIScrollView, scrollView.bhIsUnsafeForProgrammaticScrolling {
                 return nil
             }
-            if let scrollView = view as? UIScrollView, !forceSwipeScrolling {
+            if let scrollView = view as? UIScrollView {
                 return .uiScrollView(scrollView)
             }
             let screenFrame = safeSwipeFrame(from: view.convert(view.bounds, to: nil))
@@ -555,13 +555,7 @@ extension Navigation {
         if let sv = screenElement.scrollView {
             guard !sv.bhIsUnsafeForProgrammaticScrolling else { return nil }
 
-            let target: ScrollableTarget
-            if forceSwipeScrolling {
-                let screenFrame = safeSwipeFrame(from: sv.convert(sv.bounds, to: nil))
-                target = .swipeable(frame: screenFrame, contentSize: sv.contentSize)
-            } else {
-                target = .uiScrollView(sv)
-            }
+            let target: ScrollableTarget = .uiScrollView(sv)
             if let axis, !Self.scrollableAxis(of: target).contains(axis) {
                 if let (axisTarget, _) = findScrollTarget(axis: axis) {
                     return axisTarget

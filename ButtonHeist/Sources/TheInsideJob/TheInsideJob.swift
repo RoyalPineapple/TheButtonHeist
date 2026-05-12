@@ -28,7 +28,6 @@ public final class TheInsideJob {
         let instanceId: String?
         let allowedScopes: Set<ConnectionScope>?
         let port: UInt16
-        let forceSwipeScrolling: Bool?
     }
 
     enum SharedState {
@@ -47,8 +46,7 @@ public final class TheInsideJob {
                 token: args?.token,
                 instanceId: args?.instanceId,
                 allowedScopes: args?.allowedScopes,
-                port: args?.port ?? 0,
-                forceSwipeScrolling: args?.forceSwipeScrolling
+                port: args?.port ?? 0
             )
             sharedState = .live(instance)
             return instance
@@ -59,15 +57,13 @@ public final class TheInsideJob {
         token: String? = nil,
         instanceId: String? = nil,
         allowedScopes: Set<ConnectionScope>? = nil,
-        port: UInt16 = 0,
-        forceSwipeScrolling: Bool? = nil
+        port: UInt16 = 0
     ) {
         let args = ConfigureArgs(
             token: token,
             instanceId: instanceId,
             allowedScopes: allowedScopes,
-            port: port,
-            forceSwipeScrolling: forceSwipeScrolling
+            port: port
         )
         switch sharedState {
         case .pending:
@@ -117,7 +113,6 @@ public final class TheInsideJob {
     private let installationId: String
     private let sessionId = UUID()
     private let allowedScopes: Set<ConnectionScope>
-    private let forceSwipeScrolling: Bool
     private var pendingTransportStopTask: Task<Void, Never>?
     /// Tracks Tasks that wrap `await stop()` / `await suspend()` for callers
     /// that must stay synchronous (notably the @objc UIApplication lifecycle
@@ -170,18 +165,13 @@ public final class TheInsideJob {
         token: String? = nil,
         instanceId: String? = nil,
         allowedScopes: Set<ConnectionScope>? = nil,
-        port: UInt16 = 0,
-        forceSwipeScrolling: Bool? = nil
+        port: UInt16 = 0
     ) {
         self.muscle = TheMuscle(explicitToken: token)
         self.instanceId = instanceId
         self.preferredPort = port
         self.installationId = Self.loadInstallationId()
-        self.forceSwipeScrolling = Self.resolveForceSwipeScrolling(explicit: forceSwipeScrolling)
-        self.brains = TheBrains(
-            tripwire: self.tripwire,
-            forceSwipeScrolling: self.forceSwipeScrolling
-        )
+        self.brains = TheBrains(tripwire: self.tripwire)
         self.getaway = TheGetaway(
             muscle: self.muscle, brains: self.brains, tripwire: self.tripwire,
             identity: TheGetaway.ServerIdentity(
@@ -199,18 +189,6 @@ public final class TheInsideJob {
         } else {
             self.allowedScopes = ConnectionScope.default
         }
-    }
-
-    private static func resolveForceSwipeScrolling(explicit: Bool?) -> Bool {
-        if let explicit { return explicit }
-        let envKey = EnvironmentKey.insideJobForceSwipeScrolling
-        if envKey.value != nil { return envKey.boolValue }
-        if let plist = Bundle.main.object(
-            forInfoDictionaryKey: "InsideJobForceSwipeScrolling"
-        ) as? Bool {
-            return plist
-        }
-        return false
     }
 
     // MARK: - Public API
@@ -252,9 +230,6 @@ public final class TheInsideJob {
 
         let scopeNames = allowedScopes.map(\.rawValue).sorted().joined(separator: ", ")
         insideJobLogger.info("Connection scopes: \(scopeNames)")
-        if forceSwipeScrolling {
-            insideJobLogger.info("Scroll strategy override: force swipe scrolling")
-        }
         insideJobLogger.info("Server listening on port \(actualPort)")
         let token = await muscle.sessionToken
         insideJobLogger.info("Connect with session token: \(token, privacy: .public)")

@@ -21,7 +21,6 @@ final class Navigation {
     let stash: TheStash
     let safecracker: TheSafecracker
     let tripwire: TheTripwire
-    let forceSwipeScrolling: Bool
 
     /// Last dispatched swipe direction per swipeable target key.
     var lastSwipeDirectionByTarget: [String: UIAccessibilityScrollDirection] = [:]
@@ -34,13 +33,11 @@ final class Navigation {
     init(
         stash: TheStash,
         safecracker: TheSafecracker,
-        tripwire: TheTripwire,
-        forceSwipeScrolling: Bool
+        tripwire: TheTripwire
     ) {
         self.stash = stash
         self.safecracker = safecracker
         self.tripwire = tripwire
-        self.forceSwipeScrolling = forceSwipeScrolling
     }
 
     // MARK: - Nested Types
