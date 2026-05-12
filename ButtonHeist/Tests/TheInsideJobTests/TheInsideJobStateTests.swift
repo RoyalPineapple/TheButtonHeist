@@ -347,6 +347,81 @@ final class TheInsideJobStateTests: XCTestCase {
             "After `await stop()` returns, every lockout Task must have been cancelled and drained by muscle.tearDown(). Got \(afterCount) still pending."
         )
     }
+
+    // MARK: - resume() drains pendingLifecycleTasks before guarding on .suspended
+
+    /// Regression for findings PR #356 M1+M2: a rapid background→foreground
+    /// cycle delivered `appDidEnterBackground` (which spawns a Task wrapping
+    /// `await suspend()`) and `appWillEnterForeground` back-to-back on the
+    /// @MainActor. The previous `resume()` was synchronous and checked
+    /// `guard case .suspended = serverPhase else { return }` at the top —
+    /// before the in-flight suspend wrapper had a chance to set
+    /// `.suspended`. The guard failed, resume returned silently, and the
+    /// server stayed dead after foreground.
+    ///
+    /// The fix makes `resume()` async and drains `pendingLifecycleTasks`
+    /// before checking phase. This test seeds the same race: serverPhase is
+    /// `.running`, a tracked suspend wrapper is spawned (but its body has
+    /// not run yet), then `await resume()` is called. Expectation: after
+    /// resume() returns, the server is `.resuming` (the internal resume
+    /// Task is in flight) — proving the drain observed the suspended state
+    /// rather than no-op'ing.
+    func testResumeDrainsPendingSuspendBeforeGuard() async {
+        let job = TheInsideJob()
+        let transport = ServerTransport()
+        job.serverPhase = .running(transport: transport)
+
+        // Simulate what `appDidEnterBackground` does: enroll a suspend
+        // wrapper into pendingLifecycleTasks without awaiting it. The Task
+        // body runs asynchronously on @MainActor.
+        job.spawnLifecycleTask { [weak job] in
+            await job?.suspend()
+        }
+
+        // Without yielding, call resume(). The drain at the top of resume()
+        // must await the suspend wrapper, observe `.suspended`, and proceed.
+        await job.resume()
+
+        // resume() spawns an internal Task and sets `.resuming` before
+        // returning. The server may then complete the resume cycle and
+        // become `.running`, OR remain `.resuming` while the internal task
+        // is in flight. Anything except `.suspended` proves the drain
+        // worked — `.suspended` would mean resume() returned without
+        // kicking off the resume cycle.
+        switch job.serverPhase {
+        case .resuming, .running:
+            break
+        case .suspended:
+            XCTFail("resume() no-op'd because guard observed pre-suspend state — drain failed")
+        case .stopped:
+            XCTFail("Unexpected .stopped after resume() — state machine corrupted")
+        }
+    }
+
+    /// Regression for findings PR #356 M2: `pendingLifecycleTasks` must not
+    /// grow without bound across many background/foreground cycles. Each
+    /// spawned Task removes itself from the set when its body completes.
+    func testSpawnLifecycleTaskSelfRemovesOnCompletion() async {
+        let job = TheInsideJob()
+
+        let completed = expectation(description: "Tracked Task body ran")
+        job.spawnLifecycleTask {
+            completed.fulfill()
+        }
+
+        await fulfillment(of: [completed], timeout: 1.0)
+
+        // The body has completed; the self-removal closure runs on the
+        // same @MainActor right after. Yield once so the continuation
+        // following `await body()` inside spawnLifecycleTask gets a turn.
+        await Task.yield()
+        await Task.yield()
+
+        XCTAssertTrue(
+            job.pendingLifecycleTasksIsEmpty,
+            "Completed lifecycle Task should have removed itself from pendingLifecycleTasks"
+        )
+    }
 }
 
 #endif // canImport(UIKit)
