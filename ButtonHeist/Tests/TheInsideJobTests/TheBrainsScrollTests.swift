@@ -69,7 +69,7 @@ final class TheBrainsScrollTests: XCTestCase {
         }
 
         var union = brains.stash.currentScreen
-        let manifest = await brains.exploreScreen(union: &union)
+        let manifest = await brains.navigation.exploreScreen(union: &union)
 
         for container in unsafeContainers {
             XCTAssertTrue(
@@ -154,102 +154,102 @@ final class TheBrainsScrollTests: XCTestCase {
     // MARK: - requiredAxis Mapping
 
     func testRequiredAxisForScrollDirection() {
-        XCTAssertEqual(TheBrains.requiredAxis(for: ScrollDirection.up), .vertical)
-        XCTAssertEqual(TheBrains.requiredAxis(for: ScrollDirection.down), .vertical)
-        XCTAssertEqual(TheBrains.requiredAxis(for: ScrollDirection.left), .horizontal)
-        XCTAssertEqual(TheBrains.requiredAxis(for: ScrollDirection.right), .horizontal)
-        XCTAssertEqual(TheBrains.requiredAxis(for: ScrollDirection.next), .vertical)
-        XCTAssertEqual(TheBrains.requiredAxis(for: ScrollDirection.previous), .vertical)
+        XCTAssertEqual(Navigation.requiredAxis(for: ScrollDirection.up), .vertical)
+        XCTAssertEqual(Navigation.requiredAxis(for: ScrollDirection.down), .vertical)
+        XCTAssertEqual(Navigation.requiredAxis(for: ScrollDirection.left), .horizontal)
+        XCTAssertEqual(Navigation.requiredAxis(for: ScrollDirection.right), .horizontal)
+        XCTAssertEqual(Navigation.requiredAxis(for: ScrollDirection.next), .vertical)
+        XCTAssertEqual(Navigation.requiredAxis(for: ScrollDirection.previous), .vertical)
     }
 
     func testRequiredAxisForScrollEdge() {
-        XCTAssertEqual(TheBrains.requiredAxis(for: ScrollEdge.top), .vertical)
-        XCTAssertEqual(TheBrains.requiredAxis(for: ScrollEdge.bottom), .vertical)
-        XCTAssertEqual(TheBrains.requiredAxis(for: ScrollEdge.left), .horizontal)
-        XCTAssertEqual(TheBrains.requiredAxis(for: ScrollEdge.right), .horizontal)
+        XCTAssertEqual(Navigation.requiredAxis(for: ScrollEdge.top), .vertical)
+        XCTAssertEqual(Navigation.requiredAxis(for: ScrollEdge.bottom), .vertical)
+        XCTAssertEqual(Navigation.requiredAxis(for: ScrollEdge.left), .horizontal)
+        XCTAssertEqual(Navigation.requiredAxis(for: ScrollEdge.right), .horizontal)
     }
 
     func testRequiredAxisForScrollSearchDirection() {
-        XCTAssertEqual(TheBrains.requiredAxis(for: ScrollSearchDirection.up), .vertical)
-        XCTAssertEqual(TheBrains.requiredAxis(for: ScrollSearchDirection.down), .vertical)
-        XCTAssertEqual(TheBrains.requiredAxis(for: ScrollSearchDirection.left), .horizontal)
-        XCTAssertEqual(TheBrains.requiredAxis(for: ScrollSearchDirection.right), .horizontal)
+        XCTAssertEqual(Navigation.requiredAxis(for: ScrollSearchDirection.up), .vertical)
+        XCTAssertEqual(Navigation.requiredAxis(for: ScrollSearchDirection.down), .vertical)
+        XCTAssertEqual(Navigation.requiredAxis(for: ScrollSearchDirection.left), .horizontal)
+        XCTAssertEqual(Navigation.requiredAxis(for: ScrollSearchDirection.right), .horizontal)
     }
 
     // MARK: - uiScrollDirection Mapping
 
     func testUIScrollDirectionFromScrollSearchDirection() {
-        XCTAssertEqual(TheBrains.uiScrollDirection(for: ScrollSearchDirection.down), .down)
-        XCTAssertEqual(TheBrains.uiScrollDirection(for: ScrollSearchDirection.up), .up)
-        XCTAssertEqual(TheBrains.uiScrollDirection(for: ScrollSearchDirection.left), .left)
-        XCTAssertEqual(TheBrains.uiScrollDirection(for: ScrollSearchDirection.right), .right)
+        XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollSearchDirection.down), .down)
+        XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollSearchDirection.up), .up)
+        XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollSearchDirection.left), .left)
+        XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollSearchDirection.right), .right)
     }
 
     func testUIScrollDirectionFromScrollDirection() {
-        XCTAssertEqual(TheBrains.uiScrollDirection(for: ScrollDirection.up), .up)
-        XCTAssertEqual(TheBrains.uiScrollDirection(for: ScrollDirection.down), .down)
-        XCTAssertEqual(TheBrains.uiScrollDirection(for: ScrollDirection.left), .left)
-        XCTAssertEqual(TheBrains.uiScrollDirection(for: ScrollDirection.right), .right)
-        XCTAssertEqual(TheBrains.uiScrollDirection(for: ScrollDirection.next), .next)
-        XCTAssertEqual(TheBrains.uiScrollDirection(for: ScrollDirection.previous), .previous)
+        XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollDirection.up), .up)
+        XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollDirection.down), .down)
+        XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollDirection.left), .left)
+        XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollDirection.right), .right)
+        XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollDirection.next), .next)
+        XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollDirection.previous), .previous)
     }
 
     // MARK: - adaptDirection Cross-Axis Fallback
 
     func testAdaptDirectionForwardVerticalToHorizontal() {
-        let horizontalOnly = TheBrains.ScrollableTarget.swipeable(
+        let horizontalOnly = Navigation.ScrollableTarget.swipeable(
             frame: CGRect(x: 0, y: 0, width: 400, height: 200),
             contentSize: CGSize(width: 2000, height: 200)
         )
-        XCTAssertEqual(TheBrains.adaptDirection(.down, for: horizontalOnly), .right,
+        XCTAssertEqual(Navigation.adaptDirection(.down, for: horizontalOnly), .right,
                        "Forward vertical request on horizontal-only → .right")
     }
 
     func testAdaptDirectionBackwardVerticalToHorizontal() {
-        let horizontalOnly = TheBrains.ScrollableTarget.swipeable(
+        let horizontalOnly = Navigation.ScrollableTarget.swipeable(
             frame: CGRect(x: 0, y: 0, width: 400, height: 200),
             contentSize: CGSize(width: 2000, height: 200)
         )
-        XCTAssertEqual(TheBrains.adaptDirection(.up, for: horizontalOnly), .left,
+        XCTAssertEqual(Navigation.adaptDirection(.up, for: horizontalOnly), .left,
                        "Backward vertical request on horizontal-only → .left")
     }
 
     func testAdaptDirectionForwardHorizontalToVertical() {
-        let verticalOnly = TheBrains.ScrollableTarget.swipeable(
+        let verticalOnly = Navigation.ScrollableTarget.swipeable(
             frame: CGRect(x: 0, y: 0, width: 400, height: 200),
             contentSize: CGSize(width: 400, height: 2000)
         )
-        XCTAssertEqual(TheBrains.adaptDirection(.right, for: verticalOnly), .down,
+        XCTAssertEqual(Navigation.adaptDirection(.right, for: verticalOnly), .down,
                        "Forward horizontal request on vertical-only → .down")
     }
 
     func testAdaptDirectionBackwardHorizontalToVertical() {
-        let verticalOnly = TheBrains.ScrollableTarget.swipeable(
+        let verticalOnly = Navigation.ScrollableTarget.swipeable(
             frame: CGRect(x: 0, y: 0, width: 400, height: 200),
             contentSize: CGSize(width: 400, height: 2000)
         )
-        XCTAssertEqual(TheBrains.adaptDirection(.left, for: verticalOnly), .up,
+        XCTAssertEqual(Navigation.adaptDirection(.left, for: verticalOnly), .up,
                        "Backward horizontal request on vertical-only → .up")
     }
 
     func testAdaptDirectionMatchingAxisPassesThrough() {
-        let verticalOnly = TheBrains.ScrollableTarget.swipeable(
+        let verticalOnly = Navigation.ScrollableTarget.swipeable(
             frame: CGRect(x: 0, y: 0, width: 400, height: 200),
             contentSize: CGSize(width: 400, height: 2000)
         )
-        XCTAssertEqual(TheBrains.adaptDirection(.down, for: verticalOnly), .down)
-        XCTAssertEqual(TheBrains.adaptDirection(.up, for: verticalOnly), .up)
+        XCTAssertEqual(Navigation.adaptDirection(.down, for: verticalOnly), .down)
+        XCTAssertEqual(Navigation.adaptDirection(.up, for: verticalOnly), .up)
     }
 
     func testAdaptDirectionBothAxesPassesThrough() {
-        let biaxial = TheBrains.ScrollableTarget.swipeable(
+        let biaxial = Navigation.ScrollableTarget.swipeable(
             frame: CGRect(x: 0, y: 0, width: 400, height: 200),
             contentSize: CGSize(width: 2000, height: 2000)
         )
-        XCTAssertEqual(TheBrains.adaptDirection(.down, for: biaxial), .down)
-        XCTAssertEqual(TheBrains.adaptDirection(.right, for: biaxial), .right)
-        XCTAssertEqual(TheBrains.adaptDirection(.up, for: biaxial), .up)
-        XCTAssertEqual(TheBrains.adaptDirection(.left, for: biaxial), .left)
+        XCTAssertEqual(Navigation.adaptDirection(.down, for: biaxial), .down)
+        XCTAssertEqual(Navigation.adaptDirection(.right, for: biaxial), .right)
+        XCTAssertEqual(Navigation.adaptDirection(.up, for: biaxial), .up)
+        XCTAssertEqual(Navigation.adaptDirection(.left, for: biaxial), .left)
     }
 
     // MARK: - ScrollableTarget Properties
@@ -257,7 +257,7 @@ final class TheBrainsScrollTests: XCTestCase {
     func testScrollableTargetFrameForUIScrollView() {
         let frame = CGRect(x: 10, y: 20, width: 300, height: 400)
         let scrollView = UIScrollView(frame: frame)
-        let target = TheBrains.ScrollableTarget.uiScrollView(scrollView)
+        let target = Navigation.ScrollableTarget.uiScrollView(scrollView)
 
         XCTAssertEqual(target.frame, frame)
     }
@@ -265,7 +265,7 @@ final class TheBrainsScrollTests: XCTestCase {
     func testScrollableTargetFrameForSwipeable() {
         let frame = CGRect(x: 10, y: 20, width: 300, height: 400)
         let contentSize = CGSize(width: 600, height: 800)
-        let target = TheBrains.ScrollableTarget.swipeable(frame: frame, contentSize: contentSize)
+        let target = Navigation.ScrollableTarget.swipeable(frame: frame, contentSize: contentSize)
 
         XCTAssertEqual(target.frame, frame)
         XCTAssertEqual(target.contentSize, contentSize)
@@ -274,7 +274,7 @@ final class TheBrainsScrollTests: XCTestCase {
     func testScrollableTargetContentSizeForUIScrollView() {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 375, height: 667))
         scrollView.contentSize = CGSize(width: 375, height: 5000)
-        let target = TheBrains.ScrollableTarget.uiScrollView(scrollView)
+        let target = Navigation.ScrollableTarget.uiScrollView(scrollView)
 
         XCTAssertEqual(target.contentSize, CGSize(width: 375, height: 5000))
     }
@@ -282,31 +282,31 @@ final class TheBrainsScrollTests: XCTestCase {
     // MARK: - Scroll Axis Detection (Swipeable variant)
 
     func testScrollableAxisSwipeableHorizontalOnly() {
-        let target = TheBrains.ScrollableTarget.swipeable(
+        let target = Navigation.ScrollableTarget.swipeable(
             frame: CGRect(x: 0, y: 0, width: 400, height: 200),
             contentSize: CGSize(width: 2000, height: 200)
         )
-        let axis = TheBrains.scrollableAxis(of: target)
+        let axis = Navigation.scrollableAxis(of: target)
         XCTAssertTrue(axis.contains(.horizontal))
         XCTAssertFalse(axis.contains(.vertical))
     }
 
     func testScrollableAxisSwipeableVerticalOnly() {
-        let target = TheBrains.ScrollableTarget.swipeable(
+        let target = Navigation.ScrollableTarget.swipeable(
             frame: CGRect(x: 0, y: 0, width: 400, height: 200),
             contentSize: CGSize(width: 400, height: 2000)
         )
-        let axis = TheBrains.scrollableAxis(of: target)
+        let axis = Navigation.scrollableAxis(of: target)
         XCTAssertFalse(axis.contains(.horizontal))
         XCTAssertTrue(axis.contains(.vertical))
     }
 
     func testScrollableAxisSwipeableNoOverflow() {
-        let target = TheBrains.ScrollableTarget.swipeable(
+        let target = Navigation.ScrollableTarget.swipeable(
             frame: CGRect(x: 0, y: 0, width: 400, height: 200),
             contentSize: CGSize(width: 400, height: 200)
         )
-        let axis = TheBrains.scrollableAxis(of: target)
+        let axis = Navigation.scrollableAxis(of: target)
         XCTAssertTrue(axis.isEmpty)
     }
 
@@ -354,7 +354,7 @@ final class TheBrainsScrollTests: XCTestCase {
             offViewport: [(element, "button_item", CGPoint(x: 0, y: 2000))]
         )
 
-        let entry = brains.offViewportRegistryEntry(for: .heistId("button_item"))
+        let entry = brains.navigation.offViewportRegistryEntry(for: .heistId("button_item"))
         XCTAssertNotNil(entry, "Should return entry when heistId is not in live viewport")
         XCTAssertEqual(entry?.heistId, "button_item")
     }
@@ -366,7 +366,7 @@ final class TheBrainsScrollTests: XCTestCase {
             offViewport: []
         )
 
-        let entry = brains.offViewportRegistryEntry(for: .heistId("button_item"))
+        let entry = brains.navigation.offViewportRegistryEntry(for: .heistId("button_item"))
         XCTAssertNil(entry, "Should return nil when heistId is in live viewport")
     }
 
@@ -384,7 +384,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         let matcher = ElementMatcher(label: "Target Button")
-        let entry = brains.offViewportRegistryEntry(for: .matcher(matcher))
+        let entry = brains.navigation.offViewportRegistryEntry(for: .matcher(matcher))
         XCTAssertNil(entry, "Matcher resolution does not reach off-viewport entries post-0.2.25")
     }
 
@@ -396,14 +396,14 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         let matcher = ElementMatcher(label: "Visible Item")
-        let entry = brains.offViewportRegistryEntry(for: .matcher(matcher))
+        let entry = brains.navigation.offViewportRegistryEntry(for: .matcher(matcher))
         XCTAssertNil(entry, "Should return nil when matched element is in live viewport")
     }
 
     // MARK: - ContainerExploreState
 
     func testContainerExploreStateStoresValues() {
-        let state = TheBrains.ContainerExploreState(
+        let state = Navigation.ContainerExploreState(
             visibleSubtreeFingerprint: 12345,
             discoveredHeistIds: ["id_a", "id_b", "id_c"]
         )
@@ -415,19 +415,19 @@ final class TheBrainsScrollTests: XCTestCase {
     // MARK: - Clear Cache Resets Explore State
 
     func testClearCacheResetsExploreState() {
-        brains.containerExploreStates[
+        brains.navigation.containerExploreStates[
             AccessibilityContainer(
                 type: .scrollable(contentSize: CGSize(width: 375, height: 2000)),
                 frame: .zero
             )
-        ] = TheBrains.ContainerExploreState(
+        ] = Navigation.ContainerExploreState(
             visibleSubtreeFingerprint: 1,
             discoveredHeistIds: ["x"]
         )
 
         brains.clearCache()
 
-        XCTAssertTrue(brains.containerExploreStates.isEmpty,
+        XCTAssertTrue(brains.navigation.containerExploreStates.isEmpty,
                       "clearCache should empty containerExploreStates")
     }
 
@@ -445,7 +445,7 @@ final class TheBrainsScrollTests: XCTestCase {
             scrollView: scrollView
         )
 
-        let target = brains.resolveScrollTarget(
+        let target = brains.navigation.resolveScrollTarget(
             screenElement: screenElement, axis: .vertical
         )
         // When axis doesn't match and no fallback container exists in the hierarchy,
@@ -474,7 +474,7 @@ final class TheBrainsScrollTests: XCTestCase {
             scrollView: scrollView
         )
 
-        let target = forcedBrains.resolveScrollTarget(
+        let target = forcedBrains.navigation.resolveScrollTarget(
             screenElement: screenElement, axis: .vertical
         )
         guard case .swipeable = target else {
@@ -486,7 +486,7 @@ final class TheBrainsScrollTests: XCTestCase {
     // MARK: - SettleSwipeLoopState (Pure Decision Logic)
 
     func testSettleLoopSameDirectionExitsAfterOneStableFrame() {
-        var state = TheBrains.SettleSwipeLoopState(
+        var state = Navigation.SettleSwipeLoopState(
             profile: .sameDirection,
             previousViewport: ["a"],
             previousAnchor: 100
@@ -509,7 +509,7 @@ final class TheBrainsScrollTests: XCTestCase {
     }
 
     func testSettleLoopDirectionChangeHonorsMinFrames() {
-        var state = TheBrains.SettleSwipeLoopState(
+        var state = Navigation.SettleSwipeLoopState(
             profile: .directionChange,
             previousViewport: ["a"],
             previousAnchor: 100
@@ -532,7 +532,7 @@ final class TheBrainsScrollTests: XCTestCase {
     }
 
     func testSettleLoopExitsAtMaxFramesWhenConditionsNeverSettle() {
-        var state = TheBrains.SettleSwipeLoopState(
+        var state = Navigation.SettleSwipeLoopState(
             profile: .directionChange,
             previousViewport: ["a"],
             previousAnchor: 100
@@ -555,7 +555,7 @@ final class TheBrainsScrollTests: XCTestCase {
     }
 
     func testSettleLoopMovedLatchesAndNeverClears() {
-        var state = TheBrains.SettleSwipeLoopState(
+        var state = Navigation.SettleSwipeLoopState(
             profile: .directionChange,
             previousViewport: ["a"],
             previousAnchor: 100
@@ -578,7 +578,7 @@ final class TheBrainsScrollTests: XCTestCase {
     }
 
     func testSettleLoopFallsBackToViewportDiffWhenAnchorsUnavailable() {
-        var state = TheBrains.SettleSwipeLoopState(
+        var state = Navigation.SettleSwipeLoopState(
             profile: .directionChange,
             previousViewport: ["a"],
             previousAnchor: nil
@@ -596,7 +596,7 @@ final class TheBrainsScrollTests: XCTestCase {
         // filters out edge-bounce false positives. When content-space
         // anchors are unchanged across frames, viewport id shuffles
         // (element reorder, reparse flicker) must NOT count as motion.
-        var state = TheBrains.SettleSwipeLoopState(
+        var state = Navigation.SettleSwipeLoopState(
             profile: .directionChange,
             previousViewport: ["a", "b"],
             previousAnchor: 500
@@ -619,21 +619,21 @@ final class TheBrainsScrollTests: XCTestCase {
         // intersected with itself, which is the frame.
         let screen = UIScreen.main.bounds
         let inner = screen.insetBy(dx: 80, dy: 120)
-        XCTAssertEqual(brains.safeSwipeFrame(from: inner), inner)
+        XCTAssertEqual(brains.navigation.safeSwipeFrame(from: inner), inner)
     }
 
     func testSafeSwipeFrameZeroWidthReturnsOriginal() {
         // Degenerate input has no intersection with anything, so the function
         // returns the original frame.
         let input = CGRect(x: 0, y: 0, width: 0, height: 100)
-        XCTAssertEqual(brains.safeSwipeFrame(from: input), input)
+        XCTAssertEqual(brains.navigation.safeSwipeFrame(from: input), input)
     }
 
     func testSafeSwipeFrameOversizedFrameClampsWithinScreen() {
         // A frame larger than any iPhone screen must clamp to the safe
         // region and stay within the current screen bounds.
         let huge = CGRect(x: -1000, y: -1000, width: 10000, height: 10000)
-        let result = brains.safeSwipeFrame(from: huge)
+        let result = brains.navigation.safeSwipeFrame(from: huge)
         let screenBounds = UIScreen.main.bounds
         XCTAssertTrue(
             screenBounds.contains(result),
@@ -653,7 +653,7 @@ final class TheBrainsScrollTests: XCTestCase {
             firstResponderHeistId: nil,
             scrollableContainerViews: [:]
         )
-        let result = brains.safeSwipeFrame(from: CGRect(x: 100, y: 400, width: 200, height: 500))
+        let result = brains.navigation.safeSwipeFrame(from: CGRect(x: 100, y: 400, width: 200, height: 500))
         XCTAssertEqual(
             result.maxY, tabBarFrame.minY,
             "Swipe area must end at the tab bar's top edge"
@@ -663,11 +663,11 @@ final class TheBrainsScrollTests: XCTestCase {
     // MARK: - Clear Cache
 
     func testClearCacheClearsLastSwipeDirectionCache() {
-        brains.lastSwipeDirectionByTarget["key"] = .down
-        XCTAssertFalse(brains.lastSwipeDirectionByTarget.isEmpty)
+        brains.navigation.lastSwipeDirectionByTarget["key"] = .down
+        XCTAssertFalse(brains.navigation.lastSwipeDirectionByTarget.isEmpty)
         brains.clearCache()
         XCTAssertTrue(
-            brains.lastSwipeDirectionByTarget.isEmpty,
+            brains.navigation.lastSwipeDirectionByTarget.isEmpty,
             "clearCache must drop the swipe direction cache so a new session starts fresh"
         )
     }

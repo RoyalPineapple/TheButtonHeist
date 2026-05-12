@@ -18,17 +18,11 @@ import AccessibilitySnapshotParser
 // detection) working — they read `stash.viewportIds`, which mirrors the
 // latest page-only parse, not the in-flight union.
 
-extension TheBrains {
+extension Navigation {
 
     fileprivate struct ContainerPage {
         let elements: [AccessibilityElement]
         let origins: [CGPoint?]
-    }
-
-    /// Cached state from the last explore of each scrollable container.
-    struct ContainerExploreState {
-        let visibleSubtreeFingerprint: Int
-        let discoveredHeistIds: Set<String>
     }
 
     /// Explore and accumulate the unioned screen. The local `union: Screen`

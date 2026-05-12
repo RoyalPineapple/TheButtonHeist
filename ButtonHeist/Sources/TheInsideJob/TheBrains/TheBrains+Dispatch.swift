@@ -22,15 +22,15 @@ extension TheBrains {
             return await executeTouchGesture(message)
 
         case .typeText(let target):
-            return await performInteraction(command: message) { await self.executeTypeText(target) }
+            return await performInteraction(command: message) { await self.actions.executeTypeText(target) }
         case .scroll(let target):
-            return await performInteraction(command: message) { await self.executeScroll(target) }
+            return await performInteraction(command: message) { await self.navigation.executeScroll(target) }
         case .scrollToVisible(let target):
-            return await performInteraction(command: message) { await self.executeScrollToVisible(target) }
+            return await performInteraction(command: message) { await self.navigation.executeScrollToVisible(target) }
         case .elementSearch(let target):
             return await performElementSearch(target: target, command: message)
         case .scrollToEdge(let target):
-            return await performInteraction(command: message) { await self.executeScrollToEdge(target) }
+            return await performInteraction(command: message) { await self.navigation.executeScrollToEdge(target) }
         case .waitFor(let target):
             return await performWaitFor(target: target)
         case .explore:
@@ -73,7 +73,7 @@ extension TheBrains {
             return treeUnavailableResult(method: Self.diagnosticMethod(for: command))
         }
         let before = captureBeforeState()
-        let result = await executeElementSearch(target)
+        let result = await navigation.executeElementSearch(target)
 
         var enriched = await actionResultWithDelta(
             success: result.success,
@@ -157,7 +157,7 @@ extension TheBrains {
         }
         let before = captureBeforeState()
 
-        let manifest = await exploreAndPrune()
+        let manifest = await navigation.exploreAndPrune()
         let afterSnapshot = stash.selectElements()
 
         let delta = stash.computeDelta(
@@ -186,21 +186,21 @@ extension TheBrains {
     private func executeAccessibilityAction(_ message: ClientMessage) async -> ActionResult {
         switch message {
         case .activate(let target):
-            return await performInteraction(command: message) { await self.executeActivate(target) }
+            return await performInteraction(command: message) { await self.actions.executeActivate(target) }
         case .increment(let target):
-            return await performInteraction(command: message) { await self.executeIncrement(target) }
+            return await performInteraction(command: message) { await self.actions.executeIncrement(target) }
         case .decrement(let target):
-            return await performInteraction(command: message) { await self.executeDecrement(target) }
+            return await performInteraction(command: message) { await self.actions.executeDecrement(target) }
         case .performCustomAction(let target):
-            return await performInteraction(command: message) { await self.executeCustomAction(target) }
+            return await performInteraction(command: message) { await self.actions.executeCustomAction(target) }
         case .editAction(let target):
-            return await performInteraction(command: message) { await self.executeEditAction(target) }
+            return await performInteraction(command: message) { await self.actions.executeEditAction(target) }
         case .setPasteboard(let target):
-            return await performInteraction(command: message) { await self.executeSetPasteboard(target) }
+            return await performInteraction(command: message) { await self.actions.executeSetPasteboard(target) }
         case .getPasteboard:
-            return await performInteraction(command: message) { self.executeGetPasteboard() }
+            return await performInteraction(command: message) { self.actions.executeGetPasteboard() }
         case .resignFirstResponder:
-            return await performInteraction(command: message) { await self.executeResignFirstResponder() }
+            return await performInteraction(command: message) { await self.actions.executeResignFirstResponder() }
         default:
             return unsupportedCommandResult(for: message, context: "executeAccessibilityAction")
         }
@@ -209,23 +209,23 @@ extension TheBrains {
     private func executeTouchGesture(_ message: ClientMessage) async -> ActionResult {
         switch message {
         case .touchTap(let target):
-            return await performInteraction(command: message) { await self.executeTap(target) }
+            return await performInteraction(command: message) { await self.actions.executeTap(target) }
         case .touchLongPress(let target):
-            return await performInteraction(command: message) { await self.executeLongPress(target) }
+            return await performInteraction(command: message) { await self.actions.executeLongPress(target) }
         case .touchSwipe(let target):
-            return await performInteraction(command: message) { await self.executeSwipe(target) }
+            return await performInteraction(command: message) { await self.actions.executeSwipe(target) }
         case .touchDrag(let target):
-            return await performInteraction(command: message) { await self.executeDrag(target) }
+            return await performInteraction(command: message) { await self.actions.executeDrag(target) }
         case .touchPinch(let target):
-            return await performInteraction(command: message) { await self.executePinch(target) }
+            return await performInteraction(command: message) { await self.actions.executePinch(target) }
         case .touchRotate(let target):
-            return await performInteraction(command: message) { await self.executeRotate(target) }
+            return await performInteraction(command: message) { await self.actions.executeRotate(target) }
         case .touchTwoFingerTap(let target):
-            return await performInteraction(command: message) { await self.executeTwoFingerTap(target) }
+            return await performInteraction(command: message) { await self.actions.executeTwoFingerTap(target) }
         case .touchDrawPath(let target):
-            return await performInteraction(command: message) { await self.executeDrawPath(target) }
+            return await performInteraction(command: message) { await self.actions.executeDrawPath(target) }
         case .touchDrawBezier(let target):
-            return await performInteraction(command: message) { await self.executeDrawBezier(target) }
+            return await performInteraction(command: message) { await self.actions.executeDrawBezier(target) }
         default:
             return unsupportedCommandResult(for: message, context: "executeTouchGesture")
         }

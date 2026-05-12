@@ -439,7 +439,7 @@ final class TheGetaway {
             return
         }
 
-        let manifest = await brains.exploreAndPrune()
+        let manifest = await brains.navigation.exploreAndPrune()
         let time = String(format: "%.2f", manifest.explorationTime)
         let payload = brains.currentInterface()
         insideJobLogger.info("Explore: \(payload.elements.count) elements (\(manifest.scrollCount) scrolls, \(time)s)")

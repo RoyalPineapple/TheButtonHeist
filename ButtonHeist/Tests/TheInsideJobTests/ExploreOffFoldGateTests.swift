@@ -5,7 +5,7 @@ import UIKit
 @testable import AccessibilitySnapshotParser
 @testable import TheInsideJob
 
-/// Deterministic tests for `TheBrains.hasContentBeyondFrame` — the AX-tree gate
+/// Deterministic tests for `Navigation.hasContentBeyondFrame` — the AX-tree gate
 /// that prevents `exploreScreen` from swiping containers whose accessibility
 /// descendants all fit inside the container frame (e.g. SwiftUI hosting scroll
 /// views around a non-scrolling canvas).
@@ -19,7 +19,7 @@ final class ExploreOffFoldGateTests: XCTestCase {
         let hierarchy: [AccessibilityHierarchy] = [.container(container, children: [])]
 
         XCTAssertFalse(
-            TheBrains.hasContentBeyondFrame(of: container, in: hierarchy),
+            Navigation.hasContentBeyondFrame(of: container, in: hierarchy),
             "An empty container has no content beyond the fold"
         )
     }
@@ -35,7 +35,7 @@ final class ExploreOffFoldGateTests: XCTestCase {
         ]
 
         XCTAssertFalse(
-            TheBrains.hasContentBeyondFrame(of: container, in: hierarchy),
+            Navigation.hasContentBeyondFrame(of: container, in: hierarchy),
             "Every descendant fits within the container frame — nothing to discover by swiping"
         )
     }
@@ -51,7 +51,7 @@ final class ExploreOffFoldGateTests: XCTestCase {
         ]
 
         XCTAssertTrue(
-            TheBrains.hasContentBeyondFrame(of: container, in: hierarchy),
+            Navigation.hasContentBeyondFrame(of: container, in: hierarchy),
             "A descendant clipped just past the fold counts as off-screen content"
         )
     }
@@ -66,7 +66,7 @@ final class ExploreOffFoldGateTests: XCTestCase {
         ]
 
         XCTAssertFalse(
-            TheBrains.hasContentBeyondFrame(of: container, in: hierarchy),
+            Navigation.hasContentBeyondFrame(of: container, in: hierarchy),
             "Sub-pixel slack within the tolerance must not count as off-fold"
         )
     }
@@ -80,7 +80,7 @@ final class ExploreOffFoldGateTests: XCTestCase {
         ]
 
         XCTAssertTrue(
-            TheBrains.hasContentBeyondFrame(of: container, in: hierarchy),
+            Navigation.hasContentBeyondFrame(of: container, in: hierarchy),
             "Content past the right edge counts as off-fold"
         )
     }
@@ -100,7 +100,7 @@ final class ExploreOffFoldGateTests: XCTestCase {
         ]
 
         XCTAssertTrue(
-            TheBrains.hasContentBeyondFrame(of: container, in: hierarchy),
+            Navigation.hasContentBeyondFrame(of: container, in: hierarchy),
             "Descendants of nested containers must be inspected too"
         )
     }
@@ -122,7 +122,7 @@ final class ExploreOffFoldGateTests: XCTestCase {
         ]
 
         XCTAssertFalse(
-            TheBrains.hasContentBeyondFrame(of: target, in: hierarchy),
+            Navigation.hasContentBeyondFrame(of: target, in: hierarchy),
             "Off-fold content inside a sibling container must not bleed into the target's verdict"
         )
     }

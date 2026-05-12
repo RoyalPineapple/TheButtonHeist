@@ -11,8 +11,9 @@ import AccessibilitySnapshotParser
 ///
 /// TheBrains takes a command and works it through to a result by coordinating
 /// TheStash (the screen value), TheSafecracker (gestures), and TheTripwire
-/// (timing). He owns action execution, scroll orchestration, screen
-/// exploration, and the post-action delta cycle.
+/// (timing). The post-action delta cycle and command dispatch live here;
+/// scroll/explore lives in `Navigation` and the 21 `executeXxx` action
+/// handlers live in `Actions` — both are internal components of TheBrains.
 @MainActor
 final class TheBrains {
 
@@ -21,19 +22,28 @@ final class TheBrains {
     let stash: TheStash
     let safecracker: TheSafecracker
     let tripwire: TheTripwire
-    let forceSwipeScrolling: Bool
-
-    /// Last dispatched swipe direction per swipeable target key.
-    var lastSwipeDirectionByTarget: [String: UIAccessibilityScrollDirection] = [:]
-
-    /// Cached state from the last explore of each scrollable container.
-    var containerExploreStates: [AccessibilityContainer: ContainerExploreState] = [:]
+    let navigation: Navigation
+    let actions: Actions
 
     init(tripwire: TheTripwire, forceSwipeScrolling: Bool = false) {
         self.tripwire = tripwire
-        self.forceSwipeScrolling = forceSwipeScrolling
-        self.stash = TheStash(tripwire: tripwire)
-        self.safecracker = TheSafecracker()
+        let stash = TheStash(tripwire: tripwire)
+        let safecracker = TheSafecracker()
+        self.stash = stash
+        self.safecracker = safecracker
+        let navigation = Navigation(
+            stash: stash,
+            safecracker: safecracker,
+            tripwire: tripwire,
+            forceSwipeScrolling: forceSwipeScrolling
+        )
+        self.navigation = navigation
+        self.actions = Actions(
+            stash: stash,
+            safecracker: safecracker,
+            tripwire: tripwire,
+            navigation: navigation
+        )
     }
 
     // MARK: - Refresh Convenience
@@ -126,7 +136,7 @@ final class TheBrains {
                 beforeHierarchy: before.hierarchy, afterHierarchy: afterHierarchy
             )
         if isScreenChange {
-            containerExploreStates.removeAll()
+            navigation.containerExploreStates.removeAll()
         }
 
         if isScreenChange && afterElements.isEmpty {
@@ -138,7 +148,7 @@ final class TheBrains {
             stash.currentScreen = afterScreen
         }
 
-        _ = await exploreAndPrune()
+        _ = await navigation.exploreAndPrune()
         let afterSnapshot = stash.selectElements()
 
         let baseDelta = stash.computeDelta(
@@ -244,9 +254,8 @@ final class TheBrains {
 
     func clearCache() {
         stash.clearCache()
-        containerExploreStates.removeAll()
+        navigation.clearCache()
         lastSentState = nil
-        lastSwipeDirectionByTarget.removeAll()
     }
 
     // MARK: - Response State Tracking
