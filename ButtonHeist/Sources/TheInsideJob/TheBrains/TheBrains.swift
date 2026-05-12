@@ -111,7 +111,13 @@ final class TheBrains {
 
         let start = CFAbsoluteTimeGetCurrent()
         let settleSession = SettleSession.live(stash: stash, tripwire: tripwire)
-        let settleResult = await settleSession.run(start: start)
+        // Pass the baseline top-VC explicitly: it's the same snapshot
+        // captured in `before.viewController`, so the screen-change
+        // check inside the loop compares the live VC against a stable
+        // known-good reference rather than re-querying the provider for
+        // a value that might drift (or, in scripted test seams, advance
+        // the script and consume the baseline as the first element).
+        let settleResult = await settleSession.run(start: start, baselineTopVC: before.viewController)
         let settleMs = settleResult.outcome.timeMs
         var didSettle = settleResult.outcome.didSettleCleanly
         if case .cancelled(let cancelMs) = settleResult.outcome {
@@ -157,11 +163,16 @@ final class TheBrains {
             afterTree: stash.wireTree(),
             isScreenChange: isScreenChange
         )
-        let transientElements = SettleSession.transientElements(
-            seenByKey: settleResult.elementsByKey,
-            baseline: before.elements,
-            final: afterScreen?.hierarchy.sortedElements ?? []
+        let transientElements = Self.shouldSuppressTransient(
+            settleOutcome: settleResult.outcome,
+            isScreenChange: isScreenChange
         )
+            ? []
+            : SettleSession.transientElements(
+                seenByKey: settleResult.elementsByKey,
+                baseline: before.elements,
+                final: afterScreen?.hierarchy.sortedElements ?? []
+            )
         let delta = transientElements.isEmpty
             ? baseDelta
             : enriching(baseDelta, transient: transientElements)
@@ -211,6 +222,32 @@ final class TheBrains {
     }
 
     // MARK: - Transient Capture
+
+    /// Should the post-action delta omit the `transient` list?
+    ///
+    /// `SettleSession.elementsByKey` accumulates every element seen during
+    /// the multi-cycle loop. On a clean settle (no screen change) the
+    /// "appeared then disappeared" elements really are transient — a
+    /// spinner, a loading overlay, a snackbar. On a screen change the
+    /// same accumulation includes the *previous screen's* elements,
+    /// which are stale-not-transient: they didn't come and go as part of
+    /// this action, they're just no longer the active screen. Reporting
+    /// them as `transient` claims the wrong thing and pollutes the delta
+    /// with elements the agent can no longer see or act on.
+    ///
+    /// Both signals matter:
+    /// - `.screenChanged` outcome: the loop preempted itself on a VC
+    ///   change. Suppress transients.
+    /// - `isScreenChange` flag: the post-action diff (VC swap OR topology
+    ///   replacement) concluded the screen changed even if the settle
+    ///   loop reached `.settled`. Same reasoning, same suppression.
+    static func shouldSuppressTransient(
+        settleOutcome: SettleOutcome,
+        isScreenChange: Bool
+    ) -> Bool {
+        if case .screenChanged = settleOutcome { return true }
+        return isScreenChange
+    }
 
     /// Return a copy of `delta` with `transient` populated.
     private func enriching(

@@ -197,8 +197,20 @@ extension AccessibilityElement {
         let elementsByKey: [TimelineKey: AccessibilityElement]
     }
 
-    func run(start: CFAbsoluteTime) async -> Outcome {
-        let startVC = topVCProvider()
+    /// Run the settle loop.
+    ///
+    /// `baselineTopVC` is the topmost view controller captured *before* the
+    /// action that triggered this settle — passed in explicitly so the
+    /// caller owns the snapshot point and the loop never asks the
+    /// provider for the baseline itself. This eliminates an ambiguity
+    /// in scripted test seams (where the same closure was called once
+    /// for the baseline and again per cycle) and makes the contract:
+    /// "the provider answers `the current top VC` and nothing else."
+    /// Production callers pass the same value they used to populate
+    /// `BeforeState.viewController`, so the screen-change check is
+    /// against a stable known-good reference rather than the first
+    /// element of an in-flight sequence.
+    func run(start: CFAbsoluteTime, baselineTopVC: ObjectIdentifier?) async -> Outcome {
         let cycleNs = UInt64(cycleIntervalMs) * 1_000_000
         let deadline = start + Double(timeoutMs) / 1000
 
@@ -233,7 +245,7 @@ extension AccessibilityElement {
             }
 
             let nowVC = topVCProvider()
-            if nowVC != startVC {
+            if nowVC != baselineTopVC {
                 return Outcome(
                     outcome: .screenChanged(timeMs: Self.elapsedMs(since: start)),
                     elementsByKey: elementsByKey

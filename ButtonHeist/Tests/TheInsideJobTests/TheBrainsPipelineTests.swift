@@ -188,6 +188,63 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(result.message, "Unsupported command 'ping' in executeCommand")
     }
 
+    // MARK: - Transient Suppression on Screen Change (PR #330 H2)
+
+    /// `SettleSession.elementsByKey` accumulates every element observed
+    /// across cycles, including the previous screen's elements before a
+    /// transition. Those are stale, not transient, and must not be surfaced
+    /// under the delta's `transient` list when the action triggered a
+    /// screen change.
+    func testShouldSuppressTransientOnScreenChangedOutcome() {
+        XCTAssertTrue(
+            TheBrains.shouldSuppressTransient(
+                settleOutcome: .screenChanged(timeMs: 120),
+                isScreenChange: false
+            ),
+            "A .screenChanged settle outcome alone must suppress transients"
+        )
+    }
+
+    func testShouldSuppressTransientOnDiffDetectedScreenChange() {
+        XCTAssertTrue(
+            TheBrains.shouldSuppressTransient(
+                settleOutcome: .settled(timeMs: 300),
+                isScreenChange: true
+            ),
+            "Even when the settle loop reached .settled, a VC/topology screen change must suppress transients"
+        )
+    }
+
+    func testShouldNotSuppressTransientOnCleanSettle() {
+        XCTAssertFalse(
+            TheBrains.shouldSuppressTransient(
+                settleOutcome: .settled(timeMs: 300),
+                isScreenChange: false
+            ),
+            "Clean settle without a screen change: transients are real (spinners, snackbars, overlays)"
+        )
+    }
+
+    func testShouldNotSuppressTransientOnTimedOut() {
+        XCTAssertFalse(
+            TheBrains.shouldSuppressTransient(
+                settleOutcome: .timedOut(timeMs: 5_000),
+                isScreenChange: false
+            ),
+            "Timed-out settle: still on the same screen, so observed transients are still valid"
+        )
+    }
+
+    func testShouldNotSuppressTransientOnCancelled() {
+        XCTAssertFalse(
+            TheBrains.shouldSuppressTransient(
+                settleOutcome: .cancelled(timeMs: 50),
+                isScreenChange: false
+            ),
+            "Cancelled mid-action: not a screen change, transients (if any) are valid"
+        )
+    }
+
     // MARK: - exploreAndPrune
 
     func testExploreAndPruneCommitsUnion() async {
