@@ -5,7 +5,7 @@ import TheScore
 
 @main
 struct ButtonHeistMCPServer {
-    struct ToolRoutingError: Error, Equatable {
+    struct ToolRoutingError: Error {
         let message: String
     }
 
@@ -62,7 +62,7 @@ struct ButtonHeistMCPServer {
     ) async -> CallTool.Result {
         defer { idleMonitor.resetTimer() }
         do {
-            let arguments = try decodeArguments(params.arguments)
+            let arguments = decodeArguments(params.arguments)
             let routed = routeToolRequest(name: params.name, arguments: arguments)
             let request: [String: Any]
             switch routed {
@@ -74,7 +74,7 @@ struct ButtonHeistMCPServer {
 
             let response = try await fence.execute(request: request)
             let backgroundDeltas = fence.drainBackgroundDeltas()
-            return try renderResponse(response, backgroundDeltas: backgroundDeltas)
+            return renderResponse(response, backgroundDeltas: backgroundDeltas)
         } catch {
             return .init(content: [.text(text: error.displayMessage, annotations: nil, _meta: nil)], isError: true)
         }
@@ -132,13 +132,8 @@ struct ButtonHeistMCPServer {
         }
     }
 
-    private static func decodeArguments(_ arguments: [String: Value]?) throws -> [String: Any] {
-        guard let arguments else { return [:] }
-        var request: [String: Any] = [:]
-        for (key, value) in arguments {
-            request[key] = anyValue(from: value)
-        }
-        return request
+    private static func decodeArguments(_ arguments: [String: Value]?) -> [String: Any] {
+        arguments?.mapValues(anyValue(from:)) ?? [:]
     }
 
     private static func anyValue(from value: Value) -> Any {
@@ -166,7 +161,7 @@ struct ButtonHeistMCPServer {
         }
     }
 
-    static func renderResponse(_ response: FenceResponse, backgroundDeltas: [InterfaceDelta]) throws -> CallTool.Result {
+    static func renderResponse(_ response: FenceResponse, backgroundDeltas: [InterfaceDelta]) -> CallTool.Result {
         var content: [Tool.Content] = []
 
         // Background changes: what happened while the agent was thinking
