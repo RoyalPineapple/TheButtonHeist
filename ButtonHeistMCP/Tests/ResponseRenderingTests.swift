@@ -7,11 +7,11 @@ import TheScore
 struct ResponseRenderingTests {
 
     @Test("MCP renders no-change background transients")
-    func rendersNoChangeBackgroundTransients() throws {
+    func rendersNoChangeBackgroundTransients() {
         let spinner = makeElement(heistId: "spinner", label: "Loading")
         let delta: InterfaceDelta = .noChange(.init(elementCount: 4, transient: [spinner]))
 
-        let result = try ButtonHeistMCPServer.renderResponse(
+        let result = ButtonHeistMCPServer.renderResponse(
             .ok(message: "done"),
             backgroundDeltas: [delta]
         )
@@ -23,12 +23,12 @@ struct ResponseRenderingTests {
     }
 
     @Test("MCP includes transients alongside element changes")
-    func rendersElementChangedBackgroundTransients() throws {
+    func rendersElementChangedBackgroundTransients() {
         let added = makeElement(heistId: "result", label: "Result")
         let spinner = makeElement(heistId: "spinner", label: "Loading")
         let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: [added]), transient: [spinner]))
 
-        let result = try ButtonHeistMCPServer.renderResponse(
+        let result = ButtonHeistMCPServer.renderResponse(
             .ok(message: "done"),
             backgroundDeltas: [delta]
         )
@@ -40,7 +40,7 @@ struct ResponseRenderingTests {
     }
 
     @Test("MCP renders every queued background delta")
-    func rendersMultipleBackgroundDeltas() throws {
+    func rendersMultipleBackgroundDeltas() {
         let spinner = makeElement(heistId: "spinner", label: "Loading")
         let result = makeElement(heistId: "result", label: "Result")
         let deltas: [InterfaceDelta] = [
@@ -48,7 +48,7 @@ struct ResponseRenderingTests {
             .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: [result]))),
         ]
 
-        let response = try ButtonHeistMCPServer.renderResponse(
+        let response = ButtonHeistMCPServer.renderResponse(
             .ok(message: "done"),
             backgroundDeltas: deltas
         )
