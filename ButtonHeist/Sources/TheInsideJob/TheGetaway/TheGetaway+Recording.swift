@@ -47,14 +47,18 @@ extension TheGetaway {
             })
             // The completion handler signature is sync (@MainActor @Sendable).
             // `deliverRecordingResult` is async because it awaits the two
-            // outbound broadcasts in FIFO order. Bridge with a Task hop on
-            // MainActor: there is only one recording-complete event per
+            // outbound broadcasts in FIFO order. Spawn a tracked Task to
+            // bridge: there is only one recording-complete event per
             // session, so unlike the broadcast pipeline there is no FIFO
-            // contention to lose between handler invocations.
+            // contention to lose between handler invocations. The handle is
+            // stored on TheGetaway so `tearDown` cancels it on shutdown.
             await recorder.setOnRecordingComplete { [weak self] result in
-                Task { @MainActor [weak self] in
-                    await self?.deliverRecordingResult(result)
+                guard let self else { return }
+                let task = Task { [weak self] in
+                    guard let self else { return }
+                    await self.deliverRecordingResult(result)
                 }
+                self.trackRecordingTask(task)
             }
 
             // Capture screen metrics on MainActor (we are the MainActor here) and pass

@@ -1,11 +1,18 @@
 #if canImport(UIKit)
 #if DEBUG
 import UIKit
-import os.log
+import os
 
 import TheScore
 
 private let autoStartLogger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "autostart")
+
+/// Holds the auto-start Task handle. Auto-start runs exactly once per
+/// process launch from `@_cdecl` (no actor instance is available at that
+/// point), so the handle lives at file scope under a lock. The handle is
+/// retained until the Task completes so it cannot be torn off mid-launch;
+/// the value is set once, never re-read for cancellation.
+private let autoStartTask = OSAllocatedUnfairLock<Task<Void, Never>?>(initialState: nil)
 
 /// Called from Objective-C +load method to auto-start the server.
 /// Configuration via environment variables (highest priority) or Info.plist:
@@ -68,7 +75,7 @@ public func theInsideJobAutoStartFromLoad() {
 
     autoStartLogger.info("Starting with polling interval: \(interval)")
 
-    Task { @MainActor in
+    let task = Task { @MainActor in
         autoStartLogger.debug("MainActor task executing...")
         autoStartLogger.info("Device: \(UIDevice.current.name)")
         autoStartLogger.info("System: \(UIDevice.current.systemName) \(UIDevice.current.systemVersion)")
@@ -81,6 +88,7 @@ public func theInsideJobAutoStartFromLoad() {
             autoStartLogger.error("========== AUTO-START FAILED: \(error) ==========")
         }
     }
+    autoStartTask.withLock { $0 = task }
 }
 
 #endif // DEBUG

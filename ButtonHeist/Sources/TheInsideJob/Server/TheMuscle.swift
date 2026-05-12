@@ -2,7 +2,7 @@
 #if DEBUG
 import Foundation
 import UIKit
-import os.log
+import os
 
 import TheScore
 
@@ -118,6 +118,14 @@ actor TheMuscle {
     private var lockoutTasks: [UInt64: Task<Void, Never>] = [:]
     private var nextLockoutId: UInt64 = 0
 
+    /// Tasks spawned by `showApprovalAlert` to hop between actor isolation
+    /// and the MainActor-bound `AlertPresenter`. Tracked so `tearDown()` can
+    /// cancel both the alert-presentation hop and any pending Allow/Deny
+    /// callback hop before the actor is torn down. Held under a lock because
+    /// inserts happen from both actor-isolated context (the present-hop) and
+    /// the non-isolated alert button callback (the approve/deny hops).
+    private let pendingAlertTasks = OSAllocatedUnfairLock<Set<Task<Void, Never>>>(initialState: [])
+
     /// Test seam: how many delayed-disconnect Tasks are currently tracked.
     /// Used by lifetime tests to assert that `tearDown()` cancelled and
     /// drained every outstanding lockout Task before returning.
@@ -197,9 +205,15 @@ actor TheMuscle {
     var sendToClient: (@Sendable (_ data: Data, _ clientId: Int) async -> Void)?
     var markClientAuthenticated: (@Sendable (_ clientId: Int) async -> Void)?
     var disconnectClient: (@Sendable (_ clientId: Int) async -> Void)?
-    var onClientAuthenticated: (@Sendable (_ clientId: Int, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
-    /// Called when the session active state changes (true = session claimed, false = released)
-    var onSessionActiveChanged: (@Sendable (_ isActive: Bool) -> Void)?
+    /// Invoked on `@MainActor` after a client completes authentication. The
+    /// isolation is encoded in the closure type so callers can satisfy the
+    /// hop with a single `await` rather than a fire-and-forget bridge Task.
+    var onClientAuthenticated: (@MainActor @Sendable (_ clientId: Int, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
+    /// Invoked on `@MainActor` when the session-active state changes
+    /// (true = session claimed, false = released). MainActor-isolated for the
+    /// same reason as `onClientAuthenticated`: the production handler mutates
+    /// Bonjour TXT state, which is MainActor-bound.
+    var onSessionActiveChanged: (@MainActor @Sendable (_ isActive: Bool) -> Void)?
 
     // MARK: - Init
 
@@ -235,8 +249,8 @@ actor TheMuscle {
         sendToClient: @escaping @Sendable (Data, Int) async -> Void,
         markClientAuthenticated: @escaping @Sendable (Int) async -> Void,
         disconnectClient: @escaping @Sendable (Int) async -> Void,
-        onClientAuthenticated: @escaping @Sendable (Int, @escaping @Sendable (Data) -> Void) -> Void,
-        onSessionActiveChanged: @escaping @Sendable (Bool) -> Void
+        onClientAuthenticated: @escaping @MainActor @Sendable (Int, @escaping @Sendable (Data) -> Void) -> Void,
+        onSessionActiveChanged: @escaping @MainActor @Sendable (Bool) -> Void
     ) {
         self.sendToClient = sendToClient
         self.markClientAuthenticated = markClientAuthenticated
@@ -380,14 +394,14 @@ actor TheMuscle {
         // Token matches → authenticate and acquire session
         clearFailedAttempts(address: address)
         let driverIdentity = effectiveDriverId(driverId: payload.driverId, token: payload.token)
-        if !acquireSession(driverIdentity: driverIdentity, clientId: clientId, respond: respond) {
+        if !(await acquireSession(driverIdentity: driverIdentity, clientId: clientId, respond: respond)) {
             return
         }
 
         clients[clientId] = .authenticated(address: address, driverIdentity: driverIdentity, subscribed: false)
         await markClientAuthenticated?(clientId)
         logger.info("Client \(clientId) authenticated with token")
-        onClientAuthenticated?(clientId, respond)
+        await onClientAuthenticated?(clientId, respond)
     }
 
     func handleClientDisconnected(_ clientId: Int) async {
@@ -402,7 +416,7 @@ actor TheMuscle {
         guard case .pendingApproval(let address, let respond, _, let driverId) = clients[clientId] else { return }
 
         let driverIdentity = effectiveDriverId(driverId: driverId, token: sessionToken)
-        if !acquireSession(driverIdentity: driverIdentity, clientId: clientId, respond: respond) {
+        if !(await acquireSession(driverIdentity: driverIdentity, clientId: clientId, respond: respond)) {
             return
         }
 
@@ -410,7 +424,7 @@ actor TheMuscle {
         await markClientAuthenticated?(clientId)
         logger.info("Client \(clientId) approved via UI")
         sendMessage(.authApproved(AuthApprovedPayload(token: sessionToken)), respond: respond)
-        onClientAuthenticated?(clientId, respond)
+        await onClientAuthenticated?(clientId, respond)
     }
 
     func denyClient(_ clientId: Int) {
@@ -427,12 +441,20 @@ actor TheMuscle {
             task.cancel()
         }
         lockoutTasks.removeAll()
+        let alertTasks = pendingAlertTasks.withLock { tasks -> Set<Task<Void, Never>> in
+            let snapshot = tasks
+            tasks.removeAll()
+            return snapshot
+        }
+        for task in alertTasks {
+            task.cancel()
+        }
         // Cancel the release timer (if draining) explicitly before tearing down
         // the rest of the session so a fired timer can't see a half-released
         // TheMuscle. `releaseSession()` also calls this, but stating it here
         // documents the intent at the shutdown boundary.
         cancelTimerIfDraining()
-        releaseSession()
+        await releaseSession()
         await dismissAlert()
     }
 
@@ -536,7 +558,7 @@ actor TheMuscle {
         await markClientAuthenticated?(clientId)
         sendMessage(.authApproved(AuthApprovedPayload()), respond: respond)
         logger.info("Observer \(clientId) approved (no session lock)")
-        onClientAuthenticated?(clientId, respond)
+        await onClientAuthenticated?(clientId, respond)
     }
 
     // MARK: - Session Lock
@@ -556,10 +578,10 @@ actor TheMuscle {
     /// - No active session → claim it
     /// - Active session, same driver → rejoin (cancel release timer)
     /// - Active session, different driver → busy signal
-    private func acquireSession(driverIdentity: String, clientId: Int, respond: @escaping @Sendable (Data) -> Void) -> Bool {
+    private func acquireSession(driverIdentity: String, clientId: Int, respond: @escaping @Sendable (Data) -> Void) async -> Bool {
         switch sessionPhase {
         case .idle:
-            claimSession(driverIdentity: driverIdentity, clientId: clientId)
+            await claimSession(driverIdentity: driverIdentity, clientId: clientId)
             return true
 
         case .active(let activeId, var connections) where driverIdentity == activeId:
@@ -586,14 +608,14 @@ actor TheMuscle {
         }
     }
 
-    private func claimSession(driverIdentity: String, clientId: Int) {
+    private func claimSession(driverIdentity: String, clientId: Int) async {
         cancelTimerIfDraining()
         sessionPhase = .active(driverId: driverIdentity, connections: [clientId])
         logger.info("Session claimed by client \(clientId)")
-        onSessionActiveChanged?(true)
+        await onSessionActiveChanged?(true)
     }
 
-    private func releaseSession() {
+    private func releaseSession() async {
         let hadSession = switch sessionPhase {
         case .idle: false
         case .active, .draining: true
@@ -602,7 +624,7 @@ actor TheMuscle {
         sessionPhase = .idle
         if hadSession {
             logger.info("Session released")
-            onSessionActiveChanged?(false)
+            await onSessionActiveChanged?(false)
         }
     }
 
@@ -704,24 +726,50 @@ actor TheMuscle {
 
     // MARK: - Alert Presentation
 
-    /// Present the connection-approval UI for `clientId`. The `onAllow` /
-    /// `onDeny` callbacks hop back into actor isolation to mutate auth state.
+    /// Present the connection-approval UI for `clientId`. Three Tasks are
+    /// spawned across the approval lifecycle (present-on-MainActor, then
+    /// either approve-back-on-actor or deny-back-on-actor); each is
+    /// inserted into `pendingAlertTasks` so `tearDown()` can cancel work
+    /// in flight.
     private func showApprovalAlert(clientId: Int) {
         let presenter = alerts
-        Task { @MainActor [weak self] in
+        let presentTask = Task { @MainActor [weak self] in
             presenter.presentApproval(
                 clientId: clientId,
                 onAllow: { [weak self] in
-                    Task { await self?.approveClient(clientId) }
+                    self?.scheduleApprovalCallback { muscle in
+                        await muscle.approveClient(clientId)
+                    }
                 },
                 onDeny: { [weak self] in
-                    Task { await self?.denyClient(clientId) }
+                    self?.scheduleApprovalCallback { muscle in
+                        await muscle.denyClient(clientId)
+                    }
                 }
             )
-            // Silence the unused-self warning: `self` is captured to anchor
-            // the alert presentation to TheMuscle's lifetime, but the alert
-            // outlives the immediate scope through `presenter`.
-            _ = self
+        }
+        recordAlertTask(presentTask)
+    }
+
+    /// Spawn a tracked Task that hops back to actor isolation to run an
+    /// allow/deny handler. Called from `@MainActor` (alert button taps); the
+    /// closure body runs on TheMuscle's actor. The handle is stashed in the
+    /// lock-protected `pendingAlertTasks` set synchronously, so `tearDown`
+    /// can cancel it even if the actor hop hasn't yet started executing.
+    nonisolated private func scheduleApprovalCallback(_ body: @escaping @Sendable (TheMuscle) async -> Void) {
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await body(self)
+        }
+        recordAlertTask(task)
+    }
+
+    /// Insert a Task handle into the lock-protected tracking set. Safe to
+    /// call from any isolation context.
+    nonisolated private func recordAlertTask(_ task: Task<Void, Never>) {
+        pendingAlertTasks.withLock { tasks in
+            tasks = tasks.filter { !$0.isCancelled }
+            tasks.insert(task)
         }
     }
 
