@@ -49,10 +49,10 @@ actor SimpleSocketServer {
     private var authDeadlineTasks: [Int: Task<Void, Never>] = [:]
 
     /// Tasks that bridge `NWListener` / `NWConnection` callbacks into actor
-    /// isolation. Tracked via a lock-protected set so `stop()` can cancel
-    /// in-flight work — without tracking, a torn-down listener could still
-    /// have callback Tasks running against the stopped actor.
-    private let pendingCallbackTasks = OSAllocatedUnfairLock<Set<Task<Void, Never>>>(initialState: [])
+    /// isolation. Tracked so `stop()` can cancel in-flight work — without
+    /// tracking, a torn-down listener could still have callback Tasks running
+    /// against the stopped actor.
+    private let pendingCallbackTasks = TaskTracker()
 
     private let _syncListeningPort = OSAllocatedUnfairLock<UInt16>(initialState: 0)
 
@@ -183,14 +183,7 @@ actor SimpleSocketServer {
         clients.removeAll()
         for task in authDeadlineTasks.values { task.cancel() }
         authDeadlineTasks.removeAll()
-        let pending = pendingCallbackTasks.withLock { tasks -> Set<Task<Void, Never>> in
-            let snapshot = tasks
-            tasks.removeAll()
-            return snapshot
-        }
-        for task in pending {
-            task.cancel()
-        }
+        pendingCallbackTasks.cancelAll()
         serverPhase = .stopped
         _syncListeningPort.withLock { $0 = 0 }
 
@@ -205,13 +198,9 @@ actor SimpleSocketServer {
     /// into actor isolation, recording the handle so `stop()` can cancel
     /// it. The closure body runs on `SimpleSocketServer`'s actor.
     nonisolated private func spawnTrackedTask(_ body: @escaping @Sendable (SimpleSocketServer) async -> Void) {
-        let task = Task { [weak self] in
+        pendingCallbackTasks.spawn { [weak self] in
             guard let self else { return }
             await body(self)
-        }
-        pendingCallbackTasks.withLock { tasks in
-            tasks = tasks.filter { !$0.isCancelled }
-            tasks.insert(task)
         }
     }
 

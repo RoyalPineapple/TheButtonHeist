@@ -121,10 +121,11 @@ actor TheMuscle {
     /// Tasks spawned by `showApprovalAlert` to hop between actor isolation
     /// and the MainActor-bound `AlertPresenter`. Tracked so `tearDown()` can
     /// cancel both the alert-presentation hop and any pending Allow/Deny
-    /// callback hop before the actor is torn down. Held under a lock because
-    /// inserts happen from both actor-isolated context (the present-hop) and
-    /// the non-isolated alert button callback (the approve/deny hops).
-    private let pendingAlertTasks = OSAllocatedUnfairLock<Set<Task<Void, Never>>>(initialState: [])
+    /// callback hop before the actor is torn down. The tracker is lock-backed
+    /// because inserts happen from both actor-isolated context (the
+    /// present-hop) and the non-isolated alert button callback (the
+    /// approve/deny hops).
+    private let pendingAlertTasks = TaskTracker()
 
     /// Test seam: how many delayed-disconnect Tasks are currently tracked.
     /// Used by lifetime tests to assert that `tearDown()` cancelled and
@@ -441,14 +442,7 @@ actor TheMuscle {
             task.cancel()
         }
         lockoutTasks.removeAll()
-        let alertTasks = pendingAlertTasks.withLock { tasks -> Set<Task<Void, Never>> in
-            let snapshot = tasks
-            tasks.removeAll()
-            return snapshot
-        }
-        for task in alertTasks {
-            task.cancel()
-        }
+        pendingAlertTasks.cancelAll()
         // Cancel the release timer (if draining) explicitly before tearing down
         // the rest of the session so a fired timer can't see a half-released
         // TheMuscle. `releaseSession()` also calls this, but stating it here
@@ -767,10 +761,7 @@ actor TheMuscle {
     /// Insert a Task handle into the lock-protected tracking set. Safe to
     /// call from any isolation context.
     nonisolated private func recordAlertTask(_ task: Task<Void, Never>) {
-        pendingAlertTasks.withLock { tasks in
-            tasks = tasks.filter { !$0.isCancelled }
-            tasks.insert(task)
-        }
+        pendingAlertTasks.record(task)
     }
 
     private func dismissAlert() async {

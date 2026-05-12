@@ -107,6 +107,7 @@
 		72B63867F39709CBEC77B303 /* HierarchyPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FEBFC658B72A791C1BFEF2B /* HierarchyPayloadTests.swift */; };
 		75784BEDD12A767343FDACC7 /* TheBurglarParseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEF358739DC27BF19F7C58C7 /* TheBurglarParseTests.swift */; };
 		778C5650B71031770160D6BF /* SimpleSocketServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC9A012737B11E7628103EAA /* SimpleSocketServer.swift */; };
+		7A480BA7DC53F19D48C26E2D /* TaskTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDF31EB8DC13C78BB2FE3B6D /* TaskTracker.swift */; };
 		7C171E0C9479C3EAD5757469 /* TheSafecrackerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 424717FB3ECFCCEA52B1971B /* TheSafecrackerTests.swift */; };
 		7C9D2F12AC93C715BE94D816 /* ThePlantAutoStart.m in Sources */ = {isa = PBXBuildFile; fileRef = 376587F2D81DC81C4DE344CD /* ThePlantAutoStart.m */; };
 		7DE9C29580D34C57826B3ED0 /* USBDeviceDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFE165B7F4612979A10F917F /* USBDeviceDiscovery.swift */; };
@@ -538,6 +539,7 @@
 		EB3D029B36F545CDF36A7BE5 /* ScreenManifestTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenManifestTests.swift; sourceTree = "<group>"; };
 		EC23F750B22956636D1DB832 /* ScreenMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenMetrics.swift; sourceTree = "<group>"; };
 		EC6F10CA5EECFBD0A011F553 /* UIScrollView+ProgrammaticScrollSafety.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIScrollView+ProgrammaticScrollSafety.swift"; sourceTree = "<group>"; };
+		EDF31EB8DC13C78BB2FE3B6D /* TaskTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskTracker.swift; sourceTree = "<group>"; };
 		EEC77EDAB1D48630043C140D /* PingFastPath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PingFastPath.swift; sourceTree = "<group>"; };
 		F16F859F1B9863B934C03E3E /* Error+Message.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Error+Message.swift"; sourceTree = "<group>"; };
 		F460BE795E61168CDF5604F4 /* Dictionary+ArgParsing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Dictionary+ArgParsing.swift"; sourceTree = "<group>"; };
@@ -807,6 +809,7 @@
 			children = (
 				DBB214DE813D7B7AAC1D5FCA /* CancellableSleep.swift */,
 				EC23F750B22956636D1DB832 /* ScreenMetrics.swift */,
+				EDF31EB8DC13C78BB2FE3B6D /* TaskTracker.swift */,
 				EC6F10CA5EECFBD0A011F553 /* UIScrollView+ProgrammaticScrollSafety.swift */,
 			);
 			path = Support;
@@ -1379,6 +1382,7 @@
 				4FF292A4BA81E7F718F6D08A /* TheMuscle.swift in Sources */,
 				40888A351E80D3B4B46A1003 /* CancellableSleep.swift in Sources */,
 				37B4B9C76D5CDA76A5FE69C1 /* ScreenMetrics.swift in Sources */,
+				7A480BA7DC53F19D48C26E2D /* TaskTracker.swift in Sources */,
 				01E5A7DE5814E052E6EC4931 /* UIScrollView+ProgrammaticScrollSafety.swift in Sources */,
 				A0731112EA94ECABFB012AEB /* ActionResultBuilder.swift in Sources */,
 				B315615DC3E1B70B46B4BDC5 /* Actions.swift in Sources */,
