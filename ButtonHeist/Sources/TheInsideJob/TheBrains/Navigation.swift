@@ -102,6 +102,29 @@ final class Navigation {
     /// Pure stepwise driver for the swipe-settle loop. Tracks motion-detected
     /// state, idle/stable counters, and exit conditions given a sequence of
     /// per-frame observations. `moved` only latches from false to true.
+    ///
+    /// **Settle signal boundary.** This is one of four distinct settle
+    /// implementations; each watches a different signal because the callers
+    /// need different answers:
+    ///
+    /// 1. `SettleSwipeLoopState` (here) — viewport heistId set + content-space
+    ///    anchor signature, interleaved frame-by-frame with `stash.refresh()`.
+    ///    Answers "did the swipe move us, and has the viewport stopped
+    ///    accepting new heistIds?" — the only signal that distinguishes
+    ///    spring-bounce-then-settle from edge-rejected gestures.
+    /// 2. `SettleSession` (`SettleSession.swift`) — AX-tree fingerprint
+    ///    stability across polled cycles, plus VC-change preemption and
+    ///    transient-element accumulation. The post-action correctness path.
+    /// 3. `TheTripwire.waitForAllClear(timeout:)` — CADisplayLink-driven
+    ///    layer-level quiet detection (no AX tree). Used when we only care
+    ///    that animations and layout have flushed.
+    /// 4. `TheTripwire.yieldFrames(_:)` / `yieldRealFrames(_:)` — fixed-count
+    ///    waits with no termination signal. Empirically calibrated budgets
+    ///    for known animation timings (post-jump SPI scrolls, etc.).
+    ///
+    /// This loop cannot be folded into (2) or (3): (2) doesn't expose a
+    /// `moved` latch and runs its own polling cadence; (3) never reads the
+    /// AX tree, so it can't tell whether new heistIds are still arriving.
     struct SettleSwipeLoopState: Equatable {
         let profile: SettleSwipeProfile
         let previousViewport: Set<String>
