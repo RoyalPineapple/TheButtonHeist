@@ -28,20 +28,22 @@ flowchart TD
 
     Return --> Caller{Caller}
     Caller -->|Single snapshot| Commit["stash.currentScreen = screen"]
-    Caller -->|Exploration cycle| Union["union = union.merging(screen)<br/>(local var in TheBrains+Exploration)"]
+    Caller -->|Exploration cycle| Union["union = union.merging(screen)<br/>(local var in Navigation+Explore)"]
     Union --> Final["After scroll walk:<br/>stash.currentScreen = union"]
 ```
+
+The exploration accumulator lives on `Navigation` (TheBrains' navigation component) — `Navigation+Explore.exploreAndPrune` declares `var union: Screen` and commits the union back into `stash.currentScreen` at the end of the walk.
 
 ## Ownership Model
 
 - TheBurglar is **created and owned by TheStash** (via `init`), stored as a `private let` on TheStash. Production code reaches it via TheStash facades; type visibility remains module-internal for unit testing.
-- TheBurglar **does not write to TheStash.** It returns values. The caller (TheStash for single-shot, TheBrains+Exploration for accumulated union) decides when to commit. This is the load-bearing 0.2.25 invariant — parse and commit are separable, so accumulation can live in the caller's stack as a local variable.
+- TheBurglar **does not write to TheStash.** It returns values. The caller (TheStash for single-shot, Navigation+Explore for accumulated union) decides when to commit. This is the load-bearing 0.2.25 invariant — parse and commit are separable, so accumulation can live in the caller's stack as a local variable.
 - TheBrains calls `stash.refresh()` for the simple parse-and-commit case, or `stash.parse()` + `stash.buildScreen(from:)` separately when it needs to inspect parse results before committing (e.g., topology comparison in the delta cycle, or page-by-page union accumulation during exploration).
 - TheBurglar has **no mutable instance state** — its stored properties are injected dependencies (`parser`, `tripwire`).
 
 ## The exploration discipline
 
-Pre-0.2.25 the registry retained elements across parses via `merge()` / orphan attachment. 0.2.25 removes that machinery; the "full tree" (union of every element observed during a scroll-walk) is now a **local variable in `TheBrains+Exploration.exploreAndPrune`**:
+Pre-0.2.25 the registry retained elements across parses via `merge()` / orphan attachment. 0.2.25 removes that machinery; the "full tree" (union of every element observed during a scroll-walk) is now a **local variable in `Navigation+Explore.exploreAndPrune`**:
 
 ```swift
 var union = stash.currentScreen

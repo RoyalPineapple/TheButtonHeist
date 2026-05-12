@@ -1,6 +1,6 @@
 # TheGetaway — The Getaway Driver
 
-> **File:** `TheGetaway.swift`
+> **Directory:** `ButtonHeist/Sources/TheInsideJob/TheGetaway/` (`TheGetaway.swift`, `TheGetaway+Recording.swift`, `PingFastPath.swift`)
 > **Platform:** iOS 17.0+ (UIKit, DEBUG builds only)
 > **Role:** Runs all comms between the wire and the crew — message dispatch, encode/decode, broadcast, transport wiring, recording lifecycle
 

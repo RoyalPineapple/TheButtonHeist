@@ -1,6 +1,6 @@
 # TheStakeout - The Lookout
 
-> **File:** `ButtonHeist/Sources/TheInsideJob/TheStakeout.swift`
+> **File:** `ButtonHeist/Sources/TheInsideJob/TheStakeout/TheStakeout.swift`
 > **Platform:** iOS 17.0+ (AVFoundation, UIKit)
 > **Role:** Screen recording engine - captures, encodes, and delivers H.264/MP4 video
 
@@ -21,7 +21,7 @@ TheStakeout handles all screen recording operations:
 
 ```mermaid
 graph TD
-    subgraph Stakeout["Stakeout (@MainActor)"]
+    subgraph Stakeout["Stakeout (actor)"]
         Config["RecordingConfig - fps, scale, inactivity, maxDuration"]
         State["State Machine - idle / recording / finalizing"]
         Capture["Frame Capture - Timer at 1/fps interval"]
@@ -30,11 +30,15 @@ graph TD
         IntLog["Interaction Log - in-memory InteractionEvent array"]
     end
 
-    TheInsideJob["TheInsideJob - captureScreenForRecording()"] -->|frame closure| Capture
+    TheInsideJob["TheInsideJob - captureScreenForRecording() (@MainActor closure)"] -->|frame closure| Capture
     TheInsideJob -->|recordInteraction| IntLog
     Capture --> Encoder
     Encoder -->|finalized MP4| Deliver["Base64 encode + interaction log → RecordingPayload"]
 ```
+
+## Isolation Model
+
+TheStakeout is declared `actor TheStakeout` (post-0.2.24 conversion from `@MainActor` class). The single MainActor escape hatch is `captureFrame` — the closure installed by TheInsideJob that snapshots the live window hierarchy into a `UIImage`. Every other piece of state — the `stakeoutPhase` state machine, AVAssetWriter, the pixel-buffer adaptor, sample buffers, timer tasks — lives inside the actor. AVAssetWriter and its pixel-buffer adaptor are thread-safe and do not require MainActor isolation. The AVAssetWriter `finishWriting` completion handler bridges back into the actor via `Task { await self.handleFinalize(...) }` rather than hopping through MainActor.
 
 ## Recording State Machine
 

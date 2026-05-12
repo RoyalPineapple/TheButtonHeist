@@ -1,9 +1,9 @@
 # Scrolling Deep Dive
 
-> **Source:** `ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+Scroll.swift` (orchestration), `TheSafecracker/TheSafecracker+Scroll.swift` (scroll primitives)
+> **Source:** `ButtonHeist/Sources/TheInsideJob/TheBrains/Navigation+Scroll.swift` (orchestration), `TheSafecracker/TheSafecracker+Scroll.swift` (scroll primitives)
 > **Parent dossiers:** [13-THEBRAINS.md](13-THEBRAINS.md), [14-THESAFECRACKER.md](14-THESAFECRACKER.md)
 
-TheBrains owns all scroll orchestration — three explicit scroll commands for agents, and an automatic pre-interaction scroll that ensures every action is visible on screen. TheSafecracker provides the scroll primitives (`scrollByPage`, `scrollToEdge`, `scrollToMakeVisible`, `scrollBySwipe`) but never decides what to scroll or when.
+TheBrains' `Navigation` component owns all scroll orchestration — three explicit scroll commands for agents, and an automatic pre-interaction scroll that ensures every action is visible on screen. TheSafecracker provides the scroll primitives (`scrollByPage`, `scrollToEdge`, `scrollToMakeVisible`, `scrollBySwipe`) but never decides what to scroll or when. `Actions` calls into `Navigation` for pre-action positioning (`ensureOnScreen`, `ensureFirstResponderOnScreen`) — TheStash exposes resolution and live geometry but performs no scroll orchestration.
 
 Two-tier dispatch: UIScrollView for direct offset manipulation, synthetic swipe for everything else.
 
@@ -60,17 +60,17 @@ It only cares whether the element's frame is geometrically within the screen rec
 
 A sequential coarse-then-fine flow:
 
-**Step 1 — Coarse jump (off-screen heistId only).** If the target is a `.heistId` that is not in `onScreen` but was discovered by a prior full scan (`presentedHeistIds` + `contentSpaceOrigin` + live `scrollView`):
+**Step 1 — Coarse jump (off-screen heistId only).** If the target is a `.heistId` that resolves into `currentScreen.elements` (e.g. unioned in during a prior exploration cycle) but is not in the live viewport, and the stored `ScreenElement` carries both a `contentSpaceOrigin` and a live `scrollView`:
 
 1. Calls `stash.jumpToRecordedPosition(_:)` — the stash internally computes the clamped, centered content offset via `TheStash.scrollTargetOffset(for:in:)` and sets it on the owning scroll view. Returns the previous offset so callers can revert.
-2. Waits for settle via `yieldFrames(3)`, then `refresh()`
+2. Waits for settle via `yieldFrames(3)`, then `stash.refresh()` (commits a fresh `currentScreen` value)
 
 **Step 2 — Fine-tune (any target).** Asks the stash for live geometry via `stash.liveGeometry(for:)`, which promotes the weak NSObject ref to strong internally and returns a value-typed `(frame, activationPoint, scrollView)` snapshot:
 
 1. Checks `UIScreen.main.bounds.contains(frame)` and comfort-zone containment
 2. Calls `scrollToMakeVisible(_:in:)` — adjusts `contentOffset` by the minimum amount needed to bring the element fully within the scroll view's visible rect
 4. Waits for the scroll to settle via `yieldFrames(3)` — CATransaction flush + Task.yield per frame
-5. Refreshes the element cache via `refresh()` so subsequent reads reflect post-scroll positions
+5. Refreshes `currentScreen` via `stash.refresh()` so subsequent reads reflect post-scroll positions
 
 ```mermaid
 flowchart TD
@@ -101,14 +101,16 @@ flowchart TD
     Refresh --> Execute
 ```
 
+In the flowchart, `screenElement.scrollView`, `screenElement.contentSpaceOrigin`, and the coarse-jump path all read from the live `ScreenElement` stored on `currentScreen.elements[heistId]` (computed once during `buildScreen(from:)` from the parsed accessibility hierarchy and held on the `Screen` value).
+
 ### Entry points
 
 Two public methods resolve their target, then delegate to a shared private implementation:
 
 | Method | Resolves object from | Used by |
 |--------|---------------------|---------|
-| `ensureOnScreen(for: ElementTarget)` | TheStash screenElements registry | activate, increment, decrement, customAction, tap, longPress, swipe, drag, pinch, rotate, twoFingerTap, typeText |
-| `ensureFirstResponderOnScreen()` | `tripwire.currentFirstResponder()` responder chain walk | editAction, setPasteboard, getPasteboard, resignFirstResponder |
+| `ensureOnScreen(for: ElementTarget)` (on `Navigation`) | `stash.resolveTarget` → `currentScreen.elements` | activate, increment, decrement, customAction, tap, longPress, swipe, drag, pinch, rotate, twoFingerTap, typeText |
+| `ensureFirstResponderOnScreen()` (on `Navigation`) | `tripwire.currentFirstResponder()` responder chain walk | editAction, setPasteboard, getPasteboard, resignFirstResponder |
 
 ### Best-effort guarantee
 
@@ -139,7 +141,7 @@ Jumps directly to a known element's recorded scroll position. This command is fo
 
 **Input:** `ScrollToVisibleTarget` containing an `ElementTarget`. If the element is already visible, it is comfort-scrolled if needed. If it is off-screen and has a recorded content-space position, Button Heist jumps to that position and re-resolves the target.
 
-Fails closed when the element is not in the registry or has no recorded scroll position. Use `element_search` for unseen elements.
+Fails closed when the element is not in `currentScreen.elements` or has no recorded scroll position. Use `element_search` for unseen elements.
 
 ### element_search (hierarchy-driven search)
 

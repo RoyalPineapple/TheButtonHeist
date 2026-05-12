@@ -1,10 +1,12 @@
 # TheMuscle - The Bouncer
 
-> **File:** `ButtonHeist/Sources/TheInsideJob/TheMuscle.swift`
+> **Files:** `ButtonHeist/Sources/TheInsideJob/Server/TheMuscle.swift`, `Server/AlertPresenter.swift`
 > **Platform:** iOS 17.0+ (UIKit)
 > **Role:** Guards the perimeter - authentication, session locking, on-device approval
 
 ## Responsibilities
+
+TheMuscle is declared `actor TheMuscle` (post-0.2.24 conversion from `@MainActor` class). All auth state — `clients`, `addressAuthStates`, `sessionPhase`, `lockoutTasks` — is mutated on TheMuscle's own actor. UI alert presentation lives in a separate `@MainActor` companion, `AlertPresenter` (`Server/AlertPresenter.swift`), because the alert presentation and top-view-controller lookup require MainActor isolation. The presenter is minimal: it owns the live `UIAlertController` reference and accepts `@MainActor` `onAllow` / `onDeny` closures from TheMuscle, which hop back to actor context to run the decision logic.
 
 TheMuscle controls who gets access and enforces single-driver exclusivity:
 
@@ -20,12 +22,16 @@ TheMuscle controls who gets access and enforces single-driver exclusivity:
 
 ```mermaid
 graph TD
-    subgraph TheMuscle["TheMuscle (@MainActor)"]
+    subgraph TheMuscle["TheMuscle (actor)"]
         TokenRes["Token Resolution - explicit > env var > plist > auto-generated UUID"]
         HelloGate["Hello Gate - require clientHello before auth/watch/status"]
-        AuthFlow["Auth Flow - validate token / show UI prompt"]
+        AuthFlow["Auth Flow - validate token / hop to AlertPresenter"]
         SessionMgr["Session Manager - driver identity tracking"]
         Timer["Release Timer - fires when all connections drop"]
+    end
+
+    subgraph Presenter["AlertPresenter (@MainActor companion)"]
+        UIPrompt["UIAlertController - Allow / Deny"]
     end
 
     WatchMgr["Observer Manager - observer tracking, token-checked by default"]
@@ -34,7 +40,8 @@ graph TD
     HelloGate -->|authenticate(token)| AuthFlow
     HelloGate -->|watch(token)| WatchMgr
     AuthFlow -->|valid| SessionMgr
-    AuthFlow -->|empty| UIPrompt["UIAlertController - Allow / Deny"]
+    AuthFlow -->|empty| UIPrompt
+    UIPrompt -->|Allow/Deny callback hops back into actor| AuthFlow
     AuthFlow -->|invalid| Reject["authFailed + disconnect"]
 
     SessionMgr -->|same driver| Join["Join existing session"]
@@ -49,7 +56,8 @@ graph TD
 ```mermaid
 sequenceDiagram
     participant C as Client
-    participant M as TheMuscle
+    participant M as TheMuscle (actor)
+    participant AP as AlertPresenter (@MainActor)
     participant UI as UIAlertController
 
     C->>M: TCP connect
@@ -77,14 +85,17 @@ sequenceDiagram
         M->>M: disconnect after 100ms
     else Empty token (UI approval)
         C->>M: authenticate(token: "")
-        M->>UI: Show "Allow connection from [client]?"
+        M->>AP: presentApproval(clientId, onAllow, onDeny)
+        AP->>UI: Show "Allow connection from [client]?"
         alt User taps Allow
-            UI-->>M: approved
+            UI-->>AP: tapped Allow
+            AP-->>M: onAllow (hops back into actor)
             M-->>C: authApproved(generatedToken)
             M->>M: acquireSession
             M-->>C: info(ServerInfo)
         else User taps Deny
-            UI-->>M: denied
+            UI-->>AP: tapped Deny
+            AP-->>M: onDeny (hops back into actor)
             M-->>C: authFailed("Connection denied")
         end
     end

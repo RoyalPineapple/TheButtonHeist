@@ -1,6 +1,6 @@
 # TheTripwire — The Early Warning System
 
-> **File:** `ButtonHeist/Sources/TheInsideJob/TheTripwire.swift`
+> **File:** `ButtonHeist/Sources/TheInsideJob/TheTripwire/TheTripwire.swift`
 > **Platform:** iOS 17.0+ (UIKit, DEBUG builds only)
 > **Role:** Persistent UI pulse — samples all timing signals on a single ~10 Hz clock, gates settle decisions, and emits transition events
 
@@ -327,7 +327,7 @@ Scans the `foregroundActive` `UIWindowScene`. Filters out:
 
 Sorts by `windowLevel` descending (frontmost first). Returns `[(window: UIWindow, rootView: UIView)]`.
 
-Used by both `scanLayers()` (fingerprinting) and `TheStash.refreshAccessibilityData()` (accessibility parsing), ensuring both operate on the same window set.
+Used by both `scanLayers()` (fingerprinting) and `TheBurglar.parse()` (accessibility parsing, invoked via `stash.refresh()`), ensuring both operate on the same window set.
 
 ## Crew Interactions
 

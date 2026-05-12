@@ -29,14 +29,29 @@ TheScore is the shared playbook. It defines:
 
 | File | Contents |
 |------|----------|
-| `Messages.swift` | `buttonHeistServiceType`, `buttonHeistVersion` (CalVer), `WireMessageType` (51 cases), `ButtonHeistActor` |
+| `Messages.swift` | `buttonHeistServiceType`, `buttonHeistVersion` (CalVer), `WireMessageType` (51 cases), `ButtonHeistActor`, `EnvironmentKey` |
 | `ClientMessages.swift` | `RequestEnvelope`, `ClientMessage` (37 cases), all action target structs, `UnitPoint`, `RecordingConfig` |
-| `ServerMessages.swift` | `ResponseEnvelope`, `ServerMessage` (18 cases), `ActionResult`, `ErrorKind`, `InterfaceDelta`, `StatusPayload`, `ScreenPayload`, `RecordingPayload`, `InteractionEvent`, `ServerInfo` |
+| `ClientMessages+TouchTargets.swift` | Touch-specific target structs (`TapTarget`, `SwipeTarget`, `DragTarget`, `PinchTarget`, `RotateTarget`, `TwoFingerTapTarget`, `DrawPathTarget`, `DrawBezierTarget`, `LongPressTarget`) |
+| `ServerMessages.swift` | `ResponseEnvelope`, `ServerMessage` (18 cases), `ActionResult`, `ErrorKind`, `StatusPayload`, `ScreenPayload`, `RecordingPayload`, `InteractionEvent`, `ServerInfo` |
+| `InterfaceDelta.swift` | `InterfaceDelta` enum, `NoChange`, `ElementsChanged`, `ScreenChanged`, `ElementEdits`, `ElementUpdate`, `PropertyChange`, `ElementProperty`, `TreeInsertion`/`TreeRemoval`/`TreeMove` |
 | `Elements.swift` | `HeistElement`, `HeistTrait` (43 known cases + `unknown(String)`), `Interface`, `InterfaceNode`, `ContainerInfo` (with nested `ContainerType`), `ElementAction`, `HeistCustomContent`, `ElementTarget`, `ElementMatcher` |
+| `AccessibilityPolicy.swift` | `AccessibilityPolicy` namespace — single source of truth for trait policy: `transientTraits`, `interactiveTraits`, `staticOnlyTraits`, `synthesisPriority`, `tabSwitchPersistThreshold`. Consumed by both server-side parsing and client-side recording so the two cannot drift. |
+| `ActionExpectation.swift` | `ActionExpectation`, `ExpectationResult` |
+| `HeistPlayback.swift` | `HeistPlayback` — recorded session schema (versioned), with replayable command list |
+| `HeistPlaybackReport.swift` | `HeistPlaybackReport`, `StepResult`, `PlaybackErrorKind`, `Outcome`, `junitXML()` generation |
+| `WireBoundaryTypes.swift` | Auxiliary wire-boundary types used by Codable round-trip layers |
 | `ClientMessages+WireCoding.swift` | Custom flat envelope encoding for client messages |
 | `ServerMessages+WireCoding.swift` | Custom flat envelope encoding for server messages |
-| `HeistPlaybackReport.swift` | `HeistPlaybackReport`, `StepResult`, `PlaybackErrorKind`, `Outcome`, `junitXML()` generation |
 | `ConnectionScope.swift` | `ConnectionScope` enum, `NetworkInterfaceNaming` protocol |
+
+### AccessibilityPolicy — trait policy as a wire-level concern
+
+`AccessibilityPolicy` is the single source of truth for trait-related rules-of-the-world: which traits are transient (don't affect heistId synthesis), which are interactive (gate activation), which are purely descriptive (advisory warning), and the priority order used to synthesize a heistId from an element's traits. The policy lives in TheScore so that:
+
+- Server-side parsing (TheInsideJob's heistId synthesis, interactivity checks, identity signatures) reads from it.
+- Client-side recording (TheBookKeeper's minimal-matcher construction strips transient state from matchers) reads from the same constants.
+
+The UIKit-bitmask projections live in TheInsideJob as `AccessibilityPolicy+UIKit` (`TheStash/AccessibilityPolicy+UIKit.swift`). Adding a trait policy is a one-file edit in TheScore; downstream sites are pure consumers. Changes to `synthesisPriority` are wire-format breaks and require a coordinated release.
 
 ## Architecture Diagram
 
@@ -47,6 +62,8 @@ graph TD
         Client["ClientMessages.swift — RequestEnvelope, ClientMessage (37 cases), UnitPoint"]
         Server["ServerMessages.swift — ResponseEnvelope, ServerMessage (18 cases), StatusPayload"]
         Elements["Elements.swift — HeistElement, Interface, ElementTarget, ElementMatcher"]
+        Policy["AccessibilityPolicy.swift — trait policy (transient / interactive / synthesis priority)"]
+        Delta["InterfaceDelta.swift — InterfaceDelta, ElementEdits, tree ops"]
         ConnScope["ConnectionScope.swift — ConnectionScope, NetworkInterfaceNaming"]
     end
 

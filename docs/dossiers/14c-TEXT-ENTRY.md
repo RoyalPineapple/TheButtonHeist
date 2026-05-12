@@ -1,6 +1,6 @@
 # TheSafecracker Deep Dive: Text Entry
 
-> **Source:** `ButtonHeist/Sources/TheInsideJob/TheStash+Actions.swift` (`executeTypeText`), `TheSafecracker/TheSafecracker.swift` (raw keyboard methods), `TheSafecracker/KeyboardBridge.swift`
+> **Source:** `ButtonHeist/Sources/TheInsideJob/TheBrains/Actions.swift` (`executeTypeText`), `TheSafecracker/TheSafecracker.swift` (raw keyboard methods), `TheSafecracker/KeyboardBridge.swift`
 > **Parent dossier:** [14-THESAFECRACKER.md](14-THESAFECRACKER.md)
 
 Text entry bypasses the UIKit touch system entirely and speaks to `UIKeyboardImpl` through `KeyboardBridge` — a dedicated `@MainActor struct` that wraps all private API access via `ObjCRuntime`. This is the same technique used by the KIF testing framework. It works with both software and hardware keyboards.

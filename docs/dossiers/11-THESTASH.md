@@ -24,7 +24,7 @@ Post-0.2.25 the resolution layer is **a single immutable value**, `Screen`. TheS
 
 **Not TheStash's job** (moved to other crew members):
 - Parse pipeline (hierarchy parsing, element context building, heistId assignment, container stableId computation) → [TheBurglar](10-THEBURGLAR.md). `TheBurglar.buildScreen(from:)` is a pure function from a parsed accessibility tree to a `Screen` value.
-- Action execution pipelines, scroll orchestration, delta cycle, explore-and-prune → [TheBrains](13-THEBRAINS.md). The exploration accumulator is a local `var union: Screen` in `TheBrains+Exploration` — TheStash has no mode flag.
+- Action execution pipelines, scroll orchestration, delta cycle, explore-and-prune → [TheBrains](13-THEBRAINS.md). The exploration accumulator is a local `var union: Screen` in `Navigation+Explore` — TheStash has no mode flag.
 
 ## Custody Contract
 
@@ -43,7 +43,7 @@ TheStash is the custodian of the live accessibility/UI object world.
 let screen = stash.parse()        // pure read — does not touch currentScreen
 stash.currentScreen = screen      // commit
 
-// Exploration path (TheBrains+Exploration.exploreAndPrune):
+// Exploration path (Navigation+Explore.exploreAndPrune):
 var union = stash.currentScreen   // seed with current viewport
 for container in scrollableContainers {
     await scrollToTop(container)
