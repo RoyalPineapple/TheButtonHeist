@@ -3,6 +3,26 @@ import AccessibilitySnapshotParser
 import CoreGraphics
 import UIKit
 
+// MARK: - Safe Numeric Conversions
+
+/// Convert a `CGFloat` to `Int` without trapping on pathological inputs.
+///
+/// `Int(_:)` traps with a Swift runtime SIGTRAP when the input is non-finite
+/// (NaN, ±∞) or finite-but-out-of-range (e.g. `1e100`, `CGFloat.greatestFiniteMagnitude`).
+/// These values can flow in from accessibility geometry — UIKit occasionally produces
+/// `.infinity` origins on `.null` rects, and pathological callers can poison frames
+/// with values past `Int.max`. The fingerprint hot path hashes thousands of these
+/// values per refresh; one bad input takes down the parse.
+///
+/// - Returns: `0` for non-finite inputs, the clamped value for out-of-range finite
+///   inputs, and `Int(cgFloat)` otherwise.
+func safeInt(_ cgFloat: CGFloat) -> Int {
+    guard cgFloat.isFinite else { return 0 }
+    if cgFloat >= CGFloat(Int.max) { return Int.max }
+    if cgFloat <= CGFloat(Int.min) { return Int.min }
+    return Int(cgFloat)
+}
+
 // MARK: - Safe Path Bounds
 
 extension UIBezierPath {
@@ -13,6 +33,10 @@ extension UIBezierPath {
     /// non-finite coordinates when callers feed in `.nan`/`.infinity`. Passing
     /// those values to `Int(_:)` traps with a Swift runtime SIGTRAP. Returns
     /// `.zero` for any non-finite result so callers can hash the rect safely.
+    ///
+    /// Note: `safeBounds` filters non-finite values, but very large finite
+    /// coordinates (`1e100`) still flow through. Callers must use `safeInt`
+    /// for the conversion to `Int`.
     var safeBounds: CGRect {
         guard !isEmpty else { return .zero }
         let rect = cgPath.boundingBoxOfPath
@@ -46,29 +70,29 @@ extension AccessibilityElement {
         hasher.combine(traits)
         if let origin = contentSpaceOrigin {
             // Content-space: stable across scroll positions
-            hasher.combine(Int(origin.x))
-            hasher.combine(Int(origin.y))
+            hasher.combine(safeInt(origin.x))
+            hasher.combine(safeInt(origin.y))
         } else {
             // Not in a scroll view — window-space frame is fine
             switch shape {
             case let .frame(rect):
-                hasher.combine(Int(rect.origin.x))
-                hasher.combine(Int(rect.origin.y))
+                hasher.combine(safeInt(rect.origin.x))
+                hasher.combine(safeInt(rect.origin.y))
             case let .path(path):
                 let bounds = path.safeBounds
-                hasher.combine(Int(bounds.origin.x))
-                hasher.combine(Int(bounds.origin.y))
+                hasher.combine(safeInt(bounds.origin.x))
+                hasher.combine(safeInt(bounds.origin.y))
             }
         }
         // Size is scroll-invariant — always include it
         switch shape {
         case let .frame(rect):
-            hasher.combine(Int(rect.size.width))
-            hasher.combine(Int(rect.size.height))
+            hasher.combine(safeInt(rect.size.width))
+            hasher.combine(safeInt(rect.size.height))
         case let .path(path):
             let bounds = path.safeBounds
-            hasher.combine(Int(bounds.size.width))
-            hasher.combine(Int(bounds.size.height))
+            hasher.combine(safeInt(bounds.size.width))
+            hasher.combine(safeInt(bounds.size.height))
         }
         return hasher.finalize()
     }
