@@ -8,7 +8,7 @@ Technical documentation for Button Heist internals. The blueprints, not the sale
 |----------|-------------|
 | [Architecture](ARCHITECTURE.md) | System design, component interaction, and data flow diagrams |
 | [API Reference](API.md) | Complete API for the MCP server, TheInsideJob, TheFence, TheHandoff, and CLI |
-| [Wire Protocol](WIRE-PROTOCOL.md) | Protocol v9.0 specification — explicit envelopes, canonical interface tree, authentication, TLS transport |
+| [Wire Protocol](WIRE-PROTOCOL.md) | Protocol specification — explicit envelopes, canonical interface tree, authentication, TLS transport. Versioned via `buttonHeistVersion` (CalVer); no separate wire-protocol version. |
 | [Authentication](AUTH.md) | Token auth, session locking, UI approval |
 | [USB Connectivity](USB_DEVICE_CONNECTIVITY.md) | Connecting to physical devices over USB via CoreDevice IPv6 tunnels |
 | [Bonjour Troubleshooting](BONJOUR_TROUBLESHOOTING.md) | MDM stealth mode workarounds |

@@ -1,8 +1,8 @@
 # Button Heist Wire Protocol Specification
 
-**Version**: 9.0
-
 This document specifies the communication protocol between TheInsideJob (iOS) and clients (ButtonHeist framework, CLI, Python scripts).
+
+There is no separate wire protocol version. The handshake compares the server's and the client's `buttonHeistVersion` (CalVer, defined in `ButtonHeist/Sources/TheScore/Messages.swift`) for exact equality; any mismatch closes the connection with `protocolMismatch`. Wire-format changes are tied to a release bump via `scripts/release.sh`.
 
 ## Transport
 
@@ -922,7 +922,7 @@ sequenceDiagram
         TheBrains->>TheBrains: save scroll position
         loop scroll forward until stagnation
             TheBrains->>TheBrains: scrollByPage
-            TheBrains->>TheBrains: refreshAccessibilityData
+            TheBrains->>TheStash: refresh() (via TheBurglar.parse + apply)
             TheBrains->>TheBrains: record new elements
         end
         TheBrains->>TheBrains: restore scroll position

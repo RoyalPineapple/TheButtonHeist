@@ -67,7 +67,7 @@ graph TB
 **Design Decisions**:
 - All types are `Codable` and `Sendable` for JSON serialization and concurrency safety
 - No platform-specific imports (UIKit/AppKit)
-- Protocol version 9.0 with TLS transport metadata, envelope correlation, watch mode, session locking, action outcome signals, and composable element matching
+- Wire protocol carries TLS transport metadata, envelope correlation, watch mode, session locking, action outcome signals, and composable element matching. Versioned via `buttonHeistVersion` (CalVer in `Messages.swift`); no separate wire-protocol version — handshake requires exact equality.
 
 ### TheInsideJob
 
@@ -116,14 +116,16 @@ TheInsideJob (singleton, @MainActor) — coordinator split across extension file
 │   ├── parse() → ParseResult — read-only snapshot of live accessibility tree
 │   └── apply(ParseResult) — mutates registry (screen change detected before apply)
 ├── TheSafecracker (all interaction dispatch: actions, gestures, text entry)
-│   │   TheSafecracker.swift             — touch primitives, keyboard helpers
-│   │   TheSafecracker+Actions.swift     — execute* methods for actions and gestures
-│   │   TheSafecracker+Bezier.swift      — bezier curve sampling
-│   │   TheSafecracker+TextEntry.swift   — text typing and deletion
-│   ├── SyntheticTouchFactory (UITouch creation via private APIs)
-│   ├── SyntheticEventFactory (UIEvent manipulation)
+│   │   TheSafecracker.swift                  — touch primitives, text input, edit actions
+│   │   TheSafecracker+Bezier.swift           — bezier curve sampling
+│   │   TheSafecracker+IOHIDEventBuilder.swift — multi-finger HID event creation
+│   │   TheSafecracker+MultiTouch.swift       — multi-finger gesture primitives
+│   │   TheSafecracker+Scroll.swift           — scroll gesture primitives
+│   │   TheSafecracker+TapDiagnostic.swift    — tap diagnostics
+│   │   (Action and gesture orchestration lives in TheBrains/Actions.swift)
+│   ├── SyntheticTouch (UITouch/UIEvent creation via private APIs)
 │   ├── IOHIDEventBuilder (multi-finger HID event creation via IOKit)
-│   └── UIKeyboardImpl (text injection via ObjC runtime, same approach as KIF)
+│   └── KeyboardBridge (text injection via ObjC runtime, same approach as KIF)
 ├── TheStakeout (screen recording engine)
 │   ├── AVAssetWriter (H.264/MP4 encoding)
 │   ├── Frame capture via drawHierarchy (includes FingerprintWindow)
