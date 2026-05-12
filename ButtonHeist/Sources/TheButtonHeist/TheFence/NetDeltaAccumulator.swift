@@ -2,6 +2,44 @@ import Foundation
 
 import TheScore
 
+// MARK: - Non-Screen-Change Delta
+
+/// A subset of `InterfaceDelta` that structurally excludes `.screenChanged`.
+/// Built at the boundary where the caller has already pinned to the last
+/// screen-change step, so any subsequent slice is guaranteed not to contain
+/// another. Carrying that proof in the type lets every downstream consumer
+/// exhaust the cases without a `preconditionFailure` for the impossible
+/// branch.
+internal enum NonScreenChangeDelta {
+    case noChange(InterfaceDelta.NoChange)
+    case elementsChanged(InterfaceDelta.ElementsChanged)
+
+    /// Narrow an `InterfaceDelta` to `NonScreenChangeDelta`, dropping
+    /// `.screenChanged` (the caller has already proven the slice contains
+    /// none).
+    init?(_ delta: InterfaceDelta) {
+        switch delta {
+        case .noChange(let payload): self = .noChange(payload)
+        case .elementsChanged(let payload): self = .elementsChanged(payload)
+        case .screenChanged: return nil
+        }
+    }
+
+    var isMeaningful: Bool {
+        switch self {
+        case .noChange(let payload): return !payload.transient.isEmpty
+        case .elementsChanged: return true
+        }
+    }
+
+    var asInterfaceDelta: InterfaceDelta {
+        switch self {
+        case .noChange(let payload): return .noChange(payload)
+        case .elementsChanged(let payload): return .elementsChanged(payload)
+        }
+    }
+}
+
 // MARK: - Net Delta Accumulator
 
 /// Merges per-step deltas into a single net delta (like git squash).
@@ -20,9 +58,10 @@ internal enum NetDeltaAccumulator {
         // If any step was a screen change, the net is screenChanged with the last one's interface
         if let screenIndex = deltas.lastIndex(where: \.isScreenChanged),
            case .screenChanged(let screenPayload) = deltas[screenIndex] {
+            let postDeltas = deltas[(screenIndex + 1)...].compactMap(NonScreenChangeDelta.init)
             return mergeAfterScreenChange(
                 screenChange: screenPayload,
-                postDeltas: Array(deltas[(screenIndex + 1)...])
+                postDeltas: postDeltas
             )
         }
 
@@ -34,28 +73,18 @@ internal enum NetDeltaAccumulator {
     /// Fold element-level edits that happened after `screenChange` into a
     /// single `.screenChanged` result, applying them to the new interface.
     /// `postDeltas` is the slice of the original sequence strictly after the
-    /// screen-change step. The caller has already pinned to the *last* screen
-    /// change, so this slice is structurally guaranteed not to contain another.
+    /// screen-change step, narrowed to `NonScreenChangeDelta` at the
+    /// boundary so the "no further screen change" invariant is enforced by
+    /// the type system rather than a runtime precondition.
     private static func mergeAfterScreenChange(
-        screenChange: InterfaceDelta.ScreenChanged, postDeltas: [InterfaceDelta]
+        screenChange: InterfaceDelta.ScreenChanged, postDeltas: [NonScreenChangeDelta]
     ) -> InterfaceDelta {
-        precondition(
-            !postDeltas.contains(where: \.isScreenChanged),
-            "post-screen-change slice must not contain another screen change"
-        )
-        let postDeltas = postDeltas.filter { delta in
-            switch delta {
-            case .noChange(let payload): return !payload.transient.isEmpty
-            case .elementsChanged: return true
-            case .screenChanged:
-                preconditionFailure("guarded above")
-            }
-        }
-        if postDeltas.isEmpty {
+        let filteredPostDeltas: [NonScreenChangeDelta] = postDeltas.filter(\.isMeaningful)
+        if filteredPostDeltas.isEmpty {
             return .screenChanged(screenChange)
         }
         // Merge the post-screen element changes into one
-        guard let postMerged = mergeElementDeltas(postDeltas) else {
+        guard let postMerged = mergeElementDeltas(filteredPostDeltas.map(\.asInterfaceDelta)) else {
             return .screenChanged(screenChange)
         }
         let postEdits: ElementEdits
