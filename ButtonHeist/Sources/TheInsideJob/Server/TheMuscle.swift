@@ -132,6 +132,26 @@ actor TheMuscle {
     /// drained every outstanding lockout Task before returning.
     var pendingLockoutTaskCount: Int { lockoutTasks.count }
 
+    /// Test seam: install an authenticated client phase without driving the
+    /// full hello/authenticate handshake. Lets recording-routing tests
+    /// exercise the "originator is still authenticated" branch in
+    /// `TheGetaway.deliverRecordingResult` without standing up real
+    /// transports. Production code never calls this — there is no public
+    /// entry point that bypasses the handshake.
+    func installAuthenticatedClientForTest(_ clientId: Int, address: String = "127.0.0.1", driverIdentity: String = "test-driver") {
+        clients[clientId] = .authenticated(address: address, driverIdentity: driverIdentity, subscribed: false)
+    }
+
+    /// Test seam: drop the `sendToClient` transport closure to simulate
+    /// the "transport torn down between authenticated-set read and send"
+    /// race. Lets `TheGetaway.deliverRecordingResult` tests verify the
+    /// cache-preservation contract when `sendData(_:toClient:)` returns
+    /// false. Production code never calls this — `tearDown` does not
+    /// clear the closure (TheMuscle assumes one-shot wiring at init).
+    func clearSendToClientForTest() {
+        self.sendToClient = nil
+    }
+
     // MARK: - Computed Client Accessors
 
     /// IDs of all authenticated clients (drivers + observers).
@@ -305,6 +325,24 @@ actor TheMuscle {
         for (clientId, phase) in clients where phase.isSubscribed {
             await sendToClient?(data, clientId)
         }
+    }
+
+    /// Send an already-encoded envelope to a single client.
+    ///
+    /// Used by TheGetaway to route auto-finish recording payloads to the
+    /// originating `start_recording` client without broadcasting the video
+    /// to every authenticated peer.
+    ///
+    /// Returns `true` if a `sendToClient` transport closure was wired and the
+    /// data was handed off to it; `false` if the transport has been torn down
+    /// (closure is nil), in which case callers that need delivery confirmation
+    /// must preserve any cached state. The transport closure itself returns
+    /// `Void`; once the bytes are handed to it we treat the send as delivered.
+    @discardableResult
+    func sendData(_ data: Data, toClient clientId: Int) async -> Bool {
+        guard let sendToClient else { return false }
+        await sendToClient(data, clientId)
+        return true
     }
 
     func handleUnauthenticatedMessage(_ clientId: Int, data: Data, respond: @escaping @Sendable (Data) -> Void) async {

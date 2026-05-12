@@ -127,12 +127,11 @@ final class TheGetawayTests: XCTestCase {
 
     /// Regression: when a recording auto-finishes (max duration, file-size
     /// cap, inactivity) there is no `stop_recording` waiter on the server.
-    /// Earlier code only broadcast `.recordingStopped`, so the originating
-    /// `start_recording` caller — parked on `waitForRecording` — never saw
-    /// the payload and timed out. The fix broadcasts `.recording(payload)`
-    /// in addition to `.recordingStopped`. We assert via state that the
-    /// auto-finish path runs (no pending response is consumed; the result
-    /// is stashed in `completedRecording` for any later collection too).
+    /// With no originator known (or originator already gone), the payload
+    /// is cached in `completedRecording` for the next `stop_recording`
+    /// pickup, and `.recordingStopped` is broadcast as the notification.
+    /// The previous shape broadcast `.recording(payload)` to every
+    /// authenticated client, which was a privacy-leak surface.
     func testAutoFinishWithoutPendingStopBroadcastsRecording() async {
         let (getaway, _, _) = await makeGetaway()
         XCTAssertNil(getaway.pendingRecordingResponse)
@@ -284,6 +283,238 @@ final class TheGetawayTests: XCTestCase {
             XCTFail("Phase must be .idle after a failed start (or .recording on success), got \(getaway.recordingPhase)")
             return
         }
+    }
+
+    // MARK: - Recording lifecycle invalidation
+
+    /// PR #314 H1: a recording payload completed by client A must not be
+    /// returned to client B who never asked for it. When the originator
+    /// disconnects, the cache is dropped.
+    func testDisconnectInvalidatesCachedCompletedRecordingForOriginator() async {
+        let (getaway, _, _) = makeGetaway()
+        getaway.recordingOriginatorClientId = 7
+        let payload = RecordingPayload(
+            videoData: "AAAA",
+            width: 100, height: 200,
+            duration: 1.0, frameCount: 8, fps: 8,
+            startTime: Date(), endTime: Date(),
+            stopReason: .maxDuration
+        )
+        getaway.completedRecording = .succeeded(payload)
+
+        getaway.invalidateRecordingForDisconnect(clientId: 7)
+
+        XCTAssertNil(getaway.recordingOriginatorClientId)
+        XCTAssertNil(getaway.pendingRecordingResponse)
+        if case .none = getaway.completedRecording { } else {
+            XCTFail("completedRecording must drop to .none on originator disconnect, got \(getaway.completedRecording)")
+        }
+    }
+
+    /// Counterpart: an unrelated client disconnecting must not nuke a
+    /// cached payload that belongs to a still-connected originator.
+    func testDisconnectByNonOriginatorPreservesCache() async {
+        let (getaway, _, _) = makeGetaway()
+        getaway.recordingOriginatorClientId = 7
+        let payload = RecordingPayload(
+            videoData: "AAAA",
+            width: 100, height: 200,
+            duration: 1.0, frameCount: 8, fps: 8,
+            startTime: Date(), endTime: Date(),
+            stopReason: .maxDuration
+        )
+        getaway.completedRecording = .succeeded(payload)
+
+        getaway.invalidateRecordingForDisconnect(clientId: 99)
+
+        XCTAssertEqual(getaway.recordingOriginatorClientId, 7)
+        if case .succeeded = getaway.completedRecording { } else {
+            XCTFail("Cache must survive disconnect of a non-originator client, got \(getaway.completedRecording)")
+        }
+    }
+
+    /// PR #314 H2: `pendingRecordingResponse` retains the respond closure
+    /// indefinitely. If the originator's connection drops, the closure
+    /// must be cleared so the next legitimate `stop_recording` isn't
+    /// blocked by the "Recording stop already in progress" guard.
+    func testDisconnectClearsPendingRecordingResponseForOriginator() async {
+        let (getaway, _, _) = makeGetaway()
+        getaway.recordingOriginatorClientId = 3
+        var deliveriesAfterDisconnect = 0
+        getaway.pendingRecordingResponse = (
+            requestId: "stop-1",
+            respond: { _ in deliveriesAfterDisconnect += 1 }
+        )
+
+        getaway.invalidateRecordingForDisconnect(clientId: 3)
+
+        XCTAssertNil(getaway.pendingRecordingResponse, "Pending stop closure must be released when originator disconnects")
+        XCTAssertEqual(deliveriesAfterDisconnect, 0, "The captured closure must never fire after disconnect")
+    }
+
+    /// PR #314 H1 (session boundary): a driver session releasing — either
+    /// by inactivity timeout or last-connection drain — must drop any
+    /// cached payload so a future driver can't pick up a video the
+    /// previous driver started.
+    func testSessionReleaseInvalidatesCachedRecording() async {
+        let (getaway, _, _) = makeGetaway()
+        getaway.recordingOriginatorClientId = 7
+        let payload = RecordingPayload(
+            videoData: "AAAA",
+            width: 100, height: 200,
+            duration: 1.0, frameCount: 8, fps: 8,
+            startTime: Date(), endTime: Date(),
+            stopReason: .maxDuration
+        )
+        getaway.completedRecording = .succeeded(payload)
+        getaway.pendingRecordingResponse = (
+            requestId: "stop-1",
+            respond: { _ in }
+        )
+
+        getaway.invalidateRecordingForSessionRelease()
+
+        XCTAssertNil(getaway.recordingOriginatorClientId)
+        XCTAssertNil(getaway.pendingRecordingResponse)
+        if case .none = getaway.completedRecording { } else {
+            XCTFail("Session release must clear the cache, got \(getaway.completedRecording)")
+        }
+    }
+
+    /// PR #348 M3: when the originator disconnected before the on-complete
+    /// fires, the payload must not be delivered to an unrelated client. We
+    /// drop the targeted-delivery branch and fall through to "cache for
+    /// next stop_recording + broadcast .recordingStopped". This test
+    /// confirms the auto-finish path with originator-gone (originator set
+    /// to a client that is not in the authenticated set) still caches the
+    /// payload instead of trying to send to a dead client ID.
+    func testAutoFinishWithGoneOriginatorFallsBackToCache() async {
+        let (getaway, _, _) = makeGetaway()
+        // Originator set, but no client is authenticated on TheMuscle —
+        // simulating the "originator disconnected between start and the
+        // stakeout's on-complete firing" race.
+        getaway.recordingOriginatorClientId = 99
+        let payload = RecordingPayload(
+            videoData: "AAAA",
+            width: 100, height: 200,
+            duration: 1.0, frameCount: 8, fps: 8,
+            startTime: Date(), endTime: Date(),
+            stopReason: .maxDuration
+        )
+
+        await getaway.deliverRecordingResult(.success(payload))
+
+        XCTAssertNil(getaway.recordingOriginatorClientId, "Originator must clear after delivery resolves")
+        XCTAssertNil(getaway.pendingRecordingResponse)
+        guard case .succeeded(let cached) = getaway.completedRecording else {
+            XCTFail("Auto-finish with gone originator must cache the payload, got \(getaway.completedRecording)")
+            return
+        }
+        XCTAssertEqual(cached.frameCount, 8)
+    }
+
+    /// PR #314 H3 / PR #348 M3: a `stop_recording` from client B after
+    /// client A's start_recording must own the in-flight payload routing.
+    /// We can't drive the live stakeout in a unit test, but we can verify
+    /// `handleStopRecording` rebinds the originator to the requesting
+    /// client when called with a clientId.
+    func testStopRecordingDrainsCacheForRequestingClient() async {
+        let (getaway, _, _) = makeGetaway()
+        // Pre-cached completion from client A — picked up immediately, so
+        // the cache-hit branch in `handleStopRecording` clears originator
+        // and drains the payload before ever reaching the rebind path.
+        getaway.recordingOriginatorClientId = 7
+        let payload = RecordingPayload(
+            videoData: "AAAA",
+            width: 100, height: 200,
+            duration: 1.0, frameCount: 8, fps: 8,
+            startTime: Date(), endTime: Date(),
+            stopReason: .maxDuration
+        )
+        getaway.completedRecording = .succeeded(payload)
+
+        await getaway.handleStopRecording(clientId: 42, requestId: "stop-from-b") { _ in }
+
+        XCTAssertNil(getaway.recordingOriginatorClientId, "Cache pickup must clear originator")
+        if case .none = getaway.completedRecording { } else {
+            XCTFail("Cache must drain after stop_recording pickup, got \(getaway.completedRecording)")
+        }
+    }
+
+    /// PR #314 H3 / PR #348 M3: direct rebind coverage.
+    ///
+    /// Drives the parked-waiter path: no cached completion, but
+    /// `recordingPhase` is `.recording(stakeout:)` so `handleStopRecording`
+    /// skips the cache-hit early return, rebinds the originator to the
+    /// requesting client, and parks `pendingRecordingResponse`. The stubbed
+    /// stakeout is in `.idle` so `isRecording` returns false and
+    /// `stopRecording` is never invoked — the waiter stays parked and we
+    /// can inspect the rebind side effect synchronously.
+    func testStopRecordingRebindsOriginatorToRequestingClient() async {
+        let (getaway, _, _) = makeGetaway()
+
+        // A stakeout that's never been started: `isRecording` is false and
+        // `stopRecording` is a no-op on the idle phase. That lets us park
+        // a waiter without driving a real recording-complete callback.
+        let stubStakeout = TheStakeout(captureFrame: { @MainActor in nil })
+        getaway.recordingPhase = .recording(stakeout: stubStakeout)
+        getaway.recordingOriginatorClientId = 7
+        // No cache — force the function past the .succeeded/.failed early
+        // returns and into the rebind + park branch.
+        getaway.completedRecording = .none
+
+        await getaway.handleStopRecording(clientId: 42, requestId: "stop-from-b") { _ in }
+
+        XCTAssertEqual(
+            getaway.recordingOriginatorClientId,
+            42,
+            "Rebind must replace the originator with the requesting client"
+        )
+        XCTAssertNotNil(
+            getaway.pendingRecordingResponse,
+            "Parked-waiter path must store the pending response for the on-complete callback"
+        )
+        XCTAssertEqual(getaway.pendingRecordingResponse?.requestId, "stop-from-b")
+    }
+
+    /// Fix for cache-clear-before-send: when the transport is torn down
+    /// (`sendToClient` is nil on TheMuscle), the targeted send to the
+    /// originator silently no-ops. The cache must be preserved in that
+    /// case so a subsequent `stop_recording` (or tearDown) can still
+    /// resolve the payload — never drop a recording into the void.
+    func testAutoFinishWithTornDownTransportPreservesCache() async {
+        let (getaway, muscle, _) = makeGetaway()
+        // Mark client 7 as authenticated so the targeted-delivery branch
+        // is entered, then drop `sendToClient` so the send returns false
+        // and the cache must survive.
+        //
+        // `wireTransport` installs callbacks via a Task; await a yield to
+        // let that install complete before we tear it back down.
+        await Task.yield()
+        await muscle.installAuthenticatedClientForTest(7)
+        await muscle.clearSendToClientForTest()
+        getaway.recordingOriginatorClientId = 7
+
+        let payload = RecordingPayload(
+            videoData: "AAAA",
+            width: 100, height: 200,
+            duration: 1.0, frameCount: 8, fps: 8,
+            startTime: Date(), endTime: Date(),
+            stopReason: .maxDuration
+        )
+
+        await getaway.deliverRecordingResult(.success(payload))
+
+        guard case .succeeded(let cached) = getaway.completedRecording else {
+            XCTFail("Cache must be preserved when transport is torn down, got \(getaway.completedRecording)")
+            return
+        }
+        XCTAssertEqual(cached.frameCount, 8)
+        XCTAssertEqual(
+            getaway.recordingOriginatorClientId,
+            7,
+            "Originator must be preserved alongside the cache when delivery did not happen"
+        )
     }
 
     // MARK: - Helpers
