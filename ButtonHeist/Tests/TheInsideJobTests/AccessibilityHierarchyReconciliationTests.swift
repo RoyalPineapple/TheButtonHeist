@@ -542,6 +542,65 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
         XCTAssertNotEqual(elementA.contentFingerprint, elementB.contentFingerprint)
     }
 
+    // MARK: - safeInt: out-of-range and non-finite
+
+    func testSafeIntClampsGreatestFiniteMagnitude() {
+        // `Int(.greatestFiniteMagnitude)` traps. safeInt must clamp.
+        XCTAssertEqual(safeInt(CGFloat.greatestFiniteMagnitude), Int.max)
+        XCTAssertEqual(safeInt(-CGFloat.greatestFiniteMagnitude), Int.min)
+    }
+
+    func testSafeIntClampsHugeFiniteValues() {
+        // `Int(1e100)` traps because 1e100 > Int.max but is finite.
+        XCTAssertEqual(safeInt(1e100), Int.max)
+        XCTAssertEqual(safeInt(-1e100), Int.min)
+    }
+
+    func testSafeIntReturnsZeroForNonFinite() {
+        XCTAssertEqual(safeInt(.nan), 0)
+        XCTAssertEqual(safeInt(.infinity), 0)
+        XCTAssertEqual(safeInt(-.infinity), 0)
+        XCTAssertEqual(safeInt(.signalingNaN), 0)
+    }
+
+    func testSafeIntPassesThroughNormalValues() {
+        XCTAssertEqual(safeInt(0), 0)
+        XCTAssertEqual(safeInt(42), 42)
+        XCTAssertEqual(safeInt(-100), -100)
+        XCTAssertEqual(safeInt(3.7), 3)
+        XCTAssertEqual(safeInt(-3.7), -3)
+    }
+
+    func testFingerprintHugeFiniteFrameDoesNotCrash() {
+        // Pathological frame with very large finite coordinates — `Int(1e100)` traps.
+        // Must be guarded by safeInt at every hash site.
+        let element = makeElement(
+            label: "huge",
+            frame: CGRect(x: 1e100, y: -1e100, width: CGFloat.greatestFiniteMagnitude, height: 1e200)
+        )
+        _ = element.contentFingerprint
+        _ = element.fingerprint(contentSpaceOrigin: nil)
+    }
+
+    func testFingerprintHugeContentSpaceOriginDoesNotCrash() {
+        // `contentSpaceOrigin` is unguarded against finite-but-out-of-range values.
+        let element = makeElement(label: "row", frame: CGRect(x: 0, y: 0, width: 100, height: 44))
+        _ = element.fingerprint(contentSpaceOrigin: CGPoint(x: 1e100, y: -1e100))
+        _ = element.fingerprint(contentSpaceOrigin: CGPoint(
+            x: CGFloat.greatestFiniteMagnitude,
+            y: -CGFloat.greatestFiniteMagnitude
+        ))
+    }
+
+    func testFingerprintHugeFinitePathDoesNotCrash() {
+        let path = UIBezierPath()
+        path.move(to: CGPoint(x: 0, y: 0))
+        path.addLine(to: CGPoint(x: 1e100, y: 1e100))
+        let element = makePathElement(label: "huge-path", path: path)
+        _ = element.contentFingerprint
+        _ = element.fingerprint(contentSpaceOrigin: nil)
+    }
+
     func testWindowSpaceStitchFailsWithScrolledFrames() {
         // Same scenario as above but using window-space fingerprints (no content origins).
         // The overlap should fail because Row 1 at screen y=44 ≠ Row 1 at screen y=0.
