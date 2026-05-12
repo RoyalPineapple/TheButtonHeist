@@ -14,6 +14,19 @@ import UIKit
 /// with values past `Int.max`. The fingerprint hot path hashes thousands of these
 /// values per refresh; one bad input takes down the parse.
 ///
+/// Used by two classes of caller, with different stakes:
+///
+/// - **Fingerprint hashes** (`AccessibilityElement.fingerprint`) feed `Hasher`,
+///   so the only contract is "don't trap".
+/// - **heistId synthesis fragments** (TheBurglar's `coarseFrameHash`,
+///   `contentPositionHeistId`) feed directly into the wire-format heistId string.
+///   Per CLAUDE.md heistId synthesis is wire format and is locked by
+///   `SynthesisDeterminismTests`. The no-change-for-previously-working-inputs
+///   invariant is therefore load-bearing: for any `cgFloat` where `Int(cgFloat)`
+///   already succeeded (finite, in `[Int.min, Int.max]`), `safeInt(cgFloat)` must
+///   return the same value bit-for-bit. Only pathological inputs that would have
+///   trapped get clamped to `Int.min`/`Int.max`/`0`.
+///
 /// - Returns: `0` for non-finite inputs, the clamped value for out-of-range finite
 ///   inputs, and `Int(cgFloat)` otherwise.
 func safeInt(_ cgFloat: CGFloat) -> Int {

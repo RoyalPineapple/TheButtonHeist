@@ -348,12 +348,12 @@ final class TheBurglar {
     /// container that shifts by a layout pass stays in the same bucket.
     private static let coarseFrameBucket: CGFloat = 8
 
-    private static func coarseFrameHash(_ frame: CGRect) -> String {
+    static func coarseFrameHash(_ frame: CGRect) -> String {
         let bucket = coarseFrameBucket
-        let xCoord = Int((frame.origin.x.sanitizedForJSON / bucket).rounded())
-        let yCoord = Int((frame.origin.y.sanitizedForJSON / bucket).rounded())
-        let width = Int((frame.size.width.sanitizedForJSON / bucket).rounded())
-        let height = Int((frame.size.height.sanitizedForJSON / bucket).rounded())
+        let xCoord = safeInt((frame.origin.x.sanitizedForJSON / bucket).rounded())
+        let yCoord = safeInt((frame.origin.y.sanitizedForJSON / bucket).rounded())
+        let width = safeInt((frame.size.width.sanitizedForJSON / bucket).rounded())
+        let height = safeInt((frame.size.height.sanitizedForJSON / bucket).rounded())
         return "\(xCoord)_\(yCoord)_\(width)_\(height)"
     }
 
@@ -467,8 +467,8 @@ final class TheBurglar {
         return resolved
     }
 
-    private static func contentPositionHeistId(_ baseHeistId: String, origin: CGPoint) -> String {
-        "\(baseHeistId)_at_\(Int(origin.x.rounded()))_\(Int(origin.y.rounded()))"
+    static func contentPositionHeistId(_ baseHeistId: String, origin: CGPoint) -> String {
+        "\(baseHeistId)_at_\(safeInt(origin.x.rounded()))_\(safeInt(origin.y.rounded()))"
     }
 
     private static func hasSameMinimumMatcher(_ lhs: AccessibilityElement, _ rhs: AccessibilityElement) -> Bool {
