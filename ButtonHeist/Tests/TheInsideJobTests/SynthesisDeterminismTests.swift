@@ -273,10 +273,18 @@ final class HeistIdDisambiguationTests: XCTestCase {
         )
     }
 
+    /// End-anchored regex matching the exact `_at_<int>_<int>` suffix shape
+    /// produced by `contentPositionHeistId`. A substring check (`contains("_at_")`)
+    /// would false-positive on labels that slugify to contain "at" as a word
+    /// (e.g. `saturday_at_5pm_button`). The pattern requires the suffix to
+    /// sit at the END of the heistId, with two signed integers separated by
+    /// underscores — the actual structural shape of the content-position id.
+    private static let contentPositionSuffixRegex = /_at_-?\d+_-?\d+$/
+
     private func assertNoContentPositionSuffix(in screen: Screen, file: StaticString = #filePath, line: UInt = #line) {
         for heistId in screen.elements.keys {
-            XCTAssertFalse(
-                heistId.contains("_at_"),
+            XCTAssertNil(
+                heistId.firstMatch(of: Self.contentPositionSuffixRegex),
                 "buildScreen produced an `_at_X_Y` suffix — the disambiguation contract has shifted: \(heistId)",
                 file: file,
                 line: line
