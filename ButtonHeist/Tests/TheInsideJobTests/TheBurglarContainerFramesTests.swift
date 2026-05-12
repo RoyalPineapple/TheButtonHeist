@@ -34,7 +34,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
         XCTAssertFalse(result.nestedInScrollView.contains(container))
     }
 
-    func testNestedContainerExpressedInParentScrollableContentSpace() {
+    func testNestedContainerExpressedInParentScrollableContentSpace() throws {
         // A real UIWindow is needed so `convert(_:from: nil)` resolves
         // through window space rather than the no-window degenerate case.
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 480))
@@ -68,11 +68,15 @@ final class TheBurglarContainerFramesTests: XCTestCase {
                        "Top-level scrollable: no enclosing scrollable, frame stays in screen space")
         XCTAssertFalse(result.nestedInScrollView.contains(outer))
 
-        let innerContent = try? XCTUnwrap(result.contentFrames[inner])
-        XCTAssertEqual(innerContent?.origin.x ?? .nan, 0, accuracy: 0.5)
-        XCTAssertEqual(innerContent?.origin.y ?? .nan, 300, accuracy: 0.5,
+        // `try?` here would swallow the unwrap failure and defang every
+        // downstream assertion (each is `?.` chained against the optional, so
+        // a nil inner frame still passes `XCTAssertEqual(nil, …, accuracy:)`).
+        // Promote to `throws` and use bare `XCTUnwrap`.
+        let innerContent = try XCTUnwrap(result.contentFrames[inner])
+        XCTAssertEqual(innerContent.origin.x, 0, accuracy: 0.5)
+        XCTAssertEqual(innerContent.origin.y, 300, accuracy: 0.5,
                        "screen-y 200 + contentOffset.y 100 = content-y 300")
-        XCTAssertEqual(innerContent?.size, inner.frame.size,
+        XCTAssertEqual(innerContent.size, inner.frame.size,
                        "Size is unchanged by coordinate conversion")
         XCTAssertTrue(result.nestedInScrollView.contains(inner))
     }

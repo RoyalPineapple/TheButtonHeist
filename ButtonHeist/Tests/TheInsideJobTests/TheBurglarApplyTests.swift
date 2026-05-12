@@ -41,10 +41,23 @@ final class TheBurglarApplyTests: XCTestCase {
         let screen = TheBurglar.buildScreen(from: result)
 
         XCTAssertEqual(screen.elements.count, 2, "Screen should have one entry per parsed element")
-        for heistId in screen.elements.keys {
-            XCTAssertNotNil(screen.findElement(heistId: heistId),
-                            "Each heistId should map to an entry")
-        }
+        // The earlier loop iterated `screen.elements.keys` and asserted
+        // `findElement(heistId:)` returned non-nil — but `findElement` is
+        // literally `elements[heistId]`, so the assertion was structurally
+        // guaranteed and could not fail. Replace with an assertion that
+        // actually pins down the bug class: the parsed elements survive
+        // the build step and are retrievable by the heistIds IdAssignment
+        // produces.
+        XCTAssertEqual(
+            Set(screen.elements.values.map(\.element)),
+            Set([elementA, elementB]),
+            "buildScreen must place both parsed elements into the screen"
+        )
+        XCTAssertEqual(
+            Set(screen.elements.keys),
+            Set(["save_button", "cancel_button"]),
+            "Each element gets the heistId IdAssignment derives from its label and trait"
+        )
     }
 
     func testBuildScreenPopulatesHeistIdByElement() {

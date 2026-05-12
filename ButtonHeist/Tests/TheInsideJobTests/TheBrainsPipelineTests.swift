@@ -194,20 +194,24 @@ final class TheBrainsPipelineTests: XCTestCase {
         // Post-0.2.25: exploration seeds the local union from currentScreen,
         // merges each parse into it, then commits the union back. There is no
         // pruning — the union is the canonical "all elements seen this cycle".
-        // With no scrollable containers in the host hierarchy, exploreAndPrune
-        // reduces to refresh-and-commit, and the seeded entry merges into the
-        // live parse rather than being pruned.
+        //
+        // Bug class: a regression that resets currentScreen to .empty (or to
+        // refresh()'s parse alone, discarding the seed) inside exploreAndPrune
+        // would silently drop entries the caller had already committed. The
+        // assertion below is that the seeded heistId — which is not present in
+        // any live UIKit view, so refresh() cannot produce it — survives the
+        // round trip. last-read-wins on conflicts, but the seed's heistId is
+        // disjoint from any parsed heistId, so it must remain in the merged
+        // union.
         seedScreen(elements: [("Seed", .button, "button_seed")])
         XCTAssertEqual(brains.stash.currentScreen.elements.count, 1)
 
         _ = await brains.navigation.exploreAndPrune()
 
-        // Either the seed survives (no live parse landed and the union still
-        // holds it) or it merges with new live entries — either way, the
-        // currentScreen reflects the committed union, not the pre-explore
-        // value alone.
-        XCTAssertNotNil(brains.stash.currentScreen,
-                        "exploreAndPrune always commits a screen value")
+        XCTAssertNotNil(
+            brains.stash.currentScreen.findElement(heistId: "button_seed"),
+            "Pre-explore seed must survive the committed union — no fictional UIKit element produces this heistId, so it can only come from the seeded value."
+        )
     }
 
     func testExploreScreenCachesDiscoveredIdsForSwipeableContainer() async throws {
