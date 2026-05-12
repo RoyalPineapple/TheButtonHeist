@@ -116,9 +116,29 @@ extension AccessibilityElement {
 /// `@MainActor`-typed provider closures.
 @MainActor struct SettleSession { // swiftlint:disable:this agent_main_actor_value_type
 
-    /// Hardcoded; tests override via init.
+    /// Number of consecutive identical-fingerprint cycles required before the
+    /// AX tree is considered stable. Three is the smallest value that filters
+    /// out the typical "one frame of churn between two stable states" pattern
+    /// produced by UIKit animations finishing on a frame boundary, while
+    /// keeping the best-case settle to `3 × cycleInterval` (~300 ms).
     static let defaultCyclesRequired: Int = 3
+
+    /// Poll interval between AX-tree fingerprint checks. 100 ms is roughly
+    /// six display frames at 60 Hz — long enough that a parse + fingerprint
+    /// + sleep cycle stays well under one frame of main-actor budget on real
+    /// devices, short enough that settle latency is dominated by the
+    /// `cyclesRequired × interval` floor rather than per-cycle wait. This is
+    /// the poll cadence VoiceOver itself uses for similar idle-checks, which
+    /// is why agents driving the same AX surface feel "in sync" at this rate.
     static let defaultCycleIntervalMs: Int = 100
+
+    /// Hard ceiling on how long the settle loop will wait for the AX tree
+    /// to quiesce before giving up with `.timedOut`. 5 s is the longest
+    /// any well-behaved iOS transition (push, modal, alert, tab switch)
+    /// takes to settle in practice; anything longer is almost always a
+    /// non-terminating animation (spinner not flagged `updatesFrequently`,
+    /// a Lottie loop, a video) and the caller is better off accepting the
+    /// last-seen snapshot than blocking the action pipeline further.
     static let defaultTimeoutMs: Int = 5_000
 
     typealias ParseProvider = @MainActor () -> Screen?
