@@ -88,4 +88,12 @@ final class TaskTracker: @unchecked Sendable { // swiftlint:disable:this agent_u
             _ = current.remove(task)
         }
     }
+
+    #if DEBUG
+    /// Test-only snapshot of the tracked Task count. Reads under the same
+    /// lock as mutators, so the value is consistent at the moment of read.
+    var taskCountForTesting: Int {
+        tasks.withLock { current in current.count }
+    }
+    #endif
 }
