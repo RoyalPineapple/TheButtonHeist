@@ -31,10 +31,11 @@ final class TheGetaway {
 
     // MARK: - State
 
-    // `RecordingPhase` and its handlers live in TheGetaway+Recording.swift.
+    // `RecordingPhase`, `RecordingOutcome`, and their handlers live in
+    // TheGetaway+Recording.swift.
     var recordingPhase: RecordingPhase = .idle
     var hierarchyInvalidated = false
-    var completedRecording: Result<RecordingPayload, Error>?
+    var completedRecording: RecordingOutcome = .none
     var pendingRecordingResponse: (requestId: String?, respond: (Data) -> Void)?
 
     /// Current transport — set by `wireTransport`, cleared on teardown.
@@ -121,8 +122,8 @@ final class TheGetaway {
             PingFastPath.encodedPong(for: data)
         }
 
-        // Cancel any prior consumer (defensive — a single transport instance
-        // is only wired once in production, but tests reuse `wireTransport`).
+        // `wireTransport` is idempotent: re-wiring cancels any prior
+        // consumer Task so the new transport's events flow without contention.
         eventConsumerTask?.cancel()
         eventConsumerTask = Task { @MainActor [weak self, events = transport.events] in
             for await event in events {
@@ -184,7 +185,7 @@ final class TheGetaway {
         pendingRecordingTasks.removeAll()
         transport = nil
         hierarchyInvalidated = false
-        completedRecording = nil
+        completedRecording = .none
         pendingRecordingResponse = nil
     }
 

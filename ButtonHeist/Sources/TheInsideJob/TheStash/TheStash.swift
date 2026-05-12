@@ -481,6 +481,13 @@ final class TheStash {
         wireTree().hashValue
     }
 
+    /// Single-walk variant: returns the tree alongside its hash so callers
+    /// that need both (e.g. broadcast-on-change) don't pay for two walks.
+    func wireTreeWithHash() -> (tree: [InterfaceNode], hash: Int) {
+        let tree = wireTree()
+        return (tree, tree.hashValue)
+    }
+
     /// Compute the delta between two snapshots.
     func computeDelta(
         before: [ScreenElement],

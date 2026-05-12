@@ -17,6 +17,15 @@ enum SessionPhase: Sendable {
     case archived(ArchivedSession)
 }
 
+/// Two-phase heist-recording lifecycle inside an active session: either no
+/// recording is in progress, or one is and carries its file handle / counters.
+/// Replaces the `HeistRecording?` optional so the "not recording" phase is
+/// structurally distinct from any in-flight recording.
+enum HeistRecordingPhase: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+    case idle
+    case recording(HeistRecording)
+}
+
 /// Active session payload. Marked `@unchecked Sendable` because `logHandle`
 /// is a `FileHandle` (not Sendable on Swift 6); access is in practice
 /// confined to the `@ButtonHeistActor`-isolated `TheBookKeeper` that owns
@@ -28,7 +37,7 @@ struct ActiveSession: @unchecked Sendable { // swiftlint:disable:this agent_unch
     var manifest: SessionManifest
     let startTime: Date
     var nextSequenceNumber: Int
-    var heistRecording: HeistRecording?
+    var heistRecording: HeistRecordingPhase = .idle
 }
 
 /// Heist recording handle. Marked `@unchecked Sendable` because `fileHandle`
@@ -187,7 +196,9 @@ final class TheBookKeeper {
         session.logHandle.closeFile()
 
         // Close heist recording handle if still open (abandoned recording)
-        session.heistRecording?.fileHandle.closeFile()
+        if case .recording(let abandonedRecording) = session.heistRecording {
+            abandonedRecording.fileHandle.closeFile()
+        }
 
         // If compressLog throws, phase stays .closing — session data is
         // preserved and a fresh beginSession is still allowed.
@@ -415,15 +426,16 @@ final class TheBookKeeper {
     // MARK: - Heist Recording
 
     var isRecordingHeist: Bool {
-        guard case .active(let session) = phase else { return false }
-        return session.heistRecording != nil
+        guard case .active(let session) = phase,
+              case .recording = session.heistRecording else { return false }
+        return true
     }
 
     func startHeistRecording(app: String) throws {
         guard case .active(var session) = phase else {
             throw BookKeeperError.invalidPhase(expected: "active", actual: phaseName)
         }
-        guard session.heistRecording == nil else {
+        guard case .idle = session.heistRecording else {
             throw BookKeeperError.invalidPhase(expected: "not recording heist", actual: "recording heist")
         }
 
@@ -431,13 +443,13 @@ final class TheBookKeeper {
         FileManager.default.createFile(atPath: heistPath.path, contents: nil)
         let heistHandle = try FileHandle(forWritingTo: heistPath)
 
-        session.heistRecording = HeistRecording(
+        session.heistRecording = .recording(HeistRecording(
             app: app,
             startTime: Date(),
             evidenceCount: 0,
             fileHandle: heistHandle,
             filePath: heistPath
-        )
+        ))
         phase = .active(session)
     }
 
@@ -445,12 +457,12 @@ final class TheBookKeeper {
         guard case .active(var session) = phase else {
             throw BookKeeperError.invalidPhase(expected: "active", actual: phaseName)
         }
-        guard let recording = session.heistRecording else {
+        guard case .recording(let recording) = session.heistRecording else {
             throw BookKeeperError.notRecordingHeist
         }
         guard recording.evidenceCount > 0 else {
             recording.fileHandle.closeFile()
-            session.heistRecording = nil
+            session.heistRecording = .idle
             phase = .active(session)
             throw BookKeeperError.noStepsRecorded
         }
@@ -465,7 +477,7 @@ final class TheBookKeeper {
             app: recording.app,
             steps: steps
         )
-        session.heistRecording = nil
+        session.heistRecording = .idle
         phase = .active(session)
         return heist
     }
@@ -519,7 +531,7 @@ final class TheBookKeeper {
         interfaceCache: [String: HeistElement]
     ) {
         guard case .active(var session) = phase,
-              var recording = session.heistRecording else { return }
+              case .recording(var recording) = session.heistRecording else { return }
         guard !Self.excludedHeistCommands.contains(command) else { return }
         guard succeeded else { return }
 
@@ -543,7 +555,7 @@ final class TheBookKeeper {
             return
         }
         recording.evidenceCount += 1
-        session.heistRecording = recording
+        session.heistRecording = .recording(recording)
         phase = .active(session)
     }
 

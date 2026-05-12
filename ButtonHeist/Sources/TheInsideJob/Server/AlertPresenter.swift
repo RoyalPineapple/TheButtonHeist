@@ -17,11 +17,7 @@ import UIKit
 @MainActor
 final class AlertPresenter {
 
-    // MARK: - Properties
-
     private weak var presentedAlert: UIAlertController?
-
-    // MARK: - Init
 
     init() {}
 

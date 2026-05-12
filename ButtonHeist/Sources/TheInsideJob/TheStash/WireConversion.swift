@@ -1,10 +1,13 @@
 #if canImport(UIKit)
 #if DEBUG
 import UIKit
+import os.log
 
 import TheScore
 
 import AccessibilitySnapshotParser
+
+private let wireConversionLogger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "wireConversion")
 
 private struct WireTreeRecord {
     let ref: TreeNodeRef
@@ -108,7 +111,6 @@ extension TheStash {
 
     // MARK: - Wire Output
 
-    /// Convert a ScreenElement to its wire representation.
     static func toWire(_ entry: ScreenElement) -> HeistElement {
         var wire = convert(entry.element)
         wire.heistId = entry.heistId
@@ -138,8 +140,13 @@ extension TheStash {
                let entry = screen.elements[heistId] {
                 return .element(toWire(entry))
             }
-            // Defensive: parser produced an element with no heistId — emit
-            // wire with no id rather than dropping the leaf.
+            // Construction invariant: every leaf in `screen.hierarchy` also
+            // appears in `screen.heistIdByElement`/`screen.elements` because
+            // both maps are built from the same parse pass (TheBurglar zips
+            // `result.elements` with `resolvedHeistIds`, and the hierarchy's
+            // `sortedElements` IS that elements list). Log and fall back to
+            // an id-less wire node so we'd notice if the invariant ever broke.
+            wireConversionLogger.error("Hierarchy leaf with no heistId in screen; emitting wire node without id")
             return .element(convert(element))
         case .container(let container, let children):
             let stableId = screen.containerStableIds[container]

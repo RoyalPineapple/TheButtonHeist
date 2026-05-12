@@ -169,8 +169,13 @@ public final class TheFence {
     }
     var playbackPhase: PlaybackPhase = .idle
 
-    /// Cached interface elements from the most recent get_interface response, keyed by heistId.
-    /// Used by TheBookKeeper for heist recording and by expectation validation for elementDisappeared.
+    /// Durable post-action snapshot of the most recently observed interface,
+    /// keyed by heistId. This is the only mirror of post-action interface
+    /// state on the client — the request trackers above are scoped to
+    /// in-flight requests and don't retain the last delivered value. The
+    /// cache feeds heist-evidence recording (so the activated element from
+    /// the old screen survives a screen change) and `elementDisappeared`
+    /// expectation validation (which resolves removed heistIds against it).
     private var lastInterfaceCache: [String: HeistElement] = [:]
 
     // MARK: - Pending Request Tracking
@@ -738,7 +743,7 @@ public final class TheFence {
 
     func sendAction(_ message: ClientMessage) async throws -> FenceResponse {
         let result = try await sendAndAwaitAction(message, timeout: Timeouts.actionSeconds)
-        lastActionResult = result
+        lastActionHistory = .completed(result)
         return .action(result: result)
     }
 
@@ -817,7 +822,21 @@ public final class TheFence {
 
     // MARK: - Last Action / Latency Tracking
 
-    var lastActionResult: ActionResult?
+    /// Two-phase action history: `.unrun` before any action has completed,
+    /// `.completed` once one has. Display state derives from the active case;
+    /// no caller has to guard a nullable to know whether an action ever ran.
+    enum LastActionHistory {
+        case unrun
+        case completed(ActionResult)
+    }
+
+    var lastActionHistory: LastActionHistory = .unrun
+
+    /// Convenience read of the last completed action's result, if any.
+    var lastActionResult: ActionResult? {
+        if case .completed(let result) = lastActionHistory { return result }
+        return nil
+    }
     /// Round-trip time in milliseconds for the last action command that
     /// completed (request issued → response received).
     private(set) var lastLatencyMs: Int = 0

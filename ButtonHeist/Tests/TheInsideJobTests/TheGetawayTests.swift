@@ -136,7 +136,9 @@ final class TheGetawayTests: XCTestCase {
     func testAutoFinishWithoutPendingStopBroadcastsRecording() async {
         let (getaway, _, _) = makeGetaway()
         XCTAssertNil(getaway.pendingRecordingResponse)
-        XCTAssertNil(getaway.completedRecording)
+        if case .none = getaway.completedRecording {} else {
+            XCTFail("Expected .none completedRecording before deliver, got \(getaway.completedRecording)")
+        }
 
         let payload = RecordingPayload(
             videoData: "AAAA",
@@ -152,7 +154,7 @@ final class TheGetawayTests: XCTestCase {
         await getaway.deliverRecordingResult(.success(payload))
 
         XCTAssertNil(getaway.pendingRecordingResponse, "Auto-finish must not leave a stale pending response")
-        guard case .success(let captured) = getaway.completedRecording else {
+        guard case .succeeded(let captured) = getaway.completedRecording else {
             XCTFail("Auto-finish must keep the result in completedRecording for later collection")
             return
         }

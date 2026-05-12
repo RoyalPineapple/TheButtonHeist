@@ -887,9 +887,9 @@ final class TheTripwireTests: XCTestCase {
     }
 
     func testFilterReturnsAllWhenOnlyPassthroughsExist() {
-        // Defensive: if every window is a passthrough, fall back to the full
-        // input rather than returning an empty list. Better to over-include
-        // than starve the parser of any windows at all.
+        // When every window is a passthrough, the canonical behaviour is to
+        // return the full input rather than an empty list — better to
+        // over-include than starve the parser of any windows at all.
         let keyboard = makeWindow(level: .alert, rootVC: UIViewController())
         let textEffects = makeWindow(level: .alert + 1, rootVC: UIViewController())
         let input = [

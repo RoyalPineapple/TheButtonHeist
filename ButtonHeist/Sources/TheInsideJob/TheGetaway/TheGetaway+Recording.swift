@@ -18,6 +18,24 @@ extension TheGetaway {
         case recording(stakeout: TheStakeout)
     }
 
+    /// Three-state lifecycle for the latest recording's outcome:
+    /// `.none` (no completion to report), `.succeeded` (payload waiting for a
+    /// `stop_recording` pickup), or `.failed` (error to surface). Replaces the
+    /// triply-nullable `Result<RecordingPayload, Error>?` so the "no recording
+    /// yet" state is structurally distinct from success/failure.
+    enum RecordingOutcome {
+        case none
+        case succeeded(RecordingPayload)
+        case failed(Error)
+
+        init(result: Result<RecordingPayload, Error>) {
+            switch result {
+            case .success(let payload): self = .succeeded(payload)
+            case .failure(let error): self = .failed(error)
+            }
+        }
+    }
+
     func handleStartRecording(_ config: RecordingConfig, requestId: String? = nil, respond: @escaping (Data) -> Void) async {
         switch recordingPhase {
         case .recording:
@@ -33,7 +51,7 @@ extension TheGetaway {
         // Claim the phase synchronously before the first await so a second
         // start_recording landing on the actor sees `.starting` and is rejected.
         recordingPhase = .starting
-        completedRecording = nil
+        completedRecording = .none
 
         // Wrap the entire startup pipeline in do-catch so the .starting claim is
         // always rolled back on any thrown error — including any future throwing
@@ -90,7 +108,7 @@ extension TheGetaway {
     func deliverRecordingResult(_ result: Result<RecordingPayload, Error>) async {
         recordingPhase = .idle
         brains.stakeout = nil
-        completedRecording = result
+        completedRecording = RecordingOutcome(result: result)
 
         if let pending = pendingRecordingResponse {
             pendingRecordingResponse = nil
@@ -114,15 +132,17 @@ extension TheGetaway {
     }
 
     func handleStopRecording(requestId: String? = nil, respond: @escaping (Data) -> Void) async {
-        if let completedRecording {
-            self.completedRecording = nil
-            switch completedRecording {
-            case .success(let payload):
-                sendMessage(.recording(payload), requestId: requestId, respond: respond)
-            case .failure(let error):
-                sendMessage(.error(ServerError(kind: .recording, message: error.localizedDescription)), requestId: requestId, respond: respond)
-            }
+        switch completedRecording {
+        case .succeeded(let payload):
+            completedRecording = .none
+            sendMessage(.recording(payload), requestId: requestId, respond: respond)
             return
+        case .failed(let error):
+            completedRecording = .none
+            sendMessage(.error(ServerError(kind: .recording, message: error.localizedDescription)), requestId: requestId, respond: respond)
+            return
+        case .none:
+            break
         }
 
         guard let stakeout else {

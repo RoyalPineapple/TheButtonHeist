@@ -429,14 +429,12 @@ public final class TheInsideJob {
     }
 
     @objc private func appDidEnterBackground() {
-        insideJobLogger.info("App entering background, suspending server")
         spawnLifecycleTask { [weak self] in
             await self?.suspend()
         }
     }
 
     @objc private func appWillEnterForeground() {
-        insideJobLogger.info("App entering foreground, resuming server")
         resume()
     }
 

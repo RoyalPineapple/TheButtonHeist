@@ -133,8 +133,9 @@ final class DeviceConnection: DeviceConnecting {
 
         let conn = NWConnection(to: device.endpoint, using: parameters)
 
-        // Tear down any prior consumer (defensive — a fresh connect should
-        // not observe events from the previous attempt).
+        // `connect` is idempotent: any prior consumer Task and event stream
+        // are torn down so the new connection's events flow without crosstalk
+        // from a previous attempt.
         eventConsumerTask?.cancel()
         eventContinuation?.finish()
 
