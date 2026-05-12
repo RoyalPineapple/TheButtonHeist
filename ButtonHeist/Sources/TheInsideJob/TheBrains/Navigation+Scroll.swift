@@ -218,6 +218,7 @@ extension Navigation {
         guard let elementTarget = target.elementTarget else {
             return .failure(.scroll, message: "Element target required for scroll")
         }
+        await ensureOnScreen(for: elementTarget)
         let resolution = stash.resolveTarget(elementTarget)
         guard let resolved = resolution.resolved else {
             return .failure(.elementNotFound, message: resolution.diagnostics)
@@ -242,6 +243,7 @@ extension Navigation {
         guard let elementTarget = target.elementTarget else {
             return .failure(.scrollToEdge, message: "Element target required for scroll_to_edge")
         }
+        await ensureOnScreen(for: elementTarget)
         let resolution = stash.resolveTarget(elementTarget)
         guard let resolved = resolution.resolved else {
             return .failure(.elementNotFound, message: resolution.diagnostics)
