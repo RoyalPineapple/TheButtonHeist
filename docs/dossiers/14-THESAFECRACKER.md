@@ -23,23 +23,24 @@ TheSafecracker does **not** resolve element targets, check interactivity, or rea
 
 | File | Purpose |
 |------|---------|
-| `TheSafecracker.swift` | Core class, single-finger primitives, keyboard wrappers, `InteractionResult`, `PointResolution`, first responder utilities, N-finger primitives, `onGestureMove` callback |
-| `TheSafecracker+Actions.swift` | Duration/velocity helpers for draw gestures |
+| `TheSafecracker.swift` | Core class, single-finger primitives, keyboard wrappers, `InteractionResult`, `PointResolution`, first responder utilities, N-finger primitives, duration helpers, `onGestureMove` callback |
 | `TheSafecracker+Scroll.swift` | Scroll primitives: `scrollByPage`, `scrollToEdge`, `scrollToMakeVisible`, `scrollToOppositeEdge`, `scrollBySwipe` |
 | `TheSafecracker+MultiTouch.swift` | `pinch`, `rotate`, `twoFingerTap` |
 | `TheSafecracker+Bezier.swift` | `BezierSampler` — cubic bezier sampling into polylines |
 | `TheSafecracker+IOHIDEventBuilder.swift` | `IOHIDEventBuilder` + `FingerTouchData`; IOKit dlopen/dlsym loader |
+| `TheSafecracker+TapDiagnostic.swift` | Diagnostic helpers for tap-target classification |
 | `KeyboardBridge.swift` | `UIKeyboardImpl` wrapper: `shared()`, `type(_:)`, `deleteBackward()`, `drainTaskQueue()`, `hasActiveInput` |
 | `SyntheticTouch.swift` | Three nested structs: `TouchTarget`, `SyntheticTouch`, `TouchEvent` — the touch pipeline |
 | `ObjCRuntime.swift` | `ObjCRuntime.Message` — typed ObjC dispatch for void and returning calls |
+| `TheFingerprints.swift` | Visual touch indicator type (see 17-THEFINGERPRINTS dossier for the full overlay system) |
 
 ## Architecture Diagram
 
 ```mermaid
 graph TD
     subgraph TheSafecracker["TheSafecracker (@MainActor)"]
-        Actions["TheSafecracker+Actions.swift — duration helpers"]
-        Core["TheSafecracker.swift — Single-finger & N-finger primitives"]
+        Core["TheSafecracker.swift — Single-finger & N-finger primitives, duration helpers"]
+        Scroll["TheSafecracker+Scroll.swift — scroll primitives"]
         Multi["TheSafecracker+MultiTouch.swift — pinch, rotate, twoFingerTap"]
     end
 
@@ -60,14 +61,14 @@ graph TD
         Tripwire["TheTripwire (weak) — keyboard flag, settle wait"]
     end
 
-    Actions --> Core
-    Actions --> Multi
+    Core --> Multi
+    Core --> Scroll
     Core --> TouchPipeline
     TouchPipeline --> IOHID
     TouchPipeline --> ObjC
-    Actions --> KB
+    Core --> KB
     KB --> ObjC
-    Actions --> Tripwire
+    Core --> Tripwire
 ```
 
 ## Deep Dives
@@ -209,7 +210,7 @@ TheBrains owns all scroll orchestration (see [13-THEBRAINS.md](13-THEBRAINS.md))
 | `scrollToOppositeEdge` | UIScrollView + direction | Jump to opposite content edge (no animation) |
 | `scrollBySwipe` | CGRect + direction | Synthetic swipe gesture at 75% travel, 0.25s duration |
 
-**Auto-scroll** is driven by TheStash's `ensureOnScreen(for:)` before every element-targeted interaction. It checks `accessibilityFrame` against `UIScreen.main.bounds`, uses the accessibility hierarchy's scroll view reference (with UIKit ancestor fallback), calls TheSafecracker's `scrollToMakeVisible` for minimum offset adjustment, waits for settle via TheTripwire, and refreshes the element cache. Best-effort: never blocks or fails the command.
+**Auto-scroll** is driven by `Navigation.ensureOnScreen(for:)` (in `TheBrains/Navigation+Scroll.swift`) before every element-targeted interaction. It checks `accessibilityFrame` against `UIScreen.main.bounds`, uses the accessibility hierarchy's scroll view reference (with UIKit ancestor fallback), calls TheSafecracker's `scrollToMakeVisible` for minimum offset adjustment, waits for settle via TheTripwire, and refreshes `currentScreen`. TheStash exposes resolution and live geometry only — it does not perform scroll orchestration. Best-effort: never blocks or fails the command.
 
 **Input size guards:** `touchDrawPath` limits to 10,000 points; `touchDrawBezier` limits to 1,000 segments.
 
@@ -229,7 +230,7 @@ All action executors resolve elements via `TheStash.resolveTarget(_:)` which che
 
 ```mermaid
 flowchart TD
-    Target["ActionTarget - (heistId? / match?)"]
+    Target["ElementTarget - .heistId(String) / .matcher(ElementMatcher)"]
     Target --> Resolve["stash.resolveTarget(target)"]
     Resolve --> Found{resolved?}
     Found -->|yes| WeakRef["screenElement.object - → live NSObject via weak ref"]
@@ -260,8 +261,8 @@ flowchart TD
 - `drainTaskQueue()` after each keystroke matches KIF's pattern
 - `hasActiveInput` checks `delegate is UIKeyInput` (not just non-nil existence)
 
-**Duplicate default durations** (`TheSafecracker+Actions.swift` vs `TheSafecracker.swift`)
-- High-level executors and primitive methods both have independent duration defaults
+**Duplicate default durations** (`TheBrains/Actions.swift` vs `TheSafecracker.swift`)
+- High-level executors in `TheBrains/Actions.swift` and primitive methods in `TheSafecracker.swift` both have independent duration defaults
 - Both default to 0.15s for swipe — consistent but defined in two places
 
 ### LOW PRIORITY

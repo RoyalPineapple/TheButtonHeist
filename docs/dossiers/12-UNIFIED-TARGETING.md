@@ -1,6 +1,6 @@
 # Unified Targeting - Element Resolution
 
-> **Cross-cutting concern:** TheFence → TheScore (wire) → TheStash → TheSafecracker
+> **Cross-cutting concern:** TheFence → TheScore (wire) → TheBrains.Actions / TheBrains.Navigation → TheStash → TheSafecracker
 > **Role:** Routes every action command to a concrete element via a single resolution path
 
 ## Overview
@@ -9,7 +9,7 @@ Unified targeting turns a caller's intent ("tap the Submit button") into a concr
 
 There are exactly **two targeting strategies**, encoded as cases of the `ElementTarget` enum:
 
-1. **`.heistId(String)`** — "you gave me this token, I hand it back." Assigned by `get_interface`, presumed stable while the element is on screen. O(1) lookup via `screenElements` dictionary.
+1. **`.heistId(String)`** — "you gave me this token, I hand it back." Assigned by `get_interface`, presumed stable while the element is in `currentScreen`. O(1) lookup into `currentScreen.elements`.
 2. **`.matcher(ElementMatcher)`** — "I'm describing the element by its accessibility properties." A predicate-based search on label, identifier, value, and traits with **case-insensitive equality** (typography-folded — smart quotes, dashes, ellipsis fold to ASCII) and exact trait bitmask comparison. Matching is **exact or miss** — there is no substring fallback. On a miss the resolver returns structured suggestions through the diagnostic path. Callers can embed expectations (e.g. `value="6"`) so stale state fails early instead of acting on the wrong element.
 
 A single method, `TheStash.resolveTarget(_:)`, implements this and returns a `TargetResolution` enum (`.resolved(ResolvedTarget)`, `.notFound(diagnostics:)`, `.ambiguous(candidates:diagnostics:)`). `ResolvedTarget` has a single field: `screenElement: ScreenElement`. Every action executor calls this method — there are no alternative resolution paths.
@@ -20,7 +20,7 @@ A single method, `TheStash.resolveTarget(_:)`, implements this and returns a `Ta
 - **`identifier` on ActionTarget** — accessibility identifier is an accessibility property, so it belongs in the matcher.
 - **`order` on ActionTarget** — fragile positional index that shifts when anything on screen changes. Removed entirely.
 - **`heistId` on ElementMatcher** — heistId is an assigned token, not an accessibility property. It lives on ElementTarget, not in the matcher.
-- **`lastSnapshot` array** — replaced by `screenElements` dictionary for O(1) heistId lookup.
+- **`lastSnapshot` array** — replaced by `currentScreen.elements` dictionary for O(1) heistId lookup. Post-0.2.25 there is no per-screen registry; the dictionary lives on the `Screen` value held by TheStash and is replaced on every `parse()` / `merging` commit.
 - **Legacy resolution methods** — `findElement(for:)` and `resolveTraversalIndex(for:)` were dead code. Removed.
 
 ## Data Flow
@@ -31,22 +31,29 @@ sequenceDiagram
     participant TF as TheFence (macOS)
     participant Wire as ElementTarget (JSON)
     participant IJ as TheInsideJob (iOS)
-    participant TB as TheStash
+    participant TB as TheBrains
+    participant NAV as Navigation
+    participant ACT as Actions
+    participant ST as TheStash
     participant TS as TheSafecracker
 
     Caller->>TF: {"command":"activate", "label":"Submit", "traits":["button"]}
     TF->>TF: elementTarget(args) — build ElementTarget
     TF->>Wire: .matcher(ElementMatcher(label,traits))
     Wire->>IJ: ClientMessage over TLS
-    IJ->>TB: refreshAccessibilityData()
-    IJ->>TB: executeActivate(target)
-    TB->>TB: ensureOnScreen(target)
-    TB->>TB: resolveTarget(.matcher) → uniqueMatch
-    TB->>TB: checkInteractivity, activate
-    TB-->>TB: activate failed?
-    TB->>TS: fallback tap(at: activationPoint)
-    TS-->>TB: success
-    TB-->>IJ: InteractionResult
+    IJ->>TB: executeCommand(.activate(target))
+    TB->>ST: stash.refresh()
+    TB->>ACT: executeActivate(target)
+    ACT->>NAV: ensureOnScreen(for: target)
+    NAV->>ST: resolveTarget(target)
+    ACT->>ST: resolveTarget(target) → ResolvedTarget
+    ACT->>ST: Interactivity.checkInteractivity(element)
+    ACT->>ACT: activate
+    ACT-->>ACT: activate failed?
+    ACT->>TS: fallback tap(at: activationPoint)
+    TS-->>ACT: success
+    ACT-->>TB: InteractionResult
+    TB-->>IJ: ActionResult (with delta)
 ```
 
 ## Entry Point: TheFence.elementTarget()
@@ -111,24 +118,25 @@ Trait names are resolved to `UIAccessibilityTraits` bitmasks on the iOS side via
 ```mermaid
 flowchart TD
     A["resolveTarget(ElementTarget)"] --> B{Target type?}
-    B -->|".heistId(id)"| C["screenElements[id] lookup<br/>O(1) dictionary access"]
-    C --> D{Entry exists<br/>& presented<br/>& valid index?}
+    B -->|".heistId(id)"| C["currentScreen.elements[id] lookup<br/>O(1) dictionary access"]
+    C --> D{Entry exists?}
     D -->|Yes| E["Return .resolved(ResolvedTarget)"]
     D -->|No| F["Return .notFound(diagnostics)"]
 
     B -->|".matcher(m, ordinal)"| G{ordinal set?}
-    G -->|Yes| ORD["matches(matcher, limit: ordinal+1)<br/>Early-exit collection"]
+    G -->|Yes| ORD["matchScreenElements(matcher, limit: ordinal+1)<br/>Walks currentScreen.hierarchy"]
     ORD --> ORDCHK{ordinal < hits.count?}
-    ORDCHK -->|Yes| J["elementToHeistId[element]<br/>→ screenElements[heistId]<br/>(O(1) reverse index)"]
-    J --> E
+    ORDCHK -->|Yes| E
     ORDCHK -->|No| F
 
-    G -->|No| H["matches(matcher, limit: 2)<br/>Case-insensitive equality<br/>(typography-folded)<br/>on label, identifier, value"]
+    G -->|No| H["matchScreenElements(matcher, limit: 2)<br/>Case-insensitive equality<br/>(typography-folded)<br/>on label, identifier, value"]
     H --> I{Result?}
-    I -->|Exactly 1 match| J
+    I -->|Exactly 1 match| E
     I -->|0 matches| F
     I -->|2+ matches| AMB["Return .ambiguous(candidates, diagnostics)<br/>Hint: use ordinal 0–N to select one"]
 ```
+
+`matchScreenElements` walks `currentScreen.hierarchy` to find matching `AccessibilityElement`s, then resolves each hit to a `ScreenElement` via `currentScreen.heistIdByElement[element]` → `currentScreen.elements[heistId]`. The reverse index `heistIdByElement` is computed once during `buildScreen(from:)` and stored on the `Screen` value.
 
 ## Error Diagnostics: Progressive Disclosure
 
@@ -174,14 +182,7 @@ The goal: every error message answers the obvious next question. "Why didn't it 
 
 ## Matching Infrastructure (TheStash+Matching.swift)
 
-Matching operates on the **canonical `AccessibilityElement` tree**, not wire types. Two search surfaces exist:
-
-| Surface | Used by | Method |
-|---------|---------|--------|
-| **Hierarchy tree** (`[AccessibilityHierarchy]`) | `resolveTarget`, `get_interface` filtering, `wait_for` | `AccessibilityHierarchy.matches(_:)` — recursive tree walk |
-| **Flat array** (`cachedElements`) | Fallback when hierarchy is empty | `[AccessibilityElement].firstMatch(_:)` — linear scan |
-
-The hierarchy tree is the primary surface. `findMatch(_:)` searches `currentHierarchy` directly.
+Matching operates on the **canonical `AccessibilityElement` tree**, not wire types. There is exactly one search surface: `currentScreen.hierarchy`. Resolution paths (`matchScreenElements`, `hasTarget`, `HeistElement.matches`) walk the hierarchy and compare predicates against the canonical `AccessibilityElement`s. There is no flat-array fallback — pre-0.2.25 `cachedElements` was removed when the registry was eliminated.
 
 ### Match evaluation (AccessibilityElement.matches)
 
@@ -197,23 +198,24 @@ All checks are AND — first failure short-circuits to false. There is no substr
 
 ## Callers
 
-Every action executor in TheStash calls `resolveTarget(target)`:
+Every action executor calls `stash.resolveTarget(target)`. Resolution lives on TheStash; orchestration (scroll, ensureOnScreen) lives on Navigation; action execution lives on Actions:
 
 | Method | File | What it needs |
 |--------|------|--------------|
-| `ensureOnScreen(for:)` | TheStash+Scroll.swift | screenElement → object → scroll ancestor |
-| `executeScroll(_:)` | TheStash+Scroll.swift | screenElement → object → scroll ancestor |
-| `executeScrollToEdge(_:)` | TheStash+Scroll.swift | screenElement → object → scroll to edge |
-| `executeScrollToVisible(_:)` | TheStash+Scroll.swift | resolveFirstMatch (first-match semantics) |
-| `executeActivate(_:)` | TheStash+Actions.swift | element (interactivity check) + screenElement (activate/fallback tap) |
-| `executeIncrement(_:)` | TheStash+Actions.swift | screenElement (increment) + element (fingerprint point) |
-| `executeDecrement(_:)` | TheStash+Actions.swift | screenElement (decrement) + element (fingerprint point) |
-| `executeCustomAction(_:)` | TheStash+Actions.swift | screenElement (perform action) |
-| `executeTypeText(_:)` | TheStash+Actions.swift | element (activation point for tap-to-focus) |
-| `executeTap(_:)` | TheStash+Actions.swift | resolvePoint → element activation point |
-| `executeSwipe(_:)` | TheStash+Actions.swift | resolvePoint or resolveFrame for unit-point swipe |
-| `resolvePoint(from:)` | TheStash.swift | element (activation point for gesture origin) |
-| `actionResultWithDelta(...)` | TheStash.swift | element (post-action label/value/traits readback) |
+| `ensureOnScreen(for:)` | TheBrains/Navigation+Scroll.swift | screenElement → object → scroll ancestor |
+| `executeScroll(_:)` | TheBrains/Navigation+Scroll.swift | screenElement → object → scroll ancestor |
+| `executeScrollToEdge(_:)` | TheBrains/Navigation+Scroll.swift | screenElement → object → scroll to edge |
+| `executeScrollToVisible(_:)` | TheBrains/Navigation+Scroll.swift | resolveFirstMatch (first-match semantics) |
+| `executeElementSearch(_:)` | TheBrains/Navigation+Scroll.swift | resolveFirstMatch + scroll loop |
+| `executeActivate(_:)` | TheBrains/Actions.swift | element (interactivity check) + screenElement (activate/fallback tap) |
+| `executeIncrement(_:)` | TheBrains/Actions.swift | screenElement (increment) + element (fingerprint point) |
+| `executeDecrement(_:)` | TheBrains/Actions.swift | screenElement (decrement) + element (fingerprint point) |
+| `executeCustomAction(_:)` | TheBrains/Actions.swift | screenElement (perform action) |
+| `executeTypeText(_:)` | TheBrains/Actions.swift | element (activation point for tap-to-focus) |
+| `executeTap(_:)` | TheBrains/Actions.swift | resolvePoint → element activation point |
+| `executeSwipe(_:)` | TheBrains/Actions.swift | resolvePoint or resolveFrame for unit-point swipe |
+| `resolvePoint(from:)` | TheStash/TheStash.swift | element (activation point for gesture origin) |
+| `actionResultWithDelta(...)` | TheBrains/TheBrains.swift | element (post-action label/value/traits readback) |
 
 Touch gestures (tap, swipe, long_press, drag, pinch, rotate, two_finger_tap) go through `resolvePoint` which calls `resolveTarget` internally. TheSafecracker is called only for the raw gesture synthesis after TheStash has resolved the target.
 
@@ -224,8 +226,8 @@ These commands use `ElementMatcher` directly (not `ElementTarget`):
 | Command | Why |
 |---------|-----|
 | `get_interface` | Filters the full hierarchy tree, returns multiple matches |
-| `scroll_to_visible` | Scrolls until a match appears, uses `findMatch`/`hasMatch` directly |
-| `wait_for` | Polls for element appearance/disappearance, uses `hasMatch` directly |
+| `scroll_to_visible` | Scrolls until a match appears, uses `resolveFirstMatch`/`hasTarget` directly |
+| `wait_for` | Polls for element appearance/disappearance, uses `hasTarget` directly |
 
 ## Design Principles
 
@@ -255,8 +257,10 @@ These commands use `ElementMatcher` directly (not `ElementTarget`):
 
 ## Element Registry
 
-`screenElements: [String: ScreenElement]` is the persistent element registry, keyed by heistId. It lives for the screen's duration and is populated during `updateScreenElements()` (called from `refreshAccessibilityData()`). Screen change = scorched earth (full wipe + rebuild from cached data).
+There is no element registry post-0.2.25. TheStash holds exactly one mutable field — `var currentScreen: Screen` — and rebinds it on every parse / merge. The `Screen` value type carries the heistId index, the parsed hierarchy, the reverse index, and the live scrollable container references as immutable fields. Pre-0.2.25 `screenElements: [String: ScreenElement]`, `presentedHeistIds`, `onScreen`, `heistIdByTraversalOrder`, `updateScreenElements()`, `refreshAccessibilityData()`, and the scorched-earth wipe-and-rebuild on screen change are all gone.
 
-`snapshotElements()` reads from `screenElements` and returns the currently visible elements (those in `onScreen`) as `[HeistElement]`. This is the wire-level view used for `get_interface` responses and delta computation.
+`HeistId resolution` (`resolveTarget(.heistId)`) is O(1) dictionary lookup into `currentScreen.elements`. There is no presentation gate — if a heistId is in `currentScreen.elements`, it resolves. (Exploration unions older elements into `currentScreen` so heistIds for off-viewport elements still resolve until the next non-exploration `parse()` overwrites the screen.)
 
-HeistId resolution via `resolveTarget(.heistId)` is O(1) dictionary lookup into `screenElements`, gated by `presentedHeistIds` (elements sent to clients via `snapshot()`). Matcher resolution walks `currentHierarchy` then uses O(1) `heistIdByTraversalOrder` reverse index to find the corresponding `ScreenElement`. Matching always operates on canonical `AccessibilityElement` types, never on wire types.
+`Matcher resolution` walks `currentScreen.hierarchy` looking for matching `AccessibilityElement`s, then resolves each hit via `currentScreen.heistIdByElement[element]` (keyed on `AccessibilityElement`, not traversal index) → `currentScreen.elements[heistId]` to recover the `ScreenElement`. Both indices are computed once during `buildScreen(from:)` and never mutated.
+
+Matching always operates on canonical `AccessibilityElement` types, never on wire types. `Screen.merging(_:)` is last-read-wins on conflicting heistIds — the most recently parsed element wins, matching the agent-visible "fresh state beats stale state" rule for exploration unions.

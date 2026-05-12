@@ -1,6 +1,6 @@
 # TheBookKeeper - The Accountant
 
-> **Directory:** `ButtonHeist/Sources/TheButtonHeist/TheBookKeeper/`
+> **Directory:** `ButtonHeist/Sources/TheButtonHeist/TheBookKeeper/` (`TheBookKeeper.swift`, `TheBookKeeper+Compression.swift`, `TheBookKeeper+Logging.swift`, `SessionManifest.swift`, `PlaybackFailure.swift`)
 > **Platform:** macOS 14.0+
 > **Role:** Centralized file operations — session logs, artifact storage, compression, path safety, heist recording, abandoned-session recovery
 
