@@ -38,11 +38,18 @@ extension TheStash {
     ) -> String {
         let similar = knownIds.sorted()
             .filter { $0.contains(heistId) || heistId.contains($0) }
-        let nextStep = "refetch via get_interface, or target by label/identifier with a matcher."
         if similar.isEmpty {
-            return "Element not found: \"\(heistId)\" — likely scrolled off or the screen changed since your last get_interface (\(viewportCount) elements on screen now); \(nextStep)"
+            return """
+                Element not found: "\(heistId)" — likely scrolled off or the \
+                screen changed since your last get_interface (\(viewportCount) \
+                elements on screen now); refetch via get_interface, or target \
+                by label/identifier with a matcher.
+                """
         }
-        return "Element not found: \"\(heistId)\" — did you mean: \(similar.joined(separator: ", "))? If not, \(nextStep)"
+        return """
+            Element not found: "\(heistId)" — did you mean: \
+            \(similar.joined(separator: ", "))? If not, refetch via get_interface.
+            """
     }
 
     static func matcherNotFound(

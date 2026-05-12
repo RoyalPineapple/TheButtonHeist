@@ -39,6 +39,9 @@ final class DiagnosticsTests: XCTestCase {
         // The "did you mean" branch still offers a refetch fallback in case
         // none of the suggestions is what the agent meant.
         XCTAssertTrue(message.contains("get_interface"))
+        // The near-miss branch already gives concrete heistIds, so the
+        // "or target by label/identifier with a matcher" fallback is omitted.
+        XCTAssertFalse(message.contains("matcher"))
     }
 
     func testHeistIdNotFoundReverseSubstringMatch() {
