@@ -45,6 +45,12 @@ final class TheGetaway {
     /// its event continuation in `stop()`.
     private var eventConsumerTask: Task<Void, Never>?
 
+    /// Pending Tasks spawned to bridge MainActor-bound recording callbacks
+    /// back into TheGetaway. There is at most one in-flight delivery per
+    /// recording session, but storing the handle in a set keeps the
+    /// lifecycle-tracking pattern uniform with the rest of TheGetaway.
+    private var pendingRecordingTasks: Set<Task<Void, Never>> = []
+
     var stakeout: TheStakeout? {
         if case .recording(let stakeout) = recordingPhase { return stakeout }
         return nil
@@ -90,15 +96,11 @@ final class TheGetaway {
         let disconnect: @Sendable (Int) async -> Void = { clientId in
             await server.disconnect(clientId: clientId)
         }
-        let onAuthenticated: @Sendable (Int, @escaping @Sendable (Data) -> Void) -> Void = { [weak self] clientId, respond in
-            Task { @MainActor [weak self] in
-                self?.handleClientConnected(clientId, respond: respond)
-            }
+        let onAuthenticated: @MainActor @Sendable (Int, @escaping @Sendable (Data) -> Void) -> Void = { [weak self] clientId, respond in
+            self?.handleClientConnected(clientId, respond: respond)
         }
-        let onSessionActiveChanged: @Sendable (Bool) -> Void = { [weak self] isActive in
-            Task { @MainActor [weak self] in
-                self?.transport?.updateTXTRecord([TXTRecordKey.sessionActive.rawValue: isActive ? "1" : "0"])
-            }
+        let onSessionActiveChanged: @MainActor @Sendable (Bool) -> Void = { [weak self] isActive in
+            self?.transport?.updateTXTRecord([TXTRecordKey.sessionActive.rawValue: isActive ? "1" : "0"])
         }
         Task {
             await muscle.installCallbacks(
@@ -176,10 +178,21 @@ final class TheGetaway {
     func tearDown() {
         eventConsumerTask?.cancel()
         eventConsumerTask = nil
+        for task in pendingRecordingTasks {
+            task.cancel()
+        }
+        pendingRecordingTasks.removeAll()
         transport = nil
         hierarchyInvalidated = false
         completedRecording = nil
         pendingRecordingResponse = nil
+    }
+
+    /// Insert a Task into `pendingRecordingTasks` and prune already-completed
+    /// handles so the set does not grow across many recordings.
+    func trackRecordingTask(_ task: Task<Void, Never>) {
+        pendingRecordingTasks = pendingRecordingTasks.filter { !$0.isCancelled }
+        pendingRecordingTasks.insert(task)
     }
 
     // MARK: - Message Dispatch

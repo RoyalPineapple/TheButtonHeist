@@ -119,9 +119,58 @@ custom_rules:
 
   agent_callback_bridge_task:
     name: "Agent: single-line MainActor callback bridge"
-    regex: 'Task\s*\{\s*@MainActor\s+in\s+self\??\.\w+\([^)]*\)\s*\}'
+    # Single-line `Task { @MainActor in self.foo(...) }` and the `[weak self]`
+    # capture-list variant. The capture list may sit before or after `@MainActor`
+    # (Swift accepts both orderings). `self?\.` covers the weak-capture call form.
+    regex: 'Task\s*\{\s*(?:\[[^\]]*\]\s*)?@MainActor(?:\s+\[[^\]]*\])?\s+in\s+self\??\.\w+\([^)]*\)\s*\}'
     message: "Single-line `Task { @MainActor in self.foo(...) }` bridges fire-and-forget. Annotate the callback's isolation in its type and call it directly."
-    severity: warning
+    severity: error
+
+  agent_callback_bridge_task_multiline:
+    name: "Agent: multi-line MainActor callback bridge"
+    # Multi-line cousin of `agent_callback_bridge_task`. Matches the *opening*
+    # of an unstored `Task { @MainActor [weak self] in` whose body spans
+    # multiple lines. The leading anchor `^[ \t]+` is the key disambiguator:
+    # stored Tasks read as `let task = Task { @MainActor in` or
+    # `eventConsumerTask = Task { @MainActor in`, which never sit at the start
+    # of an indented line.
+    #
+    # The trailing negative-lookahead `(?![ \t]+guard\s+let\s+self\s+else\b)`
+    # excludes factory functions like `makePollingTask` that return the Task —
+    # those bodies open with `guard let self else { return }` before doing
+    # real work. The lookahead anchors before the indent so `[ \t]+`
+    # backtracking can't fool it. Callback bridges, by contrast, dive straight
+    # into a method call on `self?`, `self`, or a captured presenter.
+    # `included:` further restricts this to production source so test helpers
+    # (e.g. `TestSentinelTask.neverEndingTask`) that match the bare opener
+    # don't trip it.
+    regex: '^[ \t]+Task\s*\{\s*(?:\[[^\]]*\]\s*)?@MainActor(?:\s+\[[^\]]*\])?\s+in\s*\n(?![ \t]+guard\s+let\s+self\s+else\b)[ \t]+\S'
+    included: ".*/(ButtonHeist|ButtonHeistCLI|ButtonHeistMCP)/Sources/.*\\.swift$"
+    message: "Multi-line `Task { @MainActor in ... }` bridges fire-and-forget — no handle, no cancellation, no ordering guarantee. Annotate the callback's isolation in its declared closure type and call it directly, or store the Task on a tracked lifecycle field."
+    severity: error
+
+  agent_callback_bridge_task_unstored_await:
+    name: "Agent: unstored fire-and-forget actor-hop Task"
+    # Catches `Task { await self.foo(...) }` and `Task { await self?.foo(...) }`
+    # patterns spawned from NWConnection / NWListener callbacks (the audit's
+    # SimpleSocketServer 5.4 cluster, plus the two inner `self?` Tasks in
+    # 5.2's `showApprovalAlert`). The leading
+    # `^[ \t]+` anchor restricts this to statement-position Tasks — stored Tasks
+    # (`let task = Task { await ... }`, `pendingTasks.insert(Task { ... })`,
+    # `return Task { ... }`) never start at the line's indentation column.
+    # Scoped to production sources so test helpers that build returned tasks
+    # don't trip it.
+    regex: '^[ \t]+Task\s*\{\s*await\s+self\??\.'
+    included: ".*/(ButtonHeist|ButtonHeistCLI|ButtonHeistMCP)/Sources/.*\\.swift$"
+    message: "Unstored `Task { await self.foo(...) }` from a callback fires and forgets — there is no handle, so `stop()` / teardown cannot cancel work in flight. Track the Task in a `Set<Task<Void, Never>>` and cancel on teardown, or refactor the callback to call the actor method directly."
+    severity: error
+
+  # Known gap: bare `Task { await freeFunction() }` or `Task { await someActor.foo() }`
+  # in callback bodies is not caught. Adding it produces too many false positives
+  # on legitimate one-shot actor hops (`Task { await stakeout.noteScreenChange() }`
+  # in TheGetaway, `Task { await getaway.broadcastIfChanged() }` in TheInsideJob).
+  # The audit flagged these as 5.3 / 5.5 medium-severity — Wave 2b will track
+  # them by hand. Revisit if a structural distinguishing feature emerges.
 
   agent_unannotated_callback:
     name: "Agent: callback without isolation annotation"

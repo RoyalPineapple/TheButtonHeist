@@ -19,13 +19,40 @@ public final class TheInsideJob {
 
     // MARK: - Singleton
 
-    private static var _shared: TheInsideJob?
+    /// Pre-init configuration captured by ``configure(...)`` and consumed at
+    /// the first ``shared`` access. Once `shared` resolves, the state pins to
+    /// `.live` for the process lifetime and further `configure` calls are
+    /// ignored with a warning.
+    struct ConfigureArgs: Sendable {
+        let token: String?
+        let instanceId: String?
+        let allowedScopes: Set<ConnectionScope>?
+        let port: UInt16
+        let forceSwipeScrolling: Bool?
+    }
+
+    enum SharedState {
+        case pending(ConfigureArgs?)
+        case live(TheInsideJob)
+    }
+
+    private static var sharedState: SharedState = .pending(nil)
 
     public static var shared: TheInsideJob {
-        if let existing = _shared { return existing }
-        let instance = TheInsideJob()
-        _shared = instance
-        return instance
+        switch sharedState {
+        case .live(let existing):
+            return existing
+        case .pending(let args):
+            let instance = TheInsideJob(
+                token: args?.token,
+                instanceId: args?.instanceId,
+                allowedScopes: args?.allowedScopes,
+                port: args?.port ?? 0,
+                forceSwipeScrolling: args?.forceSwipeScrolling
+            )
+            sharedState = .live(instance)
+            return instance
+        }
     }
 
     public static func configure(
@@ -35,17 +62,19 @@ public final class TheInsideJob {
         port: UInt16 = 0,
         forceSwipeScrolling: Bool? = nil
     ) {
-        if _shared != nil {
-            insideJobLogger.warning("TheInsideJob.configure() called after already created — ignoring")
-            return
-        }
-        _shared = TheInsideJob(
+        let args = ConfigureArgs(
             token: token,
             instanceId: instanceId,
             allowedScopes: allowedScopes,
             port: port,
             forceSwipeScrolling: forceSwipeScrolling
         )
+        switch sharedState {
+        case .pending:
+            sharedState = .pending(args)
+        case .live:
+            insideJobLogger.warning("TheInsideJob.configure() called after already created — ignoring")
+        }
     }
 
     // MARK: - State Machines
@@ -61,6 +90,14 @@ public final class TheInsideJob {
         case disabled
         case active(task: Task<Void, Never>, interval: TimeInterval)
         case paused(interval: TimeInterval)
+    }
+
+    /// Idle-timer baseline state. We force `UIApplication.isIdleTimerDisabled`
+    /// on while the server is running so the device doesn't sleep mid-session,
+    /// and restore the prior value on suspend/stop.
+    enum IdleTimerProtection {
+        case unmodified
+        case engaged(baseline: Bool)
     }
 
     // MARK: - Properties
@@ -87,7 +124,7 @@ public final class TheInsideJob {
     /// observers). Cancelled and drained inside `start()` / `resume()` so a
     /// fresh start cannot interleave with a still-running shutdown.
     private var pendingLifecycleTasks: Set<Task<Void, Never>> = []
-    private var idleTimerBaseline: Bool?
+    private var idleTimerProtection: IdleTimerProtection = .unmodified
 
     // MARK: - Computed State
 
@@ -554,17 +591,17 @@ public final class TheInsideJob {
     }
 
     private func engageIdleTimerProtection() {
-        if idleTimerBaseline == nil {
-            idleTimerBaseline = UIApplication.shared.isIdleTimerDisabled
+        if case .unmodified = idleTimerProtection {
+            idleTimerProtection = .engaged(baseline: UIApplication.shared.isIdleTimerDisabled)
         }
         UIApplication.shared.isIdleTimerDisabled = true
     }
 
     private func restoreIdleTimerProtection(clearBaseline: Bool) {
-        guard let idleTimerBaseline else { return }
-        UIApplication.shared.isIdleTimerDisabled = idleTimerBaseline
+        guard case .engaged(let baseline) = idleTimerProtection else { return }
+        UIApplication.shared.isIdleTimerDisabled = baseline
         if clearBaseline {
-            self.idleTimerBaseline = nil
+            idleTimerProtection = .unmodified
         }
     }
 }

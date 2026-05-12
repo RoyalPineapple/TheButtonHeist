@@ -48,6 +48,12 @@ actor SimpleSocketServer {
     private var clientCounter = 0
     private var authDeadlineTasks: [Int: Task<Void, Never>] = [:]
 
+    /// Tasks that bridge `NWListener` / `NWConnection` callbacks into actor
+    /// isolation. Tracked via a lock-protected set so `stop()` can cancel
+    /// in-flight work — without tracking, a torn-down listener could still
+    /// have callback Tasks running against the stopped actor.
+    private let pendingCallbackTasks = OSAllocatedUnfairLock<Set<Task<Void, Never>>>(initialState: [])
+
     private let _syncListeningPort = OSAllocatedUnfairLock<UInt16>(initialState: 0)
 
     nonisolated var listeningPort: UInt16 {
@@ -155,7 +161,9 @@ actor SimpleSocketServer {
 
             newListener.newConnectionHandler = { [weak self] connection in
                 guard let self else { return }
-                Task { await self.handleNewConnection(connection) }
+                self.spawnTrackedTask { server in
+                    await server.handleNewConnection(connection)
+                }
             }
 
             newListener.start(queue: self.queue)
@@ -175,6 +183,14 @@ actor SimpleSocketServer {
         clients.removeAll()
         for task in authDeadlineTasks.values { task.cancel() }
         authDeadlineTasks.removeAll()
+        let pending = pendingCallbackTasks.withLock { tasks -> Set<Task<Void, Never>> in
+            let snapshot = tasks
+            tasks.removeAll()
+            return snapshot
+        }
+        for task in pending {
+            task.cancel()
+        }
         serverPhase = .stopped
         _syncListeningPort.withLock { $0 = 0 }
 
@@ -183,6 +199,20 @@ actor SimpleSocketServer {
         }
         listener.cancel()
         logger.info("Server stopped")
+    }
+
+    /// Spawn a Task that bridges an `NWListener` / `NWConnection` callback
+    /// into actor isolation, recording the handle so `stop()` can cancel
+    /// it. The closure body runs on `SimpleSocketServer`'s actor.
+    nonisolated private func spawnTrackedTask(_ body: @escaping @Sendable (SimpleSocketServer) async -> Void) {
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await body(self)
+        }
+        pendingCallbackTasks.withLock { tasks in
+            tasks = tasks.filter { !$0.isCancelled }
+            tasks.insert(task)
+        }
     }
 
     /// Send data to a specific client.
@@ -217,7 +247,9 @@ actor SimpleSocketServer {
                 logger.error("Send error to client \(clientId): \(error)")
             }
             guard let self else { return }
-            Task { await self.completedSend(clientId: clientId, byteCount: byteCount) }
+            self.spawnTrackedTask { server in
+                await server.completedSend(clientId: clientId, byteCount: byteCount)
+            }
         })
     }
 
@@ -338,7 +370,7 @@ actor SimpleSocketServer {
                 if let scopeFilter {
                     guard let host = Self.extractRemoteHost(from: connection) else {
                         logger.warning("Cannot classify connection endpoint, rejecting (scope filter active)")
-                        Task { await self.removeClient(clientId) }
+                        self.spawnTrackedTask { server in await server.removeClient(clientId) }
                         return
                     }
                     let interfaceNameList = (connection.currentPath?.availableInterfaces ?? []).map(\.name)
@@ -347,19 +379,21 @@ actor SimpleSocketServer {
                     let interfaceNames = interfaceNameList.joined(separator: ", ")
                     if !scopeFilter.contains(scope) {
                         logger.warning("Rejecting \(scope.rawValue) connection from \(hostDescription) via [\(interfaceNames)]")
-                        Task { await self.removeClient(clientId) }
+                        self.spawnTrackedTask { server in await server.removeClient(clientId) }
                         return
                     }
                     logger.info("Accepted \(scope.rawValue) connection from \(hostDescription) via [\(interfaceNames)]")
                 }
                 let remoteAddress = Self.extractRemoteHost(from: connection).map { "\($0)" }
                 logger.info("Client \(clientId) connected")
-                Task { await self.notifyClientConnected(clientId, address: remoteAddress) }
+                self.spawnTrackedTask { server in
+                    await server.notifyClientConnected(clientId, address: remoteAddress)
+                }
             case .failed(let error):
                 logger.error("Client \(clientId) failed: \(error)")
-                Task { await self.removeClient(clientId) }
+                self.spawnTrackedTask { server in await server.removeClient(clientId) }
             case .cancelled:
-                Task { await self.removeClient(clientId) }
+                self.spawnTrackedTask { server in await server.removeClient(clientId) }
             default:
                 break
             }
@@ -423,7 +457,7 @@ actor SimpleSocketServer {
         clients[clientId] = state
         callbacks.onRateLimited?(clientId) { [weak self] response in
             guard let self else { return }
-            Task { await self.send(response, to: clientId) }
+            self.spawnTrackedTask { server in await server.send(response, to: clientId) }
         }
     }
 
@@ -434,14 +468,16 @@ actor SimpleSocketServer {
     private func receiveNextChunk(clientId: Int, connection: NWConnection, buffer: Data) {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] content, _, isComplete, error in
             guard let self else { return }
-            Task { await self.handleReceivedData(
-                clientId: clientId,
-                connection: connection,
-                content: content,
-                isComplete: isComplete,
-                error: error,
-                buffer: buffer
-            )}
+            self.spawnTrackedTask { server in
+                await server.handleReceivedData(
+                    clientId: clientId,
+                    connection: connection,
+                    content: content,
+                    isComplete: isComplete,
+                    error: error,
+                    buffer: buffer
+                )
+            }
         }
     }
 
@@ -484,7 +520,7 @@ actor SimpleSocketServer {
                     } else {
                         callbacks.onDataReceived?(clientId, messageData) { [weak self] response in
                             guard let self else { return }
-                            Task { await self.send(response, to: clientId) }
+                            self.spawnTrackedTask { server in await server.send(response, to: clientId) }
                         }
                     }
                 } else {
@@ -494,7 +530,7 @@ actor SimpleSocketServer {
                     } else {
                         callbacks.onUnauthenticatedData?(clientId, messageData) { [weak self] response in
                             guard let self else { return }
-                            Task { await self.send(response, to: clientId) }
+                            self.spawnTrackedTask { server in await server.send(response, to: clientId) }
                         }
                     }
                 }

@@ -280,31 +280,50 @@ extension DiscoveredDevice {
 /// first: a successful status message, a disconnect, or the timeout.
 @ButtonHeistActor
 private final class ReachabilityResolver {
-    private var continuation: CheckedContinuation<Bool, Never>?
-    private var pendingResult: Bool?
+    /// Explicit three-state lifecycle replacing the prior
+    /// `(continuation: CheckedContinuation?, pendingResult: Bool?)` pair.
+    private enum State {
+        /// No awaiter has registered and no result has arrived.
+        case idle
+        /// An awaiter is parked on `continuation`, waiting for the first
+        /// `resolve(_:)` to fire.
+        case awaiting(CheckedContinuation<Bool, Never>)
+        /// A result arrived before any awaiter registered. The next
+        /// `await value` returns immediately.
+        case resolved(Bool)
+    }
+
+    private var state: State = .idle
 
     var value: Bool {
         get async {
             await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
-                if let pendingResult {
-                    continuation.resume(returning: pendingResult)
-                    return
+                switch state {
+                case .resolved(let value):
+                    continuation.resume(returning: value)
+                case .idle:
+                    state = .awaiting(continuation)
+                case .awaiting:
+                    // The resolver is one-shot — only one awaiter is ever
+                    // registered per instance. Reaching this case would
+                    // indicate a contract violation by the caller.
+                    preconditionFailure("ReachabilityResolver: second awaiter registered before resolve")
                 }
-                self.continuation = continuation
             }
         }
     }
 
     func resolve(_ value: Bool) {
-        if let continuation {
-            self.continuation = nil
+        switch state {
+        case .awaiting(let continuation):
+            state = .resolved(value)
             continuation.resume(returning: value)
+        case .idle:
+            state = .resolved(value)
+        case .resolved:
+            // Already resolved; ignore later signals (timeout firing after a
+            // successful resolve is a normal race).
             return
-        }
-        // Result arrived before any awaiter registered; remember it so the
-        // first `await value` returns immediately.
-        if pendingResult == nil {
-            pendingResult = value
         }
     }
 }
