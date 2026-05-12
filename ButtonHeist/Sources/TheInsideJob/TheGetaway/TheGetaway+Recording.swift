@@ -153,9 +153,18 @@ extension TheGetaway {
                 // are parked on `waitForRecording` and need the payload — but
                 // every other client gets the lightweight `.recordingStopped`
                 // notification, per the wire-protocol contract.
-                await muscle.sendData(payloadData, toClient: originator)
-                completedRecording = .none
-                recordingOriginatorClientId = nil
+                //
+                // Clear the cache ONLY after `sendData` confirms it handed the
+                // payload to a live transport closure. If the transport was
+                // torn down between the authenticated-set read and the send,
+                // `sendData` returns false and we keep the cached payload so a
+                // subsequent `stop_recording` (or `tearDown`) can still resolve
+                // it — never drop a recording into the void.
+                let delivered = await muscle.sendData(payloadData, toClient: originator)
+                if delivered {
+                    completedRecording = .none
+                    recordingOriginatorClientId = nil
+                }
                 if let stoppedData = encodeEnvelope(.recordingStopped) {
                     for otherClient in authenticated where otherClient != originator {
                         await muscle.sendData(stoppedData, toClient: otherClient)
@@ -206,6 +215,10 @@ extension TheGetaway {
         // already cleared on disconnect; this lets client B's stop request
         // own the in-flight payload routing.
         if let clientId {
+            // All authenticated clients in an active session are trusted peers
+            // (the cooperative co-driver model from #314); rebinding the
+            // originator on stop_recording here matches that contract, not the
+            // stricter "originator-only" identity model.
             recordingOriginatorClientId = clientId
         }
         pendingRecordingResponse = (requestId: requestId, respond: respond)

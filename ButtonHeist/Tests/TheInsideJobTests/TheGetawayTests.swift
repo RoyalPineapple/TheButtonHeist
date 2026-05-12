@@ -418,15 +418,11 @@ final class TheGetawayTests: XCTestCase {
     /// We can't drive the live stakeout in a unit test, but we can verify
     /// `handleStopRecording` rebinds the originator to the requesting
     /// client when called with a clientId.
-    func testStopRecordingRebindsOriginatorToRequestingClient() async {
+    func testStopRecordingDrainsCacheForRequestingClient() async {
         let (getaway, _, _) = makeGetaway()
         // Pre-cached completion from client A — picked up immediately, so
-        // we never reach the rebind path here. Instead, set the recording
-        // phase to a known state so we can observe the rebind on the
-        // path that parks a waiter. We can't easily construct a real
-        // TheStakeout here, so we exercise the cache-hit path: client B
-        // calls stop_recording after A finished and disconnected, which
-        // should clear the originator entirely.
+        // the cache-hit branch in `handleStopRecording` clears originator
+        // and drains the payload before ever reaching the rebind path.
         getaway.recordingOriginatorClientId = 7
         let payload = RecordingPayload(
             videoData: "AAAA",
@@ -443,6 +439,82 @@ final class TheGetawayTests: XCTestCase {
         if case .none = getaway.completedRecording { } else {
             XCTFail("Cache must drain after stop_recording pickup, got \(getaway.completedRecording)")
         }
+    }
+
+    /// PR #314 H3 / PR #348 M3: direct rebind coverage.
+    ///
+    /// Drives the parked-waiter path: no cached completion, but
+    /// `recordingPhase` is `.recording(stakeout:)` so `handleStopRecording`
+    /// skips the cache-hit early return, rebinds the originator to the
+    /// requesting client, and parks `pendingRecordingResponse`. The stubbed
+    /// stakeout is in `.idle` so `isRecording` returns false and
+    /// `stopRecording` is never invoked — the waiter stays parked and we
+    /// can inspect the rebind side effect synchronously.
+    func testStopRecordingRebindsOriginatorToRequestingClient() async {
+        let (getaway, _, _) = makeGetaway()
+
+        // A stakeout that's never been started: `isRecording` is false and
+        // `stopRecording` is a no-op on the idle phase. That lets us park
+        // a waiter without driving a real recording-complete callback.
+        let stubStakeout = TheStakeout(captureFrame: { @MainActor in nil })
+        getaway.recordingPhase = .recording(stakeout: stubStakeout)
+        getaway.recordingOriginatorClientId = 7
+        // No cache — force the function past the .succeeded/.failed early
+        // returns and into the rebind + park branch.
+        getaway.completedRecording = .none
+
+        await getaway.handleStopRecording(clientId: 42, requestId: "stop-from-b") { _ in }
+
+        XCTAssertEqual(
+            getaway.recordingOriginatorClientId,
+            42,
+            "Rebind must replace the originator with the requesting client"
+        )
+        XCTAssertNotNil(
+            getaway.pendingRecordingResponse,
+            "Parked-waiter path must store the pending response for the on-complete callback"
+        )
+        XCTAssertEqual(getaway.pendingRecordingResponse?.requestId, "stop-from-b")
+    }
+
+    /// Fix for cache-clear-before-send: when the transport is torn down
+    /// (`sendToClient` is nil on TheMuscle), the targeted send to the
+    /// originator silently no-ops. The cache must be preserved in that
+    /// case so a subsequent `stop_recording` (or tearDown) can still
+    /// resolve the payload — never drop a recording into the void.
+    func testAutoFinishWithTornDownTransportPreservesCache() async {
+        let (getaway, muscle, _) = makeGetaway()
+        // Mark client 7 as authenticated so the targeted-delivery branch
+        // is entered, then drop `sendToClient` so the send returns false
+        // and the cache must survive.
+        //
+        // `wireTransport` installs callbacks via a Task; await a yield to
+        // let that install complete before we tear it back down.
+        await Task.yield()
+        await muscle.installAuthenticatedClientForTest(7)
+        await muscle.clearSendToClientForTest()
+        getaway.recordingOriginatorClientId = 7
+
+        let payload = RecordingPayload(
+            videoData: "AAAA",
+            width: 100, height: 200,
+            duration: 1.0, frameCount: 8, fps: 8,
+            startTime: Date(), endTime: Date(),
+            stopReason: .maxDuration
+        )
+
+        await getaway.deliverRecordingResult(.success(payload))
+
+        guard case .succeeded(let cached) = getaway.completedRecording else {
+            XCTFail("Cache must be preserved when transport is torn down, got \(getaway.completedRecording)")
+            return
+        }
+        XCTAssertEqual(cached.frameCount, 8)
+        XCTAssertEqual(
+            getaway.recordingOriginatorClientId,
+            7,
+            "Originator must be preserved alongside the cache when delivery did not happen"
+        )
     }
 
     // MARK: - Helpers
