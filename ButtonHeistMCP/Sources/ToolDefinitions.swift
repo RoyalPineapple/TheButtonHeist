@@ -136,7 +136,11 @@ enum ToolDefinitions {
                 "detail": [
                     "type": "string",
                     "enum": .array(["summary", "full"].map { .string($0) }),
-                    "description": "Level of detail: summary (default, no geometry) or full (includes frame and activation point)",
+                    "description": """
+                        Level of detail. summary (default): identity fields, traits, and actions only \
+                        — no hint, customContent, frames, or activation points. full: adds VoiceOver \
+                        hint, customContent, frame, and activation point.
+                        """,
                 ],
                 "full": [
                     "type": "boolean",

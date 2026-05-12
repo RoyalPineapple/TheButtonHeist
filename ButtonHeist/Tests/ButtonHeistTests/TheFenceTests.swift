@@ -237,7 +237,11 @@ final class TheFenceTests: XCTestCase {
         XCTAssertEqual(nestedElement["frameY"] as? Double, 44)
     }
 
-    func testSummaryInterfaceJSONKeepsSemanticsAndOmitsGeometry() {
+    func testSummaryInterfaceJSONKeepsIdentityAndDropsHeavyFields() {
+        // Summary is the thin payload contract for agents polling the
+        // interface: identity fields (heistId, label, value, identifier,
+        // traits, actions) only. Heavy semantics (hint, customContent) and
+        // geometry (frame*, activationPoint*) require `detail = full`.
         let element = HeistElement(
             heistId: "wifi_toggle",
             description: "Wi-Fi",
@@ -250,6 +254,9 @@ final class TheFenceTests: XCTestCase {
             frameY: 44,
             frameWidth: 390,
             frameHeight: 44,
+            customContent: [
+                HeistCustomContent(label: "Signal", value: "Strong", isImportant: true)
+            ],
             actions: [.activate]
         )
         let containerInfo = ContainerInfo(
@@ -280,9 +287,48 @@ final class TheFenceTests: XCTestCase {
         let nestedElement = children[0]["element"] as! [String: Any]
         XCTAssertEqual(nestedElement["heistId"] as? String, "wifi_toggle")
         XCTAssertEqual(nestedElement["identifier"] as? String, "wifi")
-        XCTAssertEqual(nestedElement["hint"] as? String, "Double tap to toggle")
+        XCTAssertEqual(nestedElement["label"] as? String, "Wi-Fi")
+        XCTAssertEqual(nestedElement["value"] as? String, "On")
+        // Heavy semantics and geometry are full-only.
+        XCTAssertNil(nestedElement["hint"])
+        XCTAssertNil(nestedElement["customContent"])
         XCTAssertNil(nestedElement["frameY"])
         XCTAssertNil(nestedElement["activationPointY"])
+    }
+
+    func testFullInterfaceJSONIncludesHintAndCustomContent() {
+        let element = HeistElement(
+            heistId: "wifi_toggle",
+            description: "Wi-Fi",
+            label: "Wi-Fi",
+            value: "On",
+            identifier: "wifi",
+            hint: "Double tap to toggle",
+            traits: [.button],
+            frameX: 0,
+            frameY: 44,
+            frameWidth: 390,
+            frameHeight: 44,
+            customContent: [
+                HeistCustomContent(label: "Signal", value: "Strong", isImportant: true),
+                HeistCustomContent(label: "Network", value: "Home", isImportant: false),
+            ],
+            actions: [.activate]
+        )
+        let interface = Interface(timestamp: Date(), tree: [.element(element)])
+
+        let response = FenceResponse.interface(interface, detail: .full)
+        let json = response.jsonDict()!
+        let interfaceDict = json["interface"] as! [String: Any]
+        let tree = interfaceDict["tree"] as! [[String: Any]]
+        let nestedElement = tree[0]["element"] as! [String: Any]
+
+        XCTAssertEqual(nestedElement["hint"] as? String, "Double tap to toggle")
+        let customContent = nestedElement["customContent"] as? [String: Any]
+        XCTAssertNotNil(customContent)
+        XCTAssertNotNil(customContent?["important"])
+        XCTAssertNotNil(customContent?["default"])
+        XCTAssertEqual(nestedElement["frameY"] as? Double, 44)
     }
 
     func testCompactInterfaceUsesTreeAndSemanticFields() {
@@ -602,6 +648,117 @@ final class TheFenceTests: XCTestCase {
         // Geometry-only updates are dropped — and with no other edits, the
         // entire `edits` key is omitted from the delta dictionary.
         XCTAssertNil(deltaDict["edits"], "Geometry-only updates should be dropped entirely")
+    }
+
+    // MARK: - JSON Delta Tree Insertion Shape
+
+    /// Pin the wire shape of `deltaNodeDictionary` so the `folded()`
+    /// catamorphism refactor (and any future rewrite) can't silently regress.
+    /// Tree insertions are serialized at summary detail: identity fields are
+    /// kept, heavy semantics (hint, customContent) and geometry are dropped,
+    /// and nested containers recurse through the same fold.
+    func testActionResultDeltaInsertionPreservesNodeShape() {
+        let leafElement = HeistElement(
+            heistId: "child_leaf",
+            description: "Leaf",
+            label: "Leaf",
+            value: "v",
+            identifier: "leaf_id",
+            hint: "should be dropped",
+            traits: [.button],
+            frameX: 0,
+            frameY: 100,
+            frameWidth: 50,
+            frameHeight: 30,
+            customContent: [
+                HeistCustomContent(label: "Drop", value: "Me", isImportant: true)
+            ],
+            actions: [.custom("Inspect")]
+        )
+        let nestedContainerInfo = ContainerInfo(
+            type: .list,
+            frameX: 0,
+            frameY: 0,
+            frameWidth: 200,
+            frameHeight: 400
+        )
+        let outerContainerInfo = ContainerInfo(
+            type: .semanticGroup(label: "Outer", value: nil, identifier: nil),
+            frameX: 0,
+            frameY: 0,
+            frameWidth: 300,
+            frameHeight: 500
+        )
+        let outerNode: InterfaceNode = .container(outerContainerInfo, children: [
+            .element(leafElement),
+            .container(nestedContainerInfo, children: [
+                .element(leafElement),
+            ]),
+        ])
+
+        let delta: InterfaceDelta = .elementsChanged(.init(
+            elementCount: 3,
+            edits: ElementEdits(treeInserted: [
+                TreeInsertion(
+                    location: TreeLocation(parentId: nil, index: 0),
+                    node: outerNode
+                ),
+            ])
+        ))
+        let result = ActionResult(success: true, method: .activate, interfaceDelta: delta)
+        let response = FenceResponse.action(result: result)
+        let json = response.jsonDict()!
+
+        let deltaDict = json["delta"] as! [String: Any]
+        let editsDict = deltaDict["edits"] as! [String: Any]
+        let treeInserted = editsDict["treeInserted"] as! [[String: Any]]
+        XCTAssertEqual(treeInserted.count, 1)
+
+        let insertion = treeInserted[0]
+        XCTAssertNotNil(insertion["location"], "TreeInsertion carries a location wrapper")
+        let nodeDict = insertion["node"] as! [String: Any]
+
+        // Top-level node is a container: `{"container": {type, children, …}}`.
+        let outerContainer = nodeDict["container"] as! [String: Any]
+        XCTAssertEqual(outerContainer["type"] as? String, "semanticGroup")
+        XCTAssertEqual(outerContainer["label"] as? String, "Outer")
+        // Summary detail: container frames are dropped.
+        XCTAssertNil(outerContainer["frameX"])
+        XCTAssertNil(outerContainer["frameWidth"])
+
+        let outerChildren = outerContainer["children"] as! [[String: Any]]
+        XCTAssertEqual(outerChildren.count, 2)
+
+        // Child 0: leaf element keyed under "element".
+        let childElement = outerChildren[0]["element"] as! [String: Any]
+        XCTAssertEqual(childElement["heistId"] as? String, "child_leaf")
+        XCTAssertEqual(childElement["label"] as? String, "Leaf")
+        XCTAssertEqual(childElement["value"] as? String, "v")
+        XCTAssertEqual(childElement["identifier"] as? String, "leaf_id")
+        XCTAssertNotNil(childElement["traits"])
+        XCTAssertNotNil(childElement["actions"])
+        // Summary drops heavy semantics and geometry.
+        XCTAssertNil(childElement["hint"])
+        XCTAssertNil(childElement["customContent"])
+        XCTAssertNil(childElement["frameX"])
+        XCTAssertNil(childElement["frameY"])
+        XCTAssertNil(childElement["frameWidth"])
+        XCTAssertNil(childElement["frameHeight"])
+        XCTAssertNil(childElement["activationPointX"])
+        XCTAssertNil(childElement["activationPointY"])
+        // Delta nodes carry no traversal-order index.
+        XCTAssertNil(childElement["order"])
+
+        // Child 1: nested container recurses through the same fold.
+        let nestedContainer = outerChildren[1]["container"] as! [String: Any]
+        XCTAssertEqual(nestedContainer["type"] as? String, "list")
+        XCTAssertNil(nestedContainer["frameX"])
+        let nestedChildren = nestedContainer["children"] as! [[String: Any]]
+        XCTAssertEqual(nestedChildren.count, 1)
+        let nestedLeaf = nestedChildren[0]["element"] as! [String: Any]
+        XCTAssertEqual(nestedLeaf["heistId"] as? String, "child_leaf")
+        XCTAssertNil(nestedLeaf["hint"])
+        XCTAssertNil(nestedLeaf["frameX"])
     }
 
     // MARK: - FenceError
