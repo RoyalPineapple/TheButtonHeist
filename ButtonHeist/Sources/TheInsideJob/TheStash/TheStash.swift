@@ -25,8 +25,35 @@ final class TheStash {
     // MARK: - Mutable State
 
     /// The one piece of mutable state — the latest committed screen value.
-    /// Set by callers after `parse()`, or seeded from `merging(_:)` at the
-    /// end of an exploration cycle.
+    ///
+    /// **Dual contract — same field, two phases:**
+    ///
+    /// 1. **Outside an exploration cycle** (and during one, between scrolls)
+    ///    `currentScreen` is **page-only**: the result of the most recent
+    ///    `parse()`. `heistIds`/`viewportIds` reflect exactly what's on screen
+    ///    right now. This is what the settle loop and `scrollOnePageAndSettle`
+    ///    termination heuristics need — they compare `stash.viewportIds`
+    ///    across frames to detect movement, which only works if the field
+    ///    flips with each commit after parse.
+    ///
+    /// 2. **At the end of `Navigation.exploreAndPrune`** the local `union: Screen`
+    ///    accumulator is committed here. The unioned `elements` map now
+    ///    includes off-screen heistIds observed during scrolling, but the
+    ///    page-only fields (`hierarchy`, `heistIdByElement`,
+    ///    `firstResponderHeistId`) still come from the last parse via
+    ///    `Screen.merging` semantics. Hence `viewportIds` becomes a superset
+    ///    of `liveViewportIds` until the next non-exploration parse.
+    ///
+    /// **Writer audit** — the call sites that set this field:
+    /// - `refresh()` — single parse + commit (page-only)
+    /// - `Navigation+Explore.exploreContainer` mid-loop — page-only commits
+    ///   per scroll page, required for the termination heuristics above
+    /// - `Navigation+Explore.exploreAndPrune` end-of-cycle — union commit
+    /// - `clearCache()` / `clearScreen()` — reset to `.empty`
+    /// - `TheBrains.actionResultWithDelta` — page-only commit after settle
+    ///
+    /// Readers that specifically want "what's on screen right now" (vs the
+    /// post-exploration union) read `liveViewportIds`, not `viewportIds`.
     var currentScreen: Screen = .empty
 
     /// Hash of the last hierarchy sent to subscribers (for polling comparison).

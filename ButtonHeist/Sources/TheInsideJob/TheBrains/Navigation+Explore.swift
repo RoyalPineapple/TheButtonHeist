@@ -17,6 +17,15 @@ import AccessibilitySnapshotParser
 // `currentScreen` keep in-cycle scroll-termination checks (viewport change
 // detection) working — they read `stash.viewportIds`, which mirrors the
 // latest page-only parse, not the in-flight union.
+//
+// `stash.currentScreen` therefore plays two roles:
+//   1. During a cycle (between scrolls): page-only, rebound by each parse —
+//      this is what `stash.viewportIds`, `liveViewportIds`, and
+//      `firstResponderHeistId` read.
+//   2. At end-of-cycle: the committed union — `elements` includes off-screen
+//      heistIds; `hierarchy` and the live indices still come from the final
+//      parse (see `Screen.merging`). Strict heistId resolution still works
+//      from `elements`; off-screen elements need a re-scroll to act on.
 
 extension Navigation {
 
@@ -30,9 +39,20 @@ extension Navigation {
     /// committed to `stash.currentScreen` so subsequent operations can act on
     /// off-screen content (with the documented strict-by-default activation
     /// rule for later refreshes).
+    ///
+    /// Phase contract on `stash.currentScreen`:
+    /// - During this call, `stash.currentScreen` is **page-only** — rebound
+    ///   to the latest parse after every scroll. Termination heuristics
+    ///   (`stash.viewportIds == before`) depend on this.
+    /// - On return, `stash.currentScreen` is the **union** — all elements
+    ///   observed during this exploration, with `hierarchy` from the final
+    ///   parse only (see `Screen.merging`).
     func exploreAndPrune(target: ElementTarget? = nil) async -> ScreenManifest {
         var union = stash.currentScreen
         let manifest = await exploreScreen(target: target, union: &union)
+        // End-of-cycle union commit: `currentScreen.elements` now contains
+        // off-screen heistIds. `liveViewportIds` still reflects the last
+        // parsed page; `viewportIds` is the union.
         stash.currentScreen = union
         return manifest
     }
@@ -160,6 +180,11 @@ extension Navigation {
                     scrollTarget, direction: toLeading, animated: false
                 )
                 if moved, let parsed = stash.parse() {
+                    // Page-only commit: rebinds `stash.currentScreen` to the
+                    // latest parse so the `stash.viewportIds == before`
+                    // termination check below compares page-to-page, not
+                    // page-to-in-flight-union. The union accumulator stays
+                    // local until `exploreAndPrune` commits at end-of-cycle.
                     stash.currentScreen = parsed
                     union = union.merging(parsed)
                 }
@@ -180,6 +205,11 @@ extension Navigation {
             guard moved else { break }
             manifest.scrollCount += 1
             if let parsed = stash.parse() {
+                // Page-only commit: `visibleElementsInContainer` (called
+                // below) reads `stash.viewportIds`, which must reflect the
+                // page just parsed — not the in-flight union — for the
+                // page-stitch loop to detect new on-screen elements. The
+                // union accumulator absorbs `parsed` into `elements`.
                 stash.currentScreen = parsed
                 union = union.merging(parsed)
             }
