@@ -16,7 +16,7 @@ final class TheGetawayTests: XCTestCase {
 
     // MARK: - Test Wiring
 
-    private func makeGetaway() -> (TheGetaway, TheMuscle, ServerTransport) {
+    private func makeGetaway() async -> (TheGetaway, TheMuscle, ServerTransport) {
         let muscle = TheMuscle(explicitToken: "test-token")
         let tripwire = TheTripwire()
         let brains = TheBrains(tripwire: tripwire)
@@ -27,7 +27,7 @@ final class TheGetawayTests: XCTestCase {
         )
         let getaway = TheGetaway(muscle: muscle, brains: brains, tripwire: tripwire, identity: identity)
         let transport = ServerTransport()
-        getaway.wireTransport(transport)
+        await getaway.wireTransport(transport)
         return (getaway, muscle, transport)
     }
 
@@ -47,7 +47,7 @@ final class TheGetawayTests: XCTestCase {
     /// transitions the client to `.helloValidated`, which `helloValidatedClients`
     /// reflects.
     func testClientConnectedIsObservedBeforeDataReceived() async throws {
-        let (getaway, muscle, transport) = makeGetaway()
+        let (getaway, muscle, transport) = await makeGetaway()
         // The consumer Task captures `self` weakly, so we must retain
         // `getaway` for the lifetime of the test or the for-await loop
         // exits on the very first event.
@@ -91,7 +91,7 @@ final class TheGetawayTests: XCTestCase {
     /// is processed in FIFO order. This guards against any future regression
     /// where someone reintroduces a per-event `Task` and reopens the race.
     func testEventOrderingIsFIFOForBurstYield() async throws {
-        let (getaway, muscle, transport) = makeGetaway()
+        let (getaway, muscle, transport) = await makeGetaway()
         _ = getaway
 
         let helloEnvelope = RequestEnvelope(message: .clientHello)
@@ -134,7 +134,7 @@ final class TheGetawayTests: XCTestCase {
     /// auto-finish path runs (no pending response is consumed; the result
     /// is stashed in `completedRecording` for any later collection too).
     func testAutoFinishWithoutPendingStopBroadcastsRecording() async {
-        let (getaway, _, _) = makeGetaway()
+        let (getaway, _, _) = await makeGetaway()
         XCTAssertNil(getaway.pendingRecordingResponse)
         if case .none = getaway.completedRecording {} else {
             XCTFail("Expected .none completedRecording before deliver, got \(getaway.completedRecording)")
@@ -167,7 +167,7 @@ final class TheGetawayTests: XCTestCase {
     /// broadcasting. The pending slot must clear and the pending requestId
     /// must echo back to the originator.
     func testStopRecordingWaiterReceivesRecordingDirectly() async {
-        let (getaway, _, _) = makeGetaway()
+        let (getaway, _, _) = await makeGetaway()
 
         var receivedData: Data?
         getaway.pendingRecordingResponse = (
@@ -212,7 +212,7 @@ final class TheGetawayTests: XCTestCase {
     /// orphaning one of them. The fix adds a transient `.starting` sentinel
     /// written before the first await so the second caller is rejected.
     func testConcurrentStartRecordingRejectsSecond() async {
-        let (getaway, _, _) = makeGetaway()
+        let (getaway, _, _) = await makeGetaway()
 
         // Drive two start_recording calls in tight succession from the same
         // MainActor context. Both reach `handleStartRecording` before either
@@ -272,7 +272,7 @@ final class TheGetawayTests: XCTestCase {
     /// that two sequential `handleStartRecording` calls in a no-screen
     /// environment never leave the phase stuck.
     func testFailedStartRollsBackToIdle() async {
-        let (getaway, _, _) = makeGetaway()
+        let (getaway, _, _) = await makeGetaway()
 
         await getaway.handleStartRecording(RecordingConfig(), requestId: "a") { _ in }
         // If the first call succeeded (we ended in .recording), let it stay —

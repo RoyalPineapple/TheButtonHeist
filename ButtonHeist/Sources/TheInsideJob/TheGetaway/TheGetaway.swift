@@ -68,7 +68,19 @@ final class TheGetaway {
 
     // MARK: - Transport Wiring
 
-    func wireTransport(_ transport: ServerTransport) {
+    /// Wire a transport to the crew.
+    ///
+    /// Async because `muscle.installCallbacks(...)` must complete *before* any
+    /// transport event consumer starts. The previous shape kicked off an
+    /// unstructured `Task { await muscle.installCallbacks(...) }` and returned
+    /// synchronously; the caller then immediately ran `transport.start(...)`
+    /// and the event consumer began accepting `.clientConnected` events. Task
+    /// submission onto an actor's mailbox is not FIFO across separately-rooted
+    /// Tasks, so the first `.clientConnected` could race ahead of the install
+    /// — `sendToClient` was still nil — and the serverHello was silently
+    /// dropped. Awaiting `installCallbacks` inline closes that race for both
+    /// `start()` and `resume()`. See finding PR #352 (High) and #359 M1.
+    func wireTransport(_ transport: ServerTransport) async {
         self.transport = transport
 
         // Install actor-isolated callbacks on TheMuscle. Each callback is
@@ -80,7 +92,6 @@ final class TheGetaway {
         // MainActor and keeps `[weak transport]` (the hop makes the capture
         // safe). `handleClientConnected` is `@MainActor`, so the
         // onClientAuthenticated bridge hops through an unstructured Task too.
-        let muscle = self.muscle
         let server = transport.server
         // These closures are awaited inline at every TheMuscle call site so
         // back-to-back sends/disconnects from one logical operation execute
@@ -103,15 +114,18 @@ final class TheGetaway {
         let onSessionActiveChanged: @MainActor @Sendable (Bool) -> Void = { [weak self] isActive in
             self?.transport?.updateTXTRecord([TXTRecordKey.sessionActive.rawValue: isActive ? "1" : "0"])
         }
-        Task {
-            await muscle.installCallbacks(
-                sendToClient: sendToClient,
-                markClientAuthenticated: markAuth,
-                disconnectClient: disconnect,
-                onClientAuthenticated: onAuthenticated,
-                onSessionActiveChanged: onSessionActiveChanged
-            )
-        }
+        // Awaited inline: the event consumer below must not see a
+        // `.clientConnected` before `sendToClient` and friends are installed.
+        // There is no prior install Task to cancel — every call to
+        // `wireTransport` simply awaits and reinstalls cleanly, so re-wiring
+        // on `resume()` is safe by construction.
+        await muscle.installCallbacks(
+            sendToClient: sendToClient,
+            markClientAuthenticated: markAuth,
+            disconnectClient: disconnect,
+            onClientAuthenticated: onAuthenticated,
+            onSessionActiveChanged: onSessionActiveChanged
+        )
 
         // Keepalives must be answered even when the main actor is wedged on a
         // long parse/settle/explore. The interceptor decodes and replies on
