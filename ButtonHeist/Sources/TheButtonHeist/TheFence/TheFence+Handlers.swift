@@ -16,7 +16,7 @@ extension TheFence {
         // Full mode (default): explore the screen, return all discovered elements
         if full {
             let result = try await sendAndAwaitAction(.explore, timeout: Timeouts.exploreSeconds)
-            lastActionResult = result
+            lastActionHistory = .completed(result)
             guard case .explore(let exploreResult) = result.payload else {
                 return .error("Explore failed: \(result.message ?? "unknown error")")
             }
@@ -291,7 +291,7 @@ extension TheFence {
             }
             let scrollToVisibleTarget = ScrollToVisibleTarget(elementTarget: target)
             let result = try await sendAndAwaitAction(.scrollToVisible(scrollToVisibleTarget), timeout: Timeouts.actionSeconds)
-            lastActionResult = result
+            lastActionHistory = .completed(result)
             return .action(result: result)
         case .elementSearch:
             guard let target = try elementTarget(args) else {
@@ -310,7 +310,7 @@ extension TheFence {
                 direction: direction
             )
             let result = try await sendAndAwaitAction(.elementSearch(searchTarget), timeout: Timeouts.longActionSeconds)
-            lastActionResult = result
+            lastActionHistory = .completed(result)
             return .action(result: result)
         case .scrollToEdge:
             guard let edgeValue = args.string("edge") else {
@@ -387,7 +387,7 @@ extension TheFence {
         let result = try await sendAndAwaitAction(.typeText(TypeTextTarget(
             text: text, deleteCount: deleteCount, clearFirst: clearFirst, elementTarget: try elementTarget(args)
         )), timeout: Timeouts.longActionSeconds)
-        lastActionResult = result
+        lastActionHistory = .completed(result)
         return .action(result: result)
     }
 
@@ -426,7 +426,7 @@ extension TheFence {
             timeout: args.number("timeout")
         )
         let result = try await sendAndAwaitAction(.waitFor(waitForTarget), timeout: waitForTarget.resolvedTimeout + 5)
-        lastActionResult = result
+        lastActionHistory = .completed(result)
         return .action(result: result)
     }
 
@@ -437,7 +437,7 @@ extension TheFence {
         let timeout = args.number("timeout")
         let target = WaitForChangeTarget(expect: expectation, timeout: timeout)
         let result = try await sendAndAwaitAction(.waitForChange(target), timeout: target.resolvedTimeout + 5)
-        lastActionResult = result
+        lastActionHistory = .completed(result)
         return .action(result: result)
     }
 

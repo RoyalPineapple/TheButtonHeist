@@ -31,10 +31,11 @@ final class TheGetaway {
 
     // MARK: - State
 
-    // `RecordingPhase` and its handlers live in TheGetaway+Recording.swift.
+    // `RecordingPhase`, `RecordingOutcome`, and their handlers live in
+    // TheGetaway+Recording.swift.
     var recordingPhase: RecordingPhase = .idle
     var hierarchyInvalidated = false
-    var completedRecording: Result<RecordingPayload, Error>?
+    var completedRecording: RecordingOutcome = .none
     var pendingRecordingResponse: (requestId: String?, respond: (Data) -> Void)?
 
     /// Current transport — set by `wireTransport`, cleared on teardown.
@@ -184,7 +185,7 @@ final class TheGetaway {
         pendingRecordingTasks.removeAll()
         transport = nil
         hierarchyInvalidated = false
-        completedRecording = nil
+        completedRecording = .none
         pendingRecordingResponse = nil
     }
 

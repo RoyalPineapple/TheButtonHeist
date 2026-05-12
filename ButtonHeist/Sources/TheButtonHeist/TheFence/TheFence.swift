@@ -738,7 +738,7 @@ public final class TheFence {
 
     func sendAction(_ message: ClientMessage) async throws -> FenceResponse {
         let result = try await sendAndAwaitAction(message, timeout: Timeouts.actionSeconds)
-        lastActionResult = result
+        lastActionHistory = .completed(result)
         return .action(result: result)
     }
 
@@ -817,7 +817,21 @@ public final class TheFence {
 
     // MARK: - Last Action / Latency Tracking
 
-    var lastActionResult: ActionResult?
+    /// Two-phase action history: `.unrun` before any action has completed,
+    /// `.completed` once one has. Display state derives from the active case;
+    /// no caller has to guard a nullable to know whether an action ever ran.
+    enum LastActionHistory {
+        case unrun
+        case completed(ActionResult)
+    }
+
+    var lastActionHistory: LastActionHistory = .unrun
+
+    /// Convenience read of the last completed action's result, if any.
+    var lastActionResult: ActionResult? {
+        if case .completed(let result) = lastActionHistory { return result }
+        return nil
+    }
     /// Round-trip time in milliseconds for the last action command that
     /// completed (request issued → response received).
     private(set) var lastLatencyMs: Int = 0

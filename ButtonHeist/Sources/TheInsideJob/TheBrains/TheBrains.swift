@@ -255,7 +255,7 @@ final class TheBrains {
     func clearCache() {
         stash.clearCache()
         navigation.clearCache()
-        lastSentState = nil
+        broadcastHistory = .fresh
     }
 
     // MARK: - Response State Tracking
@@ -267,25 +267,39 @@ final class TheBrains {
         let screenId: String?
     }
 
-    /// The state of the last response sent to the driver.
-    private(set) var lastSentState: SentState?
+    /// Two-phase broadcast history: `.fresh` before the first response, and
+    /// `.sent` once a response has been recorded. Modelled as an enum so the
+    /// "never sent" case is structurally distinct from any sent state — every
+    /// caller must handle it explicitly rather than guarding against `nil`.
+    enum BroadcastHistory {
+        case fresh
+        case sent(SentState)
+    }
+
+    private(set) var broadcastHistory: BroadcastHistory = .fresh
+
+    /// The state of the last response sent to the driver, if any.
+    var lastSentState: SentState? {
+        if case .sent(let state) = broadcastHistory { return state }
+        return nil
+    }
 
     /// Snapshot current state as "last sent" — call after every response to the driver.
     func recordSentState() {
-        lastSentState = SentState(
+        broadcastHistory = .sent(SentState(
             treeHash: stash.wireTreeHash(),
             beforeState: captureBeforeState(),
             screenId: stash.lastScreenId
-        )
+        ))
     }
 
     /// Record sent state from an already-known hash (avoids redundant wire conversion).
     func recordSentState(treeHash: Int) {
-        lastSentState = SentState(
+        broadcastHistory = .sent(SentState(
             treeHash: treeHash,
             beforeState: captureBeforeState(),
             screenId: stash.lastScreenId
-        )
+        ))
     }
 
     // MARK: - Broadcast Support
@@ -311,7 +325,7 @@ final class TheBrains {
 
     /// Check if the accessibility tree changed since the last response.
     func computeBackgroundDelta() -> InterfaceDelta? {
-        guard let sent = lastSentState, sent.treeHash != 0 else { return nil }
+        guard case .sent(let sent) = broadcastHistory, sent.treeHash != 0 else { return nil }
         guard refresh() != nil else { return nil }
         let snapshot = stash.selectElements()
         let currentHash = stash.wireTreeHash()
@@ -325,12 +339,15 @@ final class TheBrains {
 
     /// Whether the screen changed since the last response (for fast-redirect logic).
     var screenChangedSinceLastSent: Bool {
-        guard let sent = lastSentState else { return false }
+        guard case .sent(let sent) = broadcastHistory else { return false }
         return sent.screenId != stash.lastScreenId
     }
 
     /// Screen ID from the last response, for diagnostic messages.
-    var lastSentScreenId: String? { lastSentState?.screenId }
+    var lastSentScreenId: String? {
+        if case .sent(let sent) = broadcastHistory { return sent.screenId }
+        return nil
+    }
 
     // MARK: - Wait For Idle
 
@@ -363,7 +380,10 @@ final class TheBrains {
         }
 
         // Fast path: tree already changed since the last response
-        let lastHash = lastSentState?.treeHash ?? 0
+        let lastHash: Int = {
+            if case .sent(let sent) = broadcastHistory { return sent.treeHash }
+            return 0
+        }()
         if lastHash != 0, initial.wireHash != lastHash {
             let delta = computeDelta(before: before, afterSnapshot: initial.snapshot)
             if let result = evaluateWaitForChange(

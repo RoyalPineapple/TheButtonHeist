@@ -441,7 +441,7 @@ final class BookKeeperHeistTests: XCTestCase {
         // overwrite the malformed bytes — then there'd be nothing for the skip path
         // to exercise.
         guard case .active(let session) = bookKeeper.phase,
-              let recording = session.heistRecording else {
+              case .recording(let recording) = session.heistRecording else {
             return XCTFail("Expected active heist recording")
         }
         recording.fileHandle.write(Data("this-is-not-json\n".utf8))
