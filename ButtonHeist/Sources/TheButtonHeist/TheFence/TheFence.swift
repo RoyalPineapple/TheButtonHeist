@@ -770,8 +770,8 @@ public final class TheFence {
             return try await tracker.wait(requestId: requestId, timeout: timeout) {
                 self.handoff.send(message, requestId: requestId)
             }
-        } catch is CancellationError {
-            throw CancellationError()
+        } catch let error as CancellationError {
+            throw error
         } catch {
             throw mapCaughtError(error)
         }
