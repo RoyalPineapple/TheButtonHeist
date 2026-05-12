@@ -96,6 +96,16 @@ public final class TheInsideJob {
         case engaged(baseline: Bool)
     }
 
+    /// Mutable holder for a `Task` handle that the Task's own body needs to
+    /// reference (for self-removal from `pendingLifecycleTasks`). The
+    /// create-then-assign dance is unavoidable: the closure captures the
+    /// holder, but the Task that owns the closure must exist before its
+    /// handle can be stored. Inherits @MainActor isolation from the
+    /// enclosing type so reads/writes serialize naturally.
+    final class TaskHolder {
+        var task: Task<Void, Never>?
+    }
+
     // MARK: - Properties
 
     var serverPhase: ServerPhase = .stopped
@@ -119,6 +129,11 @@ public final class TheInsideJob {
     /// observers). Cancelled and drained inside `start()` / `resume()` so a
     /// fresh start cannot interleave with a still-running shutdown.
     private var pendingLifecycleTasks: Set<Task<Void, Never>> = []
+    /// The Task spawned from `appWillEnterForeground` to bridge `@objc` ->
+    /// `async resume()`. Kept out of `pendingLifecycleTasks` so `resume()`'s
+    /// own drain cannot deadlock by awaiting its own handle. Tests observe
+    /// it to wait on a foreground resume cycle synchronously.
+    var pendingForegroundResumeTask: Task<Void, Never>?
     private var idleTimerProtection: IdleTimerProtection = .unmodified
 
     // MARK: - Computed State
@@ -156,6 +171,11 @@ public final class TheInsideJob {
     }
 
     var stakeout: TheStakeout? { getaway.stakeout }
+
+    /// Test hook: `pendingLifecycleTasks` is private state but tests assert
+    /// it drains after completed Tasks self-remove. Exposed as a Bool so
+    /// the underlying Set stays encapsulated.
+    var pendingLifecycleTasksIsEmpty: Bool { pendingLifecycleTasks.isEmpty }
 
     private static let defaultPollingTimeout: TimeInterval = 2.0
 
@@ -254,6 +274,9 @@ public final class TheInsideJob {
         if case .resuming(let task) = serverPhase {
             task.cancel()
         }
+
+        pendingForegroundResumeTask?.cancel()
+        pendingForegroundResumeTask = nil
 
         if case .running(let activeTransport) = serverPhase {
             pendingTransportStopTask = activeTransport.stop()
@@ -410,7 +433,17 @@ public final class TheInsideJob {
     }
 
     @objc private func appWillEnterForeground() {
-        resume()
+        // resume() drains pendingLifecycleTasks itself before checking phase,
+        // so the foreground bridge Task is NOT enrolled in that tracker —
+        // enrolling it would force resume()'s drain to await its own handle
+        // and deadlock. Tracked entries are reserved for shutdown wrappers
+        // (suspend/stop) that start()/resume() observe before re-arming. We
+        // store the handle in a dedicated field so tests can observe it.
+        pendingForegroundResumeTask?.cancel()
+        pendingForegroundResumeTask = Task { @MainActor [weak self] in
+            await self?.resume()
+            self?.pendingForegroundResumeTask = nil
+        }
     }
 
     @objc private func appWillTerminate() {
@@ -424,16 +457,27 @@ public final class TheInsideJob {
     /// retained in `pendingLifecycleTasks` so callers that resume the server
     /// (`start()` / `resume()`) can await prior shutdowns before they begin.
     ///
-    /// Completed handles stay in the set until the next drain in
-    /// `awaitPendingLifecycleTasks()`. Awaiting a completed `Task.value`
-    /// returns immediately, so a few stale entries are harmless. They cannot
-    /// accumulate: every lifecycle transition that follows an @objc-spawned
-    /// shutdown is itself a `start()` or `resume()` and drains the set.
-    private func spawnLifecycleTask(_ body: @escaping @MainActor () async -> Void) {
-        let task = Task { @MainActor in
+    /// Each Task removes itself from the set on completion so handles do not
+    /// accumulate across many lifecycle transitions. The self-removal runs
+    /// after `body()` returns, on the same `@MainActor` isolation as the set,
+    /// so `awaitPendingLifecycleTasks()` callers either see the live handle
+    /// (and await it) or see it already gone (because it finished).
+    func spawnLifecycleTask(_ body: @escaping @MainActor () async -> Void) {
+        // The handle removes itself from the set after `body()` returns so
+        // the set does not grow without bound across many lifecycle cycles.
+        // We rely on the same `@MainActor` isolation for the outer
+        // assignment to `holder.task` and the closure's read of it — both
+        // run on the main actor, so the box is single-threaded by
+        // construction even though it bridges the create/run-then-self-
+        // remove sequence.
+        let holder = TaskHolder()
+        let created = Task { @MainActor [weak self] in
             await body()
+            guard let self, let handle = holder.task else { return }
+            self.pendingLifecycleTasks.remove(handle)
         }
-        pendingLifecycleTasks.insert(task)
+        holder.task = created
+        pendingLifecycleTasks.insert(created)
     }
 
     /// Wait for any in-flight lifecycle tasks (suspend/stop wrappers spawned
@@ -482,17 +526,22 @@ public final class TheInsideJob {
         insideJobLogger.info("Server suspended")
     }
 
-    private func resume() {
+    func resume() async {
+        // Drain any in-flight suspend Task spawned from @objc background
+        // observers BEFORE checking serverPhase. A rapid background→foreground
+        // cycle delivers `appDidEnterBackground` and `appWillEnterForeground`
+        // back-to-back on the @MainActor; the suspend wrapper Task may not have
+        // run its body yet, so `serverPhase` is still `.running` when resume
+        // arrives. Without this drain we'd fall through the `.suspended` guard
+        // and silently no-op, leaving the server dead after foreground.
+        await awaitPendingLifecycleTasks()
+
         guard case .suspended = serverPhase else { return }
 
         insideJobLogger.info("Resuming server...")
 
         let task = Task { @MainActor [weak self] in
             guard let self else { return }
-            // Drain any in-flight suspend Task spawned from @objc background
-            // observers — its tearDown may still be cancelling lockoutTasks
-            // when foreground fires immediately after background.
-            await self.awaitPendingLifecycleTasks()
             var startedTransport: ServerTransport?
             do {
                 try Task.checkCancellation()
