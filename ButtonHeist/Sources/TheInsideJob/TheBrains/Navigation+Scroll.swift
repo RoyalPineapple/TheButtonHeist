@@ -66,7 +66,7 @@ extension Navigation {
                     frame: screenFrame, direction: direction
                 )
             } else {
-                await tripwire.yieldFrames(3)
+                await tripwire.yieldFrames(Self.postScrollLayoutFrames)
             }
             refresh()
             return (true, before)
@@ -260,7 +260,7 @@ extension Navigation {
         case .swipeable:
             let direction = Self.edgeDirection(for: target.edge)
             var didMove = false
-            for _ in 0..<50 {
+            for _ in 0..<Self.scrollToEdgeMaxPages {
                 let (stepped, before) = await scrollOnePageAndSettle(
                     scrollTarget, direction: direction
                 )
@@ -310,11 +310,11 @@ extension Navigation {
         if case .heistId(let heistId) = elementTarget,
            let entry = stash.currentScreen.findElement(heistId: heistId),
            stash.jumpToRecordedPosition(entry) != nil {
-            await tripwire.yieldRealFrames(20)
+            await tripwire.yieldRealFrames(Self.postJumpRealFrames)
             refresh()
             if let found = stash.resolveFirstMatch(elementTarget) {
                 ensureOnScreenSync(found)
-                await tripwire.yieldRealFrames(20)
+                await tripwire.yieldRealFrames(Self.postJumpRealFrames)
                 refresh()
                 if stash.resolveFirstMatch(elementTarget) != nil {
                     return TheSafecracker.InteractionResult(success: true, method: .scrollToVisible, message: nil, value: nil)
@@ -349,14 +349,14 @@ extension Navigation {
         if case .heistId(let heistId) = searchTarget,
            let entry = stash.currentScreen.findElement(heistId: heistId),
            let savedOffset = stash.jumpToRecordedPosition(entry) {
-            await tripwire.yieldRealFrames(20)
+            await tripwire.yieldRealFrames(Self.postJumpRealFrames)
             refresh()
             if let found = stash.resolveFirstMatch(searchTarget),
                let result = await searchFineTuneAndResolve(found, searchTarget: searchTarget, scrollCount: 1) {
                 return result
             }
             stash.restoreScrollPosition(entry, to: savedOffset)
-            await tripwire.yieldRealFrames(20)
+            await tripwire.yieldRealFrames(Self.postJumpRealFrames)
             refresh()
         }
 
@@ -396,7 +396,7 @@ extension Navigation {
         scrollCount: Int
     ) async -> TheSafecracker.InteractionResult? {
         ensureOnScreenSync(found)
-        await tripwire.yieldRealFrames(20)
+        await tripwire.yieldRealFrames(Self.postJumpRealFrames)
         stash.refresh()
         guard let fresh = stash.resolveFirstMatch(searchTarget) else { return nil }
         return searchFoundResult(fresh, scrollCount: scrollCount)
@@ -481,7 +481,7 @@ extension Navigation {
     func ensureOnScreen(for target: ElementTarget) async {
         if let entry = offViewportRegistryEntry(for: target),
            stash.jumpToRecordedPosition(entry) != nil {
-            _ = await tripwire.waitForAllClear(timeout: 1.0)
+            _ = await tripwire.waitForAllClear(timeout: Self.postJumpSettleTimeout)
             refresh()
         }
 
@@ -492,7 +492,7 @@ extension Navigation {
             geometry.frame, in: geometry.scrollView,
             comfortMarginFraction: Self.comfortMarginFraction
         ) {
-            await tripwire.yieldFrames(3)
+            await tripwire.yieldFrames(Self.postScrollLayoutFrames)
             refresh()
         }
     }
@@ -507,7 +507,7 @@ extension Navigation {
             geometry.frame, in: geometry.scrollView,
             comfortMarginFraction: Self.comfortMarginFraction
         ) {
-            await tripwire.yieldFrames(3)
+            await tripwire.yieldFrames(Self.postScrollLayoutFrames)
             refresh()
         }
     }
