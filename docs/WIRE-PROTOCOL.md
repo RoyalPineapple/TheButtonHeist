@@ -1010,7 +1010,7 @@ not duplicated on `ServerInfo`.
 | `label` | `String?` | Label |
 | `value` | `String?` | Current value (for controls) |
 | `identifier` | `String?` | Identifier |
-| `hint` | `String?` | Accessibility hint |
+| `hint` | `String?` | Accessibility hint (full detail only) |
 | `traits` | `[String]` | Trait names (e.g., `"button"`, `"adjustable"`, `"staticText"`, `"backButton"`) |
 | `frameX` | `Double` | Frame origin X in points (full detail only) |
 | `frameY` | `Double` | Frame origin Y in points (full detail only) |
@@ -1018,7 +1018,7 @@ not duplicated on `ServerInfo`.
 | `frameHeight` | `Double` | Frame height in points (full detail only) |
 | `activationPointX` | `Double` | Activation point X (full detail only) |
 | `activationPointY` | `Double` | Activation point Y (full detail only) |
-| `customContent` | `[HeistCustomContent]?` | Custom accessibility content |
+| `customContent` | `[HeistCustomContent]?` | Custom accessibility content (full detail only) |
 | `actions` | `[ElementAction]?` | Non-obvious actions only. Omitted when all actions are implied by traits (`activate` for buttons, `increment`/`decrement` for adjustable). Custom actions always included. |
 
 ### InterfaceNode

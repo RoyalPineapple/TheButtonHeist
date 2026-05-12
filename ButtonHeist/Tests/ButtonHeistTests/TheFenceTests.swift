@@ -650,6 +650,117 @@ final class TheFenceTests: XCTestCase {
         XCTAssertNil(deltaDict["edits"], "Geometry-only updates should be dropped entirely")
     }
 
+    // MARK: - JSON Delta Tree Insertion Shape
+
+    /// Pin the wire shape of `deltaNodeDictionary` so the `folded()`
+    /// catamorphism refactor (and any future rewrite) can't silently regress.
+    /// Tree insertions are serialized at summary detail: identity fields are
+    /// kept, heavy semantics (hint, customContent) and geometry are dropped,
+    /// and nested containers recurse through the same fold.
+    func testActionResultDeltaInsertionPreservesNodeShape() {
+        let leafElement = HeistElement(
+            heistId: "child_leaf",
+            description: "Leaf",
+            label: "Leaf",
+            value: "v",
+            identifier: "leaf_id",
+            hint: "should be dropped",
+            traits: [.button],
+            frameX: 0,
+            frameY: 100,
+            frameWidth: 50,
+            frameHeight: 30,
+            customContent: [
+                HeistCustomContent(label: "Drop", value: "Me", isImportant: true)
+            ],
+            actions: [.custom("Inspect")]
+        )
+        let nestedContainerInfo = ContainerInfo(
+            type: .list,
+            frameX: 0,
+            frameY: 0,
+            frameWidth: 200,
+            frameHeight: 400
+        )
+        let outerContainerInfo = ContainerInfo(
+            type: .semanticGroup(label: "Outer", value: nil, identifier: nil),
+            frameX: 0,
+            frameY: 0,
+            frameWidth: 300,
+            frameHeight: 500
+        )
+        let outerNode: InterfaceNode = .container(outerContainerInfo, children: [
+            .element(leafElement),
+            .container(nestedContainerInfo, children: [
+                .element(leafElement),
+            ]),
+        ])
+
+        let delta: InterfaceDelta = .elementsChanged(.init(
+            elementCount: 3,
+            edits: ElementEdits(treeInserted: [
+                TreeInsertion(
+                    location: TreeLocation(parentId: nil, index: 0),
+                    node: outerNode
+                ),
+            ])
+        ))
+        let result = ActionResult(success: true, method: .activate, interfaceDelta: delta)
+        let response = FenceResponse.action(result: result)
+        let json = response.jsonDict()!
+
+        let deltaDict = json["delta"] as! [String: Any]
+        let editsDict = deltaDict["edits"] as! [String: Any]
+        let treeInserted = editsDict["treeInserted"] as! [[String: Any]]
+        XCTAssertEqual(treeInserted.count, 1)
+
+        let insertion = treeInserted[0]
+        XCTAssertNotNil(insertion["location"], "TreeInsertion carries a location wrapper")
+        let nodeDict = insertion["node"] as! [String: Any]
+
+        // Top-level node is a container: `{"container": {type, children, …}}`.
+        let outerContainer = nodeDict["container"] as! [String: Any]
+        XCTAssertEqual(outerContainer["type"] as? String, "semanticGroup")
+        XCTAssertEqual(outerContainer["label"] as? String, "Outer")
+        // Summary detail: container frames are dropped.
+        XCTAssertNil(outerContainer["frameX"])
+        XCTAssertNil(outerContainer["frameWidth"])
+
+        let outerChildren = outerContainer["children"] as! [[String: Any]]
+        XCTAssertEqual(outerChildren.count, 2)
+
+        // Child 0: leaf element keyed under "element".
+        let childElement = outerChildren[0]["element"] as! [String: Any]
+        XCTAssertEqual(childElement["heistId"] as? String, "child_leaf")
+        XCTAssertEqual(childElement["label"] as? String, "Leaf")
+        XCTAssertEqual(childElement["value"] as? String, "v")
+        XCTAssertEqual(childElement["identifier"] as? String, "leaf_id")
+        XCTAssertNotNil(childElement["traits"])
+        XCTAssertNotNil(childElement["actions"])
+        // Summary drops heavy semantics and geometry.
+        XCTAssertNil(childElement["hint"])
+        XCTAssertNil(childElement["customContent"])
+        XCTAssertNil(childElement["frameX"])
+        XCTAssertNil(childElement["frameY"])
+        XCTAssertNil(childElement["frameWidth"])
+        XCTAssertNil(childElement["frameHeight"])
+        XCTAssertNil(childElement["activationPointX"])
+        XCTAssertNil(childElement["activationPointY"])
+        // Delta nodes carry no traversal-order index.
+        XCTAssertNil(childElement["order"])
+
+        // Child 1: nested container recurses through the same fold.
+        let nestedContainer = outerChildren[1]["container"] as! [String: Any]
+        XCTAssertEqual(nestedContainer["type"] as? String, "list")
+        XCTAssertNil(nestedContainer["frameX"])
+        let nestedChildren = nestedContainer["children"] as! [[String: Any]]
+        XCTAssertEqual(nestedChildren.count, 1)
+        let nestedLeaf = nestedChildren[0]["element"] as! [String: Any]
+        XCTAssertEqual(nestedLeaf["heistId"] as? String, "child_leaf")
+        XCTAssertNil(nestedLeaf["hint"])
+        XCTAssertNil(nestedLeaf["frameX"])
+    }
+
     // MARK: - FenceError
 
     func testFenceErrorDescriptions() {
