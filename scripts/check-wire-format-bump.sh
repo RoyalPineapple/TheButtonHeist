@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
 # Verify that wire-format changes are paired with a `buttonHeistVersion` bump.
 #
-# Wire-format changes (any edit to ServerMessages.swift, ClientMessages.swift,
-# Messages.swift, or Elements.swift) must be accompanied by a version bump in
-# Messages.swift. Otherwise client and server can drift silently — the handshake
-# would still pass, and protocol mismatches would surface as garbled payloads
-# in production rather than a clean `protocolMismatch` reject at connect.
+# Wire format lives in `ButtonHeist/Sources/TheScore/` — every Codable type that
+# crosses the connection, the Codable adapters, the `WireBoundaryTypes` rawValue
+# strings, the `InterfaceDelta` / `ActionExpectation` / `HeistPlayback*` /
+# `ConnectionScope` payloads, and the `AccessibilityPolicy` (whose
+# `synthesisPriority` order is wire-format because it determines synthesized
+# heistIds, per CLAUDE.md).
+#
+# Any edit under `ButtonHeist/Sources/TheScore/*.swift` is treated as a
+# wire-format change and must be accompanied by a version bump in Messages.swift.
+# Otherwise client and server can drift silently — the handshake would still
+# pass, and protocol mismatches would surface as garbled payloads in production
+# rather than a clean `protocolMismatch` reject at connect.
 #
 # Usage:
 #   scripts/check-wire-format-bump.sh                # diff against origin/main
@@ -24,13 +31,10 @@ cd "$REPO_ROOT"
 
 BASE_REF="${1:-origin/main}"
 
-# Wire-format files. Any edit here is treated as a wire-format change.
-WIRE_FILES=(
-    "ButtonHeist/Sources/TheScore/ServerMessages.swift"
-    "ButtonHeist/Sources/TheScore/ClientMessages.swift"
-    "ButtonHeist/Sources/TheScore/Messages.swift"
-    "ButtonHeist/Sources/TheScore/Elements.swift"
-)
+# Wire-format scope: every Swift file in TheScore is part of the wire contract.
+# Using a directory glob (rather than an allowlist) means new wire types are
+# covered automatically — there is no list to forget to update.
+WIRE_GLOB="ButtonHeist/Sources/TheScore/"
 
 VERSION_FILE="ButtonHeist/Sources/TheScore/Messages.swift"
 VERSION_PATTERN='buttonHeistVersion = "[^"]*"'
@@ -40,15 +44,45 @@ if ! git rev-parse --verify "$BASE_REF" >/dev/null 2>&1; then
     exit 2
 fi
 
-CHANGED_FILES=$(git diff --name-only "$BASE_REF"...HEAD)
+# Determine the merge base. CI checkouts are often shallow, and a brand-new
+# branch may share no history with the base ref. In either case, `git diff
+# A...B` errors with "fatal: no merge base". Fall back to diffing against the
+# base ref directly (two-dot), which compares the working tree against the tip
+# of the base ref rather than against the common ancestor. That's a strict
+# superset of the three-dot diff, so we may flag files that were already
+# changed upstream — acceptable, since the check only fires when the version
+# is also unchanged, and a wire-touching PR should always bump it anyway.
+DIFF_MODE="three-dot"
+if ! git merge-base "$BASE_REF" HEAD >/dev/null 2>&1; then
+    echo "::warning::No merge base between HEAD and $BASE_REF (shallow clone or unrelated history). Falling back to two-dot diff against $BASE_REF." >&2
+    DIFF_MODE="two-dot"
+fi
 
-# Which wire files changed?
-CHANGED_WIRE=()
-for file in "${WIRE_FILES[@]}"; do
-    if printf '%s\n' "$CHANGED_FILES" | grep -Fxq "$file"; then
-        CHANGED_WIRE+=("$file")
+CHANGED_FILES=""
+if [ "$DIFF_MODE" = "three-dot" ]; then
+    if ! CHANGED_FILES=$(git diff --name-only "$BASE_REF"...HEAD 2>/dev/null); then
+        echo "::warning::git diff $BASE_REF...HEAD failed unexpectedly. Falling back to two-dot diff." >&2
+        DIFF_MODE="two-dot"
     fi
-done
+fi
+
+if [ "$DIFF_MODE" = "two-dot" ]; then
+    if ! CHANGED_FILES=$(git diff --name-only "$BASE_REF" HEAD 2>/dev/null); then
+        echo "::error::Could not compute diff against '$BASE_REF'. In CI, ensure the workflow fetches enough history (e.g. fetch-depth: 0). Locally, run 'git fetch origin main' and retry." >&2
+        exit 2
+    fi
+fi
+
+# Which files under the wire glob changed?
+CHANGED_WIRE=()
+while IFS= read -r file; do
+    [ -z "$file" ] && continue
+    case "$file" in
+        "$WIRE_GLOB"*.swift)
+            CHANGED_WIRE+=("$file")
+            ;;
+    esac
+done <<< "$CHANGED_FILES"
 
 if [ "${#CHANGED_WIRE[@]}" -eq 0 ]; then
     echo "No wire-format files changed against $BASE_REF — nothing to check."
