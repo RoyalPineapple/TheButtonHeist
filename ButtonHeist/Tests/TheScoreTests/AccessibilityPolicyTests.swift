@@ -119,4 +119,22 @@ final class AccessibilityPolicyTests: XCTestCase {
             .tabBar,
         ])
     }
+
+    // MARK: - Tab Switch Persistence Threshold
+
+    /// The threshold is a ratio in `(0, 1)` — values outside that range
+    /// would either disable the tab-switch heuristic entirely (>= 1) or
+    /// make it impossible to trigger (<= 0).
+    func testTabSwitchPersistThresholdIsRatio() {
+        XCTAssertGreaterThan(AccessibilityPolicy.tabSwitchPersistThreshold, 0.0)
+        XCTAssertLessThan(AccessibilityPolicy.tabSwitchPersistThreshold, 1.0)
+    }
+
+    /// Locks the current value at `0.4`. Changing this threshold alters
+    /// screen-change semantics consumed by `TheBurglar.isTopologyChanged`
+    /// and downstream delta computation in `TheBrains`. Any change should
+    /// have a clear empirical justification documented in the PR.
+    func testTabSwitchPersistThresholdValueLocked() {
+        XCTAssertEqual(AccessibilityPolicy.tabSwitchPersistThreshold, 0.4)
+    }
 }
