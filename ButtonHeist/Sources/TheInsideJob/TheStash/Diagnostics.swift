@@ -25,6 +25,12 @@ extension TheStash {
 
     enum Diagnostics {
 
+    /// Diagnostic for an heistId that isn't in the current screen. By the time
+    /// we land here, `ensureOnScreen` has already tried to recover it, so the
+    /// id is either stale (the screen changed since the agent's last
+    /// `get_interface`) or it never existed. The message says so and points at
+    /// the two recovery moves the agent has: refetch the interface, or switch
+    /// to a matcher predicate so the lookup can hunt the exploration union.
     static func heistIdNotFound(
         _ heistId: String,
         knownIds: some Collection<String>,
@@ -32,10 +38,11 @@ extension TheStash {
     ) -> String {
         let similar = knownIds.sorted()
             .filter { $0.contains(heistId) || heistId.contains($0) }
+        let nextStep = "refetch via get_interface, or target by label/identifier with a matcher."
         if similar.isEmpty {
-            return "Element not found: \"\(heistId)\" (\(viewportCount) elements on screen)"
+            return "Element not found: \"\(heistId)\" — likely scrolled off or the screen changed since your last get_interface (\(viewportCount) elements on screen now); \(nextStep)"
         }
-        return "Element not found: \"\(heistId)\"\nsimilar: \(similar.joined(separator: ", "))"
+        return "Element not found: \"\(heistId)\" — did you mean: \(similar.joined(separator: ", "))? If not, \(nextStep)"
     }
 
     static func matcherNotFound(

@@ -19,6 +19,11 @@ final class DiagnosticsTests: XCTestCase {
         )
         XCTAssertTrue(message.contains("missing-button"))
         XCTAssertTrue(message.contains("3 elements"))
+        // When there's no near-miss, the message should hint at the stale-id
+        // case and point at the recovery moves.
+        XCTAssertTrue(message.contains("scrolled off"))
+        XCTAssertTrue(message.contains("get_interface"))
+        XCTAssertTrue(message.contains("matcher"))
     }
 
     func testHeistIdNotFoundWithSubstringMatch() {
@@ -27,10 +32,13 @@ final class DiagnosticsTests: XCTestCase {
             knownIds: ["submit-button", "cancel-button", "header"],
             viewportCount: 3
         )
-        XCTAssertTrue(message.contains("similar"))
+        XCTAssertTrue(message.contains("did you mean"))
         XCTAssertTrue(message.contains("submit-button"))
         XCTAssertTrue(message.contains("cancel-button"))
         XCTAssertFalse(message.contains("header"))
+        // The "did you mean" branch still offers a refetch fallback in case
+        // none of the suggestions is what the agent meant.
+        XCTAssertTrue(message.contains("get_interface"))
     }
 
     func testHeistIdNotFoundReverseSubstringMatch() {
@@ -39,7 +47,7 @@ final class DiagnosticsTests: XCTestCase {
             knownIds: ["submit-button", "cancel"],
             viewportCount: 2
         )
-        XCTAssertTrue(message.contains("similar"))
+        XCTAssertTrue(message.contains("did you mean"))
         XCTAssertTrue(message.contains("submit-button"))
     }
 
