@@ -122,15 +122,17 @@ final class TheSafecracker {
                 failureKind: failureKind
             )
         }
+    }
 
-        /// Internal failure kinds used by dispatch to choose the wire ErrorKind.
-        /// Not wire format — this is an internal control-flow signal.
-        enum FailureKind {
-            /// The accessibility tree could not be parsed (no traversable windows).
-            case treeUnavailable
-            /// A polling/wait operation exceeded its budget.
-            case timeout
-        }
+    /// Internal failure kinds used by dispatch to choose the wire ErrorKind.
+    /// Not wire format — this is an internal control-flow signal. Sits as a
+    /// peer of `InteractionResult` (not nested inside it) to stay at the
+    /// 2-level-deep nesting cap the SwiftLint `nesting` rule enforces.
+    enum FailureKind {
+        /// The accessibility tree could not be parsed (no traversable windows).
+        case treeUnavailable
+        /// A polling/wait operation exceeded its budget.
+        case timeout
     }
 
     // MARK: - Internal Touch State
