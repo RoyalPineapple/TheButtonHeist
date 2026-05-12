@@ -33,13 +33,11 @@ struct PlayHeistCommand: AsyncParsableCommand {
             )
             defer { fence.stop() }
 
-            if case .heistPlayback(_, _, _, _, let report) = response, let report {
+            if case .heistPlayback(_, _, _, _, .some(let report)) = response {
                 let xml = report.junitXML()
                 let url = URL(fileURLWithPath: junitPath)
                 try xml.write(to: url, atomically: true, encoding: .utf8)
                 logStatus("JUnit report written to \(junitPath)")
-            } else if case .heistPlayback = response {
-                logStatus("Warning: --junit requested but playback report was not available")
             } else {
                 logStatus("Warning: --junit requested but playback did not produce a report")
             }

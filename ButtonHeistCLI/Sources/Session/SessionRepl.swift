@@ -120,15 +120,16 @@ final class ReplSession {
         }
 
         let requestId = request["id"]
+        let parsedCommand = TheFence.Command(rawValue: command)
 
         // Enhanced help for human mode
-        if command == TheFence.Command.help.rawValue && format == .human && !line.hasPrefix("{") {
+        if parsedCommand == .help && format == .human && !line.hasPrefix("{") {
             return (.ok(message: Self.humanHelp), nil)
         }
 
         do {
             let response = try await fence.execute(request: request)
-            if command == TheFence.Command.quit.rawValue || command == TheFence.Command.exit.rawValue {
+            if parsedCommand == .quit || parsedCommand == .exit {
                 if case .running(let idleMonitor) = state {
                     idleMonitor?.stop()
                 }

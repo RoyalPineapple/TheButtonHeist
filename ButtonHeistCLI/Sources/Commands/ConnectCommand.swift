@@ -1,6 +1,5 @@
 import ArgumentParser
 import ButtonHeist
-import Foundation
 
 /// Connect (or reconnect) to an iOS device running TheInsideJob.
 ///
@@ -50,27 +49,7 @@ struct ConnectCommand: AsyncParsableCommand {
             autoReconnect: false
         )
         guard resolved.deviceFilter != nil else {
-            throw ConnectError.noTargetConfigured
-        }
-
-        try await CLIRunner.run(
-            connection: resolvedConnection,
-            format: output.format,
-            request: ["command": TheFence.Command.getInterface.rawValue],
-            statusMessage: "Connecting..."
-        )
-    }
-}
-
-// MARK: - Errors
-
-private enum ConnectError: LocalizedError {
-    case noTargetConfigured
-
-    var errorDescription: String? {
-        switch self {
-        case .noTargetConfigured:
-            return """
+            throw ValidationError("""
                 No connection target configured. Checked:
                   - positional argument
                   - --device flag
@@ -80,8 +59,15 @@ private enum ConnectError: LocalizedError {
 
                 Pass a device (e.g. `buttonheist connect 127.0.0.1:1455`), set \
                 BUTTONHEIST_DEVICE, or add a default target to .buttonheist.json.
-                """
+                """)
         }
+
+        try await CLIRunner.run(
+            connection: resolvedConnection,
+            format: output.format,
+            request: ["command": TheFence.Command.getInterface.rawValue],
+            statusMessage: "Connecting..."
+        )
     }
 }
 
