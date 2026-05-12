@@ -284,7 +284,12 @@ jobs:
         run: xcrun simctl bootstatus "$SIM_UDID" -b
 
       - name: Run iOS tests
-        timeout-minutes: 10
+        # 695 tests in a hosted BH Demo bundle on macos-15 runner run right at
+        # the 10-min edge — second-of-the-day decides pass/fail. Bumped to 20
+        # for headroom while the suite stays this size. Structural follow-up:
+        # split integration tests into a slow lane, or profile the worst
+        # offenders.
+        timeout-minutes: 20
         run: |
           set -eo pipefail
           echo "Running tests on iPhone 16 Pro (iOS $SIM_OS)"
