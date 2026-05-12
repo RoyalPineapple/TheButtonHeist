@@ -111,7 +111,6 @@ extension TheStash {
 
     // MARK: - Wire Output
 
-    /// Convert a ScreenElement to its wire representation.
     static func toWire(_ entry: ScreenElement) -> HeistElement {
         var wire = convert(entry.element)
         wire.heistId = entry.heistId
