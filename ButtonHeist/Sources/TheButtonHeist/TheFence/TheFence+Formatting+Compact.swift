@@ -239,31 +239,40 @@ extension FenceResponse {
         _ interface: Interface,
         detail: InterfaceDetail
     ) -> [String] {
-        var displayIndex = 0
+        let counter = LineIndexCounter()
+        // Fold each node to a list of un-indented lines; the parent prepends
+        // two spaces per nesting level on the way back up. Sharing
+        // `InterfaceNode.folded` keeps this walker structurally identical to
+        // the JSON encoder's walk.
         return interface.tree.flatMap { node in
-            compactTreeLines(node, detail: detail, depth: 0, indexCounter: &displayIndex)
+            indented(
+                lines: node.folded(
+                    onElement: { element in
+                        let index = counter.value
+                        counter.value += 1
+                        return [compactElementLine(element, displayIndex: index, detail: detail)]
+                    },
+                    onContainer: { info, childGroups in
+                        let header = "<\(compactContainerLine(info, detail: detail))>"
+                        let body = childGroups.flatMap { indented(lines: $0) }
+                        return [header] + body
+                    }
+                ),
+                by: 0
+            )
         }
     }
 
-    private static func compactTreeLines(
-        _ node: InterfaceNode,
-        detail: InterfaceDetail,
-        depth: Int,
-        indexCounter: inout Int
-    ) -> [String] {
-        let indent = String(repeating: "  ", count: depth)
-        switch node {
-        case .element(let element):
-            let line = "\(indent)\(compactElementLine(element, displayIndex: indexCounter, detail: detail))"
-            indexCounter += 1
-            return [line]
-        case .container(let info, let children):
-            let header = "\(indent)<\(compactContainerLine(info, detail: detail))>"
-            let childLines = children.flatMap {
-                compactTreeLines($0, detail: detail, depth: depth + 1, indexCounter: &indexCounter)
-            }
-            return [header] + childLines
-        }
+    /// Reference counter used by `compactTreeLines` to thread display indices
+    /// through `InterfaceNode.folded` without inout state in the closures.
+    private final class LineIndexCounter {
+        var value: Int = 0
+    }
+
+    private static func indented(lines: [String], by depth: Int = 1) -> [String] {
+        guard depth > 0 else { return lines }
+        let prefix = String(repeating: "  ", count: depth)
+        return lines.map { prefix + $0 }
     }
 
     private static func compactContainerLine(_ info: ContainerInfo, detail: InterfaceDetail) -> String {

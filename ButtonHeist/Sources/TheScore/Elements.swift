@@ -557,6 +557,30 @@ public extension InterfaceNode {
             return children.flatMap { $0.flatten() }
         }
     }
+
+    /// Catamorphism over the interface tree: recurse once, transform per-node.
+    ///
+    /// Walks the tree depth-first, left-to-right, applying `onElement` at every
+    /// leaf and `onContainer` at every container with its children already
+    /// folded. The leaves are visited in DFS pre-order — closures that capture
+    /// a counter by reference see elements in the same order they appear in
+    /// the canonical traversal index.
+    ///
+    /// Consumers that produce different representations of the same walk
+    /// (compact text, JSON dictionaries, delta encodings) share this single
+    /// recursion instead of each reimplementing the switch.
+    func folded<T>(
+        onElement: (HeistElement) -> T,
+        onContainer: (ContainerInfo, [T]) -> T
+    ) -> T {
+        switch self {
+        case .element(let element):
+            return onElement(element)
+        case .container(let info, let children):
+            let foldedChildren = children.map { $0.folded(onElement: onElement, onContainer: onContainer) }
+            return onContainer(info, foldedChildren)
+        }
+    }
 }
 
 public extension Array where Element == InterfaceNode {

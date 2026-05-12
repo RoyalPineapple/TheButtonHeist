@@ -237,7 +237,11 @@ final class TheFenceTests: XCTestCase {
         XCTAssertEqual(nestedElement["frameY"] as? Double, 44)
     }
 
-    func testSummaryInterfaceJSONKeepsSemanticsAndOmitsGeometry() {
+    func testSummaryInterfaceJSONKeepsIdentityAndDropsHeavyFields() {
+        // Summary is the thin payload contract for agents polling the
+        // interface: identity fields (heistId, label, value, identifier,
+        // traits, actions) only. Heavy semantics (hint, customContent) and
+        // geometry (frame*, activationPoint*) require `detail = full`.
         let element = HeistElement(
             heistId: "wifi_toggle",
             description: "Wi-Fi",
@@ -250,6 +254,9 @@ final class TheFenceTests: XCTestCase {
             frameY: 44,
             frameWidth: 390,
             frameHeight: 44,
+            customContent: [
+                HeistCustomContent(label: "Signal", value: "Strong", isImportant: true)
+            ],
             actions: [.activate]
         )
         let containerInfo = ContainerInfo(
@@ -280,9 +287,48 @@ final class TheFenceTests: XCTestCase {
         let nestedElement = children[0]["element"] as! [String: Any]
         XCTAssertEqual(nestedElement["heistId"] as? String, "wifi_toggle")
         XCTAssertEqual(nestedElement["identifier"] as? String, "wifi")
-        XCTAssertEqual(nestedElement["hint"] as? String, "Double tap to toggle")
+        XCTAssertEqual(nestedElement["label"] as? String, "Wi-Fi")
+        XCTAssertEqual(nestedElement["value"] as? String, "On")
+        // Heavy semantics and geometry are full-only.
+        XCTAssertNil(nestedElement["hint"])
+        XCTAssertNil(nestedElement["customContent"])
         XCTAssertNil(nestedElement["frameY"])
         XCTAssertNil(nestedElement["activationPointY"])
+    }
+
+    func testFullInterfaceJSONIncludesHintAndCustomContent() {
+        let element = HeistElement(
+            heistId: "wifi_toggle",
+            description: "Wi-Fi",
+            label: "Wi-Fi",
+            value: "On",
+            identifier: "wifi",
+            hint: "Double tap to toggle",
+            traits: [.button],
+            frameX: 0,
+            frameY: 44,
+            frameWidth: 390,
+            frameHeight: 44,
+            customContent: [
+                HeistCustomContent(label: "Signal", value: "Strong", isImportant: true),
+                HeistCustomContent(label: "Network", value: "Home", isImportant: false),
+            ],
+            actions: [.activate]
+        )
+        let interface = Interface(timestamp: Date(), tree: [.element(element)])
+
+        let response = FenceResponse.interface(interface, detail: .full)
+        let json = response.jsonDict()!
+        let interfaceDict = json["interface"] as! [String: Any]
+        let tree = interfaceDict["tree"] as! [[String: Any]]
+        let nestedElement = tree[0]["element"] as! [String: Any]
+
+        XCTAssertEqual(nestedElement["hint"] as? String, "Double tap to toggle")
+        let customContent = nestedElement["customContent"] as? [String: Any]
+        XCTAssertNotNil(customContent)
+        XCTAssertNotNil(customContent?["important"])
+        XCTAssertNotNil(customContent?["default"])
+        XCTAssertEqual(nestedElement["frameY"] as? Double, 44)
     }
 
     func testCompactInterfaceUsesTreeAndSemanticFields() {

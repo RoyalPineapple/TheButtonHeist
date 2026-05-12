@@ -696,7 +696,7 @@ Sent in response to a `status` probe. This response is valid before authenticati
 
 ### interface
 
-UI element interface. Public JSON output uses a tree structure. Summary detail includes the semantic accessibility surface; full detail adds geometry.
+UI element interface. Public JSON output uses a tree structure. Summary detail emits the identity fields per element (`heistId`, `label`, `value`, `identifier`, `traits`, meaningful `actions`); full detail adds VoiceOver `hint`, `customContent`, frames, and activation points.
 
 ```json
 {"buttonHeistVersion":"<calver>","type":"interface","payload":{

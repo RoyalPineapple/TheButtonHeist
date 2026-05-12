@@ -344,10 +344,41 @@ extension FenceResponse {
     }
 
     private func interfaceTreeDictionaries(_ interface: Interface, detail: InterfaceDetail) -> [[String: Any]] {
-        var indexCounter = 0
+        let counter = IndexCounter()
         return interface.tree.map { node in
-            interfaceNodeDictionary(node, detail: detail, indexCounter: &indexCounter)
+            nodeDictionary(node, detail: detail, counter: counter)
         }
+    }
+
+    /// Reference-typed leaf counter so a single counter threads through the
+    /// `folded()` recursion without needing inout state in the closures.
+    private final class IndexCounter {
+        var value: Int = 0
+    }
+
+    /// Recursive walk over an `InterfaceNode`, shared by the full-tree and
+    /// delta paths. Built on `InterfaceNode.folded` so the recursion lives in
+    /// exactly one place.
+    private func nodeDictionary(
+        _ node: InterfaceNode,
+        detail: InterfaceDetail,
+        counter: IndexCounter?
+    ) -> [String: Any] {
+        node.folded(
+            onElement: { element in
+                var payload = self.elementDictionary(element, detail: detail)
+                if let counter {
+                    payload["order"] = counter.value
+                    counter.value += 1
+                }
+                return ["element": payload]
+            },
+            onContainer: { info, children in
+                var payload = self.containerInfoDictionary(info, detail: detail)
+                payload["children"] = children
+                return ["container": payload]
+            }
+        )
     }
 
     private func navigationDictionary(_ navigation: NavigationContext) -> [String: Any] {
@@ -371,6 +402,15 @@ extension FenceResponse {
         return payload
     }
 
+    /// JSON shape for a single element.
+    ///
+    /// Summary keeps the identity fields (heistId, label, value, identifier,
+    /// traits, meaningful actions) and drops the heavy fields. Full adds the
+    /// heavy semantic fields (`hint`, `customContent`) and geometry
+    /// (`frame*`, `activationPoint*`). The MCP tool description promises
+    /// "summary (default, no geometry)" — agents that ask for summary expect
+    /// thin payloads suitable for repeated polling, not the full semantic
+    /// surface area.
     private func elementDictionary(_ element: HeistElement, detail: InterfaceDetail = .full) -> [String: Any] {
         var payload: [String: Any] = [
             "heistId": element.heistId,
@@ -385,23 +425,21 @@ extension FenceResponse {
         if let value = element.value { payload["value"] = value }
         if let identifier = element.identifier { payload["identifier"] = identifier }
 
-        if let hint = element.hint { payload["hint"] = hint }
-
-        if let customContent = element.customContent {
-            let important = customContent.filter(\.isImportant)
-            let defaultContent = customContent.filter { !$0.isImportant }
-            var content: [String: Any] = [:]
-            if !important.isEmpty {
-                content["important"] = important.map(Self.customContentEntry)
-            }
-            if !defaultContent.isEmpty {
-                content["default"] = defaultContent.map(Self.customContentEntry)
-            }
-            payload["customContent"] = content
-        }
-
-        // Geometry only in full detail
+        // Heavy semantic fields and geometry are full-detail only.
         if detail == .full {
+            if let hint = element.hint { payload["hint"] = hint }
+            if let customContent = element.customContent {
+                let important = customContent.filter(\.isImportant)
+                let defaultContent = customContent.filter { !$0.isImportant }
+                var content: [String: Any] = [:]
+                if !important.isEmpty {
+                    content["important"] = important.map(Self.customContentEntry)
+                }
+                if !defaultContent.isEmpty {
+                    content["default"] = defaultContent.map(Self.customContentEntry)
+                }
+                payload["customContent"] = content
+            }
             payload["frameX"] = element.frameX
             payload["frameY"] = element.frameY
             payload["frameWidth"] = element.frameWidth
@@ -419,35 +457,10 @@ extension FenceResponse {
         return entry
     }
 
-    private func interfaceNodeDictionary(
-        _ node: InterfaceNode,
-        detail: InterfaceDetail,
-        indexCounter: inout Int
-    ) -> [String: Any] {
-        switch node {
-        case .element(let element):
-            var payload = elementDictionary(element, detail: detail)
-            payload["order"] = indexCounter
-            indexCounter += 1
-            return ["element": payload]
-        case .container(let info, let children):
-            var payload = containerInfoDictionary(info, detail: detail)
-            payload["children"] = children.map { child -> [String: Any] in
-                interfaceNodeDictionary(child, detail: detail, indexCounter: &indexCounter)
-            }
-            return ["container": payload]
-        }
-    }
-
+    /// Delta payloads serialize inserted subtrees at summary detail (no
+    /// geometry, no heavy semantics) and never carry traversal-order indices.
     private func deltaNodeDictionary(_ node: InterfaceNode) -> [String: Any] {
-        switch node {
-        case .element(let element):
-            return ["element": elementDictionary(element, detail: .summary)]
-        case .container(let info, let children):
-            var payload = containerInfoDictionary(info, detail: .summary)
-            payload["children"] = children.map(deltaNodeDictionary)
-            return ["container": payload]
-        }
+        nodeDictionary(node, detail: .summary, counter: nil)
     }
 
     private func containerInfoDictionary(_ info: ContainerInfo, detail: InterfaceDetail) -> [String: Any] {
