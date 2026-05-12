@@ -46,6 +46,10 @@ final class SettleSessionTests: XCTestCase {
     /// is consumed by the synchronous baseline-seed parse; subsequent
     /// entries feed the post-sleep parses. The last entry is repeated
     /// indefinitely if the loop runs longer than the script.
+    ///
+    /// `topVCSequence` feeds only the per-cycle top-VC checks inside the
+    /// loop — the baseline top-VC is now passed explicitly to `run(...)`
+    /// so the provider never has to answer for the pre-action snapshot.
     private func makeSession(
         script: [Screen?],
         cyclesRequired: Int = 3,
@@ -100,7 +104,7 @@ final class SettleSessionTests: XCTestCase {
             cyclesRequired: 3
         )
 
-        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent())
+        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent(), baselineTopVC: nil)
 
         if case .settled = outcome.outcome {
             // Expected.
@@ -136,7 +140,7 @@ final class SettleSessionTests: XCTestCase {
             timeoutMs: 50
         )
 
-        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent())
+        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent(), baselineTopVC: nil)
 
         if case .timedOut = outcome.outcome {
             // Expected.
@@ -152,8 +156,10 @@ final class SettleSessionTests: XCTestCase {
     func testScreenChangeAbortsLoopAndSettlesCleanly() async {
         let stable = makeParseResult([makeElement(label: "A", traits: .staticText)])
         let placeholder = ObjectIdentifier(NSObject())
-        // First call (baseline seed): nil. Second call (post-first-sleep): different VC.
-        let topVCSeq: [ObjectIdentifier?] = [nil, placeholder, placeholder]
+        // Baseline is passed in explicitly as `nil`; every call to the
+        // provider during the loop returns the post-transition VC, so
+        // the very first post-sleep comparison detects the change.
+        let topVCSeq: [ObjectIdentifier?] = [placeholder]
         let session = makeSession(
             script: [stable, stable, stable],
             cyclesRequired: 3,
@@ -162,7 +168,7 @@ final class SettleSessionTests: XCTestCase {
             topVCSequence: topVCSeq
         )
 
-        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent())
+        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent(), baselineTopVC: nil)
 
         if case .screenChanged = outcome.outcome {
             // Expected.
@@ -171,6 +177,68 @@ final class SettleSessionTests: XCTestCase {
         }
         XCTAssertTrue(outcome.outcome.didSettleCleanly,
                       ".screenChanged should report didSettleCleanly == true")
+    }
+
+    // MARK: - Explicit Baseline (PR #330 H1)
+
+    /// The baseline top-VC is passed in explicitly, so the loop never
+    /// consumes a script entry just to "discover" what the pre-action VC
+    /// was. With the same VC value passed as baseline AND returned by
+    /// every provider call, no screen-change should ever trigger.
+    func testExplicitBaselineMatchesProviderSequenceNoScreenChange() async {
+        let stable = makeParseResult([makeElement(label: "A", traits: .staticText)])
+        // Retain the underlying object so the ObjectIdentifier stays valid
+        // for the entire loop — otherwise the temp NSObject can be
+        // deallocated and a later allocation can collide on its slot.
+        let baselineObject = NSObject()
+        let baseline = ObjectIdentifier(baselineObject)
+        // Every provider call answers with the same VC as the baseline —
+        // proves the loop is comparing against the parameter, not its own
+        // first sampled value.
+        let session = makeSession(
+            script: [stable, stable, stable, stable],
+            cyclesRequired: 3,
+            cycleIntervalMs: 1,
+            timeoutMs: 100,
+            topVCSequence: [baseline, baseline, baseline, baseline]
+        )
+
+        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent(), baselineTopVC: baseline)
+        _ = baselineObject // keep alive
+
+        if case .settled = outcome.outcome {
+            // Expected — same VC throughout means no screen change.
+        } else {
+            XCTFail("Same baseline + provider VC should settle, got \(outcome.outcome)")
+        }
+    }
+
+    /// Inverse of the above: baseline differs from the provider's value
+    /// from the first cycle, so the very first post-sleep comparison
+    /// triggers a screen change. No script-position offset needed.
+    func testExplicitBaselineDifferingFromProviderTriggersScreenChange() async {
+        let stable = makeParseResult([makeElement(label: "A", traits: .staticText)])
+        let baselineObject = NSObject()
+        let liveObject = NSObject()
+        let baseline = ObjectIdentifier(baselineObject)
+        let livePostTransition = ObjectIdentifier(liveObject)
+        let session = makeSession(
+            script: [stable, stable, stable],
+            cyclesRequired: 3,
+            cycleIntervalMs: 1,
+            timeoutMs: 100,
+            topVCSequence: [livePostTransition]
+        )
+
+        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent(), baselineTopVC: baseline)
+        _ = baselineObject // keep alive
+        _ = liveObject // keep alive
+
+        if case .screenChanged = outcome.outcome {
+            // Expected.
+        } else {
+            XCTFail("Differing baseline vs provider must surface .screenChanged, got \(outcome.outcome)")
+        }
     }
 
     // MARK: - Cancellation
@@ -186,7 +254,7 @@ final class SettleSessionTests: XCTestCase {
             timeoutMs: 200
         )
 
-        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent())
+        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent(), baselineTopVC: nil)
 
         if case .cancelled = outcome.outcome {
             // Expected.
@@ -209,7 +277,7 @@ final class SettleSessionTests: XCTestCase {
             timeoutMs: 200
         )
 
-        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent())
+        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent(), baselineTopVC: nil)
 
         if case .timedOut = outcome.outcome {
             // Expected.
@@ -238,7 +306,7 @@ final class SettleSessionTests: XCTestCase {
             cyclesRequired: 3
         )
 
-        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent())
+        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent(), baselineTopVC: nil)
 
         if case .settled = outcome.outcome {
             // Expected.
@@ -264,7 +332,7 @@ final class SettleSessionTests: XCTestCase {
             cyclesRequired: 3
         )
 
-        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent())
+        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent(), baselineTopVC: nil)
 
         if case .settled = outcome.outcome {
             // Expected.
