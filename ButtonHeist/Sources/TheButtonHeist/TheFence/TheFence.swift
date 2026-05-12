@@ -910,11 +910,11 @@ public final class TheFence {
             handoff.send(.startRecording(config))
             didStart = true
             return try await waitForRecording(timeout: timeout)
-        } catch is CancellationError {
+        } catch let error as CancellationError {
             if didStart {
                 cleanUpServerRecording()
             }
-            throw CancellationError()
+            throw error
         } catch {
             if didStart {
                 cleanUpServerRecording()
