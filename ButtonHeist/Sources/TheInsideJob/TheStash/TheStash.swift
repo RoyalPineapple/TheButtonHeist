@@ -460,19 +460,14 @@ final class TheStash {
         )
     }
 
-    // MARK: - Wire Conversion Facades
-
-    func toWire(_ entries: [ScreenElement]) -> [HeistElement] {
-        WireConversion.toWire(entries)
-    }
-
-    func toWire(_ entry: ScreenElement) -> HeistElement {
-        WireConversion.toWire(entry)
-    }
+    // MARK: - Tree Read Helpers
 
     /// Convert the current screen's hierarchy to canonical wire form. Every
     /// element on screen appears at its tree position; containers carry
     /// stable ids derived once during parse.
+    ///
+    /// Thin reader over `WireConversion.toWireTree` — exists because callers
+    /// need the tree of the *current* screen, not an arbitrary one.
     func wireTree() -> [InterfaceNode] {
         WireConversion.toWireTree(from: currentScreen)
     }
@@ -486,27 +481,6 @@ final class TheStash {
     func wireTreeWithHash() -> (tree: [InterfaceNode], hash: Int) {
         let tree = wireTree()
         return (tree, tree.hashValue)
-    }
-
-    /// Compute the delta between two snapshots.
-    func computeDelta(
-        before: [ScreenElement],
-        after: [ScreenElement],
-        beforeTree: [InterfaceNode]? = nil,
-        beforeTreeHash: Int? = nil,
-        isScreenChange: Bool
-    ) -> InterfaceDelta {
-        WireConversion.computeDelta(
-            before: before, after: after,
-            beforeTree: beforeTree,
-            beforeTreeHash: beforeTreeHash,
-            afterTree: wireTree(),
-            isScreenChange: isScreenChange
-        )
-    }
-
-    func traitNames(_ traits: UIAccessibilityTraits) -> [HeistTrait] {
-        WireConversion.traitNames(traits)
     }
 }
 

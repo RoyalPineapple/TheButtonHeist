@@ -26,7 +26,7 @@ TheBrains keeps the post-action delta cycle, dispatch, wait handlers, and broadc
 
    - `BeforeState` — frozen snapshot (sorted elements, raw parsed elements, hierarchy, VC identity) taken before every action.
    - **`refresh()`** — delegates to `stash.refresh()`.
-   - **`actionResultWithDelta(before:)`** — the convergence point. On failure: immediate return from before-snapshot. On success: settle via `tripwire.waitForAllClear(1s)` → `stash.parse()` → screen-change detection (VC identity OR topology) → `stash.apply()` → `navigation.exploreAndPrune()` → snapshot → `stash.computeDelta()` → re-resolve target for post-action element metadata → `ActionResultBuilder.success()`.
+   - **`actionResultWithDelta(before:)`** — the convergence point. On failure: immediate return from before-snapshot. On success: settle via `tripwire.waitForAllClear(1s)` → `stash.parse()` → screen-change detection (VC identity OR topology) → `stash.apply()` → `navigation.exploreAndPrune()` → snapshot → `InterfaceDiff.computeDelta()` → re-resolve target for post-action element metadata → `ActionResultBuilder.success()`.
 
    **Response state** — `SentState` struct (treeHash, beforeState, screenId) tracks the last response sent to the driver. `recordSentState()` snapshots current state; `computeBackgroundDelta()` compares against it. TheGetaway calls `recordSentState()` after every send.
 

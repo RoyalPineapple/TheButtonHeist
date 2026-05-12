@@ -20,14 +20,15 @@ Single-snapshot screen state, target resolution, wire conversion, and screen cap
    - `parse()` → read-only, returns `ParseResult`.
    - `buildScreen(from:)` → returns a `Screen` value, does NOT mutate `currentScreen`. Callers decide when to commit.
 
-   **Wire conversion facades** (delegate to `WireConversion`):
-   - `toWire(_:)`, `convertTree(_:)`, `computeDelta(before:after:afterTree:isScreenChange:)`, `traitNames(_:)`.
+   **Tree read helpers** — `wireTree()` and `wireTreeHash()` compute the wire tree of `currentScreen` via `WireConversion.toWireTree(from:)`. They are not facades — they read state. Element-level wire conversion (`WireConversion.toWire`, `WireConversion.traitNames`) and delta computation (`InterfaceDiff.computeDelta`) are pure transforms; callers invoke them directly.
 
    **`selectElements()`** — returns live hierarchy elements in traversal order, then off-viewport elements (from the post-explore union) sorted by heistId. Deterministic across runs.
 
 3. **`IdAssignment.swift`** — Pure static namespace. `assign(_:)` generates heistIds in two phases: base ID (developer identifier if stable, else synthesized from trait+label), then suffix disambiguation (`_1`, `_2`, ... for all instances of a duplicate). `synthesizeBaseId` picks from a ranked trait list (`backButton` → `tabBarItem` → `searchField` → `textEntry` → `switchButton` → `adjustable` → `header` → `button` → `link` → `image` → `tabBar`) and slugifies the label. Value is excluded for stability. **Wire-format-stable** — agents rely on synthesis being predictable, do not change without a major version bump.
 
-4. **`WireConversion.swift`** — Pure static namespace. `toWire(_:)` maps `AccessibilityElement` → `HeistElement` (sanitizes NaN/infinity in frames). `toWireTree(...)` walks a hierarchy + `containerStableIds` + `heistIdByElement` to emit the canonical wire tree. `computeDelta` has three paths: screen changed → full new `Interface`; fast no-change check via hierarchy hash; something changed → full wire conversion + `computeElementDelta`.
+4. **`WireConversion.swift`** — Pure static namespace (caseless `@MainActor enum`). `convert(_:)` and `toWire(_:)` map `AccessibilityElement` / `Screen.ScreenElement` → `HeistElement` (sanitizes NaN/infinity in frames). `toWireTree(from:)` walks a `Screen`'s hierarchy + `containerStableIds` + `heistIdByElement` to emit the canonical wire tree. `traitNames(_:)` maps a `UIAccessibilityTraits` bitmask to `[HeistTrait]`. No delta logic — see `InterfaceDiff`.
+
+4a. **`InterfaceDiff.swift`** — Pure static namespace (caseless `@MainActor enum`). `computeDelta(before:after:beforeTree:beforeTreeHash:afterTree:isScreenChange:)` has three paths: screen changed → full new `Interface`; fast no-change check via hierarchy hash + tree-edit fallback; something changed → lift to wire via `WireConversion.toWire`, then `computeElementEdits` + `computeTreeEdits` (with functional-move pairing inference to collapse churn that's really a move). Owns the four delta-internal types: `WireTreeRecord`, `ElementIdentitySignature`, `ElementStateSignature`, `ElementPairingSignature`.
 
 5. **`TheStash+Matching.swift`** — `matchScreenElements(matcher, limit:)` walks `currentScreen.hierarchy` (live only — off-viewport explored elements are NOT in the matcher path), maps hits through `currentScreen.heistIdByElement`. **Exact-or-miss**: `AccessibilityElement.matches(_:mode:)` defers to `ElementMatcher.stringEquals` (TheScore) for byte-for-byte server/client equivalence: case-insensitive equality with typography folding. Unknown trait names fail-safe to a miss. `MatchMode.substring` is reserved for `Diagnostics.findNearMiss`; resolution itself never uses substring.
 

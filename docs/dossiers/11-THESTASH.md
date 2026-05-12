@@ -1,6 +1,6 @@
 # TheStash - The Score Handler
 
-> **Files:** `TheStash.swift`, `TheStash+Matching.swift`, `TheStash+Capture.swift`, `TheStash/WireConversion.swift`, `TheStash/IdAssignment.swift`, `TheStash/Screen.swift`, `TheStash/Diagnostics.swift`, `TheStash/Interactivity.swift`, `TheStash/ArrayHelpers.swift`
+> **Files:** `TheStash.swift`, `TheStash+Matching.swift`, `TheStash+Capture.swift`, `TheStash/WireConversion.swift`, `TheStash/InterfaceDiff.swift`, `TheStash/IdAssignment.swift`, `TheStash/Screen.swift`, `TheStash/Diagnostics.swift`, `TheStash/Interactivity.swift`, `TheStash/ArrayHelpers.swift`
 > **Platform:** iOS 17.0+ (UIKit, DEBUG builds only)
 > **Role:** Resolution layer, target dispatch, wire conversion, screen capture
 
@@ -14,8 +14,8 @@ Post-0.2.25 the resolution layer is **a single immutable value**, `Screen`. TheS
 2. **Target resolution** — `resolveTarget(_:)` looks only in `currentScreen.elements` / `currentScreen.hierarchy`. The off-screen rule is **strict**: an heistId not in `currentScreen.elements` returns `.notFound` with a near-miss suggestion. No fallback to a recorded scroll position from a previous parse. See [12-UNIFIED-TARGETING.md](12-UNIFIED-TARGETING.md) for the full targeting system.
 3. **Element matching** — `matchScreenElements(_:limit:)` walks `currentScreen.hierarchy` using `ElementMatcher` predicates with AND semantics and case-insensitive equality (typography-folded — smart quotes, dashes, ellipsis fold to ASCII; emoji/accents/CJK preserved). Matching is exact or miss; substring is reserved for the diagnostic suggestion path (`Diagnostics.findNearMiss`).
 4. **HeistId synthesis** — `IdAssignment` assigns stable, deterministic `heistId` identifiers directly from `AccessibilityElement` (developer identifier preferred, else synthesized from traits+label; value excluded for stability), with suffix disambiguation for duplicates and `_at_X_Y` content-position suffixes for spatially-distinct same-content elements seen within one parse. Synthesis is wire format — see CLAUDE.md.
-5. **Wire conversion at boundary** — `WireConversion.toWire()` converts `Screen.ScreenElement` → `HeistElement` at serialization boundaries. `WireConversion.toWireTree(from:)` walks the live hierarchy and emits `[InterfaceNode]` for the full tree payload.
-6. **Delta computation** — `WireConversion.computeDelta()` computes interface deltas from before/after snapshots.
+5. **Wire conversion at boundary** — `WireConversion.toWire()` converts `Screen.ScreenElement` → `HeistElement` at serialization boundaries. `WireConversion.toWireTree(from:)` walks the live hierarchy and emits `[InterfaceNode]` for the full tree payload. Pure transform — no stored state.
+6. **Delta computation** — `InterfaceDiff.computeDelta()` compares before/after snapshots and emits a compact `InterfaceDelta`. Lifts internal `ScreenElement` arrays to wire form via `WireConversion.toWire`, then computes element-level and tree-level edits side-by-side (including functional-move pairing inference). Sibling of `WireConversion`; the two were split in 0.2.26 so trait-policy edits and delta-algorithm edits no longer share a file.
 7. **Element actions** — thin wrappers over `accessibilityActivate()`, `accessibilityIncrement()`, `accessibilityDecrement()`, `accessibilityCustomActions` on the live UIKit object. `performCustomAction` returns a `CustomActionOutcome` enum so callers can distinguish "view deallocated" from "no such action" without a raw NSObject check.
 8. **Scroll-position primitives** — `jumpToRecordedPosition(_:)`, `restoreScrollPosition(_:to:)`, and `scrollTargetOffset(for:in:)` set `contentOffset` on an element's owning scroll view from a recorded `contentSpaceOrigin`. The stash decides nothing (callers still orchestrate when to jump); it just encapsulates the UIScrollView write so the scroll view handle doesn't leak.
 9. **Live geometry readout** — `liveGeometry(for:)` promotes the weak NSObject ref internally and returns a value-typed `(frame, activationPoint, scrollView)` snapshot for callers that need to make viewport decisions.
@@ -78,7 +78,7 @@ flowchart LR
         direction TB
         B1["currentScreen: Screen<br/>(one mutable field)"]
         B2["Target resolution<br/>(heistId / matcher)"]
-        B3["Wire conversion<br/>(toWire, computeDelta)"]
+        B3["WireConversion (toWire)<br/>+ InterfaceDiff (computeDelta)"]
         B6["Screen capture<br/>+ recording frames"]
     end
 
@@ -192,7 +192,8 @@ No store writes to another store. No circular dependencies.
 | `TheStash+Matching.swift` | Element matching against ElementMatcher predicates over `currentScreen.hierarchy` |
 | `TheStash+Capture.swift` | Screen capture (clean + recording overlay) |
 | `TheStash/Screen.swift` | `Screen` struct + `ScreenElement` + `ScrollableViewRef` + `merging(_:)` |
-| `TheStash/WireConversion.swift` | Caseless enum with static methods: toWire(), delta computation, hierarchy → InterfaceNode tree conversion |
+| `TheStash/WireConversion.swift` | Caseless enum with static methods: traitNames, convert, toWire (element + array), toWireTree (Screen → InterfaceNode tree). Pure transform; no delta logic. |
+| `TheStash/InterfaceDiff.swift` | Caseless enum with static methods: `computeDelta` and its element/tree edit helpers (functional-move pairing, tree-order sort). Consumes the wire forms produced by `WireConversion`. |
 | `TheStash/IdAssignment.swift` | Caseless enum with static methods: deterministic heistId synthesis from traits/labels (wire-format-stable) |
 | `TheStash/Diagnostics.swift` | Caseless enum with static methods: resolution error formatting, near-miss suggestions |
 | `TheStash/Interactivity.swift` | Interactivity predicates (shared by WireConversion and ActionExecution) |
@@ -206,4 +207,4 @@ No store writes to another store. No circular dependencies.
 
 ## Architectural Rule
 
-TheStash owns the NSObject boundary — value semantics at its API edge. It holds exactly one piece of resolution state, `currentScreen`, and exposes thin facades for parse, refresh, resolve, match, wire-convert, and act. It does not *orchestrate* — it does not decide when to scroll, when to refresh, or when to dispatch an action. Those decisions belong to TheBrains, which coordinates TheStash, TheBurglar, TheSafecracker, and TheTripwire. No NSObject escapes the stash after TheBurglar deposits it: callers pass `ScreenElement` tokens and receive CGRects, CGPoints, Bools, and typed outcome enums. Wire conversion and ID assignment are static methods on caseless enums (`TheStash.WireConversion`, `TheStash.IdAssignment`); TheStash exposes thin instance facades (`toWire`, `wireTree`, `computeDelta`, `traitNames`) for ergonomics — both forms are valid, the statics are the source of truth.
+TheStash owns the NSObject boundary — value semantics at its API edge. It holds exactly one piece of resolution state, `currentScreen`, and exposes thin facades for parse, refresh, resolve, match, and act. It does not *orchestrate* — it does not decide when to scroll, when to refresh, or when to dispatch an action. Those decisions belong to TheBrains, which coordinates TheStash, TheBurglar, TheSafecracker, and TheTripwire. No NSObject escapes the stash after TheBurglar deposits it: callers pass `ScreenElement` tokens and receive CGRects, CGPoints, Bools, and typed outcome enums. Wire conversion, delta computation, and ID assignment are static methods on caseless enums (`TheStash.WireConversion`, `TheStash.InterfaceDiff`, `TheStash.IdAssignment`); callers invoke them directly. TheStash retains `wireTree()` / `wireTreeHash()` as thin readers because they need the *current* screen — they are not zero-behavior facades.

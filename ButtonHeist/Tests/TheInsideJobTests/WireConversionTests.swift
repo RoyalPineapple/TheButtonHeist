@@ -30,6 +30,7 @@ private extension ElementEdits {
 final class WireConverterTests: XCTestCase {
 
     private typealias WireConversion = TheStash.WireConversion
+    private typealias InterfaceDiff = TheStash.InterfaceDiff
 
     // MARK: - Helpers
 
@@ -238,7 +239,7 @@ final class WireConverterTests: XCTestCase {
 
     func testIdenticalSnapshotsReturnNoChange() {
         let elements = [makeScreenElement(heistId: "button_ok", label: "OK", traits: [.button])]
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: elements, after: elements, afterTree: [], isScreenChange: false
         )
         XCTAssertFalse(delta.isScreenChanged)
@@ -251,7 +252,7 @@ final class WireConverterTests: XCTestCase {
 
     func testEmptySnapshotsReturnNoChange() {
         let empty: [TheStash.ScreenElement] = []
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: empty, after: empty, afterTree: [], isScreenChange: false
         )
         XCTAssertFalse(delta.isScreenChanged)
@@ -266,7 +267,7 @@ final class WireConverterTests: XCTestCase {
         let added = makeScreenElement(heistId: "button_cancel", label: "Cancel", traits: [.button])
         let after = before + [added]
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertFalse(delta.isScreenChanged)
@@ -285,7 +286,7 @@ final class WireConverterTests: XCTestCase {
         ]
         let after = [before[0]]
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertFalse(delta.isScreenChanged)
@@ -300,7 +301,7 @@ final class WireConverterTests: XCTestCase {
         let before = [makeScreenElement(heistId: "slider", value: "50%")]
         let after = [makeScreenElement(heistId: "slider", value: "75%")]
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertFalse(delta.isScreenChanged)
@@ -316,7 +317,7 @@ final class WireConverterTests: XCTestCase {
         let before = [makeScreenElement(heistId: "btn", traits: [.button])]
         let after = [makeScreenElement(heistId: "btn", traits: [.button, .selected])]
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertFalse(delta.isScreenChanged)
@@ -331,7 +332,7 @@ final class WireConverterTests: XCTestCase {
         let before = [makeScreenElement(heistId: "btn", hint: "Tap to continue")]
         let after = [makeScreenElement(heistId: "btn", hint: "Tap to go back")]
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertFalse(delta.isScreenChanged)
@@ -346,7 +347,7 @@ final class WireConverterTests: XCTestCase {
         let before = [makeScreenElement(heistId: "slider", traits: [.button])]
         let after = [makeScreenElement(heistId: "slider", traits: [.adjustable])]
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertFalse(delta.isScreenChanged)
@@ -358,7 +359,7 @@ final class WireConverterTests: XCTestCase {
         let before = [makeScreenElement(heistId: "box", frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 50)]
         let after = [makeScreenElement(heistId: "box", frameX: 10, frameY: 20, frameWidth: 100, frameHeight: 50)]
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertFalse(delta.isScreenChanged)
@@ -373,7 +374,7 @@ final class WireConverterTests: XCTestCase {
         let before = [makeScreenElement(heistId: "btn", activationPointX: 50, activationPointY: 25)]
         let after = [makeScreenElement(heistId: "btn", activationPointX: 75, activationPointY: 40)]
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertFalse(delta.isScreenChanged)
@@ -388,7 +389,7 @@ final class WireConverterTests: XCTestCase {
         let before = [makeScreenElement(heistId: "slider", value: "50%", hint: "Volume")]
         let after = [makeScreenElement(heistId: "slider", value: "75%", hint: "Music Volume")]
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertEqual(delta.testEdits.updatedOptional?.first?.changes.count, 2)
@@ -403,7 +404,7 @@ final class WireConverterTests: XCTestCase {
         let before = [makeScreenElement(heistId: "loginButton", label: "Show More", identifier: "loginButton")]
         let after = [makeScreenElement(heistId: "loginButton", label: "Show Less", identifier: "loginButton")]
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertFalse(delta.isScreenChanged)
@@ -421,7 +422,7 @@ final class WireConverterTests: XCTestCase {
         let before = [makeScreenElement(heistId: "button_ok", label: "OK", traits: [.button])]
         let after = [makeScreenElement(heistId: "button_done", label: "Done", traits: [.button])]
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertFalse(delta.isScreenChanged)
@@ -441,7 +442,7 @@ final class WireConverterTests: XCTestCase {
         // the flat snapshot — so the tree must reflect after.
         let afterTree: [InterfaceNode] = [wireLeaf(afterElement)]
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: before, after: after, afterTree: afterTree, isScreenChange: true
         )
         guard case .screenChanged(let payload) = delta else {
@@ -463,7 +464,7 @@ final class WireConverterTests: XCTestCase {
             )
         ]
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: [element],
             after: [element],
             beforeTree: beforeTree,
@@ -503,7 +504,7 @@ final class WireConverterTests: XCTestCase {
             wireLeaf(first),
         ]
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: [first, second],
             after: [second, first],
             beforeTree: beforeTree,
@@ -554,7 +555,7 @@ final class WireConverterTests: XCTestCase {
             wireLeaf(afterElement),
         ]
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: [beforeElement, other],
             after: [other, afterElement],
             beforeTree: beforeTree,
@@ -603,7 +604,7 @@ final class WireConverterTests: XCTestCase {
             wireLeaf(afterElement),
         ]
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: [beforeElement, other],
             after: [other, afterElement],
             beforeTree: beforeTree,
@@ -647,7 +648,7 @@ final class WireConverterTests: XCTestCase {
         let beforeTree = [InterfaceNode.element(WireConversion.toWire(beforeElement))]
         let afterTree: [InterfaceNode] = [wireLeaf(afterElement)]
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: [beforeElement],
             after: [afterElement],
             beforeTree: beforeTree,
@@ -674,7 +675,7 @@ final class WireConverterTests: XCTestCase {
         ]
         let afterTree: [InterfaceNode] = [wireLeaf(first)]
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: [first, second],
             after: [first],
             beforeTree: beforeTree,
@@ -707,7 +708,7 @@ final class WireConverterTests: XCTestCase {
             makeScreenElement(heistId: "cell_1", value: "Y"),
         ]
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertFalse(delta.isScreenChanged)
@@ -727,7 +728,7 @@ final class WireConverterTests: XCTestCase {
             makeScreenElement(heistId: "cell", value: "X"),
         ]
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertFalse(delta.isScreenChanged)
@@ -741,7 +742,7 @@ final class WireConverterTests: XCTestCase {
     func testNoDifferencesCoercedToNoChange() {
         let screenElement = makeScreenElement(heistId: "btn", label: "OK", traits: [.button])
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: [screenElement], after: [screenElement], afterTree: [], isScreenChange: false
         )
         XCTAssertFalse(delta.isScreenChanged)
@@ -822,7 +823,7 @@ final class WireConverterTests: XCTestCase {
             customContent: [.init(label: "Size", value: "3.1 MB", isImportant: false)]
         )]
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertFalse(delta.isScreenChanged)
@@ -841,7 +842,7 @@ final class WireConverterTests: XCTestCase {
             customContent: [.init(label: "Price", value: "$9.99", isImportant: true)]
         )]
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertFalse(delta.isScreenChanged)
@@ -860,7 +861,7 @@ final class WireConverterTests: XCTestCase {
         )]
         let after = [makeScreenElement(heistId: "card", label: "Item")]
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertFalse(delta.isScreenChanged)
@@ -882,7 +883,7 @@ final class WireConverterTests: XCTestCase {
             ]
         )]
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
         let change = delta.testEdits.updatedOptional?.first?.changes.first
@@ -979,7 +980,7 @@ final class WireConverterTests: XCTestCase {
             customContent: content
         )]
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: elements, after: elements, afterTree: [], isScreenChange: false
         )
         XCTAssertFalse(delta.isScreenChanged)
@@ -1000,7 +1001,7 @@ final class WireConverterTests: XCTestCase {
             customContent: [.init(label: "Size", value: "2.4 MB", isImportant: true)]
         )]
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertFalse(delta.isScreenChanged)
@@ -1025,7 +1026,7 @@ final class WireConverterTests: XCTestCase {
             customContent: [.init(label: "Stock", value: "Low Stock", isImportant: true)]
         )]
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
         XCTAssertFalse(delta.isScreenChanged)
@@ -1045,7 +1046,7 @@ final class WireConverterTests: XCTestCase {
             customContent: [.init(label: "Featured", value: "", isImportant: true)]
         )]
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
         let change = delta.testEdits.updatedOptional?.first?.changes.first
@@ -1061,7 +1062,7 @@ final class WireConverterTests: XCTestCase {
             customContent: [.init(label: "", value: "Available", isImportant: false)]
         )]
 
-        let delta = WireConversion.computeDelta(
+        let delta = InterfaceDiff.computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
         )
         let change = delta.testEdits.updatedOptional?.first?.changes.first

@@ -151,10 +151,11 @@ final class TheBrains {
         _ = await navigation.exploreAndPrune()
         let afterSnapshot = stash.selectElements()
 
-        let baseDelta = stash.computeDelta(
+        let baseDelta = TheStash.InterfaceDiff.computeDelta(
             before: before.snapshot, after: afterSnapshot,
             beforeTree: before.tree,
             beforeTreeHash: before.treeHash,
+            afterTree: stash.wireTree(),
             isScreenChange: isScreenChange
         )
         let transientElements = SettleSession.transientElements(
@@ -479,10 +480,11 @@ final class TheBrains {
             before: before.elements, after: afterElements,
             beforeHierarchy: before.hierarchy, afterHierarchy: stash.currentHierarchy
         )
-        return stash.computeDelta(
+        return TheStash.InterfaceDiff.computeDelta(
             before: before.snapshot, after: afterSnapshot,
             beforeTree: before.tree,
             beforeTreeHash: before.treeHash,
+            afterTree: stash.wireTree(),
             isScreenChange: isScreenChange
         )
     }
