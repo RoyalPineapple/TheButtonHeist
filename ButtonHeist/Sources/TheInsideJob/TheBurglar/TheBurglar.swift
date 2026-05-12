@@ -21,11 +21,6 @@ final class TheBurglar {
     private let parser = AccessibilityHierarchyParser()
     private let tripwire: TheTripwire
 
-    /// Persistence ratio below which a tab bar content swap counts as a tab switch.
-    /// If fewer than this fraction of non-tab-bar labels persist between snapshots,
-    /// we treat it as a screen change rather than a scroll.
-    private static let tabSwitchPersistThreshold = 0.4
-
     init(tripwire: TheTripwire) {
         self.tripwire = tripwire
     }
@@ -163,7 +158,7 @@ final class TheBurglar {
 
         let maxCount = max(beforeContent.count, afterContent.count)
         let persistRatio = Double(matchedCount) / Double(maxCount)
-        return persistRatio < Self.tabSwitchPersistThreshold
+        return persistRatio < AccessibilityPolicy.tabSwitchPersistThreshold
     }
 
     private struct TabBarPartition {
