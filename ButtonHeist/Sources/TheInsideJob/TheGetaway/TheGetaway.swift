@@ -38,6 +38,16 @@ final class TheGetaway {
     var completedRecording: RecordingOutcome = .none
     var pendingRecordingResponse: (requestId: String?, respond: (Data) -> Void)?
 
+    /// Client ID of the connection that issued the in-flight `start_recording`.
+    /// Set in `handleStartRecording` and threaded through the lifecycle so
+    /// (a) auto-finish payloads can be delivered to the originator instead of
+    /// broadcast to every authenticated client, and (b) any cached completion
+    /// can be invalidated when that connection drops or the session releases.
+    /// Nil between recordings. Cleared in `tearDown`, on originator disconnect,
+    /// on session-active-change-to-false, and when `completedRecording` is
+    /// drained by a `stop_recording` pickup or successful direct delivery.
+    var recordingOriginatorClientId: Int?
+
     /// Current transport — set by `wireTransport`, cleared on teardown.
     private(set) weak var transport: ServerTransport?
 
@@ -102,6 +112,13 @@ final class TheGetaway {
         }
         let onSessionActiveChanged: @MainActor @Sendable (Bool) -> Void = { [weak self] isActive in
             self?.transport?.updateTXTRecord([TXTRecordKey.sessionActive.rawValue: isActive ? "1" : "0"])
+            if !isActive {
+                // Session released — drop any cached recording payload so a
+                // future driver can't pick up a video the previous driver
+                // started. Pending stop waiters are also cleared; their
+                // transport is dead anyway.
+                self?.invalidateRecordingForSessionRelease()
+            }
         }
         Task {
             await muscle.installCallbacks(
@@ -153,6 +170,7 @@ final class TheGetaway {
 
         case .clientDisconnected(let clientId):
             insideJobLogger.info("Client \(clientId) disconnected")
+            invalidateRecordingForDisconnect(clientId: clientId)
             await muscle.handleClientDisconnected(clientId)
 
         case .dataReceived(let clientId, let data, let respond):
@@ -184,6 +202,7 @@ final class TheGetaway {
         hierarchyInvalidated = false
         completedRecording = .none
         pendingRecordingResponse = nil
+        recordingOriginatorClientId = nil
     }
 
     /// Insert a Task into `pendingRecordingTasks` and prune already-completed
@@ -249,9 +268,9 @@ final class TheGetaway {
 
             switch message {
             case .startRecording(let config):
-                await handleStartRecording(config, requestId: requestId, respond: respond)
+                await handleStartRecording(config, clientId: clientId, requestId: requestId, respond: respond)
             case .stopRecording:
-                await handleStopRecording(requestId: requestId, respond: respond)
+                await handleStopRecording(clientId: clientId, requestId: requestId, respond: respond)
             default:
                 if let stakeout {
                     await stakeout.noteActivity()

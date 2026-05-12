@@ -307,6 +307,15 @@ actor TheMuscle {
         }
     }
 
+    /// Send an already-encoded envelope to a single client.
+    ///
+    /// Used by TheGetaway to route auto-finish recording payloads to the
+    /// originating `start_recording` client without broadcasting the video
+    /// to every authenticated peer.
+    func sendData(_ data: Data, toClient clientId: Int) async {
+        await sendToClient?(data, clientId)
+    }
+
     func handleUnauthenticatedMessage(_ clientId: Int, data: Data, respond: @escaping @Sendable (Data) -> Void) async {
         guard let envelope = decodeRequest(data) else {
             logger.warning("Client \(clientId) sent unparsable message before authenticating, disconnecting")
