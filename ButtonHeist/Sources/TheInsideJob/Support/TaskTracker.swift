@@ -5,9 +5,8 @@ import os
 /// drain-and-cancel teardown.
 ///
 /// Three crew members track callback-bridge Tasks the same way: hold a set,
-/// insert on spawn (pruning already-cancelled handles to keep the set
-/// bounded), and cancel-all on teardown. The pattern needs a lock because
-/// inserts happen from arbitrary isolation contexts — NWConnection /
+/// insert on spawn, and cancel-all on teardown. The pattern needs a lock
+/// because inserts happen from arbitrary isolation contexts — NWConnection /
 /// NWListener callbacks, UIAlertController button handlers — that can't hop
 /// onto the owning actor synchronously.
 ///
@@ -16,9 +15,28 @@ import os
 /// `spawn(_:)` when the call site just wants a `@Sendable` closure scheduled
 /// and tracked in one step.
 ///
-/// `cancelAll()` snapshots the set under the lock, clears it, then cancels
-/// each handle outside the lock so a Task's completion handler can't deadlock
-/// against the same lock while we're tearing down.
+/// **Lifecycle invariant.** Every tracked Task is removed from the set via
+/// exactly one of two paths:
+///
+/// 1. **Completion path.** When `record(_:)` or `spawn(_:)` accepts a Task, a
+///    sibling watcher Task is spawned that awaits the tracked Task's value
+///    and then removes it under the lock. This handles the common case of a
+///    Task that finishes normally — `Task.isCancelled` is `false` for tasks
+///    that completed without cancellation, so without explicit self-removal
+///    a completed Task would linger in the set until `cancelAll()` ran. On
+///    hot paths (every receive callback, every send completion) that lingering
+///    is an unbounded slow leak.
+/// 2. **Teardown path.** `cancelAll()` snapshots the set under the lock,
+///    clears it, then cancels each handle outside the lock. A Task that
+///    completes and self-removes between snapshot and cancel is fine —
+///    `.cancel()` on a completed Task is a no-op.
+///
+/// The two paths race benignly: removal is idempotent (`Set.remove` on a
+/// missing element is a no-op), and the watcher task's removal happens under
+/// the same lock that protects `tasks`, so there is no torn read.
+///
+/// `cancelAll()` cancels handles outside the lock so a Task's cleanup body
+/// cannot deadlock against the same lock while we're tearing down.
 ///
 /// `@unchecked Sendable`: the only mutable state is `tasks`, protected by
 /// `OSAllocatedUnfairLock`. All access goes through `withLock`, so concurrent
@@ -27,13 +45,17 @@ final class TaskTracker: @unchecked Sendable { // swiftlint:disable:this agent_u
 
     private let tasks = OSAllocatedUnfairLock<Set<Task<Void, Never>>>(initialState: [])
 
-    /// Insert an already-created Task into the tracking set. Prunes
-    /// already-cancelled handles on every insert so the set does not grow
-    /// across many call sites. Safe to call from any isolation context.
+    /// Insert an already-created Task into the tracking set and arm
+    /// completion-removal. When the Task finishes (normally or via
+    /// cancellation), a sibling watcher Task removes it from the set. Safe to
+    /// call from any isolation context.
     func record(_ task: Task<Void, Never>) {
         tasks.withLock { current in
-            current = current.filter { !$0.isCancelled }
-            current.insert(task)
+            _ = current.insert(task)
+        }
+        Task { [weak self, task] in
+            await task.value
+            self?.remove(task)
         }
     }
 
@@ -57,4 +79,21 @@ final class TaskTracker: @unchecked Sendable { // swiftlint:disable:this agent_u
             task.cancel()
         }
     }
+
+    /// Remove a single Task from the tracking set. Idempotent: removing a
+    /// Task that is not present (e.g. because `cancelAll()` already cleared
+    /// the set) is a no-op.
+    private func remove(_ task: Task<Void, Never>) {
+        tasks.withLock { current in
+            _ = current.remove(task)
+        }
+    }
+
+    #if DEBUG
+    /// Test-only snapshot of the tracked Task count. Reads under the same
+    /// lock as mutators, so the value is consistent at the moment of read.
+    var taskCountForTesting: Int {
+        tasks.withLock { current in current.count }
+    }
+    #endif
 }
