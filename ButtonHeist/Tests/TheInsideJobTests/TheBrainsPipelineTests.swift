@@ -200,7 +200,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         seedScreen(elements: [("Seed", .button, "button_seed")])
         XCTAssertEqual(brains.stash.currentScreen.elements.count, 1)
 
-        _ = await brains.exploreAndPrune()
+        _ = await brains.navigation.exploreAndPrune()
 
         // Either the seed survives (no live parse landed and the union still
         // holds it) or it merges with new live entries — either way, the
@@ -222,10 +222,10 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
 
         var union = brains.stash.currentScreen
-        let manifest = await brains.exploreScreen(union: &union)
+        let manifest = await brains.navigation.exploreScreen(union: &union)
 
         XCTAssertTrue(manifest.exploredContainers.contains(container))
-        XCTAssertNotNil(brains.containerExploreStates[container],
+        XCTAssertNotNil(brains.navigation.containerExploreStates[container],
                         "Swipeable containers should be explored and cached")
     }
 

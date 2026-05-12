@@ -86,7 +86,7 @@ final class PresentationObscuringTests: XCTestCase {
 
     func testViewWithNoWindowIsNotObscured() {
         let view = UIView()
-        XCTAssertFalse(TheBrains.isObscuredByPresentation(view: view))
+        XCTAssertFalse(Navigation.isObscuredByPresentation(view: view))
     }
 
     func testViewInWindowWithNoPresentationIsNotObscured() {
@@ -99,7 +99,7 @@ final class PresentationObscuringTests: XCTestCase {
         let testView = UIView()
         rootVC.view.addSubview(testView)
 
-        XCTAssertFalse(TheBrains.isObscuredByPresentation(view: testView))
+        XCTAssertFalse(Navigation.isObscuredByPresentation(view: testView))
 
         window.isHidden = true
     }

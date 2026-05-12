@@ -21,7 +21,7 @@ final class ScreenManifestTests: XCTestCase {
     // MARK: - Initial State
 
     func testEmptyManifest() {
-        let manifest = TheBrains.ScreenManifest()
+        let manifest = Navigation.ScreenManifest()
         XCTAssertTrue(manifest.pendingContainers.isEmpty)
         XCTAssertTrue(manifest.exploredContainers.isEmpty)
         XCTAssertEqual(manifest.scrollCount, 0)
@@ -30,7 +30,7 @@ final class ScreenManifestTests: XCTestCase {
     // MARK: - markExplored
 
     func testMarkExploredMovesFromPendingToExplored() {
-        var manifest = TheBrains.ScreenManifest()
+        var manifest = Navigation.ScreenManifest()
         let container = makeScrollableContainer()
         manifest.addPendingContainers([container])
 
@@ -45,7 +45,7 @@ final class ScreenManifestTests: XCTestCase {
     // MARK: - addPendingContainers
 
     func testAddPendingContainersSkipsAlreadyExplored() {
-        var manifest = TheBrains.ScreenManifest()
+        var manifest = Navigation.ScreenManifest()
         let container = makeScrollableContainer()
         manifest.markExplored(container)
         manifest.addPendingContainers([container])
@@ -55,7 +55,7 @@ final class ScreenManifestTests: XCTestCase {
     }
 
     func testAddPendingContainersAddsNewContainers() {
-        var manifest = TheBrains.ScreenManifest()
+        var manifest = Navigation.ScreenManifest()
         let containerA = makeScrollableContainer(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
         let containerB = makeScrollableContainer(frame: CGRect(x: 0, y: 100, width: 100, height: 100))
         manifest.addPendingContainers([containerA, containerB])
@@ -66,8 +66,8 @@ final class ScreenManifestTests: XCTestCase {
     // MARK: - maxScrollsPerContainer
 
     func testMaxScrollsPerContainerIsReasonable() {
-        XCTAssertGreaterThan(TheBrains.ScreenManifest.maxScrollsPerContainer, 0)
-        XCTAssertEqual(TheBrains.ScreenManifest.maxScrollsPerContainer, 200)
+        XCTAssertGreaterThan(Navigation.ScreenManifest.maxScrollsPerContainer, 0)
+        XCTAssertEqual(Navigation.ScreenManifest.maxScrollsPerContainer, 200)
     }
 }
 

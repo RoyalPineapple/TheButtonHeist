@@ -391,7 +391,7 @@ final class ContainerFingerprintTests: XCTestCase {
             frame: .zero
         )
 
-        var manifest = TheBrains.ScreenManifest()
+        var manifest = Navigation.ScreenManifest()
         manifest.addPendingContainers([container])
         XCTAssertTrue(manifest.pendingContainers.contains(container))
 
@@ -407,7 +407,7 @@ final class ContainerFingerprintTests: XCTestCase {
             frame: .zero
         )
 
-        var manifest = TheBrains.ScreenManifest()
+        var manifest = Navigation.ScreenManifest()
         manifest.markExplored(container)
         manifest.addPendingContainers([container])
 

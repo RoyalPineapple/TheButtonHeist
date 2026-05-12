@@ -33,7 +33,7 @@ final class TheStashScrollTests: XCTestCase {
             scrollView: scrollView
         )
 
-        let target = brains.resolveScrollTarget(screenElement: screenElement)
+        let target = brains.navigation.resolveScrollTarget(screenElement: screenElement)
         if case .uiScrollView(let sv) = target {
             XCTAssertTrue(sv === scrollView)
         } else {
@@ -51,7 +51,7 @@ final class TheStashScrollTests: XCTestCase {
             scrollView: nil
         )
 
-        let target = brains.resolveScrollTarget(screenElement: screenElement)
+        let target = brains.navigation.resolveScrollTarget(screenElement: screenElement)
         XCTAssertNil(target)
     }
 
@@ -61,7 +61,7 @@ final class TheStashScrollTests: XCTestCase {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
         scrollView.contentSize = CGSize(width: 2000, height: 200)
 
-        let axis = TheBrains.scrollableAxis(of: .uiScrollView(scrollView))
+        let axis = Navigation.scrollableAxis(of: .uiScrollView(scrollView))
         XCTAssertTrue(axis.contains(.horizontal))
         XCTAssertFalse(axis.contains(.vertical))
     }
@@ -70,7 +70,7 @@ final class TheStashScrollTests: XCTestCase {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
         scrollView.contentSize = CGSize(width: 400, height: 2000)
 
-        let axis = TheBrains.scrollableAxis(of: .uiScrollView(scrollView))
+        let axis = Navigation.scrollableAxis(of: .uiScrollView(scrollView))
         XCTAssertFalse(axis.contains(.horizontal))
         XCTAssertTrue(axis.contains(.vertical))
     }
@@ -79,7 +79,7 @@ final class TheStashScrollTests: XCTestCase {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
         scrollView.contentSize = CGSize(width: 2000, height: 2000)
 
-        let axis = TheBrains.scrollableAxis(of: .uiScrollView(scrollView))
+        let axis = Navigation.scrollableAxis(of: .uiScrollView(scrollView))
         XCTAssertTrue(axis.contains(.horizontal))
         XCTAssertTrue(axis.contains(.vertical))
     }
@@ -88,40 +88,40 @@ final class TheStashScrollTests: XCTestCase {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
         scrollView.contentSize = CGSize(width: 400, height: 200)
 
-        let axis = TheBrains.scrollableAxis(of: .uiScrollView(scrollView))
+        let axis = Navigation.scrollableAxis(of: .uiScrollView(scrollView))
         XCTAssertTrue(axis.isEmpty)
     }
 
     // MARK: - adaptDirection
 
     func testAdaptDirectionMatchingAxis() {
-        let target = TheBrains.ScrollableTarget.swipeable(
+        let target = Navigation.ScrollableTarget.swipeable(
             frame: CGRect(x: 0, y: 0, width: 400, height: 800),
             contentSize: CGSize(width: 400, height: 2000)
         )
-        XCTAssertEqual(TheBrains.adaptDirection(.down, for: target), .down)
-        XCTAssertEqual(TheBrains.adaptDirection(.up, for: target), .up)
+        XCTAssertEqual(Navigation.adaptDirection(.down, for: target), .down)
+        XCTAssertEqual(Navigation.adaptDirection(.up, for: target), .up)
     }
 
     func testAdaptDirectionCrossAxis() {
-        let target = TheBrains.ScrollableTarget.swipeable(
+        let target = Navigation.ScrollableTarget.swipeable(
             frame: CGRect(x: 0, y: 0, width: 400, height: 200),
             contentSize: CGSize(width: 2000, height: 200)
         )
-        XCTAssertEqual(TheBrains.adaptDirection(.down, for: target), .right,
+        XCTAssertEqual(Navigation.adaptDirection(.down, for: target), .right,
                        "Forward vertical → forward horizontal")
-        XCTAssertEqual(TheBrains.adaptDirection(.up, for: target), .left,
+        XCTAssertEqual(Navigation.adaptDirection(.up, for: target), .left,
                        "Backward vertical → backward horizontal")
     }
 
     func testAdaptDirectionCrossAxisVertical() {
-        let target = TheBrains.ScrollableTarget.swipeable(
+        let target = Navigation.ScrollableTarget.swipeable(
             frame: CGRect(x: 0, y: 0, width: 400, height: 800),
             contentSize: CGSize(width: 400, height: 2000)
         )
-        XCTAssertEqual(TheBrains.adaptDirection(.right, for: target), .down,
+        XCTAssertEqual(Navigation.adaptDirection(.right, for: target), .down,
                        "Forward horizontal → forward vertical")
-        XCTAssertEqual(TheBrains.adaptDirection(.left, for: target), .up,
+        XCTAssertEqual(Navigation.adaptDirection(.left, for: target), .up,
                        "Backward horizontal → backward vertical")
     }
 

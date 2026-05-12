@@ -22,49 +22,49 @@ final class TheBrainsActionTests: XCTestCase {
     // MARK: - clampDuration
 
     func testClampDurationNilReturnsDefault() {
-        let result = brains.clampDuration(nil)
+        let result = brains.actions.clampDuration(nil)
         XCTAssertEqual(result, 0.5, accuracy: 0.001,
                        "nil duration should return default (0.5)")
     }
 
     func testClampDurationRespectsMinimum() {
-        let result = brains.clampDuration(0.001)
+        let result = brains.actions.clampDuration(0.001)
         XCTAssertEqual(result, 0.01, accuracy: 0.001,
                        "Duration below minimum should clamp to 0.01")
     }
 
     func testClampDurationRespectsMaximum() {
-        let result = brains.clampDuration(120.0)
+        let result = brains.actions.clampDuration(120.0)
         XCTAssertEqual(result, 60.0, accuracy: 0.001,
                        "Duration above maximum should clamp to 60.0")
     }
 
     func testClampDurationPassesThroughValidValue() {
-        let result = brains.clampDuration(1.5)
+        let result = brains.actions.clampDuration(1.5)
         XCTAssertEqual(result, 1.5, accuracy: 0.001,
                        "Valid duration should pass through unchanged")
     }
 
     func testClampDurationAtExactMinimum() {
-        let result = brains.clampDuration(0.01)
+        let result = brains.actions.clampDuration(0.01)
         XCTAssertEqual(result, 0.01, accuracy: 0.001,
                        "Exact minimum should pass through")
     }
 
     func testClampDurationAtExactMaximum() {
-        let result = brains.clampDuration(60.0)
+        let result = brains.actions.clampDuration(60.0)
         XCTAssertEqual(result, 60.0, accuracy: 0.001,
                        "Exact maximum should pass through")
     }
 
     func testClampDurationNegativeValueClampsToMin() {
-        let result = brains.clampDuration(-5.0)
+        let result = brains.actions.clampDuration(-5.0)
         XCTAssertEqual(result, 0.01, accuracy: 0.001,
                        "Negative duration should clamp to minimum")
     }
 
     func testClampDurationZeroClampsToMin() {
-        let result = brains.clampDuration(0.0)
+        let result = brains.actions.clampDuration(0.0)
         XCTAssertEqual(result, 0.01, accuracy: 0.001,
                        "Zero duration should clamp to minimum")
     }
@@ -73,7 +73,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     func testResolveDurationExplicitDurationTakesPrecedence() {
         let points = [CGPoint(x: 0, y: 0), CGPoint(x: 100, y: 0)]
-        let result = brains.resolveDuration(2.0, velocity: 50.0, points: points)
+        let result = brains.actions.resolveDuration(2.0, velocity: 50.0, points: points)
         XCTAssertEqual(result, 2.0, accuracy: 0.001,
                        "Explicit duration should take precedence over velocity")
     }
@@ -84,7 +84,7 @@ final class TheBrainsActionTests: XCTestCase {
             CGPoint(x: 100, y: 0),
             CGPoint(x: 200, y: 0),
         ]
-        let result = brains.resolveDuration(nil, velocity: 100.0, points: points)
+        let result = brains.actions.resolveDuration(nil, velocity: 100.0, points: points)
         XCTAssertEqual(result, 2.0, accuracy: 0.01,
                        "200pt path at 100pt/s = 2.0s")
     }
@@ -94,35 +94,35 @@ final class TheBrainsActionTests: XCTestCase {
             CGPoint(x: 0, y: 0),
             CGPoint(x: 300, y: 400),
         ]
-        let result = brains.resolveDuration(nil, velocity: 500.0, points: points)
+        let result = brains.actions.resolveDuration(nil, velocity: 500.0, points: points)
         XCTAssertEqual(result, 1.0, accuracy: 0.01,
                        "500pt diagonal path at 500pt/s = 1.0s")
     }
 
     func testResolveDurationNilBothReturnsDefault() {
         let points = [CGPoint(x: 0, y: 0), CGPoint(x: 100, y: 0)]
-        let result = brains.resolveDuration(nil, velocity: nil, points: points)
+        let result = brains.actions.resolveDuration(nil, velocity: nil, points: points)
         XCTAssertEqual(result, 0.5, accuracy: 0.001,
                        "No duration and no velocity should return default")
     }
 
     func testResolveDurationZeroVelocityReturnsDefault() {
         let points = [CGPoint(x: 0, y: 0), CGPoint(x: 100, y: 0)]
-        let result = brains.resolveDuration(nil, velocity: 0.0, points: points)
+        let result = brains.actions.resolveDuration(nil, velocity: 0.0, points: points)
         XCTAssertEqual(result, 0.5, accuracy: 0.001,
                        "Zero velocity should fall through to default")
     }
 
     func testResolveDurationVelocityResultIsClamped() {
         let points = [CGPoint(x: 0, y: 0), CGPoint(x: 10000, y: 0)]
-        let result = brains.resolveDuration(nil, velocity: 1.0, points: points)
+        let result = brains.actions.resolveDuration(nil, velocity: 1.0, points: points)
         XCTAssertEqual(result, 60.0, accuracy: 0.001,
                        "Very long path at low velocity should clamp to max")
     }
 
     func testResolveDurationVelocitySmallPathClamps() {
         let points = [CGPoint(x: 0, y: 0), CGPoint(x: 0.0001, y: 0)]
-        let result = brains.resolveDuration(nil, velocity: 1000.0, points: points)
+        let result = brains.actions.resolveDuration(nil, velocity: 1000.0, points: points)
         XCTAssertEqual(result, 0.01, accuracy: 0.001,
                        "Tiny path at high velocity should clamp to minimum")
     }
@@ -158,7 +158,7 @@ final class TheBrainsActionTests: XCTestCase {
             object: nil
         )
 
-        let result = await brains.executeIncrement(.heistId(heistId))
+        let result = await brains.actions.executeIncrement(.heistId(heistId))
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .elementDeallocated)
@@ -173,7 +173,7 @@ final class TheBrainsActionTests: XCTestCase {
             object: nil
         )
 
-        let result = await brains.executeDecrement(.heistId(heistId))
+        let result = await brains.actions.executeDecrement(.heistId(heistId))
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .elementDeallocated)
@@ -188,7 +188,7 @@ final class TheBrainsActionTests: XCTestCase {
             object: nil
         )
 
-        let result = await brains.executeCustomAction(
+        let result = await brains.actions.executeCustomAction(
             CustomActionTarget(elementTarget: .heistId(heistId), actionName: "Delete")
         )
 
@@ -206,7 +206,7 @@ final class TheBrainsActionTests: XCTestCase {
             object: liveObject
         )
 
-        let result = await brains.executeIncrement(.heistId(heistId))
+        let result = await brains.actions.executeIncrement(.heistId(heistId))
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .increment)
@@ -217,19 +217,19 @@ final class TheBrainsActionTests: XCTestCase {
     func testClearCacheResetsStashAndExploreState() {
         let element = makeElement(label: "Item")
         installScreen(elements: [(element, "test_id")])
-        brains.containerExploreStates[
+        brains.navigation.containerExploreStates[
             AccessibilityContainer(
                 type: .scrollable(contentSize: CGSize(width: 375, height: 2000)),
                 frame: .zero
             )
-        ] = TheBrains.ContainerExploreState(
+        ] = Navigation.ContainerExploreState(
             visibleSubtreeFingerprint: 1,
             discoveredHeistIds: ["x"]
         )
 
         brains.clearCache()
 
-        XCTAssertTrue(brains.containerExploreStates.isEmpty)
+        XCTAssertTrue(brains.navigation.containerExploreStates.isEmpty)
         XCTAssertEqual(brains.stash.currentScreen, .empty)
     }
 
