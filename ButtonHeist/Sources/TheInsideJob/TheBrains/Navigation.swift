@@ -48,6 +48,30 @@ final class Navigation {
     /// Keep swipe gesture timing stable; scrolling cadence is frame-driven.
     static let swipeGestureDuration: TimeInterval = 0.12
 
+    /// Layout frames to yield after a non-animated UIScrollView scroll or
+    /// `scrollToMakeVisible` before re-reading the accessibility tree.
+    /// Empirical: 3 frames covers a CATransaction flush plus a UIKit layout
+    /// pass without waiting for animations.
+    static let postScrollLayoutFrames: Int = 3
+
+    /// Real (CADisplayLink-paced) frames to yield after an accessibility-SPI
+    /// scroll jump (`jumpToRecordedPosition`, `restoreScrollPosition`,
+    /// `scrollToMakeVisible`-animated). The SPI queues an animated scroll;
+    /// `Task.yield` alone won't advance it, so this uses `yieldRealFrames`
+    /// (Task.sleep at 16ms intervals). 20 frames is the empirical budget for
+    /// that animation to land.
+    static let postJumpRealFrames: Int = 20
+
+    /// Maximum pages `scroll_to_edge` will walk before declaring the edge
+    /// unreachable. Paired with `element_search`'s 200-page cap declared
+    /// locally; the asymmetry is intentional (search is broader than edge-seek).
+    static let scrollToEdgeMaxPages: Int = 50
+
+    /// Settle window after `jumpToRecordedPosition` before reading geometry
+    /// for the comfort-zone check. Paired with `postJumpRealFrames` — the SPI
+    /// jump animates, this is the upper bound on waiting for it to land.
+    static let postJumpSettleTimeout: TimeInterval = 1.0
+
     /// Settle-loop pacing parameters. Two canned profiles: `.directionChange`
     /// is the conservative budget for reversals (spring/inertia takes longer);
     /// `.sameDirection` is the aggressive budget for continuing scrolls.
