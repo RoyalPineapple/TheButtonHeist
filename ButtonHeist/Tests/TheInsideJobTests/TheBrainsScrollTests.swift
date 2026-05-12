@@ -319,30 +319,11 @@ final class TheBrainsScrollTests: XCTestCase {
         liveHierarchy: [(AccessibilityElement, String)],
         offViewport: [(AccessibilityElement, String, CGPoint?)]
     ) {
-        var elements: [String: Screen.ScreenElement] = [:]
-        var heistIdByElement: [AccessibilityElement: String] = [:]
-        var hierarchy: [AccessibilityHierarchy] = []
-        for (index, pair) in liveHierarchy.enumerated() {
-            elements[pair.1] = Screen.ScreenElement(
-                heistId: pair.1, contentSpaceOrigin: nil, element: pair.0,
-                object: nil, scrollView: nil
-            )
-            heistIdByElement[pair.0] = pair.1
-            hierarchy.append(.element(pair.0, traversalIndex: index))
-        }
-        for entry in offViewport {
-            elements[entry.1] = Screen.ScreenElement(
-                heistId: entry.1, contentSpaceOrigin: entry.2,
-                element: entry.0, object: nil, scrollView: nil
-            )
-        }
-        brains.stash.currentScreen = Screen(
-            elements: elements,
-            hierarchy: hierarchy,
-            containerStableIds: [:],
-            heistIdByElement: heistIdByElement,
-            firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
+        brains.stash.currentScreen = .makeForTests(
+            elements: liveHierarchy.map { ($0.0, $0.1) },
+            offViewport: offViewport.map {
+                Screen.OffViewportEntry($0.0, heistId: $0.1, contentSpaceOrigin: $0.2)
+            }
         )
     }
 

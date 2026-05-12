@@ -20,6 +20,7 @@
 		0DB249CA4805D5D002B7E9FF /* ScreenTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD60080E4BE14A994AC72411 /* ScreenTests.swift */; };
 		0E2C28E4F9B2ECA2C9DB4369 /* AccessibilityPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B05AC474B9C2427612BB9A7 /* AccessibilityPolicyTests.swift */; };
 		0E433A911382DEAA1212EDD7 /* ClientMessages+TouchTargets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46B5611AC70709F078B75945 /* ClientMessages+TouchTargets.swift */; };
+		118A50FD8EB5B37B8C5FC4F3 /* TempDirectoryFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEB3305A1CA445C4E0169E24 /* TempDirectoryFixture.swift */; };
 		12AC8757F939E21B034993A9 /* TheFence+Formatting+Compact.swift in Sources */ = {isa = PBXBuildFile; fileRef = 767DEE6FAE03706BA7D58223 /* TheFence+Formatting+Compact.swift */; };
 		13344C2041F70A5C737C6D5F /* Navigation+Explore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0416F886B1256AC38EC0F682 /* Navigation+Explore.swift */; };
 		14FD6C0CDE2EE60E1805F245 /* TheFingerprints.swift in Sources */ = {isa = PBXBuildFile; fileRef = D12CAE8F1C0CE5FAD5BB0B5A /* TheFingerprints.swift */; };
@@ -200,6 +201,7 @@
 		DEFD37E760F6D330DE96EC02 /* TLSIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00ABB66C5FED7BD84301E2D3 /* TLSIdentity.swift */; };
 		E053E068CA957250B66351E4 /* TheFenceHandlerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B1D087B067D089CF13A7BBC /* TheFenceHandlerTests.swift */; };
 		E327E060E6709EE93A5BBEBB /* TheFence+ParameterSpec.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5E24FDE9CA2911FE9390918 /* TheFence+ParameterSpec.swift */; };
+		E5D5E025A0672D93F8FA9D40 /* ScreenFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10D79C29B3000357A40270A6 /* ScreenFactory.swift */; };
 		E7B024D8233DE5634603458C /* HeistPlaybackReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4E2CC1F69874C1BC9C88BBD /* HeistPlaybackReport.swift */; };
 		E84B186FCA145561549DE2EB /* IdAssignmentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D49CBF2F9D6B021BBD2C282F /* IdAssignmentTests.swift */; };
 		EA349CAD7A8024EDA17335AC /* ExploreOffFoldGateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07DE8C276376C372FBC44610 /* ExploreOffFoldGateTests.swift */; };
@@ -356,6 +358,7 @@
 		0B05AC474B9C2427612BB9A7 /* AccessibilityPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityPolicyTests.swift; sourceTree = "<group>"; };
 		0F6A4B7485D71E57F9ED1123 /* TheTripwire.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheTripwire.swift; sourceTree = "<group>"; };
 		10D4AA78D802F6F18119E5F4 /* Interactivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Interactivity.swift; sourceTree = "<group>"; };
+		10D79C29B3000357A40270A6 /* ScreenFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenFactory.swift; sourceTree = "<group>"; };
 		128F3191FFEFB94EDEC50C98 /* NetDeltaAccumulator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetDeltaAccumulator.swift; sourceTree = "<group>"; };
 		1308BFFECC16AF7E933839EB /* TheSafecracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheSafecracker.swift; sourceTree = "<group>"; };
 		13D30AC92A982F4FC9F47B71 /* swift-crypto_CCryptoBoringSSL.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "swift-crypto_CCryptoBoringSSL.bundle"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -522,6 +525,7 @@
 		DCC1088F98FACEF52AEBC66A /* BezierSamplerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BezierSamplerTests.swift; sourceTree = "<group>"; };
 		DD05EE261CD3684BED556896 /* TheGetaway+Recording.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheGetaway+Recording.swift"; sourceTree = "<group>"; };
 		DEB0B7809F88FC5A43CCE9A4 /* TheScoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheScoreTests.swift; sourceTree = "<group>"; };
+		DEB3305A1CA445C4E0169E24 /* TempDirectoryFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TempDirectoryFixture.swift; sourceTree = "<group>"; };
 		DF20B785D6EE842B5BA45D6C /* PendingRequestTrackerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingRequestTrackerTests.swift; sourceTree = "<group>"; };
 		DFE165B7F4612979A10F917F /* USBDeviceDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = USBDeviceDiscovery.swift; sourceTree = "<group>"; };
 		E1516619DB01066CA78C043C /* NetDeltaAccumulatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetDeltaAccumulatorTests.swift; sourceTree = "<group>"; };
@@ -611,6 +615,7 @@
 		00407D826337C530975FFF13 /* ButtonHeistTests */ = {
 			isa = PBXGroup;
 			children = (
+				54981A097707360726A2810E /* Helpers */,
 				FABF374ED46E8B26F4A831C2 /* AuthFailureTests.swift */,
 				DB4DDD1535AD9C1FE02A2C86 /* AuthFlowTests.swift */,
 				B71B881BAC0E71A88ED33B2A /* BookKeeperHeistTests.swift */,
@@ -819,6 +824,14 @@
 			path = Server;
 			sourceTree = "<group>";
 		};
+		54981A097707360726A2810E /* Helpers */ = {
+			isa = PBXGroup;
+			children = (
+				DEB3305A1CA445C4E0169E24 /* TempDirectoryFixture.swift */,
+			);
+			path = Helpers;
+			sourceTree = "<group>";
+		};
 		65F9437CA625EC19AE790A5C /* Tests */ = {
 			isa = PBXGroup;
 			children = (
@@ -1006,6 +1019,7 @@
 			isa = PBXGroup;
 			children = (
 				E6F4710016DAB7DB48972937 /* AccessibilityElementFactory.swift */,
+				10D79C29B3000357A40270A6 /* ScreenFactory.swift */,
 			);
 			path = Helpers;
 			sourceTree = "<group>";
@@ -1459,6 +1473,7 @@
 				97870800B0C86DD7C9CB7ED6 /* DeviceResolverTests.swift in Sources */,
 				EC8A154334ECF021BA4A2729 /* DiscoveredDeviceTests.swift in Sources */,
 				BB087841628B78C69870795C /* EnvironmentConfigTests.swift in Sources */,
+				118A50FD8EB5B37B8C5FC4F3 /* TempDirectoryFixture.swift in Sources */,
 				462DDE00FBBD9214256650F2 /* IdleMonitorTests.swift in Sources */,
 				9C5A844A6040C6C5A5073D35 /* Mocks.swift in Sources */,
 				A6E4744089078056B0B81B52 /* NetDeltaAccumulatorTests.swift in Sources */,
@@ -1493,6 +1508,7 @@
 				35733F90076016629B0E685B /* ElementMatcherTests.swift in Sources */,
 				EA349CAD7A8024EDA17335AC /* ExploreOffFoldGateTests.swift in Sources */,
 				B71383192968625B32A99AE2 /* AccessibilityElementFactory.swift in Sources */,
+				E5D5E025A0672D93F8FA9D40 /* ScreenFactory.swift in Sources */,
 				E84B186FCA145561549DE2EB /* IdAssignmentTests.swift in Sources */,
 				A70C5582716DE8D184D2187C /* InteractivityTests.swift in Sources */,
 				F9821E9AFFD222BE89C6AD3A /* KeyboardWindowTestHelpers.swift in Sources */,
@@ -1777,6 +1793,11 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
+					"$(inherited)",
+					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
+					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
+					"$(SRCROOT)/submodules/AccessibilitySnapshotBH/Sources/AccessibilitySnapshot/Parser/ObjC/include",
+					"$(inherited)",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
 					"$(SRCROOT)/submodules/AccessibilitySnapshotBH/Sources/AccessibilitySnapshot/Parser/ObjC/include",
@@ -1826,6 +1847,11 @@
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(inherited)",
+					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
+					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
+					"$(SRCROOT)/submodules/AccessibilitySnapshotBH/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 					"$(inherited)",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
@@ -1879,6 +1905,11 @@
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(inherited)",
+					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
+					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
+					"$(SRCROOT)/submodules/AccessibilitySnapshotBH/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 					"$(inherited)",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
@@ -2058,6 +2089,7 @@
 				LastSwiftMigration = 2620;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SRCROOT = "/Users/aodawa/Development/accra/.claude/worktrees/agent-ad0887e5";
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 				SWIFT_VERSION = 6;
 				VALIDATE_PRODUCT = YES;
@@ -2121,6 +2153,7 @@
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SRCROOT = "/Users/aodawa/Development/accra/.claude/worktrees/agent-ad0887e5";
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 				SWIFT_VERSION = 6;
 			};
@@ -2151,6 +2184,11 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(inherited)",
+					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
+					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
+					"$(SRCROOT)/submodules/AccessibilitySnapshotBH/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 					"$(inherited)",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",

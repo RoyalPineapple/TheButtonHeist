@@ -232,33 +232,15 @@ final class TheBrainsPipelineTests: XCTestCase {
     // MARK: - Helpers
 
     private func seedScreen(elements: [(label: String, traits: UIAccessibilityTraits, heistId: String)]) {
-        var screenElements: [String: Screen.ScreenElement] = [:]
-        var hierarchy: [AccessibilityHierarchy] = []
-        var heistIdByElement: [AccessibilityElement: String] = [:]
-        for (index, entry) in elements.enumerated() {
+        let pairs: [(AccessibilityElement, String)] = elements.map { entry in
             let element = AccessibilityElement.make(
                 label: entry.label,
                 traits: entry.traits,
                 respondsToUserInteraction: false
             )
-            screenElements[entry.heistId] = Screen.ScreenElement(
-                heistId: entry.heistId,
-                contentSpaceOrigin: nil,
-                element: element,
-                object: nil,
-                scrollView: nil
-            )
-            hierarchy.append(.element(element, traversalIndex: index))
-            heistIdByElement[element] = entry.heistId
+            return (element, entry.heistId)
         }
-        brains.stash.currentScreen = Screen(
-            elements: screenElements,
-            hierarchy: hierarchy,
-            containerStableIds: [:],
-            heistIdByElement: heistIdByElement,
-            firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
-        )
+        brains.stash.currentScreen = .makeForTests(elements: pairs)
     }
 
 }

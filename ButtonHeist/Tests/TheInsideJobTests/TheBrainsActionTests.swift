@@ -285,28 +285,9 @@ final class TheBrainsActionTests: XCTestCase {
         elements: [(AccessibilityElement, String)],
         objects: [String: NSObject?] = [:]
     ) {
-        var screenElements: [String: Screen.ScreenElement] = [:]
-        var hierarchy: [AccessibilityHierarchy] = []
-        var heistIdByElement: [AccessibilityElement: String] = [:]
-        for (index, pair) in elements.enumerated() {
-            let entry = Screen.ScreenElement(
-                heistId: pair.1,
-                contentSpaceOrigin: nil,
-                element: pair.0,
-                object: objects[pair.1] ?? nil,
-                scrollView: nil
-            )
-            screenElements[pair.1] = entry
-            hierarchy.append(.element(pair.0, traversalIndex: index))
-            heistIdByElement[pair.0] = pair.1
-        }
-        brains.stash.currentScreen = Screen(
-            elements: screenElements,
-            hierarchy: hierarchy,
-            containerStableIds: [:],
-            heistIdByElement: heistIdByElement,
-            firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
+        brains.stash.currentScreen = .makeForTests(
+            elements: elements.map { ($0.0, $0.1) },
+            objects: objects
         )
     }
 

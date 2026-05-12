@@ -7,13 +7,11 @@ final class BookKeeperHeistTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        tempDirectory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("bookkeeper-heist-tests-\(UUID().uuidString)")
-        try? FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        tempDirectory = TempDirectoryFixture.make(prefix: "bookkeeper-heist-tests")
     }
 
     override func tearDown() {
-        try? FileManager.default.removeItem(at: tempDirectory)
+        TempDirectoryFixture.remove(tempDirectory)
         super.tearDown()
     }
 
