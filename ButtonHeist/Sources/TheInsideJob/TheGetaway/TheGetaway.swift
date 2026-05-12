@@ -241,7 +241,11 @@ final class TheGetaway {
         let isObserver = await muscle.observerClients.contains(clientId)
 
         switch message {
-        // Protocol messages
+        // Protocol messages: handshake/auth flow is consumed by TheMuscle's
+        // pre-dispatch hook (`TheMuscle.swift` ~ line 331). By the time a
+        // message reaches this switch, those cases have already been handled
+        // and we should not process them again. Breaking here is intentional.
+        // swiftlint:disable:next agent_wire_message_arm_no_op_break
         case .clientHello, .authenticate, .watch:
             break
         case .requestInterface:
