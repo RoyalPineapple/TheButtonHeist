@@ -8,11 +8,37 @@ import AccessibilitySnapshotParser
 
 // MARK: - Action Execution
 //
-// Two generic pipelines handle all element and point interactions.
-// Each executeXxx method is a thin wrapper that feeds the pipeline
-// a closure for the actual gesture or accessibility action.
+// Internal component of TheBrains. Two generic pipelines handle all element
+// and point interactions. Each executeXxx method is a thin wrapper that feeds
+// the pipeline a closure for the actual gesture or accessibility action.
 
-extension TheBrains {
+/// Actions — element and point action execution.
+///
+/// Internal component of TheBrains. Calls into Navigation for
+/// pre-action positioning (`ensureOnScreen`, `ensureFirstResponderOnScreen`).
+@MainActor
+final class Actions {
+
+    // MARK: - Properties
+
+    let stash: TheStash
+    let safecracker: TheSafecracker
+    let tripwire: TheTripwire
+    let navigation: Navigation
+
+    // MARK: - Init
+
+    init(
+        stash: TheStash,
+        safecracker: TheSafecracker,
+        tripwire: TheTripwire,
+        navigation: Navigation
+    ) {
+        self.stash = stash
+        self.safecracker = safecracker
+        self.tripwire = tripwire
+        self.navigation = navigation
+    }
 
     // MARK: - Element Action Pipeline
 
@@ -24,7 +50,7 @@ extension TheBrains {
         requireInteractive: Bool = true,
         action: @MainActor (TheStash.ResolvedTarget) async -> TheSafecracker.InteractionResult?
     ) async -> TheSafecracker.InteractionResult {
-        await ensureOnScreen(for: target)
+        await navigation.ensureOnScreen(for: target)
         let resolution = stash.resolveTarget(target)
         guard let resolved = resolution.resolved else {
             return .failure(.elementNotFound, message: resolution.diagnostics)
@@ -53,7 +79,7 @@ extension TheBrains {
         action: (CGPoint) async -> Bool
     ) async -> TheSafecracker.InteractionResult {
         if let elementTarget {
-            await ensureOnScreen(for: elementTarget)
+            await navigation.ensureOnScreen(for: elementTarget)
         }
         switch stash.resolvePoint(from: elementTarget, pointX: pointX, pointY: pointY) {
         case .failure(let result):
@@ -70,7 +96,7 @@ extension TheBrains {
     func executeActivate(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
         await performElementAction(target: target, method: .activate) { resolved in
             // First attempt — accessibilityActivate on the live UIKit object.
-            let firstOutcome = stash.activate(resolved.screenElement)
+            let firstOutcome = self.stash.activate(resolved.screenElement)
             if firstOutcome == .success {
                 self.safecracker.showFingerprint(at: resolved.element.activationPoint)
                 return TheSafecracker.InteractionResult(success: true, method: .activate, message: nil, value: nil)
@@ -80,8 +106,8 @@ extension TheBrains {
             // a scroll can deallocate the weak object ref between resolution and
             // dispatch; re-resolving against a freshly-parsed tree gives us a new
             // live object at the (possibly updated) activation point.
-            self.refresh()
-            await self.ensureOnScreen(for: target)
+            self.navigation.refresh()
+            await self.navigation.ensureOnScreen(for: target)
             let retryResolution = self.stash.resolveTarget(target)
             let retryResolved = retryResolution.resolved ?? resolved
             let retryOutcome = self.stash.activate(retryResolved.screenElement)
@@ -117,7 +143,7 @@ extension TheBrains {
 
     func executeIncrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
         await performElementAction(target: target, method: .increment) { resolved in
-            guard stash.increment(resolved.screenElement) else {
+            guard self.stash.increment(resolved.screenElement) else {
                 return .failure(.elementDeallocated, message: "Element deallocated before increment")
             }
             self.safecracker.showFingerprint(at: resolved.element.activationPoint)
@@ -127,7 +153,7 @@ extension TheBrains {
 
     func executeDecrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
         await performElementAction(target: target, method: .decrement) { resolved in
-            guard stash.decrement(resolved.screenElement) else {
+            guard self.stash.decrement(resolved.screenElement) else {
                 return .failure(.elementDeallocated, message: "Element deallocated before decrement")
             }
             self.safecracker.showFingerprint(at: resolved.element.activationPoint)
@@ -137,7 +163,7 @@ extension TheBrains {
 
     func executeCustomAction(_ target: CustomActionTarget) async -> TheSafecracker.InteractionResult {
         await performElementAction(target: target.elementTarget, method: .customAction) { resolved in
-            switch stash.performCustomAction(named: target.actionName, on: resolved.screenElement) {
+            switch self.stash.performCustomAction(named: target.actionName, on: resolved.screenElement) {
             case .deallocated:
                 return .failure(.elementDeallocated, message: "Element deallocated before custom action")
             case .noSuchAction:
@@ -153,13 +179,13 @@ extension TheBrains {
     // MARK: - Edit / Pasteboard / Responder
 
     func executeEditAction(_ target: EditActionTarget) async -> TheSafecracker.InteractionResult {
-        await ensureFirstResponderOnScreen()
+        await navigation.ensureFirstResponderOnScreen()
         let success = safecracker.performEditAction(target.action)
         return TheSafecracker.InteractionResult(success: success, method: .editAction, message: nil, value: nil)
     }
 
     func executeSetPasteboard(_ target: SetPasteboardTarget) async -> TheSafecracker.InteractionResult {
-        await ensureFirstResponderOnScreen()
+        await navigation.ensureFirstResponderOnScreen()
         UIPasteboard.general.string = target.text
         return TheSafecracker.InteractionResult(
             success: true, method: .setPasteboard, message: nil, value: target.text
@@ -176,7 +202,7 @@ extension TheBrains {
     }
 
     func executeResignFirstResponder() async -> TheSafecracker.InteractionResult {
-        await ensureFirstResponderOnScreen()
+        await navigation.ensureFirstResponderOnScreen()
         let success = safecracker.resignFirstResponder()
         return TheSafecracker.InteractionResult(
             success: success, method: .resignFirstResponder,
@@ -225,7 +251,7 @@ extension TheBrains {
             guard let elementTarget = target.elementTarget else {
                 return .failure(.syntheticSwipe, message: "Unit-point swipe requires an element target")
             }
-            await ensureOnScreen(for: elementTarget)
+            await navigation.ensureOnScreen(for: elementTarget)
             guard let frame = stash.resolveFrame(for: elementTarget) else {
                 return .failure(.elementNotFound, message: "Element not found")
             }
@@ -244,7 +270,7 @@ extension TheBrains {
 
         // Absolute-point swipe: resolve start point, compute end from direction or explicit coords
         if let elementTarget = target.elementTarget {
-            await ensureOnScreen(for: elementTarget)
+            await navigation.ensureOnScreen(for: elementTarget)
         }
         switch stash.resolvePoint(from: target.elementTarget, pointX: target.startX, pointY: target.startY) {
         case .failure(let result):
@@ -357,7 +383,7 @@ extension TheBrains {
 
     func executeTypeText(_ target: TypeTextTarget) async -> TheSafecracker.InteractionResult {
         if let elementTarget = target.elementTarget {
-            await ensureOnScreen(for: elementTarget)
+            await navigation.ensureOnScreen(for: elementTarget)
             let resolution = stash.resolveTarget(elementTarget)
             guard let resolved = resolution.resolved else {
                 return .failure(.elementNotFound, message: resolution.diagnostics)

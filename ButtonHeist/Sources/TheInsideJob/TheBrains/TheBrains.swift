@@ -11,8 +11,9 @@ import AccessibilitySnapshotParser
 ///
 /// TheBrains takes a command and works it through to a result by coordinating
 /// TheStash (the screen value), TheSafecracker (gestures), and TheTripwire
-/// (timing). He owns action execution, scroll orchestration, screen
-/// exploration, and the post-action delta cycle.
+/// (timing). The post-action delta cycle and command dispatch live here;
+/// scroll/explore lives in `Navigation` and the 21 `executeXxx` action
+/// handlers live in `Actions` — both are internal components of TheBrains.
 @MainActor
 final class TheBrains {
 
@@ -21,20 +22,43 @@ final class TheBrains {
     let stash: TheStash
     let safecracker: TheSafecracker
     let tripwire: TheTripwire
-    let forceSwipeScrolling: Bool
-
-    /// Last dispatched swipe direction per swipeable target key.
-    var lastSwipeDirectionByTarget: [String: UIAccessibilityScrollDirection] = [:]
-
-    /// Cached state from the last explore of each scrollable container.
-    var containerExploreStates: [AccessibilityContainer: ContainerExploreState] = [:]
+    let navigation: Navigation
+    let actions: Actions
 
     init(tripwire: TheTripwire, forceSwipeScrolling: Bool = false) {
         self.tripwire = tripwire
-        self.forceSwipeScrolling = forceSwipeScrolling
-        self.stash = TheStash(tripwire: tripwire)
-        self.safecracker = TheSafecracker()
+        let stash = TheStash(tripwire: tripwire)
+        let safecracker = TheSafecracker()
+        self.stash = stash
+        self.safecracker = safecracker
+        let navigation = Navigation(
+            stash: stash,
+            safecracker: safecracker,
+            tripwire: tripwire,
+            forceSwipeScrolling: forceSwipeScrolling
+        )
+        self.navigation = navigation
+        self.actions = Actions(
+            stash: stash,
+            safecracker: safecracker,
+            tripwire: tripwire,
+            navigation: navigation
+        )
     }
+
+    // MARK: - Nested-Type Aliases
+    //
+    // Navigation owns the scroll/explore types. Aliases keep the historical
+    // `TheBrains.X` spelling working for tests and external readers that
+    // index the type by its dispatcher.
+
+    typealias ScrollableTarget = Navigation.ScrollableTarget
+    typealias ScrollAxis = Navigation.ScrollAxis
+    typealias SettleSwipeProfile = Navigation.SettleSwipeProfile
+    typealias SettleSwipeStep = Navigation.SettleSwipeStep
+    typealias SettleSwipeLoopState = Navigation.SettleSwipeLoopState
+    typealias ContainerExploreState = Navigation.ContainerExploreState
+    typealias ScreenManifest = Navigation.ScreenManifest
 
     // MARK: - Refresh Convenience
 
@@ -126,7 +150,7 @@ final class TheBrains {
                 beforeHierarchy: before.hierarchy, afterHierarchy: afterHierarchy
             )
         if isScreenChange {
-            containerExploreStates.removeAll()
+            navigation.containerExploreStates.removeAll()
         }
 
         if isScreenChange && afterElements.isEmpty {
@@ -138,7 +162,7 @@ final class TheBrains {
             stash.currentScreen = afterScreen
         }
 
-        _ = await exploreAndPrune()
+        _ = await navigation.exploreAndPrune()
         let afterSnapshot = stash.selectElements()
 
         let baseDelta = stash.computeDelta(
@@ -244,9 +268,8 @@ final class TheBrains {
 
     func clearCache() {
         stash.clearCache()
-        containerExploreStates.removeAll()
+        navigation.clearCache()
         lastSentState = nil
-        lastSwipeDirectionByTarget.removeAll()
     }
 
     // MARK: - Response State Tracking
@@ -481,6 +504,129 @@ final class TheBrains {
         set { stash.stakeout = newValue }
     }
 
+}
+
+// MARK: - Test-Facing Forwarders
+//
+// Existing tests reach into properties and methods that were moved to
+// Navigation / Actions. These thin forwarders preserve the historical
+// `brains.X` spelling without duplicating state — the state still lives
+// in the owning component. New production code should call
+// `brains.navigation.X` / `brains.actions.X` directly.
+
+extension TheBrains {
+
+    // MARK: - Navigation Forwarders
+
+    var containerExploreStates: [AccessibilityContainer: Navigation.ContainerExploreState] {
+        get { navigation.containerExploreStates }
+        set { navigation.containerExploreStates = newValue }
+    }
+
+    var lastSwipeDirectionByTarget: [String: UIAccessibilityScrollDirection] {
+        get { navigation.lastSwipeDirectionByTarget }
+        set { navigation.lastSwipeDirectionByTarget = newValue }
+    }
+
+    var forceSwipeScrolling: Bool { navigation.forceSwipeScrolling }
+
+    func exploreAndPrune(target: ElementTarget? = nil) async -> ScreenManifest {
+        await navigation.exploreAndPrune(target: target)
+    }
+
+    func exploreScreen(target: ElementTarget? = nil, union: inout Screen) async -> ScreenManifest {
+        await navigation.exploreScreen(target: target, union: &union)
+    }
+
+    func resolveScrollTarget(
+        screenElement: TheStash.ScreenElement,
+        axis: ScrollAxis? = nil
+    ) -> ScrollableTarget? {
+        navigation.resolveScrollTarget(screenElement: screenElement, axis: axis)
+    }
+
+    func offViewportRegistryEntry(for target: ElementTarget) -> Screen.ScreenElement? {
+        navigation.offViewportRegistryEntry(for: target)
+    }
+
+    func safeSwipeFrame(from frame: CGRect) -> CGRect {
+        navigation.safeSwipeFrame(from: frame)
+    }
+
+    // MARK: - Navigation Static Forwarders
+
+    static func scrollableAxis(of target: ScrollableTarget) -> ScrollAxis {
+        Navigation.scrollableAxis(of: target)
+    }
+
+    static func requiredAxis(for direction: ScrollDirection) -> ScrollAxis {
+        Navigation.requiredAxis(for: direction)
+    }
+
+    static func requiredAxis(for edge: ScrollEdge) -> ScrollAxis {
+        Navigation.requiredAxis(for: edge)
+    }
+
+    static func requiredAxis(for direction: ScrollSearchDirection) -> ScrollAxis {
+        Navigation.requiredAxis(for: direction)
+    }
+
+    static func uiScrollDirection(for direction: ScrollSearchDirection) -> UIAccessibilityScrollDirection {
+        Navigation.uiScrollDirection(for: direction)
+    }
+
+    static func uiScrollDirection(for direction: ScrollDirection) -> UIAccessibilityScrollDirection {
+        Navigation.uiScrollDirection(for: direction)
+    }
+
+    static func adaptDirection(
+        _ direction: ScrollSearchDirection,
+        for target: ScrollableTarget
+    ) -> UIAccessibilityScrollDirection {
+        Navigation.adaptDirection(direction, for: target)
+    }
+
+    static func edgeDirection(for edge: ScrollEdge) -> UIAccessibilityScrollDirection {
+        Navigation.edgeDirection(for: edge)
+    }
+
+    static func hasContentBeyondFrame(
+        of container: AccessibilityContainer,
+        in hierarchy: [AccessibilityHierarchy],
+        tolerance: CGFloat = 1
+    ) -> Bool {
+        Navigation.hasContentBeyondFrame(of: container, in: hierarchy, tolerance: tolerance)
+    }
+
+    static func isObscuredByPresentation(view: UIView) -> Bool {
+        Navigation.isObscuredByPresentation(view: view)
+    }
+
+    // MARK: - Actions Forwarders
+
+    func executeActivate(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
+        await actions.executeActivate(target)
+    }
+
+    func executeIncrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
+        await actions.executeIncrement(target)
+    }
+
+    func executeDecrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
+        await actions.executeDecrement(target)
+    }
+
+    func executeCustomAction(_ target: CustomActionTarget) async -> TheSafecracker.InteractionResult {
+        await actions.executeCustomAction(target)
+    }
+
+    func clampDuration(_ value: Double?) -> Double {
+        actions.clampDuration(value)
+    }
+
+    func resolveDuration(_ duration: Double?, velocity: Double?, points: [CGPoint]) -> TimeInterval {
+        actions.resolveDuration(duration, velocity: velocity, points: points)
+    }
 }
 
 #endif // DEBUG

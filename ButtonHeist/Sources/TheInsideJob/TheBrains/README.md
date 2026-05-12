@@ -2,22 +2,31 @@
 
 Command execution engine. Takes a `ClientMessage`, works it through refresh → action → settle → delta, and returns an `ActionResult`.
 
+TheBrains is the orchestrator. Two internal components handle the heavy lifting:
+
+- **`Navigation`** — scroll orchestration and screen exploration. Owns `ScrollableTarget`, `SettleSwipeLoopState`, `ScreenManifest`, `ContainerExploreState`, `lastSwipeDirectionByTarget`, `containerExploreStates`. Public entry points are `executeScroll`, `executeScrollToVisible`, `executeScrollToEdge`, `executeElementSearch`, `exploreAndPrune`, `ensureOnScreen`, `ensureFirstResponderOnScreen`.
+- **`Actions`** — the 21 `executeXxx` action handlers (activate, increment, decrement, customAction, editAction, setPasteboard, getPasteboard, resignFirstResponder, tap, longPress, swipe, drag, pinch, rotate, twoFingerTap, drawPath, drawBezier, typeText, plus the `performElementAction` / `performPointAction` generic pipelines and duration helpers).
+
+Both components are owned by TheBrains (`let navigation: Navigation`, `let actions: Actions`) and share the same TheStash / TheSafecracker / TheTripwire references. They are *internal components of TheBrains*, not crew members in their own right — neutral noun-style names. Actions holds a reference to Navigation so `executeTypeText` can call `navigation.ensureFirstResponderOnScreen()` after focusing a field.
+
+TheBrains keeps the post-action delta cycle, dispatch, wait handlers, and broadcast state. It also re-exposes the most-touched Navigation/Actions members via typealiases and forwarding properties so callers can spell them `brains.X` when the original location was less ergonomic; new code should call `brains.navigation.X` / `brains.actions.X` directly.
+
 ## Reading order
 
 1. **`TheBrains+Dispatch.swift`** — Start here. `executeCommand(_:)` is the single entry point from TheGetaway. A switch routes every `ClientMessage` case to one of four pipelines:
 
-   - **`performInteraction`** (most commands) — refresh → captureBeforeState → action closure → actionResultWithDelta. Used by all accessibility actions and touch gestures.
-   - **`performElementSearch`** — same shape but the scroll loop manages its own refresh/settle internally. Patches `ScrollSearchResult` onto the result.
+   - **`performInteraction`** (most commands) — refresh → captureBeforeState → action closure → actionResultWithDelta. Used by all accessibility actions and touch gestures. The action closure calls `actions.executeXxx(target)` or `navigation.executeScroll(target)` etc.
+   - **`performElementSearch`** — same shape but the scroll loop in `navigation.executeElementSearch` manages its own refresh/settle internally. Patches `ScrollSearchResult` onto the result.
    - **`performWaitFor`** — polls `stash.hasTarget(elementTarget)` in a settle loop until found/absent or timeout.
-   - **`performExplore`** — scrolls all containers, assembles result inline (doesn't use `actionResultWithDelta`; needs full wire elements in `ExploreResult`).
+   - **`performExplore`** — calls `navigation.exploreAndPrune()`, assembles the result inline (doesn't use `actionResultWithDelta`; needs full wire elements in `ExploreResult`).
 
-   Two private helpers `executeAccessibilityAction` and `executeTouchGesture` are second-level switches that unpack the associated value and call `performInteraction` with the specific `executeXxx` closure.
+   Two private helpers `executeAccessibilityAction` and `executeTouchGesture` are second-level switches that unpack the associated value and call `performInteraction` with the specific `actions.executeXxx` closure.
 
 2. **`TheBrains.swift`** — Core class. Key types:
 
    - `BeforeState` — frozen snapshot (sorted elements, raw parsed elements, hierarchy, VC identity) taken before every action.
-   - **`refresh()`** — delegates to `stash.refresh()`, then calls `recordDuringExplore(_:)` which accumulates viewport heistIds into `explorePhase` when it is `.active`.
-   - **`actionResultWithDelta(before:)`** — the convergence point. On failure: immediate return from before-snapshot. On success: settle via `tripwire.waitForAllClear(1s)` → `stash.parse()` → screen-change detection (VC identity OR topology) → `stash.apply()` → `exploreAndPrune()` → snapshot → `stash.computeDelta()` → re-resolve target for post-action element metadata → `ActionResultBuilder.success()`.
+   - **`refresh()`** — delegates to `stash.refresh()`.
+   - **`actionResultWithDelta(before:)`** — the convergence point. On failure: immediate return from before-snapshot. On success: settle via `tripwire.waitForAllClear(1s)` → `stash.parse()` → screen-change detection (VC identity OR topology) → `stash.apply()` → `navigation.exploreAndPrune()` → snapshot → `stash.computeDelta()` → re-resolve target for post-action element metadata → `ActionResultBuilder.success()`.
 
    **Response state** — `SentState` struct (treeHash, beforeState, screenId) tracks the last response sent to the driver. `recordSentState()` snapshots current state; `computeBackgroundDelta()` compares against it. TheGetaway calls `recordSentState()` after every send.
 
@@ -25,17 +34,17 @@ Command execution engine. Takes a `ClientMessage`, works it through refresh → 
 
    **TheGetaway-facing methods** — `currentInterface()`, `broadcastInterfaceIfChanged()`, `computeBackgroundDelta()`, `captureScreen()`, `captureScreenForRecording()`, `screenName`, `screenId`, `stakeout`. These exist so TheGetaway and TheInsideJob never reach through to TheStash.
 
-3. **`TheBrains+Actions.swift`** — Two generic pipelines and all `executeXxx` methods:
-   - `performElementAction(target:method:action:)` — ensureOnScreen → resolveTarget → checkInteractivity → action closure. Used by activate, increment, decrement, customAction.
+3. **`Actions.swift`** — Two generic pipelines and all `executeXxx` methods:
+   - `performElementAction(target:method:action:)` — `navigation.ensureOnScreen` → `stash.resolveTarget` → checkInteractivity → action closure. Used by activate, increment, decrement, customAction.
    - `performPointAction(elementTarget:pointX:pointY:action:)` — resolvePoint → action closure → showFingerprint. Used by tap, longPress, drag, pinch, rotate, twoFingerTap.
    - `executeSwipe` has two paths: unit-point (element-relative 0-1 coordinates resolved against frame) and absolute-point.
-   - `executeTypeText` is the longest: optional tap-to-focus → poll for active text input → optional clear/delete → type string → refresh → re-resolve for value readback.
+   - `executeTypeText` is the longest: optional `navigation.ensureOnScreen` + tap-to-focus → poll for active text input → optional clear/delete → type string → refresh → re-resolve for value readback. After focusing, it calls `navigation.ensureFirstResponderOnScreen()` — this is the only documented cross-component call from Actions into Navigation.
 
-4. **`TheBrains+Scroll.swift`** — `ScrollableTarget` enum (`.uiScrollView` for direct setContentOffset, `.swipeable` for synthetic swipe fallback). `executeScroll` does one page. `executeScrollToVisible` tries three strategies: already visible → content-space one-shot jump → failure. `executeElementSearch` tries four: visible → one-shot → page-by-page loop (up to 200 scrolls) → not found. `ensureOnScreen` pre-scrolls off-viewport elements and nudges into the comfort zone (frame inset by 1/6).
+4. **`Navigation.swift`** — Type declaration, init, state (`lastSwipeDirectionByTarget`, `containerExploreStates`), and the nested types `SettleSwipeProfile`, `SettleSwipeStep`, `SettleSwipeLoopState`, `ScrollableTarget`, `ScrollAxis`, `ContainerExploreState`, `ScreenManifest`. Plus `refresh()` and `clearCache()` helpers.
 
-5. **`TheBrains+Exploration.swift`** — `exploreAndPrune()` calls `beginExploreCycle()`, runs `exploreScreen()`, then `endExploreCycle()` and `registry.prune(keeping:)`. Per container: checks fingerprint cache (skip if unchanged) → scrolls to leading edge → pages through accumulating elements via `stitchPage` → restores visual origin for `UIScrollView` targets → caches state. Exploration uses `ScrollableTarget` so non-`UIScrollView` containers use swipe fallback.
+5. **`Navigation+Scroll.swift`** — `executeScroll` does one page. `executeScrollToVisible` tries three strategies: already visible → content-space one-shot jump → failure. `executeElementSearch` tries four: visible → one-shot → page-by-page loop (up to 200 scrolls) → not found. `ensureOnScreen` pre-scrolls off-viewport elements and nudges into the comfort zone (frame inset by 1/6). Direction mapping, axis detection, and `safeSwipeFrame` (tab-bar-aware clip) also live here.
 
-6. **`TheBrains+Exploration+Manifest.swift`** — `ScreenManifest` bookkeeping struct. Tracks pending/explored containers, scroll count, skip counts, timing. `maxScrollsPerContainer = 200`.
+6. **`Navigation+Explore.swift`** — `exploreAndPrune()` builds a local `var union: Screen`, runs `exploreScreen()`, then writes `stash.currentScreen = union`. Per container: checks fingerprint cache (skip if unchanged) → scrolls to leading edge → pages through accumulating elements via `stitchPage` → restores visual origin for `UIScrollView` targets → caches state. Exploration uses `ScrollableTarget` so non-`UIScrollView` containers use swipe fallback. `ScreenManifest` bookkeeping lives in `Navigation.swift`.
 
 7. **`ActionResultBuilder.swift`** — Assembles `ActionResult` from method + snapshot. Two init paths (from `[ScreenElement]` or explicit screenName/Id). Two terminal methods: `success(scrollSearchResult:exploreResult:)` and `failure(errorKind:)`.
 
@@ -44,5 +53,5 @@ Command execution engine. Takes a `ClientMessage`, works it through refresh → 
 ## Audit Acceptance Criteria
 
 - Unsupported commands include stable command identity and current screen context.
-- Explore pruning relies on explicit `explorePhase` (`.idle`/`.active`) and always resets to `.idle`.
-- `exploreAndPrune()` explores scrollable containers through both direct `UIScrollView` and swipe fallback paths before pruning.
+- `exploreAndPrune()` explores scrollable containers through both direct `UIScrollView` and swipe fallback paths.
+- `Navigation` and `Actions` are internal components of TheBrains, not crew members. Production code can call either `brains.navigation.X` / `brains.actions.X` (preferred) or `brains.X` (forwarders, kept for test compatibility).
