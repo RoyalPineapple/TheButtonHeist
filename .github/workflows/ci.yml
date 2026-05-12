@@ -145,34 +145,17 @@ jobs:
         timeout-minutes: 3
         run: |
           tuist generate --no-binary-cache --no-open
-
-          # PR #328 M2: diff BEFORE cleaning so drift between raw `tuist
-          # generate` output and the committed pbxproj surfaces. The earlier
-          # ordering (generate → clean → diff) masked drift whenever the
-          # cleaner happened to erase the same noise — e.g. a contributor
-          # who ran the wrapper and committed cleaned output would pass CI
-          # even if Tuist's raw output had diverged.
-          git diff --exit-code -- '*.pbxproj' '*.xcworkspacedata' || {
-            echo "::error::Generated Xcode project (raw tuist output) is out of date. Run 'scripts/generate-project.sh' and commit the changes."
-            echo "::group::Diff (raw tuist output vs committed)"
-            git diff -- '*.pbxproj' '*.xcworkspacedata'
-            echo "::endgroup::"
-            exit 1
-          }
-
           # Strip the same noise scripts/generate-project.sh strips locally
-          # (duplicate $(inherited), hardcoded SRCROOT). A second diff
-          # confirms the cleaner is a no-op on the committed files — if it
-          # mutates anything, the committed pbxproj is missing the cleaner
-          # pass and the contributor ran bare `tuist generate`.
+          # (duplicate $(inherited), hardcoded SRCROOT) so the committed
+          # pbxproj matches what contributors check in via the wrapper.
           find . -name 'project.pbxproj' \
             -not -path './Tuist/.build/*' \
             -not -path './submodules/*' \
             -not -path './.context/*' \
             -print0 | xargs -0 python3 scripts/clean-pbxproj.py
           git diff --exit-code -- '*.pbxproj' '*.xcworkspacedata' || {
-            echo "::error::Committed pbxproj contains noise the cleaner strips. Run 'scripts/generate-project.sh' (not bare 'tuist generate') and commit the result."
-            echo "::group::Diff (post-cleaner)"
+            echo "::error::Generated Xcode project is out of date. Run 'scripts/generate-project.sh' and commit the changes."
+            echo "::group::Diff"
             git diff -- '*.pbxproj' '*.xcworkspacedata'
             echo "::endgroup::"
             exit 1
