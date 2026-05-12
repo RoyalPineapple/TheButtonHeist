@@ -314,23 +314,7 @@ final class TheBrainsActionTests: XCTestCase {
         label: String? = nil,
         traits: UIAccessibilityTraits = .none
     ) -> AccessibilityElement {
-        AccessibilityElement(
-            description: label ?? "",
-            label: label,
-            value: nil,
-            traits: traits,
-            identifier: nil,
-            hint: nil,
-            userInputLabels: nil,
-            shape: .frame(.zero),
-            activationPoint: .zero,
-            usesDefaultActivationPoint: true,
-            customActions: [],
-            customContent: [],
-            customRotors: [],
-            accessibilityLanguage: nil,
-            respondsToUserInteraction: false
-        )
+        .make(label: label, traits: traits, respondsToUserInteraction: false)
     }
 
     private func withNoTraversableWindows<T>(

@@ -12,23 +12,7 @@ import XCTest
 final class TheBurglarContainerFramesTests: XCTestCase {
 
     private func makeElement() -> AccessibilityElement {
-        AccessibilityElement(
-            description: "",
-            label: nil,
-            value: nil,
-            traits: [],
-            identifier: nil,
-            hint: nil,
-            userInputLabels: nil,
-            shape: .frame(.zero),
-            activationPoint: .zero,
-            usesDefaultActivationPoint: true,
-            customActions: [],
-            customContent: [],
-            customRotors: [],
-            accessibilityLanguage: nil,
-            respondsToUserInteraction: false
-        )
+        .make(respondsToUserInteraction: false)
     }
 
     func testTopLevelContainerKeepsScreenSpaceFrame() {

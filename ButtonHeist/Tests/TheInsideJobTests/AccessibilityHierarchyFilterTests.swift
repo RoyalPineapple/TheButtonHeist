@@ -15,23 +15,7 @@ final class AccessibilityHierarchyFilterTests: XCTestCase {
         index: Int = 0
     ) -> AccessibilityHierarchy {
         .element(
-            AccessibilityElement(
-                description: label,
-                label: label,
-                value: value,
-                traits: traits,
-                identifier: nil,
-                hint: nil,
-                userInputLabels: nil,
-                shape: .frame(.zero),
-                activationPoint: .zero,
-                usesDefaultActivationPoint: true,
-                customActions: [],
-                customContent: [],
-                customRotors: [],
-                accessibilityLanguage: nil,
-                respondsToUserInteraction: true
-            ),
+            .make(label: label, value: value, traits: traits),
             traversalIndex: index
         )
     }

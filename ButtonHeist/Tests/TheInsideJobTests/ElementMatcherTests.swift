@@ -16,23 +16,7 @@ final class ElementMatcherTests: XCTestCase {
         traits: UIAccessibilityTraits = .none,
         hint: String? = nil
     ) -> AccessibilityElement {
-        AccessibilityElement(
-            description: label ?? "",
-            label: label,
-            value: value,
-            traits: traits,
-            identifier: identifier,
-            hint: hint,
-            userInputLabels: nil,
-            shape: .frame(.zero),
-            activationPoint: .zero,
-            usesDefaultActivationPoint: true,
-            customActions: [],
-            customContent: [],
-            customRotors: [],
-            accessibilityLanguage: nil,
-            respondsToUserInteraction: true
-        )
+        .make(label: label, value: value, identifier: identifier, hint: hint, traits: traits)
     }
 
     // MARK: - Label Matching

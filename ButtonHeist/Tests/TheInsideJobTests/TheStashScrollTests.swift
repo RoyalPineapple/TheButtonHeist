@@ -128,23 +128,7 @@ final class TheStashScrollTests: XCTestCase {
     // MARK: - Helpers
 
     private func dummyElement() -> AccessibilityElement {
-        AccessibilityElement(
-            description: "",
-            label: nil,
-            value: nil,
-            traits: .none,
-            identifier: nil,
-            hint: nil,
-            userInputLabels: nil,
-            shape: .frame(.zero),
-            activationPoint: .zero,
-            usesDefaultActivationPoint: true,
-            customActions: [],
-            customContent: [],
-            customRotors: [],
-            accessibilityLanguage: nil,
-            respondsToUserInteraction: false
-        )
+        .make(respondsToUserInteraction: false)
     }
 }
 

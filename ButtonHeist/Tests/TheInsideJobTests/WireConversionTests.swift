@@ -47,25 +47,18 @@ final class WireConverterTests: XCTestCase {
         activationPointY: Double = 0,
         customContent: [AccessibilityElement.CustomContent] = []
     ) -> AccessibilityElement {
-        let uiTraits = UIAccessibilityTraits.fromNames(traits.map(\.rawValue))
         let frame = CGRect(x: frameX, y: frameY, width: frameWidth, height: frameHeight)
         let activationPoint = CGPoint(x: activationPointX, y: activationPointY)
-        return AccessibilityElement(
-            description: label ?? "",
+        return .make(
             label: label,
             value: value,
-            traits: uiTraits,
             identifier: identifier,
             hint: hint,
-            userInputLabels: nil,
+            traits: UIAccessibilityTraits.fromNames(traits.map(\.rawValue)),
             shape: .frame(frame),
             activationPoint: activationPoint,
             usesDefaultActivationPoint: activationPointX == 0 && activationPointY == 0,
-            customActions: [],
-            customContent: customContent,
-            customRotors: [],
-            accessibilityLanguage: nil,
-            respondsToUserInteraction: true
+            customContent: customContent
         )
     }
 

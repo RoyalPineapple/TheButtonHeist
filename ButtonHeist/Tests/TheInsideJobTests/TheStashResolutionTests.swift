@@ -33,22 +33,12 @@ final class TheStashResolutionTests: XCTestCase {
         // current Screen value treats as distinct.
         let frame = CGRect(x: 0, y: nextElementYOffset, width: 100, height: 44)
         nextElementYOffset += 50
-        return AccessibilityElement(
-            description: label ?? "",
+        return .make(
             label: label,
             value: value,
-            traits: traits,
             identifier: identifier,
-            hint: nil,
-            userInputLabels: nil,
-            shape: .frame(frame),
-            activationPoint: .zero,
-            usesDefaultActivationPoint: true,
-            customActions: [],
-            customContent: [],
-            customRotors: [],
-            accessibilityLanguage: nil,
-            respondsToUserInteraction: true
+            traits: traits,
+            shape: .frame(frame)
         )
     }
 

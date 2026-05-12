@@ -16,21 +16,13 @@ final class ActivateFailureDiagnosticTests: XCTestCase {
         activationPoint: CGPoint = CGPoint(x: 52, y: 420),
         traits: UIAccessibilityTraits = .button
     ) -> AccessibilityElement {
-        AccessibilityElement(
+        .make(
             description: "",
             label: "Charge $16.99",
-            value: nil,
             traits: traits,
-            identifier: nil,
-            hint: nil,
-            userInputLabels: nil,
             shape: .frame(frame),
             activationPoint: activationPoint,
             usesDefaultActivationPoint: false,
-            customActions: [],
-            customContent: [],
-            customRotors: [],
-            accessibilityLanguage: nil,
             respondsToUserInteraction: false
         )
     }

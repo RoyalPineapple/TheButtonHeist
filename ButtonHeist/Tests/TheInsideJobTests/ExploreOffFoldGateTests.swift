@@ -137,24 +137,7 @@ final class ExploreOffFoldGateTests: XCTestCase {
     }
 
     private func element(label: String, frame: CGRect, index: Int = 0) -> AccessibilityHierarchy {
-        let element = AccessibilityElement(
-            description: label,
-            label: label,
-            value: nil,
-            traits: .none,
-            identifier: nil,
-            hint: nil,
-            userInputLabels: nil,
-            shape: .frame(frame),
-            activationPoint: CGPoint(x: frame.midX, y: frame.midY),
-            usesDefaultActivationPoint: true,
-            customActions: [],
-            customContent: [],
-            customRotors: [],
-            accessibilityLanguage: nil,
-            respondsToUserInteraction: true
-        )
-        return .element(element, traversalIndex: index)
+        .element(.make(label: label, frame: frame), traversalIndex: index)
     }
 }
 

@@ -236,21 +236,9 @@ final class TheBrainsPipelineTests: XCTestCase {
         var hierarchy: [AccessibilityHierarchy] = []
         var heistIdByElement: [AccessibilityElement: String] = [:]
         for (index, entry) in elements.enumerated() {
-            let element = AccessibilityElement(
-                description: entry.label,
+            let element = AccessibilityElement.make(
                 label: entry.label,
-                value: nil,
                 traits: entry.traits,
-                identifier: nil,
-                hint: nil,
-                userInputLabels: nil,
-                shape: .frame(.zero),
-                activationPoint: .zero,
-                usesDefaultActivationPoint: true,
-                customActions: [],
-                customContent: [],
-                customRotors: [],
-                accessibilityLanguage: nil,
                 respondsToUserInteraction: false
             )
             screenElements[entry.heistId] = Screen.ScreenElement(

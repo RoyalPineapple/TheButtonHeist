@@ -679,23 +679,7 @@ final class TheBrainsScrollTests: XCTestCase {
         traits: UIAccessibilityTraits = .none,
         shape: AccessibilityElement.Shape = .frame(.zero)
     ) -> AccessibilityElement {
-        AccessibilityElement(
-            description: label ?? "",
-            label: label,
-            value: nil,
-            traits: traits,
-            identifier: nil,
-            hint: nil,
-            userInputLabels: nil,
-            shape: shape,
-            activationPoint: .zero,
-            usesDefaultActivationPoint: true,
-            customActions: [],
-            customContent: [],
-            customRotors: [],
-            accessibilityLanguage: nil,
-            respondsToUserInteraction: false
-        )
+        .make(label: label, traits: traits, shape: shape, respondsToUserInteraction: false)
     }
 
     private func requireForegroundWindowScene() throws -> UIWindowScene {
