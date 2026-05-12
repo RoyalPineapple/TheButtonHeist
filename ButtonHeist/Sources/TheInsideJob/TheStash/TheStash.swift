@@ -34,7 +34,7 @@ final class TheStash {
     ///    right now. This is what the settle loop and `scrollOnePageAndSettle`
     ///    termination heuristics need — they compare `stash.viewportIds`
     ///    across frames to detect movement, which only works if the field
-    ///    flips with each parse.
+    ///    flips with each commit after parse.
     ///
     /// 2. **At the end of `Navigation.exploreAndPrune`** the local `union: Screen`
     ///    accumulator is committed here. The unioned `elements` map now
@@ -44,7 +44,7 @@ final class TheStash {
     ///    `Screen.merging` semantics. Hence `viewportIds` becomes a superset
     ///    of `liveViewportIds` until the next non-exploration parse.
     ///
-    /// **Writer audit** (only three call sites set this field):
+    /// **Writer audit** — the call sites that set this field:
     /// - `refresh()` — single parse + commit (page-only)
     /// - `Navigation+Explore.exploreContainer` mid-loop — page-only commits
     ///   per scroll page, required for the termination heuristics above
