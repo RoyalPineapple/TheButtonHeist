@@ -107,7 +107,7 @@ Matchers describe elements by **identity**, not state:
 
 - **Label** + **identity traits** is the primary targeting strategy
 - **Identifier** (developer-assigned `accessibilityIdentifier`) takes priority when unique
-- **State traits** (`selected`, `notEnabled`, `isEditing`, `inactive`, `visited`) are filtered out of matchers
+- **State traits** (`selected`, `notEnabled`, `isEditing`, `inactive`, `visited`, `updatesFrequently`) are filtered out of matchers
 - **UUID-containing identifiers** (runtime-generated) are detected and skipped in favor of labels
 - **Value** is never used for identification
 

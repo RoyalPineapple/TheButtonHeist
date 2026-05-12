@@ -480,17 +480,8 @@ final class TheBurglar {
     }
 
     private static func stableTraitNames(_ traits: UIAccessibilityTraits) -> Set<String> {
-        Set(traits.traitNames).subtracting(transientTraitNames)
+        Set(traits.traitNames).subtracting(AccessibilityPolicy.transientTraitNames)
     }
-
-    private static let transientTraitNames: Set<String> = [
-        HeistTrait.selected.rawValue,
-        HeistTrait.notEnabled.rawValue,
-        HeistTrait.isEditing.rawValue,
-        HeistTrait.inactive.rawValue,
-        HeistTrait.visited.rawValue,
-        HeistTrait.updatesFrequently.rawValue,
-    ]
 
     private static func sameOrigin(_ lhs: CGPoint, _ rhs: CGPoint) -> Bool {
         abs(lhs.x - rhs.x) < 0.5 && abs(lhs.y - rhs.y) < 0.5
