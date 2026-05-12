@@ -122,8 +122,8 @@ final class TheGetaway {
             PingFastPath.encodedPong(for: data)
         }
 
-        // Cancel any prior consumer (defensive — a single transport instance
-        // is only wired once in production, but tests reuse `wireTransport`).
+        // `wireTransport` is idempotent: re-wiring cancels any prior
+        // consumer Task so the new transport's events flow without contention.
         eventConsumerTask?.cancel()
         eventConsumerTask = Task { @MainActor [weak self, events = transport.events] in
             for await event in events {
