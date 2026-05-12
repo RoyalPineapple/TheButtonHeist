@@ -102,6 +102,9 @@ public final class TheInsideJob {
     /// holder, but the Task that owns the closure must exist before its
     /// handle can be stored. Inherits @MainActor isolation from the
     /// enclosing type so reads/writes serialize naturally.
+    /// The Task body cannot start until the main actor yields, which is after
+    /// `holder.task = created` — so the transient `nil` window is never
+    /// observable from within the closure.
     final class TaskHolder {
         var task: Task<Void, Never>?
     }
@@ -275,8 +278,10 @@ public final class TheInsideJob {
             task.cancel()
         }
 
-        pendingForegroundResumeTask?.cancel()
+        let bridge = pendingForegroundResumeTask
         pendingForegroundResumeTask = nil
+        bridge?.cancel()
+        await bridge?.value
 
         if case .running(let activeTransport) = serverPhase {
             pendingTransportStopTask = activeTransport.stop()
