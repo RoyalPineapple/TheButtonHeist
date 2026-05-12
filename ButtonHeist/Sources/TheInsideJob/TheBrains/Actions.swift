@@ -280,7 +280,7 @@ final class Actions {
             if let endX = target.endX, let endY = target.endY {
                 endPoint = CGPoint(x: endX, y: endY)
             } else if let direction = target.direction {
-                let dist = 200.0
+                let dist = Self.defaultSwipeDistance
                 switch direction {
                 case .up:    endPoint = CGPoint(x: startPoint.x, y: startPoint.y - dist)
                 case .down:  endPoint = CGPoint(x: startPoint.x, y: startPoint.y + dist)
@@ -452,6 +452,17 @@ final class Actions {
     private static let defaultGestureDuration: Double = 0.5
     private static let minGestureDuration: Double = 0.01
     private static let maxGestureDuration: Double = 60.0
+
+    /// Default swipe travel distance in points when the caller specifies a
+    /// direction without explicit end coordinates.
+    ///
+    /// 200pt is a deliberate, screen-relative-ish choice: ~25% of the short
+    /// dimension on iPhone and ~25% of the long dimension on the smallest
+    /// iPad, which is large enough to cross a typical paginated cell or
+    /// trigger a UIKit scroll-view paging snap, but small enough to stay on
+    /// screen from any activation point. Treating it as a named constant
+    /// keeps direction-only swipes behaviourally stable across releases.
+    static let defaultSwipeDistance: CGFloat = 200
 
     func clampDuration(_ value: Double?) -> Double {
         min(max(value ?? Self.defaultGestureDuration, Self.minGestureDuration), Self.maxGestureDuration)
