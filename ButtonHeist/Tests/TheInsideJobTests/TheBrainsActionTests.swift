@@ -219,6 +219,9 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .waitForIdle)
         XCTAssertEqual(result.errorKind, .actionFailed)
+        // The exact `message` here is user-facing copy, not a control-flow
+        // contract. Anchor on `errorKind` for behavioural assertions; this one
+        // sanity-check on the literal stays so a wording regression is visible.
         XCTAssertEqual(result.message, "Could not access accessibility tree")
     }
 
@@ -230,7 +233,6 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .explore)
         XCTAssertEqual(result.errorKind, .actionFailed)
-        XCTAssertEqual(result.message, "Could not access accessibility tree")
     }
 
     func testExecuteCommandWaitForFailsWhenAccessibilityTreeUnavailable() async {
@@ -244,7 +246,6 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .waitFor)
         XCTAssertEqual(result.errorKind, .actionFailed)
-        XCTAssertEqual(result.message, "Could not access accessibility tree")
     }
 
     // MARK: - Helpers

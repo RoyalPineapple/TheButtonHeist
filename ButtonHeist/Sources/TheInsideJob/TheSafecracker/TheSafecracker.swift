@@ -88,18 +88,51 @@ final class TheSafecracker {
         let message: String?
         let value: String?
         let scrollSearchResult: ScrollSearchResult?
+        /// Structural reason for failure when `success == false`. Lets dispatch code
+        /// distinguish tree-unavailable from timeout without parsing `message`
+        /// (which is user-facing copy, not a control-flow contract).
+        let failureKind: FailureKind?
 
-        init(success: Bool, method: ActionMethod, message: String?, value: String?, scrollSearchResult: ScrollSearchResult? = nil) {
+        init(
+            success: Bool,
+            method: ActionMethod,
+            message: String?,
+            value: String?,
+            scrollSearchResult: ScrollSearchResult? = nil,
+            failureKind: FailureKind? = nil
+        ) {
             self.success = success
             self.method = method
             self.message = message
             self.value = value
             self.scrollSearchResult = scrollSearchResult
+            self.failureKind = failureKind
         }
 
-        static func failure(_ method: ActionMethod, message: String) -> InteractionResult {
-            InteractionResult(success: false, method: method, message: message, value: nil)
+        static func failure(
+            _ method: ActionMethod,
+            message: String,
+            failureKind: FailureKind? = nil
+        ) -> InteractionResult {
+            InteractionResult(
+                success: false,
+                method: method,
+                message: message,
+                value: nil,
+                failureKind: failureKind
+            )
         }
+    }
+
+    /// Internal failure kinds used by dispatch to choose the wire ErrorKind.
+    /// Not wire format — this is an internal control-flow signal. Sits as a
+    /// peer of `InteractionResult` (not nested inside it) to stay at the
+    /// 2-level-deep nesting cap the SwiftLint `nesting` rule enforces.
+    enum FailureKind {
+        /// The accessibility tree could not be parsed (no traversable windows).
+        case treeUnavailable
+        /// A polling/wait operation exceeded its budget.
+        case timeout
     }
 
     // MARK: - Internal Touch State

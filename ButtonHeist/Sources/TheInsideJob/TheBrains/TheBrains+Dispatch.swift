@@ -96,9 +96,13 @@ extension TheBrains {
         }
         let before = captureBeforeState()
         let result = await executeWaitFor(target)
-        let errorKind: ErrorKind? = result.success
-            ? nil
-            : (result.message == TheBrains.treeUnavailableMessage ? .actionFailed : .timeout)
+        let errorKind: ErrorKind? = {
+            guard !result.success else { return nil }
+            switch result.failureKind {
+            case .treeUnavailable: return .actionFailed
+            case .timeout, .none: return .timeout
+            }
+        }()
 
         return await actionResultWithDelta(
             success: result.success,
@@ -116,7 +120,7 @@ extension TheBrains {
         let start = CFAbsoluteTimeGetCurrent()
 
         guard stash.refresh() != nil else {
-            return .failure(.waitFor, message: TheBrains.treeUnavailableMessage)
+            return .failure(.waitFor, message: TheBrains.treeUnavailableMessage, failureKind: .treeUnavailable)
         }
         if target.resolvedAbsent {
             if !stash.hasTarget(elementTarget) {
@@ -131,7 +135,7 @@ extension TheBrains {
         while ContinuousClock.now < deadline {
             _ = await tripwire.waitForAllClear(timeout: 1.0)
             guard stash.refresh() != nil else {
-                return .failure(.waitFor, message: TheBrains.treeUnavailableMessage)
+                return .failure(.waitFor, message: TheBrains.treeUnavailableMessage, failureKind: .treeUnavailable)
             }
             let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
             if target.resolvedAbsent {
@@ -147,7 +151,7 @@ extension TheBrains {
 
         let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
         let reason = target.resolvedAbsent ? "element still present" : "element not found"
-        return .failure(.waitFor, message: "timed out after \(elapsed)s (\(reason))")
+        return .failure(.waitFor, message: "timed out after \(elapsed)s (\(reason))", failureKind: .timeout)
     }
 
     /// Full screen exploration.
