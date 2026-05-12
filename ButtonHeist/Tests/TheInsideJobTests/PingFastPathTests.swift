@@ -118,7 +118,7 @@ final class PingFastPathTests: XCTestCase {
         )
         let getaway = TheGetaway(muscle: muscle, brains: brains, tripwire: tripwire, identity: identity)
         let transport = ServerTransport()
-        getaway.wireTransport(transport)
+        await getaway.wireTransport(transport)
 
         let request = RequestEnvelope(requestId: "req-cb", message: .ping)
         let pingData = try JSONEncoder().encode(request)
@@ -174,7 +174,7 @@ final class PingFastPathTests: XCTestCase {
         )
         let getaway = TheGetaway(muscle: muscle, brains: brains, tripwire: tripwire, identity: identity)
         let transport = ServerTransport()
-        getaway.wireTransport(transport)
+        await getaway.wireTransport(transport)
 
         let interceptor = try XCTUnwrap(transport.syncDataInterceptor, "wireTransport did not install syncDataInterceptor")
 

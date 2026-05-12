@@ -222,7 +222,7 @@ public final class TheInsideJob {
         self.tlsActive = true
         getaway.identity.tlsActive = true
         let transport = ServerTransport(tlsIdentity: identity, allowedScopes: allowedScopes)
-        getaway.wireTransport(transport)
+        await getaway.wireTransport(transport)
 
         let useLoopback = allowedScopes == [.simulator]
         let actualPort = try await transport.start(port: preferredPort, bindToLoopback: useLoopback)
@@ -516,7 +516,7 @@ public final class TheInsideJob {
                 self.getaway.identity.tlsActive = true
 
                 let transport = ServerTransport(tlsIdentity: identity, allowedScopes: self.allowedScopes)
-                self.getaway.wireTransport(transport)
+                await self.getaway.wireTransport(transport)
                 startedTransport = transport
 
                 let useLoopback = self.allowedScopes == [.simulator]
