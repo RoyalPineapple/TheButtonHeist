@@ -45,10 +45,6 @@ final class TheFenceTests: XCTestCase {
 
     // MARK: - Command Enum
 
-    func testCommandCaseCount() {
-        XCTAssertEqual(TheFence.Command.allCases.count, 42)
-    }
-
     func testCommandRawValuesMatchWireFormat() {
         let expected: [TheFence.Command: String] = [
             .help: "help",

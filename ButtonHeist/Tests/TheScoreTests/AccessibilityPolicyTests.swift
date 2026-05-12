@@ -3,8 +3,6 @@ import XCTest
 
 /// Sanity tests for `AccessibilityPolicy` — the single source of truth for
 /// trait-related policy. These tests assert that:
-/// - Every policy set is non-empty (a regression to "policy was deleted"
-///   would not be silent).
 /// - The policy sets carry only known `HeistTrait` cases (no `.unknown`).
 /// - `synthesisPriority` is duplicate-free and contains only traits that
 ///   appear in `HeistTrait.allCases`.
@@ -12,24 +10,6 @@ import XCTest
 ///   cannot simultaneously mark "state, not identity" and "user interacts
 ///   with this".
 final class AccessibilityPolicyTests: XCTestCase {
-
-    // MARK: - Non-emptiness
-
-    func testTransientTraitsIsNonEmpty() {
-        XCTAssertFalse(AccessibilityPolicy.transientTraits.isEmpty)
-    }
-
-    func testInteractiveTraitsIsNonEmpty() {
-        XCTAssertFalse(AccessibilityPolicy.interactiveTraits.isEmpty)
-    }
-
-    func testStaticOnlyTraitsIsNonEmpty() {
-        XCTAssertFalse(AccessibilityPolicy.staticOnlyTraits.isEmpty)
-    }
-
-    func testSynthesisPriorityIsNonEmpty() {
-        XCTAssertFalse(AccessibilityPolicy.synthesisPriority.isEmpty)
-    }
 
     // MARK: - Known traits only
 

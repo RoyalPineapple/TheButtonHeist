@@ -15,23 +15,7 @@ final class ContainerFingerprintTests: XCTestCase {
         identifier: String? = nil,
         frame: CGRect = .zero
     ) -> AccessibilityElement {
-        AccessibilityElement(
-            description: label,
-            label: label,
-            value: value,
-            traits: traits,
-            identifier: identifier,
-            hint: nil,
-            userInputLabels: nil,
-            shape: .frame(frame),
-            activationPoint: CGPoint(x: frame.midX, y: frame.midY),
-            usesDefaultActivationPoint: true,
-            customActions: [],
-            customContent: [],
-            customRotors: [],
-            accessibilityLanguage: nil,
-            respondsToUserInteraction: true
-        )
+        .make(label: label, value: value, identifier: identifier, traits: traits, frame: frame)
     }
 
     private func element(

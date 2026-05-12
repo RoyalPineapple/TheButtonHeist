@@ -104,23 +104,7 @@ final class DiagnosticsTests: XCTestCase {
     // MARK: - Helpers
 
     private func makeElement(label: String) -> AccessibilityElement {
-        AccessibilityElement(
-            description: label,
-            label: label,
-            value: nil,
-            traits: [],
-            identifier: nil,
-            hint: nil,
-            userInputLabels: nil,
-            shape: .frame(.zero),
-            activationPoint: .zero,
-            usesDefaultActivationPoint: true,
-            customActions: [],
-            customContent: [],
-            customRotors: [],
-            accessibilityLanguage: nil,
-            respondsToUserInteraction: false
-        )
+        .make(label: label, respondsToUserInteraction: false)
     }
 }
 

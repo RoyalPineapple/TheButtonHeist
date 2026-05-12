@@ -297,21 +297,11 @@ final class TheBurglarApplyTests: XCTestCase {
         traits: UIAccessibilityTraits = .none,
         frame: CGRect = .zero
     ) -> AccessibilityElement {
-        AccessibilityElement(
-            description: label ?? "",
+        .make(
             label: label,
             value: value,
             traits: traits,
-            identifier: nil,
-            hint: nil,
-            userInputLabels: nil,
             shape: .frame(frame),
-            activationPoint: .zero,
-            usesDefaultActivationPoint: true,
-            customActions: [],
-            customContent: [],
-            customRotors: [],
-            accessibilityLanguage: nil,
             respondsToUserInteraction: false
         )
     }

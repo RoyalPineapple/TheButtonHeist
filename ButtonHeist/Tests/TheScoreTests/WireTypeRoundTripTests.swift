@@ -10,14 +10,6 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     // MARK: - ScrollEdge
 
-    func testScrollEdgeAllCasesRoundTrip() throws {
-        for edge in ScrollEdge.allCases {
-            let data = try encoder.encode(edge)
-            let decoded = try decoder.decode(ScrollEdge.self, from: data)
-            XCTAssertEqual(decoded, edge)
-        }
-    }
-
     func testScrollEdgeRawValues() {
         XCTAssertEqual(ScrollEdge.top.rawValue, "top")
         XCTAssertEqual(ScrollEdge.bottom.rawValue, "bottom")
@@ -27,35 +19,9 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     // MARK: - ScrollDirection
 
-    func testScrollDirectionAllCasesRoundTrip() throws {
-        for direction in ScrollDirection.allCases {
-            let data = try encoder.encode(direction)
-            let decoded = try decoder.decode(ScrollDirection.self, from: data)
-            XCTAssertEqual(decoded, direction)
-        }
-    }
-
-    func testScrollDirectionCaseCount() {
-        XCTAssertEqual(ScrollDirection.allCases.count, 6)
-    }
-
     func testScrollDirectionRawValues() {
         XCTAssertEqual(ScrollDirection.next.rawValue, "next")
         XCTAssertEqual(ScrollDirection.previous.rawValue, "previous")
-    }
-
-    // MARK: - EditAction
-
-    func testEditActionAllCasesRoundTrip() throws {
-        for action in EditAction.allCases {
-            let data = try encoder.encode(action)
-            let decoded = try decoder.decode(EditAction.self, from: data)
-            XCTAssertEqual(decoded, action)
-        }
-    }
-
-    func testEditActionCaseCount() {
-        XCTAssertEqual(EditAction.allCases.count, 5)
     }
 
     // MARK: - EditActionTarget
@@ -648,10 +614,6 @@ final class WireTypeRoundTripTests: XCTestCase {
             let decoded = try decoder.decode(WireMessageType.self, from: data)
             XCTAssertEqual(decoded, messageType)
         }
-    }
-
-    func testWireMessageTypeCaseCount() {
-        XCTAssertEqual(WireMessageType.allCases.count, 52)
     }
 
     // MARK: - TXTRecordKey

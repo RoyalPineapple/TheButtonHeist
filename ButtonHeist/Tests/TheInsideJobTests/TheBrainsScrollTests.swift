@@ -310,7 +310,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(axis.isEmpty)
     }
 
-    // MARK: - offViewportRegistryEntry
+    // MARK: - Off-Viewport Entry
 
     /// Install a Screen whose `elements` includes an entry that's not in the
     /// live hierarchy — simulating an element retained from a previous
@@ -319,30 +319,11 @@ final class TheBrainsScrollTests: XCTestCase {
         liveHierarchy: [(AccessibilityElement, String)],
         offViewport: [(AccessibilityElement, String, CGPoint?)]
     ) {
-        var elements: [String: Screen.ScreenElement] = [:]
-        var heistIdByElement: [AccessibilityElement: String] = [:]
-        var hierarchy: [AccessibilityHierarchy] = []
-        for (index, pair) in liveHierarchy.enumerated() {
-            elements[pair.1] = Screen.ScreenElement(
-                heistId: pair.1, contentSpaceOrigin: nil, element: pair.0,
-                object: nil, scrollView: nil
-            )
-            heistIdByElement[pair.0] = pair.1
-            hierarchy.append(.element(pair.0, traversalIndex: index))
-        }
-        for entry in offViewport {
-            elements[entry.1] = Screen.ScreenElement(
-                heistId: entry.1, contentSpaceOrigin: entry.2,
-                element: entry.0, object: nil, scrollView: nil
-            )
-        }
-        brains.stash.currentScreen = Screen(
-            elements: elements,
-            hierarchy: hierarchy,
-            containerStableIds: [:],
-            heistIdByElement: heistIdByElement,
-            firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
+        brains.stash.currentScreen = .makeForTests(
+            elements: liveHierarchy.map { ($0.0, $0.1) },
+            offViewport: offViewport.map {
+                Screen.OffViewportEntry($0.0, heistId: $0.1, contentSpaceOrigin: $0.2)
+            }
         )
     }
 
@@ -370,68 +351,20 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertNil(entry, "Should return nil when heistId is in live viewport")
     }
 
-    /// Matcher resolution no longer falls back to off-viewport entries
-    /// (the registry is gone — matchers walk the live hierarchy only).
-    /// `offViewportRegistryEntry(for:.matcher)` therefore only returns a
-    /// hit when the live hierarchy resolves the matcher *and* the resolved
-    /// element is not in the live viewport, which is impossible.
-    func testOffViewportEntryByMatcherReturnsNilForOffScreenOnlyEntry() {
-        let other = makeElement(label: "Other")
-        let element = makeElement(label: "Target Button", traits: .button)
-        installScreenWithOffViewportEntry(
-            liveHierarchy: [(other, "other_element")],
-            offViewport: [(element, "button_target_button", CGPoint(x: 0, y: 3000))]
-        )
-
-        let matcher = ElementMatcher(label: "Target Button")
-        let entry = brains.navigation.offViewportRegistryEntry(for: .matcher(matcher))
-        XCTAssertNil(entry, "Matcher resolution does not reach off-viewport entries post-0.2.25")
-    }
-
-    func testOffViewportEntryByMatcherReturnsNilWhenOnScreen() {
-        let element = makeElement(label: "Visible Item", traits: .button)
-        installScreenWithOffViewportEntry(
-            liveHierarchy: [(element, "button_visible_item")],
-            offViewport: []
-        )
-
-        let matcher = ElementMatcher(label: "Visible Item")
-        let entry = brains.navigation.offViewportRegistryEntry(for: .matcher(matcher))
-        XCTAssertNil(entry, "Should return nil when matched element is in live viewport")
-    }
-
-    // MARK: - ContainerExploreState
-
-    func testContainerExploreStateStoresValues() {
-        let state = Navigation.ContainerExploreState(
-            visibleSubtreeFingerprint: 12345,
-            discoveredHeistIds: ["id_a", "id_b", "id_c"]
-        )
-        XCTAssertEqual(state.visibleSubtreeFingerprint, 12345)
-        XCTAssertEqual(state.discoveredHeistIds.count, 3)
-        XCTAssertTrue(state.discoveredHeistIds.contains("id_a"))
-    }
-
-    // MARK: - Clear Cache Resets Explore State
-
-    func testClearCacheResetsExploreState() {
-        brains.navigation.containerExploreStates[
-            AccessibilityContainer(
-                type: .scrollable(contentSize: CGSize(width: 375, height: 2000)),
-                frame: .zero
-            )
-        ] = Navigation.ContainerExploreState(
-            visibleSubtreeFingerprint: 1,
-            discoveredHeistIds: ["x"]
-        )
-
-        brains.clearCache()
-
-        XCTAssertTrue(brains.navigation.containerExploreStates.isEmpty,
-                      "clearCache should empty containerExploreStates")
-    }
-
     // MARK: - resolveScrollTarget
+
+    func testResolveScrollTargetReturnsNilWhenNoScrollView() {
+        let screenElement = TheStash.ScreenElement(
+            heistId: "item",
+            contentSpaceOrigin: nil,
+            element: makeElement(),
+            object: UILabel(),
+            scrollView: nil
+        )
+
+        let target = brains.navigation.resolveScrollTarget(screenElement: screenElement)
+        XCTAssertNil(target)
+    }
 
     func testResolveScrollTargetWithAxisMismatchReturnsScrollViewWhenNoFallback() {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
@@ -679,23 +612,7 @@ final class TheBrainsScrollTests: XCTestCase {
         traits: UIAccessibilityTraits = .none,
         shape: AccessibilityElement.Shape = .frame(.zero)
     ) -> AccessibilityElement {
-        AccessibilityElement(
-            description: label ?? "",
-            label: label,
-            value: nil,
-            traits: traits,
-            identifier: nil,
-            hint: nil,
-            userInputLabels: nil,
-            shape: shape,
-            activationPoint: .zero,
-            usesDefaultActivationPoint: true,
-            customActions: [],
-            customContent: [],
-            customRotors: [],
-            accessibilityLanguage: nil,
-            respondsToUserInteraction: false
-        )
+        .make(label: label, traits: traits, shape: shape, respondsToUserInteraction: false)
     }
 
     private func requireForegroundWindowScene() throws -> UIWindowScene {

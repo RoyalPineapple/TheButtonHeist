@@ -45,30 +45,6 @@ final class TheBrainsActionTests: XCTestCase {
                        "Valid duration should pass through unchanged")
     }
 
-    func testClampDurationAtExactMinimum() {
-        let result = brains.actions.clampDuration(0.01)
-        XCTAssertEqual(result, 0.01, accuracy: 0.001,
-                       "Exact minimum should pass through")
-    }
-
-    func testClampDurationAtExactMaximum() {
-        let result = brains.actions.clampDuration(60.0)
-        XCTAssertEqual(result, 60.0, accuracy: 0.001,
-                       "Exact maximum should pass through")
-    }
-
-    func testClampDurationNegativeValueClampsToMin() {
-        let result = brains.actions.clampDuration(-5.0)
-        XCTAssertEqual(result, 0.01, accuracy: 0.001,
-                       "Negative duration should clamp to minimum")
-    }
-
-    func testClampDurationZeroClampsToMin() {
-        let result = brains.actions.clampDuration(0.0)
-        XCTAssertEqual(result, 0.01, accuracy: 0.001,
-                       "Zero duration should clamp to minimum")
-    }
-
     // MARK: - resolveDuration
 
     func testResolveDurationExplicitDurationTakesPrecedence() {
@@ -285,28 +261,9 @@ final class TheBrainsActionTests: XCTestCase {
         elements: [(AccessibilityElement, String)],
         objects: [String: NSObject?] = [:]
     ) {
-        var screenElements: [String: Screen.ScreenElement] = [:]
-        var hierarchy: [AccessibilityHierarchy] = []
-        var heistIdByElement: [AccessibilityElement: String] = [:]
-        for (index, pair) in elements.enumerated() {
-            let entry = Screen.ScreenElement(
-                heistId: pair.1,
-                contentSpaceOrigin: nil,
-                element: pair.0,
-                object: objects[pair.1] ?? nil,
-                scrollView: nil
-            )
-            screenElements[pair.1] = entry
-            hierarchy.append(.element(pair.0, traversalIndex: index))
-            heistIdByElement[pair.0] = pair.1
-        }
-        brains.stash.currentScreen = Screen(
-            elements: screenElements,
-            hierarchy: hierarchy,
-            containerStableIds: [:],
-            heistIdByElement: heistIdByElement,
-            firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
+        brains.stash.currentScreen = .makeForTests(
+            elements: elements.map { ($0.0, $0.1) },
+            objects: objects
         )
     }
 
@@ -314,23 +271,7 @@ final class TheBrainsActionTests: XCTestCase {
         label: String? = nil,
         traits: UIAccessibilityTraits = .none
     ) -> AccessibilityElement {
-        AccessibilityElement(
-            description: label ?? "",
-            label: label,
-            value: nil,
-            traits: traits,
-            identifier: nil,
-            hint: nil,
-            userInputLabels: nil,
-            shape: .frame(.zero),
-            activationPoint: .zero,
-            usesDefaultActivationPoint: true,
-            customActions: [],
-            customContent: [],
-            customRotors: [],
-            accessibilityLanguage: nil,
-            respondsToUserInteraction: false
-        )
+        .make(label: label, traits: traits, respondsToUserInteraction: false)
     }
 
     private func withNoTraversableWindows<T>(

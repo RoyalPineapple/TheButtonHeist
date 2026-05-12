@@ -6,7 +6,7 @@ import UIKit
 @testable import TheScore
 
 /// Deterministic tests for the pipelines on TheBrains that operate purely against
-/// the stash registry: the failure branch of `actionResultWithDelta`, the
+/// the current `Screen` snapshot: the failure branch of `actionResultWithDelta`, the
 /// `SentState` accessors, the `computeBackgroundDelta` guards, the
 /// `broadcastInterfaceIfChanged` cache-miss, and `exploreAndPrune` pruning.
 ///
@@ -232,45 +232,15 @@ final class TheBrainsPipelineTests: XCTestCase {
     // MARK: - Helpers
 
     private func seedScreen(elements: [(label: String, traits: UIAccessibilityTraits, heistId: String)]) {
-        var screenElements: [String: Screen.ScreenElement] = [:]
-        var hierarchy: [AccessibilityHierarchy] = []
-        var heistIdByElement: [AccessibilityElement: String] = [:]
-        for (index, entry) in elements.enumerated() {
-            let element = AccessibilityElement(
-                description: entry.label,
+        let pairs: [(AccessibilityElement, String)] = elements.map { entry in
+            let element = AccessibilityElement.make(
                 label: entry.label,
-                value: nil,
                 traits: entry.traits,
-                identifier: nil,
-                hint: nil,
-                userInputLabels: nil,
-                shape: .frame(.zero),
-                activationPoint: .zero,
-                usesDefaultActivationPoint: true,
-                customActions: [],
-                customContent: [],
-                customRotors: [],
-                accessibilityLanguage: nil,
                 respondsToUserInteraction: false
             )
-            screenElements[entry.heistId] = Screen.ScreenElement(
-                heistId: entry.heistId,
-                contentSpaceOrigin: nil,
-                element: element,
-                object: nil,
-                scrollView: nil
-            )
-            hierarchy.append(.element(element, traversalIndex: index))
-            heistIdByElement[element] = entry.heistId
+            return (element, entry.heistId)
         }
-        brains.stash.currentScreen = Screen(
-            elements: screenElements,
-            hierarchy: hierarchy,
-            containerStableIds: [:],
-            heistIdByElement: heistIdByElement,
-            firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
-        )
+        brains.stash.currentScreen = .makeForTests(elements: pairs)
     }
 
 }

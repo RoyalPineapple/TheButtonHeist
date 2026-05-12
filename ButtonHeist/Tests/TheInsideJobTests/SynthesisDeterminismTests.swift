@@ -25,23 +25,11 @@ final class SynthesisDeterminismTests: XCTestCase {
         identifier: String? = nil,
         traits: [HeistTrait] = []
     ) -> AccessibilityElement {
-        let uiTraits = UIAccessibilityTraits.fromNames(traits.map(\.rawValue))
-        return AccessibilityElement(
-            description: label ?? "",
+        .make(
             label: label,
             value: value,
-            traits: uiTraits,
             identifier: identifier,
-            hint: nil,
-            userInputLabels: nil,
-            shape: .frame(.zero),
-            activationPoint: .zero,
-            usesDefaultActivationPoint: true,
-            customActions: [],
-            customContent: [],
-            customRotors: [],
-            accessibilityLanguage: nil,
-            respondsToUserInteraction: true
+            heistTraits: traits
         )
     }
 

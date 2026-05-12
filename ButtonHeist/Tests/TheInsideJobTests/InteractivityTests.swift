@@ -15,21 +15,10 @@ final class InteractivityTests: XCTestCase {
         customActions: [AccessibilityElement.CustomAction] = [],
         respondsToUserInteraction: Bool = false
     ) -> AccessibilityElement {
-        AccessibilityElement(
-            description: label ?? "",
+        .make(
             label: label,
-            value: nil,
             traits: traits,
-            identifier: nil,
-            hint: nil,
-            userInputLabels: nil,
-            shape: .frame(.zero),
-            activationPoint: .zero,
-            usesDefaultActivationPoint: true,
             customActions: customActions,
-            customContent: [],
-            customRotors: [],
-            accessibilityLanguage: nil,
             respondsToUserInteraction: respondsToUserInteraction
         )
     }

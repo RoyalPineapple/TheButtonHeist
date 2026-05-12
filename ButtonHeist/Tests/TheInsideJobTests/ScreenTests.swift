@@ -15,23 +15,7 @@ final class ScreenTests: XCTestCase {
         identifier: String? = nil,
         traits: UIAccessibilityTraits = .none
     ) -> AccessibilityElement {
-        AccessibilityElement(
-            description: label ?? "",
-            label: label,
-            value: value,
-            traits: traits,
-            identifier: identifier,
-            hint: nil,
-            userInputLabels: nil,
-            shape: .frame(.zero),
-            activationPoint: .zero,
-            usesDefaultActivationPoint: true,
-            customActions: [],
-            customContent: [],
-            customRotors: [],
-            accessibilityLanguage: nil,
-            respondsToUserInteraction: true
-        )
+        .make(label: label, value: value, identifier: identifier, traits: traits)
     }
 
     private func makeEntry(

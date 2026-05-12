@@ -257,23 +257,7 @@ final class TheStashTopologyTests: XCTestCase {
         identifier: String? = nil,
         traits: UIAccessibilityTraits = .none
     ) -> AccessibilityElement {
-        AccessibilityElement(
-            description: label ?? "",
-            label: label,
-            value: nil,
-            traits: traits,
-            identifier: identifier,
-            hint: nil,
-            userInputLabels: nil,
-            shape: .frame(.zero),
-            activationPoint: .zero,
-            usesDefaultActivationPoint: true,
-            customActions: [],
-            customContent: [],
-            customRotors: [],
-            accessibilityLanguage: nil,
-            respondsToUserInteraction: false
-        )
+        .make(label: label, identifier: identifier, traits: traits, respondsToUserInteraction: false)
     }
 }
 
