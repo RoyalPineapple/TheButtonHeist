@@ -484,7 +484,7 @@ extension TheStash {
             text: text,
             identifier: element.identifier,
             hint: element.hint,
-            stableTraits: normalizedTraits(element.traits.filter { !Self.transientTraits.contains($0) })
+            stableTraits: normalizedTraits(element.traits.filter { !AccessibilityPolicy.transientTraits.contains($0) })
         )
     }
 
@@ -492,7 +492,7 @@ extension TheStash {
         ElementStateSignature(
             label: element.label,
             value: element.value,
-            transientTraits: normalizedTraits(element.traits.filter(Self.transientTraits.contains)),
+            transientTraits: normalizedTraits(element.traits.filter(AccessibilityPolicy.transientTraits.contains)),
             respondsToUserInteraction: element.respondsToUserInteraction,
             customContent: element.customContent,
             actions: element.actions
@@ -511,15 +511,6 @@ extension TheStash {
     private static func normalizedTraits(_ traits: [HeistTrait]) -> [HeistTrait] {
         traits.sorted { $0.rawValue < $1.rawValue }
     }
-
-    private static let transientTraits: Set<HeistTrait> = [
-        .selected,
-        .notEnabled,
-        .isEditing,
-        .inactive,
-        .visited,
-        .updatesFrequently,
-    ]
 
     private static func indexTree(_ roots: [InterfaceNode]) -> [String: WireTreeRecord] {
         var result: [String: WireTreeRecord] = [:]

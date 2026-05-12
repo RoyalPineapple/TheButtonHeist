@@ -369,6 +369,15 @@ Prefer typed enums (`enum Foo: String`) over raw strings for any value that has 
 - When adding a new command, action type, or option set: define it as a `String`-backed enum with `CaseIterable` in the appropriate module, not as string literals scattered across switch statements.
 - Use `.rawValue` only at serialization boundaries — never compare `.rawValue` against a string literal deeper in the stack.
 
+## Trait Policy: One Source of Truth
+
+`AccessibilityPolicy` (in `ButtonHeist/Sources/TheScore/AccessibilityPolicy.swift`) is the single source of truth for trait-related rules-of-the-world: which traits are transient (state, not identity), which are interactive, which are static-only, and which drive heistId synthesis. UIKit-bitmask projections live in `AccessibilityPolicy+UIKit.swift` (TheStash) and are derived from the `Set<HeistTrait>` policy — they cannot drift.
+
+- If you're tempted to write `if traits.contains(.button) || traits.contains(.link) || ...`, check whether `AccessibilityPolicy` already encodes the rule you're checking.
+- If you're tempted to define a local `Set<HeistTrait>` of "state traits" or "actionable traits", read from `AccessibilityPolicy` instead.
+- Adding a new transient/interactive/static-only trait is a one-line edit to `AccessibilityPolicy`; every consumer picks it up automatically.
+- `synthesisPriority` is wire-format — reordering it changes every synthesised heistId. Locked by `SynthesisDeterminismTests`. Treat changes as a coordinated release.
+
 ## Explicit State Machines
 
 Model multi-phase lifecycle as an enum with associated data — not as coordinated optionals and booleans at the class/struct level. The litmus test: if two or more fields co-vary to represent a single "phase", they belong inside an enum case's associated value, not as top-level properties.

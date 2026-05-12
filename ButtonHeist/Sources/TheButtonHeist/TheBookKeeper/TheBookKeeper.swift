@@ -621,13 +621,8 @@ final class TheBookKeeper {
 
     // MARK: - Minimal Matcher
 
-    /// Traits that represent mutable state, not element identity.
-    static let stateTraits: Set<HeistTrait> = [
-        .selected, .notEnabled, .isEditing, .inactive, .visited,
-    ]
-
     private func identityTraits(_ traits: [HeistTrait]) -> [HeistTrait]? {
-        let filtered = traits.filter { !Self.stateTraits.contains($0) }
+        let filtered = traits.filter { !AccessibilityPolicy.transientTraits.contains($0) }
         return filtered.isEmpty ? nil : filtered
     }
 

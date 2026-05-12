@@ -22,16 +22,8 @@ extension TheStash {
     /// UIKit responder / window state. No instances are constructed.
     @MainActor enum Interactivity { // swiftlint:disable:this agent_main_actor_value_type
 
-    private static let interactiveHeistTraits: [HeistTrait] = [
-        .button, .link, .adjustable, .searchField, .keyboardKey,
-        .backButton, .switchButton
-    ]
-
-    private static let interactiveTraits: UIAccessibilityTraits =
-        UIAccessibilityTraits.fromNames(interactiveHeistTraits.map(\.rawValue))
-
     private static func hasInteractiveTraits(_ element: AccessibilityElement) -> Bool {
-        !element.traits.isDisjoint(with: interactiveTraits)
+        !element.traits.isDisjoint(with: AccessibilityPolicy.interactiveTraitsBitmask)
     }
 
     /// Check if an element is interactive based on its parsed accessibility data.
@@ -49,7 +41,7 @@ extension TheStash {
             return .blocked(reason: "Element is disabled (has 'notEnabled' trait)")
         }
 
-        let staticTraitsOnly = element.traits.isSubset(of: [.staticText, .image, .header])
+        let staticTraitsOnly = element.traits.isSubset(of: AccessibilityPolicy.staticOnlyTraitsBitmask)
         let warning: String? = (staticTraitsOnly && !hasInteractiveTraits(element) && element.customActions.isEmpty)
             ? "Element '\(element.description)' has only static traits, tap may not work"
             : nil
