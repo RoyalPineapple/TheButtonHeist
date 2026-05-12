@@ -100,7 +100,6 @@ public enum EnvironmentKey: String, Sendable {
     case insideJobPollingInterval = "INSIDEJOB_POLLING_INTERVAL"
     case insideJobId = "INSIDEJOB_ID"
     case insideJobScope = "INSIDEJOB_SCOPE"
-    case insideJobForceSwipeScrolling = "INSIDEJOB_FORCE_SWIPE_SCROLLING"
     case insideJobRestrictWatchers = "INSIDEJOB_RESTRICT_WATCHERS"
     case insideJobSessionTimeout = "INSIDEJOB_SESSION_TIMEOUT"
 }

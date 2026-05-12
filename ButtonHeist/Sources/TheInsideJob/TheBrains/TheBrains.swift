@@ -25,7 +25,7 @@ final class TheBrains {
     let navigation: Navigation
     let actions: Actions
 
-    init(tripwire: TheTripwire, forceSwipeScrolling: Bool = false) {
+    init(tripwire: TheTripwire) {
         self.tripwire = tripwire
         let stash = TheStash(tripwire: tripwire)
         let safecracker = TheSafecracker()
@@ -34,8 +34,7 @@ final class TheBrains {
         let navigation = Navigation(
             stash: stash,
             safecracker: safecracker,
-            tripwire: tripwire,
-            forceSwipeScrolling: forceSwipeScrolling
+            tripwire: tripwire
         )
         self.navigation = navigation
         self.actions = Actions(
