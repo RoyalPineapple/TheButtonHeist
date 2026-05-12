@@ -168,6 +168,8 @@ final class Actions {
                 return .failure(.elementDeallocated, message: "Element deallocated before custom action")
             case .noSuchAction:
                 return .failure(.customAction, message: "Action '\(target.actionName)' not found")
+            case .declined:
+                return .failure(.customAction, message: "Action '\(target.actionName)' declined by handler")
             case .succeeded:
                 return TheSafecracker.InteractionResult(
                     success: true, method: .customAction, message: nil, value: nil

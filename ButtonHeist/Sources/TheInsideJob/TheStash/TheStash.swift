@@ -191,6 +191,7 @@ final class TheStash {
 
     enum CustomActionOutcome {
         case succeeded
+        case declined
         case deallocated
         case noSuchAction
     }
@@ -251,7 +252,7 @@ final class TheStash {
             return .noSuchAction
         }
         if let handler = action.actionHandler {
-            return handler(action) ? .succeeded : .noSuchAction
+            return handler(action) ? .succeeded : .declined
         }
         if let target = action.target {
             _ = (target as AnyObject).perform(action.selector, with: action)
