@@ -97,6 +97,16 @@ extension AccessibilityElement {
 /// changing, regardless of ongoing visual motion (analog clocks, animated
 /// gradients, Lottie loops).
 ///
+/// **Settle signal boundary.** SettleSession is the post-action correctness
+/// path — it watches the AX tree because that is the user-visible truth for
+/// a screen-reader user. `TheTripwire.waitForAllClear` watches CALayers and
+/// is deliberately blind to the AX tree; the two cannot be unified because
+/// "no layer motion" and "AX tree stable" disagree on every spinner-driven
+/// loading state. `SettleSwipeLoopState` (Navigation.swift) is also AX-tree
+/// driven but interleaves parse with frame yields and exposes a `moved`
+/// latch — its termination is per-swipe, not per-action. See the comment on
+/// `SettleSwipeLoopState` for the full four-implementation boundary.
+///
 /// The loop seeds `previousFingerprint` from a synchronous parse *before*
 /// the first sleep, so a static screen settles after exactly
 /// `cyclesRequired` cycles (300 ms with the default 3 × 100 ms), not
