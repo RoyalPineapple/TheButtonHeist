@@ -153,11 +153,12 @@ extension TheStash {
             guard relaxation.relaxed.hasPredicates else { continue }
             let hits = hierarchy.matches(relaxation.relaxed, mode: .substring, limit: suggestionCap + 1)
             guard !hits.isEmpty else { continue }
-            let candidates = hits.prefix(suggestionCap).map { relaxation.actual($0.element) }
+            let deduped = dedupedPreservingOrder(hits.map { relaxation.actual($0.element) })
+            let candidates = deduped.prefix(suggestionCap)
             let suggestion = candidates
                 .map { "\(relaxation.field)=\"\($0)\"" }
                 .joined(separator: ", ")
-            let suffix = hits.count > suggestionCap ? ", ..." : ""
+            let suffix = deduped.count > suggestionCap ? ", ..." : ""
             return "near miss: matched all fields except \(relaxation.field) — did you mean \(suggestion)\(suffix)?"
         }
 
@@ -170,11 +171,12 @@ extension TheStash {
         for relaxation in relaxations where !relaxation.relaxed.hasPredicates {
             let substringHits = hierarchy.matches(matcher, mode: .substring, limit: suggestionCap + 1)
             guard !substringHits.isEmpty else { continue }
-            let candidates = substringHits.prefix(suggestionCap).map { relaxation.actual($0.element) }
+            let deduped = dedupedPreservingOrder(substringHits.map { relaxation.actual($0.element) })
+            let candidates = deduped.prefix(suggestionCap)
             let suggestion = candidates
                 .map { "\(relaxation.field)=\"\($0)\"" }
                 .joined(separator: ", ")
-            let suffix = substringHits.count > suggestionCap ? ", ..." : ""
+            let suffix = deduped.count > suggestionCap ? ", ..." : ""
             return "near miss: \(relaxation.field) matched as substring only — did you mean \(suggestion)\(suffix)?"
         }
         return nil
@@ -211,6 +213,14 @@ extension TheStash {
             lines.append("  ... and \(visibleElements.count - cap) more")
         }
         return lines.joined(separator: "\n")
+    }
+
+    /// Drop duplicate strings from the candidate list while keeping the first
+    /// occurrence's position. Near-miss output gets noisy when several elements
+    /// share the same label/identifier, so we collapse them before joining.
+    private static func dedupedPreservingOrder(_ values: [String]) -> [String] {
+        var seen: Set<String> = []
+        return values.filter { seen.insert($0).inserted }
     }
     }
 }

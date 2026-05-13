@@ -588,8 +588,23 @@ extension TheFence {
             return .sessionLog(manifest: manifest)
         case .archiveSession:
             let deleteSource = args.boolean("delete_source") ?? false
-            if case .active = bookKeeper.phase {
+            // Drive whatever phase we observe toward .closed before archiving.
+            switch bookKeeper.phase {
+            case .idle:
+                // No session to close. archiveSession will surface the
+                // phase mismatch with a clean error message rather than
+                // silently fall through as if .active.
+                break
+            case .active:
                 try await bookKeeper.closeSession()
+            case .closing:
+                // A prior close is mid-flight (or its compression failed
+                // and left us stuck). Don't attempt closeSession again —
+                // it would throw a phase mismatch. Fall through and let
+                // archiveSession surface the diagnostic.
+                break
+            case .closed, .archived:
+                break
             }
             let (archiveURL, manifest) = try await bookKeeper.archiveSession(deleteSource: deleteSource)
             return .archiveResult(path: archiveURL.path, manifest: manifest)

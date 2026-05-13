@@ -310,13 +310,18 @@ Tests replace these with mock implementations to avoid real Bonjour and NWConnec
 #### ConnectionPhase
 
 ```swift
-public enum ConnectionPhase: Equatable {
+public enum ConnectionPhase {
     case disconnected
     case connecting(device: DiscoveredDevice)
-    case connected(device: DiscoveredDevice)
+    case connected(ConnectedSession)
     case failed(ConnectionError)
 }
 ```
+
+> `ConnectionPhase` is not `Equatable`: the `.connected` case carries a
+> `ConnectedSession` whose `keepaliveTask` is a `Task`, which has no
+> structural equality. Tests that compare phases assert on individual
+> cases via pattern match instead.
 
 #### ConnectionError
 
@@ -685,7 +690,7 @@ public let buttonHeistVersion = "<calver>"  // Single product version; bumped on
 ### ConnectionPhase
 
 ```swift
-public enum ConnectionPhase: Equatable
+public enum ConnectionPhase
 ```
 
 #### Cases
