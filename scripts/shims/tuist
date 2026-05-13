@@ -42,7 +42,9 @@ tuist_status=$?
 clean_status=0
 case "$subcommand" in
     generate|test)
-        "$REPO_ROOT/scripts/clean-generated-projects.sh" || clean_status=$?
+        if [[ "${BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN:-}" != "1" ]]; then
+            "$REPO_ROOT/scripts/clean-generated-projects.sh" || clean_status=$?
+        fi
         ;;
 esac
 

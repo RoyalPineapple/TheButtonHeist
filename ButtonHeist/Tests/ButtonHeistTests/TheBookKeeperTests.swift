@@ -158,6 +158,17 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testBeginSessionRejectsEmbeddedDoubleDotIdentifier() async {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        XCTAssertThrowsError(try bookKeeper.beginSession(identifier: "session..name")) { error in
+            guard case BookKeeperError.unsafePath = error else {
+                XCTFail("Expected unsafePath error, got \(error)")
+                return
+            }
+        }
+    }
+
+    @ButtonHeistActor
     func testBeginSessionRejectsSlashInIdentifier() async {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         XCTAssertThrowsError(try bookKeeper.beginSession(identifier: "foo/bar")) { error in

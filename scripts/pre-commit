@@ -17,7 +17,7 @@ fi
 if command -v tuist >/dev/null 2>&1; then
     # Ensure external dependencies are fetched before generating
     tuist install >/dev/null 2>&1 || true
-    if tuist generate --no-open --no-binary-cache >/dev/null 2>&1; then
+    if BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 tuist generate --no-open --no-binary-cache >/dev/null 2>&1; then
         # Auto-clean pbxproj noise that tuist (and Xcode UI edits) leak in:
         # hardcoded SRCROOT, duplicated header search paths, etc.
         #
@@ -64,7 +64,7 @@ tuist_files=$(git diff --cached --name-only --diff-filter=ACM -- 'Project.swift'
 if [[ -n "$tuist_files" ]]; then
     echo "Tuist config changed — regenerating to check for drift..."
     tuist install >/dev/null 2>&1 || true
-    if tuist generate --no-open --no-binary-cache >/dev/null 2>&1; then
+    if BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 tuist generate --no-open --no-binary-cache >/dev/null 2>&1; then
         # PR #328 M3: cleaner failures propagate via `set -e`.
         scripts/clean-generated-projects.sh >/dev/null
 

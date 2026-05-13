@@ -13,7 +13,7 @@ cd "$(dirname "$0")/.."
 tuist install
 
 set +e
-tuist generate --no-open
+BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 tuist generate --no-open
 generate_status=$?
 set -e
 

@@ -36,7 +36,7 @@ BUMP_TYPE=""
 
 run_tuist_test() {
     set +e
-    tuist test "$@"
+    BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 tuist test "$@"
     local test_status=$?
     set -e
 

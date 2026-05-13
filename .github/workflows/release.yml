@@ -78,7 +78,7 @@ jobs:
       - name: Build BH Demo for iOS Simulator
         run: |
           tuist install
-          tuist generate --no-binary-cache --no-open
+          BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 tuist generate --no-binary-cache --no-open
           ./scripts/clean-generated-projects.sh
           xcodebuild -workspace ButtonHeist.xcworkspace -scheme "BH Demo" \
             -destination "generic/platform=iOS Simulator" \

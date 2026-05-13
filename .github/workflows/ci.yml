@@ -144,7 +144,7 @@ jobs:
       - name: Verify generated project is up to date
         timeout-minutes: 3
         run: |
-          tuist generate --no-binary-cache --no-open
+          BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 tuist generate --no-binary-cache --no-open
           ./scripts/clean-generated-projects.sh
           git diff --exit-code -- '*.pbxproj' '*.xcworkspacedata' || {
             echo "::error::Generated Xcode project is out of date. Run 'scripts/generate-project.sh' and commit the changes."
@@ -242,7 +242,7 @@ jobs:
       - name: Generate project
         timeout-minutes: 5
         run: |
-          tuist generate --no-binary-cache --no-open
+          BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 tuist generate --no-binary-cache --no-open
           ./scripts/clean-generated-projects.sh
 
       - name: Build iOS app targets

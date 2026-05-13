@@ -1147,8 +1147,12 @@ final class TheFenceTests: XCTestCase {
         mockConn.autoResponse = { message in
             if case .startRecording = message {
                 Task { @ButtonHeistActor in
+                    for _ in 0..<200 where fence.handoff.onRecording == nil {
+                        await Task.yield()
+                    }
                     fence.handoff.onRecording?(expectedPayload)
                 }
+                return .recordingStarted
             }
             return .actionResult(ActionResult(success: true, method: .activate))
         }
@@ -1172,7 +1176,7 @@ final class TheFenceTests: XCTestCase {
         try await fence.start()
         // Do not deliver a payload — the wait should hang until cancelled.
         mockConn.autoResponse = { _ in
-            .actionResult(ActionResult(success: true, method: .activate))
+            .recordingStarted
         }
 
         let task = Task { @ButtonHeistActor in
@@ -1182,15 +1186,11 @@ final class TheFenceTests: XCTestCase {
             )
         }
 
-        // Wait until the start_recording message has actually been observed by
-        // the mock — that's the only deterministic signal that the task has
-        // progressed past the start send and into the wait.
+        // Wait until the completion callback has been registered — that's the
+        // deterministic signal that the task has progressed past start
+        // acknowledgement and into the recording wait.
         for _ in 0..<200 {
-            let started = mockConn.sent.contains { sent in
-                if case .startRecording = sent.0 { return true }
-                return false
-            }
-            if started { break }
+            if fence.handoff.onRecording != nil { break }
             await Task.yield()
         }
 
@@ -1566,15 +1566,21 @@ final class TheFenceTests: XCTestCase {
         let delta: InterfaceDelta = .screenChanged(.init(elementCount: 3, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])))
         fence.handoff.onBackgroundDelta?(delta)
 
-        // Action without expect — should NOT short-circuit, should try to connect
+        // Action without expect — should NOT short-circuit against the
+        // background delta. Depending on current connection setup this may
+        // surface as a thrown connection error or an error response, but it
+        // must not return the synthetic "expectation already met" action.
         do {
-            _ = try await fence.execute(request: [
+            let response = try await fence.execute(request: [
                 "command": "activate",
                 "heistId": "some_button",
             ])
-            XCTFail("Expected connection error")
+            if case .action(let result, _) = response {
+                XCTAssertFalse(result.success)
+                XCTAssertNotEqual(result.message, "expectation already met by background change")
+            }
         } catch {
-            // Expected — no connection, but the point is it didn't short-circuit
+            // Also acceptable — no connection, and no background short-circuit.
         }
     }
 

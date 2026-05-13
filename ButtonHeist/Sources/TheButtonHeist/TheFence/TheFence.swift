@@ -915,8 +915,17 @@ public final class TheFence {
         recordingStartWait = .waiting(syntheticId: syntheticId)
         defer { recordingStartWait = .idle }
 
-        _ = try await recordingStartTracker.wait(requestId: syntheticId, timeout: timeout) {
-            self.handoff.send(.startRecording(config), requestId: UUID().uuidString)
+        var didSendStart = false
+        do {
+            _ = try await recordingStartTracker.wait(requestId: syntheticId, timeout: timeout) {
+                didSendStart = true
+                self.handoff.send(.startRecording(config), requestId: UUID().uuidString)
+            }
+        } catch {
+            if didSendStart {
+                cleanUpServerRecording()
+            }
+            throw error
         }
     }
 
@@ -927,10 +936,11 @@ public final class TheFence {
 
     /// Run a recording from start to completion as a single async unit.
     ///
-    /// Sends `start_recording`, awaits the resulting `RecordingPayload`, and on
-    /// any error path (including `CancellationError` from a parent task) sends
-    /// `stop_recording` so the iOS-side recording is not stranded. Cleanup is
-    /// best-effort: if it fails, the original error still propagates.
+    /// Sends `start_recording`, waits for the server acknowledgement, then
+    /// awaits the resulting `RecordingPayload`. On any error path after the
+    /// start request is sent, sends `stop_recording` so the iOS-side recording
+    /// is not stranded. Cleanup is best-effort: if it fails, the original error
+    /// still propagates.
     public func recordToCompletion(
         config: RecordingConfig,
         timeout: TimeInterval
@@ -946,7 +956,7 @@ public final class TheFence {
 
         var didStart = false
         do {
-            handoff.send(.startRecording(config))
+            try await startRecordingAndWait(config: config, timeout: timeout)
             didStart = true
             return try await waitForRecording(timeout: timeout)
         } catch let error as CancellationError {
