@@ -170,6 +170,35 @@ final class TheSafecrackerScrollTests: XCTestCase {
         XCTAssertEqual(sv.contentOffset.y, 0, accuracy: 0.01,
                        "Should not scroll when target is already visible")
     }
+
+    func testScrollToMakeVisibleReturnsFalseWhenClampedOffsetStillLeavesTargetOffscreen() {
+        let sv = makeScrollView(
+            frame: CGRect(x: 0, y: 0, width: 400, height: 600),
+            contentSize: CGSize(width: 1200, height: 600),
+            contentOffset: .zero
+        )
+        let targetFrame = CGRect(x: -80, y: 100, width: 40, height: 40)
+
+        let result = safecracker.scrollToMakeVisible(targetFrame, in: sv, animated: false)
+
+        XCTAssertFalse(result)
+        XCTAssertEqual(sv.contentOffset.x, 0, accuracy: 0.01)
+    }
+
+    func testScrollToMakeVisibleReturnsFalseWhenChangedClampStillLeavesTargetOffscreen() {
+        let sv = makeScrollView(
+            frame: CGRect(x: 0, y: 0, width: 400, height: 600),
+            contentSize: CGSize(width: 1200, height: 600),
+            contentOffset: CGPoint(x: 10, y: 0)
+        )
+        let targetFrame = CGRect(x: -80, y: 100, width: 40, height: 40)
+
+        let result = safecracker.scrollToMakeVisible(targetFrame, in: sv, animated: false)
+
+        XCTAssertFalse(result)
+        XCTAssertEqual(sv.contentOffset.x, 10, accuracy: 0.01)
+    }
+
     // MARK: - scrollToMakeVisible: comfort margin
 
     func testScrollToMakeVisibleComfortMarginScrollsElementOutsideComfortZone() {

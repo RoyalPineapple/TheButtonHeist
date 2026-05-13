@@ -59,7 +59,7 @@ extension TheSafecracker {
     /// `comfortMarginFraction` insets the visible rect by that fraction on each side
     /// (e.g. 1/6 targets the middle 2/3). Falls back to the full visible rect when
     /// the target is larger than the comfort zone.
-    /// Returns true if already visible or if scroll was triggered.
+    /// Returns true if the target is already visible or the resulting offset can make it visible.
     func scrollToMakeVisible(
         _ targetFrame: CGRect,
         in scrollView: UIScrollView,
@@ -70,36 +70,30 @@ extension TheSafecracker {
 
         let targetInScrollView = scrollView.convert(targetFrame, from: nil)
 
-        let inset = scrollView.adjustedContentInset
-        let fullVisibleRect = CGRect(
-            x: scrollView.contentOffset.x + inset.left,
-            y: scrollView.contentOffset.y + inset.top,
-            width: scrollView.frame.width - inset.left - inset.right,
-            height: scrollView.frame.height - inset.top - inset.bottom
-        )
+        let fullVisibleRect = visibleRect(in: scrollView, at: scrollView.contentOffset)
 
         let comfortRect = fullVisibleRect.insetBy(
             dx: fullVisibleRect.width * comfortMarginFraction,
             dy: fullVisibleRect.height * comfortMarginFraction
         )
-        let visibleRect = (comfortRect.width >= targetInScrollView.width
+        let targetVisibleRect = (comfortRect.width >= targetInScrollView.width
             && comfortRect.height >= targetInScrollView.height)
             ? comfortRect : fullVisibleRect
 
-        if visibleRect.contains(targetInScrollView) { return true }
+        if targetVisibleRect.contains(targetInScrollView) { return true }
 
         var newOffset = scrollView.contentOffset
 
-        if targetInScrollView.minX < visibleRect.minX {
-            newOffset.x -= visibleRect.minX - targetInScrollView.minX
-        } else if targetInScrollView.maxX > visibleRect.maxX {
-            newOffset.x += targetInScrollView.maxX - visibleRect.maxX
+        if targetInScrollView.minX < targetVisibleRect.minX {
+            newOffset.x -= targetVisibleRect.minX - targetInScrollView.minX
+        } else if targetInScrollView.maxX > targetVisibleRect.maxX {
+            newOffset.x += targetInScrollView.maxX - targetVisibleRect.maxX
         }
 
-        if targetInScrollView.minY < visibleRect.minY {
-            newOffset.y -= visibleRect.minY - targetInScrollView.minY
-        } else if targetInScrollView.maxY > visibleRect.maxY {
-            newOffset.y += targetInScrollView.maxY - visibleRect.maxY
+        if targetInScrollView.minY < targetVisibleRect.minY {
+            newOffset.y -= targetVisibleRect.minY - targetInScrollView.minY
+        } else if targetInScrollView.maxY > targetVisibleRect.maxY {
+            newOffset.y += targetInScrollView.maxY - targetVisibleRect.maxY
         }
 
         let insets = scrollView.adjustedContentInset
@@ -108,12 +102,23 @@ extension TheSafecracker {
         newOffset.x = max(-insets.left, min(newOffset.x, maxX))
         newOffset.y = max(-insets.top, min(newOffset.y, maxY))
 
-        if newOffset.x == scrollView.contentOffset.x && newOffset.y == scrollView.contentOffset.y {
-            return true
-        }
+        let clampedVisibleRect = visibleRect(in: scrollView, at: newOffset)
+        guard clampedVisibleRect.contains(targetInScrollView) else { return false }
+
+        if newOffset.x == scrollView.contentOffset.x && newOffset.y == scrollView.contentOffset.y { return true }
 
         scrollView.setContentOffset(newOffset, animated: animated)
         return true
+    }
+
+    private func visibleRect(in scrollView: UIScrollView, at offset: CGPoint) -> CGRect {
+        let inset = scrollView.adjustedContentInset
+        return CGRect(
+            x: offset.x + inset.left,
+            y: offset.y + inset.top,
+            width: scrollView.frame.width - inset.left - inset.right,
+            height: scrollView.frame.height - inset.top - inset.bottom
+        )
     }
 
     /// Scroll to an absolute edge.

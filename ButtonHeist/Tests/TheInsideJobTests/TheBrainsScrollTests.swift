@@ -282,6 +282,72 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(result?.container, vertical)
     }
 
+    func testScrollSearchCandidatesKeepCrossAxisFallbacksAfterPreferredAxis() {
+        let vertical = makeScrollableContainer(
+            contentSize: CGSize(width: 320, height: 2000),
+            frame: CGRect(x: 0, y: 0, width: 320, height: 400)
+        )
+        let horizontal = makeScrollableContainer(
+            contentSize: CGSize(width: 1200, height: 200),
+            frame: CGRect(x: 0, y: 420, width: 320, height: 200)
+        )
+        installScrollableContainers([vertical, horizontal])
+
+        let candidates = brains.navigation.scrollSearchCandidates(preferredAxis: .horizontal)
+
+        XCTAssertEqual(candidates.map(\.container), [horizontal, vertical])
+    }
+
+    func testPrioritizeScrollSearchCandidatesPromotesPreferredAxisAfterMerge() {
+        let horizontalContentSize = CGSize(width: 1200, height: 200)
+        let verticalContentSize = CGSize(width: 320, height: 1600)
+        let horizontal = makeScrollableContainer(
+            contentSize: horizontalContentSize,
+            frame: CGRect(x: 0, y: 0, width: 320, height: 200)
+        )
+        let vertical = makeScrollableContainer(
+            contentSize: verticalContentSize,
+            frame: CGRect(x: 0, y: 220, width: 320, height: 400)
+        )
+        let candidates: [(target: Navigation.ScrollableTarget, container: AccessibilityContainer)] = [
+            (
+                .swipeable(frame: horizontal.frame, contentSize: horizontalContentSize),
+                horizontal
+            ),
+            (
+                .swipeable(frame: vertical.frame, contentSize: verticalContentSize),
+                vertical
+            )
+        ]
+
+        let prioritized = brains.navigation.prioritizeScrollSearchCandidates(
+            candidates,
+            preferredAxis: .vertical
+        )
+
+        XCTAssertEqual(prioritized.map(\.container), [vertical, horizontal])
+    }
+
+    func testNextScrollSearchCandidateUsesKnownSiblingAfterFirstContainerExhausted() {
+        let first = makeScrollableContainer(
+            contentSize: CGSize(width: 320, height: 2000),
+            frame: CGRect(x: 0, y: 0, width: 320, height: 400)
+        )
+        let sibling = makeScrollableContainer(
+            contentSize: CGSize(width: 320, height: 1600),
+            frame: CGRect(x: 0, y: 420, width: 320, height: 400)
+        )
+        installScrollableContainers([first, sibling])
+        let candidates = brains.navigation.scrollSearchCandidates(preferredAxis: .vertical)
+
+        let result = brains.navigation.nextScrollSearchCandidate(
+            from: candidates,
+            exhausted: [first]
+        )
+
+        XCTAssertEqual(result?.container, sibling)
+    }
+
     // MARK: - Scroll Search Progress
 
     func testScrollSearchProgressReportsCapAsNonExhaustive() {
@@ -317,6 +383,30 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(progress.exhaustedContainers, Set([container]))
         XCTAssertFalse(progress.didHitScrollCap)
         XCTAssertTrue(progress.exhaustive)
+    }
+
+    func testScrollSearchProgressIsNotExhaustiveWhileKnownContainerRemains() {
+        let first = makeScrollableContainer(
+            contentSize: CGSize(width: 320, height: 2000),
+            frame: CGRect(x: 0, y: 0, width: 320, height: 400)
+        )
+        let sibling = makeScrollableContainer(
+            contentSize: CGSize(width: 320, height: 1600),
+            frame: CGRect(x: 0, y: 420, width: 320, height: 400)
+        )
+        var progress = Navigation.ScrollSearchProgress(
+            initialVisibleHeistIds: ["initial"],
+            knownContainers: [first, sibling],
+            maxScrolls: 5
+        )
+
+        progress.markContainerExhausted(first)
+
+        XCTAssertEqual(progress.containersSearched, 1)
+        XCTAssertEqual(progress.exhaustedContainers, Set([first]))
+        XCTAssertEqual(progress.knownContainers, Set([first, sibling]))
+        XCTAssertFalse(progress.didHitScrollCap)
+        XCTAssertFalse(progress.exhaustive)
     }
 
     func testScrollSearchProgressWithoutSearchedContainersIsNotExhaustive() {

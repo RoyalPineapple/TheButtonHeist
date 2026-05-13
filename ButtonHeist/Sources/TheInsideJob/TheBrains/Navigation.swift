@@ -264,15 +264,18 @@ final class Navigation {
 
         let maxScrolls: Int
         private(set) var scrollCount = 0
+        private(set) var knownContainers = Set<AccessibilityContainer>()
         private(set) var searchedContainers = Set<AccessibilityContainer>()
         private(set) var exhaustedContainers = Set<AccessibilityContainer>()
         private var seenHeistIds: Set<String>
 
         init(
             initialVisibleHeistIds: Set<String> = [],
+            knownContainers: Set<AccessibilityContainer> = [],
             maxScrolls: Int = Self.defaultMaxScrolls
         ) {
             self.maxScrolls = maxScrolls
+            self.knownContainers = knownContainers
             self.seenHeistIds = initialVisibleHeistIds
         }
 
@@ -298,10 +301,17 @@ final class Navigation {
         }
 
         var exhaustive: Bool {
-            containersSearched > 0 && !didHitScrollCap
+            !knownContainers.isEmpty
+                && !didHitScrollCap
+                && knownContainers.isSubset(of: exhaustedContainers)
+        }
+
+        mutating func recordKnownContainers(_ containers: some Sequence<AccessibilityContainer>) {
+            knownContainers.formUnion(containers)
         }
 
         mutating func markContainerSearched(_ container: AccessibilityContainer) {
+            recordKnownContainers([container])
             searchedContainers.insert(container)
         }
 
