@@ -1253,11 +1253,9 @@ final class TheFenceTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testRecordToCompletionPropagatesNonCancelErrors() async throws {
+    func testRecordToCompletionPropagatesStartAcknowledgementErrorsAndStops() async throws {
         let (fence, mockConn) = makeConnectedFence()
         try await fence.start()
-        // On startRecording, deliver a recording-error so the wait fails
-        // synchronously with FenceError.actionFailed.
         mockConn.autoResponse = { message in
             if case .startRecording = message {
                 Task { @ButtonHeistActor in
@@ -1282,12 +1280,50 @@ final class TheFenceTests: XCTestCase {
             XCTFail("Expected FenceError.actionFailed, got \(error)")
         }
 
-        // Cleanup branch must still fire on non-cancel error.
         let stopSent = mockConn.sent.contains { sent in
             if case .stopRecording = sent.0 { return true }
             return false
         }
-        XCTAssertTrue(stopSent, "Expected stop_recording on non-cancel error")
+        XCTAssertTrue(stopSent, "Expected stop_recording on start acknowledgement error")
+    }
+
+    @ButtonHeistActor
+    func testRecordToCompletionPropagatesCompletionErrorsAndStops() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        try await fence.start()
+        mockConn.autoResponse = { message in
+            if case .startRecording = message {
+                Task { @ButtonHeistActor in
+                    for _ in 0..<200 where fence.handoff.onRecording == nil {
+                        await Task.yield()
+                    }
+                    fence.handoff.onRecordingError?("disk full")
+                }
+                return .recordingStarted
+            }
+            return .actionResult(ActionResult(success: true, method: .activate))
+        }
+
+        do {
+            _ = try await fence.recordToCompletion(
+                config: RecordingConfig(fps: 8, maxDuration: 60),
+                timeout: 5.0
+            )
+            XCTFail("Expected FenceError.actionFailed")
+        } catch let error as FenceError {
+            guard case .actionFailed(let message) = error else {
+                return XCTFail("Expected actionFailed, got \(error)")
+            }
+            XCTAssertTrue(message.contains("disk full"), "Expected message to mention 'disk full', got: \(message)")
+        } catch {
+            XCTFail("Expected FenceError.actionFailed, got \(error)")
+        }
+
+        let stopSent = mockConn.sent.contains { sent in
+            if case .stopRecording = sent.0 { return true }
+            return false
+        }
+        XCTAssertTrue(stopSent, "Expected stop_recording on completion error")
     }
 
     @ButtonHeistActor

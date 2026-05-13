@@ -39,11 +39,29 @@ subcommand="${1:-}"
 PATH="$path_without_shim" "$real_tuist" "$@"
 tuist_status=$?
 
+is_help=false
+for arg in "$@"; do
+    if [[ "$arg" == "--help" || "$arg" == "-h" ]]; then
+        is_help=true
+        break
+    fi
+done
+
 clean_status=0
 case "$subcommand" in
-    generate|test)
-        if [[ "${BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN:-}" != "1" ]]; then
+    generate)
+        if [[ "${BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN:-}" != "1" && "$is_help" == false ]]; then
             "$REPO_ROOT/scripts/clean-generated-projects.sh" || clean_status=$?
+        fi
+        ;;
+    test)
+        if [[ "${BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN:-}" != "1" && "$is_help" == false ]]; then
+            PATH="$path_without_shim" "$real_tuist" generate --no-open --no-binary-cache
+            generate_status=$?
+            "$REPO_ROOT/scripts/clean-generated-projects.sh" || clean_status=$?
+            if [[ "$clean_status" -eq 0 ]]; then
+                clean_status=$generate_status
+            fi
         fi
         ;;
 esac
