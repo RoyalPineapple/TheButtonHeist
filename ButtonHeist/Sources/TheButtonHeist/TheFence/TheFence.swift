@@ -992,6 +992,8 @@ public final class TheFence {
         }
         let syntheticId = "recording"
         recordingWait = .waiting(syntheticId: syntheticId)
+        // Recording errors normally resolve the start acknowledgement. Once stop_recording is waiting,
+        // temporarily route them to the completion waiter, then restore the start handler.
         let previousOnRecording = handoff.onRecording
         let previousOnRecordingError = handoff.onRecordingError
         defer {

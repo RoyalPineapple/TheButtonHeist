@@ -59,7 +59,7 @@ case "$subcommand" in
             PATH="$path_without_shim" "$real_tuist" generate --no-open --no-binary-cache
             generate_status=$?
             "$REPO_ROOT/scripts/clean-generated-projects.sh" || clean_status=$?
-            if [[ "$clean_status" -eq 0 ]]; then
+            if [[ "$generate_status" -ne 0 ]]; then
                 clean_status=$generate_status
             fi
         fi
