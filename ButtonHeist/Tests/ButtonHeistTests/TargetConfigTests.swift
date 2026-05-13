@@ -422,7 +422,7 @@ final class TargetConfigTests: XCTestCase {
             "device": "127.0.0.1:9999",
             "token": "bad-tok",
         ])
-        if case .error(let message) = response {
+        if case .error(let message, _) = response {
             XCTAssertTrue(message.contains("restored previous connection"))
         } else {
             XCTFail("Expected error response, got \(response)")
@@ -437,7 +437,7 @@ final class TargetConfigTests: XCTestCase {
     func testConnectWithoutTargetOrDeviceReturnsError() async throws {
         let fence = TheFence(configuration: .init())
         let response = try await fence.execute(request: ["command": "connect"])
-        if case .error(let message) = response {
+        if case .error(let message, _) = response {
             XCTAssertTrue(message.contains("Must specify"))
         } else {
             XCTFail("Expected error response, got \(response)")
@@ -452,7 +452,7 @@ final class TargetConfigTests: XCTestCase {
         )
         let fence = TheFence(configuration: .init(fileConfig: config))
         let response = try await fence.execute(request: ["command": "connect", "target": "nonexistent"])
-        if case .error(let message) = response {
+        if case .error(let message, _) = response {
             XCTAssertTrue(message.contains("Unknown target"))
             XCTAssertTrue(message.contains("sim1"))
         } else {
@@ -464,7 +464,7 @@ final class TargetConfigTests: XCTestCase {
     func testConnectWithNoConfigFileReturnsError() async throws {
         let fence = TheFence(configuration: .init())
         let response = try await fence.execute(request: ["command": "connect", "target": "sim1"])
-        if case .error(let message) = response {
+        if case .error(let message, _) = response {
             XCTAssertTrue(message.contains("No config file"))
         } else {
             XCTFail("Expected error response, got \(response)")

@@ -13,8 +13,8 @@ extension FenceResponse {
         switch self {
         case .ok(let message):
             return ["status": "ok", "message": message]
-        case .error(let message):
-            return ["status": "error", "message": message]
+        case .error(let message, let details):
+            return errorJsonDict(message, details: details)
         case .help(let commands):
             return ["status": "ok", "commands": commands]
         case .status(let connected, let deviceName):
@@ -102,6 +102,22 @@ extension FenceResponse {
         case .fenceError(_, _, let interface), .thrown(_, _, let interface):
             if let interface {
                 dict["interface"] = interfaceDictionary(interface, detail: .summary)
+            }
+        }
+        return dict
+    }
+
+    private func errorJsonDict(_ message: String, details: FailureDetails?) -> [String: Any] {
+        var dict: [String: Any] = [
+            "status": "error",
+            "message": message,
+        ]
+        if let details {
+            dict["errorCode"] = details.errorCode
+            dict["phase"] = details.phase.rawValue
+            dict["retryable"] = details.retryable
+            if let hint = details.hint {
+                dict["hint"] = hint
             }
         }
         return dict

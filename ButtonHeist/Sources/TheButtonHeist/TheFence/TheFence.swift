@@ -36,6 +36,10 @@ public enum FenceError: Error, LocalizedError {
     case actionFailed(String)
     case serverError(ServerError)
 
+    private static let actionTimeoutRecoveryHint =
+        "The app may be busy on its main thread, processing a long-running UI update, " +
+        "or sending a large response. The connection is preserved; retry the command on the same session."
+
     public var errorDescription: String? {
         switch self {
         case .invalidRequest(let message):
@@ -75,8 +79,7 @@ public enum FenceError: Error, LocalizedError {
         case .actionTimeout:
             return """
                 Command timed out waiting for a response from the app.
-                  The app may be busy on its main thread, processing a long-running UI update, or sending a large response.
-                  The connection is preserved — retry the command on the same session.
+                  \(Self.actionTimeoutRecoveryHint)
                 """
         case .actionFailed(let message):
             return "Action failed: \(message)"
@@ -162,7 +165,7 @@ public enum FenceError: Error, LocalizedError {
         case .notConnected:
             return "Check that the app is running, then retry the command. Use 'buttonheist list' to see available devices."
         case .actionTimeout:
-            return "The connection is preserved; retry the command on the same session."
+            return Self.actionTimeoutRecoveryHint
         case .actionFailed:
             return nil
         case .serverError(let serverError):
@@ -860,7 +863,7 @@ public final class TheFence {
         let artifactPath: String?
         let errorMessage: String?
         switch response {
-        case .error(let message):
+        case .error(let message, _):
             responseStatus = .error
             artifactPath = nil
             errorMessage = message

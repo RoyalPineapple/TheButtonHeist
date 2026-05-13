@@ -32,7 +32,7 @@ public struct BatchStepSummary: Sendable {
 /// specified.
 public enum FenceResponse {
     case ok(message: String)
-    case error(String)
+    case error(String, details: FailureDetails? = nil)
     case help(commands: [String])
     case status(connected: Bool, deviceName: String?)
     case devices([DiscoveredDevice])
@@ -67,6 +67,14 @@ public enum FenceResponse {
         return nil
     }
 
+    /// Builds an error response with typed metadata when the error belongs to TheFence.
+    public static func failure(_ error: Error) -> FenceResponse {
+        if let fenceError = error as? FenceError {
+            return .error(fenceError.coreMessage, details: fenceError.failureDetails)
+        }
+        return .error(error.displayMessage)
+    }
+
     /// Whether callers should treat this response as a failed command.
     public var isFailure: Bool {
         switch self {
@@ -89,7 +97,7 @@ public enum FenceResponse {
         switch self {
         case .ok(let message):
             return message
-        case .error(let message):
+        case .error(let message, _):
             return "Error: \(message)"
         case .help(let commands):
             return "Commands:\n" + commands.map { "  \($0)" }.joined(separator: "\n")

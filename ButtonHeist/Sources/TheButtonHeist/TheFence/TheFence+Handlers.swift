@@ -528,12 +528,27 @@ extension TheFence {
         } catch {
             config = previousConfig
             handoff.token = previousToken
+            let connectionFailure = error as? FenceError
+            let connectionFailureDetails = connectionFailure?.failureDetails
+            let connectionFailureMessage = connectionFailure?.coreMessage ?? error.displayMessage
             do {
                 try await start()
             } catch {
-                return .error("Connect failed and could not restore previous connection: \(error.displayMessage)")
+                let restoreFailure = error as? FenceError
+                // Prefer restore details when available; otherwise keep the original connection failure typed.
+                let restoreFailureDetails = restoreFailure?.failureDetails ?? connectionFailureDetails
+                let restoreFailureMessage = restoreFailure?.coreMessage ?? error.displayMessage
+                let message = "Connect failed (\(connectionFailureMessage)) " +
+                    "and could not restore previous connection: \(restoreFailureMessage)"
+                return .error(
+                    message,
+                    details: restoreFailureDetails
+                )
             }
-            return .error("Connect failed, restored previous connection: \(error.displayMessage)")
+            return .error(
+                "Connect failed, restored previous connection: \(connectionFailureMessage)",
+                details: connectionFailureDetails
+            )
         }
 
         return try await handleGetInterface()
@@ -775,7 +790,7 @@ extension TheFence {
     private func playbackFailure(step: HeistEvidence, response: FenceResponse) -> PlaybackFailure? {
         let failedStep = PlaybackFailure.FailedStep(command: step.command, target: step.target)
         switch response {
-        case .error(let message):
+        case .error(let message, _):
             return .fenceError(step: failedStep, message: message, interface: nil)
         case .action(let result, let expectation) where !result.success || expectation?.met == false:
             return .actionFailed(step: failedStep, result: result, expectation: expectation, interface: nil)

@@ -24,7 +24,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, _) = makeConnectedFence()
         do {
             let response = try await fence.execute(request: request)
-            if case .error(let message) = response {
+            if case .error(let message, _) = response {
                 XCTAssertTrue(
                     message.contains(substring),
                     "Expected error containing '\(substring)', got: \(message)",
@@ -48,7 +48,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, _) = makeConnectedFence()
         do {
             let response = try await fence.execute(request: request)
-            if case .error(let message) = response {
+            if case .error(let message, _) = response {
                 XCTFail("Got validation error: \(message)", file: file, line: line)
             }
         } catch {
@@ -1082,6 +1082,66 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         XCTAssertEqual(results.count, 1, "Batch should stop after the error step")
         XCTAssertEqual(failedIndex, 0, "Failed index should be the error step")
+    }
+
+    @ButtonHeistActor
+    func testBatchStopOnErrorSummarizesSkippedSteps() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        mockConn.autoResponse = { _ in
+            .actionResult(ActionResult(success: true, method: .activate))
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "run_batch",
+            "policy": "stop_on_error",
+            "steps": [
+                ["command": "activate", "identifier": "btn1"],
+                ["command": "not_a_real_command"],
+                ["command": "activate", "identifier": "btn2"],
+            ] as [[String: Any]],
+        ])
+
+        guard case .batch(let results, _, let failedIndex, _, _, _, let summaries, _) = response else {
+            XCTFail("Expected batch response, got \(response)")
+            return
+        }
+        XCTAssertEqual(results.count, 2, "Only executed steps should appear in results")
+        XCTAssertEqual(failedIndex, 1)
+        XCTAssertEqual(summaries.map(\.command), ["activate", "not_a_real_command", "activate"])
+        XCTAssertNil(summaries[0].error)
+        XCTAssertNotNil(summaries[1].error)
+        XCTAssertEqual(summaries[2].error, "skipped: stop_on_error stopped batch after step 1")
+    }
+
+    @ButtonHeistActor
+    func testBatchExpectationFailureSummarizesSkippedSteps() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
+        mockConn.autoResponse = { _ in
+            .actionResult(ActionResult(success: true, method: .activate, interfaceDelta: delta))
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "run_batch",
+            "policy": "stop_on_error",
+            "steps": [
+                ["command": "activate", "identifier": "btn1", "expect": "screen_changed"],
+                ["command": "activate", "identifier": "btn2"],
+            ] as [[String: Any]],
+        ])
+
+        guard case .batch(let results, _, let failedIndex, _, let checked, let met, let summaries, _) = response else {
+            XCTFail("Expected batch response, got \(response)")
+            return
+        }
+        XCTAssertEqual(results.count, 1, "Batch should stop after the failed expectation")
+        XCTAssertEqual(failedIndex, 0)
+        XCTAssertEqual(checked, 1)
+        XCTAssertEqual(met, 0)
+        XCTAssertEqual(summaries.count, 2)
+        XCTAssertEqual(summaries[0].expectationMet, false)
+        XCTAssertEqual(summaries[1].command, "activate")
+        XCTAssertEqual(summaries[1].error, "skipped: stop_on_error stopped batch after step 0")
     }
 
     // MARK: - Explore via get_interface --full

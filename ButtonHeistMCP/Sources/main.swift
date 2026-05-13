@@ -76,7 +76,8 @@ struct ButtonHeistMCPServer {
             let backgroundDeltas = fence.drainBackgroundDeltas()
             return renderResponse(response, backgroundDeltas: backgroundDeltas)
         } catch {
-            return .init(content: [.text(text: error.displayMessage, annotations: nil, _meta: nil)], isError: true)
+            let response = FenceResponse.failure(error)
+            return .init(content: [.text(text: response.compactFormatted(), annotations: nil, _meta: nil)], isError: true)
         }
     }
 

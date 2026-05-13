@@ -20,7 +20,7 @@ final class TheFenceSecurityTests: XCTestCase {
         let (fence, _) = makeConnectedFence()
         do {
             let response = try await fence.execute(request: request)
-            if case .error(let message) = response {
+            if case .error(let message, _) = response {
                 XCTAssertTrue(
                     message.contains(substring),
                     "Expected error containing '\(substring)', got: \(message)",
@@ -83,7 +83,7 @@ final class TheFenceSecurityTests: XCTestCase {
             let response = try await fence.execute(request: [
                 "command": "stop_recording", "output": "/tmp/../etc/passwd",
             ])
-            if case .error(let message) = response {
+            if case .error(let message, _) = response {
                 XCTAssertTrue(
                     message.contains("must not contain '..'"),
                     "Expected path traversal error, got: \(message)"
@@ -138,7 +138,7 @@ final class TheFenceSecurityTests: XCTestCase {
         for command in TheFence.Command.allCases where !skipCommands.contains(command) {
             do {
                 let response = try await fence.execute(request: ["command": command.rawValue])
-                if case .error(let message) = response {
+                if case .error(let message, _) = response {
                     XCTAssertFalse(
                         message.hasPrefix("Unknown command"),
                         "Command '\(command.rawValue)' was not routed by dispatch"

@@ -11,8 +11,8 @@ extension FenceResponse {
         switch self {
         case .ok(let message):
             return message
-        case .error(let message):
-            return "error: \(message)"
+        case .error(let message, let details):
+            return Self.compactError(message, details: details)
         case .help(let commands):
             return commands.joined(separator: ", ")
         case .status(let connected, let deviceName):
@@ -99,7 +99,30 @@ extension FenceResponse {
         if let expectation {
             if !expectation.met {
                 text += "\n[expectation FAILED: got \(expectation.actual ?? "nil")]"
+                if let hint = Self.compactExpectationFailureHint(expectation) {
+                    text += "\nhint: \(hint)"
+                }
             }
+        }
+        return text
+    }
+
+    private static func compactExpectationFailureHint(_ expectation: ExpectationResult) -> String? {
+        guard expectation.expectation == .screenChanged, expectation.actual == "elementsChanged" else {
+            return nil
+        }
+        return "screen_changed requires a screen-level transition; " +
+            "use elements_changed for same-screen element updates " +
+            "or wait_for_change when the UI may settle asynchronously"
+    }
+
+    private static func compactError(_ message: String, details: FailureDetails?) -> String {
+        guard let details else {
+            return "error: \(message)"
+        }
+        var text = "error[\(details.errorCode) \(details.phase.rawValue) retryable=\(details.retryable)]: \(message)"
+        if let hint = details.hint {
+            text += "\nhint: \(hint)"
         }
         return text
     }
