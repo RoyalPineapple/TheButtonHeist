@@ -20,12 +20,15 @@ if command -v tuist >/dev/null 2>&1; then
     if tuist generate --no-open --no-binary-cache >/dev/null 2>&1; then
         # Auto-clean pbxproj noise that tuist (and Xcode UI edits) leak in:
         # hardcoded SRCROOT, duplicated header search paths, etc.
+        #
+        # PR #328 M3: cleaner failures propagate via `set -e`. The earlier
+        # `|| echo` swallowed real script errors (Python tracebacks, missing
+        # files) and let the commit proceed with un-stripped noise.
         find . -name 'project.pbxproj' \
             -not -path './Tuist/.build/*' \
             -not -path './submodules/*' \
             -not -path './.context/*' \
-            -print0 | xargs -0 python3 scripts/clean-pbxproj.py >/dev/null \
-            || echo "warning: scripts/clean-pbxproj.py exited non-zero; pbxproj noise may not be stripped"
+            -print0 | xargs -0 python3 scripts/clean-pbxproj.py >/dev/null
 
         dirty=$(git diff --name-only -- '*.pbxproj' '*.xcworkspacedata' '*.xcscheme')
         if [[ -n "$dirty" ]]; then
@@ -65,12 +68,12 @@ if [[ -n "$tuist_files" ]]; then
     echo "Tuist config changed — regenerating to check for drift..."
     tuist install >/dev/null 2>&1 || true
     if tuist generate --no-open --no-binary-cache >/dev/null 2>&1; then
+        # PR #328 M3: cleaner failures propagate via `set -e`.
         find . -name 'project.pbxproj' \
             -not -path './Tuist/.build/*' \
             -not -path './submodules/*' \
             -not -path './.context/*' \
-            -print0 | xargs -0 python3 scripts/clean-pbxproj.py >/dev/null \
-            || echo "warning: scripts/clean-pbxproj.py exited non-zero; pbxproj noise may not be stripped"
+            -print0 | xargs -0 python3 scripts/clean-pbxproj.py >/dev/null
 
         drift=$(git diff --name-only -- '*.pbxproj' '*.xcworkspacedata')
         if [[ -n "$drift" ]]; then

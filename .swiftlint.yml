@@ -97,12 +97,27 @@ custom_rules:
 
   agent_main_actor_value_type:
     name: "Agent: @MainActor on a value type"
-    regex: '@MainActor\s+(?:public\s+|internal\s+|private\s+|fileprivate\s+)?(?:final\s+)?(?:struct|enum)\s+\w+'
+    # PR #347 L7: allow other attributes (`@frozen`, `@objc`), doc comments
+    # (`///`), and MARK lines between `@MainActor` and the value-type
+    # declaration. The previous `\s+` form only matched whitespace, so a
+    # `@MainActor` line followed by `@frozen` or a docstring slipped past.
+    # The intervening-line group is `(?:\s*(?:@\w+|///[^\n]*|//[^\n]*))*`
+    # — zero or more attribute / comment lines, each surrounded by
+    # whitespace. The final `\s+` consumes the gap before the keyword.
+    regex: '@MainActor(?:\s*(?:@\w+|///[^\n]*|//[^\n]*))*\s+(?:public\s+|internal\s+|private\s+|fileprivate\s+)?(?:final\s+)?(?:struct|enum)\s+\w+'
     message: "Sendable structs and enums must not carry @MainActor. Actor isolation belongs on reference types; values cross actors freely."
     severity: warning
 
   agent_unchecked_sendable_no_comment:
     name: "Agent: @unchecked Sendable without justification"
+    # PR #347 M1: by design this is a banned-token rule, not a justification
+    # parser. The disable-comment IS the justification surface: SwiftLint
+    # disable directives sit on the line above the declaration alongside a
+    # human rationale, and the rule only goes silent when both are present.
+    # A regex that tried to detect "a comment within N lines above" would
+    # either miss legitimate rationales (file-header explanations, MARK
+    # blocks) or accept any nearby comment, which defeats the purpose.
+    #
     # NSRegularExpression can't reliably inspect preceding-line comments, so
     # this rule flags every `@unchecked Sendable` token. Mentions inside
     # comments and strings are filtered by `match_kinds`. Use
@@ -144,7 +159,14 @@ custom_rules:
     # `included:` further restricts this to production source so test helpers
     # (e.g. `TestSentinelTask.neverEndingTask`) that match the bare opener
     # don't trip it.
-    regex: '^[ \t]+Task\s*\{\s*(?:\[[^\]]*\]\s*)?@MainActor(?:\s+\[[^\]]*\])?\s+in\s*\n(?![ \t]+guard\s+let\s+self\s+else\b)[ \t]+\S'
+    #
+    # PR #383 M3: also catch `Task` that opens *after* a trailing-closure
+    # brace on the same line (e.g. `events.observe { Task { @MainActor in`).
+    # The first alternation is the original "Task at start of indented
+    # line"; the second matches "Task immediately after an opening `{` and
+    # whitespace, not preceded by assignment/return". Both feed the same
+    # body-shape lookahead.
+    regex: '(?:^[ \t]+|\{\s+)Task\s*\{\s*(?:\[[^\]]*\]\s*)?@MainActor(?:\s+\[[^\]]*\])?\s+in\s*\n(?![ \t]+guard\s+let\s+self\s+else\b)[ \t]+\S'
     included: ".*/(ButtonHeist|ButtonHeistCLI|ButtonHeistMCP)/Sources/.*\\.swift$"
     message: "Multi-line `Task { @MainActor in ... }` bridges fire-and-forget — no handle, no cancellation, no ordering guarantee. Annotate the callback's isolation in its declared closure type and call it directly, or store the Task on a tracked lifecycle field."
     severity: error
@@ -178,14 +200,23 @@ custom_rules:
     # the canonical onEvent/onSend/onTransition callbacks are `internal`, so the
     # rule covers them too — class-level isolation inference is not a substitute
     # for an explicit annotation in the closure type.
-    regex: '\bvar\s+on\w+:\s*\(\([^)]*\)\s*->\s*Void\)\?'
+    #
+    # PR #361 M1: param list allows one level of nested parens so tuple-arg
+    # callbacks (`var onFoo: (((Int, String)) -> Void)?`) are caught. The
+    # plain `[^)]*` form stopped at the first `)` and silently missed them.
+    regex: '\bvar\s+on\w+:\s*\(\((?:[^()]|\([^()]*\))*\)\s*->\s*Void\)\?'
     message: "`onFoo` callbacks must declare isolation in the closure type (e.g. `(@ButtonHeistActor (X) -> Void)?` or `@Sendable`). Class-level actor inference and docstring isolation both drift."
     severity: warning
 
   agent_no_task_detached:
     name: "Agent: Task.detached banned"
     # Match both `Task.detached(...)` and `Task.detached { ... }` (trailing closure).
-    regex: 'Task\.detached\s*[({]'
+    #
+    # PR #361 M3: leading `\b` anchor prevents matching identifiers that end
+    # in `Task` (e.g. `MyTask.detached`, `pollingTask.detached`). Without it
+    # the regex hits `mTask.detached`/`oneTask.detached` on any custom type
+    # whose name happens to end in `Task`.
+    regex: '\bTask\.detached\s*[({]'
     message: "Task.detached escapes the calling isolation context. Use Task { ... } (inherits caller isolation) or refactor to structured concurrency. If you genuinely need to escape isolation, document why with `// swiftlint:disable:next agent_no_task_detached` and a rationale comment."
     severity: error
 
@@ -198,6 +229,11 @@ custom_rules:
     # the include list are not checked — a future wire-dispatch site needs to
     # be added here when it lands.
     regex: 'case\s+\.[A-Za-z_][A-Za-z0-9_]*(?:\s*,\s*\.[A-Za-z_][A-Za-z0-9_]*)*\s*:[ \t]*\n[ \t]+break[ \t]*(?://[^\n]*)?\n'
-    included: ".*(DeviceConnection|TheHandoff|SimpleSocketServer)\\.swift$"
+    # PR #361 H1: TheGetaway.swift has the server-side dispatch mirror of
+    # TheHandoff's client-side dispatch. Both fan messages out by switching
+    # on the wire enum, so a bare `break` in either drops a message. Keep
+    # this list narrow — only files that genuinely dispatch wire-message
+    # enums belong here.
+    included: ".*(DeviceConnection|TheHandoff|SimpleSocketServer|TheGetaway)\\.swift$"
     message: "Wire-message switch arms that `break` silently drop messages. Either flow the message through `onEvent` (or the equivalent dispatch), or annotate with `// swiftlint:disable:next agent_wire_message_arm_no_op_break` and explain who consumes this case elsewhere."
     severity: warning
