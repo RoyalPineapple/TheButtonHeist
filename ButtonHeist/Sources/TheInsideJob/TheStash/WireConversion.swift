@@ -46,7 +46,7 @@ extension TheStash {
 
     // MARK: - Element Conversion
 
-    static func convert(_ element: AccessibilityElement) -> HeistElement {
+    static func convert(_ element: AccessibilityElement, object: NSObject? = nil) -> HeistElement {
         let frame = element.shape.frame
         return HeistElement(
             description: element.description,
@@ -68,12 +68,12 @@ extension TheStash {
                     HeistCustomContent(label: $0.label, value: $0.value, isImportant: $0.isImportant)
                 }
             }(),
-            actions: buildActions(for: element)
+            actions: buildActions(for: element, object: object)
         )
     }
 
-    static func buildActions(for element: AccessibilityElement) -> [ElementAction] {
-        let isInteractive = Interactivity.isInteractive(element: element)
+    static func buildActions(for element: AccessibilityElement, object: NSObject? = nil) -> [ElementAction] {
+        let isInteractive = Interactivity.isInteractive(element: element, object: object)
         let activate: [ElementAction] = isInteractive ? [.activate] : []
         let adjustable: [ElementAction] = (isInteractive && element.traits.contains(.adjustable))
             ? [.increment, .decrement]
@@ -85,7 +85,7 @@ extension TheStash {
     // MARK: - Wire Output
 
     static func toWire(_ entry: ScreenElement) -> HeistElement {
-        var wire = convert(entry.element)
+        var wire = convert(entry.element, object: entry.object)
         wire.heistId = entry.heistId
         return wire
     }

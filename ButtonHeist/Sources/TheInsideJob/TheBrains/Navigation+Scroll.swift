@@ -19,9 +19,18 @@ extension Navigation {
     // MARK: - Scroll Axis Detection
 
     static func scrollableAxis(of target: ScrollableTarget) -> ScrollAxis {
+        scrollableAxis(contentSize: target.contentSize, frame: target.frame)
+    }
+
+    static func scrollableAxis(of container: AccessibilityContainer) -> ScrollAxis {
+        guard case .scrollable(let contentSize) = container.type else { return [] }
+        return scrollableAxis(contentSize: contentSize, frame: container.frame)
+    }
+
+    private static func scrollableAxis(contentSize: CGSize, frame: CGRect) -> ScrollAxis {
         var axis: ScrollAxis = []
-        if target.contentSize.width > target.frame.width { axis.insert(.horizontal) }
-        if target.contentSize.height > target.frame.height { axis.insert(.vertical) }
+        if contentSize.width > frame.width + 1 { axis.insert(.horizontal) }
+        if contentSize.height > frame.height + 1 { axis.insert(.vertical) }
         return axis
     }
 
@@ -346,11 +355,18 @@ extension Navigation {
         let searchDirection = target.resolvedDirection
 
         stash.refresh()
+        var progress = ScrollSearchProgress(
+            initialVisibleHeistIds: stash.currentScreen.heistIds,
+            maxScrolls: Self.scrollSearchMaxScrolls
+        )
 
         // Check if already visible before searching
         if let found = stash.resolveFirstMatch(searchTarget) {
             ensureOnScreenSync(found)
-            return searchFoundResult(found, scrollCount: 0)
+            return searchFoundResult(
+                found, scrollCount: 0,
+                uniqueElementsSeen: progress.uniqueElementsSeen
+            )
         }
 
         // If we have a recorded position, try the one-shot path first
@@ -359,55 +375,88 @@ extension Navigation {
            let savedOffset = stash.jumpToRecordedPosition(entry) {
             await tripwire.yieldRealFrames(Self.postJumpRealFrames)
             refresh()
+            progress.recordVisibleHeistIds(stash.currentScreen.heistIds)
             if let found = stash.resolveFirstMatch(searchTarget),
-               let result = await searchFineTuneAndResolve(found, searchTarget: searchTarget, scrollCount: 1) {
+               let result = await searchFineTuneAndResolve(
+                    found, searchTarget: searchTarget,
+                    scrollCount: 1, progress: &progress
+               ) {
                 return result
             }
             stash.restoreScrollPosition(entry, to: savedOffset)
             await tripwire.yieldRealFrames(Self.postJumpRealFrames)
             refresh()
+            progress.recordVisibleHeistIds(stash.currentScreen.heistIds)
         }
 
         // Iterative page-by-page search
-        var exhausted = Set<AccessibilityContainer>()
-        var scrollCount = 0
-        let maxScrolls = 200
+        let requestedAxis = Self.requiredAxis(for: searchDirection)
 
-        while scrollCount < maxScrolls {
-            guard let (scrollTarget, container) = findScrollTarget(excluding: exhausted) else { break }
+        while progress.canScrollMore {
+            guard let (scrollTarget, container) = findScrollTarget(
+                preferredAxis: requestedAxis,
+                excluding: progress.exhaustedContainers
+            ) else { break }
 
-            let direction = Self.adaptDirection(searchDirection, for: scrollTarget)
+            let direction = Self.adaptDirection(
+                searchDirection, for: scrollTarget, container: container
+            )
+            progress.markContainerSearched(container)
             let (moved, before) = await scrollOnePageAndSettle(
                 scrollTarget, direction: direction
             )
 
-            if !moved { exhausted.insert(container); continue }
-
-            scrollCount += 1
-
-            if let found = stash.resolveFirstMatch(searchTarget) {
-                if let result = await searchFineTuneAndResolve(found, searchTarget: searchTarget, scrollCount: scrollCount) {
-                    return result
-                }
-                return searchFoundResult(found, scrollCount: scrollCount)
+            if !moved {
+                progress.markContainerExhausted(container)
+                continue
             }
 
-            if stash.viewportIds == before { exhausted.insert(container) }
+            progress.markScrolledPage(in: container, visibleHeistIds: stash.currentScreen.heistIds)
+            if let found = stash.resolveFirstMatch(searchTarget) {
+                if let result = await searchFineTuneAndResolve(
+                    found, searchTarget: searchTarget,
+                    scrollCount: progress.scrollCount, progress: &progress
+                ) {
+                    return result
+                }
+                return searchFoundResult(
+                    found, scrollCount: progress.scrollCount,
+                    uniqueElementsSeen: progress.uniqueElementsSeen
+                )
+            }
+
+            if stash.viewportIds == before { progress.markContainerExhausted(container) }
         }
 
-        return searchNotFoundResult(scrollCount: scrollCount)
+        return searchNotFoundResult(progress: progress)
     }
 
     private func searchFineTuneAndResolve(
         _ found: TheStash.ResolvedTarget,
         searchTarget: ElementTarget,
-        scrollCount: Int
+        scrollCount: Int,
+        progress: inout ScrollSearchProgress
     ) async -> TheSafecracker.InteractionResult? {
         ensureOnScreenSync(found)
         await tripwire.yieldRealFrames(Self.postJumpRealFrames)
         stash.refresh()
+        progress.recordVisibleHeistIds(stash.currentScreen.heistIds)
         guard let fresh = stash.resolveFirstMatch(searchTarget) else { return nil }
-        return searchFoundResult(fresh, scrollCount: scrollCount)
+        return searchFoundResult(
+            fresh, scrollCount: scrollCount,
+            uniqueElementsSeen: progress.uniqueElementsSeen
+        )
+    }
+
+    func findScrollTarget(
+        preferredAxis axis: ScrollAxis?,
+        excluding exhausted: Set<AccessibilityContainer> = []
+    ) -> (target: ScrollableTarget, container: AccessibilityContainer)? {
+        if let axis,
+           let preferredTarget = findScrollTarget(axis: axis, excluding: exhausted) {
+            return preferredTarget
+        }
+        return findScrollTarget(excluding: exhausted)
     }
 
     func findScrollTarget(
@@ -427,7 +476,7 @@ extension Navigation {
                 guard let target = self.scrollableTarget(for: container, contentSize: contentSize) else {
                     return nil
                 }
-                if let axis, !Self.scrollableAxis(of: target).contains(axis) { return nil }
+                if let axis, !Self.scrollableAxis(of: container).contains(axis) { return nil }
                 return (target, container)
             }
             .first
@@ -452,26 +501,42 @@ extension Navigation {
         return .swipeable(frame: safeSwipeFrame(from: container.frame), contentSize: contentSize)
     }
 
-    private func searchNotFoundResult(scrollCount: Int) -> TheSafecracker.InteractionResult {
+    private func searchNotFoundResult(progress: ScrollSearchProgress) -> TheSafecracker.InteractionResult {
         TheSafecracker.InteractionResult(
             success: false, method: .elementSearch,
-            message: "Element not found after \(scrollCount) scrolls", value: nil,
+            message: searchNotFoundMessage(progress: progress), value: nil,
             scrollSearchResult: ScrollSearchResult(
-                scrollCount: scrollCount, uniqueElementsSeen: stash.currentScreen.elements.count,
-                totalItems: nil, exhaustive: true
+                scrollCount: progress.scrollCount,
+                uniqueElementsSeen: progress.uniqueElementsSeen,
+                totalItems: nil, exhaustive: progress.exhaustive
             )
         )
     }
 
-    private func searchFoundResult(_ found: TheStash.ResolvedTarget, scrollCount: Int) -> TheSafecracker.InteractionResult {
+    private func searchFoundResult(
+        _ found: TheStash.ResolvedTarget,
+        scrollCount: Int,
+        uniqueElementsSeen: Int
+    ) -> TheSafecracker.InteractionResult {
         let wire = TheStash.WireConversion.toWire(found.screenElement)
         return TheSafecracker.InteractionResult(
             success: true, method: .elementSearch, message: nil, value: nil,
             scrollSearchResult: ScrollSearchResult(
-                scrollCount: scrollCount, uniqueElementsSeen: stash.currentScreen.elements.count,
+                scrollCount: scrollCount, uniqueElementsSeen: uniqueElementsSeen,
                 totalItems: nil, exhaustive: false, foundElement: wire
             )
         )
+    }
+
+    private func searchNotFoundMessage(progress: ScrollSearchProgress) -> String {
+        let containerLabel = progress.containersSearched == 1 ? "container" : "containers"
+        let pageLabel = progress.pagesSearched == 1 ? "page" : "pages"
+        let capSuffix = progress.didHitScrollCap
+            ? " (capped at \(progress.maxScrolls) scrolls)"
+            : ""
+        return "Element not found after \(progress.scrollCount) scrolls across "
+            + "\(progress.pagesSearched) \(pageLabel) in "
+            + "\(progress.containersSearched) \(containerLabel)\(capSuffix)"
     }
 
     // MARK: - Ensure On Screen (Comfort Zone)
@@ -600,7 +665,25 @@ extension Navigation {
         _ direction: ScrollSearchDirection,
         for target: ScrollableTarget
     ) -> UIAccessibilityScrollDirection {
-        let axis = scrollableAxis(of: target)
+        adaptDirection(direction, axis: scrollableAxis(of: target))
+    }
+
+    static func adaptDirection(
+        _ direction: ScrollSearchDirection,
+        for target: ScrollableTarget,
+        container: AccessibilityContainer
+    ) -> UIAccessibilityScrollDirection {
+        let axis = scrollableAxis(of: container)
+        if !axis.isEmpty {
+            return adaptDirection(direction, axis: axis)
+        }
+        return adaptDirection(direction, for: target)
+    }
+
+    private static func adaptDirection(
+        _ direction: ScrollSearchDirection,
+        axis: ScrollAxis
+    ) -> UIAccessibilityScrollDirection {
         let requested = requiredAxis(for: direction)
         if axis.contains(requested) { return uiScrollDirection(for: direction) }
 

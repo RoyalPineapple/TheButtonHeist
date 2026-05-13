@@ -243,22 +243,17 @@ actor TheMuscle {
     /// (`TheInsideJob.init`) and the tests today satisfy this. Pass a custom
     /// presenter when you need to construct from outside MainActor.
     @MainActor
-    init(explicitToken: String?, alerts: AlertPresenter? = nil) {
+    init(
+        explicitToken: String?,
+        restrictWatchers: Bool? = nil,
+        sessionReleaseTimeout: TimeInterval? = nil,
+        alerts: AlertPresenter? = nil
+    ) {
+        let startupConfiguration = StartupConfiguration.resolve()
         self.sessionToken = explicitToken ?? UUID().uuidString
         self.alerts = alerts ?? AlertPresenter()
-        if EnvironmentKey.insideJobRestrictWatchers.value != nil {
-            self.restrictWatchers = EnvironmentKey.insideJobRestrictWatchers.boolValue
-        } else if let plistValue = Bundle.main.object(forInfoDictionaryKey: "InsideJobRestrictWatchers") as? Bool {
-            self.restrictWatchers = plistValue
-        } else {
-            self.restrictWatchers = true
-        }
-        if let envTimeout = EnvironmentKey.insideJobSessionTimeout.value,
-           let parsed = TimeInterval(envTimeout) {
-            self.sessionReleaseTimeout = min(max(1.0, parsed), 3600.0)
-        } else {
-            self.sessionReleaseTimeout = 30.0
-        }
+        self.restrictWatchers = restrictWatchers ?? startupConfiguration.restrictWatchers.value
+        self.sessionReleaseTimeout = sessionReleaseTimeout ?? startupConfiguration.sessionTimeout.value
     }
 
     // MARK: - Callback Wiring

@@ -28,6 +28,7 @@ public final class TheInsideJob {
         let instanceId: String?
         let allowedScopes: Set<ConnectionScope>?
         let port: UInt16
+        let startupConfiguration: StartupConfiguration?
     }
 
     enum SharedState {
@@ -42,12 +43,16 @@ public final class TheInsideJob {
         case .live(let existing):
             return existing
         case .pending(let args):
-            let instance = TheInsideJob(
-                token: args?.token,
-                instanceId: args?.instanceId,
-                allowedScopes: args?.allowedScopes,
-                port: args?.port ?? 0
-            )
+            let instance = if let configuration = args?.startupConfiguration {
+                TheInsideJob(startupConfiguration: configuration)
+            } else {
+                TheInsideJob(
+                    token: args?.token,
+                    instanceId: args?.instanceId,
+                    allowedScopes: args?.allowedScopes,
+                    port: args?.port ?? 0
+                )
+            }
             sharedState = .live(instance)
             return instance
         }
@@ -63,7 +68,24 @@ public final class TheInsideJob {
             token: token,
             instanceId: instanceId,
             allowedScopes: allowedScopes,
-            port: port
+            port: port,
+            startupConfiguration: nil
+        )
+        switch sharedState {
+        case .pending:
+            sharedState = .pending(args)
+        case .live:
+            insideJobLogger.warning("TheInsideJob.configure() called after already created — ignoring")
+        }
+    }
+
+    static func configure(startupConfiguration: StartupConfiguration) {
+        let args = ConfigureArgs(
+            token: startupConfiguration.token.value,
+            instanceId: startupConfiguration.instanceId.value,
+            allowedScopes: startupConfiguration.allowedScopes.value,
+            port: startupConfiguration.preferredPort.value,
+            startupConfiguration: startupConfiguration
         )
         switch sharedState {
         case .pending:
@@ -123,6 +145,13 @@ public final class TheInsideJob {
 
     private let instanceId: String?
     private let preferredPort: UInt16
+    private let tokenSource: StartupConfigurationSource
+    private let instanceIdSource: StartupConfigurationSource
+    private let preferredPortSource: StartupConfigurationSource
+    private let allowedScopesSource: StartupConfigurationSource
+    private let pollingInterval: ResolvedStartupValue<TimeInterval>?
+    private let restrictWatchers: ResolvedStartupValue<Bool>
+    private let sessionReleaseTimeout: ResolvedStartupValue<TimeInterval>
     private let installationId: String
     private let sessionId = UUID()
     private let allowedScopes: Set<ConnectionScope>
@@ -184,15 +213,71 @@ public final class TheInsideJob {
 
     // MARK: - Initialization
 
-    public init(
+    public convenience init(
         token: String? = nil,
         instanceId: String? = nil,
         allowedScopes: Set<ConnectionScope>? = nil,
         port: UInt16 = 0
     ) {
-        self.muscle = TheMuscle(explicitToken: token)
+        let startupConfiguration = StartupConfiguration.resolve()
+        self.init(
+            token: token,
+            tokenSource: token == nil ? .generated : .api,
+            instanceId: instanceId,
+            instanceIdSource: instanceId == nil ? .generated : .api,
+            allowedScopes: allowedScopes ?? startupConfiguration.allowedScopes.value,
+            allowedScopesSource: allowedScopes == nil ? startupConfiguration.allowedScopes.source : .api,
+            port: port,
+            preferredPortSource: port == 0 ? .defaultValue : .api,
+            pollingInterval: nil,
+            restrictWatchers: startupConfiguration.restrictWatchers,
+            sessionReleaseTimeout: startupConfiguration.sessionTimeout
+        )
+    }
+
+    convenience init(startupConfiguration: StartupConfiguration) {
+        self.init(
+            token: startupConfiguration.token.value,
+            tokenSource: startupConfiguration.token.source,
+            instanceId: startupConfiguration.instanceId.value,
+            instanceIdSource: startupConfiguration.instanceId.source,
+            allowedScopes: startupConfiguration.allowedScopes.value,
+            allowedScopesSource: startupConfiguration.allowedScopes.source,
+            port: startupConfiguration.preferredPort.value,
+            preferredPortSource: startupConfiguration.preferredPort.source,
+            pollingInterval: startupConfiguration.pollingInterval,
+            restrictWatchers: startupConfiguration.restrictWatchers,
+            sessionReleaseTimeout: startupConfiguration.sessionTimeout
+        )
+    }
+
+    private init(
+        token: String?,
+        tokenSource: StartupConfigurationSource,
+        instanceId: String?,
+        instanceIdSource: StartupConfigurationSource,
+        allowedScopes: Set<ConnectionScope>,
+        allowedScopesSource: StartupConfigurationSource,
+        port: UInt16,
+        preferredPortSource: StartupConfigurationSource,
+        pollingInterval: ResolvedStartupValue<TimeInterval>?,
+        restrictWatchers: ResolvedStartupValue<Bool>,
+        sessionReleaseTimeout: ResolvedStartupValue<TimeInterval>
+    ) {
+        self.muscle = TheMuscle(
+            explicitToken: token,
+            restrictWatchers: restrictWatchers.value,
+            sessionReleaseTimeout: sessionReleaseTimeout.value
+        )
         self.instanceId = instanceId
         self.preferredPort = port
+        self.tokenSource = tokenSource
+        self.instanceIdSource = instanceIdSource
+        self.preferredPortSource = preferredPortSource
+        self.allowedScopesSource = allowedScopesSource
+        self.pollingInterval = pollingInterval
+        self.restrictWatchers = restrictWatchers
+        self.sessionReleaseTimeout = sessionReleaseTimeout
         self.installationId = Self.loadInstallationId()
         self.brains = TheBrains(tripwire: self.tripwire)
         self.getaway = TheGetaway(
@@ -203,15 +288,7 @@ public final class TheInsideJob {
                 tlsActive: false
             )
         )
-
-        if let scopes = allowedScopes {
-            self.allowedScopes = scopes
-        } else if let envValue = EnvironmentKey.insideJobScope.value,
-                  let parsed = ConnectionScope.parse(envValue) {
-            self.allowedScopes = parsed
-        } else {
-            self.allowedScopes = ConnectionScope.default
-        }
+        self.allowedScopes = allowedScopes
     }
 
     // MARK: - Public API
@@ -251,13 +328,14 @@ public final class TheInsideJob {
         let actualPort = try await transport.start(port: preferredPort, bindToLoopback: useLoopback)
         serverPhase = .running(transport: transport)
 
-        let scopeNames = allowedScopes.map(\.rawValue).sorted().joined(separator: ", ")
-        insideJobLogger.info("Connection scopes: \(scopeNames)")
-        insideJobLogger.info("Server listening on port \(actualPort)")
         let token = await muscle.sessionToken
-        insideJobLogger.info("Connect with session token: \(token, privacy: .public)")
-        insideJobLogger.info("Instance ID: \(self.effectiveInstanceId)")
-        advertiseService(port: actualPort)
+        let serviceName = advertiseService(port: actualPort)
+        logStartupSummary(
+            actualPort: actualPort,
+            token: token,
+            tlsFingerprint: identity.fingerprint,
+            bonjourServiceName: serviceName
+        )
 
         engageIdleTimerProtection()
 
@@ -371,7 +449,8 @@ public final class TheInsideJob {
         return generated
     }
 
-    private func advertiseService(port: UInt16) {
+    @discardableResult
+    private func advertiseService(port: UInt16) -> String {
         let appName = Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "App"
         let serviceName = "\(appName)#\(effectiveInstanceId)"
 
@@ -384,6 +463,34 @@ public final class TheInsideJob {
                 "devicename": UIDevice.current.name
             ]
         )
+
+        return serviceName
+    }
+
+    private func logStartupSummary(
+        actualPort: UInt16,
+        token: String,
+        tlsFingerprint: String,
+        bonjourServiceName: String
+    ) {
+        let scopeNames = allowedScopes.map(\.rawValue).sorted().joined(separator: ",")
+        let pollingDescription = pollingInterval.map {
+            "\($0.value)s(\($0.source.label))"
+        } ?? "not-started"
+        let fields = [
+            "actualPort=\(actualPort)",
+            "preferredPort=\(preferredPort)(\(preferredPortSource.label))",
+            "tokenSource=\(tokenSource.label)",
+            "sessionId=\(sessionId.uuidString)",
+            "instanceIdentifier=\(effectiveInstanceId)(\(instanceIdSource.label))",
+            "allowedScopes=\(scopeNames)(\(allowedScopesSource.label))",
+            "pollingInterval=\(pollingDescription)",
+            "restrictWatchers=\(restrictWatchers.value)(\(restrictWatchers.source.label))",
+            "sessionTimeout=\(sessionReleaseTimeout.value)s(\(sessionReleaseTimeout.source.label))",
+            "tls=enabled fingerprint=\(tlsFingerprint)",
+            "bonjour=advertising service=\(bonjourServiceName)"
+        ].joined(separator: " ")
+        insideJobLogger.info("Startup summary: \(fields, privacy: .public) token=\(token, privacy: .public)")
     }
 
     // MARK: - Accessibility Observation

@@ -772,6 +772,7 @@ final class TheFenceTests: XCTestCase {
         XCTAssertNotNil(FenceError.connectionFailed("refused").errorDescription)
         XCTAssertNotNil(FenceError.sessionLocked("busy").errorDescription)
         XCTAssertNotNil(FenceError.authFailed("denied").errorDescription)
+        XCTAssertNotNil(FenceError.serverError(ServerError(kind: .general, message: "boom")).errorDescription)
     }
 
     func testActionTimeoutErrorDescriptionExplainsLikelyBusyApp() {
@@ -780,6 +781,77 @@ final class TheFenceTests: XCTestCase {
         XCTAssertTrue(description.contains("waiting for a response"))
         XCTAssertTrue(description.contains("main thread"))
         XCTAssertTrue(description.contains("connection is preserved"))
+    }
+
+    func testFenceErrorTaxonomy() {
+        let cases: [(FenceError, String, FailurePhase, Bool, String?)] = [
+            (.invalidRequest("bad"), "request.invalid", .request, false, "Fix the request"),
+            (.noDeviceFound, "discovery.no_device_found", .discovery, true, "Start the app"),
+            (
+                .noMatchingDevice(filter: "Demo", available: ["Other"]),
+                "discovery.no_matching_device", .discovery, false, "Check the device filter"
+            ),
+            (.connectionTimeout, "setup.timeout", .setup, true, "buttonheist list"),
+            (.connectionFailed("refused"), "connection.failed", .transport, true, "buttonheist list"),
+            (.sessionLocked("busy"), "session.locked", .session, true, "current driver"),
+            (.authFailed("denied"), "auth.failed", .authentication, false, "without --token"),
+            (.notConnected, "connection.not_connected", .request, true, "retry the command"),
+            (.actionTimeout, "request.timeout", .request, true, "same session"),
+            (.actionFailed("boom"), "request.action_failed", .request, false, nil),
+        ]
+
+        for (error, code, phase, retryable, hintFragment) in cases {
+            XCTAssertEqual(error.errorCode, code)
+            XCTAssertEqual(error.phase, phase)
+            XCTAssertEqual(error.retryable, retryable)
+            if let hintFragment {
+                XCTAssertTrue(
+                    error.hint?.contains(hintFragment) == true,
+                    "Expected hint for \(error) to contain \(hintFragment), got \(String(describing: error.hint))"
+                )
+            } else {
+                XCTAssertNil(error.hint)
+            }
+        }
+    }
+
+    func testServerErrorTaxonomyMapsErrorKind() {
+        let cases: [(ErrorKind, String, FailurePhase, Bool, String?)] = [
+            (.elementNotFound, "request.element_not_found", .request, false, "Refresh the interface"),
+            (.timeout, "request.timeout", .request, true, "timed out"),
+            (.unsupported, "request.unsupported", .request, false, "supported command"),
+            (.inputError, "request.input_error", .request, false, "request input"),
+            (.validationError, "request.validation_error", .request, false, "validation rules"),
+            (.actionFailed, "request.action_failed", .request, false, nil),
+            (.authFailure, "auth.failed", .authentication, false, "fresh session"),
+            (.recording, "recording.failed", .recording, false, "recording error"),
+            (.general, "server.general", .server, false, nil),
+        ]
+
+        for (kind, code, phase, retryable, hintFragment) in cases {
+            let error = ServerError(kind: kind, message: "boom")
+            XCTAssertEqual(error.errorCode, code)
+            XCTAssertEqual(error.phase, phase)
+            XCTAssertEqual(error.retryable, retryable)
+            if let hintFragment {
+                XCTAssertTrue(
+                    error.hint?.contains(hintFragment) == true,
+                    "Expected hint for \(kind) to contain \(hintFragment), got \(String(describing: error.hint))"
+                )
+            } else {
+                XCTAssertNil(error.hint)
+            }
+        }
+    }
+
+    func testFenceErrorDistinguishesSetupAndRequestTimeoutTaxonomy() {
+        let setupTimeout = FenceError(TheHandoff.ConnectionError.timeout)
+        let requestTimeout = FenceError.actionTimeout
+
+        XCTAssertEqual(setupTimeout.errorCode, "setup.timeout")
+        XCTAssertEqual(setupTimeout.phase, .setup)
+        XCTAssertEqual(requestTimeout.errorCode, "request.timeout")
+        XCTAssertEqual(requestTimeout.phase, .request)
     }
 
     @ButtonHeistActor
@@ -1012,12 +1084,14 @@ final class TheFenceTests: XCTestCase {
 
         do {
             _ = try await fence.execute(request: ["command": "activate", "identifier": "button"])
-            XCTFail("Expected FenceError.actionFailed")
+            XCTFail("Expected FenceError.serverError")
         } catch {
-            guard case FenceError.actionFailed(let message) = error else {
-                return XCTFail("Expected actionFailed, got \(error)")
+            guard case FenceError.serverError(let serverError) = error else {
+                return XCTFail("Expected serverError, got \(error)")
             }
-            XCTAssertTrue(message.contains("Response too large"))
+            XCTAssertEqual(serverError.kind, .general)
+            XCTAssertTrue(serverError.message.contains("Response too large"))
+            XCTAssertEqual((error as? FenceError)?.errorCode, "server.general")
         }
 
         XCTAssertTrue(mockConn.isConnected)

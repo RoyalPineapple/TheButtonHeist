@@ -4,6 +4,12 @@ import XCTest
 @testable import TheInsideJob
 @testable import TheScore
 
+private final class ActivationOverrideView: UIView {
+    override func accessibilityActivate() -> Bool {
+        true
+    }
+}
+
 @MainActor
 final class InteractivityTests: XCTestCase {
 
@@ -28,6 +34,35 @@ final class InteractivityTests: XCTestCase {
     func testRespondsToUserInteractionIsInteractive() {
         let element = makeElement(respondsToUserInteraction: true)
         XCTAssertTrue(TheStash.Interactivity.isInteractive(element: element))
+    }
+
+    func testActivationBlockIsInteractiveWithoutTraits() throws {
+        guard #available(iOS 17.0, tvOS 17.0, *) else {
+            throw XCTSkip("accessibilityActivateBlock requires iOS 17")
+        }
+        let object = UIView()
+        guard object.responds(to: NSSelectorFromString("accessibilityActivateBlock")),
+              object.responds(to: NSSelectorFromString("setAccessibilityActivateBlock:")) else {
+            throw XCTSkip("accessibilityActivateBlock is not available on this UIKit runtime")
+        }
+        object.accessibilityActivateBlock = { true }
+        let element = makeElement(label: "Plain")
+
+        XCTAssertTrue(TheStash.Interactivity.isInteractive(element: element, object: object))
+    }
+
+    func testAccessibilityActivateOverrideIsInteractiveWithoutTraits() {
+        let element = makeElement(label: "Plain")
+        let object = ActivationOverrideView()
+
+        XCTAssertTrue(TheStash.Interactivity.isInteractive(element: element, object: object))
+    }
+
+    func testPlainObjectWithoutActivationSignalIsNotInteractive() {
+        let element = makeElement(label: "Plain")
+        let object = UIView()
+
+        XCTAssertFalse(TheStash.Interactivity.isInteractive(element: element, object: object))
     }
 
     func testAdjustableTraitIsInteractive() {
@@ -113,6 +148,20 @@ final class InteractivityTests: XCTestCase {
             XCTAssertTrue(warningText.contains("static traits"))
         case .blocked(let reason):
             XCTFail("Expected interactive (with warning), got blocked: \(reason)")
+        }
+    }
+
+    func testActivationOverrideDoesNotEmitStaticWarning() {
+        let element = makeElement(label: "Plain")
+        let object = ActivationOverrideView()
+
+        let result = TheStash.Interactivity.checkInteractivity(element, object: object)
+
+        switch result {
+        case .interactive(let warning):
+            XCTAssertNil(warning, "Default activation support should be treated as a real interaction signal")
+        case .blocked(let reason):
+            XCTFail("Expected interactive, got blocked: \(reason)")
         }
     }
 

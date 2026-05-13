@@ -26,6 +26,12 @@ private extension ElementEdits {
     var treeMovedOptional: [TreeMove]? { treeMoved.isEmpty ? nil : treeMoved }
 }
 
+private final class WireActivationOverrideView: UIView {
+    override func accessibilityActivate() -> Bool {
+        true
+    }
+}
+
 @MainActor
 final class WireConverterTests: XCTestCase {
 
@@ -46,7 +52,8 @@ final class WireConverterTests: XCTestCase {
         frameHeight: Double = 0,
         activationPointX: Double = 0,
         activationPointY: Double = 0,
-        customContent: [AccessibilityElement.CustomContent] = []
+        customContent: [AccessibilityElement.CustomContent] = [],
+        respondsToUserInteraction: Bool = true
     ) -> AccessibilityElement {
         let frame = CGRect(x: frameX, y: frameY, width: frameWidth, height: frameHeight)
         let activationPoint = CGPoint(x: activationPointX, y: activationPointY)
@@ -59,7 +66,8 @@ final class WireConverterTests: XCTestCase {
             shape: .frame(frame),
             activationPoint: activationPoint,
             usesDefaultActivationPoint: activationPointX == 0 && activationPointY == 0,
-            customContent: customContent
+            customContent: customContent,
+            respondsToUserInteraction: respondsToUserInteraction
         )
     }
 
@@ -76,7 +84,9 @@ final class WireConverterTests: XCTestCase {
         frameHeight: Double = 0,
         activationPointX: Double = 0,
         activationPointY: Double = 0,
-        customContent: [AccessibilityElement.CustomContent] = []
+        customContent: [AccessibilityElement.CustomContent] = [],
+        respondsToUserInteraction: Bool = true,
+        object: NSObject? = nil
     ) -> Screen.ScreenElement {
         Screen.ScreenElement(
             heistId: heistId,
@@ -86,9 +96,10 @@ final class WireConverterTests: XCTestCase {
                 traits: traits, frameX: frameX, frameY: frameY,
                 frameWidth: frameWidth, frameHeight: frameHeight,
                 activationPointX: activationPointX, activationPointY: activationPointY,
-                customContent: customContent
+                customContent: customContent,
+                respondsToUserInteraction: respondsToUserInteraction
             ),
-            object: nil,
+            object: object,
             scrollView: nil
         )
     }
@@ -233,6 +244,36 @@ final class WireConverterTests: XCTestCase {
             XCTAssertFalse(hasUnknownEntry,
                            "Known trait \(trait.rawValue) must not produce an unknown residual, got: \(wire)")
         }
+    }
+
+    // MARK: - Action Conversion
+
+    func testToWireIncludesActivateForActivationOverrideWithoutTraits() {
+        let object = WireActivationOverrideView()
+        let element = makeScreenElement(
+            heistId: "plain_action",
+            label: "Plain action",
+            respondsToUserInteraction: false,
+            object: object
+        )
+
+        let wire = WireConversion.toWire(element)
+
+        XCTAssertEqual(wire.actions, [.activate])
+    }
+
+    func testToWireOmitsActivateForPlainObjectWithoutActivationSignal() {
+        let object = UIView()
+        let element = makeScreenElement(
+            heistId: "plain_label",
+            label: "Plain label",
+            respondsToUserInteraction: false,
+            object: object
+        )
+
+        let wire = WireConversion.toWire(element)
+
+        XCTAssertEqual(wire.actions, [])
     }
 
     // MARK: - Delta: Identical Snapshots
