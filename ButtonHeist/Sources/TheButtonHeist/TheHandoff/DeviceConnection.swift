@@ -49,6 +49,77 @@ enum DisconnectReason: Error, LocalizedError {
             return "No TLS fingerprint available for non-loopback device — cannot establish secure connection"
         }
     }
+
+    var failureCode: String {
+        switch self {
+        case .networkError:
+            return "transport.network_error"
+        case .bufferOverflow:
+            return "transport.buffer_overflow"
+        case .serverClosed:
+            return "transport.server_closed"
+        case .authFailed:
+            return "auth.failed"
+        case .sessionLocked:
+            return "session.locked"
+        case .protocolMismatch:
+            return "protocol.mismatch"
+        case .localDisconnect:
+            return "client.local_disconnect"
+        case .certificateMismatch:
+            return "tls.certificate_mismatch"
+        case .missingFingerprint:
+            return "tls.missing_fingerprint"
+        }
+    }
+
+    var phase: FailurePhase {
+        switch self {
+        case .networkError, .bufferOverflow, .serverClosed:
+            return .transport
+        case .authFailed:
+            return .authentication
+        case .sessionLocked:
+            return .session
+        case .protocolMismatch:
+            return .protocolNegotiation
+        case .localDisconnect:
+            return .client
+        case .certificateMismatch, .missingFingerprint:
+            return .tls
+        }
+    }
+
+    var retryable: Bool {
+        switch self {
+        case .networkError, .serverClosed, .sessionLocked:
+            return true
+        case .bufferOverflow, .authFailed, .protocolMismatch, .localDisconnect,
+             .certificateMismatch, .missingFingerprint:
+            return false
+        }
+    }
+
+    var hint: String? {
+        switch self {
+        case .networkError, .serverClosed:
+            return "Check that the app is still running and reachable, then retry."
+        case .bufferOverflow:
+            return "Request a smaller payload or narrow the interface query before retrying."
+        case .authFailed:
+            return "Retry without a token to request a fresh session."
+        case .sessionLocked:
+            return "Wait for the current driver to disconnect or for the session to time out."
+        case .protocolMismatch:
+            return "Rebuild or reinstall so the CLI, MCP server, and iOS app use the same Button Heist version."
+        case .localDisconnect:
+            return nil
+        case .certificateMismatch:
+            return "Refresh the configured device fingerprint before reconnecting."
+        case .missingFingerprint:
+            return "Use a loopback simulator target or configure the device's TLS certificate fingerprint."
+        }
+    }
 }
 
 /// Single ordered event emitted from an NWConnection's network-queue

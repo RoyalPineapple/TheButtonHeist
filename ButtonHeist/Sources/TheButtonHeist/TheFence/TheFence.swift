@@ -3,6 +3,25 @@ import os.log
 
 private let logger = Logger(subsystem: "com.buttonheist.thefence", category: "bookkeeper")
 
+/// Stable client-side phase for connection and request failures.
+///
+/// This is not part of the wire protocol. It classifies existing local errors
+/// so CLI/MCP surfaces and tests can reason about failures without parsing
+/// human messages.
+public enum FailurePhase: String, Sendable, Equatable, CaseIterable {
+    case discovery
+    case setup
+    case transport
+    case authentication = "auth"
+    case session
+    case request
+    case recording
+    case protocolNegotiation = "protocol"
+    case tls
+    case client
+    case server
+}
+
 /// Errors thrown by TheFence during command dispatch, connection, and action execution.
 public enum FenceError: Error, LocalizedError {
     case invalidRequest(String)
@@ -15,6 +34,7 @@ public enum FenceError: Error, LocalizedError {
     case notConnected
     case actionTimeout
     case actionFailed(String)
+    case serverError(ServerError)
 
     public var errorDescription: String? {
         switch self {
@@ -60,6 +80,183 @@ public enum FenceError: Error, LocalizedError {
                 """
         case .actionFailed(let message):
             return "Action failed: \(message)"
+        case .serverError(let serverError):
+            return "Action failed: \(serverError.message)"
+        }
+    }
+
+    public var errorCode: String {
+        switch self {
+        case .invalidRequest:
+            return "request.invalid"
+        case .noDeviceFound:
+            return "discovery.no_device_found"
+        case .noMatchingDevice:
+            return "discovery.no_matching_device"
+        case .connectionTimeout:
+            return "setup.timeout"
+        case .connectionFailed:
+            return "connection.failed"
+        case .sessionLocked:
+            return "session.locked"
+        case .authFailed:
+            return "auth.failed"
+        case .notConnected:
+            return "connection.not_connected"
+        case .actionTimeout:
+            return "request.timeout"
+        case .actionFailed:
+            return "request.action_failed"
+        case .serverError(let serverError):
+            return serverError.errorCode
+        }
+    }
+
+    public var phase: FailurePhase {
+        switch self {
+        case .invalidRequest, .notConnected, .actionTimeout, .actionFailed:
+            return .request
+        case .noDeviceFound, .noMatchingDevice:
+            return .discovery
+        case .connectionTimeout:
+            return .setup
+        case .connectionFailed:
+            return .transport
+        case .sessionLocked:
+            return .session
+        case .authFailed:
+            return .authentication
+        case .serverError(let serverError):
+            return serverError.phase
+        }
+    }
+
+    public var retryable: Bool {
+        switch self {
+        case .noDeviceFound, .connectionTimeout, .connectionFailed, .sessionLocked,
+             .notConnected, .actionTimeout:
+            return true
+        case .invalidRequest, .noMatchingDevice, .authFailed, .actionFailed:
+            return false
+        case .serverError(let serverError):
+            return serverError.retryable
+        }
+    }
+
+    public var hint: String? {
+        switch self {
+        case .invalidRequest:
+            return "Fix the request shape or arguments before retrying."
+        case .noDeviceFound:
+            return "Start the app and confirm it advertises a Button Heist session."
+        case .noMatchingDevice:
+            return "Check the device filter or target name against 'buttonheist list'."
+        case .connectionTimeout:
+            return "Is the app running? Check 'buttonheist list' to see available devices."
+        case .connectionFailed:
+            return "Is the app running? Check 'buttonheist list' to see available devices."
+        case .sessionLocked:
+            return "Wait for the current driver to disconnect or for the session to time out."
+        case .authFailed:
+            return "Retry without --token to request a fresh session."
+        case .notConnected:
+            return "Check that the app is running, then retry the command. Use 'buttonheist list' to see available devices."
+        case .actionTimeout:
+            return "The connection is preserved; retry the command on the same session."
+        case .actionFailed:
+            return nil
+        case .serverError(let serverError):
+            return serverError.hint
+        }
+    }
+}
+
+public extension ServerError {
+    var errorCode: String {
+        kind.errorCode
+    }
+
+    var phase: FailurePhase {
+        kind.phase
+    }
+
+    var retryable: Bool {
+        kind.retryable
+    }
+
+    var hint: String? {
+        kind.hint
+    }
+}
+
+private extension ErrorKind {
+    var errorCode: String {
+        switch self {
+        case .elementNotFound:
+            return "request.element_not_found"
+        case .timeout:
+            return "request.timeout"
+        case .unsupported:
+            return "request.unsupported"
+        case .inputError:
+            return "request.input_error"
+        case .validationError:
+            return "request.validation_error"
+        case .actionFailed:
+            return "request.action_failed"
+        case .authFailure:
+            return "auth.failed"
+        case .recording:
+            return "recording.failed"
+        case .general:
+            return "server.general"
+        }
+    }
+
+    var phase: FailurePhase {
+        switch self {
+        case .elementNotFound, .timeout, .unsupported, .inputError,
+             .validationError, .actionFailed:
+            return .request
+        case .authFailure:
+            return .authentication
+        case .recording:
+            return .recording
+        case .general:
+            return .server
+        }
+    }
+
+    var retryable: Bool {
+        switch self {
+        case .timeout:
+            return true
+        case .elementNotFound, .unsupported, .inputError, .validationError,
+             .actionFailed, .authFailure, .recording, .general:
+            return false
+        }
+    }
+
+    var hint: String? {
+        switch self {
+        case .elementNotFound:
+            return "Refresh the interface and verify the target's accessibility properties."
+        case .timeout:
+            return "The request timed out; retry on the same session if the app is responsive."
+        case .unsupported:
+            return "Use a supported command or target for this element."
+        case .inputError:
+            return "Fix the request input before retrying."
+        case .validationError:
+            return "Fix the request so it satisfies the server-side validation rules."
+        case .actionFailed:
+            return nil
+        case .authFailure:
+            return "Retry without a token to request a fresh session."
+        case .recording:
+            return "Stop any in-progress recording and retry after resolving the recording error."
+        case .general:
+            return nil
         }
     }
 }
@@ -239,9 +436,9 @@ public final class TheFence {
             self?.resolveRecordingStart(.failure(FenceError.actionFailed("Recording failed: \(message)")))
         }
 
-        handoff.onRequestError = { [weak self] message, requestId in
+        handoff.onRequestError = { [weak self] serverError, requestId in
             guard let self else { return }
-            let error = FenceError.actionFailed(message)
+            let error = FenceError.serverError(serverError)
             self.actionTracker.resolve(requestId: requestId, result: .failure(error))
             self.interfaceTracker.resolve(requestId: requestId, result: .failure(error))
             self.screenTracker.resolve(requestId: requestId, result: .failure(error))

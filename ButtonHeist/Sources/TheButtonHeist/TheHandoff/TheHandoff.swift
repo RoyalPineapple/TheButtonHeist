@@ -42,6 +42,64 @@ final class TheHandoff {
                 return "No device matching '\(filter)' (available: \(available.joined(separator: ", ")))"
             }
         }
+
+        var failureCode: String {
+            switch self {
+            case .connectionFailed:
+                return "connection.failed"
+            case .authFailed:
+                return "auth.failed"
+            case .sessionLocked:
+                return "session.locked"
+            case .timeout:
+                return "setup.timeout"
+            case .noDeviceFound:
+                return "discovery.no_device_found"
+            case .noMatchingDevice:
+                return "discovery.no_matching_device"
+            }
+        }
+
+        var phase: FailurePhase {
+            switch self {
+            case .connectionFailed:
+                return .transport
+            case .authFailed:
+                return .authentication
+            case .sessionLocked:
+                return .session
+            case .timeout:
+                return .setup
+            case .noDeviceFound, .noMatchingDevice:
+                return .discovery
+            }
+        }
+
+        var retryable: Bool {
+            switch self {
+            case .connectionFailed, .sessionLocked, .timeout, .noDeviceFound:
+                return true
+            case .authFailed, .noMatchingDevice:
+                return false
+            }
+        }
+
+        var hint: String? {
+            switch self {
+            case .connectionFailed:
+                return "Check that the app is running and reachable, then retry."
+            case .authFailed:
+                return "Retry without a token to request a fresh session."
+            case .sessionLocked:
+                return "Wait for the current driver to disconnect or for the session to time out."
+            case .timeout:
+                return "Check that the app is running with Button Heist enabled; use 'buttonheist list' to see available devices."
+            case .noDeviceFound:
+                return "Start the app and confirm it advertises a Button Heist session."
+            case .noMatchingDevice:
+                return "Check the device filter or target name against 'buttonheist list'."
+            }
+        }
     }
 
     /// State carried while connected: device, keepalive task, and the
@@ -261,7 +319,7 @@ final class TheHandoff {
     /// General protocol/transport error reported by the server.
     var onError: (@ButtonHeistActor (String) -> Void)?
     /// Error response for a specific in-flight request.
-    var onRequestError: (@ButtonHeistActor (String, String) -> Void)?
+    var onRequestError: (@ButtonHeistActor (ServerError, String) -> Void)?
     /// Auth approved. The parameter is the approved token, or nil when reusing a persistent session.
     var onAuthApproved: (@ButtonHeistActor (String?) -> Void)?
     /// Another agent currently owns the session. Payload carries details for the operator to resolve.
@@ -551,7 +609,7 @@ final class TheHandoff {
                 onAuthFailed?(serverError.message)
             default:
                 if let requestId {
-                    onRequestError?(serverError.message, requestId)
+                    onRequestError?(serverError, requestId)
                 } else {
                     transitionToFailed(.connectionFailed(serverError.message))
                     onError?(serverError.message)

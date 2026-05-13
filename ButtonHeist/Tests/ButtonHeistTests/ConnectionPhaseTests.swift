@@ -20,4 +20,22 @@ final class ConnectionPhaseTests: XCTestCase {
             TheHandoff.ConnectionError.sessionLocked("bad token")
         )
     }
+
+    func testConnectionErrorTaxonomy() {
+        let cases: [(TheHandoff.ConnectionError, String, FailurePhase, Bool)] = [
+            (.connectionFailed("refused"), "connection.failed", .transport, true),
+            (.authFailed("bad token"), "auth.failed", .authentication, false),
+            (.sessionLocked("busy"), "session.locked", .session, true),
+            (.timeout, "setup.timeout", .setup, true),
+            (.noDeviceFound, "discovery.no_device_found", .discovery, true),
+            (.noMatchingDevice(filter: "Demo", available: ["Other"]), "discovery.no_matching_device", .discovery, false),
+        ]
+
+        for (error, code, phase, retryable) in cases {
+            XCTAssertEqual(error.failureCode, code)
+            XCTAssertEqual(error.phase, phase)
+            XCTAssertEqual(error.retryable, retryable)
+            XCTAssertNotNil(error.hint, "Expected hint for \(error)")
+        }
+    }
 }

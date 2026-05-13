@@ -160,7 +160,7 @@ final class TheStash {
     // MARK: - Element Actions
 
     func hasInteractiveObject(_ screenElement: ScreenElement) -> Bool {
-        isInteractive(element: screenElement.element)
+        Interactivity.isInteractive(element: screenElement.element, object: screenElement.object)
     }
 
     /// Outcome of `activate(_:)`.
@@ -329,8 +329,8 @@ final class TheStash {
         }
     }
 
-    func checkElementInteractivity(_ element: AccessibilityElement) -> InteractivityCheck {
-        Interactivity.checkInteractivity(element)
+    func checkElementInteractivity(_ screenElement: ScreenElement) -> InteractivityCheck {
+        Interactivity.checkInteractivity(screenElement.element, object: screenElement.object)
     }
 
     func resolvePoint(

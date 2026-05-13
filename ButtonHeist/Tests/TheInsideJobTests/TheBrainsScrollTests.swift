@@ -252,6 +252,84 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(Navigation.adaptDirection(.left, for: biaxial), .left)
     }
 
+    // MARK: - Scroll Search Target Selection
+
+    func testFindScrollTargetPrefersRequestedAxisBeforeCrossAxisFallback() {
+        let vertical = makeScrollableContainer(
+            contentSize: CGSize(width: 320, height: 2000),
+            frame: CGRect(x: 0, y: 0, width: 320, height: 400)
+        )
+        let horizontal = makeScrollableContainer(
+            contentSize: CGSize(width: 1200, height: 200),
+            frame: CGRect(x: 0, y: 420, width: 320, height: 200)
+        )
+        installScrollableContainers([vertical, horizontal])
+
+        let result = brains.navigation.findScrollTarget(preferredAxis: .horizontal)
+
+        XCTAssertEqual(result?.container, horizontal)
+    }
+
+    func testFindScrollTargetFallsBackWhenRequestedAxisIsUnavailable() {
+        let vertical = makeScrollableContainer(
+            contentSize: CGSize(width: 320, height: 2000),
+            frame: CGRect(x: 0, y: 0, width: 320, height: 400)
+        )
+        installScrollableContainers([vertical])
+
+        let result = brains.navigation.findScrollTarget(preferredAxis: .horizontal)
+
+        XCTAssertEqual(result?.container, vertical)
+    }
+
+    // MARK: - Scroll Search Progress
+
+    func testScrollSearchProgressReportsCapAsNonExhaustive() {
+        let container = makeScrollableContainer()
+        var progress = Navigation.ScrollSearchProgress(
+            initialVisibleHeistIds: ["initial"],
+            maxScrolls: 2
+        )
+
+        progress.markScrolledPage(in: container, visibleHeistIds: ["page_1"])
+        progress.markScrolledPage(in: container, visibleHeistIds: ["initial", "page_2"])
+
+        XCTAssertEqual(progress.scrollCount, 2)
+        XCTAssertEqual(progress.pagesSearched, 3)
+        XCTAssertEqual(progress.containersSearched, 1)
+        XCTAssertEqual(progress.uniqueElementsSeen, 3)
+        XCTAssertTrue(progress.didHitScrollCap)
+        XCTAssertFalse(progress.exhaustive)
+    }
+
+    func testScrollSearchProgressReportsExhaustiveWhenEdgesReachedBeforeCap() {
+        let container = makeScrollableContainer()
+        var progress = Navigation.ScrollSearchProgress(
+            initialVisibleHeistIds: ["initial"],
+            maxScrolls: 2
+        )
+
+        progress.markContainerExhausted(container)
+
+        XCTAssertEqual(progress.scrollCount, 0)
+        XCTAssertEqual(progress.pagesSearched, 1)
+        XCTAssertEqual(progress.containersSearched, 1)
+        XCTAssertEqual(progress.exhaustedContainers, Set([container]))
+        XCTAssertFalse(progress.didHitScrollCap)
+        XCTAssertTrue(progress.exhaustive)
+    }
+
+    func testScrollSearchProgressWithoutSearchedContainersIsNotExhaustive() {
+        let progress = Navigation.ScrollSearchProgress(
+            initialVisibleHeistIds: ["initial"],
+            maxScrolls: 2
+        )
+
+        XCTAssertEqual(progress.containersSearched, 0)
+        XCTAssertFalse(progress.didHitScrollCap)
+        XCTAssertFalse(progress.exhaustive)
+    }
+
     // MARK: - ScrollableTarget Properties
 
     func testScrollableTargetFrameForUIScrollView() {
@@ -588,6 +666,25 @@ final class TheBrainsScrollTests: XCTestCase {
         shape: AccessibilityElement.Shape = .frame(.zero)
     ) -> AccessibilityElement {
         .make(label: label, traits: traits, shape: shape, respondsToUserInteraction: false)
+    }
+
+    private func makeScrollableContainer(
+        contentSize: CGSize = CGSize(width: 320, height: 2000),
+        frame: CGRect = CGRect(x: 0, y: 0, width: 320, height: 400)
+    ) -> AccessibilityContainer {
+        AccessibilityContainer(
+            type: .scrollable(contentSize: contentSize),
+            frame: frame
+        )
+    }
+
+    private func installScrollableContainers(_ containers: [AccessibilityContainer]) {
+        brains.stash.currentScreen = Screen(
+            elements: [:],
+            hierarchy: containers.map { .container($0, children: []) },
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
     }
 
     private func requireForegroundWindowScene() throws -> UIWindowScene {

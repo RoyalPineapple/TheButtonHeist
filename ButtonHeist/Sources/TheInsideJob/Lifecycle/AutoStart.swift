@@ -21,68 +21,32 @@ private let autoStartTask = OSAllocatedUnfairLock<Task<Void, Never>?>(initialSta
 /// - INSIDEJOB_ID / InsideJobInstanceId: Human-readable instance identifier
 /// - INSIDEJOB_POLLING_INTERVAL / InsideJobPollingInterval: Polling interval in seconds
 /// - INSIDEJOB_PORT / InsideJobPort: Fixed TCP port to listen on (0 or unset = any available)
+/// - INSIDEJOB_SCOPE / InsideJobScope: Allowed connection scopes
+/// - INSIDEJOB_RESTRICT_WATCHERS / InsideJobRestrictWatchers: Require watcher auth
+/// - INSIDEJOB_SESSION_TIMEOUT / InsideJobSessionTimeout: Session release timeout
 @_cdecl("TheInsideJob_autoStartFromLoad")
 public func theInsideJobAutoStartFromLoad() {
     autoStartLogger.info("========== AUTO-START BEGIN ==========")
     autoStartLogger.info("Bundle ID: \(Bundle.main.bundleIdentifier ?? "unknown")")
 
-    // Check INSIDEJOB_DISABLE environment variable
-    if EnvironmentKey.insideJobDisable.boolValue {
-        autoStartLogger.info("Auto-start disabled via INSIDEJOB_DISABLE")
+    let configuration = StartupConfiguration.resolve()
+    for warning in configuration.warnings {
+        autoStartLogger.warning("\(warning.message, privacy: .public)")
+    }
+
+    if configuration.disableAutoStart.value {
+        autoStartLogger.info("Auto-start disabled via \(configuration.disableAutoStart.source.label, privacy: .public)")
         return
     }
-
-    // Check Info.plist InsideJobDisableAutoStart
-    if let disable = Bundle.main.object(forInfoDictionaryKey: "InsideJobDisableAutoStart") as? Bool, disable {
-        autoStartLogger.info("Auto-start disabled via Info.plist")
-        return
-    }
-
-    // Get polling interval (default 1.0, minimum 0.5)
-    var interval: TimeInterval = 1.0
-    if let envInterval = EnvironmentKey.insideJobPollingInterval.value,
-       let parsed = TimeInterval(envInterval) {
-        interval = max(0.5, parsed)
-    } else if let plistInterval = Bundle.main.object(forInfoDictionaryKey: "InsideJobPollingInterval") as? Double {
-        interval = max(0.5, plistInterval)
-    }
-
-    // Get auth token
-    var token: String?
-    if let envToken = EnvironmentKey.insideJobToken.value {
-        token = envToken
-    } else if let plistToken = Bundle.main.object(forInfoDictionaryKey: "InsideJobToken") as? String {
-        token = plistToken
-    }
-
-    // Get instance ID
-    var instanceId: String?
-    if let envId = EnvironmentKey.insideJobId.value {
-        instanceId = envId
-    } else if let plistId = Bundle.main.object(forInfoDictionaryKey: "InsideJobInstanceId") as? String {
-        instanceId = plistId
-    }
-
-    // Get preferred port (0 = any available)
-    var port: UInt16 = 0
-    if let envPort = EnvironmentKey.insideJobPort.value,
-       let parsed = UInt16(envPort), parsed > 0 {
-        port = parsed
-    } else if let plistPort = Bundle.main.object(forInfoDictionaryKey: "InsideJobPort") as? Int,
-              plistPort > 0, plistPort <= UInt16.max {
-        port = UInt16(plistPort)
-    }
-
-    autoStartLogger.info("Starting with polling interval: \(interval)")
 
     let task = Task { @MainActor in
         autoStartLogger.debug("MainActor task executing...")
         autoStartLogger.info("Device: \(UIDevice.current.name)")
         autoStartLogger.info("System: \(UIDevice.current.systemName) \(UIDevice.current.systemVersion)")
         do {
-            TheInsideJob.configure(token: token, instanceId: instanceId, port: port)
+            TheInsideJob.configure(startupConfiguration: configuration)
             try await TheInsideJob.shared.start()
-            TheInsideJob.shared.startPolling(interval: interval)
+            TheInsideJob.shared.startPolling(interval: configuration.pollingInterval.value)
             autoStartLogger.info("========== AUTO-START SUCCESS ==========")
         } catch {
             autoStartLogger.error("========== AUTO-START FAILED: \(error) ==========")

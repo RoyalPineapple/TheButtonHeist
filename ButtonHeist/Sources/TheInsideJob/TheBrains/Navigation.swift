@@ -60,9 +60,13 @@ final class Navigation {
     static let postJumpRealFrames: Int = 20
 
     /// Maximum pages `scroll_to_edge` will walk before declaring the edge
-    /// unreachable. Paired with `element_search`'s 200-page cap declared
-    /// locally; the asymmetry is intentional (search is broader than edge-seek).
+    /// unreachable. Paired with `scrollSearchMaxScrolls`; the asymmetry is
+    /// intentional (search is broader than edge-seek).
     static let scrollToEdgeMaxPages: Int = 50
+
+    /// Maximum successful page scrolls `element_search` will perform before
+    /// returning a capped, non-exhaustive failure.
+    static let scrollSearchMaxScrolls: Int = ScrollSearchProgress.defaultMaxScrolls
 
     /// Settle window after `jumpToRecordedPosition` before reading geometry
     /// for the comfort-zone check. Paired with `postJumpRealFrames` — the SPI
@@ -251,6 +255,72 @@ final class Navigation {
 
         mutating func addPendingContainers(_ containers: [AccessibilityContainer]) {
             pendingContainers.formUnion(containers.filter { !exploredContainers.contains($0) })
+        }
+    }
+
+    /// Bookkeeping for one `element_search` pass.
+    struct ScrollSearchProgress: Equatable {
+        static let defaultMaxScrolls: Int = 200
+
+        let maxScrolls: Int
+        private(set) var scrollCount = 0
+        private(set) var searchedContainers = Set<AccessibilityContainer>()
+        private(set) var exhaustedContainers = Set<AccessibilityContainer>()
+        private var seenHeistIds: Set<String>
+
+        init(
+            initialVisibleHeistIds: Set<String> = [],
+            maxScrolls: Int = Self.defaultMaxScrolls
+        ) {
+            self.maxScrolls = maxScrolls
+            self.seenHeistIds = initialVisibleHeistIds
+        }
+
+        var canScrollMore: Bool {
+            scrollCount < maxScrolls
+        }
+
+        var didHitScrollCap: Bool {
+            !canScrollMore
+        }
+
+        /// Initial viewport plus each page reached by a successful scroll.
+        var pagesSearched: Int {
+            scrollCount + 1
+        }
+
+        var containersSearched: Int {
+            searchedContainers.count
+        }
+
+        var uniqueElementsSeen: Int {
+            seenHeistIds.count
+        }
+
+        var exhaustive: Bool {
+            containersSearched > 0 && !didHitScrollCap
+        }
+
+        mutating func markContainerSearched(_ container: AccessibilityContainer) {
+            searchedContainers.insert(container)
+        }
+
+        mutating func markContainerExhausted(_ container: AccessibilityContainer) {
+            markContainerSearched(container)
+            exhaustedContainers.insert(container)
+        }
+
+        mutating func markScrolledPage(
+            in container: AccessibilityContainer,
+            visibleHeistIds: Set<String>
+        ) {
+            markContainerSearched(container)
+            scrollCount += 1
+            recordVisibleHeistIds(visibleHeistIds)
+        }
+
+        mutating func recordVisibleHeistIds(_ heistIds: Set<String>) {
+            seenHeistIds.formUnion(heistIds)
         }
     }
 

@@ -18,13 +18,38 @@ final class DeviceConnectionTLSTests: XCTestCase {
             .serverClosed,
             .authFailed("bad token"),
             .sessionLocked("locked"),
+            .protocolMismatch("server=old, client=new"),
             .localDisconnect,
             .certificateMismatch,
+            .missingFingerprint,
         ]
 
         for reason in reasons {
             XCTAssertNotNil(reason.errorDescription, "Missing description for \(reason)")
             XCTAssertFalse(reason.errorDescription!.isEmpty, "Empty description for \(reason)")
+        }
+    }
+
+    func testDisconnectReasonTaxonomy() {
+        let cases: [(DisconnectReason, String, FailurePhase, Bool)] = [
+            (.networkError(NSError(domain: "test", code: 1)), "transport.network_error", .transport, true),
+            (.bufferOverflow, "transport.buffer_overflow", .transport, false),
+            (.serverClosed, "transport.server_closed", .transport, true),
+            (.authFailed("bad token"), "auth.failed", .authentication, false),
+            (.sessionLocked("busy"), "session.locked", .session, true),
+            (.protocolMismatch("server=old, client=new"), "protocol.mismatch", .protocolNegotiation, false),
+            (.localDisconnect, "client.local_disconnect", .client, false),
+            (.certificateMismatch, "tls.certificate_mismatch", .tls, false),
+            (.missingFingerprint, "tls.missing_fingerprint", .tls, false),
+        ]
+
+        for (reason, code, phase, retryable) in cases {
+            XCTAssertEqual(reason.failureCode, code)
+            XCTAssertEqual(reason.phase, phase)
+            XCTAssertEqual(reason.retryable, retryable)
+            if code != "client.local_disconnect" {
+                XCTAssertNotNil(reason.hint, "Expected hint for \(reason)")
+            }
         }
     }
 

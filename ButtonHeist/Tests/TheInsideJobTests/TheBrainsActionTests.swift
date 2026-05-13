@@ -4,6 +4,15 @@ import XCTest
 @testable import TheInsideJob
 @testable import TheScore
 
+private final class ActionActivationOverrideView: UIView {
+    private(set) var activationCount = 0
+
+    override func accessibilityActivate() -> Bool {
+        activationCount += 1
+        return true
+    }
+}
+
 @MainActor
 final class TheBrainsActionTests: XCTestCase {
 
@@ -203,6 +212,55 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .elementDeallocated)
         XCTAssertTrue(result.message?.contains("deallocated") ?? false)
+    }
+
+    func testExecuteActivateSucceedsForNoTraitElementWithActivationOverride() async {
+        let heistId = "plain_action"
+        let liveObject = ActionActivationOverrideView()
+        registerScreenElement(
+            heistId: heistId,
+            element: makeElement(label: "Plain action"),
+            object: liveObject
+        )
+
+        let result = await brains.actions.executeActivate(.heistId(heistId))
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(result.method, .activate)
+        XCTAssertEqual(liveObject.activationCount, 1)
+    }
+
+    func testExecuteActivateFailsForNoTraitElementWithoutActivationSignal() async {
+        let heistId = "plain_label"
+        let liveObject = UIView()
+        registerScreenElement(
+            heistId: heistId,
+            element: makeElement(label: "Plain label"),
+            object: liveObject
+        )
+
+        let result = await brains.actions.executeActivate(.heistId(heistId))
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .activate)
+        XCTAssertEqual(result.message, "Element does not support activate")
+    }
+
+    func testExecuteActivateBlocksDisabledElementWithActivationOverride() async {
+        let heistId = "disabled_action"
+        let liveObject = ActionActivationOverrideView()
+        registerScreenElement(
+            heistId: heistId,
+            element: makeElement(label: "Disabled action", traits: .notEnabled),
+            object: liveObject
+        )
+
+        let result = await brains.actions.executeActivate(.heistId(heistId))
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .activate)
+        XCTAssertTrue(result.message?.contains("disabled") ?? false)
+        XCTAssertEqual(liveObject.activationCount, 0)
     }
 
     func testExecuteIncrementSucceedsWhenElementObjectIsLive() async {

@@ -338,7 +338,10 @@ enum ToolDefinitions {
                 "direction": [
                     "type": "string",
                     "enum": .array(["up", "down", "left", "right", "next", "previous"].map { .string($0) }),
-                    "description": "Scroll direction (required for mode page, optional starting direction for mode search)",
+                    "description": """
+                        Scroll direction. mode=page accepts up, down, left, right, next, previous. \
+                        mode=search accepts only up, down, left, right.
+                        """,
                 ],
                 "edge": [
                     "type": "string",
@@ -347,6 +350,24 @@ enum ToolDefinitions {
                 ],
                 "expect": expectProperty,
             ] as [String: Value]) { _, new in new }),
+            "allOf": .array([
+                .object([
+                    "if": .object([
+                        "properties": .object([
+                            "mode": ["const": "search"],
+                        ]),
+                        "required": .array([.string("mode")]),
+                    ]),
+                    "then": .object([
+                        "properties": .object([
+                            "direction": .object([
+                                "type": "string",
+                                "enum": .array(["up", "down", "left", "right"].map { .string($0) }),
+                            ]),
+                        ]),
+                    ]),
+                ]),
+            ]),
             "additionalProperties": false,
         ])
     )

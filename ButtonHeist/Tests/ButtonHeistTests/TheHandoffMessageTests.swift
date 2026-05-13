@@ -219,17 +219,18 @@ final class TheHandoffMessageTests: XCTestCase {
         let handoff = TheHandoff()
         connectMockHandoff(handoff)
         var receivedError: String?
-        var requestError: (message: String, requestId: String)?
+        var requestError: (serverError: ServerError, requestId: String)?
         handoff.onError = { receivedError = $0 }
-        handoff.onRequestError = { message, requestId in
-            requestError = (message, requestId)
+        handoff.onRequestError = { serverError, requestId in
+            requestError = (serverError, requestId)
         }
         handoff.handleServerMessage(.info(makeServerInfo()), requestId: nil)
 
         handoff.handleServerMessage(.error(ServerError(kind: .general, message: "Response too large")), requestId: "request-1")
 
         XCTAssertNil(receivedError)
-        XCTAssertEqual(requestError?.message, "Response too large")
+        XCTAssertEqual(requestError?.serverError.kind, .general)
+        XCTAssertEqual(requestError?.serverError.message, "Response too large")
         XCTAssertEqual(requestError?.requestId, "request-1")
         if case .failed = handoff.connectionPhase {
             XCTFail("Request-scoped error should not fail the connection")

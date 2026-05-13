@@ -56,7 +56,7 @@ final class Actions {
             return .failure(.elementNotFound, message: resolution.diagnostics)
         }
         if requireInteractive {
-            switch stash.checkElementInteractivity(resolved.element) {
+            switch stash.checkElementInteractivity(resolved.screenElement) {
             case .blocked(let reason):
                 return .failure(method, message: reason)
             case .interactive(let warning):

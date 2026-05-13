@@ -257,6 +257,27 @@ struct ToolSyncTests {
         #expect(extractRequiredKeys(from: segmentItems) == segmentKeys)
     }
 
+    @Test("Scroll search direction schema excludes page-only directions")
+    func scrollSearchDirectionSchemaExcludesPageOnlyDirections() {
+        guard let scroll = ToolDefinitions.all.first(where: { $0.name == "scroll" }) else {
+            Issue.record("No scroll tool found")
+            return
+        }
+
+        let pageDirections = extractEnumValues(from: scroll, property: "direction")
+        #expect(pageDirections == Set(ScrollDirection.allCases.map(\.rawValue)))
+
+        guard case .object(let schema) = scroll.inputSchema,
+              let allOf = schema["allOf"],
+              case .array(let clauses) = allOf else {
+            Issue.record("scroll tool missing conditional allOf schema")
+            return
+        }
+
+        let searchDirectionEnums = clauses.compactMap { searchDirectionEnum(from: $0) }
+        #expect(searchDirectionEnums.contains(Set(ScrollSearchDirection.allCases.map(\.rawValue))))
+    }
+
     // MARK: - Exhaustiveness
 
     @Test("ToolDefinitions.all has no duplicate tool names")
@@ -330,6 +351,31 @@ struct ToolSyncTests {
             guard case .string(let string) = value else { return nil }
             return string
         })
+    }
+
+    private func extractEnumValues(from schema: [String: Value]) -> Set<String> {
+        guard let enumValues = schema["enum"],
+              case .array(let values) = enumValues else {
+            return []
+        }
+        return Set(values.compactMap { value -> String? in
+            guard case .string(let string) = value else { return nil }
+            return string
+        })
+    }
+
+    private func searchDirectionEnum(from value: Value) -> Set<String>? {
+        guard case .object(let clause) = value,
+              let ifSchema = extractObjectField(from: clause, key: "if"),
+              let ifProperties = extractObjectField(from: ifSchema, key: "properties"),
+              let modeSchema = extractObjectField(from: ifProperties, key: "mode"),
+              extractStringField(from: modeSchema, key: "const") == "search",
+              let thenSchema = extractObjectField(from: clause, key: "then"),
+              let thenProperties = extractObjectField(from: thenSchema, key: "properties"),
+              let directionSchema = extractObjectField(from: thenProperties, key: "direction") else {
+            return nil
+        }
+        return extractEnumValues(from: directionSchema)
     }
 
     private func extractPropertySchema(from tool: Tool, property: String) -> [String: Value]? {
