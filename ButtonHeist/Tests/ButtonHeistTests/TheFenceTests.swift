@@ -108,6 +108,52 @@ final class TheFenceTests: XCTestCase {
         XCTAssertEqual(response.humanFormatted(), "Error: something broke")
     }
 
+    func testFenceErrorDisplayMessageDoesNotSerializeFailureDetails() {
+        let message = FenceError.connectionTimeout.displayMessage
+
+        XCTAssertTrue(message.contains("Connection timed out"))
+        XCTAssertTrue(message.contains("Hint:"))
+        XCTAssertFalse(message.contains("Code: setup.timeout"))
+        XCTAssertFalse(message.contains("retryable: true"))
+    }
+
+    func testFenceErrorFailureDetailsAreTyped() {
+        let details = FenceError.connectionTimeout.failureDetails
+
+        XCTAssertEqual(details.errorCode, "setup.timeout")
+        XCTAssertEqual(details.phase, .setup)
+        XCTAssertTrue(details.retryable)
+        XCTAssertEqual(details.hint, "Is the app running? Check 'buttonheist list' to see available devices.")
+    }
+
+    func testCompactErrorResponseIncludesFailureDetailsConcisely() {
+        let response = FenceResponse.failure(FenceError.actionTimeout)
+        let text = response.compactFormatted()
+
+        XCTAssertTrue(text.contains("error[request.timeout request retryable=true]"))
+        XCTAssertTrue(text.contains("Command timed out"))
+        XCTAssertTrue(text.contains("hint: The app may be busy"))
+        XCTAssertTrue(text.contains("The connection is preserved; retry the command on the same session."))
+        XCTAssertFalse(text.contains("The connection is preserved — retry"))
+        XCTAssertFalse(text.contains("Code: request.timeout"))
+    }
+
+    func testCompactErrorResponsePreservesDelimitedHint() {
+        let response = FenceResponse.error(
+            "failed",
+            details: FailureDetails(
+                errorCode: "request.failed",
+                phase: .request,
+                retryable: false,
+                hint: "retry | inspect logs"
+            )
+        )
+        let text = response.compactFormatted()
+
+        XCTAssertTrue(text.contains("error[request.failed request retryable=false]: failed"))
+        XCTAssertTrue(text.contains("hint: retry | inspect logs"))
+    }
+
     func testHelpResponseFormatting() {
         let response = FenceResponse.help(commands: ["one_finger_tap", "swipe"])
         let formatted = response.humanFormatted()
@@ -145,6 +191,21 @@ final class TheFenceTests: XCTestCase {
         let json = response.jsonDict()
         XCTAssertEqual(json?["status"] as? String, "error")
         XCTAssertEqual(json?["message"] as? String, "failed")
+    }
+
+    func testErrorResponseJSONIncludesFailureDetailsWhenPresent() {
+        let response = FenceResponse.failure(FenceError.authFailed("bad token"))
+        let json = response.jsonDict()
+
+        XCTAssertEqual(json?["status"] as? String, "error")
+        let message = json?["message"] as? String
+        XCTAssertTrue(message?.contains("Auth failed: bad token") == true)
+        XCTAssertFalse(message?.contains("Retry without --token") == true)
+        XCTAssertFalse(message?.contains("Code: auth.failed") == true)
+        XCTAssertEqual(json?["errorCode"] as? String, "auth.failed")
+        XCTAssertEqual(json?["phase"] as? String, "auth")
+        XCTAssertEqual(json?["retryable"] as? Bool, false)
+        XCTAssertEqual(json?["hint"] as? String, "Retry without --token to request a fresh session.")
     }
 
     func testHelpResponseJSON() {
@@ -416,6 +477,21 @@ final class TheFenceTests: XCTestCase {
         let text = response.humanFormatted()
         XCTAssertTrue(text.contains("[expectation FAILED"))
         XCTAssertTrue(text.contains("noChange"))
+    }
+
+    func testCompactScreenChangedExpectationFailureIncludesGuidance() {
+        let result = ActionResult(
+            success: true,
+            method: .activate,
+            interfaceDelta: .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
+        )
+        let expectation = ExpectationResult(met: false, expectation: .screenChanged, actual: "elementsChanged")
+        let response = FenceResponse.action(result: result, expectation: expectation)
+        let text = response.compactFormatted()
+
+        XCTAssertTrue(text.contains("[expectation FAILED: got elementsChanged]"))
+        XCTAssertTrue(text.contains("hint: screen_changed requires a screen-level transition"))
+        XCTAssertTrue(text.contains("use elements_changed for same-screen element updates"))
     }
 
     func testActionWithDeliveryFailureFormatting() {
@@ -783,6 +859,16 @@ final class TheFenceTests: XCTestCase {
         XCTAssertTrue(description.contains("connection is preserved"))
     }
 
+    func testActionTimeoutCoreMessageLeavesRecoveryGuidanceInHint() {
+        XCTAssertEqual(
+            FenceError.actionTimeout.coreMessage,
+            "Command timed out waiting for a response from the app."
+        )
+        XCTAssertFalse(FenceError.actionTimeout.coreMessage.contains("main thread"))
+        XCTAssertTrue(FenceError.actionTimeout.failureDetails.hint?.contains("main thread") == true)
+        XCTAssertTrue(FenceError.actionTimeout.failureDetails.hint?.contains("same session") == true)
+    }
+
     func testFenceErrorTaxonomy() {
         let cases: [(FenceError, String, FailurePhase, Bool, String?)] = [
             (.invalidRequest("bad"), "request.invalid", .request, false, "Fix the request"),
@@ -990,7 +1076,7 @@ final class TheFenceTests: XCTestCase {
     func testExecuteGetSessionLogReturnsErrorWhenIdle() async throws {
         let fence = TheFence(configuration: .init())
         let response = try await fence.execute(request: ["command": "get_session_log"])
-        if case .error(let message) = response {
+        if case .error(let message, _) = response {
             XCTAssertTrue(message.contains("No active session"))
         } else {
             XCTFail("Expected error response when no session active, got \(response)")

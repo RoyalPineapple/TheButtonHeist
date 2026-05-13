@@ -75,6 +75,13 @@ extension TheFence {
             }
         }
 
+        if let failedIndex, policy == .stopOnError {
+            stepSummaries.append(contentsOf: skippedStepSummaries(
+                steps: steps,
+                afterFailedIndex: failedIndex
+            ))
+        }
+
         let totalMs = Int((CFAbsoluteTimeGetCurrent() - batchStart) * 1000)
         let netDelta = NetDeltaAccumulator.merge(deltas: stepDeltas)
         return .batch(
@@ -87,6 +94,22 @@ extension TheFence {
             stepSummaries: stepSummaries,
             netDelta: netDelta
         )
+    }
+
+    private func skippedStepSummaries(
+        steps: [[String: Any]], afterFailedIndex failedIndex: Int
+    ) -> [BatchStepSummary] {
+        steps.dropFirst(failedIndex + 1).map { step in
+            BatchStepSummary(
+                command: step["command"] as? String ?? "?",
+                deltaKind: nil,
+                screenName: nil,
+                screenId: nil,
+                expectationMet: nil,
+                elementCount: nil,
+                error: "skipped: stop_on_error stopped batch after step \(failedIndex)"
+            )
+        }
     }
 
     // MARK: - Step Outcome
@@ -143,7 +166,7 @@ extension TheFence {
                 command: command, deltaKind: nil, screenName: nil, screenId: nil,
                 expectationMet: nil, elementCount: iface.elements.count, error: nil
             )
-        case .error(let message):
+        case .error(let message, _):
             return BatchStepSummary(
                 command: command, deltaKind: nil, screenName: nil, screenId: nil,
                 expectationMet: nil, elementCount: nil, error: message

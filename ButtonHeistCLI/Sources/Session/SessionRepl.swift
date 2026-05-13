@@ -137,7 +137,7 @@ final class ReplSession {
             }
             return (response, requestId)
         } catch {
-            return (.error(error.displayMessage), requestId)
+            return (.failure(error), requestId)
         }
     }
 
