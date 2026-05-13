@@ -291,7 +291,7 @@ final class TheGetawayTests: XCTestCase {
     /// returned to client B who never asked for it. When the originator
     /// disconnects, the cache is dropped.
     func testDisconnectInvalidatesCachedCompletedRecordingForOriginator() async {
-        let (getaway, _, _) = makeGetaway()
+        let (getaway, _, _) = await makeGetaway()
         getaway.recordingOriginatorClientId = 7
         let payload = RecordingPayload(
             videoData: "AAAA",
@@ -314,7 +314,7 @@ final class TheGetawayTests: XCTestCase {
     /// Counterpart: an unrelated client disconnecting must not nuke a
     /// cached payload that belongs to a still-connected originator.
     func testDisconnectByNonOriginatorPreservesCache() async {
-        let (getaway, _, _) = makeGetaway()
+        let (getaway, _, _) = await makeGetaway()
         getaway.recordingOriginatorClientId = 7
         let payload = RecordingPayload(
             videoData: "AAAA",
@@ -338,7 +338,7 @@ final class TheGetawayTests: XCTestCase {
     /// must be cleared so the next legitimate `stop_recording` isn't
     /// blocked by the "Recording stop already in progress" guard.
     func testDisconnectClearsPendingRecordingResponseForOriginator() async {
-        let (getaway, _, _) = makeGetaway()
+        let (getaway, _, _) = await makeGetaway()
         getaway.recordingOriginatorClientId = 3
         var deliveriesAfterDisconnect = 0
         getaway.pendingRecordingResponse = (
@@ -357,7 +357,7 @@ final class TheGetawayTests: XCTestCase {
     /// cached payload so a future driver can't pick up a video the
     /// previous driver started.
     func testSessionReleaseInvalidatesCachedRecording() async {
-        let (getaway, _, _) = makeGetaway()
+        let (getaway, _, _) = await makeGetaway()
         getaway.recordingOriginatorClientId = 7
         let payload = RecordingPayload(
             videoData: "AAAA",
@@ -389,7 +389,7 @@ final class TheGetawayTests: XCTestCase {
     /// to a client that is not in the authenticated set) still caches the
     /// payload instead of trying to send to a dead client ID.
     func testAutoFinishWithGoneOriginatorFallsBackToCache() async {
-        let (getaway, _, _) = makeGetaway()
+        let (getaway, _, _) = await makeGetaway()
         // Originator set, but no client is authenticated on TheMuscle —
         // simulating the "originator disconnected between start and the
         // stakeout's on-complete firing" race.
@@ -419,7 +419,7 @@ final class TheGetawayTests: XCTestCase {
     /// `handleStopRecording` rebinds the originator to the requesting
     /// client when called with a clientId.
     func testStopRecordingDrainsCacheForRequestingClient() async {
-        let (getaway, _, _) = makeGetaway()
+        let (getaway, _, _) = await makeGetaway()
         // Pre-cached completion from client A — picked up immediately, so
         // the cache-hit branch in `handleStopRecording` clears originator
         // and drains the payload before ever reaching the rebind path.
@@ -451,7 +451,7 @@ final class TheGetawayTests: XCTestCase {
     /// `stopRecording` is never invoked — the waiter stays parked and we
     /// can inspect the rebind side effect synchronously.
     func testStopRecordingRebindsOriginatorToRequestingClient() async {
-        let (getaway, _, _) = makeGetaway()
+        let (getaway, _, _) = await makeGetaway()
 
         // A stakeout that's never been started: `isRecording` is false and
         // `stopRecording` is a no-op on the idle phase. That lets us park
@@ -483,7 +483,7 @@ final class TheGetawayTests: XCTestCase {
     /// case so a subsequent `stop_recording` (or tearDown) can still
     /// resolve the payload — never drop a recording into the void.
     func testAutoFinishWithTornDownTransportPreservesCache() async {
-        let (getaway, muscle, _) = makeGetaway()
+        let (getaway, muscle, _) = await makeGetaway()
         // Mark client 7 as authenticated so the targeted-delivery branch
         // is entered, then drop `sendToClient` so the send returns false
         // and the cache must survive.
