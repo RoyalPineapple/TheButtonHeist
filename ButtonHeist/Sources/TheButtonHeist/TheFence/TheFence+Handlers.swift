@@ -72,7 +72,7 @@ extension TheFence {
                 return .screenshot(path: url.path, width: screen.width, height: screen.height)
             }
         } catch BookKeeperError.unsafePath {
-            return .error("Invalid output path: must not contain '..' components")
+            return .error("Invalid output path: must not contain '..' components or control characters")
         } catch BookKeeperError.base64DecodingFailed {
             return .error("Failed to decode screenshot data")
         }
@@ -454,8 +454,8 @@ extension TheFence {
             inactivityTimeout: args.number("inactivity_timeout"),
             maxDuration: args.number("max_duration")
         )
-        handoff.send(.startRecording(config))
-        return .ok(message: "Recording start requested — use stop_recording to retrieve the video")
+        try await startRecordingAndWait(config: config, timeout: Timeouts.actionSeconds)
+        return .ok(message: "Recording started — use stop_recording to retrieve the video")
     }
 
     // MARK: - Handler: List Devices
@@ -570,7 +570,7 @@ extension TheFence {
                 return .recording(path: url.path, payload: recording)
             }
         } catch BookKeeperError.unsafePath {
-            return .error("Invalid output path: must not contain '..' components")
+            return .error("Invalid output path: must not contain '..' components or control characters")
         } catch BookKeeperError.base64DecodingFailed {
             return .error("Failed to decode video data")
         }
@@ -621,7 +621,7 @@ extension TheFence {
                 throw FenceError.invalidRequest("stop_heist requires an 'output' path")
             }
             guard let resolvedURL = bookKeeper.validateOutputPath(outputPath) else {
-                throw FenceError.invalidRequest("Invalid output path: must not be empty or contain '..' components")
+                throw FenceError.invalidRequest("Invalid output path: must not be empty, contain '..' components, or contain control characters")
             }
             let heist = try bookKeeper.stopHeistRecording()
             try TheBookKeeper.writeHeist(heist, to: resolvedURL)

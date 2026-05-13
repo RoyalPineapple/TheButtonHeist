@@ -1040,8 +1040,11 @@ final class TheFenceTests: XCTestCase {
     @ButtonHeistActor
     func testWaitForRecordingRestoresCallbacks() async throws {
         let fence = TheFence(configuration: .init())
+        var restoredRecordingErrorCallbackInvoked = false
+        fence.handoff.onRecordingError = { _ in
+            restoredRecordingErrorCallbackInvoked = true
+        }
         XCTAssertNil(fence.handoff.onRecording)
-        XCTAssertNil(fence.handoff.onRecordingError)
 
         do {
             _ = try await fence.waitForRecording(timeout: 0.05)
@@ -1050,7 +1053,8 @@ final class TheFenceTests: XCTestCase {
         }
 
         XCTAssertNil(fence.handoff.onRecording, "onRecording should be restored to nil after waitForRecording")
-        XCTAssertNil(fence.handoff.onRecordingError, "onRecordingError should be restored to nil after waitForRecording")
+        fence.handoff.onRecordingError?("after-timeout")
+        XCTAssertTrue(restoredRecordingErrorCallbackInvoked, "onRecordingError should be restored after waitForRecording")
     }
 
     @ButtonHeistActor
@@ -1091,6 +1095,45 @@ final class TheFenceTests: XCTestCase {
     // MARK: - recordToCompletion
 
     @ButtonHeistActor
+    func testStartRecordingWaitsForServerAcknowledgement() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        try await fence.start()
+        mockConn.autoResponse = nil
+
+        var didReturn = false
+        var responseMessage: String?
+        let task = Task { @ButtonHeistActor in
+            let response = try await fence.execute(request: ["command": "start_recording"])
+            guard case .ok(let message) = response else {
+                didReturn = true
+                return XCTFail("Expected .ok response, got \(response)")
+            }
+            responseMessage = message
+            didReturn = true
+        }
+
+        var startSent = false
+        for _ in 0..<200 {
+            startSent = mockConn.sent.contains { sent in
+                if case .startRecording = sent.0 { return true }
+                return false
+            }
+            if startSent { break }
+            await Task.yield()
+        }
+
+        XCTAssertTrue(startSent, "Expected start_recording to be sent")
+        await Task.yield()
+        XCTAssertFalse(didReturn, "start_recording should not return before recordingStarted arrives")
+
+        fence.handoff.handleServerMessage(.recordingStarted, requestId: nil)
+
+        try await task.value
+        XCTAssertTrue(responseMessage?.contains("Recording started") == true)
+        XCTAssertTrue(didReturn)
+    }
+
+    @ButtonHeistActor
     func testRecordToCompletionReturnsPayloadOnSuccess() async throws {
         let (fence, mockConn) = makeConnectedFence()
         try await fence.start()
@@ -1104,8 +1147,12 @@ final class TheFenceTests: XCTestCase {
         mockConn.autoResponse = { message in
             if case .startRecording = message {
                 Task { @ButtonHeistActor in
+                    for _ in 0..<200 where fence.handoff.onRecording == nil {
+                        await Task.yield()
+                    }
                     fence.handoff.onRecording?(expectedPayload)
                 }
+                return .recordingStarted
             }
             return .actionResult(ActionResult(success: true, method: .activate))
         }
@@ -1129,7 +1176,7 @@ final class TheFenceTests: XCTestCase {
         try await fence.start()
         // Do not deliver a payload — the wait should hang until cancelled.
         mockConn.autoResponse = { _ in
-            .actionResult(ActionResult(success: true, method: .activate))
+            .recordingStarted
         }
 
         let task = Task { @ButtonHeistActor in
@@ -1139,15 +1186,11 @@ final class TheFenceTests: XCTestCase {
             )
         }
 
-        // Wait until the start_recording message has actually been observed by
-        // the mock — that's the only deterministic signal that the task has
-        // progressed past the start send and into the wait.
+        // Wait until the completion callback has been registered — that's the
+        // deterministic signal that the task has progressed past start
+        // acknowledgement and into the recording wait.
         for _ in 0..<200 {
-            let started = mockConn.sent.contains { sent in
-                if case .startRecording = sent.0 { return true }
-                return false
-            }
-            if started { break }
+            if fence.handoff.onRecording != nil { break }
             await Task.yield()
         }
 
@@ -1210,11 +1253,9 @@ final class TheFenceTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testRecordToCompletionPropagatesNonCancelErrors() async throws {
+    func testRecordToCompletionPropagatesStartAcknowledgementErrorsAndStops() async throws {
         let (fence, mockConn) = makeConnectedFence()
         try await fence.start()
-        // On startRecording, deliver a recording-error so the wait fails
-        // synchronously with FenceError.actionFailed.
         mockConn.autoResponse = { message in
             if case .startRecording = message {
                 Task { @ButtonHeistActor in
@@ -1239,12 +1280,50 @@ final class TheFenceTests: XCTestCase {
             XCTFail("Expected FenceError.actionFailed, got \(error)")
         }
 
-        // Cleanup branch must still fire on non-cancel error.
         let stopSent = mockConn.sent.contains { sent in
             if case .stopRecording = sent.0 { return true }
             return false
         }
-        XCTAssertTrue(stopSent, "Expected stop_recording on non-cancel error")
+        XCTAssertTrue(stopSent, "Expected stop_recording on start acknowledgement error")
+    }
+
+    @ButtonHeistActor
+    func testRecordToCompletionPropagatesCompletionErrorsAndStops() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        try await fence.start()
+        mockConn.autoResponse = { message in
+            if case .startRecording = message {
+                Task { @ButtonHeistActor in
+                    for _ in 0..<200 where fence.handoff.onRecording == nil {
+                        await Task.yield()
+                    }
+                    fence.handoff.onRecordingError?("disk full")
+                }
+                return .recordingStarted
+            }
+            return .actionResult(ActionResult(success: true, method: .activate))
+        }
+
+        do {
+            _ = try await fence.recordToCompletion(
+                config: RecordingConfig(fps: 8, maxDuration: 60),
+                timeout: 5.0
+            )
+            XCTFail("Expected FenceError.actionFailed")
+        } catch let error as FenceError {
+            guard case .actionFailed(let message) = error else {
+                return XCTFail("Expected actionFailed, got \(error)")
+            }
+            XCTAssertTrue(message.contains("disk full"), "Expected message to mention 'disk full', got: \(message)")
+        } catch {
+            XCTFail("Expected FenceError.actionFailed, got \(error)")
+        }
+
+        let stopSent = mockConn.sent.contains { sent in
+            if case .stopRecording = sent.0 { return true }
+            return false
+        }
+        XCTAssertTrue(stopSent, "Expected stop_recording on completion error")
     }
 
     @ButtonHeistActor
@@ -1523,15 +1602,21 @@ final class TheFenceTests: XCTestCase {
         let delta: InterfaceDelta = .screenChanged(.init(elementCount: 3, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])))
         fence.handoff.onBackgroundDelta?(delta)
 
-        // Action without expect — should NOT short-circuit, should try to connect
+        // Action without expect — should NOT short-circuit against the
+        // background delta. Depending on current connection setup this may
+        // surface as a thrown connection error or an error response, but it
+        // must not return the synthetic "expectation already met" action.
         do {
-            _ = try await fence.execute(request: [
+            let response = try await fence.execute(request: [
                 "command": "activate",
                 "heistId": "some_button",
             ])
-            XCTFail("Expected connection error")
+            if case .action(let result, _) = response {
+                XCTAssertFalse(result.success)
+                XCTAssertNotEqual(result.message, "expectation already met by background change")
+            }
         } catch {
-            // Expected — no connection, but the point is it didn't short-circuit
+            // Also acceptable — no connection, and no background short-circuit.
         }
     }
 

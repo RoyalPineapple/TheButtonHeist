@@ -158,9 +158,53 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testBeginSessionRejectsEmbeddedDoubleDotIdentifier() async {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        XCTAssertThrowsError(try bookKeeper.beginSession(identifier: "session..name")) { error in
+            guard case BookKeeperError.unsafePath = error else {
+                XCTFail("Expected unsafePath error, got \(error)")
+                return
+            }
+        }
+    }
+
+    @ButtonHeistActor
     func testBeginSessionRejectsSlashInIdentifier() async {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         XCTAssertThrowsError(try bookKeeper.beginSession(identifier: "foo/bar")) { error in
+            guard case BookKeeperError.unsafePath = error else {
+                XCTFail("Expected unsafePath error, got \(error)")
+                return
+            }
+        }
+    }
+
+    @ButtonHeistActor
+    func testBeginSessionRejectsEmptyIdentifier() async {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        XCTAssertThrowsError(try bookKeeper.beginSession(identifier: "")) { error in
+            guard case BookKeeperError.unsafePath = error else {
+                XCTFail("Expected unsafePath error, got \(error)")
+                return
+            }
+        }
+    }
+
+    @ButtonHeistActor
+    func testBeginSessionRejectsOptionLikeIdentifier() async {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        XCTAssertThrowsError(try bookKeeper.beginSession(identifier: "--checkpoint-action=exec=echo")) { error in
+            guard case BookKeeperError.unsafePath = error else {
+                XCTFail("Expected unsafePath error, got \(error)")
+                return
+            }
+        }
+    }
+
+    @ButtonHeistActor
+    func testBeginSessionRejectsControlCharactersInIdentifier() async {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        XCTAssertThrowsError(try bookKeeper.beginSession(identifier: "session\nname")) { error in
             guard case BookKeeperError.unsafePath = error else {
                 XCTFail("Expected unsafePath error, got \(error)")
                 return
@@ -411,6 +455,12 @@ final class TheBookKeeperTests: XCTestCase {
     func testRejectsEmbeddedDoubleDot() async {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         XCTAssertNil(bookKeeper.validateOutputPath("foo/../../../etc/passwd"))
+    }
+
+    @ButtonHeistActor
+    func testRejectsControlCharactersInOutputPath() async {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        XCTAssertNil(bookKeeper.validateOutputPath("screenshots/bad\nname.png"))
     }
 
     @ButtonHeistActor

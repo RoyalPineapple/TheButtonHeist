@@ -630,7 +630,7 @@ Touch gesture tool. For element interactions, prefer `activate` instead. The `ty
 - `rotate` — Requires `angle` (radians)
 - `two_finger_tap` — Two-finger tap
 - `draw_path` — Requires `points` array of `{x, y}` objects
-- `draw_bezier` — Requires `curves` array of bezier curve objects
+- `draw_bezier` — Requires `segments` array of bezier segment objects
 
 #### edit_action
 

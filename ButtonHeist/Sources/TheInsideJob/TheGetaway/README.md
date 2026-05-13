@@ -35,7 +35,7 @@ Owns `RecordingPhase` state machine (`.idle` / `.recording(stakeout:)`). `handle
 
 `broadcastIfChanged()` calls `brains.broadcastInterfaceIfChanged()` — if the tree changed, broadcasts the `Interface` to subscribers. Called by TheInsideJob's pulse handler and polling task.
 
-`sendInterface(requestId:respond:)` settles, refreshes, explores, builds the full `Interface` payload via `brains.currentInterface()`, sends it, and records the sent state.
+`sendInterface(requestId:respond:)` settles, refreshes, builds the visible `Interface` payload via `brains.currentInterface()`, sends it, and records the sent state. Full-screen exploration is handled by the explicit `.explore` command.
 
 ### Identity
 

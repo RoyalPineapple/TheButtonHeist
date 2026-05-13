@@ -37,7 +37,7 @@ extension TheBookKeeper {
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/tar")
-        process.arguments = ["czf", archivePath.path, "-C", parentDirectory.path, directoryName]
+        process.arguments = ["czf", archivePath.path, "-C", parentDirectory.path, "--", directoryName]
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
 

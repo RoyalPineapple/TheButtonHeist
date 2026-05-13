@@ -295,7 +295,10 @@ extension Navigation {
     /// If already visible, no-op. If the element has a recorded content-space
     /// position, computes the target offset and scrolls there in one shot.
     /// Fails if the element is not in the current screen or has no scroll position.
-    func executeScrollToVisible(_ target: ScrollToVisibleTarget) async -> TheSafecracker.InteractionResult {
+    func executeScrollToVisible(
+        _ target: ScrollToVisibleTarget,
+        recordedScreen: Screen? = nil
+    ) async -> TheSafecracker.InteractionResult {
         guard let elementTarget = target.elementTarget else {
             return .failure(.scrollToVisible, message: "Element target required for scroll_to_visible")
         }
@@ -310,7 +313,7 @@ extension Navigation {
 
         // Known element with recorded position — one-shot jump
         if case .heistId(let heistId) = elementTarget,
-           let entry = stash.currentScreen.findElement(heistId: heistId),
+           let entry = (recordedScreen ?? stash.currentScreen).findElement(heistId: heistId),
            stash.jumpToRecordedPosition(entry) != nil {
             await tripwire.yieldRealFrames(Self.postJumpRealFrames)
             refresh()
@@ -333,7 +336,10 @@ extension Navigation {
 
     /// Iterative search: page through scroll content looking for an element.
     /// Used when the element has never been seen (not in the current screen).
-    func executeElementSearch(_ target: ElementSearchTarget) async -> TheSafecracker.InteractionResult {
+    func executeElementSearch(
+        _ target: ElementSearchTarget,
+        recordedScreen: Screen? = nil
+    ) async -> TheSafecracker.InteractionResult {
         guard let searchTarget = target.elementTarget else {
             return .failure(.elementSearch, message: "Element target required for element_search")
         }
@@ -349,7 +355,7 @@ extension Navigation {
 
         // If we have a recorded position, try the one-shot path first
         if case .heistId(let heistId) = searchTarget,
-           let entry = stash.currentScreen.findElement(heistId: heistId),
+           let entry = (recordedScreen ?? stash.currentScreen).findElement(heistId: heistId),
            let savedOffset = stash.jumpToRecordedPosition(entry) {
             await tripwire.yieldRealFrames(Self.postJumpRealFrames)
             refresh()

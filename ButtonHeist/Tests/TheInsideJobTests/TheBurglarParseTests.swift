@@ -25,7 +25,7 @@ final class TheBurglarParseTests: XCTestCase {
         XCTAssertNil(result)
     }
 
-    func testParseRestoresSearchBarHidingAfterParse() throws {
+    func testParseDoesNotMutateSearchBarHiding() throws {
         let windowScene = try requireForegroundWindowScene()
 
         let contentVC = UIViewController()
@@ -48,7 +48,7 @@ final class TheBurglarParseTests: XCTestCase {
         XCTAssertNotNil(stash.parse())
         XCTAssertTrue(
             contentVC.navigationItem.hidesSearchBarWhenScrolling,
-            "parse() should restore hidesSearchBarWhenScrolling after temporary reveal"
+            "parse() should not change hidesSearchBarWhenScrolling"
         )
     }
 
