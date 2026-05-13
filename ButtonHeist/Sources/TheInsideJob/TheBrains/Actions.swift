@@ -143,6 +143,9 @@ final class Actions {
 
     func executeIncrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
         await performElementAction(target: target, method: .increment) { resolved in
+            guard resolved.element.traits.contains(.adjustable) else {
+                return .failure(.increment, message: "Element is not adjustable")
+            }
             guard self.stash.increment(resolved.screenElement) else {
                 return .failure(.elementDeallocated, message: "Element deallocated before increment")
             }
@@ -153,6 +156,9 @@ final class Actions {
 
     func executeDecrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
         await performElementAction(target: target, method: .decrement) { resolved in
+            guard resolved.element.traits.contains(.adjustable) else {
+                return .failure(.decrement, message: "Element is not adjustable")
+            }
             guard self.stash.decrement(resolved.screenElement) else {
                 return .failure(.elementDeallocated, message: "Element deallocated before decrement")
             }

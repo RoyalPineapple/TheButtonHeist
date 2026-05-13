@@ -231,7 +231,7 @@ Swipe between two points or in a direction from an element.
 
 **From element in direction:**
 ```json
-{"buttonHeistVersion":"<calver>","type":"touchSwipe","payload":{"elementTarget":{"identifier":"list"},"direction":"up","distance":300}}
+{"buttonHeistVersion":"<calver>","type":"touchSwipe","payload":{"elementTarget":{"identifier":"list"},"direction":"up"}}
 ```
 
 ### touchDrag

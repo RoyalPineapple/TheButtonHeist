@@ -26,7 +26,7 @@ extension TheBrains {
         case .scroll(let target):
             return await performInteraction(command: message) { await self.navigation.executeScroll(target) }
         case .scrollToVisible(let target):
-            return await performInteraction(command: message) { await self.navigation.executeScrollToVisible(target) }
+            return await performScrollToVisible(target: target, command: message)
         case .elementSearch(let target):
             return await performElementSearch(target: target, command: message)
         case .scrollToEdge(let target):
@@ -64,16 +64,42 @@ extension TheBrains {
         )
     }
 
+    /// Scroll-to-visible can use an off-viewport entry from the most recent
+    /// exploration. Preserve that union across the dispatch refresh that
+    /// otherwise narrows `currentScreen` back to the live viewport.
+    func performScrollToVisible(
+        target: ScrollToVisibleTarget,
+        command: ClientMessage
+    ) async -> ActionResult {
+        let screenBeforeRefresh = stash.currentScreen
+        guard refresh() != nil else {
+            return treeUnavailableResult(method: Self.diagnosticMethod(for: command))
+        }
+        let recordedScreen = recordedScreenIfCurrentViewportStillMatches(screenBeforeRefresh)
+        let before = captureBeforeState()
+        let result = await navigation.executeScrollToVisible(target, recordedScreen: recordedScreen)
+
+        return await actionResultWithDelta(
+            success: result.success,
+            method: result.method,
+            message: result.message,
+            value: result.value,
+            before: before
+        )
+    }
+
     /// Element search: dedicated path because the scroll loop manages its own refresh/settle.
     func performElementSearch(
         target: ElementSearchTarget,
         command: ClientMessage
     ) async -> ActionResult {
+        let screenBeforeRefresh = stash.currentScreen
         guard refresh() != nil else {
             return treeUnavailableResult(method: Self.diagnosticMethod(for: command))
         }
+        let recordedScreen = recordedScreenIfCurrentViewportStillMatches(screenBeforeRefresh)
         let before = captureBeforeState()
-        let result = await navigation.executeElementSearch(target)
+        let result = await navigation.executeElementSearch(target, recordedScreen: recordedScreen)
 
         var enriched = await actionResultWithDelta(
             success: result.success,
@@ -87,6 +113,15 @@ extension TheBrains {
             enriched.payload = .scrollSearch(scrollSearch)
         }
         return enriched
+    }
+
+    private func recordedScreenIfCurrentViewportStillMatches(_ screenBeforeRefresh: Screen) -> Screen? {
+        let currentViewportIds = stash.currentScreen.heistIds
+        guard !screenBeforeRefresh.elements.isEmpty,
+              currentViewportIds.isSubset(of: screenBeforeRefresh.heistIds) else {
+            return nil
+        }
+        return screenBeforeRefresh
     }
 
     /// Wait for an element to appear or disappear.

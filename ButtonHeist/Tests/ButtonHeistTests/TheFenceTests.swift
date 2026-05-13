@@ -1040,8 +1040,11 @@ final class TheFenceTests: XCTestCase {
     @ButtonHeistActor
     func testWaitForRecordingRestoresCallbacks() async throws {
         let fence = TheFence(configuration: .init())
+        var restoredRecordingErrorCallbackInvoked = false
+        fence.handoff.onRecordingError = { _ in
+            restoredRecordingErrorCallbackInvoked = true
+        }
         XCTAssertNil(fence.handoff.onRecording)
-        XCTAssertNil(fence.handoff.onRecordingError)
 
         do {
             _ = try await fence.waitForRecording(timeout: 0.05)
@@ -1050,7 +1053,8 @@ final class TheFenceTests: XCTestCase {
         }
 
         XCTAssertNil(fence.handoff.onRecording, "onRecording should be restored to nil after waitForRecording")
-        XCTAssertNil(fence.handoff.onRecordingError, "onRecordingError should be restored to nil after waitForRecording")
+        fence.handoff.onRecordingError?("after-timeout")
+        XCTAssertTrue(restoredRecordingErrorCallbackInvoked, "onRecordingError should be restored after waitForRecording")
     }
 
     @ButtonHeistActor
@@ -1089,6 +1093,45 @@ final class TheFenceTests: XCTestCase {
     }
 
     // MARK: - recordToCompletion
+
+    @ButtonHeistActor
+    func testStartRecordingWaitsForServerAcknowledgement() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        try await fence.start()
+        mockConn.autoResponse = nil
+
+        var didReturn = false
+        var responseMessage: String?
+        let task = Task { @ButtonHeistActor in
+            let response = try await fence.execute(request: ["command": "start_recording"])
+            guard case .ok(let message) = response else {
+                didReturn = true
+                return XCTFail("Expected .ok response, got \(response)")
+            }
+            responseMessage = message
+            didReturn = true
+        }
+
+        var startSent = false
+        for _ in 0..<200 {
+            startSent = mockConn.sent.contains { sent in
+                if case .startRecording = sent.0 { return true }
+                return false
+            }
+            if startSent { break }
+            await Task.yield()
+        }
+
+        XCTAssertTrue(startSent, "Expected start_recording to be sent")
+        await Task.yield()
+        XCTAssertFalse(didReturn, "start_recording should not return before recordingStarted arrives")
+
+        fence.handoff.handleServerMessage(.recordingStarted, requestId: nil)
+
+        try await task.value
+        XCTAssertTrue(responseMessage?.contains("Recording started") == true)
+        XCTAssertTrue(didReturn)
+    }
 
     @ButtonHeistActor
     func testRecordToCompletionReturnsPayloadOnSuccess() async throws {

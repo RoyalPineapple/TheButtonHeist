@@ -11,12 +11,12 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 tuist install
-tuist generate --no-open
 
-find . \
-    -name 'project.pbxproj' \
-    -not -path './Tuist/.build/*' \
-    -not -path './submodules/*' \
-    -not -path './.context/*' \
-    -print0 \
-    | xargs -0 python3 scripts/clean-pbxproj.py
+set +e
+tuist generate --no-open
+generate_status=$?
+set -e
+
+scripts/clean-generated-projects.sh
+
+exit "$generate_status"

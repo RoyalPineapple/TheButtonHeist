@@ -145,7 +145,7 @@ final class TheBookKeeper {
             throw BookKeeperError.invalidPhase(expected: "idle, closed, or archived", actual: "active")
         }
 
-        guard !identifier.contains("/"), !identifier.contains("..") else {
+        guard Self.isSafeSessionIdentifier(identifier) else {
             throw BookKeeperError.unsafePath(identifier)
         }
 
@@ -175,6 +175,17 @@ final class TheBookKeeper {
             startTime: startTime,
             nextSequenceNumber: 1
         ))
+    }
+
+    private static func isSafeSessionIdentifier(_ identifier: String) -> Bool {
+        guard !identifier.isEmpty,
+              !identifier.hasPrefix("-"),
+              !identifier.contains("/"),
+              !identifier.contains("..") else { return false }
+
+        return !identifier.unicodeScalars.contains {
+            CharacterSet.controlCharacters.contains($0)
+        }
     }
 
     func closeSession() async throws {

@@ -8,10 +8,9 @@ Reads the live accessibility tree and builds a `Screen` value for TheStash to co
 
 **`parse()`** — the read-only path:
 1. `tripwire.getAccessibleWindows()` — modal-aware window list.
-2. `revealHiddenSearchBars()` — temporarily unhides `UISearchController` bars hidden by `hidesSearchBarWhenScrolling`, restores after parsing.
-3. For each window: `parser.parseAccessibilityHierarchy(in: rootView, elementVisitor:, containerVisitor:)`. `elementVisitor` captures `element → object` mappings; `containerVisitor` captures `container → UIView` for scrollable containers.
-4. Multi-window: wraps each window's tree in a `.container(semanticGroup)` node with the window class name.
-5. Returns `ParseResult(elements:, hierarchy:, objects:, scrollViews:)` — `elements` is the flat traversal-ordered list, `hierarchy` is the tree.
+2. For each window: `parser.parseAccessibilityHierarchy(in: rootView, elementVisitor:, containerVisitor:)`. `elementVisitor` captures `element → object` mappings; `containerVisitor` captures `container → UIView` for scrollable containers.
+3. Multi-window: wraps each window's tree in a `.container(semanticGroup)` node with the window class name.
+4. Returns `ParseResult(elements:, hierarchy:, objects:, scrollViews:)` — `elements` is the flat traversal-ordered list, `hierarchy` is the tree.
 
 **`buildScreen(from:)`** — the value-producing factory:
 1. `buildElementContexts(...)` walks the hierarchy with context propagation (nearest enclosing UIScrollView), computing `contentSpaceOrigin` per element via `scrollView.convert(frame.origin, from: nil)`.

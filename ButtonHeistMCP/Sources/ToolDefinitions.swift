@@ -54,6 +54,41 @@ enum ToolDefinitions {
         ],
     ] as [String: Value]) { _, new in new }
 
+    static let drawingPointArraySchema: Value = [
+        "type": "array",
+        "description": "Array of {x, y} waypoints (draw_path)",
+        "items": [
+            "type": "object",
+            "properties": [
+                "x": ["type": "number", "description": "X coordinate"],
+                "y": ["type": "number", "description": "Y coordinate"],
+            ],
+            "required": .array([.string("x"), .string("y")]),
+            "additionalProperties": false,
+        ],
+    ]
+
+    static let bezierSegmentArraySchema: Value = [
+        "type": "array",
+        "description": "Array of bezier segments: {cp1X, cp1Y, cp2X, cp2Y, endX, endY} (draw_bezier)",
+        "items": [
+            "type": "object",
+            "properties": [
+                "cp1X": ["type": "number", "description": "First control point X coordinate"],
+                "cp1Y": ["type": "number", "description": "First control point Y coordinate"],
+                "cp2X": ["type": "number", "description": "Second control point X coordinate"],
+                "cp2Y": ["type": "number", "description": "Second control point Y coordinate"],
+                "endX": ["type": "number", "description": "Segment end X coordinate"],
+                "endY": ["type": "number", "description": "Segment end Y coordinate"],
+            ],
+            "required": .array([
+                .string("cp1X"), .string("cp1Y"), .string("cp2X"),
+                .string("cp2Y"), .string("endX"), .string("endY"),
+            ]),
+            "additionalProperties": false,
+        ],
+    ]
+
     // Shared expect property for action tools — matches the batch step schema.
     // Wire shape uses a `type` discriminator that matches ActionExpectation's
     // Codable encoding, so JSON from a wire log can be pasted into a tool call.
@@ -373,8 +408,8 @@ enum ToolDefinitions {
                 "radius": ["type": "number", "description": "Rotation radius (rotate)"],
                 "velocity": ["type": "number", "description": "Drawing velocity in points/sec (draw_path, draw_bezier)"],
                 "samplesPerSegment": ["type": "integer", "description": "Bezier curve sampling resolution (draw_bezier)"],
-                "points": ["type": "array", "description": "Array of {x, y} waypoints (draw_path)"],
-                "segments": ["type": "array", "description": "Array of bezier segments: {cp1X, cp1Y, cp2X, cp2Y, endX, endY} (draw_bezier)"],
+                "points": drawingPointArraySchema,
+                "segments": bezierSegmentArraySchema,
                 "expect": expectProperty,
             ] as [String: Value]) { _, new in new }),
             "required": .array([.string("type")]),

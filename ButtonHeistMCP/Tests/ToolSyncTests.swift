@@ -230,6 +230,33 @@ struct ToolSyncTests {
         }
     }
 
+    @Test("Gesture drawing schemas describe array item shapes")
+    func gestureDrawingSchemasDescribeArrayItemShapes() {
+        guard let gesture = ToolDefinitions.all.first(where: { $0.name == "gesture" }) else {
+            Issue.record("No gesture tool found")
+            return
+        }
+
+        guard let pointsSchema = extractPropertySchema(from: gesture, property: "points"),
+              let pointItems = extractObjectField(from: pointsSchema, key: "items") else {
+            Issue.record("gesture.points missing object item schema")
+            return
+        }
+        #expect(extractStringField(from: pointsSchema, key: "type") == "array")
+        #expect(extractPropertyKeys(from: pointItems) == ["x", "y"])
+        #expect(extractRequiredKeys(from: pointItems) == ["x", "y"])
+
+        guard let segmentsSchema = extractPropertySchema(from: gesture, property: "segments"),
+              let segmentItems = extractObjectField(from: segmentsSchema, key: "items") else {
+            Issue.record("gesture.segments missing object item schema")
+            return
+        }
+        let segmentKeys: Set<String> = ["cp1X", "cp1Y", "cp2X", "cp2Y", "endX", "endY"]
+        #expect(extractStringField(from: segmentsSchema, key: "type") == "array")
+        #expect(extractPropertyKeys(from: segmentItems) == segmentKeys)
+        #expect(extractRequiredKeys(from: segmentItems) == segmentKeys)
+    }
+
     // MARK: - Exhaustiveness
 
     @Test("ToolDefinitions.all has no duplicate tool names")
@@ -256,10 +283,29 @@ struct ToolSyncTests {
         return Set(propertyMap.keys)
     }
 
+    private func extractPropertyKeys(from schema: [String: Value]) -> Set<String> {
+        guard let properties = schema["properties"],
+              case .object(let propertyMap) = properties else {
+            return []
+        }
+        return Set(propertyMap.keys)
+    }
+
     /// Extract the "required" array from a Tool's inputSchema.
     private func extractRequiredKeys(from tool: Tool) -> Set<String> {
         guard case .object(let schema) = tool.inputSchema,
               let required = schema["required"],
+              case .array(let values) = required else {
+            return []
+        }
+        return Set(values.compactMap { value -> String? in
+            guard case .string(let string) = value else { return nil }
+            return string
+        })
+    }
+
+    private func extractRequiredKeys(from schema: [String: Value]) -> Set<String> {
+        guard let required = schema["required"],
               case .array(let values) = required else {
             return []
         }
@@ -284,5 +330,32 @@ struct ToolSyncTests {
             guard case .string(let string) = value else { return nil }
             return string
         })
+    }
+
+    private func extractPropertySchema(from tool: Tool, property: String) -> [String: Value]? {
+        guard case .object(let schema) = tool.inputSchema,
+              let properties = schema["properties"],
+              case .object(let propertyMap) = properties,
+              let propertyDef = propertyMap[property],
+              case .object(let propertySchema) = propertyDef else {
+            return nil
+        }
+        return propertySchema
+    }
+
+    private func extractObjectField(from schema: [String: Value], key: String) -> [String: Value]? {
+        guard let value = schema[key],
+              case .object(let object) = value else {
+            return nil
+        }
+        return object
+    }
+
+    private func extractStringField(from schema: [String: Value], key: String) -> String? {
+        guard let value = schema[key],
+              case .string(let string) = value else {
+            return nil
+        }
+        return string
     }
 }

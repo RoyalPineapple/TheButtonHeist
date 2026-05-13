@@ -79,6 +79,7 @@ jobs:
         run: |
           tuist install
           tuist generate --no-binary-cache --no-open
+          ./scripts/clean-generated-projects.sh
           xcodebuild -workspace ButtonHeist.xcworkspace -scheme "BH Demo" \
             -destination "generic/platform=iOS Simulator" \
             build | tail -5

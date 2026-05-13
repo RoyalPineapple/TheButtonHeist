@@ -34,6 +34,8 @@ func makeConnectedFence() -> (TheFence, MockConnection) {
             return .interface(Interface(timestamp: Date(), tree: []))
         case .requestScreen:
             return .screen(ScreenPayload(pngData: "", width: 393, height: 852))
+        case .startRecording:
+            return .recordingStarted
         case .stopRecording:
             return .recording(RecordingPayload(
                 videoData: "", width: 390, height: 844, duration: 1,

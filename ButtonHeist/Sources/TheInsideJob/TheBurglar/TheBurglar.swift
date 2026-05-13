@@ -61,9 +61,6 @@ final class TheBurglar {
             }
         }
 
-        let revealedSearchBars = Self.revealHiddenSearchBars()
-        defer { Self.restoreSearchBarHiding(revealedSearchBars) }
-
         var allHierarchy: [AccessibilityHierarchy] = []
         var allObjects: [AccessibilityElement: NSObject] = [:]
         var allScrollViews: [AccessibilityContainer: UIView] = [:]
@@ -513,50 +510,6 @@ final class TheBurglar {
         return result
     }
 
-    // MARK: - Search Bar Reveal
-
-    private static func revealHiddenSearchBars() -> [UINavigationItem] {
-        var revealed: [UINavigationItem] = []
-        guard let windowScene = UIApplication.shared.connectedScenes
-            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
-        else { return revealed }
-
-        for window in windowScene.windows where !window.isHidden {
-            guard let rootViewController = window.rootViewController else { continue }
-            for viewController in allVisibleViewControllers(from: rootViewController) {
-                let item = viewController.navigationItem
-                guard item.searchController != nil, item.hidesSearchBarWhenScrolling else { continue }
-                UIView.performWithoutAnimation {
-                    item.hidesSearchBarWhenScrolling = false
-                    viewController.navigationController?.navigationBar.layoutIfNeeded()
-                }
-                revealed.append(item)
-            }
-        }
-        return revealed
-    }
-
-    private static func restoreSearchBarHiding(_ items: [UINavigationItem]) {
-        guard !items.isEmpty else { return }
-        UIView.performWithoutAnimation {
-            for item in items {
-                item.hidesSearchBarWhenScrolling = true
-            }
-        }
-    }
-
-    private static func allVisibleViewControllers(from root: UIViewController) -> [UIViewController] {
-        let presentedChain = root.presentedViewController.map { allVisibleViewControllers(from: $0) } ?? []
-        if let nav = root as? UINavigationController {
-            let navChild = nav.topViewController.map { allVisibleViewControllers(from: $0) } ?? []
-            return navChild + presentedChain
-        }
-        if let tab = root as? UITabBarController {
-            let tabChild = tab.selectedViewController.map { allVisibleViewControllers(from: $0) } ?? []
-            return tabChild + presentedChain
-        }
-        return [root] + presentedChain
-    }
 }
 
 #endif // DEBUG

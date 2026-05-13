@@ -156,6 +156,38 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertTrue(result.message?.contains("deallocated") ?? false)
     }
 
+    func testExecuteIncrementFailsWhenElementIsNotAdjustable() async {
+        let heistId = "live_button"
+        let liveObject = UIButton(type: .system)
+        registerScreenElement(
+            heistId: heistId,
+            element: makeElement(label: "Live", traits: .button),
+            object: liveObject
+        )
+
+        let result = await brains.actions.executeIncrement(.heistId(heistId))
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .increment)
+        XCTAssertEqual(result.message, "Element is not adjustable")
+    }
+
+    func testExecuteDecrementFailsWhenElementIsNotAdjustable() async {
+        let heistId = "live_button"
+        let liveObject = UIButton(type: .system)
+        registerScreenElement(
+            heistId: heistId,
+            element: makeElement(label: "Live", traits: .button),
+            object: liveObject
+        )
+
+        let result = await brains.actions.executeDecrement(.heistId(heistId))
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .decrement)
+        XCTAssertEqual(result.message, "Element is not adjustable")
+    }
+
     func testExecuteCustomActionFailsWhenElementObjectIsDeallocated() async {
         let heistId = "options_button"
         registerScreenElement(

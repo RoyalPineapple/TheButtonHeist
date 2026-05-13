@@ -34,6 +34,17 @@ DRY_RUN=false
 RUN_TESTS=false
 BUMP_TYPE=""
 
+run_tuist_test() {
+    set +e
+    tuist test "$@"
+    local test_status=$?
+    set -e
+
+    scripts/clean-generated-projects.sh
+
+    return "$test_status"
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dry-run)    DRY_RUN=true; shift ;;
@@ -208,7 +219,7 @@ echo "  ✓ Formula/buttonheist.rb"
 
 # 6. Regenerate Xcode projects so pbxproj files stay in sync
 echo "  Regenerating Xcode projects..."
-tuist generate --no-open
+scripts/generate-project.sh
 echo "  ✓ Xcode projects"
 echo ""
 
@@ -278,11 +289,11 @@ if [[ "$RUN_TESTS" == true ]]; then
     rm -rf ~/Library/Developer/Xcode/DerivedData/ButtonHeist-*
 
     echo "  Running TheScoreTests..."
-    tuist test TheScoreTests --no-selective-testing
+    run_tuist_test TheScoreTests --no-selective-testing
     echo "  ✓ TheScoreTests"
 
     echo "  Running ButtonHeistTests..."
-    tuist test ButtonHeistTests --no-selective-testing
+    run_tuist_test ButtonHeistTests --no-selective-testing
     echo "  ✓ ButtonHeistTests"
 
     # Reuse a persistent release-test simulator instead of create/boot/delete
@@ -308,7 +319,7 @@ if [[ "$RUN_TESTS" == true ]]; then
     fi
 
     echo "  Running TheInsideJobTests on $SIM_NAME..."
-    tuist test TheInsideJobTests --platform ios --device "$SIM_NAME" --no-selective-testing
+    run_tuist_test TheInsideJobTests --platform ios --device "$SIM_NAME" --no-selective-testing
     echo "  ✓ TheInsideJobTests"
     echo ""
 fi
@@ -321,7 +332,7 @@ echo "==> Phase 5: Committing and tagging"
 
 # Regenerate right before commit so the pre-commit hook's tuist generate
 # produces identical output (build artifacts can shift cache state)
-tuist generate --no-open
+scripts/generate-project.sh
 
 git add \
     ButtonHeist/Sources/TheScore/Messages.swift \

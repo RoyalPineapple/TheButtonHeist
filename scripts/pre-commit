@@ -24,11 +24,7 @@ if command -v tuist >/dev/null 2>&1; then
         # PR #328 M3: cleaner failures propagate via `set -e`. The earlier
         # `|| echo` swallowed real script errors (Python tracebacks, missing
         # files) and let the commit proceed with un-stripped noise.
-        find . -name 'project.pbxproj' \
-            -not -path './Tuist/.build/*' \
-            -not -path './submodules/*' \
-            -not -path './.context/*' \
-            -print0 | xargs -0 python3 scripts/clean-pbxproj.py >/dev/null
+        scripts/clean-generated-projects.sh >/dev/null
 
         dirty=$(git diff --name-only -- '*.pbxproj' '*.xcworkspacedata' '*.xcscheme')
         if [[ -n "$dirty" ]]; then
@@ -38,6 +34,7 @@ if command -v tuist >/dev/null 2>&1; then
             exit 1
         fi
     else
+        scripts/clean-generated-projects.sh >/dev/null || true
         echo "warning: tuist generate failed, skipping project freshness check"
     fi
 fi
@@ -69,11 +66,7 @@ if [[ -n "$tuist_files" ]]; then
     tuist install >/dev/null 2>&1 || true
     if tuist generate --no-open --no-binary-cache >/dev/null 2>&1; then
         # PR #328 M3: cleaner failures propagate via `set -e`.
-        find . -name 'project.pbxproj' \
-            -not -path './Tuist/.build/*' \
-            -not -path './submodules/*' \
-            -not -path './.context/*' \
-            -print0 | xargs -0 python3 scripts/clean-pbxproj.py >/dev/null
+        scripts/clean-generated-projects.sh >/dev/null
 
         drift=$(git diff --name-only -- '*.pbxproj' '*.xcworkspacedata')
         if [[ -n "$drift" ]]; then
@@ -83,6 +76,7 @@ if [[ -n "$tuist_files" ]]; then
             exit 1
         fi
     else
+        scripts/clean-generated-projects.sh >/dev/null || true
         echo "warning: tuist generate failed, skipping drift check"
     fi
 fi

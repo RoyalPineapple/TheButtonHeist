@@ -183,7 +183,15 @@ public final class TheFence {
     private let actionTracker = PendingRequestTracker<ActionResult>()
     private let interfaceTracker = PendingRequestTracker<Interface>()
     private let screenTracker = PendingRequestTracker<ScreenPayload>()
+    private let recordingStartTracker = PendingRequestTracker<Bool>()
     private let recordingTracker = PendingRequestTracker<RecordingPayload>()
+
+    /// State of the in-flight `start_recording` acknowledgement wait, if any.
+    enum RecordingStartWait {
+        case idle
+        case waiting(syntheticId: String)
+    }
+    private var recordingStartWait: RecordingStartWait = .idle
 
     /// State of the in-flight `stop_recording` wait, if any. `.waiting`
     /// carries the synthetic request ID used to key the recording tracker.
@@ -221,6 +229,14 @@ public final class TheFence {
         handoff.onScreen = { [weak self] payload, requestId in
             guard let self, let requestId else { return }
             self.screenTracker.resolve(requestId: requestId, result: .success(payload))
+        }
+
+        handoff.onRecordingStarted = { [weak self] in
+            self?.resolveRecordingStart(.success(true))
+        }
+
+        handoff.onRecordingError = { [weak self] message in
+            self?.resolveRecordingStart(.failure(FenceError.actionFailed("Recording failed: \(message)")))
         }
 
         handoff.onRequestError = { [weak self] message, requestId in
@@ -886,6 +902,29 @@ public final class TheFence {
         }
     }
 
+    func startRecordingAndWait(config: RecordingConfig, timeout: TimeInterval = Timeouts.actionSeconds) async throws {
+        guard handoff.isConnected else { throw FenceError.notConnected }
+        guard !handoff.isRecording else {
+            throw FenceError.invalidRequest("Recording already in progress — use stop_recording first")
+        }
+        guard case .idle = recordingStartWait else {
+            throw FenceError.invalidRequest("start_recording already waiting for acknowledgement")
+        }
+
+        let syntheticId = "recording-start"
+        recordingStartWait = .waiting(syntheticId: syntheticId)
+        defer { recordingStartWait = .idle }
+
+        _ = try await recordingStartTracker.wait(requestId: syntheticId, timeout: timeout) {
+            self.handoff.send(.startRecording(config), requestId: UUID().uuidString)
+        }
+    }
+
+    private func resolveRecordingStart(_ result: Result<Bool, Error>) {
+        guard case .waiting(let syntheticId) = recordingStartWait else { return }
+        recordingStartTracker.resolve(requestId: syntheticId, result: result)
+    }
+
     /// Run a recording from start to completion as a single async unit.
     ///
     /// Sends `start_recording`, awaits the resulting `RecordingPayload`, and on
@@ -964,6 +1003,7 @@ public final class TheFence {
         actionTracker.cancelAll(error: error)
         interfaceTracker.cancelAll(error: error)
         screenTracker.cancelAll(error: error)
+        recordingStartTracker.cancelAll(error: error)
         recordingTracker.cancelAll(error: error)
     }
 
