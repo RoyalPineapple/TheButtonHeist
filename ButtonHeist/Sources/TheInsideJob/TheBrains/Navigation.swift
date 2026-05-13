@@ -298,7 +298,7 @@ final class Navigation {
         }
 
         var exhaustive: Bool {
-            !didHitScrollCap
+            containersSearched > 0 && !didHitScrollCap
         }
 
         mutating func markContainerSearched(_ container: AccessibilityContainer) {

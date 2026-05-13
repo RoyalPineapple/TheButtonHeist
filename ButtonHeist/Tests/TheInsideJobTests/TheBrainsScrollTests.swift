@@ -319,6 +319,17 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(progress.exhaustive)
     }
 
+    func testScrollSearchProgressWithoutSearchedContainersIsNotExhaustive() {
+        let progress = Navigation.ScrollSearchProgress(
+            initialVisibleHeistIds: ["initial"],
+            maxScrolls: 2
+        )
+
+        XCTAssertEqual(progress.containersSearched, 0)
+        XCTAssertFalse(progress.didHitScrollCap)
+        XCTAssertFalse(progress.exhaustive)
+    }
+
     // MARK: - ScrollableTarget Properties
 
     func testScrollableTargetFrameForUIScrollView() {

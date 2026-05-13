@@ -249,11 +249,10 @@ actor TheMuscle {
         sessionReleaseTimeout: TimeInterval? = nil,
         alerts: AlertPresenter? = nil
     ) {
-        let startupConfiguration = StartupConfiguration.resolve()
         self.sessionToken = explicitToken ?? UUID().uuidString
         self.alerts = alerts ?? AlertPresenter()
-        self.restrictWatchers = restrictWatchers ?? startupConfiguration.restrictWatchers.value
-        self.sessionReleaseTimeout = sessionReleaseTimeout ?? startupConfiguration.sessionTimeout.value
+        self.restrictWatchers = restrictWatchers ?? true
+        self.sessionReleaseTimeout = sessionReleaseTimeout ?? StartupConfiguration.defaultSessionTimeout
     }
 
     // MARK: - Callback Wiring
