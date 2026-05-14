@@ -257,8 +257,8 @@ struct ToolSyncTests {
         #expect(extractRequiredKeys(from: segmentItems) == segmentKeys)
     }
 
-    @Test("Scroll search direction schema excludes page-only directions")
-    func scrollSearchDirectionSchemaExcludesPageOnlyDirections() {
+    @Test("Scroll direction schema lists all server-validated directions")
+    func scrollDirectionSchemaListsAllServerValidatedDirections() {
         guard let scroll = ToolDefinitions.all.first(where: { $0.name == "scroll" }) else {
             Issue.record("No scroll tool found")
             return
@@ -266,19 +266,55 @@ struct ToolSyncTests {
 
         let pageDirections = extractEnumValues(from: scroll, property: "direction")
         #expect(pageDirections == Set(ScrollDirection.allCases.map(\.rawValue)))
+        #expect(ScrollSearchDirection.allCases.allSatisfy { pageDirections.contains($0.rawValue) })
+    }
 
-        guard case .object(let schema) = scroll.inputSchema,
-              let allOf = schema["allOf"],
-              case .array(let clauses) = allOf else {
-            Issue.record("scroll tool missing conditional allOf schema")
-            return
+    @Test("Expect schema advertises string and object forms")
+    func expectSchemaAdvertisesStringAndObjectForms() throws {
+        let toolsWithExpect = ToolDefinitions.all.filter { extractPropertyKeys(from: $0).contains("expect") }
+        #expect(!toolsWithExpect.isEmpty)
+
+        for tool in toolsWithExpect {
+            guard let expectSchema = extractPropertySchema(from: tool, property: "expect") else {
+                Issue.record("\(tool.name) is missing expect property schema")
+                continue
+            }
+            #expect(
+                extractTypeValues(from: expectSchema) == ["string", "object"],
+                "\(tool.name).expect should advertise both string shorthand and object expectation forms"
+            )
         }
+    }
 
-        let searchDirectionEnums = clauses.compactMap { searchDirectionEnum(from: $0) }
-        #expect(searchDirectionEnums.contains(Set(ScrollSearchDirection.allCases.map(\.rawValue))))
+    @Test("Expect object type enum matches ActionExpectation wire types")
+    func expectObjectTypeEnumMatchesActionExpectationWireTypes() {
+        for tool in ToolDefinitions.all where extractPropertyKeys(from: tool).contains("expect") {
+            guard let expectSchema = extractPropertySchema(from: tool, property: "expect"),
+                  let expectProperties = extractObjectField(from: expectSchema, key: "properties"),
+                  let typeSchema = extractObjectField(from: expectProperties, key: "type") else {
+                Issue.record("\(tool.name).expect missing object type schema")
+                continue
+            }
+
+            #expect(
+                extractEnumValues(from: typeSchema) == Set(ActionExpectation.wireTypeValues),
+                "\(tool.name).expect type enum should match ActionExpectation wire type values"
+            )
+        }
     }
 
     // MARK: - Exhaustiveness
+
+    @Test("Tool input schemas avoid Claude-incompatible composition keywords")
+    func toolInputSchemasAvoidUnsupportedCompositionKeywords() {
+        for tool in ToolDefinitions.all {
+            let violations = unsupportedCompositionKeywordPaths(in: tool.inputSchema)
+            #expect(
+                violations.isEmpty,
+                "\(tool.name) input schema uses unsupported composition keywords at: \(violations.joined(separator: ", "))"
+            )
+        }
+    }
 
     @Test("ToolDefinitions.all has no duplicate tool names")
     func noDuplicateToolNames() {
@@ -364,18 +400,20 @@ struct ToolSyncTests {
         })
     }
 
-    private func searchDirectionEnum(from value: Value) -> Set<String>? {
-        guard case .object(let clause) = value,
-              let ifSchema = extractObjectField(from: clause, key: "if"),
-              let ifProperties = extractObjectField(from: ifSchema, key: "properties"),
-              let modeSchema = extractObjectField(from: ifProperties, key: "mode"),
-              extractStringField(from: modeSchema, key: "const") == "search",
-              let thenSchema = extractObjectField(from: clause, key: "then"),
-              let thenProperties = extractObjectField(from: thenSchema, key: "properties"),
-              let directionSchema = extractObjectField(from: thenProperties, key: "direction") else {
-            return nil
+    private func extractTypeValues(from schema: [String: Value]) -> Set<String> {
+        guard let type = schema["type"] else { return [] }
+
+        switch type {
+        case .string(let string):
+            return [string]
+        case .array(let values):
+            return Set(values.compactMap { value -> String? in
+                guard case .string(let string) = value else { return nil }
+                return string
+            })
+        default:
+            return []
         }
-        return extractEnumValues(from: directionSchema)
     }
 
     private func extractPropertySchema(from tool: Tool, property: String) -> [String: Value]? {
@@ -395,6 +433,27 @@ struct ToolSyncTests {
             return nil
         }
         return object
+    }
+
+    private func unsupportedCompositionKeywordPaths(in value: Value, path: String = "$") -> [String] {
+        let unsupportedKeys: Set<String> = ["oneOf", "allOf", "anyOf"]
+
+        switch value {
+        case .object(let object):
+            let directViolations = object.keys
+                .filter { unsupportedKeys.contains($0) }
+                .map { "\(path).\($0)" }
+            let nestedViolations = object.flatMap { key, nestedValue in
+                unsupportedCompositionKeywordPaths(in: nestedValue, path: "\(path).\(key)")
+            }
+            return directViolations + nestedViolations
+        case .array(let values):
+            return values.enumerated().flatMap { index, nestedValue in
+                unsupportedCompositionKeywordPaths(in: nestedValue, path: "\(path)[\(index)]")
+            }
+        default:
+            return []
+        }
     }
 
     private func extractStringField(from schema: [String: Value], key: String) -> String? {

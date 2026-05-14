@@ -93,56 +93,45 @@ enum ToolDefinitions {
     // Wire shape uses a `type` discriminator that matches ActionExpectation's
     // Codable encoding, so JSON from a wire log can be pasted into a tool call.
     static let expectProperty: Value = [
+        "type": .array([.string("string"), .string("object")]),
         "description": """
             Inline verification for this action. String form: "screen_changed" or "elements_changed". \
             Object form: {"type": "element_updated"|"element_appeared"|"element_disappeared"|"compound", ...}. \
             See docs/MCP-AGENT-GUIDE.md for the full expectation vocabulary and recipes.
             """,
-        "oneOf": .array([
-            [
+        "required": .array([.string("type")]),
+        "properties": [
+            "type": [
                 "type": "string",
-                "enum": .array(["screen_changed", "elements_changed"].map { .string($0) }),
+                "enum": .array(ActionExpectation.wireTypeValues.map { .string($0) }),
+                "description": "Object-form discriminator. String shorthand also accepts screen_changed or elements_changed.",
             ],
-            [
+            "heistId": ["type": "string", "description": "element_updated: match a specific element"],
+            "property": [
+                "type": "string",
+                "description": "element_updated: match a specific property",
+                "enum": .array(["label", "value", "traits", "hint", "actions", "frame", "activationPoint"].map { .string($0) }),
+            ],
+            "oldValue": ["type": "string", "description": "element_updated: expected previous value"],
+            "newValue": ["type": "string", "description": "element_updated: expected new value"],
+            "matcher": [
                 "type": "object",
-                "description": "Discriminated expectation. `type` selects the case; other fields depend on the case.",
-                "required": .array([.string("type")]),
+                "description": "element_appeared / element_disappeared: predicate identifying the element",
                 "properties": [
-                    "type": [
-                        "type": "string",
-                        "enum": .array([
-                            "screen_changed", "elements_changed", "element_updated",
-                            "element_appeared", "element_disappeared", "compound",
-                        ].map { .string($0) }),
-                    ],
-                    "heistId": ["type": "string", "description": "element_updated: match a specific element"],
-                    "property": [
-                        "type": "string",
-                        "description": "element_updated: match a specific property",
-                        "enum": .array(["label", "value", "traits", "hint", "actions", "frame", "activationPoint"].map { .string($0) }),
-                    ],
-                    "oldValue": ["type": "string", "description": "element_updated: expected previous value"],
-                    "newValue": ["type": "string", "description": "element_updated: expected new value"],
-                    "matcher": [
-                        "type": "object",
-                        "description": "element_appeared / element_disappeared: predicate identifying the element",
-                        "properties": [
-                            "label": ["type": "string"],
-                            "identifier": ["type": "string"],
-                            "value": ["type": "string"],
-                            "traits": ["type": "array", "items": ["type": "string"]],
-                            "excludeTraits": ["type": "array", "items": ["type": "string"]],
-                        ],
-                        "additionalProperties": false,
-                    ],
-                    "expectations": [
-                        "type": "array",
-                        "description": "compound: array of sub-expectations (strings or objects)",
-                    ],
+                    "label": ["type": "string"],
+                    "identifier": ["type": "string"],
+                    "value": ["type": "string"],
+                    "traits": ["type": "array", "items": ["type": "string"]],
+                    "excludeTraits": ["type": "array", "items": ["type": "string"]],
                 ],
                 "additionalProperties": false,
             ],
-        ]),
+            "expectations": [
+                "type": "array",
+                "description": "compound: array of sub-expectations (strings or objects)",
+            ],
+        ],
+        "additionalProperties": false,
     ]
 
     static let all: [Tool] = [
@@ -339,8 +328,8 @@ enum ToolDefinitions {
                     "type": "string",
                     "enum": .array(["up", "down", "left", "right", "next", "previous"].map { .string($0) }),
                     "description": """
-                        Scroll direction. mode=page accepts up, down, left, right, next, previous. \
-                        mode=search accepts only up, down, left, right.
+                        Scroll direction. next/previous are page-only directions for mode=page; \
+                        mode=search accepts only up, down, left, right and is validated server-side.
                         """,
                 ],
                 "edge": [
@@ -350,24 +339,6 @@ enum ToolDefinitions {
                 ],
                 "expect": expectProperty,
             ] as [String: Value]) { _, new in new }),
-            "allOf": .array([
-                .object([
-                    "if": .object([
-                        "properties": .object([
-                            "mode": ["const": "search"],
-                        ]),
-                        "required": .array([.string("mode")]),
-                    ]),
-                    "then": .object([
-                        "properties": .object([
-                            "direction": .object([
-                                "type": "string",
-                                "enum": .array(["up", "down", "left", "right"].map { .string($0) }),
-                            ]),
-                        ]),
-                    ]),
-                ]),
-            ]),
             "additionalProperties": false,
         ])
     )
