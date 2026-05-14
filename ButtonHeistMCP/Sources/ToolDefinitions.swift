@@ -130,7 +130,18 @@ enum ToolDefinitions {
             ],
             "expectations": [
                 "type": "array",
-                "description": "compound: array of sub-expectations (strings or objects)",
+                "description": "compound: array of sub-expectation objects",
+                "items": [
+                    "type": "object",
+                    "required": .array([.string("type")]),
+                    "properties": [
+                        "type": [
+                            "type": "string",
+                            "enum": .array(ActionExpectation.wireTypeValues.map { .string($0) }),
+                        ],
+                    ],
+                    "additionalProperties": true,
+                ],
             ],
         ],
         "additionalProperties": false,

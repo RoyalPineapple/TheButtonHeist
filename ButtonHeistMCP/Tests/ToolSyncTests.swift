@@ -327,6 +327,17 @@ struct ToolSyncTests {
         }
     }
 
+    @Test("Array schemas declare item schemas")
+    func arraySchemasDeclareItems() {
+        for tool in ToolDefinitions.all {
+            let violations = arrayWithoutItemsPaths(in: tool.inputSchema)
+            #expect(
+                violations.isEmpty,
+                "\(tool.name) input schema has array fields without items at: \(violations.joined(separator: ", "))"
+            )
+        }
+    }
+
     @Test("ToolDefinitions.all has no duplicate tool names")
     func noDuplicateToolNames() {
         var seen = Set<String>()
@@ -428,6 +439,28 @@ struct ToolSyncTests {
             return nil
         }
         return object
+    }
+
+    private func arrayWithoutItemsPaths(in value: Value, path: String = "$") -> [String] {
+        switch value {
+        case .object(let object):
+            let directViolations: [String]
+            if let typeValue = object["type"], case .string("array") = typeValue, object["items"] == nil {
+                directViolations = [path]
+            } else {
+                directViolations = []
+            }
+            let nestedViolations = object.flatMap { key, nestedValue in
+                arrayWithoutItemsPaths(in: nestedValue, path: "\(path).\(key)")
+            }
+            return directViolations + nestedViolations
+        case .array(let values):
+            return values.enumerated().flatMap { index, nestedValue in
+                arrayWithoutItemsPaths(in: nestedValue, path: "\(path)[\(index)]")
+            }
+        default:
+            return []
+        }
     }
 
     private func typeUnionPaths(in value: Value, path: String = "$") -> [String] {
