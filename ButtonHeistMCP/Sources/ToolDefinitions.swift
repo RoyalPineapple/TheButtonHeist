@@ -90,13 +90,15 @@ enum ToolDefinitions {
     ]
 
     // Shared expect property for action tools — matches the batch step schema.
-    // Wire shape uses a `type` discriminator that matches ActionExpectation's
-    // Codable encoding, so JSON from a wire log can be pasted into a tool call.
+    // MCP advertises only the object discriminator form because some clients
+    // normalize JSON Schema type unions into top-level anyOf/oneOf payloads.
+    // The server parser still accepts legacy string shorthand and arrays.
     static let expectProperty: Value = [
-        "type": .array([.string("string"), .string("object")]),
+        "type": "object",
         "description": """
-            Inline verification for this action. String form: "screen_changed" or "elements_changed". \
-            Object form: {"type": "element_updated"|"element_appeared"|"element_disappeared"|"compound", ...}. \
+            Inline verification for this action. Use {"type": "screen_changed"} or \
+            {"type": "elements_changed"} for simple expectations, or object forms like \
+            {"type": "element_updated"|"element_appeared"|"element_disappeared"|"compound", ...}. \
             See docs/MCP-AGENT-GUIDE.md for the full expectation vocabulary and recipes.
             """,
         "required": .array([.string("type")]),
@@ -128,7 +130,18 @@ enum ToolDefinitions {
             ],
             "expectations": [
                 "type": "array",
-                "description": "compound: array of sub-expectations (strings or objects)",
+                "description": "compound: array of sub-expectation objects",
+                "items": [
+                    "type": "object",
+                    "required": .array([.string("type")]),
+                    "properties": [
+                        "type": [
+                            "type": "string",
+                            "enum": .array(ActionExpectation.wireTypeValues.map { .string($0) }),
+                        ],
+                    ],
+                    "additionalProperties": true,
+                ],
             ],
         ],
         "additionalProperties": false,

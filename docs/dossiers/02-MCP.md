@@ -101,9 +101,9 @@ graph TD
 - `readOnlyHint: true`, `idempotentHint: true`
 
 ### Shared `expect` property
-Used on all action tools. Accepts either:
-- String: `"screen_changed"` or `"elements_changed"`
+Used on all action tools. MCP advertises the object form only for Claude schema compatibility. The Fence parser still accepts legacy string shorthand and arrays from CLI/heist payloads.
 - Object with a `type` discriminator that matches `ActionExpectation`'s Codable shape:
+  - `{"type": "screen_changed"}` / `{"type": "elements_changed"}`
   - `{"type": "element_updated", "heistId": "...", "property": "...", "oldValue": "...", "newValue": "..."}` — all non-`type` fields are optional wildcards; `property` is one of `label`, `value`, `traits`, `hint`, `actions`, `frame`, `activationPoint`
   - `{"type": "element_appeared", "matcher": { ElementMatcher }}` / `{"type": "element_disappeared", "matcher": { ElementMatcher }}`
   - `{"type": "compound", "expectations": [ ... ]}`

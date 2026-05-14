@@ -18,7 +18,7 @@ Button Heist drives iOS apps through the accessibility layer — the same interf
 
 **Finding**: `scroll` with mode "to_visible" when you've seen an element before but it scrolled off-screen. `scroll` with mode "search" when you've never seen it — scrolls every container looking for a match. `wait_for` when you know a specific element will appear.
 
-**Waiting**: `wait_for_change` when the UI is updating asynchronously — network requests, timers, animations completing. Pass an expectation to wait for the specific outcome: `expect="screen_changed"` rides through loading spinners until the real navigation happens. With no expectation, returns on any tree change. This is the correct response when your action produced a transient state (spinner appeared, interactive elements disappeared) and you need the final result.
+**Waiting**: `wait_for_change` when the UI is updating asynchronously — network requests, timers, animations completing. Pass an expectation object to wait for the specific outcome: `expect={"type":"screen_changed"}` rides through loading spinners until the real navigation happens. With no expectation, returns on any tree change. This is the correct response when your action produced a transient state (spinner appeared, interactive elements disappeared) and you need the final result.
 
 **Composing**: `run_batch` for multi-step sequences in a single call. Attach `expect` to each step for inline verification.
 
@@ -33,8 +33,8 @@ Every response includes what changed since your last call. You never poll. Three
 **Screen changed** — `[background: screen changed (7 elements)]` with the full new element list. Your heistIds are stale. Don't try to use them — read the new elements from the background block. If you had an `expect` on your action and it matches the background change, the action is skipped entirely and you get "expectation already met." If you didn't have an expect, the action is skipped with "Screen changed while you were thinking" and the response carries the new interface. Either way, you're never left pointing at a screen that doesn't exist.
 
 **Async pattern** — for operations that take time (payments, network requests):
-1. `activate pay_button expect="screen_changed"` — tap and declare intent
-2. Delta shows spinner, expectation not met → `wait_for_change expect="screen_changed"` — server waits until the real screen arrives
+1. `activate pay_button expect={"type":"screen_changed"}` — tap and declare intent
+2. Delta shows spinner, expectation not met → `wait_for_change expect={"type":"screen_changed"}` — server waits until the real screen arrives
 3. Or: you were slow to act, payment already completed → your next call gets the confirmation instantly via background awareness. No wait needed.
 
 ## Expectations
@@ -44,7 +44,7 @@ Every action is an opportunity to validate. Attaching `expect` costs nothing —
 Before you act, ask: what should change? A toggle flips a value. A nav button changes the screen. A delete removes an element. Form that hypothesis, attach it, and let the result confirm or correct you. Unmet expectations are information, not errors — they tell you what actually happened so you can adapt.
 
 Expectations are as specific as you need — say what you know, omit what you don't:
-- `"elements_changed"` — something should change (broadest).
+- `{"type": "elements_changed"}` — something should change (broadest).
 - `{"type": "element_updated"}` — some element's property should change.
 - `{"type": "element_updated", "heistId": "counter"}` — this specific element should change.
 - `{"type": "element_updated", "heistId": "counter", "property": "value"}` — its value specifically.

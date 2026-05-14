@@ -269,8 +269,8 @@ struct ToolSyncTests {
         #expect(ScrollSearchDirection.allCases.allSatisfy { pageDirections.contains($0.rawValue) })
     }
 
-    @Test("Expect schema advertises string and object forms")
-    func expectSchemaAdvertisesStringAndObjectForms() throws {
+    @Test("Expect schema advertises Claude-compatible object form")
+    func expectSchemaAdvertisesClaudeCompatibleObjectForm() throws {
         let toolsWithExpect = ToolDefinitions.all.filter { extractPropertyKeys(from: $0).contains("expect") }
         #expect(!toolsWithExpect.isEmpty)
 
@@ -280,8 +280,8 @@ struct ToolSyncTests {
                 continue
             }
             #expect(
-                extractTypeValues(from: expectSchema) == ["string", "object"],
-                "\(tool.name).expect should advertise both string shorthand and object expectation forms"
+                extractStringField(from: expectSchema, key: "type") == "object",
+                "\(tool.name).expect should advertise only object form to avoid client-side anyOf/oneOf normalization"
             )
         }
     }
@@ -312,6 +312,28 @@ struct ToolSyncTests {
             #expect(
                 violations.isEmpty,
                 "\(tool.name) input schema uses unsupported composition keywords at: \(violations.joined(separator: ", "))"
+            )
+        }
+    }
+
+    @Test("Tool input schemas avoid JSON Schema type unions")
+    func toolInputSchemasAvoidTypeUnions() {
+        for tool in ToolDefinitions.all {
+            let violations = typeUnionPaths(in: tool.inputSchema)
+            #expect(
+                violations.isEmpty,
+                "\(tool.name) input schema uses array-valued type unions at: \(violations.joined(separator: ", "))"
+            )
+        }
+    }
+
+    @Test("Array schemas declare item schemas")
+    func arraySchemasDeclareItems() {
+        for tool in ToolDefinitions.all {
+            let violations = arrayWithoutItemsPaths(in: tool.inputSchema)
+            #expect(
+                violations.isEmpty,
+                "\(tool.name) input schema has array fields without items at: \(violations.joined(separator: ", "))"
             )
         }
     }
@@ -400,22 +422,6 @@ struct ToolSyncTests {
         })
     }
 
-    private func extractTypeValues(from schema: [String: Value]) -> Set<String> {
-        guard let type = schema["type"] else { return [] }
-
-        switch type {
-        case .string(let string):
-            return [string]
-        case .array(let values):
-            return Set(values.compactMap { value -> String? in
-                guard case .string(let string) = value else { return nil }
-                return string
-            })
-        default:
-            return []
-        }
-    }
-
     private func extractPropertySchema(from tool: Tool, property: String) -> [String: Value]? {
         guard case .object(let schema) = tool.inputSchema,
               let properties = schema["properties"],
@@ -433,6 +439,50 @@ struct ToolSyncTests {
             return nil
         }
         return object
+    }
+
+    private func arrayWithoutItemsPaths(in value: Value, path: String = "$") -> [String] {
+        switch value {
+        case .object(let object):
+            let directViolations: [String]
+            if let typeValue = object["type"], case .string("array") = typeValue, object["items"] == nil {
+                directViolations = [path]
+            } else {
+                directViolations = []
+            }
+            let nestedViolations = object.flatMap { key, nestedValue in
+                arrayWithoutItemsPaths(in: nestedValue, path: "\(path).\(key)")
+            }
+            return directViolations + nestedViolations
+        case .array(let values):
+            return values.enumerated().flatMap { index, nestedValue in
+                arrayWithoutItemsPaths(in: nestedValue, path: "\(path)[\(index)]")
+            }
+        default:
+            return []
+        }
+    }
+
+    private func typeUnionPaths(in value: Value, path: String = "$") -> [String] {
+        switch value {
+        case .object(let object):
+            let directViolations: [String]
+            if let typeValue = object["type"], case .array = typeValue {
+                directViolations = ["\(path).type"]
+            } else {
+                directViolations = []
+            }
+            let nestedViolations = object.flatMap { key, nestedValue in
+                typeUnionPaths(in: nestedValue, path: "\(path).\(key)")
+            }
+            return directViolations + nestedViolations
+        case .array(let values):
+            return values.enumerated().flatMap { index, nestedValue in
+                typeUnionPaths(in: nestedValue, path: "\(path)[\(index)]")
+            }
+        default:
+            return []
+        }
     }
 
     private func unsupportedCompositionKeywordPaths(in value: Value, path: String = "$") -> [String] {
