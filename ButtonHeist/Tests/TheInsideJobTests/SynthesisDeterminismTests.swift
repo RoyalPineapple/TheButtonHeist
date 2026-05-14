@@ -104,6 +104,52 @@ final class SynthesisDeterminismTests: XCTestCase {
                            "synthesizeBaseId wire-format regression: label=\(testCase.label ?? "nil") traits=\(testCase.traits.map(\.rawValue))")
         }
     }
+
+    // MARK: - Regression: stripTraitSuffix wire-format contract
+    //
+    // `stripTraitSuffix` is wire format. Its output feeds the slug half of
+    // `{slug}_{trait}` heistIds — any change in stripping behavior reshuffles
+    // every synthesised id on screens whose labels duplicate their trait
+    // name. The cases below pin the contract for single-word, multi-word,
+    // partial, case-insensitive, and too-short inputs so regressions show up
+    // at PR time, not after a release.
+
+    func testStripTraitSuffixKnownInputsProduceKnownOutputs() {
+        // Each tuple: (label, traitSuffix, expected). `nil` expected means
+        // stripping is a no-op (the label IS the trait name, or doesn't
+        // match the prefix, or is too short to strip).
+        let cases: [(label: String?, traitSuffix: String, expected: String?)] = [
+            // Single-word strip: label equals the trait suffix words → nil
+            // (everything strips, the remainder is empty).
+            ("Switch Button", "switchButton", nil),
+            // Multi-word strip: leading words match suffix, remainder kept.
+            ("Switch Button Off", "switchButton", "Off"),
+            // Partial strip: second word doesn't match second suffix word → nil.
+            ("Switch Off", "switchButton", nil),
+            // Case-insensitive comparison preserves the original casing
+            // of the remainder.
+            ("SWITCH BUTTON Off", "switchButton", "Off"),
+            // Too few words: label has fewer words than the suffix expands to → nil.
+            ("Button", "backButton", nil),
+            // Single-word camelCase suffix splits into one word.
+            ("Image Logo", "image", "Logo"),
+            // Multi-word remainder is preserved with single-space joiner.
+            ("Text Entry Email Address", "textEntry", "Email Address"),
+            // Three-word remainder, leading suffix words matched.
+            ("Search Field Find My Phone", "searchField", "Find My Phone"),
+            // Nil label is a no-op.
+            (nil, "button", nil),
+        ]
+
+        for testCase in cases {
+            let actual = IdAssignment.stripTraitSuffix(testCase.label, traitSuffix: testCase.traitSuffix)
+            XCTAssertEqual(
+                actual,
+                testCase.expected,
+                "stripTraitSuffix wire-format regression: label=\(testCase.label ?? "nil") suffix=\(testCase.traitSuffix)"
+            )
+        }
+    }
 }
 
 // MARK: - Seeded RNG (deterministic)
