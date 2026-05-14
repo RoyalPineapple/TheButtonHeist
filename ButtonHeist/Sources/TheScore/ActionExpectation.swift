@@ -106,7 +106,7 @@ extension ActionExpectation: Codable {
     }
 
     /// Discriminator strings for the `type` field on the wire.
-    private enum WireType: String {
+    private enum WireType: String, CaseIterable {
         case screenChanged = "screen_changed"
         case elementsChanged = "elements_changed"
         case elementUpdated = "element_updated"
@@ -114,6 +114,9 @@ extension ActionExpectation: Codable {
         case elementDisappeared = "element_disappeared"
         case compound
     }
+
+    /// Discriminator strings accepted in object-form expectation payloads.
+    public static let wireTypeValues: [String] = WireType.allCases.map(\.rawValue)
 
     private enum ElementUpdatedKey: String, CodingKey {
         case type, heistId, property, oldValue, newValue
