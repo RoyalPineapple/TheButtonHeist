@@ -416,21 +416,21 @@ Directions: `"up"`, `"down"`, `"left"`, `"right"`, `"next"`, `"previous"`.
 
 ### scrollToVisible
 
-Scroll a known registry element into view. This is a one-shot recorded-position jump for elements already discovered by `get_interface --full` or prior scrolling. For iterative discovery of an element that may not be in the registry yet, use `element_search`.
+Scroll a known registry element into view. This is a one-shot recorded-position jump for elements that are visible now or whose `heistId` is still present in the current or preserved screen snapshot, such as the union produced by the latest `get_interface --full`. For iterative discovery of an unseen or stale element, use `element_search`.
 
-**Target fields:** `heistId`, or flat matcher fields `label`, `identifier`, `value`, `traits`, `excludeTraits`. Matcher fields are decoded at the payload root; there is no nested `match` object.
+**Target fields:** `heistId`, or flat matcher fields `label`, `identifier`, `value`, `traits`, `excludeTraits`. Use `heistId` for recorded-position jumps. Matcher fields are decoded at the payload root and only resolve elements already present in the current snapshot; there is no nested `match` object.
 
 **By heistId:**
 ```json
 {"buttonHeistVersion":"<calver>","type":"scrollToVisible","payload":{"heistId":"buttonheist.longList.colorPicker"}}
 ```
 
-**By label:**
+**By visible label:**
 ```json
 {"buttonHeistVersion":"<calver>","type":"scrollToVisible","payload":{"label":"Color Picker"}}
 ```
 
-**Compound matcher:**
+**Visible compound matcher:**
 ```json
 {"buttonHeistVersion":"<calver>","type":"scrollToVisible","payload":{"label":"Settings","traits":["header"]}}
 ```
@@ -937,14 +937,14 @@ Three ways to find elements, each suited to a different situation:
 |---------|----------------|-------------|
 | `get_interface` | Visible elements only | Fast reads. You know the element is on screen, or you want the current viewport. |
 | `get_interface` with `full: true` | Every element on screen, including off-screen content | You need to know what exists in scroll views without navigating. Returns the same `interface` response with all elements populated. |
-| `scroll_to_visible` | Jumps to a known registry element, leaves viewport on it | You have already discovered the element and want to **navigate to it** for interaction. Changes the scroll position. |
+| `scroll_to_visible` | Jumps to a known registry element, leaves viewport on it | You have a visible target or a `heistId` still present in the current or preserved screen snapshot. Changes the scroll position. |
 | `element_search` | Scrolls until the target element is found, leaves viewport on it | You have not discovered the element yet and need to search scrollable content. |
 
 ### Choosing between full, element_search, and scroll_to_visible
 
 - **`get_interface --full`** is a read operation. It explores, then restores scroll positions. The user sees no change. Use it when you need a census — "what elements are on this screen?" — without committing to navigate anywhere.
 
-- **`scroll_to_visible`** is a recorded-position navigation action. It scrolls to a known target and leaves the viewport there so you can interact with the element. Use it after `get_interface --full`, previous scrolling, or a prior delta has discovered the element.
+- **`scroll_to_visible`** is a recorded-position navigation action. It scrolls to a known target and leaves the viewport there so you can interact with the element. Use it when the target is visible now or when a `heistId` is still present in the current/preserved screen snapshot, especially after `get_interface --full`.
 
 - **`element_search`** is an iterative navigation action. It pages through scrollable containers and stops when the target is found. Use it when the element has not been seen yet.
 
@@ -968,7 +968,7 @@ Most agent workflows don't need full exploration. The typical pattern is:
 1. `get_interface` — see what's visible
 2. `activate` / `scroll` / `swipe` — interact with visible elements
 3. `element_search` — find a specific unseen off-screen element when needed
-4. `scroll_to_visible` — return to a known off-screen element by recorded position
+4. `scroll_to_visible` — return to a known off-screen `heistId` while it is still present in the current or preserved screen snapshot
 
 Use `get_interface --full` when the screen has deep scrollable content and you need to make decisions based on elements that aren't currently visible (e.g., checking if a specific item exists in a long list before deciding what to do).
 
@@ -1230,7 +1230,7 @@ Enum values: `"top"`, `"bottom"`, `"left"`, `"right"`.
 
 ### ElementMatcher
 
-Predicate for matching elements in the accessibility tree. All specified fields must match (AND semantics). Used by `scrollToVisible`, `waitFor`, `get_interface` filtering, and action commands through flat `ElementTarget` matcher fields.
+Predicate for matching elements in the accessibility tree. All specified fields must match (AND semantics). Used by `elementSearch`, `waitFor`, `get_interface` filtering, and action commands through flat `ElementTarget` matcher fields.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -1245,7 +1245,7 @@ Predicate for matching elements in the accessibility tree. All specified fields 
 | Field | Type | Description |
 |-------|------|-------------|
 | `heistId` | `String?` | Known stable heistId to scroll into view |
-| `label` / `identifier` / `value` / `traits` / `excludeTraits` | matcher fields | Flat matcher fields for the known element to scroll into view |
+| `label` / `identifier` / `value` / `traits` / `excludeTraits` | matcher fields | Flat matcher fields for elements already present in the current snapshot |
 
 ### ScrollSearchDirection
 
@@ -1301,7 +1301,7 @@ A point in unit coordinates (0–1) relative to an element's accessibility frame
 | `method` | `String` | How action was performed (see method values above) |
 | `message` | `String?` | Additional context or error description |
 | `errorKind` | `String?` | Typed error classification: `"elementNotFound"`, `"timeout"`, `"unsupported"`, `"inputError"`, `"validationError"`, `"actionFailed"`, `"authFailure"`, `"recording"`, `"general"`. Nil on success. |
-| `payload` | `ResultPayload?` | Command-specific payload as a tagged union: `{"kind": "value", "data": "..."}` for `typeText` / `setPasteboard` / `getPasteboard`; `{"kind": "scrollSearch", "data": {...}}` for `elementSearch` / `scrollToVisible`; `{"kind": "explore", "data": {...}}` for `explore`. Omitted when no command-specific payload applies. |
+| `payload` | `ResultPayload?` | Command-specific payload as a tagged union: `{"kind": "value", "data": "..."}` for `typeText` / `setPasteboard` / `getPasteboard`; `{"kind": "scrollSearch", "data": {...}}` for `elementSearch`; `{"kind": "explore", "data": {...}}` for `explore`. Omitted when no command-specific payload applies. |
 | `interfaceDelta` | `InterfaceDelta?` | Compact delta describing what changed after the action |
 | `animating` | `Bool?` | `true` if UI was still animating when result was produced; `nil` means idle |
 | `screenName` | `String?` | Label of the first header element in the post-action snapshot (screen name hint) |

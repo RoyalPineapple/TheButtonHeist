@@ -44,7 +44,7 @@ graph TB
 **Key Types**:
 - `RequestEnvelope` - Wraps `ClientMessage` with an optional `requestId` for response correlation
 - `ResponseEnvelope` - Wraps `ServerMessage` echoing the `requestId` back; push broadcasts use `requestId: nil`
-- `ClientMessage` - Messages from client to server (35 cases including 9 touch gestures, 3 scroll commands, text input, edit actions, idle waiting, recording control, status, and watch)
+- `ClientMessage` - Messages from client to server (37 cases including 9 touch gestures, 4 scroll/search commands, text input, edit actions, idle waiting, recording control, status, and watch)
 - `ServerMessage` - Messages from server to client (18 cases including auth challenge/failure/approval, recording events, and interaction broadcasts)
 - `HeistElement` - Flat UI element representation (heistId, label, value, traits, frame, custom content)
 - `InterfaceNode` - Recursive tree node; leaves carry full `HeistElement` payloads, containers carry `ContainerInfo` + children
@@ -55,7 +55,7 @@ graph TB
 - `ActionTarget` - Two-strategy element resolution: `heistId` (stable token) or `match: ElementMatcher` (accessibility predicate)
 - `ElementMatcher` - Composable predicate for matching elements by label, identifier, value, traits, and excludeTraits
 - `UnitPoint` - Unit coordinates (0–1) relative to element frame for device-independent swiping
-- `ScrollToVisibleTarget` - Search target wrapping an optional `heistId` or `ElementMatcher` with `direction`
+- `ScrollToVisibleTarget` - Known-position scroll target wrapping an optional `ElementTarget`
 - `WaitForTarget` - Wait for element to appear/disappear with predicate matching and timeout (max 30s)
 - `ScrollSearchResult` - Scroll search diagnostics (scroll count, unique elements seen, total items, exhaustive flag, matched element)
 - `ScreenPayload` - Base64-encoded PNG with dimensions
@@ -102,7 +102,7 @@ TheInsideJob (singleton, @MainActor) — coordinator split across extension file
 ├── TheBrains (action dispatch, scroll orchestration, screen exploration)
 │   ├── Owns TheStash and TheSafecracker (created in init)
 │   ├── Action execution: resolve target → perform action → build result with delta
-│   ├── Scroll orchestration: direction, edge, scroll-to-visible search
+│   ├── Scroll orchestration: direction, edge, known-position jumps, element search
 │   └── exploreAndPrune() — scrolls all containers, discovers off-screen elements, restores positions
 ├── TheStash (element registry, matching, resolution, capture, wire conversion)
 │   ├── Owns TheBurglar (created in init, private implementation detail)

@@ -510,6 +510,57 @@ final class TheFenceTests: XCTestCase {
         XCTAssertFalse(text.contains("expectation"))
     }
 
+    func testCompactElementSearchFormattingUsesElementSearchCommandName() {
+        let foundElement = HeistElement(
+            heistId: "long_list_button",
+            description: "Long List",
+            label: "Long List",
+            value: nil,
+            identifier: nil,
+            traits: [.button],
+            frameX: 0,
+            frameY: 0,
+            frameWidth: 100,
+            frameHeight: 44,
+            actions: [.activate]
+        )
+        let search = ScrollSearchResult(
+            scrollCount: 1,
+            uniqueElementsSeen: 29,
+            exhaustive: false,
+            foundElement: foundElement
+        )
+        let result = ActionResult(
+            success: true,
+            method: .elementSearch,
+            payload: .scrollSearch(search)
+        )
+
+        let text = FenceResponse.action(result: result).compactFormatted()
+
+        XCTAssertTrue(text.contains("element_search: found after 1 scrolls (29 unique elements seen)"))
+        XCTAssertTrue(text.contains("long_list_button \"Long List\" [button]"))
+        XCTAssertFalse(text.contains("scroll_to_visible"))
+    }
+
+    func testCompactElementSearchFailureFormattingUsesElementSearchCommandName() {
+        let search = ScrollSearchResult(
+            scrollCount: 3,
+            uniqueElementsSeen: 42,
+            exhaustive: false
+        )
+        let result = ActionResult(
+            success: false,
+            method: .elementSearch,
+            payload: .scrollSearch(search),
+            screenId: "buttonheist_demo"
+        )
+
+        let text = FenceResponse.action(result: result).compactFormatted()
+
+        XCTAssertEqual(text, "buttonheist_demo | element_search: not found after 3 scrolls (42 unique elements seen)")
+    }
+
     // MARK: - FenceResponse: Action with Expectation (JSON)
 
     func testActionWithExpectationMetJSON() {

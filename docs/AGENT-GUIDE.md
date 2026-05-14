@@ -105,10 +105,10 @@ Each line is one element. The first token is the **heistId** — a stable identi
 
 This means an element you need to interact with might not show up in `get_interface` at all. It's not missing — it's just off-screen, and the system hasn't rendered it yet. You have three strategies for dealing with this:
 
-**Strategy 1: Scroll to find it.** If you know what the element looks like (label, identifier, traits), `scroll_to_visible` will search for it automatically. It scrolls through every scrollable container on screen, checking after each scroll, and stops when the element appears:
+**Strategy 1: Search while scrolling.** If you know what the element looks like (label, identifier, traits), `element_search` will scroll through containers on screen, checking after each scroll, and stops when the element appears. In MCP, this is the `scroll` tool with `mode: "search"`:
 
 ```json
-{"tool": "scroll_to_visible", "arguments": {"label": "Delete Account", "traits": ["button"]}}
+{"tool": "scroll", "arguments": {"mode": "search", "label": "Delete Account", "traits": ["button"]}}
 ```
 
 This is the right choice when you know what you're looking for but don't know where it is. The response tells you how many scrolls it took and returns the element's heistId once found.
@@ -143,7 +143,8 @@ Use `full: true` when you need to understand the entire screen before acting —
 The delta shows you which elements appeared (`+`) and disappeared (`-`) as content scrolled in and out of view. You can scroll and inspect incrementally.
 
 **When to use which:**
-- You know the element's label → `scroll_to_visible`
+- You know the unseen element's label → `element_search` / `scroll mode=search`
+- You already discovered the element and need to return to it → `scroll_to_visible` / `scroll mode=to_visible`
 - You need the full picture → `get_interface` with `full: true`
 - You're exploring or want step-by-step control → `scroll` + read deltas
 - The element is already visible → just use its heistId directly
@@ -202,7 +203,7 @@ Matchers are the right tool when:
 
 On the current screen, with elements you've already seen: **heistId**. Zero ambiguity, no matching logic, no risk of hitting the wrong "Submit" button if there are two.
 
-Across screen transitions, for elements you haven't observed, or in `wait_for`/`scroll_to_visible` where the element may not exist yet: **matcher**.
+Across screen transitions, for elements you haven't observed, or in `wait_for`/`element_search` where the element may not exist yet: **matcher**.
 
 ## Acting on Elements
 
@@ -232,17 +233,20 @@ Optionally clear the field first:
 
 ### Scroll
 
-Three flavors:
+Four common modes:
 
 ```json
 // Scroll down one page in the element's nearest scrollable ancestor
 {"tool": "scroll", "arguments": {"heistId": "some-element", "direction": "down"}}
 
-// Keep scrolling until a specific element becomes visible
-{"tool": "scroll_to_visible", "arguments": {"label": "Submit Order"}}
+// Search while scrolling until a specific unseen element becomes visible
+{"tool": "scroll", "arguments": {"mode": "search", "label": "Submit Order"}}
+
+// Return to a known element discovered by heistId
+{"tool": "scroll", "arguments": {"mode": "to_visible", "heistId": "submit_order_button"}}
 
 // Jump to an edge
-{"tool": "scroll_to_edge", "arguments": {"heistId": "list-container", "edge": "bottom"}}
+{"tool": "scroll", "arguments": {"mode": "to_edge", "heistId": "list-container", "edge": "bottom"}}
 ```
 
 ### Wait for state
@@ -420,7 +424,7 @@ Each step shows its command, delta kind, and expectation result (`✓`/`✗`). T
 
 ### What can go in a batch?
 
-Any interaction command: `activate`, `type_text`, `scroll`, `scroll_to_visible`, `scroll_to_edge`, `swipe`, gesture commands, `edit_action`, `set_pasteboard`, `get_pasteboard`, `dismiss_keyboard`. You can also include `get_interface` and `get_screen` as steps.
+Any interaction command: `activate`, `type_text`, `scroll`, `scroll_to_visible`, `element_search`, `scroll_to_edge`, `swipe`, gesture commands, `edit_action`, `set_pasteboard`, `get_pasteboard`, `dismiss_keyboard`. You can also include `get_interface` and `get_screen` as steps.
 
 ## Efficient Agent Patterns
 
@@ -442,7 +446,7 @@ Attach expectations to actions where you have a clear hypothesis. They cost noth
 
 ### Progressive disclosure
 
-Start with `get_interface` (visible only). If you need more, filter by traits or labels. If the element isn't visible, try `scroll_to_visible`. If you need everything, use `full: true`. Each level costs more time — escalate only when the cheaper option isn't enough.
+Start with `get_interface` for the current screen. If you need more, filter by traits or labels. If a specific element is not visible, use `element_search`; if you need everything, use `full: true`. Use `scroll_to_visible` to return to a known `heistId` while it is still present in the current or preserved screen snapshot. Each level costs more time — escalate only when the cheaper option isn't enough.
 
 ## Quick Reference
 
@@ -450,7 +454,8 @@ Start with `get_interface` (visible only). If you need more, filter by traits or
 |------|------|----------------|
 | Read visible UI | `get_interface` | `detail`, `label`, `traits` |
 | Read all UI (scroll-discovered) | `get_interface` | `full: true` |
-| Find off-screen element | `scroll_to_visible` | `label`/`identifier` |
+| Find unseen off-screen element | `scroll mode=search` / `element_search` | `label`/`identifier` |
+| Return to known off-screen element | `scroll mode=to_visible` / `scroll_to_visible` | `heistId` |
 | Tap/activate a control | `activate` | `heistId`, `action` |
 | Type text | `type_text` | `heistId`, `text`, `clearFirst` |
 | Scroll | `scroll` | `heistId`, `direction` |
