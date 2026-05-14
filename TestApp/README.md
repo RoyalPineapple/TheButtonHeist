@@ -63,7 +63,7 @@ xcodebuild -workspace ButtonHeist.xcworkspace \
   -destination "platform=iOS Simulator,id=$SIM_UDID" build
 
 # Install and launch
-APP=$(ls -td ~/Library/Developer/Xcode/DerivedData/ButtonHeist*/Build/Products/Debug-iphonesimulator/BH Demo.app | head -1)
+APP=$(ls -td ~/Library/Developer/Xcode/DerivedData/ButtonHeist*/Build/Products/Debug-iphonesimulator/BHDemo.app | head -1)
 xcrun simctl install "$SIM_UDID" "$APP"
 TASK_SLUG="accra-scroll-detection"  # use {workspace}-{task-slug}
 INSIDEJOB_PORT=$((RANDOM % 10000 + 20000))

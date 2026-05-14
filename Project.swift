@@ -120,7 +120,7 @@ let project = Project(
                 .project(target: "BH Demo", path: "TestApp"),
             ],
             settings: .settings(base: [
-                "TEST_HOST": "$(BUILT_PRODUCTS_DIR)/BH Demo.app/BH Demo",
+                "TEST_HOST": "$(BUILT_PRODUCTS_DIR)/BHDemo.app/BHDemo",
                 "BUNDLE_LOADER": "$(TEST_HOST)",
             ])
         ),

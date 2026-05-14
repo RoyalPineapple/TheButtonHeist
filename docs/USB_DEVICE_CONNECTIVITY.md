@@ -91,7 +91,7 @@ xcodebuild -workspace ButtonHeist.xcworkspace \
 ```bash
 xcrun devicectl device install app \
   --device "Your Device Name" \
-  ~/Library/Developer/Xcode/DerivedData/ButtonHeist-*/Build/Products/Debug-iphoneos/BH Demo.app
+  ~/Library/Developer/Xcode/DerivedData/ButtonHeist-*/Build/Products/Debug-iphoneos/BHDemo.app
 
 xcrun devicectl device process launch \
   --device "Your Device Name" \
