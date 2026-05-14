@@ -7,38 +7,17 @@ extension TheFence {
     // MARK: - Expectation Parsing
 
     /// Parse the `"expect"` field off a CLI/MCP request dictionary into a typed
-    /// `ActionExpectation`. Returns `nil` when no expectation is set. Supports a
-    /// short string tier (`"screen_changed"` / `"elements_changed"`), a single
-    /// discriminator object (`{"type": "...", …}`), or an array (compound).
+    /// `ActionExpectation`. Returns `nil` when no expectation is set. The
+    /// accepted shape is the discriminator object used by `ActionExpectation`'s
+    /// wire encoding: `{"type": "...", …}`. Compound expectations use the same
+    /// object form with `{"type": "compound", "expectations": [...]}`.
     func parseExpectation(_ dictionary: [String: Any]) throws -> ActionExpectation? {
         guard let expect = dictionary["expect"] else { return nil }
-        if let array = expect as? [[String: Any]] {
-            let sub = try array.map { try parseSingleExpectation($0) }
-            return sub.count == 1 ? sub[0] : .compound(sub)
-        }
-        if let array = expect as? [Any] {
-            let sub = try array.map { try parseSingleExpectationValue($0) }
-            return sub.count == 1 ? sub[0] : .compound(sub)
-        }
-        return try parseSingleExpectationValue(expect)
-    }
-
-    private func parseSingleExpectationValue(_ expect: Any) throws -> ActionExpectation {
-        if let str = expect as? String {
-            guard let expectation = ActionExpectation(stringTier: str) else {
-                let validTiers = ActionExpectation.stringTierValues.joined(separator: ", ")
-                throw FenceError.invalidRequest(
-                    "Unknown expectation tier: \"\(str)\". " +
-                    "Valid: \(validTiers), or {\"type\": \"element_updated\", …}"
-                )
-            }
-            return expectation
-        }
         if let dict = expect as? [String: Any] {
             return try parseSingleExpectation(dict)
         }
         throw FenceError.invalidRequest(
-            "Invalid expectation type: expected string, object, or array"
+            "Invalid expectation type: expected object with a \"type\" discriminator"
         )
     }
 
@@ -53,10 +32,11 @@ extension TheFence {
                 "Got keys: \(dict.keys.sorted())"
             )
         }
-        if let expectation = ActionExpectation(stringTier: typeString) {
-            return expectation
-        }
         switch typeString {
+        case "screen_changed":
+            return .screenChanged
+        case "elements_changed":
+            return .elementsChanged
         case "element_updated":
             return .elementUpdated(
                 heistId: dict["heistId"] as? String,
@@ -84,7 +64,14 @@ extension TheFence {
                     "compound requires an \"expectations\" array"
                 )
             }
-            let sub = try expectationsArray.map { try parseSingleExpectationValue($0) }
+            let sub = try expectationsArray.map { value -> ActionExpectation in
+                guard let dict = value as? [String: Any] else {
+                    throw FenceError.invalidRequest(
+                        "compound expectations must be objects with a \"type\" discriminator"
+                    )
+                }
+                return try parseSingleExpectation(dict)
+            }
             return .compound(sub)
         default:
             let validTypes = "screen_changed, elements_changed, element_updated, " +

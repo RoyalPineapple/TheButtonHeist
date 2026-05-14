@@ -1710,7 +1710,7 @@ final class TheFenceTests: XCTestCase {
         let response = try await fence.execute(request: [
             "command": "activate",
             "heistId": "stale_button",
-            "expect": "screen_changed",
+            "expect": ["type": "screen_changed"],
         ])
 
         if case .action(let result, let expectation) = response {
@@ -1785,11 +1785,11 @@ final class TheFenceTests: XCTestCase {
         let delta: InterfaceDelta = .screenChanged(.init(elementCount: 1, newInterface: fullInterface))
         fence.handoff.onBackgroundDelta?(delta)
 
-        // Execute an action with expect=screen_changed — should short-circuit
+        // Execute an action with expect screen_changed — should short-circuit
         let response = try await fence.execute(request: [
             "command": "activate",
             "heistId": "stale_button",
-            "expect": "screen_changed",
+            "expect": ["type": "screen_changed"],
         ])
 
         // Should return success with "already met" rather than elementNotFound

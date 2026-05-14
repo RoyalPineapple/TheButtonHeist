@@ -77,27 +77,6 @@ public enum ActionExpectation: Sendable, Equatable {
     }
 }
 
-extension ActionExpectation {
-    /// Resolve a string-form expectation tier (`"screen_changed"` or
-    /// `"elements_changed"`) to the matching expectation case. Returns `nil`
-    /// for any other input — callers that need a typed-discriminator object
-    /// should use the Codable path instead.
-    public init?(stringTier: String) {
-        switch stringTier {
-        case "screen_changed":
-            self = .screenChanged
-        case "elements_changed":
-            self = .elementsChanged
-        default:
-            return nil
-        }
-    }
-
-    /// The set of valid string-tier inputs accepted by `init(stringTier:)`.
-    /// Used by parsers to surface diagnostics on miss.
-    public static let stringTierValues: [String] = ["screen_changed", "elements_changed"]
-}
-
 // MARK: - ActionExpectation Codable
 
 extension ActionExpectation: Codable {

@@ -54,6 +54,13 @@ enum ToolDefinitions {
         ],
     ] as [String: Value]) { _, new in new }
 
+    static func stringEnumValues<E>(
+        _ type: E.Type,
+        appending extraValues: [String] = []
+    ) -> Value where E: CaseIterable & RawRepresentable, E.RawValue == String {
+        .array((E.allCases.map(\.rawValue) + extraValues).map { .string($0) })
+    }
+
     static let drawingPointArraySchema: Value = [
         "type": "array",
         "description": "Array of {x, y} waypoints (draw_path)",
@@ -90,9 +97,8 @@ enum ToolDefinitions {
     ]
 
     // Shared expect property for action tools — matches the batch step schema.
-    // MCP advertises only the object discriminator form because some clients
-    // normalize JSON Schema type unions into top-level anyOf/oneOf payloads.
-    // The server parser still accepts legacy string shorthand and arrays.
+    // Expectations use the object discriminator form so all clients see one
+    // shape and avoid JSON Schema unions/composition keywords.
     static let expectProperty: Value = [
         "type": "object",
         "description": """
@@ -106,13 +112,13 @@ enum ToolDefinitions {
             "type": [
                 "type": "string",
                 "enum": .array(ActionExpectation.wireTypeValues.map { .string($0) }),
-                "description": "Object-form discriminator. String shorthand also accepts screen_changed or elements_changed.",
+                "description": "Object-form discriminator, such as screen_changed or element_updated.",
             ],
             "heistId": ["type": "string", "description": "element_updated: match a specific element"],
             "property": [
                 "type": "string",
                 "description": "element_updated: match a specific property",
-                "enum": .array(["label", "value", "traits", "hint", "actions", "frame", "activationPoint"].map { .string($0) }),
+                "enum": .array(ElementProperty.allCases.map { .string($0.rawValue) }),
             ],
             "oldValue": ["type": "string", "description": "element_updated: expected previous value"],
             "newValue": ["type": "string", "description": "element_updated: expected new value"],
@@ -172,7 +178,7 @@ enum ToolDefinitions {
             "properties": .object(([
                 "detail": [
                     "type": "string",
-                    "enum": .array(["summary", "full"].map { .string($0) }),
+                    "enum": stringEnumValues(InterfaceDetail.self),
                     "description": """
                         Level of detail. summary (default): identity fields, traits, and actions only \
                         — no hint, customContent, frames, or activation points. full: adds VoiceOver \
@@ -334,12 +340,12 @@ enum ToolDefinitions {
             "properties": .object(elementTargetProperties.merging([
                 "mode": [
                     "type": "string",
-                    "enum": .array(["page", "to_visible", "search", "to_edge"].map { .string($0) }),
+                    "enum": stringEnumValues(ScrollMode.self),
                     "description": "Scroll mode (default: page)",
                 ],
                 "direction": [
                     "type": "string",
-                    "enum": .array(["up", "down", "left", "right", "next", "previous"].map { .string($0) }),
+                    "enum": stringEnumValues(ScrollDirection.self),
                     "description": """
                         Scroll direction. next/previous are page-only directions for mode=page; \
                         mode=search accepts only up, down, left, right and is validated server-side.
@@ -347,7 +353,7 @@ enum ToolDefinitions {
                 ],
                 "edge": [
                     "type": "string",
-                    "enum": .array(["top", "bottom", "left", "right"].map { .string($0) }),
+                    "enum": stringEnumValues(ScrollEdge.self),
                     "description": "Edge to scroll to (required for mode to_edge)",
                 ],
                 "expect": expectProperty,
@@ -370,10 +376,7 @@ enum ToolDefinitions {
             "properties": .object(elementTargetProperties.merging([
                 "type": [
                     "type": "string",
-                    "enum": .array([
-                        "swipe", "one_finger_tap", "drag", "long_press", "pinch",
-                        "rotate", "two_finger_tap", "draw_path", "draw_bezier",
-                    ].map { .string($0) }),
+                    "enum": stringEnumValues(GestureType.self),
                     "description": "Gesture type",
                 ],
                 "direction": [
@@ -433,7 +436,7 @@ enum ToolDefinitions {
             "properties": [
                 "action": [
                     "type": "string",
-                    "enum": .array(["copy", "paste", "cut", "select", "selectAll", "dismiss"].map { .string($0) }),
+                    "enum": stringEnumValues(EditAction.self, appending: ["dismiss"]),
                     "description": "Action to perform",
                 ],
                 "expect": expectProperty,

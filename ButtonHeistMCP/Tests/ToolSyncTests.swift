@@ -269,6 +269,26 @@ struct ToolSyncTests {
         #expect(ScrollSearchDirection.allCases.allSatisfy { pageDirections.contains($0.rawValue) })
     }
 
+    @Test("MCP enum schemas match wire-boundary enums")
+    func mcpEnumSchemasMatchWireBoundaryEnums() {
+        let getInterface = ToolDefinitions.all.first { $0.name == "get_interface" }
+        #expect(extractEnumValues(from: getInterface, property: "detail") == Set(InterfaceDetail.allCases.map(\.rawValue)))
+
+        let scroll = ToolDefinitions.all.first { $0.name == "scroll" }
+        #expect(extractEnumValues(from: scroll, property: "mode") == Set(ScrollMode.allCases.map(\.rawValue)))
+        #expect(extractEnumValues(from: scroll, property: "direction") == Set(ScrollDirection.allCases.map(\.rawValue)))
+        #expect(extractEnumValues(from: scroll, property: "edge") == Set(ScrollEdge.allCases.map(\.rawValue)))
+
+        let gesture = ToolDefinitions.all.first { $0.name == "gesture" }
+        #expect(extractEnumValues(from: gesture, property: "type") == Set(GestureType.allCases.map(\.rawValue)))
+
+        let editAction = ToolDefinitions.all.first { $0.name == "edit_action" }
+        #expect(
+            extractEnumValues(from: editAction, property: "action") ==
+                Set(EditAction.allCases.map(\.rawValue) + ["dismiss"])
+        )
+    }
+
     @Test("Expect schema advertises Claude-compatible object form")
     func expectSchemaAdvertisesClaudeCompatibleObjectForm() throws {
         let toolsWithExpect = ToolDefinitions.all.filter { extractPropertyKeys(from: $0).contains("expect") }
@@ -299,6 +319,23 @@ struct ToolSyncTests {
             #expect(
                 extractEnumValues(from: typeSchema) == Set(ActionExpectation.wireTypeValues),
                 "\(tool.name).expect type enum should match ActionExpectation wire type values"
+            )
+        }
+    }
+
+    @Test("Expect object property enum matches ElementProperty")
+    func expectObjectPropertyEnumMatchesElementProperty() {
+        for tool in ToolDefinitions.all where extractPropertyKeys(from: tool).contains("expect") {
+            guard let expectSchema = extractPropertySchema(from: tool, property: "expect"),
+                  let expectProperties = extractObjectField(from: expectSchema, key: "properties"),
+                  let propertySchema = extractObjectField(from: expectProperties, key: "property") else {
+                Issue.record("\(tool.name).expect missing element property schema")
+                continue
+            }
+
+            #expect(
+                extractEnumValues(from: propertySchema) == Set(ElementProperty.allCases.map(\.rawValue)),
+                "\(tool.name).expect property enum should match ElementProperty cases"
             )
         }
     }
@@ -409,6 +446,11 @@ struct ToolSyncTests {
             guard case .string(let string) = value else { return nil }
             return string
         })
+    }
+
+    private func extractEnumValues(from tool: Tool?, property: String) -> Set<String> {
+        guard let tool else { return [] }
+        return extractEnumValues(from: tool, property: property)
     }
 
     private func extractEnumValues(from schema: [String: Value]) -> Set<String> {

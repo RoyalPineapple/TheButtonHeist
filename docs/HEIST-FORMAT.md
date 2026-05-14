@@ -35,10 +35,13 @@ Each step is a flat JSON object compatible with `TheFence.execute(request:)` —
   "command": "activate",
   "label": "Review PR, High priority",
   "traits": ["button"],
-  "expect": [
-    {"type": "element_updated", "property": "value", "newValue": "Completed"},
-    {"type": "element_appeared", "matcher": {"label": "8 items remaining", "traits": ["staticText"]}}
-  ],
+  "expect": {
+    "type": "compound",
+    "expectations": [
+      {"type": "element_updated", "property": "value", "newValue": "Completed"},
+      {"type": "element_appeared", "matcher": {"label": "8 items remaining", "traits": ["staticText"]}}
+    ]
+  },
   "_recorded": {
     "heistId": "button_review_pr_high_priority",
     "frame": {"x": 16, "y": 514, "width": 370, "height": 65}
@@ -78,7 +81,7 @@ Each step is a flat JSON object compatible with `TheFence.execute(request:)` —
 | `identifier` | `String` | No | Element matcher: case-insensitive equality (typography-folded) on accessibility identifier |
 | `traits` | `[String]` | No | Element matcher: all listed traits must be present |
 | `excludeTraits` | `[String]` | No | Element matcher: none of these traits may be present |
-| `expect` | `String \| Object \| Array` | No | Expected outcome — validated on playback |
+| `expect` | `Object` | No | Expected outcome — validated on playback |
 | `_recorded` | `Object` | No | Recording-time metadata (ignored during playback) |
 | *(other keys)* | varies | No | Command-specific arguments (`text`, `direction`, `duration`, etc.) |
 
@@ -99,7 +102,7 @@ When recording a heist, **always target elements by stable matcher fields** (lab
 Examples:
 - `wait_for(label: "Loading", absent: true)` — waits for an element to disappear (loading indicator gone)
 - `wait_for(label: "Confirmation", traits: ["staticText"])` — waits for an element to appear
-- `wait_for_change(expect: "screen_changed")` — waits for a screen transition to finish
+- `wait_for_change(expect: {"type": "screen_changed"})` — waits for a screen transition to finish
 
 ## Element Targeting
 
@@ -121,16 +124,7 @@ Matching is exact (case-insensitive, typography-folded); the recorder builds the
 
 The `expect` field uses the same format as `run_batch` expectations. On playback, `TheFence.execute()` validates each step's `expect` against the live `ActionResult`.
 
-### String expectations
-
-| Value | Validates |
-|-------|-----------|
-| `"screen_changed"` | View controller identity changed (navigation, modal, tab switch) |
-| `"elements_changed"` | Any element added, removed, or updated (or screen changed — superset rule) |
-
-### Object expectations
-
-Object expectations use a `type` discriminator that matches the wire Codable shape for `ActionExpectation`, so JSON from a wire log can be pasted straight into a heist file.
+Expectations use a `type` discriminator that matches the wire Codable shape for `ActionExpectation`, so JSON from a wire log can be pasted straight into a heist file.
 
 ```json
 {"type": "element_updated", "property": "value", "newValue": "50%"}
@@ -142,7 +136,7 @@ Checks that some element's property changed to the specified value. All non-`typ
 |-------|------|-------------|
 | `type` | `String` | `"element_updated"` |
 | `heistId` | `String?` | Filter by specific element (rarely used in heist files) |
-| `property` | `String?` | Filter by property: `label`, `value`, `traits`, `hint`, `actions` |
+| `property` | `String?` | Filter by property: `label`, `value`, `traits`, `hint`, `actions`, `frame`, `activationPoint`, `customContent` |
 | `oldValue` | `String?` | Expected previous value |
 | `newValue` | `String?` | Expected new value |
 
@@ -158,13 +152,16 @@ Checks that an element matching the `matcher` predicate appeared in the delta's 
 
 Checks that an element matching the `matcher` predicate was in the delta's removed list. Requires a pre-action element cache to resolve removed heistIds.
 
-### Array expectations (compound)
+### Compound expectations
 
 ```json
-"expect": [
-  {"type": "element_updated", "property": "value", "newValue": "Completed"},
-  {"type": "element_appeared", "matcher": {"label": "8 items remaining", "traits": ["staticText"]}}
-]
+"expect": {
+  "type": "compound",
+  "expectations": [
+    {"type": "element_updated", "property": "value", "newValue": "Completed"},
+    {"type": "element_appeared", "matcher": {"label": "8 items remaining", "traits": ["staticText"]}}
+  ]
+}
 ```
 
 All sub-expectations must be met. Used when an action produces multiple observable outcomes (e.g., toggling a task changes its value AND updates the counter).

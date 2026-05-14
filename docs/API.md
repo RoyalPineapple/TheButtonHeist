@@ -642,7 +642,7 @@ Execute an ordered sequence of commands in a single call. Each step is a full co
 
 **Parameters:**
 
-- `steps` (required) — Array of command request objects (e.g., `[{"command": "activate", "identifier": "loginButton", "expect": "screen_changed"}, ...]`)
+- `steps` (required) — Array of command request objects (e.g., `[{"command": "activate", "identifier": "loginButton", "expect": {"type": "screen_changed"}}, ...]`)
 - `policy` — `"stop_on_error"` (default) or `"continue_on_error"`
 
 With the default `stop_on_error` policy, the batch halts at the first mismet expectation or delivery failure. `failedIndex` points at the step that broke — not a downstream step that failed because the expected state change never happened.
