@@ -74,7 +74,7 @@ extension FenceResponse {
     private func compactActionResult(_ result: ActionResult, expectation: ExpectationResult?) -> String {
         guard result.success else {
             if case .scrollSearch(let search) = result.payload {
-                return Self.compactScrollSearchNotFound(search, screenId: result.screenId)
+                return Self.compactScrollSearchNotFound(search, method: result.method, screenId: result.screenId)
             }
             return "error: \(result.message ?? result.method.rawValue)"
         }
@@ -82,7 +82,7 @@ extension FenceResponse {
         var text: String
         switch result.payload {
         case .scrollSearch(let search):
-            text = Self.compactScrollSearchFound(search)
+            text = Self.compactScrollSearchFound(search, method: result.method)
         case .value, .explore, .none:
             if let delta = result.interfaceDelta {
                 text = Self.compactDelta(delta, method: result.method.rawValue)
@@ -127,13 +127,17 @@ extension FenceResponse {
         return text
     }
 
-    private static func compactScrollSearchFound(_ search: ScrollSearchResult) -> String {
+    private static func compactScrollSearchFound(
+        _ search: ScrollSearchResult,
+        method: ActionMethod
+    ) -> String {
+        let commandName = compactScrollSearchCommandName(for: method)
         var header: String
         if search.scrollCount == 0 {
-            header = "scroll_to_visible: already visible"
+            header = "\(commandName): already visible"
         } else {
             let itemInfo = scrollSearchItemInfo(search)
-            header = "scroll_to_visible: found after \(search.scrollCount) scrolls\(itemInfo)"
+            header = "\(commandName): found after \(search.scrollCount) scrolls\(itemInfo)"
         }
         if let element = search.foundElement {
             header += "\n  \(compactElementLine(element))"
@@ -141,21 +145,37 @@ extension FenceResponse {
         return header
     }
 
-    private static func compactScrollSearchNotFound(_ search: ScrollSearchResult, screenId: String?) -> String {
+    private static func compactScrollSearchNotFound(
+        _ search: ScrollSearchResult,
+        method: ActionMethod,
+        screenId: String?
+    ) -> String {
+        let commandName = compactScrollSearchCommandName(for: method)
         var text: String
         if search.exhaustive {
             let itemInfo = scrollSearchItemInfo(search)
-            text = "scroll_to_visible: not found\(itemInfo) (exhaustive)"
+            text = "\(commandName): not found\(itemInfo) (exhaustive)"
         } else if search.scrollCount > 0 {
             let itemInfo = scrollSearchItemInfo(search)
-            text = "scroll_to_visible: not found after \(search.scrollCount) scrolls\(itemInfo)"
+            text = "\(commandName): not found after \(search.scrollCount) scrolls\(itemInfo)"
         } else {
-            text = "scroll_to_visible: not found"
+            text = "\(commandName): not found"
         }
         if let screenId {
             text = "\(screenId) | \(text)"
         }
         return text
+    }
+
+    private static func compactScrollSearchCommandName(for method: ActionMethod) -> String {
+        switch method {
+        case .elementSearch:
+            return "element_search"
+        case .scrollToVisible:
+            return "scroll_to_visible"
+        default:
+            return method.rawValue
+        }
     }
 
     private static func scrollSearchItemInfo(_ search: ScrollSearchResult) -> String {

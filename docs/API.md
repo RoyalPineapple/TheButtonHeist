@@ -798,6 +798,7 @@ Messages sent from client to server.
 - `getPasteboard` - Read text from general pasteboard
 - `scroll(ScrollTarget)` - Axis-aware page scroll (finds scroll view matching direction's axis)
 - `scrollToVisible(ScrollToVisibleTarget)` - One-shot scroll to a known registry element
+- `elementSearch(ElementSearchTarget)` - Iterative scroll search for an unseen element
 - `scrollToEdge(ScrollToEdgeTarget)` - Axis-aware edge jump with lazy container iteration
 - `resignFirstResponder` - Dismiss keyboard
 - `waitForIdle(WaitForIdleTarget)` - Wait for animations to settle (internal)
@@ -1002,7 +1003,7 @@ public struct ScrollToEdgeTarget: Codable, Sendable
 public struct ElementMatcher: Codable, Sendable, Equatable
 ```
 
-Composable predicate for matching elements in the accessibility tree. All specified fields use AND semantics. Used by `scrollToVisible`, `wait_for`, `get_interface` filtering, and action commands through flat `ElementTarget` matcher fields.
+Composable predicate for matching elements in the accessibility tree. All specified fields use AND semantics. Used by `element_search`, `wait_for`, `get_interface` filtering, and action commands through flat `ElementTarget` matcher fields.
 
 Matching is **exact or miss**: string fields are compared case-insensitively after typography folding (smart quotes/dashes/ellipsis fold to ASCII; emoji, accents, and CJK pass through). Traits compare as exact bitmasks. There is no substring fallback. On a miss the resolver returns `.notFound` with a structured near-miss diagnostic that lists up to three substring suggestions (e.g. "did you mean 'Save Draft', 'Save All', 'Save As'?"). The same semantics are evaluated by `HeistElement.matches` on the client and `AccessibilityElement.matches` on the server so the same matcher input produces the same outcome on both sides.
 
@@ -1022,7 +1023,7 @@ public struct ScrollToVisibleTarget: Codable, Sendable
 
 #### Properties
 
-- `elementTarget: ElementTarget?` - Known registry element to scroll into view, encoded as flat `heistId` or matcher fields. This command does a one-shot recorded-position jump; use `ElementSearchTarget` for iterative discovery.
+- `elementTarget: ElementTarget?` - Known registry element to scroll into view. Use `heistId` for recorded-position jumps; matcher fields only resolve elements already present in the current snapshot. Use `ElementSearchTarget` for iterative discovery.
 
 ### ScrollSearchDirection
 
@@ -1597,7 +1598,7 @@ OPTIONS:
 
 ### buttonheist scroll_to_visible
 
-Scroll a known registry element into view. The element must already have been seen through `get_interface --full`, earlier scrolling, or an action delta. Use `element_search` for iterative discovery of unseen off-screen elements.
+Scroll a known registry element into view. The target must be visible now or identified by a `heistId` still present in the current or preserved screen snapshot, such as the union produced by the latest `get_interface --full`. Use `element_search` for unseen elements or stale heistIds that have fallen out of the current snapshot.
 
 ```
 USAGE: buttonheist scroll_to_visible [OPTIONS]
@@ -1974,8 +1975,8 @@ buttonheist type_text --delete 5 --text "World!" --identifier nameField
 # Scroll commands
 buttonheist scroll --identifier "buttonheist.longList.item-5" --direction up
 buttonheist scroll -l "Messages" --ordinal 1 --direction down
-buttonheist scroll_to_visible --label "Color Picker"
-buttonheist scroll_to_visible --label "Settings" --traits header
+buttonheist element_search --label "Color Picker"
+buttonheist element_search --label "Settings" --traits header
 buttonheist scroll_to_visible "buttonheist.longList.last"
 buttonheist scroll_to_edge --identifier "buttonheist.longList.item-0" --edge bottom
 ```

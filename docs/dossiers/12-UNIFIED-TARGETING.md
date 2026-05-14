@@ -78,7 +78,7 @@ args: {"heistId":"button-Submit-0", "label":"Submit"}
 
 There are two builder methods:
 - **`elementTarget(_:)`** — used by all action commands. Produces `ElementTarget`.
-- **`elementMatcher(_:)`** — used by `get_interface`, `scroll_to_visible`, `wait_for`. Produces `ElementMatcher` directly. (`absent` is a separate field on `WaitForTarget`, not on `ElementMatcher`.)
+- **`elementMatcher(_:)`** — used by multi-result filtering such as `get_interface`. Produces `ElementMatcher` directly. (`absent` is a separate field on `WaitForTarget`, not on `ElementMatcher`.)
 
 ## Wire Types
 
@@ -219,15 +219,14 @@ Every action executor calls `stash.resolveTarget(target)`. Resolution lives on T
 
 Touch gestures (tap, swipe, long_press, drag, pinch, rotate, two_finger_tap) go through `resolvePoint` which calls `resolveTarget` internally. TheSafecracker is called only for the raw gesture synthesis after TheStash has resolved the target.
 
-### Commands that bypass ElementTarget
+### Commands that bypass single-target resolution
 
-These commands use `ElementMatcher` directly (not `ElementTarget`):
+These commands do not resolve exactly one live element through `resolveTarget()` before doing their work:
 
 | Command | Why |
 |---------|-----|
 | `get_interface` | Filters the full hierarchy tree, returns multiple matches |
-| `scroll_to_visible` | Scrolls until a match appears, uses `resolveFirstMatch`/`hasTarget` directly |
-| `wait_for` | Polls for element appearance/disappearance, uses `hasTarget` directly |
+| `wait_for` | Carries an `ElementTarget`, but polls `hasTarget` for appearance/disappearance instead of resolving a single element |
 
 ## Design Principles
 

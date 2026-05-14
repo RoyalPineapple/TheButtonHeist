@@ -14,7 +14,7 @@ The most common cause. You carried a heistId across a screen transition — a na
 
 `get_interface` only returns what's currently visible. If the element is below the fold in a scroll view, it doesn't exist in the accessibility tree yet.
 
-**Fix:** Use `scroll_to_visible` with a matcher to find it, or call `get_interface` with `full: true` to discover all off-screen content. See the "visibility problem" section in the Agent Guide.
+**Fix:** Use `element_search` with a matcher to find unseen off-screen content. If a `heistId` is still present in the current or preserved screen snapshot, such as the latest `get_interface` with `full: true` union, use `scroll_to_visible` to return to that known position. See the "visibility problem" section in the Agent Guide.
 
 ### You predicted a heistId
 
@@ -130,7 +130,7 @@ The element you targeted for scroll isn't inside a scroll view. Static content a
 
 The scroll view is already at the boundary you're scrolling toward. Further scrolling in that direction has no effect.
 
-**Fix:** This is informational, not a failure. If you're searching for content, it's not in this scroll direction. Try the opposite direction, or use `scroll_to_visible` which handles bidirectional search automatically.
+**Fix:** This is informational, not a failure. If you're searching for unseen content, try the opposite direction or use `element_search` from a position where the target can be reached.
 
 ## Action succeeded but nothing changed
 
