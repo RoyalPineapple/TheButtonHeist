@@ -269,9 +269,9 @@ jobs:
               echo "| ${fw} | ${SIZE} |" >> "$GITHUB_STEP_SUMMARY"
             fi
           done
-          if [ -d "$DERIVED/BH Demo.app" ]; then
-            APP_SIZE=$(du -sh "$DERIVED/BH Demo.app" | cut -f1)
-            echo "| BH Demo.app (total) | ${APP_SIZE} |" >> "$GITHUB_STEP_SUMMARY"
+          if [ -d "$DERIVED/BHDemo.app" ]; then
+            APP_SIZE=$(du -sh "$DERIVED/BHDemo.app" | cut -f1)
+            echo "| BHDemo.app (total) | ${APP_SIZE} |" >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Wait for simulator boot

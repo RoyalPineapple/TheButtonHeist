@@ -22,10 +22,12 @@ let project = Project(
             name: "BH Demo",
             destinations: .iOS,
             product: .app,
+            productName: "BHDemo",
             bundleId: "com.buttonheist.testapp",
             deploymentTargets: .iOS("17.0"),
             infoPlist: .extendingDefault(with: [
                 "UILaunchScreen": [:],
+                "CFBundleName": "BH Demo",
                 "CFBundleDisplayName": "BH Demo",
                 "NSLocalNetworkUsageDescription": "This app uses local network to communicate with the accessibility inspector.",
                 "NSBonjourServices": ["_buttonheist._tcp"],

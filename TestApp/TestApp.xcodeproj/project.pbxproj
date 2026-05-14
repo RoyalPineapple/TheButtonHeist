@@ -208,6 +208,7 @@
 		032C1171E016C8BE746BC170 /* TuistBundle+BHDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TuistBundle+BHDemo.swift"; sourceTree = "<group>"; };
 		08096B81FBB34A677903EC34 /* DemoTableViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoTableViewController.swift; sourceTree = "<group>"; };
 		08C502CD65C96FA553FDE94E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		0D299F08D35557F0768E4EB5 /* BHDemo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BHDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1000E4B43B35612CE0CCDBAA /* ResearchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResearchApp.swift; sourceTree = "<group>"; };
 		10CDD5E500E477B98B606858 /* TheInsideJob.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TheInsideJob.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		133B3C55419B175F5FC5F332 /* TabBarDemoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBarDemoView.swift; sourceTree = "<group>"; };
@@ -266,7 +267,6 @@
 		ED3E93AE1108866F17601CB8 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		ED4B9F8DAB1D7DE45C567B35 /* swift-crypto_CCryptoBoringSSLShims.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "swift-crypto_CCryptoBoringSSLShims.bundle"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F7D07E273A0048DA7FE282A3 /* TodoListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoListView.swift; sourceTree = "<group>"; };
-		FA43E178125751F102C44AE0 /* BH Demo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BH Demo.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		FC1B8E4B0AFCAA03702D3E7E /* DisplayDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayDemo.swift; sourceTree = "<group>"; };
 		FD906130128B1A2B55BA304D /* TuistAssets+UIKitTestApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TuistAssets+UIKitTestApp.swift"; sourceTree = "<group>"; };
 		FDDC28751BB57CA789B63ADC /* TogglePickerDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TogglePickerDemo.swift; sourceTree = "<group>"; };
@@ -358,7 +358,7 @@
 			children = (
 				C7BFD903B5A7DB547CD6A4C7 /* AccessibilitySnapshotParser_ObjC.framework */,
 				97C3DF6EAC0366513F5B9CB8 /* AccessibilitySnapshotParser.framework */,
-				FA43E178125751F102C44AE0 /* BH Demo.app */,
+				0D299F08D35557F0768E4EB5 /* BHDemo.app */,
 				3043BA82964C737BBCED996A /* Crypto.framework */,
 				26B4D16FE6864A962C9904FD /* ResearchApp.app */,
 				1B609F468C0E57C4984AAD7D /* swift-crypto__CryptoExtras.bundle */,
@@ -500,8 +500,8 @@
 			name = "BH Demo";
 			packageProductDependencies = (
 			);
-			productName = "BH Demo";
-			productReference = FA43E178125751F102C44AE0 /* BH Demo.app */;
+			productName = BHDemo;
+			productReference = 0D299F08D35557F0768E4EB5 /* BHDemo.app */;
 			productType = "com.apple.product-type.application";
 		};
 		E8F47D029AA78A88203C022B /* UIKitTestApp */ = {
@@ -813,7 +813,7 @@
 					"-fmodule-map-file=$(SRCROOT)/../submodules/AccessibilitySnapshotBH/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.testapp;
-				PRODUCT_NAME = "BH Demo";
+				PRODUCT_NAME = BHDemo;
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
@@ -919,7 +919,7 @@
 					"-fmodule-map-file=$(SRCROOT)/../submodules/AccessibilitySnapshotBH/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.testapp;
-				PRODUCT_NAME = "BH Demo";
+				PRODUCT_NAME = BHDemo;
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;

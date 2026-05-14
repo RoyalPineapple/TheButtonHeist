@@ -83,7 +83,7 @@ jobs:
           xcodebuild -workspace ButtonHeist.xcworkspace -scheme "BH Demo" \
             -destination "generic/platform=iOS Simulator" \
             build | tail -5
-          APP_PATH=$(ls -td ~/Library/Developer/Xcode/DerivedData/ButtonHeist*/Build/Products/Debug-iphonesimulator/BH\ Demo.app | head -1)
+          APP_PATH=$(ls -td ~/Library/Developer/Xcode/DerivedData/ButtonHeist*/Build/Products/Debug-iphonesimulator/BHDemo.app | head -1)
           echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
           echo "Built: $APP_PATH"
 

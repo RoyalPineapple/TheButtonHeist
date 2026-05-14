@@ -155,7 +155,7 @@ Use the `BH Demo` scheme — this embeds TheInsideJob and all frameworks. Buildi
 
 ```bash
 # Find the freshest build
-APP=$(ls -td ~/Library/Developer/Xcode/DerivedData/ButtonHeist*/Build/Products/Debug-iphonesimulator/BH Demo.app | head -1)
+APP=$(ls -td ~/Library/Developer/Xcode/DerivedData/ButtonHeist*/Build/Products/Debug-iphonesimulator/BHDemo.app | head -1)
 
 # Pick a unique port; use the task slug as the token
 INSIDEJOB_PORT=$((RANDOM % 10000 + 20000))
