@@ -16,6 +16,14 @@ import AccessibilitySnapshotParser
 
 extension Navigation {
 
+    typealias ScrollCandidate = (target: ScrollableTarget, container: AccessibilityContainer)
+
+    private enum ScrollAxisSelection {
+        case any
+        case required(ScrollAxis)
+        case preferred(ScrollAxis)
+    }
+
     // MARK: - Scroll Axis Detection
 
     static func scrollableAxis(of target: ScrollableTarget) -> ScrollAxis {
@@ -419,10 +427,9 @@ extension Navigation {
                 progress: &progress
             )
 
-            guard let (scrollTarget, container) = nextScrollSearchCandidate(
-                from: candidates,
-                exhausted: progress.exhaustedContainers
-            ) else { break }
+            guard let (scrollTarget, container) = candidates.first(where: {
+                !progress.exhaustedContainers.contains($0.container)
+            }) else { break }
 
             let direction = Self.adaptDirection(
                 searchDirection, for: scrollTarget, container: container
@@ -483,58 +490,36 @@ extension Navigation {
     func findScrollTarget(
         preferredAxis axis: ScrollAxis?,
         excluding exhausted: Set<AccessibilityContainer> = []
-    ) -> (target: ScrollableTarget, container: AccessibilityContainer)? {
-        if let axis,
-           let preferredTarget = findScrollTarget(axis: axis, excluding: exhausted) {
-            return preferredTarget
-        }
-        return findScrollTarget(excluding: exhausted)
+    ) -> ScrollCandidate? {
+        scrollCandidates(
+            selecting: axis.map(ScrollAxisSelection.preferred) ?? .any,
+            excluding: exhausted
+        )
+        .first
     }
 
     func scrollSearchCandidates(
         preferredAxis axis: ScrollAxis?
-    ) -> [(target: ScrollableTarget, container: AccessibilityContainer)] {
-        prioritizeScrollSearchCandidates(
-            scrollTargets(in: stash.currentHierarchy.scrollableContainers),
-            preferredAxis: axis
-        )
-    }
-
-    func nextScrollSearchCandidate(
-        from candidates: [(target: ScrollableTarget, container: AccessibilityContainer)],
-        exhausted: Set<AccessibilityContainer>
-    ) -> (target: ScrollableTarget, container: AccessibilityContainer)? {
-        candidates.first { !exhausted.contains($0.container) }
-    }
-
-    func prioritizeScrollSearchCandidates(
-        _ candidates: [(target: ScrollableTarget, container: AccessibilityContainer)],
-        preferredAxis axis: ScrollAxis?
-    ) -> [(target: ScrollableTarget, container: AccessibilityContainer)] {
-        guard let axis else { return candidates }
-        return candidates.filter { Self.scrollableAxis(of: $0.container).contains(axis) }
-            + candidates.filter { !Self.scrollableAxis(of: $0.container).contains(axis) }
+    ) -> [ScrollCandidate] {
+        scrollCandidates(selecting: axis.map(ScrollAxisSelection.preferred) ?? .any)
     }
 
     private func refreshScrollSearchCandidates(
         preferredAxis axis: ScrollAxis?,
-        candidates: inout [(target: ScrollableTarget, container: AccessibilityContainer)],
+        candidates: inout [ScrollCandidate],
         progress: inout ScrollSearchProgress
     ) {
-        candidates = prioritizeScrollSearchCandidates(
-            mergeScrollSearchCandidates(
-                candidates,
-                with: scrollSearchCandidates(preferredAxis: axis)
-            ),
-            preferredAxis: axis
+        candidates = orderScrollCandidates(
+            mergeScrollSearchCandidates(candidates, with: scrollSearchCandidates(preferredAxis: axis)),
+            selecting: axis.map(ScrollAxisSelection.preferred) ?? .any
         )
         progress.recordKnownContainers(candidates.map(\.container))
     }
 
     private func mergeScrollSearchCandidates(
-        _ existing: [(target: ScrollableTarget, container: AccessibilityContainer)],
-        with discovered: [(target: ScrollableTarget, container: AccessibilityContainer)]
-    ) -> [(target: ScrollableTarget, container: AccessibilityContainer)] {
+        _ existing: [ScrollCandidate],
+        with discovered: [ScrollCandidate]
+    ) -> [ScrollCandidate] {
         discovered.reduce(into: existing) { merged, candidate in
             if let index = merged.firstIndex(where: { $0.container == candidate.container }) {
                 merged[index] = candidate
@@ -544,39 +529,46 @@ extension Navigation {
         }
     }
 
-    func findScrollTarget(
-        axis: ScrollAxis? = nil,
+    private func scrollCandidates(
+        selecting axisSelection: ScrollAxisSelection,
         excluding exhausted: Set<AccessibilityContainer> = []
-    ) -> (target: ScrollableTarget, container: AccessibilityContainer)? {
-        scrollTargets(
-            in: stash.currentHierarchy.scrollableContainers,
-            axis: axis,
-            excluding: exhausted
-        )
-        .first
+    ) -> [ScrollCandidate] {
+        let candidates = stash.currentHierarchy.scrollableContainers.compactMap { container -> ScrollCandidate? in
+            guard !exhausted.contains(container),
+                  case .scrollable(let contentSize) = container.type else { return nil }
+
+            let axis = Self.scrollableAxis(of: container)
+            if case .required(let requiredAxis) = axisSelection,
+               !axis.contains(requiredAxis) {
+                return nil
+            }
+
+            if let view = self.stash.scrollableContainerViews[container],
+               view.window != nil,
+               Self.isObscuredByPresentation(view: view) {
+                return nil
+            }
+            guard let target = self.scrollableTarget(for: container, contentSize: contentSize) else {
+                return nil
+            }
+            return (target, container)
+        }
+        return orderScrollCandidates(candidates, selecting: axisSelection)
     }
 
-    private func scrollTargets(
-        in containers: [AccessibilityContainer],
-        axis: ScrollAxis? = nil,
-        excluding exhausted: Set<AccessibilityContainer> = []
-    ) -> [(target: ScrollableTarget, container: AccessibilityContainer)] {
-        Array(
-            containers.lazy.compactMap { container -> (target: ScrollableTarget, container: AccessibilityContainer)? in
-                guard !exhausted.contains(container),
-                      case .scrollable(let contentSize) = container.type else { return nil }
-                if let view = self.stash.scrollableContainerViews[container],
-                   view.window != nil,
-                   Self.isObscuredByPresentation(view: view) {
-                    return nil
-                }
-                guard let target = self.scrollableTarget(for: container, contentSize: contentSize) else {
-                    return nil
-                }
-                if let axis, !Self.scrollableAxis(of: container).contains(axis) { return nil }
-                return (target, container)
-            }
-        )
+    private func orderScrollCandidates(
+        _ candidates: [ScrollCandidate],
+        selecting axisSelection: ScrollAxisSelection
+    ) -> [ScrollCandidate] {
+        guard case .preferred(let preferredAxis) = axisSelection else { return candidates }
+
+        let preferred = candidates.filter {
+            Self.scrollableAxis(of: $0.container).contains(preferredAxis)
+        }
+        let fallback = candidates.filter {
+            !Self.scrollableAxis(of: $0.container).contains(preferredAxis)
+        }
+        return preferred + fallback
     }
 
     /// Build a ScrollableTarget for a container, preferring the live UIView when attached
@@ -728,7 +720,7 @@ extension Navigation {
 
             let target: ScrollableTarget = .uiScrollView(sv)
             if let axis, !Self.scrollableAxis(of: target).contains(axis) {
-                if let (axisTarget, _) = findScrollTarget(axis: axis) {
+                if let (axisTarget, _) = scrollCandidates(selecting: .required(axis)).first {
                     return axisTarget
                 }
             }
