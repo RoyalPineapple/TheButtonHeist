@@ -8,9 +8,8 @@ import UIKit
 /// 2. **`accessibilityViewIsModal` flag** — ModalWindowDemo handles the
 ///    separate-window case; this screen exercises the same flag set on a
 ///    subview within the main window.
-/// 3. **Overlay window (`windowLevel > .normal`)** — SwiftUI `.alert` and
-///    `.confirmationDialog` host a UIAlertController in its own alert-level
-///    window with a rootViewController.
+/// 3. **Elevated non-modal windows** — alert-level windows without
+///    `accessibilityViewIsModal` remain additive with the base app window.
 /// 4. **`presentedViewController`** — SwiftUI `.sheet`, `.fullScreenCover`,
 ///    and the UIKit-backed buttons walk the presentation chain.
 /// 5. **Deeply stacked presentations** — sheet → sheet → alert exercises
