@@ -82,6 +82,7 @@ graph TD
 
         subgraph Windows["Window Access"]
             GetWindows["getTraversableWindows()"]
+            GetAXWindows["getAccessibleWindows()"]
         end
     end
 
@@ -100,7 +101,7 @@ graph TD
     end
 
     IJ -->|"owns, sets onTransition"| TheTripwire
-    BM -->|"getTraversableWindows, waitForAllClear,<br/>yieldFrames, isScreenChange"| TheTripwire
+    BM -->|"getAccessibleWindows/getTraversableWindows,<br/>waitForAllClear, yieldFrames, isScreenChange"| TheTripwire
     SC -->|"weak ref, keyboardVisibleFlag"| TheTripwire
 ```
 
@@ -318,16 +319,24 @@ tripwire.isScreenChange(before:after:) || isTopologyChanged(before:after:)
 
 TheInsideJob wires `onTransition` and uses `.settled` to trigger deferred hierarchy broadcasts when `hierarchyInvalidated` is true.
 
-## Window Filtering (`getTraversableWindows()`)
+## Window Filtering
 
-Scans the `foregroundActive` `UIWindowScene`. Filters out:
+`getTraversableWindows()` scans the `foregroundActive` `UIWindowScene`. Filters out:
 - `TheFingerprints.FingerprintWindow` (tap-indicator overlay)
 - Hidden windows
 - Zero-size windows
 
 Sorts by `windowLevel` descending (frontmost first). Returns `[(window: UIWindow, rootView: UIView)]`.
 
-Used by both `scanLayers()` (fingerprinting) and `TheBurglar.parse()` (accessibility parsing, invoked via `stash.refresh()`), ensuring both operate on the same window set.
+Used by `scanLayers()` for visual fingerprinting and screenshot capture so visual work sees the full composited window stack.
+
+`getAccessibleWindows()` starts from the traversable set and applies the accessibility parse scope:
+- If any window contains `accessibilityViewIsModal` (searched up to four view levels deep), the frontmost such window is exclusive.
+- System passthrough windows (`UIRemoteKeyboardWindow`, `UITextEffectsWindow`) are dropped because they sit above the app but do not contain app content.
+- Elevated non-modal windows remain additive with lower app windows; window level alone is not a modal signal.
+- Each remaining window with a presented-view-controller chain is parsed from the deepest presented view.
+
+Used by `TheBurglar.parse()` for accessibility hierarchy parsing, invoked through `stash.refresh()`.
 
 ## Crew Interactions
 
@@ -338,12 +347,12 @@ graph LR
     SC["TheSafecracker"] -->|"weak var tripwire"| TW
 
     TW -->|".settled → broadcastCurrentHierarchy()"| IJ
-    TW -->|"getTraversableWindows, waitForAllClear, isScreenChange, topmostVC"| BM
+    TW -->|"window access, waitForAllClear, isScreenChange, topmostVC"| BM
     TW -->|"keyboardVisibleFlag (direct read)"| SC
 ```
 
 - **TheInsideJob** owns the instance. Sets `onTransition` in `start()`, calls `startPulse()`/`stopPulse()` on suspend/resume. On `.settled`, broadcasts hierarchy if invalidated.
-- **TheStash** holds a strong ref passed at init. Uses `getTraversableWindows()` for parsing and capture, `waitForAllClear()` post-action, `topmostViewController()` and `isScreenChange()` for delta computation.
+- **TheStash** holds a strong ref passed at init. Uses accessible windows for parsing, traversable windows for capture, `waitForAllClear()` post-action, `topmostViewController()` and `isScreenChange()` for delta computation.
 - **TheSafecracker** holds a weak ref. Reads `keyboardVisibleFlag` directly for `isKeyboardVisible()`. Uses `waitForAllClear()` for scroll-settle in `ensureOnScreen`.
 
 ## Design Decisions
@@ -353,7 +362,7 @@ graph LR
 - **Weak-ref indirection via PulseTick**: `CADisplayLink` retains its target. If TheTripwire were the target, deallocating it would leave a dangling display link. The `PulseTick` intermediary checks a weak ref and self-invalidates.
 - **`CATransaction.flush()` before scanning**: SwiftUI batches layout commits. Without the flush, `scanLayers()` would see stale layer positions and report false "quiet" readings.
 - **Per-waiter quiet frames**: Global quiet-frame count can't serve multiple concurrent callers with different start times. Each waiter tracks its own count from registration, preventing false positives from stale settle state.
-- **Separation from TheStash**: TheTripwire reads UIKit timing signals; TheStash reads the accessibility tree. Neither imports the other's domain. The only shared surface is `getTraversableWindows()`.
+- **Separation from TheStash**: TheTripwire reads UIKit timing signals; TheStash reads the accessibility tree. Neither imports the other's domain. The shared surface is window selection plus settle/screen-change signals.
 - **VC identity over element overlap**: `ObjectIdentifier` comparison of the topmost VC is cheaper and more reliable than the old heuristic of element identifier overlap ratios.
 - **Presentation layer fingerprinting**: Summing `CALayer.presentation()` positions/opacities catches any layer movement without enumerating specific animation types. The tolerances (0.5 pt position, 0.05 opacity) filter sub-pixel noise while catching all perceptible motion.
 
@@ -361,6 +370,7 @@ graph LR
 
 ### LOW PRIORITY
 
-**`getTraversableWindows()` is called from both TheTripwire and TheStash**
-- TheStash calls `tripwire.getTraversableWindows()` for hierarchy parsing and screen capture
-- This is by design (shared window set), but the method is on TheTripwire rather than being shared infrastructure
+**Window selection is owned by TheTripwire**
+- TheBurglar parses `tripwire.getAccessibleWindows()` so accessibility scope follows modal and passthrough policy.
+- Capture and fingerprinting use `tripwire.getTraversableWindows()` so visual work sees the full composited window stack.
+- This is by design, but the policy still lives on TheTripwire rather than a standalone window-selection type.

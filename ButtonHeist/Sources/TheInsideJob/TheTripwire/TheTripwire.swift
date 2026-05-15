@@ -358,20 +358,18 @@ final class TheTripwire {
     }
 
     /// Windows filtered for accessibility tree parsing. Mirrors the filtering
-    /// VoiceOver applies — only the topmost modal context is exposed, and
-    /// everything beneath it is hidden from the tree.
+    /// VoiceOver applies — explicit modal contexts hide everything beneath
+    /// them, while non-modal overlay windows remain additive.
     ///
-    /// Three independent checks, in order:
+    /// Resolution steps, in order:
     /// 1. **Explicit modal flag** — any window containing a view with
     ///    `accessibilityViewIsModal` set (popovers, custom overlays).
-    /// 2. **Overlay window** — frontmost non-passthrough window has
-    ///    `windowLevel > .normal` (UIAlertController, action sheets,
-    ///    status-bar level UI). System decoration windows like the software
-    ///    keyboard and text-effects window are excluded — they sit above
-    ///    `.normal` but are not modal takeovers.
-    /// 3. **Modal presentation** — a window's root VC has a presented VC,
-    ///    in which case only the deepest presented VC's view is parsed,
-    ///    matching what `UIPresentationController` exposes to UIKit's AX.
+    /// 2. **System passthrough windows** — keyboard and text-effects windows
+    ///    are excluded because they sit above `.normal` but contain no app
+    ///    content the agent can usefully act on.
+    /// 3. **Modal presentation** — each window whose root VC has a presented
+    ///    VC is parsed from the deepest presented VC's view, matching what
+    ///    `UIPresentationController` exposes to UIKit's AX for that window.
     ///
     /// If none match, all traversable non-passthrough windows are returned.
     ///
@@ -419,18 +417,9 @@ final class TheTripwire {
         }
 
         let appWindows = windows.filter { !isPassthrough($0.window) }
+        let accessibleWindows = appWindows.map { deepestPresentedEntry($0) ?? $0 }
 
-        if let top = appWindows.first,
-           top.window.windowLevel > .normal,
-           top.window.rootViewController != nil {
-            return [top]
-        }
-
-        if let presented = appWindows.lazy.compactMap(deepestPresentedEntry).first {
-            return [presented]
-        }
-
-        return appWindows.isEmpty ? windows : appWindows
+        return accessibleWindows.isEmpty ? windows : accessibleWindows
     }
 
     /// If `entry`'s root VC has a presentation chain, return the deepest

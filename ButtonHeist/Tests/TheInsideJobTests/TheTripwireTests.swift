@@ -490,6 +490,14 @@ final class TheTripwireTests: XCTestCase {
         XCTAssertTrue(accessible.first?.window === modalWindow)
     }
 
+    func testGetAccessibleWindowsKeepsUIAlertControllerAlertExclusive() async throws {
+        try await assertUIAlertControllerIsExclusive(style: .alert)
+    }
+
+    func testGetAccessibleWindowsKeepsUIAlertControllerActionSheetExclusive() async throws {
+        try await assertUIAlertControllerIsExclusive(style: .actionSheet)
+    }
+
     func testGetAccessibleWindowsModalFlagBeatsOverlay() {
         guard let windowScene = UIApplication.shared.connectedScenes
             .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
@@ -568,6 +576,64 @@ final class TheTripwireTests: XCTestCase {
             accessible.first?.window === upperModal,
             "The frontmost (highest level) modal should win"
         )
+    }
+
+    private func assertUIAlertControllerIsExclusive(
+        style: UIAlertController.Style,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws {
+        guard let windowScene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
+        else {
+            throw XCTSkip("No active window scene")
+        }
+
+        let root = UIViewController()
+        root.view.backgroundColor = .white
+        root.view.frame = UIScreen.main.bounds
+
+        let window = UIWindow(windowScene: windowScene)
+        window.windowLevel = .normal + 10
+        window.rootViewController = root
+        window.frame = UIScreen.main.bounds
+        window.isHidden = false
+        window.layoutIfNeeded()
+
+        let alert = UIAlertController(
+            title: "Tripwire Alert",
+            message: "Tripwire alert scope check",
+            preferredStyle: style
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        alert.popoverPresentationController?.sourceView = root.view
+        alert.popoverPresentationController?.sourceRect = CGRect(x: 20, y: 20, width: 1, height: 1)
+
+        await present(alert, from: root)
+
+        let accessible = tripwire.getAccessibleWindows()
+
+        await dismiss(alert)
+        window.isHidden = true
+
+        XCTAssertEqual(accessible.count, 1, file: file, line: line)
+        XCTAssertTrue(accessible.first?.window === window, file: file, line: line)
+    }
+
+    private func present(_ viewController: UIViewController, from presenter: UIViewController) async {
+        await withCheckedContinuation { continuation in
+            presenter.present(viewController, animated: false) {
+                continuation.resume()
+            }
+        }
+    }
+
+    private func dismiss(_ viewController: UIViewController) async {
+        await withCheckedContinuation { continuation in
+            viewController.dismiss(animated: false) {
+                continuation.resume()
+            }
+        }
     }
 
     // MARK: - topmostViewController (hosted test)
@@ -693,24 +759,22 @@ final class TheTripwireTests: XCTestCase {
         XCTAssertTrue(result.isEmpty)
     }
 
-    func testFilterToAccessibleWindowsPicksOverlayWhenNoModalFlag() {
-        let overlay = makeWindow(level: .alert, rootVC: UIViewController())
+    func testFilterToAccessibleWindowsIncludesAlertLevelNonModalWindowAndBaseWindow() {
+        let alertLevelWindow = makeWindow(level: .alert, rootVC: UIViewController())
         let base = makeWindow(level: .normal, rootVC: UIViewController())
         let input = [
-            (window: overlay, rootView: overlay as UIView),
+            (window: alertLevelWindow, rootView: alertLevelWindow as UIView),
             (window: base, rootView: base as UIView),
         ]
 
         let result = TheTripwire.filterToAccessibleWindows(input)
 
-        XCTAssertEqual(result.count, 1)
-        XCTAssertTrue(result.first?.window === overlay, "Overlay window should win")
+        XCTAssertEqual(result.count, 2)
+        XCTAssertTrue(result[0].window === alertLevelWindow)
+        XCTAssertTrue(result[1].window === base)
     }
 
-    func testFilterToAccessibleWindowsSkipsOverlayWithoutRootVC() {
-        // Frontmost overlay has no rootVC — overlay branch should not match,
-        // falling through to other branches (and ultimately the all-windows
-        // fallback since no presentation chain exists either).
+    func testFilterToAccessibleWindowsIncludesElevatedWindowWithoutRootVC() {
         let overlay = makeWindow(level: .alert, rootVC: nil)
         let base = makeWindow(level: .normal, rootVC: UIViewController())
         let input = [
@@ -720,7 +784,9 @@ final class TheTripwireTests: XCTestCase {
 
         let result = TheTripwire.filterToAccessibleWindows(input)
 
-        XCTAssertEqual(result.count, 2, "Should fall through to all-windows fallback")
+        XCTAssertEqual(result.count, 2)
+        XCTAssertTrue(result[0].window === overlay)
+        XCTAssertTrue(result[1].window === base)
     }
 
     func testFilterToAccessibleWindowsPicksDeepestPresentedView() {
@@ -772,11 +838,10 @@ final class TheTripwireTests: XCTestCase {
         XCTAssertTrue(result.first?.window === flagged, "Modal flag should win over overlay")
     }
 
-    func testFilterToAccessibleWindowsOverlayBeatsPresentedVC() {
-        // Lower window has presented VC; frontmost overlay has none but is
-        // higher level — overlay branch is checked before presented-VC walk.
+    func testFilterToAccessibleWindowsIncludesOverlayAndPresentedBaseWindow() {
         let baseRoot = StubViewController()
-        baseRoot.fakePresented = UIViewController()
+        let presented = UIViewController()
+        baseRoot.fakePresented = presented
         let baseWindow = makeWindow(level: .normal, rootVC: baseRoot)
 
         let overlay = makeWindow(level: .alert, rootVC: UIViewController())
@@ -788,13 +853,15 @@ final class TheTripwireTests: XCTestCase {
 
         let result = TheTripwire.filterToAccessibleWindows(input)
 
-        XCTAssertEqual(result.count, 1)
-        XCTAssertTrue(result.first?.window === overlay, "Overlay should win over presented-VC branch")
+        XCTAssertEqual(result.count, 2)
+        XCTAssertTrue(result[0].window === overlay)
+        XCTAssertTrue(result[1].window === baseWindow)
+        XCTAssertTrue(result[1].rootView === presented.view)
     }
 
     // MARK: - System Passthrough Windows (keyboard / text-effects)
 
-    func testFilterSkipsPassthroughWhenLookingForOverlay() {
+    func testFilterDropsPassthroughAndKeepsAppWindow() {
         // Frontmost window is a system passthrough (keyboard) above .normal —
         // it must NOT be treated as the overlay. The base app window beneath
         // should remain accessible so the focused text field and surrounding
@@ -816,16 +883,15 @@ final class TheTripwireTests: XCTestCase {
                       "App window should be returned, not the passthrough keyboard")
     }
 
-    func testFilterPicksRealOverlayBeneathPassthrough() {
-        // When the keyboard is up over a UIAlertController, the overlay branch
-        // should still pick the alert window (after skipping the keyboard),
-        // not return all three windows.
+    func testFilterIncludesNonModalOverlayBeneathPassthrough() {
+        // A passthrough keyboard is still excluded, but an elevated non-modal
+        // app window beneath it remains additive with the base app window.
         let keyboard = makeWindow(level: .statusBar, rootVC: UIViewController())
-        let alert = makeWindow(level: .alert, rootVC: UIViewController())
+        let overlay = makeWindow(level: .alert, rootVC: UIViewController())
         let base = makeWindow(level: .normal, rootVC: UIViewController())
         let input = [
             (window: keyboard, rootView: keyboard as UIView),
-            (window: alert, rootView: alert as UIView),
+            (window: overlay, rootView: overlay as UIView),
             (window: base, rootView: base as UIView),
         ]
 
@@ -834,14 +900,16 @@ final class TheTripwireTests: XCTestCase {
             isPassthrough: { $0 === keyboard }
         )
 
-        XCTAssertEqual(result.count, 1)
-        XCTAssertTrue(result.first?.window === alert,
-                      "Alert window should win once keyboard is filtered out")
+        XCTAssertEqual(result.count, 2)
+        XCTAssertFalse(result.contains(where: { $0.window === keyboard }))
+        XCTAssertTrue(result[0].window === overlay)
+        XCTAssertTrue(result[1].window === base)
     }
 
     func testFilterFindsPresentedVCBeneathPassthrough() {
         // Keyboard above an app window whose root VC has a presented VC.
-        // After skipping the keyboard, the presented-VC branch should win.
+        // After skipping the keyboard, the app window should be parsed from
+        // its deepest presented VC.
         let root = StubViewController()
         let presented = StubViewController()
         root.fakePresented = presented

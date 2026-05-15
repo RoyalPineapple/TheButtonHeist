@@ -55,10 +55,8 @@ final class TheBurglarParseTests: XCTestCase {
     func testParseWrapsEachWindowWithSemanticGroupInMultiWindowMode() throws {
         let windowScene = try requireForegroundWindowScene()
 
-        // Multi-window mode is only entered when no window is an overlay
-        // (no modal flag, no level > .normal with a root VC, no presentation).
-        // Use levels below .normal so the test windows coexist with the host
-        // window without triggering overlay filtering.
+        // Use levels below .normal so the test windows are ordered beneath the
+        // host window without changing the foreground overlay stack.
         let levelA = UIWindow.Level(rawValue: -1001)
         let levelB = UIWindow.Level(rawValue: -1002)
 
@@ -78,6 +76,48 @@ final class TheBurglarParseTests: XCTestCase {
         let values = semanticGroupValues(in: result.hierarchy)
         XCTAssertTrue(values.contains("windowLevel: \(levelA.rawValue)"))
         XCTAssertTrue(values.contains("windowLevel: \(levelB.rawValue)"))
+    }
+
+    func testParseIncludesBaseWindowWhenElevatedNonModalWindowIsPresent() throws {
+        let windowScene = try requireForegroundWindowScene()
+
+        let result = withNoTraversableWindows {
+            let base = makeWindow(windowScene: windowScene, level: .normal)
+
+            let overlayViewController = UIViewController()
+            overlayViewController.view.backgroundColor = .clear
+            let overlayLabel = UILabel(frame: CGRect(x: 20, y: 60, width: 260, height: 44))
+            overlayLabel.text = "Reader Overlay"
+            overlayViewController.view.addSubview(overlayLabel)
+
+            let overlay = UIWindow(windowScene: windowScene)
+            overlay.windowLevel = .alert - 1
+            overlay.rootViewController = overlayViewController
+            overlay.frame = UIScreen.main.bounds
+            overlay.isHidden = false
+
+            defer {
+                base.isHidden = true
+                overlay.isHidden = true
+            }
+
+            return stash.parse()
+        }
+
+        guard let result else {
+            XCTFail("Expected parse result with base and elevated non-modal windows")
+            return
+        }
+
+        let labels = result.hierarchy.sortedElements.compactMap(\.label)
+        XCTAssertTrue(
+            labels.contains("Window \(Int(UIWindow.Level.normal.rawValue))"),
+            "Elevated non-modal windows should not hide the base app window"
+        )
+        XCTAssertTrue(
+            labels.contains("Reader Overlay"),
+            "Elevated non-modal windows should contribute their own accessible content"
+        )
     }
 
     func testParseIncludesPopoverContentSiblingAfterDismissRegion() throws {
