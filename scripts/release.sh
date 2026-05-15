@@ -28,7 +28,9 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
 SEMVER_REGEX='^[0-9]+\.[0-9]+\.[0-9]+$'
-GITHUB_REPO="RoyalPineapple/TheButtonHeist"
+
+# shellcheck source=scripts/release-contract.sh
+source "$SCRIPT_DIR/release-contract.sh"
 
 DRY_RUN=false
 RUN_TESTS=false
@@ -59,7 +61,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Read current version
-CURRENT_VERSION=$(grep -o 'buttonHeistVersion = "[^"]*"' ButtonHeist/Sources/TheScore/Messages.swift | cut -d'"' -f2)
+CURRENT_VERSION=$(grep -o 'buttonHeistVersion = "[^"]*"' "$BUTTONHEIST_CODE_VERSION_FILE" | cut -d'"' -f2)
 
 if [[ $# -ge 1 ]]; then
     NEW_VERSION="$1"
@@ -124,19 +126,19 @@ if [[ "$RUN_TESTS" == false ]]; then
     CI_DEADLINE=$((SECONDS + 1200))
     CI_RUN_ID=""
     while [[ $SECONDS -lt $CI_DEADLINE ]]; do
-        CI_RUN_ID=$(gh run list --repo "$GITHUB_REPO" --commit "$LOCAL_SHA" --workflow CI --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
+        CI_RUN_ID=$(gh run list --repo "$BUTTONHEIST_GITHUB_REPO" --commit "$LOCAL_SHA" --workflow CI --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
         if [[ -n "$CI_RUN_ID" && "$CI_RUN_ID" != "null" ]]; then break; fi
         sleep 5
     done
     if [[ -z "$CI_RUN_ID" || "$CI_RUN_ID" == "null" ]]; then
         echo "Error: no CI run found after 20 minutes"
-        echo "  Check: https://github.com/$GITHUB_REPO/actions"
+        echo "  Check: https://github.com/$BUTTONHEIST_GITHUB_REPO/actions"
         echo "  Or run with --full to test locally"
         exit 1
     fi
-    if ! gh run watch "$CI_RUN_ID" --repo "$GITHUB_REPO" --exit-status; then
+    if ! gh run watch "$CI_RUN_ID" --repo "$BUTTONHEIST_GITHUB_REPO" --exit-status; then
         echo "Error: CI failed on $(echo "$LOCAL_SHA" | cut -c1-8)"
-        echo "  https://github.com/$GITHUB_REPO/actions/runs/$CI_RUN_ID"
+        echo "  https://github.com/$BUTTONHEIST_GITHUB_REPO/actions/runs/$CI_RUN_ID"
         exit 1
     fi
     echo "  CI: passed on $(echo "$LOCAL_SHA" | cut -c1-8)"
@@ -215,8 +217,8 @@ sed -i '' "s/buttonHeistVersion = \"$CURRENT_ESC\"/buttonHeistVersion = \"$NEW_E
 echo "  ✓ Messages.swift"
 
 # 2. RELEASE_VERSION file
-echo "$NEW_VERSION" > RELEASE_VERSION
-echo "  ✓ RELEASE_VERSION"
+echo "$NEW_VERSION" > "$BUTTONHEIST_RELEASE_VERSION_FILE"
+echo "  ✓ $BUTTONHEIST_RELEASE_VERSION_FILE"
 
 # 3. docs/API.md
 sed -i '' "s/\*\*Version\*\*: $CURRENT_ESC/**Version**: $NEW_ESC/" docs/API.md
@@ -228,8 +230,11 @@ sed -i '' "s/LabeledContent(\"Version\", value: \"$CURRENT_ESC\")/LabeledContent
 echo "  ✓ DisclosureGroupingDemo.swift"
 
 # 5. Formula/buttonheist.rb (in-repo template — PLACEHOLDERs stay, CI fills them)
-sed -i '' "s/version \"$CURRENT_ESC\"/version \"$NEW_ESC\"/" Formula/buttonheist.rb
-echo "  ✓ Formula/buttonheist.rb"
+sed -i '' "s/version \"$CURRENT_ESC\"/version \"$NEW_ESC\"/" "$BUTTONHEIST_FORMULA_TEMPLATE"
+echo "  ✓ $BUTTONHEIST_FORMULA_TEMPLATE"
+
+"$SCRIPT_DIR/validate-release-contract.sh"
+echo "  ✓ release contract"
 
 # 6. Regenerate Xcode projects so pbxproj files stay in sync
 echo "  Regenerating Xcode projects..."
@@ -350,10 +355,10 @@ scripts/generate-project.sh
 
 git add \
     ButtonHeist/Sources/TheScore/Messages.swift \
-    RELEASE_VERSION \
+    "$BUTTONHEIST_RELEASE_VERSION_FILE" \
     docs/API.md \
     TestApp/Sources/DisclosureGroupingDemo.swift \
-    Formula/buttonheist.rb \
+    "$BUTTONHEIST_FORMULA_TEMPLATE" \
     -- '*.pbxproj' '*.xcworkspacedata' '*.xcscheme'
 
 git commit -m "Release $NEW_VERSION"
@@ -386,18 +391,18 @@ echo "==> Phase 6: Waiting for release workflow"
 
 # Find the workflow run triggered by the tag push
 for _ in 1 2 3 4 5; do
-    RUN_ID=$(gh run list --repo "$GITHUB_REPO" --branch "v$NEW_VERSION" --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
+    RUN_ID=$(gh run list --repo "$BUTTONHEIST_GITHUB_REPO" --branch "v$NEW_VERSION" --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
     if [[ -n "$RUN_ID" ]]; then break; fi
     sleep 2
 done
 
 if [[ -z "${RUN_ID:-}" ]]; then
     echo "  Could not find release workflow run for v$NEW_VERSION."
-    echo "  Check manually: https://github.com/$GITHUB_REPO/actions"
+    echo "  Check manually: https://github.com/$BUTTONHEIST_GITHUB_REPO/actions"
     echo "  Then run: brew update && brew upgrade royalpineapple/tap/buttonheist"
 else
     echo "  Watching run $RUN_ID..."
-    if gh run watch "$RUN_ID" --repo "$GITHUB_REPO" --exit-status; then
+    if gh run watch "$RUN_ID" --repo "$BUTTONHEIST_GITHUB_REPO" --exit-status; then
         echo ""
         echo "  ✓ Release workflow passed"
         if command -v brew &>/dev/null && brew list royalpineapple/tap/buttonheist &>/dev/null; then
@@ -427,7 +432,7 @@ else
         fi
 
         # Delete the failed GitHub release if one was created
-        gh release delete "v$NEW_VERSION" --repo "$GITHUB_REPO" --yes 2>/dev/null || true
+        gh release delete "v$NEW_VERSION" --repo "$BUTTONHEIST_GITHUB_REPO" --yes 2>/dev/null || true
         echo "  ✓ Cleaned up GitHub release"
 
         echo ""

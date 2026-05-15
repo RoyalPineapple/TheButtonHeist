@@ -35,20 +35,22 @@ jobs:
 
       - name: Verify version consistency
         run: |
+          source scripts/release-contract.sh
           TAG_VERSION="${{ steps.version.outputs.version }}"
-          FILE_VERSION=$(cat RELEASE_VERSION)
+          FILE_VERSION=$(tr -d '[:space:]' < "$BUTTONHEIST_RELEASE_VERSION_FILE")
           CODE_VERSION=$(grep -o 'buttonHeistVersion = "[^"]*"' \
-            ButtonHeist/Sources/TheScore/Messages.swift | cut -d'"' -f2)
+            "$BUTTONHEIST_CODE_VERSION_FILE" | cut -d'"' -f2)
 
           if [[ "$TAG_VERSION" != "$FILE_VERSION" ]]; then
-            echo "::error::Tag version ($TAG_VERSION) != VERSION file ($FILE_VERSION)"
+            echo "::error::Tag version ($TAG_VERSION) != $BUTTONHEIST_RELEASE_VERSION_FILE ($FILE_VERSION)"
             exit 1
           fi
           if [[ "$TAG_VERSION" != "$CODE_VERSION" ]]; then
             echo "::error::Tag version ($TAG_VERSION) != buttonHeistVersion ($CODE_VERSION)"
             exit 1
           fi
-          echo "Version $TAG_VERSION verified across tag, VERSION, and source."
+          scripts/validate-release-contract.sh
+          echo "Version $TAG_VERSION verified across tag, release contract, and source."
 
       - name: Build CLI (universal)
         run: |
@@ -105,21 +107,25 @@ jobs:
 
       - name: Package binaries and scripts
         run: |
+          source scripts/release-contract.sh
           VERSION="${{ steps.version.outputs.version }}"
+          CLI_ARCHIVE=$(buttonheist_cli_archive_name "$VERSION")
+          MCP_ARCHIVE=$(buttonheist_mcp_archive_name "$VERSION")
+          DEMO_ARCHIVE=$(buttonheist_demo_archive_name "$VERSION")
           mkdir -p dist
 
           # CLI + frameworks
           cp ButtonHeistCLI/.build/buttonheist dist/
-          tar -czf "dist/buttonheist-${VERSION}-macos.tar.gz" -C dist buttonheist ButtonHeistFrameworks
+          tar -czf "dist/${CLI_ARCHIVE}" -C dist buttonheist ButtonHeistFrameworks
           rm dist/buttonheist
 
           # MCP
           cp ButtonHeistMCP/.build/buttonheist-mcp dist/
-          tar -czf "dist/buttonheist-mcp-${VERSION}-macos.tar.gz" -C dist buttonheist-mcp
+          tar -czf "dist/${MCP_ARCHIVE}" -C dist buttonheist-mcp
           rm dist/buttonheist-mcp
 
           # Simulator app
-          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "dist/bh-demo-${VERSION}-iphonesimulator.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "dist/${DEMO_ARCHIVE}"
 
           # Checksums
           cd dist
@@ -130,13 +136,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          source scripts/release-contract.sh
           VERSION="${{ steps.version.outputs.version }}"
           gh release create "v${VERSION}" \
             --title "Button Heist ${VERSION}" \
             --generate-notes \
-            dist/buttonheist-${VERSION}-macos.tar.gz \
-            dist/buttonheist-mcp-${VERSION}-macos.tar.gz \
-            dist/bh-demo-${VERSION}-iphonesimulator.zip \
+            "dist/$(buttonheist_cli_archive_name "$VERSION")" \
+            "dist/$(buttonheist_mcp_archive_name "$VERSION")" \
+            "dist/$(buttonheist_demo_archive_name "$VERSION")" \
             dist/checksums.txt
 
       - name: Update Homebrew tap
@@ -144,64 +151,20 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
+          source scripts/release-contract.sh
           VERSION="${{ steps.version.outputs.version }}"
+          CLI_ARCHIVE=$(buttonheist_cli_archive_name "$VERSION")
+          MCP_ARCHIVE=$(buttonheist_mcp_archive_name "$VERSION")
 
           # Extract checksums
-          CLI_SHA=$(grep "buttonheist-${VERSION}-macos.tar.gz" dist/checksums.txt | awk '{print $1}')
-          MCP_SHA=$(grep "buttonheist-mcp-${VERSION}-macos.tar.gz" dist/checksums.txt | awk '{print $1}')
+          CLI_SHA=$(grep -F "$CLI_ARCHIVE" dist/checksums.txt | awk '{print $1}')
+          MCP_SHA=$(grep -F "$MCP_ARCHIVE" dist/checksums.txt | awk '{print $1}')
 
-          # Generate formula with hardcoded version and SHA-256 values
-          RELEASE_URL="https://github.com/RoyalPineapple/TheButtonHeist/releases/download/v${VERSION}"
-          cat > /tmp/buttonheist-final.rb << FORMULA
-          class Buttonheist < Formula
-            desc "Give AI agents full programmatic control of iOS apps"
-            homepage "https://github.com/RoyalPineapple/TheButtonHeist"
-            version "${VERSION}"
-
-            url "${RELEASE_URL}/buttonheist-${VERSION}-macos.tar.gz"
-            sha256 "${CLI_SHA}"
-
-            resource "mcp" do
-              url "${RELEASE_URL}/buttonheist-mcp-${VERSION}-macos.tar.gz"
-              sha256 "${MCP_SHA}"
-            end
-
-            depends_on :macos
-            depends_on macos: :sonoma
-
-            def install
-              bin.install "buttonheist"
-              bin.install "ButtonHeistFrameworks" if (buildpath/"ButtonHeistFrameworks").exist?
-              resource("mcp").stage { bin.install "buttonheist-mcp" }
-            end
-
-            def caveats
-              <<~EOS
-                MCP server is installed at:
-                  #{opt_bin}/buttonheist-mcp
-
-                Add to your project's .mcp.json:
-                  {
-                    "mcpServers": {
-                      "buttonheist": {
-                        "command": "#{opt_bin}/buttonheist-mcp",
-                        "args": []
-                      }
-                    }
-                  }
-              EOS
-            end
-
-            test do
-              assert_match version.to_s, shell_output("#{bin}/buttonheist --version")
-            end
-          end
-          FORMULA
-          # Remove leading whitespace from heredoc
-          sed -i '' 's/^          //' /tmp/buttonheist-final.rb
+          # Generate formula from the checked-in template and release contract.
+          scripts/render-homebrew-formula.sh "$VERSION" "$CLI_SHA" "$MCP_SHA" /tmp/buttonheist-final.rb
 
           # Push to tap repo
-          TAP_REPO="RoyalPineapple/homebrew-tap"
+          TAP_REPO="$BUTTONHEIST_TAP_REPO"
           EXISTING_SHA=$(gh api "repos/${TAP_REPO}/contents/Formula/buttonheist.rb" --jq '.sha' 2>/dev/null || true)
           SHA_ARG=()
           if [[ -n "$EXISTING_SHA" ]]; then

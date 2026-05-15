@@ -1,7 +1,8 @@
 # Homebrew formula for Button Heist CLI + MCP server.
 #
-# Source of truth lives here. The release workflow copies this to
-# RoyalPineapple/homebrew-tap with real version and SHA-256 values.
+# Formula shape lives here. Release artifact names and repository constants
+# live in scripts/release-contract.sh. The release workflow renders this into
+# RoyalPineapple/homebrew-tap with real SHA-256 values.
 #
 # Users install with:
 #   brew install RoyalPineapple/tap/buttonheist
