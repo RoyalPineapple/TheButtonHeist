@@ -84,6 +84,23 @@ jobs:
               FAILED=1
             fi
           fi
+
+          PACKAGE_TAG=$(grep 'AccessibilitySnapshotBH' Package.swift | grep -oE 'from: "[0-9]+\.[0-9]+\.[0-9]+"' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+          if [ -n "$PACKAGE_TAG" ]; then
+            TAG_SHA=$(git ls-remote https://github.com/RoyalPineapple/AccessibilitySnapshotBH "refs/tags/$PACKAGE_TAG^{}" | awk '{print $1}')
+            if [ -z "$TAG_SHA" ]; then
+              TAG_SHA=$(git ls-remote https://github.com/RoyalPineapple/AccessibilitySnapshotBH "refs/tags/$PACKAGE_TAG" | awk '{print $1}')
+            fi
+            echo "Package.swift tag: $PACKAGE_TAG"
+            echo "Tagged commit:      $TAG_SHA"
+            if [ -z "$TAG_SHA" ]; then
+              echo "::error::Package.swift references AccessibilitySnapshotBH tag $PACKAGE_TAG, but that tag does not exist."
+              FAILED=1
+            elif [ "$TAG_SHA" != "$SUBMODULE_SHA" ]; then
+              echo "::error::Package.swift tag $PACKAGE_TAG ($TAG_SHA) does not match submodule ($SUBMODULE_SHA). Run: ./scripts/bump-parser.sh"
+              FAILED=1
+            fi
+          fi
           exit $FAILED
 
   spm-package:
