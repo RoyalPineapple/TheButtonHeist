@@ -12,10 +12,11 @@ swift build -c release
 
 ## Tool Surface
 
-ButtonHeistMCP currently exposes 23 tools backed by `TheFence`:
+ButtonHeistMCP currently exposes 24 tools backed by `TheFence`:
 
 - `get_interface`
 - `activate` (accepts optional `action` for increment/decrement/custom actions)
+- `rotor`
 - `type_text`
 - `get_screen`
 - `wait_for`

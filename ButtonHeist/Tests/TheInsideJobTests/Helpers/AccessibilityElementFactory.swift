@@ -28,6 +28,7 @@ extension AccessibilityElement {
         usesDefaultActivationPoint: Bool = true,
         customActions: [CustomAction] = [],
         customContent: [CustomContent] = [],
+        customRotors: [CustomRotor] = [],
         respondsToUserInteraction: Bool = true
     ) -> AccessibilityElement {
         AccessibilityElement(
@@ -43,7 +44,7 @@ extension AccessibilityElement {
             usesDefaultActivationPoint: usesDefaultActivationPoint,
             customActions: customActions,
             customContent: customContent,
-            customRotors: [],
+            customRotors: customRotors,
             accessibilityLanguage: nil,
             respondsToUserInteraction: respondsToUserInteraction
         )
@@ -63,6 +64,7 @@ extension AccessibilityElement {
         usesDefaultActivationPoint: Bool = true,
         customActions: [CustomAction] = [],
         customContent: [CustomContent] = [],
+        customRotors: [CustomRotor] = [],
         respondsToUserInteraction: Bool = true
     ) -> AccessibilityElement {
         make(
@@ -76,6 +78,7 @@ extension AccessibilityElement {
             usesDefaultActivationPoint: usesDefaultActivationPoint,
             customActions: customActions,
             customContent: customContent,
+            customRotors: customRotors,
             respondsToUserInteraction: respondsToUserInteraction
         )
     }

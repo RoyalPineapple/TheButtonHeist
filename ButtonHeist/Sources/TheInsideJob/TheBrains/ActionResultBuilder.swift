@@ -43,6 +43,7 @@ import TheScore
 
     func success(
         scrollSearchResult: ScrollSearchResult? = nil,
+        rotorResult: RotorResult? = nil,
         exploreResult: ExploreResult? = nil
     ) -> ActionResult {
         ActionResult(
@@ -50,7 +51,7 @@ import TheScore
             method: method,
             message: message,
             payload: Self.makePayload(
-                value: value, scrollSearch: scrollSearchResult, explore: exploreResult
+                value: value, scrollSearch: scrollSearchResult, rotor: rotorResult, explore: exploreResult
             ),
             interfaceDelta: interfaceDelta,
             screenName: screenName,
@@ -76,10 +77,11 @@ import TheScore
     }
 
     private static func makePayload(
-        value: String?, scrollSearch: ScrollSearchResult?, explore: ExploreResult?
+        value: String?, scrollSearch: ScrollSearchResult?, rotor: RotorResult?, explore: ExploreResult?
     ) -> ResultPayload? {
         if let value { return .value(value) }
         if let scrollSearch { return .scrollSearch(scrollSearch) }
+        if let rotor { return .rotor(rotor) }
         if let explore { return .explore(explore) }
         return nil
     }

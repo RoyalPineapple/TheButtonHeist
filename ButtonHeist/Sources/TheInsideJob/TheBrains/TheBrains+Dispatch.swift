@@ -11,8 +11,18 @@ extension TheBrains {
     /// refresh → snapshot → execute → settle → delta → result.
     /// Returns the ActionResult for TheInsideJob to send/broadcast.
     func executeCommand(_ message: ClientMessage) async -> ActionResult {
+        let pendingRotorResultToken = stash.preparePendingRotorResult(
+            targetedHeistId: message.pendingRotorResultTargetHeistId
+        )
+        defer {
+            if let pendingRotorResultToken {
+                stash.clearPendingRotorResult(consumedToken: pendingRotorResultToken)
+            }
+        }
+
         switch message {
         case .activate, .increment, .decrement, .performCustomAction,
+             .rotor,
              .editAction, .setPasteboard, .getPasteboard, .resignFirstResponder:
             return await executeAccessibilityAction(message)
 
@@ -60,6 +70,7 @@ extension TheBrains {
             method: result.method,
             message: result.message,
             value: result.value,
+            rotorResult: result.rotorResult,
             before: before
         )
     }
@@ -233,6 +244,10 @@ extension TheBrains {
             return await performInteraction(command: message) { await self.actions.executeDecrement(target) }
         case .performCustomAction(let target):
             return await performInteraction(command: message) { await self.actions.executeCustomAction(target) }
+        case .rotor(let target):
+            return await performInteraction(command: message) {
+                await self.actions.executeRotor(target)
+            }
         case .editAction(let target):
             return await performInteraction(command: message) { await self.actions.executeEditAction(target) }
         case .setPasteboard(let target):
@@ -289,6 +304,7 @@ extension TheBrains {
         case .increment: return .increment
         case .decrement: return .decrement
         case .performCustomAction: return .customAction
+        case .rotor: return .rotor
         case .editAction: return .editAction
         case .setPasteboard: return .setPasteboard
         case .getPasteboard: return .getPasteboard
@@ -316,6 +332,73 @@ extension TheBrains {
         }
     }
 
+}
+
+private extension ClientMessage {
+
+    var pendingRotorResultTargetHeistId: String? {
+        switch self {
+        case .activate(let target),
+             .increment(let target),
+             .decrement(let target):
+            return target.exactHeistId
+        case .performCustomAction(let target):
+            return target.elementTarget.exactHeistId
+        case .rotor(let target):
+            return target.currentHeistId
+        case .touchTap(let target):
+            return target.elementTarget?.exactHeistId
+        case .touchLongPress(let target):
+            return target.elementTarget?.exactHeistId
+        case .touchSwipe(let target):
+            return target.elementTarget?.exactHeistId
+        case .touchDrag(let target):
+            return target.elementTarget?.exactHeistId
+        case .touchPinch(let target):
+            return target.elementTarget?.exactHeistId
+        case .touchRotate(let target):
+            return target.elementTarget?.exactHeistId
+        case .touchTwoFingerTap(let target):
+            return target.elementTarget?.exactHeistId
+        case .typeText(let target):
+            return target.elementTarget?.exactHeistId
+        case .clientHello,
+             .authenticate,
+             .requestInterface,
+             .subscribe,
+             .unsubscribe,
+             .ping,
+             .status,
+             .touchDrawPath,
+             .touchDrawBezier,
+             .editAction,
+             .scroll,
+             .scrollToVisible,
+             .elementSearch,
+             .scrollToEdge,
+             .resignFirstResponder,
+             .setPasteboard,
+             .getPasteboard,
+             .waitForIdle,
+             .waitFor,
+             .waitForChange,
+             .requestScreen,
+             .explore,
+             .startRecording,
+             .stopRecording,
+             .watch:
+            return nil
+        }
+    }
+}
+
+private extension ElementTarget {
+    var exactHeistId: String? {
+        if case .heistId(let heistId) = self {
+            return heistId
+        }
+        return nil
+    }
 }
 
 #endif // DEBUG

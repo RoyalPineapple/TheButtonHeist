@@ -188,6 +188,36 @@ final class ServerMessageTests: XCTestCase {
         XCTAssertEqual(inner["scrollCount"] as? Int, 2)
     }
 
+    func testActionResultPayloadRotorWireShape() throws {
+        let rotor = RotorResult(
+            rotor: "Errors",
+            direction: .next,
+            foundElement: HeistElement(
+                description: "Email",
+                label: "Email",
+                value: nil,
+                identifier: nil,
+                frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
+                actions: []
+            ),
+            textRange: RotorTextRange(text: "@maria", startOffset: 10, endOffset: 16, rangeDescription: "[10..<16]")
+        )
+        let result = ActionResult(success: true, method: .rotor, payload: .rotor(rotor))
+        let data = try JSONEncoder().encode(result)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let payload = try XCTUnwrap(json["payload"] as? [String: Any])
+        XCTAssertEqual(payload["kind"] as? String, "rotor")
+        let inner = try XCTUnwrap(payload["data"] as? [String: Any])
+        XCTAssertEqual(inner["rotor"] as? String, "Errors")
+        XCTAssertEqual(inner["direction"] as? String, "next")
+        XCTAssertNotNil(inner["foundElement"])
+        let textRange = try XCTUnwrap(inner["textRange"] as? [String: Any])
+        XCTAssertEqual(textRange["text"] as? String, "@maria")
+        XCTAssertEqual(textRange["startOffset"] as? Int, 10)
+        XCTAssertEqual(textRange["endOffset"] as? Int, 16)
+        XCTAssertEqual(textRange["rangeDescription"] as? String, "[10..<16]")
+    }
+
     func testActionResultPayloadDecodesFromExplicitJSON() throws {
         let json = """
         {"type":"actionResult","payload":{"success":true,"method":"typeText","payload":{"kind":"value","data":"Hello"}}}

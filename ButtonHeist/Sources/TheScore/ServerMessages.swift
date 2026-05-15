@@ -212,11 +212,13 @@ public enum ResultPayload: Codable, Sendable {
     case value(String)
     case scrollSearch(ScrollSearchResult)
     case explore(ExploreResult)
+    case rotor(RotorResult)
 
     private enum Kind: String, Codable {
         case value
         case scrollSearch
         case explore
+        case rotor
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -234,6 +236,8 @@ public enum ResultPayload: Codable, Sendable {
             self = .scrollSearch(try container.decode(ScrollSearchResult.self, forKey: .data))
         case .explore:
             self = .explore(try container.decode(ExploreResult.self, forKey: .data))
+        case .rotor:
+            self = .rotor(try container.decode(RotorResult.self, forKey: .data))
         }
     }
 
@@ -249,6 +253,9 @@ public enum ResultPayload: Codable, Sendable {
         case .explore(let explore):
             try container.encode(Kind.explore, forKey: .kind)
             try container.encode(explore, forKey: .data)
+        case .rotor(let rotor):
+            try container.encode(Kind.rotor, forKey: .kind)
+            try container.encode(rotor, forKey: .data)
         }
     }
 }
@@ -373,6 +380,48 @@ public struct ExploreResult: Codable, Sendable {
     }
 }
 
+// MARK: - Custom Rotor Result
+
+/// Result from a live rotor step operation.
+public struct RotorResult: Codable, Sendable {
+    public let rotor: String
+    public let direction: RotorDirection
+    public let foundElement: HeistElement?
+    public let textRange: RotorTextRange?
+
+    public init(
+        rotor: String,
+        direction: RotorDirection,
+        foundElement: HeistElement? = nil,
+        textRange: RotorTextRange? = nil
+    ) {
+        self.rotor = rotor
+        self.direction = direction
+        self.foundElement = foundElement
+        self.textRange = textRange
+    }
+}
+
+/// Text range returned by a rotor result.
+public struct RotorTextRange: Codable, Equatable, Sendable {
+    public let text: String?
+    public let startOffset: Int?
+    public let endOffset: Int?
+    public let rangeDescription: String
+
+    public init(
+        text: String? = nil,
+        startOffset: Int? = nil,
+        endOffset: Int? = nil,
+        rangeDescription: String
+    ) {
+        self.text = text
+        self.startOffset = startOffset
+        self.endOffset = endOffset
+        self.rangeDescription = rangeDescription
+    }
+}
+
 // MARK: - Tree Edit Types
 
 /// Stable identity namespace for a node in `Interface.tree`.
@@ -448,6 +497,7 @@ public enum ElementProperty: String, Codable, Sendable, CaseIterable {
     case frame
     case activationPoint
     case customContent
+    case rotors
 
     /// Geometry properties: frame position/size and activation point coordinates.
     public var isGeometry: Bool {
@@ -587,6 +637,7 @@ public enum ActionMethod: String, Codable, Sendable {
     case resignFirstResponder
     case setPasteboard
     case getPasteboard
+    case rotor
     case waitForIdle
     case waitForChange
     case scroll

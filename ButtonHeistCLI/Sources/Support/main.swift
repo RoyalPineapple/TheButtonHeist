@@ -23,6 +23,7 @@ struct ButtonHeistApp: AsyncParsableCommand {
             ListCommand.self,
             GetInterfaceCommand.self,
             ActivateCommand.self,
+            RotorCommand.self,
             TypeCommand.self,
             ScreenshotCommand.self,
             ScrollCommand.self,

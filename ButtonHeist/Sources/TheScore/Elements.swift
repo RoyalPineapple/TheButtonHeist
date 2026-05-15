@@ -615,6 +615,7 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
     public var activationPointY: Double
     public var respondsToUserInteraction: Bool
     public var customContent: [HeistCustomContent]?
+    public var rotors: [HeistRotor]?
     public var actions: [ElementAction]
 
     public init(
@@ -633,6 +634,7 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
         activationPointY: Double = 0,
         respondsToUserInteraction: Bool = true,
         customContent: [HeistCustomContent]? = nil,
+        rotors: [HeistRotor]? = nil,
         actions: [ElementAction]
     ) {
         self.heistId = heistId
@@ -650,9 +652,23 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
         self.activationPointY = activationPointY
         self.respondsToUserInteraction = respondsToUserInteraction
         self.customContent = customContent
+        self.rotors = rotors
         self.actions = actions
     }
 
+}
+
+/// Rotor metadata attached to a HeistElement.
+///
+/// This intentionally describes availability only. Rotor results are discovered
+/// live through a command because rotor movement is contextual and can be
+/// direction-dependent or unbounded.
+public struct HeistRotor: Codable, Equatable, Hashable, Sendable {
+    public var name: String
+
+    public init(name: String) {
+        self.name = name
+    }
 }
 
 /// Custom content attached to a HeistElement (maps to AccessibilityElement.CustomContent)

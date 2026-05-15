@@ -25,6 +25,45 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         }
     }
 
+    func testClientMessageRotorPreviousEncoding() throws {
+        let message = ClientMessage.rotor(RotorTarget(
+            elementTarget: .heistId("form"),
+            rotor: "Errors",
+            direction: .previous,
+            currentHeistId: "email",
+            currentTextRange: TextRangeReference(startOffset: 10, endOffset: 15)
+        ))
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+
+        if case .rotor(let target) = decoded {
+            XCTAssertEqual(target.elementTarget, .heistId("form"))
+            XCTAssertEqual(target.rotor, "Errors")
+            XCTAssertNil(target.rotorIndex)
+            XCTAssertEqual(target.direction, .previous)
+            XCTAssertEqual(target.currentHeistId, "email")
+            XCTAssertEqual(target.currentTextRange, TextRangeReference(startOffset: 10, endOffset: 15))
+        } else {
+            XCTFail("Expected rotor message")
+        }
+    }
+
+    func testClientMessageRotorRejectsNegativeIndex() throws {
+        let json = """
+        {"type":"rotor","payload":{"heistId":"form","rotorIndex":-1}}
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: Data(json.utf8)))
+    }
+
+    func testClientMessageRotorRejectsInvalidCurrentTextRange() throws {
+        let json = """
+        {"type":"rotor","payload":{"heistId":"form","currentTextRange":{"startOffset":8,"endOffset":3}}}
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: Data(json.utf8)))
+    }
+
     func testClientMessageTouchTapEncoding() throws {
         let message = ClientMessage.touchTap(TouchTapTarget(pointX: 100, pointY: 200))
         let data = try JSONEncoder().encode(message)
@@ -208,6 +247,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
             .customAction,
             .editAction,
             .resignFirstResponder,
+            .rotor,
             .waitForIdle,
             .elementNotFound,
             .elementDeallocated,

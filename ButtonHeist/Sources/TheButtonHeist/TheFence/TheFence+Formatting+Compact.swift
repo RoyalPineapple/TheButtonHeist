@@ -83,6 +83,8 @@ extension FenceResponse {
         switch result.payload {
         case .scrollSearch(let search):
             text = Self.compactScrollSearchFound(search, method: result.method)
+        case .rotor(let search):
+            text = Self.compactRotor(search)
         case .value, .explore, .none:
             if let delta = result.interfaceDelta {
                 text = Self.compactDelta(delta, method: result.method.rawValue)
@@ -102,6 +104,20 @@ extension FenceResponse {
                 if let hint = Self.compactExpectationFailureHint(expectation) {
                     text += "\nhint: \(hint)"
                 }
+            }
+        }
+        return text
+    }
+
+    private static func compactRotor(_ search: RotorResult) -> String {
+        var text = "rotor \(search.direction.rawValue): \(search.rotor)"
+        if let element = search.foundElement {
+            text += "\n  \(compactElementLine(element))"
+        }
+        if let range = search.textRange {
+            text += "\n  textRange=\(range.rangeDescription)"
+            if let rangeText = range.text {
+                text += " \"\(rangeText)\""
             }
         }
         return text
@@ -247,6 +263,9 @@ extension FenceResponse {
         let actions = meaningfulActions(element)
         if !actions.isEmpty {
             parts.append("{\(actions.map(\.description).joined(separator: ", "))}")
+        }
+        if let rotors = element.rotors, !rotors.isEmpty {
+            parts.append("rotors={\(rotors.map(\.name).joined(separator: ", "))}")
         }
         if let hint = element.hint, !hint.isEmpty {
             parts.append("hint=\"\(hint)\"")

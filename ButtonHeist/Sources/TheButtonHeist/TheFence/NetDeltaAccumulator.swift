@@ -144,7 +144,7 @@ internal enum NetDeltaAccumulator {
             if fullyApplied {
                 elementsById[update.heistId] = element
             } else {
-                // We couldn't apply every property delta in-place (e.g. actions/customContent
+                // We couldn't apply every property delta in-place (e.g. actions/customContent/rotors
                 // are lossy strings on the wire). Drop the element from `newInterface` so the
                 // snapshot stays internally consistent — callers should read the authoritative
                 // edits.updated list.
@@ -214,7 +214,7 @@ internal enum NetDeltaAccumulator {
             element.activationPointX = point.x
             element.activationPointY = point.y
             return true
-        case .actions, .customContent:
+        case .actions, .customContent, .rotors:
             return false
         }
     }

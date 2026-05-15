@@ -56,6 +56,8 @@ final class TheStash {
     /// post-exploration union) read `liveViewportIds`, not `viewportIds`.
     var currentScreen: Screen = .empty
 
+    private var pendingRotorState: PendingRotorState = .none
+
     /// Hash of the last hierarchy sent to subscribers (for polling comparison).
     /// Read/written by broadcast paths. Kept as a separate field — it tracks
     /// what was *broadcast*, which is orthogonal to what's *current*.
@@ -204,6 +206,41 @@ final class TheStash {
         case noSuchAction
     }
 
+    struct RotorHit {
+        let rotor: String
+        let screenElement: ScreenElement?
+        let textRange: RotorTextRange?
+    }
+
+    private struct PendingRotorResult {
+        let token: UUID
+        let screenElement: ScreenElement
+        /// Strongly retain out-of-tree rotor result objects for exactly one
+        /// follow-up command. `ScreenElement.object` is weak, but VoiceOver-style
+        /// rotor continuation needs the object to remain alive long enough for
+        /// activation or a next/previous step.
+        let object: NSObject
+    }
+
+    private enum PendingRotorState {
+        case none
+        case stored(PendingRotorResult)
+        case active(PendingRotorResult)
+    }
+
+    enum RotorOutcome {
+        case succeeded(RotorHit)
+        case deallocated
+        case noRotors
+        case noSuchRotor(available: [String])
+        case ambiguousRotor(available: [String])
+        case currentItemUnavailable(String)
+        case currentTextRangeUnavailable
+        case noResult(String)
+        case resultTargetUnavailable(String)
+        case resultTargetNotParsed(String)
+    }
+
     struct LiveGeometry {
         let frame: CGRect
         let activationPoint: CGPoint
@@ -269,6 +306,83 @@ final class TheStash {
         return .noSuchAction
     }
 
+    func performRotor(
+        _ target: RotorTarget,
+        direction: RotorDirection,
+        on screenElement: ScreenElement
+    ) -> RotorOutcome {
+        guard let object = screenElement.object else { return .deallocated }
+        let rotors = object.accessibilityCustomRotors ?? []
+        guard !rotors.isEmpty else { return .noRotors }
+
+        let availableNames = rotors.map(\.name)
+        let selection: UIAccessibilityCustomRotor
+        if let rotorIndex = target.rotorIndex {
+            guard rotors.indices.contains(rotorIndex) else {
+                return .noSuchRotor(available: availableNames)
+            }
+            selection = rotors[rotorIndex]
+        } else if let rotorName = target.rotor {
+            let matches = rotors.enumerated().filter { $0.element.name == rotorName }
+            switch matches.count {
+            case 0:
+                return .noSuchRotor(available: availableNames)
+            case 1:
+                selection = matches[0].element
+            default:
+                return .ambiguousRotor(available: availableNames)
+            }
+        } else if rotors.count == 1 {
+            selection = rotors[0]
+        } else {
+            return .ambiguousRotor(available: availableNames)
+        }
+
+        let predicate = UIAccessibilityCustomRotorSearchPredicate()
+        predicate.searchDirection = direction.uiAccessibilityDirection
+        if let currentHeistId = target.currentHeistId {
+            guard let current = resolveTarget(.heistId(currentHeistId)).resolved?.screenElement,
+                  let currentObject = current.object else {
+                return .currentItemUnavailable(currentHeistId)
+            }
+            let currentRange: UITextRange?
+            if let currentTextRange = target.currentTextRange {
+                guard let input = currentObject as? UITextInput,
+                      let range = textRange(from: currentTextRange, in: input) else {
+                    return .currentTextRangeUnavailable
+                }
+                currentRange = range
+            } else {
+                currentRange = nil
+            }
+            predicate.currentItem = UIAccessibilityCustomRotorItemResult(targetElement: currentObject, targetRange: currentRange)
+        } else if target.currentTextRange != nil {
+            return .currentTextRangeUnavailable
+        }
+
+        let rotorName = selection.name
+        guard let result = selection.itemSearchBlock(predicate) else {
+            return .noResult(rotorName)
+        }
+        let resultObject = result.targetElement as? NSObject
+        let textRange = result.targetRange.map { describeTextRange($0, in: resultObject) }
+        guard let resultObject else {
+            return .resultTargetUnavailable(rotorName)
+        }
+        let parsed = parseRotorResultObject(resultObject)
+        if let parsed, !parsed.isInCurrentHierarchy {
+            pendingRotorState = .stored(PendingRotorResult(
+                token: UUID(),
+                screenElement: parsed.screenElement,
+                object: resultObject
+            ))
+        }
+        guard parsed != nil || textRange != nil else {
+            return .resultTargetNotParsed(rotorName)
+        }
+        return .succeeded(RotorHit(rotor: rotorName, screenElement: parsed?.screenElement, textRange: textRange))
+    }
+
     /// Resolve a target to a unique element. Returns `.resolved` on success,
     /// `.notFound` or `.ambiguous` with diagnostics on failure.
     ///
@@ -278,6 +392,9 @@ final class TheStash {
     func resolveTarget(_ target: ElementTarget) -> TargetResolution {
         switch target {
         case .heistId(let heistId):
+            if let pending = activePendingRotorResult(heistId: heistId) {
+                return .resolved(ResolvedTarget(screenElement: pending))
+            }
             guard let entry = screenElement(heistId: heistId, in: .known) else {
                 return .notFound(diagnostics: Diagnostics.heistIdNotFound(
                     heistId,
@@ -484,6 +601,7 @@ final class TheStash {
     /// Clear cached element data (used on suspend).
     func clearCache() {
         currentScreen = .empty
+        clearPendingRotorResult()
         lastHierarchyHash = 0
     }
 
@@ -492,6 +610,7 @@ final class TheStash {
     /// produces a fresh screen.
     func clearScreen() {
         currentScreen = .empty
+        clearPendingRotorResult()
     }
 
     /// TheTripwire handles window access and animation detection.
@@ -508,6 +627,143 @@ final class TheStash {
     func parse() -> Screen? {
         guard let result = burglar.parse() else { return nil }
         return TheBurglar.buildScreen(from: result)
+    }
+
+    /// Return the known `ScreenElement` corresponding to a UIKit accessibility
+    /// object by live object identity.
+    func knownObject(_ object: NSObject) -> ParsedRotorResultObject? {
+        guard let cached = currentScreen.elements.values.first(where: { $0.object === object }) else {
+            return nil
+        }
+        return ParsedRotorResultObject(
+            screenElement: cached,
+            isInCurrentHierarchy: liveViewportIds.contains(cached.heistId)
+        )
+    }
+
+    /// Parse the live hierarchy and return the `ScreenElement` corresponding to
+    /// a UIKit accessibility object. Used by live custom rotor steps so the
+    /// returned rotor target flows through the same parser as `get_interface`.
+    func parseLiveObject(_ object: NSObject) -> ScreenElement? {
+        guard let result = burglar.parse() else { return nil }
+        guard let parsedElement = result.objects.first(where: { pair in
+            pair.value === object
+        })?.key else {
+            return nil
+        }
+        let screen = TheBurglar.buildScreen(from: result)
+        guard let heistId = screen.heistIdByElement[parsedElement] else { return nil }
+        return screen.elements[heistId]
+    }
+
+    struct ParsedRotorResultObject {
+        let screenElement: ScreenElement
+        let isInCurrentHierarchy: Bool
+    }
+
+    func parseRotorResultObject(_ object: NSObject) -> ParsedRotorResultObject? {
+        if let known = knownObject(object) {
+            return known
+        }
+
+        let standaloneElement = burglar.parseObject(object)
+        if let screenElement = parseLiveObject(object) {
+            return ParsedRotorResultObject(screenElement: screenElement, isInCurrentHierarchy: true)
+        }
+
+        guard let element = standaloneElement else { return nil }
+        let heistId = pendingRotorHeistId(for: element)
+        return ParsedRotorResultObject(
+            screenElement: ScreenElement(
+                heistId: heistId,
+                contentSpaceOrigin: nil,
+                element: element,
+                object: object,
+                scrollView: nil
+            ),
+            isInCurrentHierarchy: false
+        )
+    }
+
+    func preparePendingRotorResult(targetedHeistId: String?) -> UUID? {
+        let pending: PendingRotorResult
+        switch pendingRotorState {
+        case .none:
+            return nil
+        case .stored(let result), .active(let result):
+            pending = result
+        }
+        guard targetedHeistId == pending.screenElement.heistId else {
+            clearPendingRotorResult()
+            return nil
+        }
+        pendingRotorState = .active(pending)
+        return pending.token
+    }
+
+    func clearPendingRotorResult() {
+        pendingRotorState = .none
+    }
+
+    func clearPendingRotorResult(consumedToken: UUID) {
+        switch pendingRotorState {
+        case .none:
+            return
+        case .stored(let pending):
+            if pending.token == consumedToken {
+                clearPendingRotorResult()
+            }
+            return
+        case .active(let pending):
+            if pending.token == consumedToken {
+                clearPendingRotorResult()
+            } else {
+                pendingRotorState = .stored(pending)
+            }
+        }
+    }
+
+    private func activePendingRotorResult(heistId: String) -> ScreenElement? {
+        guard case .active(let pendingRotorResult) = pendingRotorState,
+              pendingRotorResult.screenElement.heistId == heistId else {
+            return nil
+        }
+        return pendingRotorResult.screenElement
+    }
+
+    private func pendingRotorHeistId(for element: AccessibilityElement) -> String {
+        let base = Self.IdAssignment.assign([element]).first ?? "element"
+        let root = "rotor_result_\(base)"
+        var candidate = root
+        var suffix = 2
+        while currentScreen.heistIds.contains(candidate) {
+            candidate = "\(root)_\(suffix)"
+            suffix += 1
+        }
+        return candidate
+    }
+
+    private func textRange(from reference: TextRangeReference, in input: UITextInput) -> UITextRange? {
+        guard let start = input.position(from: input.beginningOfDocument, offset: reference.startOffset),
+              let end = input.position(from: input.beginningOfDocument, offset: reference.endOffset) else {
+            return nil
+        }
+        return input.textRange(from: start, to: end)
+    }
+
+    private func describeTextRange(_ range: UITextRange, in object: NSObject?) -> RotorTextRange {
+        guard let input = object as? UITextInput else {
+            return RotorTextRange(rangeDescription: "\(range)")
+        }
+
+        let startOffset = input.offset(from: input.beginningOfDocument, to: range.start)
+        let endOffset = input.offset(from: input.beginningOfDocument, to: range.end)
+        return RotorTextRange(
+            text: input.text(in: range),
+            startOffset: startOffset,
+            endOffset: endOffset,
+            rangeDescription: "[\(startOffset)..<\(endOffset)]"
+        )
     }
 
     /// Parse and commit in one step. Most callers use this — exploration
@@ -553,6 +809,17 @@ final class TheStash {
     func wireTreeWithHash() -> (tree: [InterfaceNode], hash: Int) {
         let tree = wireTree()
         return (tree, tree.hashValue)
+    }
+}
+
+private extension RotorDirection {
+    var uiAccessibilityDirection: UIAccessibilityCustomRotor.Direction {
+        switch self {
+        case .next:
+            return .next
+        case .previous:
+            return .previous
+        }
     }
 }
 

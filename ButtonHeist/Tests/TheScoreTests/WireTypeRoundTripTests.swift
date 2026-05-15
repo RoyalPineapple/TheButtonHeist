@@ -564,6 +564,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertFalse(ElementProperty.traits.isGeometry)
         XCTAssertFalse(ElementProperty.hint.isGeometry)
         XCTAssertFalse(ElementProperty.actions.isGeometry)
+        XCTAssertFalse(ElementProperty.rotors.isGeometry)
     }
 
     func testElementPropertyAllCasesRoundTrip() throws {
@@ -595,7 +596,7 @@ final class WireTypeRoundTripTests: XCTestCase {
             .syntheticTap, .syntheticLongPress, .syntheticSwipe, .syntheticDrag,
             .syntheticPinch, .syntheticRotate, .syntheticTwoFingerTap, .syntheticDrawPath,
             .typeText, .customAction, .editAction, .resignFirstResponder,
-            .setPasteboard, .getPasteboard, .waitForIdle,
+            .setPasteboard, .getPasteboard, .rotor, .waitForIdle,
             .scroll, .scrollToVisible, .elementSearch, .scrollToEdge,
             .waitFor, .explore, .elementNotFound, .elementDeallocated,
         ]

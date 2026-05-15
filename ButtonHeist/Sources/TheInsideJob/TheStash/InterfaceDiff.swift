@@ -26,6 +26,7 @@ private struct ElementStateSignature: Hashable {
     let transientTraits: [HeistTrait]
     let respondsToUserInteraction: Bool
     let customContent: [HeistCustomContent]?
+    let rotors: [HeistRotor]?
     let actions: [ElementAction]?
 }
 
@@ -368,6 +369,7 @@ extension TheStash {
             transientTraits: normalizedTraits(element.traits.filter(AccessibilityPolicy.transientTraits.contains)),
             respondsToUserInteraction: element.respondsToUserInteraction,
             customContent: element.customContent,
+            rotors: element.rotors,
             actions: element.actions
         )
     }
@@ -509,6 +511,17 @@ extension TheStash {
                 property: .customContent,
                 old: formatContent(old.customContent),
                 new: formatContent(new.customContent)
+            ))
+        }
+        if old.rotors != new.rotors {
+            let formatRotors: ([HeistRotor]?) -> String? = { rotors in
+                guard let rotors, !rotors.isEmpty else { return nil }
+                return rotors.map(\.name).joined(separator: ", ")
+            }
+            changes.append(PropertyChange(
+                property: .rotors,
+                old: formatRotors(old.rotors),
+                new: formatRotors(new.rotors)
             ))
         }
         let oldFrame = "\(Int(old.frameX)),\(Int(old.frameY)),\(Int(old.frameWidth)),\(Int(old.frameHeight))"

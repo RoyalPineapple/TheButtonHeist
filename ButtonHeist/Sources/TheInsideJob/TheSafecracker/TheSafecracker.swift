@@ -88,6 +88,7 @@ final class TheSafecracker {
         let message: String?
         let value: String?
         let scrollSearchResult: ScrollSearchResult?
+        let rotorResult: RotorResult?
         /// Structural reason for failure when `success == false`. Lets dispatch code
         /// distinguish tree-unavailable from timeout without parsing `message`
         /// (which is user-facing copy, not a control-flow contract).
@@ -99,6 +100,7 @@ final class TheSafecracker {
             message: String?,
             value: String?,
             scrollSearchResult: ScrollSearchResult? = nil,
+            rotorResult: RotorResult? = nil,
             failureKind: FailureKind? = nil
         ) {
             self.success = success
@@ -106,6 +108,7 @@ final class TheSafecracker {
             self.message = message
             self.value = value
             self.scrollSearchResult = scrollSearchResult
+            self.rotorResult = rotorResult
             self.failureKind = failureKind
         }
 

@@ -250,6 +250,25 @@ extension FenceResponse {
         ]
         if let message = result.message { payload["message"] = message }
         if case .value(let value) = result.payload { payload["value"] = value }
+        if case .rotor(let search) = result.payload {
+            var rotor: [String: Any] = [
+                "name": search.rotor,
+                "direction": search.direction.rawValue,
+            ]
+            if let foundElement = search.foundElement {
+                rotor["foundElement"] = elementDictionary(foundElement, detail: .summary)
+            }
+            if let textRange = search.textRange {
+                var range: [String: Any] = [
+                    "rangeDescription": textRange.rangeDescription,
+                ]
+                if let text = textRange.text { range["text"] = text }
+                if let startOffset = textRange.startOffset { range["startOffset"] = startOffset }
+                if let endOffset = textRange.endOffset { range["endOffset"] = endOffset }
+                rotor["textRange"] = range
+            }
+            payload["rotor"] = rotor
+        }
         if result.animating == true { payload["animating"] = true }
         if let delta = result.interfaceDelta {
             payload["delta"] = deltaDictionary(delta)
@@ -436,6 +455,9 @@ extension FenceResponse {
         let meaningfulActions = Self.meaningfulActions(element)
         if !meaningfulActions.isEmpty {
             payload["actions"] = meaningfulActions.map(\.description)
+        }
+        if let rotors = element.rotors, !rotors.isEmpty {
+            payload["rotors"] = rotors.map(\.name)
         }
         if let label = element.label { payload["label"] = label }
         if let value = element.value { payload["value"] = value }

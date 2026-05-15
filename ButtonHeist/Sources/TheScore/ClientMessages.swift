@@ -69,6 +69,9 @@ public enum ClientMessage: Codable, Sendable {
     /// Perform a custom action on an element
     case performCustomAction(CustomActionTarget)
 
+    /// Move through a custom accessibility rotor.
+    case rotor(RotorTarget)
+
     // MARK: - Touch Gesture Commands
 
     /// Tap at a point or element
@@ -175,6 +178,7 @@ public enum ClientMessage: Codable, Sendable {
         case .increment: return "increment"
         case .decrement: return "decrement"
         case .performCustomAction: return "perform_custom_action"
+        case .rotor: return "rotor"
         case .editAction: return "edit_action"
         case .setPasteboard: return "set_pasteboard"
         case .getPasteboard: return "get_pasteboard"
@@ -218,6 +222,8 @@ public enum ClientMessage: Codable, Sendable {
         case .elementSearch(let t):
             return t.elementTarget
         case .performCustomAction(let t):
+            return t.elementTarget
+        case .rotor(let t):
             return t.elementTarget
         case .editAction:
             return nil
@@ -379,6 +385,104 @@ public struct CustomActionTarget: Codable, Sendable {
     public init(elementTarget: ElementTarget, actionName: String) {
         self.elementTarget = elementTarget
         self.actionName = actionName
+    }
+}
+
+/// Direction for a rotor step.
+public enum RotorDirection: String, Codable, Sendable, CaseIterable {
+    case next
+    case previous
+}
+
+/// Text-range cursor for continuing through rotor results inside one text input.
+public struct TextRangeReference: Codable, Equatable, Hashable, Sendable {
+    public let startOffset: Int
+    public let endOffset: Int
+
+    public init(startOffset: Int, endOffset: Int) {
+        self.startOffset = startOffset
+        self.endOffset = endOffset
+    }
+}
+
+/// Target for moving through a rotor.
+public struct RotorTarget: Sendable {
+    /// Element whose `accessibilityCustomRotors` should be used.
+    public let elementTarget: ElementTarget
+    /// Select a rotor by display/name. When omitted, `rotorIndex` is used.
+    public let rotor: String?
+    /// Select a rotor by zero-based index when the name is omitted or ambiguous.
+    public let rotorIndex: Int?
+    /// Direction to move. Defaults to `.next`.
+    public let direction: RotorDirection?
+    /// Optional heistId for the current rotor item. Use the previous result's
+    /// heistId to continue moving through a rotor like a VoiceOver user.
+    public let currentHeistId: String?
+    /// Optional text-range cursor for continuing through text-range rotor
+    /// results inside the element identified by `currentHeistId`.
+    public let currentTextRange: TextRangeReference?
+
+    public init(
+        elementTarget: ElementTarget,
+        rotor: String? = nil,
+        rotorIndex: Int? = nil,
+        direction: RotorDirection? = nil,
+        currentHeistId: String? = nil,
+        currentTextRange: TextRangeReference? = nil
+    ) {
+        self.elementTarget = elementTarget
+        self.rotor = rotor
+        self.rotorIndex = rotorIndex
+        self.direction = direction
+        self.currentHeistId = currentHeistId
+        self.currentTextRange = currentTextRange
+    }
+
+    public var resolvedDirection: RotorDirection { direction ?? .next }
+}
+
+extension RotorTarget: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case rotor
+        case rotorIndex
+        case direction
+        case currentHeistId
+        case currentTextRange
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        elementTarget = try ElementTarget(from: decoder)
+        rotor = try container.decodeIfPresent(String.self, forKey: .rotor)
+        rotorIndex = try container.decodeIfPresent(Int.self, forKey: .rotorIndex)
+        direction = try container.decodeIfPresent(RotorDirection.self, forKey: .direction)
+        currentHeistId = try container.decodeIfPresent(String.self, forKey: .currentHeistId)
+        currentTextRange = try container.decodeIfPresent(TextRangeReference.self, forKey: .currentTextRange)
+        if let rotorIndex, rotorIndex < 0 {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: container.codingPath,
+                debugDescription: "rotorIndex must be non-negative, got \(rotorIndex)"
+            ))
+        }
+        if let currentTextRange {
+            guard currentTextRange.startOffset >= 0,
+                  currentTextRange.endOffset >= currentTextRange.startOffset else {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: container.codingPath + [CodingKeys.currentTextRange],
+                    debugDescription: "currentTextRange must use non-negative offsets with endOffset >= startOffset"
+                ))
+            }
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        try elementTarget.encode(to: encoder)
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(rotor, forKey: .rotor)
+        try container.encodeIfPresent(rotorIndex, forKey: .rotorIndex)
+        try container.encodeIfPresent(direction, forKey: .direction)
+        try container.encodeIfPresent(currentHeistId, forKey: .currentHeistId)
+        try container.encodeIfPresent(currentTextRange, forKey: .currentTextRange)
     }
 }
 

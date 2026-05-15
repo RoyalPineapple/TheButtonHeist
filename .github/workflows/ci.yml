@@ -284,7 +284,7 @@ jobs:
       - name: Run BH Demo CLI smoke
         # Cold CLI SwiftPM resolution plus simulator install can exceed 5 min
         # on macOS runners; keep this bounded without clipping valid replay runs.
-        timeout-minutes: 8
+        timeout-minutes: 12
         run: |
           set -eo pipefail
           APP="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/BHDemo.app"

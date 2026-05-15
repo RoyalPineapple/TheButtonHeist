@@ -12,7 +12,7 @@ public let buttonHeistServiceType = "_buttonheist._tcp"
 /// the server's and the client's `buttonHeistVersion`. Update this constant
 /// only via `scripts/release.sh`. See `docs/WIRE-PROTOCOL.md` and
 /// `VERSIONING.md` in bh-infra.
-public let buttonHeistVersion = "0.2.32"
+public let buttonHeistVersion = "0.2.33"
 
 /// Explicit wire message discriminator used at JSON boundaries.
 public enum WireMessageType: String, Codable, CaseIterable, Sendable {
@@ -35,6 +35,7 @@ public enum WireMessageType: String, Codable, CaseIterable, Sendable {
     case increment
     case decrement
     case performCustomAction
+    case rotor
     case actionResult
     case touchTap
     case touchLongPress

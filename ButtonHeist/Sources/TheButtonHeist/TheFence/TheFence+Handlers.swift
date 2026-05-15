@@ -331,6 +331,10 @@ extension TheFence {
     // MARK: - Handler: Accessibility Actions
 
     func handleAccessibilityAction(command: Command, args: [String: Any]) async throws -> FenceResponse {
+        if command == .rotor {
+            return try await handleRotor(args)
+        }
+
         guard let target = try elementTarget(args) else {
             return .error("Must specify element (heistId or matcher)")
         }
@@ -373,6 +377,46 @@ extension TheFence {
             return try await sendAction(.performCustomAction(
                 CustomActionTarget(elementTarget: target, actionName: actionName)))
         }
+    }
+
+    private func handleRotor(_ args: [String: Any]) async throws -> FenceResponse {
+        guard let target = try elementTarget(args) else {
+            return .error("Must specify element (heistId or matcher) for rotor")
+        }
+        let directionValue = args.string("direction") ?? RotorDirection.next.rawValue
+        guard let direction = RotorDirection(rawValue: directionValue.lowercased()) else {
+            return .error("Invalid direction '\(directionValue)'. Valid: \(RotorDirection.allCases.map(\.rawValue).joined(separator: ", "))")
+        }
+        if let rotorIndex = args.integer("rotorIndex"), rotorIndex < 0 {
+            return .error("rotorIndex must be non-negative")
+        }
+        let currentTextStartOffset = args.integer("currentTextStartOffset")
+        let currentTextEndOffset = args.integer("currentTextEndOffset")
+        if (currentTextStartOffset == nil) != (currentTextEndOffset == nil) {
+            return .error("currentTextStartOffset and currentTextEndOffset must be provided together")
+        }
+        let currentTextRange: TextRangeReference?
+        if let startOffset = currentTextStartOffset, let endOffset = currentTextEndOffset {
+            guard args.string("currentHeistId") != nil else {
+                return .error("currentHeistId is required when continuing from a text range")
+            }
+            guard startOffset >= 0, endOffset >= startOffset else {
+                return .error("current text range offsets must be non-negative with end >= start")
+            }
+            currentTextRange = TextRangeReference(startOffset: startOffset, endOffset: endOffset)
+        } else {
+            currentTextRange = nil
+        }
+
+        let rotorTarget = RotorTarget(
+            elementTarget: target,
+            rotor: args.string("rotor"),
+            rotorIndex: args.integer("rotorIndex"),
+            direction: direction,
+            currentHeistId: args.string("currentHeistId"),
+            currentTextRange: currentTextRange
+        )
+        return try await sendAction(.rotor(rotorTarget))
     }
 
     // MARK: - Handler: Text Input

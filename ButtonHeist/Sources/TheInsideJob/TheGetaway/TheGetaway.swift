@@ -263,12 +263,15 @@ final class TheGetaway {
 
         // Observation
         case .requestScreen:
+            brains.clearPendingRotorResult()
             handleScreen(requestId: requestId, respond: respond)
         case .waitForIdle(let target):
+            brains.clearPendingRotorResult()
             let result = await brains.executeWaitForIdle(timeout: min(target.timeout ?? 5.0, 60.0))
             sendMessage(.actionResult(result), requestId: requestId, respond: respond)
             brains.recordSentState()
         case .waitForChange(let target):
+            brains.clearPendingRotorResult()
             let result = await brains.executeWaitForChange(
                 timeout: target.resolvedTimeout, expectation: target.expect
             )
@@ -286,8 +289,10 @@ final class TheGetaway {
 
             switch message {
             case .startRecording(let config):
+                brains.clearPendingRotorResult()
                 await handleStartRecording(config, clientId: clientId, requestId: requestId, respond: respond)
             case .stopRecording:
+                brains.clearPendingRotorResult()
                 await handleStopRecording(clientId: clientId, requestId: requestId, respond: respond)
             default:
                 if let stakeout {
@@ -480,6 +485,7 @@ final class TheGetaway {
 
     func sendInterface(requestId: String? = nil, respond: @escaping (Data) -> Void) async {
         _ = await tripwire.waitForAllClear(timeout: 0.5)
+        brains.clearPendingRotorResult()
 
         guard brains.refresh() != nil else {
             sendMessage(.error(ServerError(kind: .general, message: "Could not access root view")), requestId: requestId, respond: respond)

@@ -138,7 +138,7 @@ enum ToolDefinitions {
     ]
 
     static let all: [Tool] = [
-        getInterface, activate, typeText, getScreen,
+        getInterface, activate, rotor, typeText, getScreen,
         waitForChange, waitFor, startRecording, stopRecording, listDevices,
         gesture, editAction, setPasteboard, getPasteboard,
         scroll,
@@ -198,6 +198,42 @@ enum ToolDefinitions {
             "type": "object",
             "properties": .object(elementTargetProperties.merging([
                 "action": ["type": "string", "description": "Named action (e.g. \"increment\", \"decrement\", or a custom action name)"],
+                "expect": expectProperty,
+            ] as [String: Value]) { _, new in new }),
+            "additionalProperties": false,
+        ])
+    )
+
+    static let rotor = Tool(
+        name: "rotor",
+        description: """
+            Move through a rotor exposed by an element. Defaults to next. Use rotors listed by \
+            get_interface to pick rotor or rotorIndex; pass currentHeistId from the previous \
+            object result to continue like a VoiceOver user. For text-range results, also pass \
+            the returned start and end offsets.
+            """,
+        inputSchema: .object([
+            "type": "object",
+            "properties": .object(elementTargetProperties.merging([
+                "rotor": ["type": "string", "description": "Rotor name from the element's rotors list"],
+                "rotorIndex": ["type": "integer", "description": "Zero-based rotor index when names are omitted or ambiguous"],
+                "direction": [
+                    "type": "string",
+                    "enum": stringEnumValues(RotorDirection.self),
+                    "description": "Rotor movement direction. Defaults to next.",
+                ],
+                "currentHeistId": [
+                    "type": "string",
+                    "description": "Optional current item heistId; pass the previous result to continue through a rotor",
+                ],
+                "currentTextStartOffset": [
+                    "type": "integer",
+                    "description": "Current text-range start offset for continuing through text-range rotor results",
+                ],
+                "currentTextEndOffset": [
+                    "type": "integer",
+                    "description": "Current text-range end offset for continuing through text-range rotor results",
+                ],
                 "expect": expectProperty,
             ] as [String: Value]) { _, new in new }),
             "additionalProperties": false,

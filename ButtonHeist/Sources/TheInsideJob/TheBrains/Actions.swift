@@ -184,6 +184,73 @@ final class Actions {
         }
     }
 
+    func executeRotor(_ target: RotorTarget) async -> TheSafecracker.InteractionResult {
+        let direction = target.resolvedDirection
+        let method: ActionMethod = .rotor
+        return await performElementAction(
+            target: target.elementTarget,
+            method: method,
+            requireInteractive: false
+        ) { resolved in
+            switch self.stash.performRotor(target, direction: direction, on: resolved.screenElement) {
+            case .deallocated:
+                return .failure(.elementDeallocated, message: "Element deallocated before rotor step")
+            case .noRotors:
+                return .failure(method, message: "Element has no custom rotors")
+            case .noSuchRotor(let available):
+                return .failure(
+                    method,
+                    message: "Rotor not found. Available: \(available.joined(separator: ", "))"
+                )
+            case .ambiguousRotor(let available):
+                return .failure(
+                    method,
+                    message: "Multiple rotors available: \(available.joined(separator: ", ")). Specify rotor or rotorIndex."
+                )
+            case .currentItemUnavailable(let heistId):
+                return .failure(.elementNotFound, message: "Current rotor item '\(heistId)' is not available")
+            case .currentTextRangeUnavailable:
+                return .failure(method, message: "Current rotor text range is not available")
+            case .noResult(let rotorName):
+                return .failure(
+                    method,
+                    message: "Rotor '\(rotorName)' returned no \(direction.rawValue) result"
+                )
+            case .resultTargetUnavailable(let rotorName):
+                return .failure(
+                    method,
+                    message: "Rotor '\(rotorName)' returned a result without an accessibility target"
+                )
+            case .resultTargetNotParsed(let rotorName):
+                return .failure(
+                    method,
+                    message: "Rotor '\(rotorName)' returned a target outside the parsed accessibility hierarchy"
+                )
+            case .succeeded(let hit):
+                let found = hit.screenElement.map(TheStash.WireConversion.toWire)
+                var message = "Rotor '\(hit.rotor)' found"
+                if let found {
+                    message += " \(found.heistId)"
+                }
+                if let textRange = hit.textRange {
+                    message += " text range \(textRange.rangeDescription)"
+                }
+                return TheSafecracker.InteractionResult(
+                    success: true,
+                    method: method,
+                    message: message,
+                    value: nil,
+                    rotorResult: RotorResult(
+                        rotor: hit.rotor,
+                        direction: direction,
+                        foundElement: found,
+                        textRange: hit.textRange
+                    )
+                )
+            }
+        }
+    }
+
     // MARK: - Edit / Pasteboard / Responder
 
     func executeEditAction(_ target: EditActionTarget) async -> TheSafecracker.InteractionResult {

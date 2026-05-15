@@ -270,6 +270,9 @@ public enum FenceResponse {
         if !element.actions.isEmpty {
             output += "       Actions: \(element.actions.map(\.description).joined(separator: ", "))\n"
         }
+        if let rotors = element.rotors, !rotors.isEmpty {
+            output += "       Rotors: \(rotors.map(\.name).joined(separator: ", "))\n"
+        }
         output += "       Frame: (\(Int(element.frameX)), \(Int(element.frameY))) \(Int(element.frameWidth))×\(Int(element.frameHeight))\n"
         return output
     }
@@ -279,6 +282,18 @@ public enum FenceResponse {
             var output = "✓ \(result.method.rawValue)"
             if case .value(let value) = result.payload {
                 output += "  value: \"\(value)\""
+            }
+            if case .rotor(let search) = result.payload {
+                output += "  rotor: \"\(search.rotor)\" \(search.direction.rawValue)"
+                if let foundElement = search.foundElement {
+                    output += " → \(foundElement.heistId)"
+                }
+                if let textRange = search.textRange {
+                    output += "  range: \(textRange.rangeDescription)"
+                    if let text = textRange.text {
+                        output += " \"\(text)\""
+                    }
+                }
             }
             if let delta = result.interfaceDelta {
                 output += "  \(formatDelta(delta))"

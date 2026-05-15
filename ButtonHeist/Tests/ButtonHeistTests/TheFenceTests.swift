@@ -72,6 +72,7 @@ final class TheFenceTests: XCTestCase {
             .increment: "increment",
             .decrement: "decrement",
             .performCustomAction: "perform_custom_action",
+            .rotor: "rotor",
             .typeText: "type_text",
             .editAction: "edit_action",
             .setPasteboard: "set_pasteboard",
@@ -737,6 +738,7 @@ final class TheFenceTests: XCTestCase {
         XCTAssertFalse(ElementProperty.traits.isGeometry)
         XCTAssertFalse(ElementProperty.hint.isGeometry)
         XCTAssertFalse(ElementProperty.actions.isGeometry)
+        XCTAssertFalse(ElementProperty.rotors.isGeometry)
     }
 
     // MARK: - JSON Delta Geometry Filtering

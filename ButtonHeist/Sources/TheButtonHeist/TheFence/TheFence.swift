@@ -927,7 +927,7 @@ public final class TheFence {
             return try await handleScrollAction(command: command, args: args)
         case .waitFor:
             return try await handleWaitFor(args)
-        case .activate, .increment, .decrement, .performCustomAction:
+        case .activate, .increment, .decrement, .performCustomAction, .rotor:
             return try await handleAccessibilityAction(command: command, args: args)
         case .typeText:
             return try await handleTypeText(args)
