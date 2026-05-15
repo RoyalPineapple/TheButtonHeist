@@ -22,7 +22,7 @@ Everything else builds on this core loop.
 
 ## Why So Many Commands?
 
-The `TheFence.Command` enum has 42 cases, the CLI has grouped top-level subcommands, and the MCP exposes 23 tools. This is driven by **iOS interaction coverage** — each command maps to a distinct iOS capability (accessibility activation, gesture types, scroll modes, text editing, recording, etc.).
+The `TheFence.Command` enum has 43 cases, the CLI has grouped top-level subcommands, and the MCP exposes 24 tools. This is driven by **iOS interaction coverage** — each command maps to a distinct iOS capability (accessibility activation, gesture types, scroll modes, text editing, recording, etc.).
 
 Both interfaces use the same **grouping strategy**: gesture variants fold into one surface (`gesture` in MCP, `touch` in CLI), scroll variants fold into `scroll`, and edit menu operations fold into `edit_action`. Common operations like `activate`, `type_text`, and `get_interface` stay top-level in both.
 

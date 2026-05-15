@@ -580,7 +580,7 @@ Structured reason for why a connection was closed. Passed via `ConnectionEvent.d
 
 ### Overview
 
-MCP server exposing 23 purpose-built tools backed by TheFence. `activate` is the primary interaction tool — it uses the activation-first pattern (accessibility activation, then synthetic tap fallback). Pass `action` to `activate` to perform named actions (increment, decrement, or custom actions). Low-level touch gestures are grouped under `gesture` as escape hatches. Build with:
+MCP server exposing 24 purpose-built tools backed by TheFence. `activate` is the primary interaction tool — it uses the activation-first pattern (accessibility activation, then synthetic tap fallback). Pass `action` to `activate` to perform named actions (increment, decrement, or custom actions). Low-level touch gestures are grouped under `gesture` as escape hatches. Build with:
 
 ```bash
 cd ButtonHeistMCP && swift build -c release
@@ -592,6 +592,7 @@ cd ButtonHeistMCP && swift build -c release
 |------|-------------|----------------|
 | `get_interface` | Get UI element hierarchy. Pass `full: true` to include off-screen elements in scroll views. | `full`, `label`, `identifier`, `value`, `traits`, `excludeTraits` (optional filtering) |
 | `activate` | **Primary interaction tool.** Activate a UI element (activation-first pattern). Pass `action` for named actions (increment, decrement, custom) | `heistId`, `label`, `identifier`, `value`, `traits`, `excludeTraits`, `action`, `expect` |
+| `rotor` | Move through an accessibility rotor, defaulting to next | element target, `rotor`/`rotorIndex`, `direction`, `currentHeistId`, text-range cursor offsets, `expect` |
 | `type_text` | Type text / delete characters | `text`, `deleteCount`, `clearFirst`, `heistId`, `label`, `identifier`, `value`, `traits`, `excludeTraits`, `expect` |
 | `get_screen` | Capture PNG screenshot | `output` (file path, optional) |
 | `wait_for_change` | Wait for UI to change, optionally matching an expectation | `expect`, `timeout` |
@@ -1433,7 +1434,7 @@ A single recorded interaction event captured during a Stakeout recording.
 ## CLI Reference
 
 **Location**: `ButtonHeistCLI/`
-**Version**: 0.2.32
+**Version**: 0.2.33
 
 All subcommands that connect to a device accept these connection options:
 

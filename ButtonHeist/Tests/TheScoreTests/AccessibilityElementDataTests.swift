@@ -81,6 +81,23 @@ final class HeistElementTests: XCTestCase {
         XCTAssertNil(decoded.identifier)
     }
 
+    func testElementWithRotorsRoundTrips() throws {
+        let element = HeistElement(
+            description: "Validation Results",
+            label: "Validation Results",
+            value: nil,
+            identifier: nil,
+            frameX: 0, frameY: 0, frameWidth: 320, frameHeight: 400,
+            rotors: [HeistRotor(name: "Errors"), HeistRotor(name: "Warnings")],
+            actions: []
+        )
+
+        let data = try JSONEncoder().encode(element)
+        let decoded = try JSONDecoder().decode(HeistElement.self, from: data)
+
+        XCTAssertEqual(decoded.rotors, element.rotors)
+    }
+
     // MARK: - Helpers
 
     private func makeElement(label: String) -> HeistElement {

@@ -68,6 +68,10 @@ extension TheStash {
                     HeistCustomContent(label: $0.label, value: $0.value, isImportant: $0.isImportant)
                 }
             }(),
+            rotors: {
+                let valid = element.customRotors.filter { !$0.name.isEmpty }
+                return valid.isEmpty ? nil : valid.map { HeistRotor(name: $0.name) }
+            }(),
             actions: buildActions(for: element, object: object)
         )
     }

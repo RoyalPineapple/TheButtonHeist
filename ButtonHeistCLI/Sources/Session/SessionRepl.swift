@@ -216,6 +216,8 @@ nonisolated extension ReplSession {
           increment <id>              Increment (e.g. slider)
           decrement <id>              Decrement
           perform_custom_action <id>  Perform named custom action
+          rotor <id> rotor=Errors     Move to next rotor result
+          rotor previous <id>         Move to previous rotor result
           type "hello world"          Type text
           copy / paste / cut          Edit actions
           select / select_all         Selection actions
@@ -267,7 +269,7 @@ nonisolated extension ReplSession {
     ]
 
     private static let directionCommands: Set<String> = [
-        TheFence.Command.swipe.rawValue, TheFence.Command.scroll.rawValue,
+        TheFence.Command.swipe.rawValue, TheFence.Command.scroll.rawValue, TheFence.Command.rotor.rawValue,
     ]
 
     static func parseHumanInput(_ line: String) -> [String: Any] {

@@ -314,6 +314,17 @@ extension TheFence.Command {
                 expect,
             ]
 
+        case .rotor:
+            return target + [
+                .init(key: "rotor", type: .string),
+                .init(key: "rotorIndex", type: .integer),
+                .init(key: "direction", type: .string),
+                .init(key: "currentHeistId", type: .string),
+                .init(key: "currentTextStartOffset", type: .integer),
+                .init(key: "currentTextEndOffset", type: .integer),
+                expect,
+            ]
+
         // MARK: Text / keyboard
         case .typeText:
             return target + [

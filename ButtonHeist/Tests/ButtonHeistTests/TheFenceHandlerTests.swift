@@ -645,6 +645,87 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testRotorMissingElement() async {
+        await assertValidationError(
+            ["command": "rotor", "rotor": "Errors"],
+            contains: "Must specify element"
+        )
+    }
+
+    @ButtonHeistActor
+    func testRotorNegativeIndex() async {
+        await assertValidationError(
+            ["command": "rotor", "identifier": "myElement", "rotorIndex": -1],
+            contains: "rotorIndex must be non-negative"
+        )
+    }
+
+    @ButtonHeistActor
+    func testRotorInvalidDirection() async {
+        await assertValidationError(
+            ["command": "rotor", "identifier": "myElement", "direction": "sideways"],
+            contains: "Invalid direction"
+        )
+    }
+
+    @ButtonHeistActor
+    func testRotorTextRangeRequiresBothOffsets() async {
+        await assertValidationError(
+            ["command": "rotor", "identifier": "myElement", "currentTextStartOffset": 4],
+            contains: "currentTextStartOffset and currentTextEndOffset"
+        )
+    }
+
+    @ButtonHeistActor
+    func testRotorTextRangeRequiresCurrentHeistId() async {
+        await assertValidationError(
+            [
+                "command": "rotor",
+                "identifier": "myElement",
+                "currentTextStartOffset": 4,
+                "currentTextEndOffset": 8,
+            ],
+            contains: "currentHeistId is required"
+        )
+    }
+
+    @ButtonHeistActor
+    func testRotorRejectsInvalidTextRangeOffsets() async {
+        await assertValidationError(
+            [
+                "command": "rotor",
+                "identifier": "myElement",
+                "currentHeistId": "notes",
+                "currentTextStartOffset": 8,
+                "currentTextEndOffset": 4,
+            ],
+            contains: "current text range offsets"
+        )
+    }
+
+    @ButtonHeistActor
+    func testRotorValidPassesValidation() async {
+        await assertPassesValidation(
+            ["command": "rotor", "identifier": "myElement", "rotor": "Errors"]
+        )
+    }
+
+    @ButtonHeistActor
+    func testRotorPreviousValidTextRangeCursorPassesValidation() async {
+        await assertPassesValidation(
+            [
+                "command": "rotor",
+                "identifier": "myElement",
+                "rotor": "Mentions",
+                "direction": "previous",
+                "currentHeistId": "notes",
+                "currentTextStartOffset": 4,
+                "currentTextEndOffset": 10,
+            ]
+        )
+    }
+
+    @ButtonHeistActor
     func testActivateWithCustomActionDispatches() async {
         await assertPassesValidation(
             ["command": "activate", "identifier": "myElement", "action": "Delete"]

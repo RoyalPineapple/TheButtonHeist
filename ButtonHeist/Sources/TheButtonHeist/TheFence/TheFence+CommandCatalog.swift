@@ -29,6 +29,7 @@ extension TheFence {
         case increment
         case decrement
         case performCustomAction = "perform_custom_action"
+        case rotor
         case typeText = "type_text"
         case editAction = "edit_action"
         case setPasteboard = "set_pasteboard"

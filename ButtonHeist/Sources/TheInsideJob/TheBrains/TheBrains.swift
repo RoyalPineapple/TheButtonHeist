@@ -56,6 +56,10 @@ final class TheBrains {
         stash.refresh()
     }
 
+    func clearPendingRotorResult() {
+        stash.clearPendingRotorResult()
+    }
+
     func treeUnavailableResult(method: ActionMethod) -> ActionResult {
         var builder = ActionResultBuilder(method: method, screenName: stash.lastScreenName, screenId: stash.lastScreenId)
         builder.message = TheBrains.treeUnavailableMessage
@@ -96,6 +100,7 @@ final class TheBrains {
         method: ActionMethod,
         message: String? = nil,
         value: String? = nil,
+        rotorResult: RotorResult? = nil,
         errorKind: ErrorKind? = nil,
         before: BeforeState
     ) async -> ActionResult {
@@ -186,7 +191,7 @@ final class TheBrains {
         builder.settled = didSettle
         builder.settleTimeMs = settleMs
 
-        return builder.success()
+        return builder.success(rotorResult: rotorResult)
     }
 
     // MARK: - Settle Outcome Helpers

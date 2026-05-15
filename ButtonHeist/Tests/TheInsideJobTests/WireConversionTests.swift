@@ -53,6 +53,7 @@ final class WireConverterTests: XCTestCase {
         activationPointX: Double = 0,
         activationPointY: Double = 0,
         customContent: [AccessibilityElement.CustomContent] = [],
+        customRotors: [AccessibilityElement.CustomRotor] = [],
         respondsToUserInteraction: Bool = true
     ) -> AccessibilityElement {
         let frame = CGRect(x: frameX, y: frameY, width: frameWidth, height: frameHeight)
@@ -67,6 +68,7 @@ final class WireConverterTests: XCTestCase {
             activationPoint: activationPoint,
             usesDefaultActivationPoint: activationPointX == 0 && activationPointY == 0,
             customContent: customContent,
+            customRotors: customRotors,
             respondsToUserInteraction: respondsToUserInteraction
         )
     }
@@ -85,6 +87,7 @@ final class WireConverterTests: XCTestCase {
         activationPointX: Double = 0,
         activationPointY: Double = 0,
         customContent: [AccessibilityElement.CustomContent] = [],
+        customRotors: [AccessibilityElement.CustomRotor] = [],
         respondsToUserInteraction: Bool = true,
         object: NSObject? = nil
     ) -> Screen.ScreenElement {
@@ -97,6 +100,7 @@ final class WireConverterTests: XCTestCase {
                 frameWidth: frameWidth, frameHeight: frameHeight,
                 activationPointX: activationPointX, activationPointY: activationPointY,
                 customContent: customContent,
+                customRotors: customRotors,
                 respondsToUserInteraction: respondsToUserInteraction
             ),
             object: object,
@@ -848,6 +852,64 @@ final class WireConverterTests: XCTestCase {
         let element = makeElement(label: "File", customContent: content)
         let wire = WireConversion.convert(element)
         XCTAssertNil(wire.customContent)
+    }
+
+    // MARK: - Custom Rotor Conversion
+
+    func testCustomRotorsConvertedToWire() {
+        let element = makeElement(
+            label: "Validation Results",
+            customRotors: [
+                .init(name: "Errors"),
+                .init(name: "Warnings"),
+            ]
+        )
+
+        let wire = WireConversion.convert(element)
+
+        XCTAssertEqual(wire.rotors, [
+            HeistRotor(name: "Errors"),
+            HeistRotor(name: "Warnings"),
+        ])
+    }
+
+    func testEmptyCustomRotorNamesFilteredOut() {
+        let element = makeElement(
+            label: "Validation Results",
+            customRotors: [
+                .init(name: ""),
+                .init(name: "Errors"),
+            ]
+        )
+
+        let wire = WireConversion.convert(element)
+
+        XCTAssertEqual(wire.rotors, [HeistRotor(name: "Errors")])
+    }
+
+    func testNoCustomRotorsConvertedToNil() {
+        let element = makeElement(label: "Validation Results")
+        let wire = WireConversion.convert(element)
+        XCTAssertNil(wire.rotors)
+    }
+
+    func testCustomRotorChangeProducesUpdate() {
+        let before = [makeScreenElement(heistId: "results", label: "Validation Results")]
+        let after = [makeScreenElement(
+            heistId: "results",
+            label: "Validation Results",
+            customRotors: [.init(name: "Errors")]
+        )]
+
+        let delta = InterfaceDiff.computeDelta(
+            before: before, after: after, afterTree: [], isScreenChange: false
+        )
+        XCTAssertFalse(delta.isScreenChanged)
+        if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
+        let change = delta.testEdits.updatedOptional?.first?.changes.first
+        XCTAssertEqual(change?.property, .rotors)
+        XCTAssertNil(change?.old)
+        XCTAssertEqual(change?.new, "Errors")
     }
 
     // MARK: - Delta: Custom Content Changes

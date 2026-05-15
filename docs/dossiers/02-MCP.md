@@ -55,33 +55,34 @@ graph TD
     Idle --> TheFence
 ```
 
-## Full Tool List (23 tools)
+## Full Tool List (24 tools)
 
 | # | Tool Name | Type | Key Parameters |
 |---|-----------|------|---------------|
 | 1 | `get_interface` | direct | `detail` (`"summary"`/`"full"`), `elements` (heistId filter array) |
 | 2 | `activate` | direct | element target, optional `action` for increment/decrement/custom |
-| 3 | `type_text` | direct | `text`, `clearFirst`, `deleteCount` |
-| 4 | `get_screen` | direct | `output` (file path, optional) |
-| 5 | `wait_for_change` | direct | `expect`, `timeout` |
-| 6 | `wait_for` | direct | element match fields, `absent`, `timeout` |
-| 7 | `start_recording` | direct | `fps`, `scale`, `inactivity_timeout`, `max_duration` |
-| 8 | `stop_recording` | direct | `output` (file path) |
-| 9 | `list_devices` | direct | (no params) |
-| 10 | `gesture` | grouped | `type` enum → underlying command (swipe, one_finger_tap, drag, long_press, pinch, rotate, two_finger_tap, draw_path, draw_bezier) |
-| 11 | `edit_action` | hybrid | `action`: copy/paste/cut/select/selectAll, or `"dismiss"` → routes to dismiss_keyboard |
-| 12 | `set_pasteboard` | direct | `text` |
-| 13 | `get_pasteboard` | direct | (no params) |
-| 14 | `scroll` | hybrid | `mode`: page (default), to_visible, search, to_edge; `direction`, `edge` |
-| 15 | `run_batch` | direct | `steps` array, `policy` |
-| 16 | `get_session_state` | direct | (no params) |
-| 17 | `connect` | direct | `target`, `device`, `token` |
-| 18 | `list_targets` | direct | (no params) |
-| 19 | `get_session_log` | direct | (no params) |
-| 20 | `archive_session` | direct | `delete_source` |
-| 21 | `start_heist` | direct | `name` |
-| 22 | `stop_heist` | direct | (no params) |
-| 23 | `play_heist` | direct | `name` |
+| 3 | `rotor` | direct | element target, `rotor`/`rotorIndex`, `direction`, `currentHeistId`, text-range cursor offsets |
+| 4 | `type_text` | direct | `text`, `clearFirst`, `deleteCount` |
+| 5 | `get_screen` | direct | `output` (file path, optional) |
+| 6 | `wait_for_change` | direct | `expect`, `timeout` |
+| 7 | `wait_for` | direct | element match fields, `absent`, `timeout` |
+| 8 | `start_recording` | direct | `fps`, `scale`, `inactivity_timeout`, `max_duration` |
+| 9 | `stop_recording` | direct | `output` (file path) |
+| 10 | `list_devices` | direct | (no params) |
+| 11 | `gesture` | grouped | `type` enum -> underlying command (swipe, one_finger_tap, drag, long_press, pinch, rotate, two_finger_tap, draw_path, draw_bezier) |
+| 12 | `edit_action` | hybrid | `action`: copy/paste/cut/select/selectAll, or `"dismiss"` -> routes to dismiss_keyboard |
+| 13 | `set_pasteboard` | direct | `text` |
+| 14 | `get_pasteboard` | direct | (no params) |
+| 15 | `scroll` | hybrid | `mode`: page (default), to_visible, search, to_edge; `direction`, `edge` |
+| 16 | `run_batch` | direct | `steps` array, `policy` |
+| 17 | `get_session_state` | direct | (no params) |
+| 18 | `connect` | direct | `target`, `device`, `token` |
+| 19 | `list_targets` | direct | (no params) |
+| 20 | `get_session_log` | direct | (no params) |
+| 21 | `archive_session` | direct | `delete_source` |
+| 22 | `start_heist` | direct | `name` |
+| 23 | `stop_heist` | direct | (no params) |
+| 24 | `play_heist` | direct | `name` |
 
 ### Grouped and hybrid tools
 
