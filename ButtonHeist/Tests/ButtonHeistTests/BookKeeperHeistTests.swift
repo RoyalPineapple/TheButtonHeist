@@ -69,7 +69,7 @@ final class BookKeeperHeistTests: XCTestCase {
         bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Go", "traits": ["button"]], interfaceCache: [:])
         let script = try bookKeeper.stopHeistRecording()
 
-        XCTAssertEqual(script.version, 1)
+        XCTAssertEqual(script.version, HeistPlayback.currentVersion)
         XCTAssertEqual(script.app, "com.example.app")
         XCTAssertEqual(script.steps.count, 1)
         XCTAssertEqual(script.steps[0].command, "activate")
@@ -415,7 +415,7 @@ final class BookKeeperHeistTests: XCTestCase {
         try TheBookKeeper.writeHeist(script, to: filePath)
 
         let loaded = try TheBookKeeper.readHeist(from: filePath)
-        XCTAssertEqual(loaded.version, 1)
+        XCTAssertEqual(loaded.version, HeistPlayback.currentVersion)
         XCTAssertEqual(loaded.app, "com.example.app")
         XCTAssertEqual(loaded.steps.count, 2)
         XCTAssertEqual(loaded.steps[0].command, "activate")

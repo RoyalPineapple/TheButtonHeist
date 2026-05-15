@@ -1,389 +1,408 @@
 {
-  "app" : "com.buttonheist.testapp",
-  "recorded" : "2026-04-03T18:08:55Z",
-  "steps" : [
+  "version": 2,
+  "app": "com.buttonheist.testapp",
+  "recorded": "2026-04-03T18:08:55Z",
+  "steps": [
     {
-      "command" : "activate",
-      "expect" : "screen_changed",
-      "label" : "Todo List"
+      "command": "activate",
+      "expect": {
+        "type": "screen_changed"
+      },
+      "label": "Todo List"
     },
     {
-      "command" : "activate",
-      "expect" : [
-        {
-          "elementUpdated" : {
-            "newValue" : "Completed",
-            "property" : "value"
+      "command": "activate",
+      "expect": {
+        "type": "compound",
+        "expectations": [
+          {
+            "type": "element_updated",
+            "newValue": "Completed",
+            "property": "value"
+          },
+          {
+            "type": "element_appeared",
+            "matcher": {
+              "label": "8 items remaining",
+              "traits": [
+                "staticText"
+              ]
+            }
           }
-        },
-        {
-          "elementAppeared" : {
-            "label" : "8 items remaining",
-            "traits" : [
-              "staticText"
-            ]
-          }
-        }
-      ],
-      "label" : "Review PR, High priority",
-      "traits" : [
+        ]
+      },
+      "label": "Review PR, High priority",
+      "traits": [
         "button"
       ]
     },
     {
-      "command" : "activate",
-      "expect" : [
-        {
-          "elementUpdated" : {
-            "newValue" : "Completed",
-            "property" : "value"
+      "command": "activate",
+      "expect": {
+        "type": "compound",
+        "expectations": [
+          {
+            "type": "element_updated",
+            "newValue": "Completed",
+            "property": "value"
+          },
+          {
+            "type": "element_appeared",
+            "matcher": {
+              "label": "7 items remaining",
+              "traits": [
+                "staticText"
+              ]
+            }
           }
-        },
-        {
-          "elementAppeared" : {
-            "label" : "7 items remaining",
-            "traits" : [
-              "staticText"
-            ]
-          }
-        }
-      ],
-      "label" : "Fix bug, Low priority",
-      "traits" : [
+        ]
+      },
+      "label": "Fix bug, Low priority",
+      "traits": [
         "button"
       ]
     },
     {
-      "command" : "activate",
-      "expect" : "screen_changed",
-      "traits" : [
+      "command": "activate",
+      "expect": {
+        "type": "screen_changed"
+      },
+      "traits": [
         "textEntry"
       ]
     },
     {
-      "command" : "type_text",
-      "expect" : [
-        {
-          "elementUpdated" : {
-            "newValue" : "button",
-            "property" : "traits"
+      "command": "type_text",
+      "expect": {
+        "type": "compound",
+        "expectations": [
+          {
+            "type": "element_updated",
+            "newValue": "button",
+            "property": "traits"
+          },
+          {
+            "type": "element_appeared",
+            "matcher": {
+              "traits": [
+                "textEntry",
+                "isEditing"
+              ],
+              "value": "Ship release"
+            }
           }
-        },
-        {
-          "elementAppeared" : {
-            "traits" : [
-              "textEntry",
-              "isEditing"
-            ],
-            "value" : "Ship release"
-          }
-        }
-      ],
-      "text" : "Ship release"
+        ]
+      },
+      "text": "Ship release"
     },
     {
-      "command" : "activate",
-      "expect" : [
-        {
-          "elementUpdated" : {
-            "newValue" : "button, notEnabled",
-            "property" : "traits"
+      "command": "activate",
+      "expect": {
+        "type": "compound",
+        "expectations": [
+          {
+            "type": "element_updated",
+            "newValue": "button, notEnabled",
+            "property": "traits"
+          },
+          {
+            "type": "element_appeared",
+            "matcher": {
+              "label": "8 items remaining",
+              "traits": [
+                "staticText"
+              ]
+            }
+          },
+          {
+            "type": "element_appeared",
+            "matcher": {
+              "traits": [
+                "textEntry",
+                "isEditing"
+              ],
+              "value": "What needs to be done?"
+            }
           }
-        },
-        {
-          "elementAppeared" : {
-            "label" : "8 items remaining",
-            "traits" : [
-              "staticText"
-            ]
-          }
-        },
-        {
-          "elementAppeared" : {
-            "traits" : [
-              "textEntry",
-              "isEditing"
-            ],
-            "value" : "What needs to be done?"
-          }
-        }
-      ],
-      "label" : "Add",
-      "traits" : [
+        ]
+      },
+      "label": "Add",
+      "traits": [
         "button"
       ]
     },
     {
-      "command" : "activate",
-      "expect" : [
-        {
-          "elementUpdated" : {
-            "newValue" : "Active",
-            "property" : "value"
+      "command": "activate",
+      "expect": {
+        "type": "compound",
+        "expectations": [
+          {
+            "type": "element_updated",
+            "newValue": "Active",
+            "property": "value"
+          },
+          {
+            "type": "element_appeared",
+            "matcher": {
+              "label": "Personal",
+              "traits": [
+                "staticText",
+                "header"
+              ]
+            }
+          },
+          {
+            "type": "element_appeared",
+            "matcher": {
+              "label": "Ship release, Medium priority",
+              "traits": [
+                "button",
+                "popupButton"
+              ],
+              "value": "Active"
+            }
+          },
+          {
+            "type": "element_appeared",
+            "matcher": {
+              "label": "Fix bug, Medium priority",
+              "traits": [
+                "button",
+                "popupButton"
+              ],
+              "value": "Active"
+            }
+          },
+          {
+            "type": "element_appeared",
+            "matcher": {
+              "label": "Buy groceries, High priority",
+              "traits": [
+                "button",
+                "popupButton"
+              ],
+              "value": "Active"
+            }
           }
-        },
-        {
-          "elementAppeared" : {
-            "label" : "Personal",
-            "traits" : [
-              "staticText",
-              "header"
-            ]
-          }
-        },
-        {
-          "elementAppeared" : {
-            "label" : "Ship release, Medium priority",
-            "traits" : [
-              "button",
-              "popupButton"
-            ],
-            "value" : "Active"
-          }
-        },
-        {
-          "elementAppeared" : {
-            "label" : "Fix bug, Medium priority",
-            "traits" : [
-              "button",
-              "popupButton"
-            ],
-            "value" : "Active"
-          }
-        },
-        {
-          "elementAppeared" : {
-            "label" : "Buy groceries, High priority",
-            "traits" : [
-              "button",
-              "popupButton"
-            ],
-            "value" : "Active"
-          }
-        }
-      ],
-      "label" : "Active"
+        ]
+      },
+      "label": "Active"
     },
     {
-      "command" : "activate",
-      "expect" : "screen_changed",
-      "label" : "ButtonHeist Demo",
-      "traits" : [
+      "command": "activate",
+      "expect": {
+        "type": "screen_changed"
+      },
+      "label": "ButtonHeist Demo",
+      "traits": [
         "button",
         "backButton"
       ]
     },
     {
-      "command" : "activate",
-      "expect" : "screen_changed",
-      "label" : "Calculator"
-    },
-    {
-      "command" : "activate",
-      "expect" : {
-        "elementUpdated" : {
-          "newValue" : "1",
-          "property" : "label"
-        }
+      "command": "activate",
+      "expect": {
+        "type": "screen_changed"
       },
-      "identifier" : "buttonheist.calc.digit1"
+      "label": "Calculator"
     },
     {
-      "command" : "activate",
-      "expect" : {
-        "elementUpdated" : {
-          "newValue" : "12",
-          "property" : "label"
-        }
+      "command": "activate",
+      "expect": {
+        "type": "element_updated",
+        "newValue": "1",
+        "property": "label"
       },
-      "identifier" : "buttonheist.calc.digit2"
+      "identifier": "buttonheist.calc.digit1"
     },
     {
-      "command" : "activate",
-      "expect" : {
-        "elementUpdated" : {
-          "newValue" : "123",
-          "property" : "label"
-        }
+      "command": "activate",
+      "expect": {
+        "type": "element_updated",
+        "newValue": "12",
+        "property": "label"
       },
-      "identifier" : "buttonheist.calc.digit3"
+      "identifier": "buttonheist.calc.digit2"
     },
     {
-      "command" : "activate",
-      "expect" : {
-        "elementUpdated" : {
-          "newValue" : "1234",
-          "property" : "label"
-        }
+      "command": "activate",
+      "expect": {
+        "type": "element_updated",
+        "newValue": "123",
+        "property": "label"
       },
-      "identifier" : "buttonheist.calc.digit4"
+      "identifier": "buttonheist.calc.digit3"
     },
     {
-      "command" : "activate",
-      "expect" : {
-        "elementUpdated" : {
-          "newValue" : "button, selected",
-          "property" : "traits"
-        }
+      "command": "activate",
+      "expect": {
+        "type": "element_updated",
+        "newValue": "1234",
+        "property": "label"
       },
-      "identifier" : "buttonheist.calc.multiply"
+      "identifier": "buttonheist.calc.digit4"
     },
     {
-      "command" : "activate",
-      "expect" : {
-        "elementUpdated" : {
-          "newValue" : "button",
-          "property" : "traits"
-        }
+      "command": "activate",
+      "expect": {
+        "type": "element_updated",
+        "newValue": "button, selected",
+        "property": "traits"
       },
-      "identifier" : "buttonheist.calc.digit5"
+      "identifier": "buttonheist.calc.multiply"
     },
     {
-      "command" : "activate",
-      "expect" : {
-        "elementUpdated" : {
-          "newValue" : "56",
-          "property" : "label"
-        }
+      "command": "activate",
+      "expect": {
+        "type": "element_updated",
+        "newValue": "button",
+        "property": "traits"
       },
-      "identifier" : "buttonheist.calc.digit6"
+      "identifier": "buttonheist.calc.digit5"
     },
     {
-      "command" : "activate",
-      "expect" : {
-        "elementUpdated" : {
-          "newValue" : "567",
-          "property" : "label"
-        }
+      "command": "activate",
+      "expect": {
+        "type": "element_updated",
+        "newValue": "56",
+        "property": "label"
       },
-      "identifier" : "buttonheist.calc.digit7"
+      "identifier": "buttonheist.calc.digit6"
     },
     {
-      "command" : "activate",
-      "expect" : {
-        "elementUpdated" : {
-          "newValue" : "5678",
-          "property" : "label"
-        }
+      "command": "activate",
+      "expect": {
+        "type": "element_updated",
+        "newValue": "567",
+        "property": "label"
       },
-      "identifier" : "buttonheist.calc.digit8"
+      "identifier": "buttonheist.calc.digit7"
     },
     {
-      "command" : "activate",
-      "expect" : {
-        "elementUpdated" : {
-          "newValue" : "7006652",
-          "property" : "label"
-        }
+      "command": "activate",
+      "expect": {
+        "type": "element_updated",
+        "newValue": "5678",
+        "property": "label"
       },
-      "identifier" : "buttonheist.calc.equals"
+      "identifier": "buttonheist.calc.digit8"
     },
     {
-      "command" : "activate",
-      "expect" : {
-        "elementUpdated" : {
-          "newValue" : "button, selected",
-          "property" : "traits"
-        }
+      "command": "activate",
+      "expect": {
+        "type": "element_updated",
+        "newValue": "7006652",
+        "property": "label"
       },
-      "identifier" : "buttonheist.calc.divide"
+      "identifier": "buttonheist.calc.equals"
     },
     {
-      "command" : "activate",
-      "expect" : {
-        "elementUpdated" : {
-          "newValue" : "button",
-          "property" : "traits"
-        }
+      "command": "activate",
+      "expect": {
+        "type": "element_updated",
+        "newValue": "button, selected",
+        "property": "traits"
       },
-      "identifier" : "buttonheist.calc.digit4"
+      "identifier": "buttonheist.calc.divide"
     },
     {
-      "command" : "activate",
-      "expect" : {
-        "elementUpdated" : {
-          "newValue" : "42",
-          "property" : "label"
-        }
+      "command": "activate",
+      "expect": {
+        "type": "element_updated",
+        "newValue": "button",
+        "property": "traits"
       },
-      "identifier" : "buttonheist.calc.digit2"
+      "identifier": "buttonheist.calc.digit4"
     },
     {
-      "command" : "activate",
-      "expect" : {
-        "elementUpdated" : {
-          "newValue" : "166825.04761905",
-          "property" : "label"
-        }
+      "command": "activate",
+      "expect": {
+        "type": "element_updated",
+        "newValue": "42",
+        "property": "label"
       },
-      "identifier" : "buttonheist.calc.equals"
+      "identifier": "buttonheist.calc.digit2"
     },
     {
-      "command" : "activate",
-      "expect" : "screen_changed",
-      "label" : "ButtonHeist Demo",
-      "traits" : [
+      "command": "activate",
+      "expect": {
+        "type": "element_updated",
+        "newValue": "166825.04761905",
+        "property": "label"
+      },
+      "identifier": "buttonheist.calc.equals"
+    },
+    {
+      "command": "activate",
+      "expect": {
+        "type": "screen_changed"
+      },
+      "label": "ButtonHeist Demo",
+      "traits": [
         "button",
         "backButton"
       ]
     },
     {
-      "command" : "activate",
-      "expect" : "screen_changed",
-      "label" : "Touch Canvas"
+      "command": "activate",
+      "expect": {
+        "type": "screen_changed"
+      },
+      "label": "Touch Canvas"
     },
     {
-      "_recorded" : {
-        "coordinateOnly" : true
+      "_recorded": {
+        "coordinateOnly": true
       },
-      "command" : "draw_bezier",
-      "duration" : 1.5,
-      "segments" : [
+      "command": "draw_bezier",
+      "duration": 1.5,
+      "segments": [
         {
-          "cp1X" : 150,
-          "cp1Y" : 350,
-          "cp2X" : 100,
-          "cp2Y" : 300,
-          "endX" : 140,
-          "endY" : 280
+          "cp1X": 150,
+          "cp1Y": 350,
+          "cp2X": 100,
+          "cp2Y": 300,
+          "endX": 140,
+          "endY": 280
         },
         {
-          "cp1X" : 160,
-          "cp1Y" : 260,
-          "cp2X" : 185,
-          "cp2Y" : 250,
-          "endX" : 200,
-          "endY" : 270
+          "cp1X": 160,
+          "cp1Y": 260,
+          "cp2X": 185,
+          "cp2Y": 250,
+          "endX": 200,
+          "endY": 270
         },
         {
-          "cp1X" : 215,
-          "cp1Y" : 250,
-          "cp2X" : 240,
-          "cp2Y" : 260,
-          "endX" : 260,
-          "endY" : 280
+          "cp1X": 215,
+          "cp1Y": 250,
+          "cp2X": 240,
+          "cp2Y": 260,
+          "endX": 260,
+          "endY": 280
         },
         {
-          "cp1X" : 300,
-          "cp1Y" : 300,
-          "cp2X" : 250,
-          "cp2Y" : 350,
-          "endX" : 200,
-          "endY" : 500
+          "cp1X": 300,
+          "cp1Y": 300,
+          "cp2X": 250,
+          "cp2Y": 350,
+          "endX": 200,
+          "endY": 500
         }
       ],
-      "startX" : 200,
-      "startY" : 500
+      "startX": 200,
+      "startY": 500
     },
     {
-      "command" : "activate",
-      "expect" : "screen_changed",
-      "label" : "ButtonHeist Demo",
-      "traits" : [
+      "command": "activate",
+      "expect": {
+        "type": "screen_changed"
+      },
+      "label": "ButtonHeist Demo",
+      "traits": [
         "button",
         "backButton"
       ]
     }
-  ],
-  "version" : 1
+  ]
 }

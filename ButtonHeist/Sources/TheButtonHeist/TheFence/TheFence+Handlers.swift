@@ -661,9 +661,11 @@ extension TheFence {
 
         let heist = try TheBookKeeper.readHeist(from: resolvedURL)
 
-        guard heist.version <= HeistPlayback.currentVersion else {
+        guard heist.version == HeistPlayback.currentVersion else {
             throw FenceError.invalidRequest(
-                "Heist file version \(heist.version) is newer than supported version \(HeistPlayback.currentVersion). Update Button Heist to play this file."
+                "Unsupported heist file version \(heist.version). " +
+                    "This Button Heist build supports version \(HeistPlayback.currentVersion). " +
+                    "Re-record the heist with the current format."
             )
         }
 

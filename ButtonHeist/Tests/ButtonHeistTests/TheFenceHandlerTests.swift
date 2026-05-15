@@ -1582,7 +1582,34 @@ final class TheFenceHandlerTests: XCTestCase {
             guard case FenceError.invalidRequest(let message) = error else {
                 return XCTFail("Expected FenceError.invalidRequest, got \(error)")
             }
-            XCTAssertTrue(message.contains("newer than supported version"))
+            XCTAssertTrue(message.contains("Unsupported heist file version"))
+            XCTAssertTrue(message.contains("Re-record the heist"))
+        }
+    }
+
+    @ButtonHeistActor
+    func testPlayHeistRejectsOlderVersion() async throws {
+        let heist = HeistPlayback(
+            version: HeistPlayback.currentVersion - 1,
+            app: "com.test.mock",
+            steps: []
+        )
+        let heistURL = try writeTemporaryHeist(heist)
+        defer { try? FileManager.default.removeItem(at: heistURL) }
+
+        let (fence, _) = makeConnectedFence()
+        do {
+            _ = try await fence.execute(request: [
+                "command": "play_heist", "input": heistURL.path,
+            ])
+            XCTFail("Expected FenceError.invalidRequest to be thrown")
+        } catch {
+            guard case FenceError.invalidRequest(let message) = error else {
+                return XCTFail("Expected FenceError.invalidRequest, got \(error)")
+            }
+            XCTAssertTrue(message.contains("Unsupported heist file version"))
+            XCTAssertTrue(message.contains("supports version \(HeistPlayback.currentVersion)"))
+            XCTAssertTrue(message.contains("Re-record the heist"))
         }
     }
 }
