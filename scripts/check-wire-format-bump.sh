@@ -3,8 +3,8 @@
 #
 # Wire format lives in `ButtonHeist/Sources/TheScore/` — every Codable type that
 # crosses the connection, the Codable adapters, the `WireBoundaryTypes` rawValue
-# strings, the `InterfaceDelta` / `ActionExpectation` / `HeistPlayback*` /
-# `ConnectionScope` payloads, and the `AccessibilityPolicy` (whose
+# strings, the `InterfaceDelta` / `ActionExpectation` / `ConnectionScope`
+# payloads, and the `AccessibilityPolicy` (whose
 # `synthesisPriority` order is wire-format because it determines synthesized
 # heistIds, per CLAUDE.md).
 #
@@ -31,10 +31,14 @@ cd "$REPO_ROOT"
 
 BASE_REF="${1:-origin/main}"
 
-# Wire-format scope: every Swift file in TheScore is part of the wire contract.
-# Using a directory glob (rather than an allowlist) means new wire types are
-# covered automatically — there is no list to forget to update.
+# Wire-format scope: every live protocol Swift file in TheScore is part of the
+# connection contract. Heist playback files are persisted local artifacts with
+# their own file-format version, so they do not require a product release bump.
 WIRE_GLOB="ButtonHeist/Sources/TheScore/"
+NON_PROTOCOL_FILES=(
+    "ButtonHeist/Sources/TheScore/HeistPlayback.swift"
+    "ButtonHeist/Sources/TheScore/HeistPlaybackReport.swift"
+)
 
 VERSION_FILE="ButtonHeist/Sources/TheScore/Messages.swift"
 VERSION_PATTERN='buttonHeistVersion = "[^"]*"'
@@ -77,6 +81,15 @@ fi
 CHANGED_WIRE=()
 while IFS= read -r file; do
     [ -z "$file" ] && continue
+    skip=false
+    for non_protocol_file in "${NON_PROTOCOL_FILES[@]}"; do
+        if [ "$file" = "$non_protocol_file" ]; then
+            skip=true
+            break
+        fi
+    done
+    [ "$skip" = true ] && continue
+
     case "$file" in
         "$WIRE_GLOB"*.swift)
             CHANGED_WIRE+=("$file")

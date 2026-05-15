@@ -2,7 +2,7 @@
 
 **Extension**: `.heist`
 **Encoding**: JSON (UTF-8)
-**Version**: 1
+**Version**: 2
 
 A `.heist` file is a recorded session that can be played back deterministically. It captures actions with matcher-based element targeting and auto-generated expectations, removing the agent from the loop.
 
@@ -10,7 +10,7 @@ A `.heist` file is a recorded session that can be played back deterministically.
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "recorded": "2026-04-03T18:00:59Z",
   "app": "com.buttonheist.testapp",
   "steps": [ ... ]
@@ -19,10 +19,12 @@ A `.heist` file is a recorded session that can be played back deterministically.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `version` | `Int` | Format version. Currently `1`. |
+| `version` | `Int` | Format version. Currently `2`. |
 | `recorded` | `String` | ISO 8601 timestamp of when the recording was made. |
 | `app` | `String` | Bundle identifier of the app that was running. |
 | `steps` | `[HeistEvidence]` | Ordered list of recorded actions. |
+
+Version 2 is intentionally not backward-compatible with the prototype v1 expectation shapes. Re-record old prototypes rather than carrying migration logic in playback.
 
 ## Evidence (Steps)
 
@@ -125,6 +127,8 @@ Matching is exact (case-insensitive, typography-folded); the recorder builds the
 The `expect` field uses the same format as `run_batch` expectations. On playback, `TheFence.execute()` validates each step's `expect` against the live `ActionResult`.
 
 Expectations use a `type` discriminator that matches the wire Codable shape for `ActionExpectation`, so JSON from a wire log can be pasted straight into a heist file.
+
+Legacy shorthand strings, top-level expectation arrays, and compiler-derived enum wrapper objects are not part of the persisted format.
 
 ```json
 {"type": "element_updated", "property": "value", "newValue": "50%"}
