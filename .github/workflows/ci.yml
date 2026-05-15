@@ -204,6 +204,8 @@ jobs:
   ios-tests:
     runs-on: macos-15
     timeout-minutes: 30
+    env:
+      DERIVED_DATA_PATH: /tmp/ButtonHeistDerivedData
 
     steps:
       - name: Checkout repository
@@ -274,19 +276,23 @@ jobs:
           for scheme in "BH Demo" "UIKitTestApp" "ResearchApp"; do
             echo "Building $scheme..."
             xcodebuild -workspace ButtonHeist.xcworkspace -scheme "$scheme" \
-              -destination "$DEST" build
+              -destination "$DEST" \
+              -derivedDataPath "$DERIVED_DATA_PATH" \
+              build
           done
 
       - name: Run BH Demo CLI smoke
-        timeout-minutes: 5
+        # Cold CLI SwiftPM resolution plus simulator install can exceed 5 min
+        # on macOS runners; keep this bounded without clipping valid replay runs.
+        timeout-minutes: 8
         run: |
           set -eo pipefail
-          APP=$(ls -td ~/Library/Developer/Xcode/DerivedData/ButtonHeist*/Build/Products/Debug-iphonesimulator/BHDemo.app | head -1)
+          APP="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/BHDemo.app"
           scripts/e2e-demo-smoke.sh --skip-generate --sim-udid "$SIM_UDID" --app "$APP"
 
       - name: Measure framework sizes
         run: |
-          DERIVED=$(ls -td ~/Library/Developer/Xcode/DerivedData/ButtonHeist*/Build/Products/Debug-iphonesimulator/ | head -1)
+          DERIVED="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator"
           echo "## Framework Sizes" >> "$GITHUB_STEP_SUMMARY"
           echo "| Framework | Size |" >> "$GITHUB_STEP_SUMMARY"
           echo "|-----------|------|" >> "$GITHUB_STEP_SUMMARY"
@@ -314,5 +320,11 @@ jobs:
         timeout-minutes: 20
         run: |
           set -eo pipefail
+          DEST="platform=iOS Simulator,id=$SIM_UDID"
           echo "Running tests on iPhone 16 Pro (iOS $SIM_OS)"
-          tuist test TheInsideJobTests --platform ios --device "iPhone 16 Pro" --os "$SIM_OS" --no-selective-testing
+          # The project was already generated above. Calling `tuist test` here
+          # regenerates it and invalidates the SwiftPM build products from the
+          # app builds, including Swift Crypto.
+          xcodebuild test -workspace ButtonHeist.xcworkspace -scheme TheInsideJobTests \
+            -destination "$DEST" \
+            -derivedDataPath "$DERIVED_DATA_PATH"
