@@ -22,6 +22,58 @@ Button Heist drives iOS apps through the accessibility layer — the same interf
 
 **Composing**: `run_batch` for multi-step sequences in a single call. Attach `expect` to each step for inline verification.
 
+## Local MCP Development
+
+Use this workflow when testing a worktree-local `ButtonHeistMCP` change through an MCP host.
+
+**Build the worktree binary:**
+
+```bash
+cd ButtonHeistMCP
+swift build -c release
+```
+
+The release binary is written to `ButtonHeistMCP/.build/release/buttonheist-mcp` in the current worktree.
+
+**Know what `.mcp.json` loads.** The repo config starts `buttonheist` with `./scripts/buttonheist-mcp.sh`. That wrapper resolves its own directory, treats the parent as the repo root, and `exec`s that worktree's release binary. It does not build the server, choose a device, or rewrite environment variables; the MCP host's environment is inherited by the server process.
+
+Start the MCP host or agent from the worktree you are testing. If a host loaded `.mcp.json` from another checkout, its relative `./scripts/buttonheist-mcp.sh` may still point at that checkout until the MCP session is restarted.
+
+**Set target environment before starting the MCP host:**
+
+- `BUTTONHEIST_DEVICE`: discovered device name, named target, or direct `host:port`. Use `127.0.0.1:<port>` for simulator direct-connect sessions that bypass Bonjour.
+- `BUTTONHEIST_TOKEN`: auth token from `TheInsideJob`.
+- `BUTTONHEIST_DRIVER_ID`: stable driver identity for session locking. Use a unique value per agent/session when multiple clients share a token.
+
+Exporting these variables after the host has already launched does not update an already-running MCP server process. Start a fresh MCP session or agent after changing the target environment.
+
+**Reload after rebuilds.** MCP hosts usually keep the server process alive for the lifetime of the loaded MCP session. Rebuilding `ButtonHeistMCP` updates the binary on disk, but an already-loaded server keeps running the old code. If tool behavior still matches the previous build, end the MCP session or start a fresh agent/host from this worktree.
+
+**Run against a simulator endpoint:**
+
+```bash
+TASK_SLUG="mcp-reload-debug"
+INSIDEJOB_PORT=$((RANDOM % 10000 + 20000))
+
+SIMCTL_CHILD_INSIDEJOB_PORT="$INSIDEJOB_PORT" \
+SIMCTL_CHILD_INSIDEJOB_TOKEN="$TASK_SLUG" \
+SIMCTL_CHILD_INSIDEJOB_ID="$TASK_SLUG" \
+xcrun simctl launch "$SIM_UDID" com.buttonheist.testapp
+
+export BUTTONHEIST_DEVICE="127.0.0.1:$INSIDEJOB_PORT"
+export BUTTONHEIST_TOKEN="$TASK_SLUG"
+export BUTTONHEIST_DRIVER_ID="$TASK_SLUG"
+```
+
+Then start the MCP host or agent from this worktree so `.mcp.json` resolves to the same build. For a one-off stdio smoke check outside a host:
+
+```bash
+BUTTONHEIST_DEVICE="127.0.0.1:$INSIDEJOB_PORT" \
+BUTTONHEIST_TOKEN="$TASK_SLUG" \
+BUTTONHEIST_DRIVER_ID="$TASK_SLUG" \
+./scripts/buttonheist-mcp.sh
+```
+
 ## The Server Is Always Watching
 
 Every response includes what changed since your last call. You never poll. Three things can happen between your tool calls:
