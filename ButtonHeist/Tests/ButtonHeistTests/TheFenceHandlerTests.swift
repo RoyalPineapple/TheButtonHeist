@@ -934,6 +934,29 @@ final class TheFenceHandlerTests: XCTestCase {
         }
     }
 
+    @ButtonHeistActor
+    func testParseExpectationFromHeistPlaybackDictionary() async throws {
+        let (fence, _) = makeConnectedFence()
+        let step = HeistEvidence(
+            command: "activate",
+            arguments: [
+                "expect": .object([
+                    "type": .string("element_updated"),
+                    "heistId": .string("counter"),
+                    "property": .string("value"),
+                    "newValue": .string("5"),
+                ]),
+            ]
+        )
+
+        let result = try fence.parseExpectation(step.toRequestDictionary())
+
+        XCTAssertEqual(
+            result,
+            .elementUpdated(heistId: "counter", property: .value, newValue: "5")
+        )
+    }
+
     // MARK: - Parse Expectation: Discriminator Wire Shape
 
     @ButtonHeistActor
@@ -959,6 +982,24 @@ final class TheFenceHandlerTests: XCTestCase {
             result,
             .elementUpdated(heistId: "slider", property: .value, oldValue: "0", newValue: "50")
         )
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationDiscriminatorElementUpdatedInvalidPropertyListsValidValues() async {
+        let (fence, _) = makeConnectedFence()
+        XCTAssertThrowsError(try fence.parseExpectation([
+            "expect": [
+                "type": "element_updated",
+                "property": "bogus",
+            ] as [String: Any]
+        ])) { error in
+            guard case FenceError.invalidRequest(let msg) = error else {
+                XCTFail("Expected FenceError.invalidRequest, got \(error)")
+                return
+            }
+            XCTAssertTrue(msg.contains("Unknown element property"))
+            XCTAssertTrue(msg.contains("Valid:"))
+        }
     }
 
     @ButtonHeistActor
