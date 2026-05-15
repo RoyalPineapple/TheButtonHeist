@@ -5,10 +5,6 @@ import TheScore
 
 @main
 struct ButtonHeistMCPServer {
-    struct ToolRoutingError: Error {
-        let message: String
-    }
-
     static func main() async throws {
         let (fence, idleMonitor) = await setUp()
 
@@ -84,53 +80,8 @@ struct ButtonHeistMCPServer {
     static func routeToolRequest(
         name: String,
         arguments: [String: Any]
-    ) -> Result<[String: Any], ToolRoutingError> {
-        var request = arguments
-
-        // Direct 1:1 tools — tool name IS the command.
-        switch name {
-        case "get_interface", "activate", "type_text", "get_screen",
-             "wait_for_change", "wait_for", "start_recording", "stop_recording", "list_devices",
-             "set_pasteboard", "get_pasteboard",
-             "run_batch", "get_session_state",
-             "connect", "list_targets",
-             "get_session_log", "archive_session",
-             "start_heist", "stop_heist", "play_heist":
-            request["command"] = name
-            return .success(request)
-
-        case "gesture":
-            guard let rawType = request.removeValue(forKey: "type") as? String else {
-                return .failure(ToolRoutingError(message: "Missing required parameter: type"))
-            }
-            guard let gestureType = GestureType(rawValue: rawType) else {
-                let valid = GestureType.allCases.map(\.rawValue).joined(separator: ", ")
-                return .failure(ToolRoutingError(message: "Unknown gesture type: \(rawType). Valid: \(valid)"))
-            }
-            request["command"] = gestureType.rawValue
-            return .success(request)
-
-        case "scroll":
-            let rawMode = (request.removeValue(forKey: "mode") as? String) ?? ScrollMode.page.rawValue
-            guard let scrollMode = ScrollMode(rawValue: rawMode) else {
-                let valid = ScrollMode.allCases.map(\.rawValue).joined(separator: ", ")
-                return .failure(ToolRoutingError(message: "Unknown scroll mode: \(rawMode). Valid: \(valid)"))
-            }
-            request["command"] = scrollMode.canonicalCommand
-            return .success(request)
-
-        case "edit_action":
-            if let action = request["action"] as? String, action == "dismiss" {
-                request.removeValue(forKey: "action")
-                request["command"] = "dismiss_keyboard"
-            } else {
-                request["command"] = "edit_action"
-            }
-            return .success(request)
-
-        default:
-            return .failure(ToolRoutingError(message: "Unknown tool: \(name)"))
-        }
+    ) -> Result<[String: Any], FenceOperationRoutingError> {
+        FenceOperationCatalog.normalizeToolCall(name: name, arguments: arguments)
     }
 
     private static func decodeArguments(_ arguments: [String: Value]?) -> [String: Any] {

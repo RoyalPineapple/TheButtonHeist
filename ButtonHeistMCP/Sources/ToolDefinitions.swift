@@ -1,22 +1,6 @@
 import ButtonHeist
 import MCP
 
-// NOTE: Grouped tool dispatch
-// The `gesture`, `scroll`, and `editAction` tools fan in multiple
-// TheFence.Command cases under a single MCP tool. Their `type`, `mode`, and
-// `action` enum values are the literal `TheFence.Command` rawValues — the
-// actual routing happens in main.swift, which reads the field and rewrites
-// the outgoing request's `"command"` key before dispatch. When a new
-// grouped command case is added to TheFence.Command, update both the tool's
-// enum values below and the switch in main.swift.
-//
-// Note: `dismiss` is a keyboard action that lives inside the `editAction`
-// tool's `action` enum. main.swift rewrites it to the `dismiss_keyboard`
-// command, so on the wire it dispatches through the same TheFence handler
-// as the CLI's standalone `dismiss_keyboard` subcommand. Agents can reach
-// `dismiss_keyboard` via either `editAction(action: "dismiss")` or
-// `dismissKeyboard` — both paths land on the same backend.
-
 enum ToolDefinitions {
     // NOTE: Video data handling
     // The MCP server intentionally omits raw base64 video data from responses.
@@ -482,9 +466,10 @@ enum ToolDefinitions {
     static let runBatch = Tool(
         name: "run_batch",
         description: """
-            Execute multiple commands in one call. Each step is a JSON object with 'command' plus \
-            that command's parameters; attach 'expect' per step to verify inline. Returns per-step \
-            results and a merged net delta. policy=stop_on_error (default) or continue_on_error.
+            Execute multiple commands in one call. Each step is a JSON object with 'command' set \
+            to an MCP tool name or raw Fence command plus that command's parameters; attach \
+            'expect' per step to verify inline. Returns per-step results and a merged net delta. \
+            policy=stop_on_error (default) or continue_on_error.
             """,
         inputSchema: [
             "type": "object",

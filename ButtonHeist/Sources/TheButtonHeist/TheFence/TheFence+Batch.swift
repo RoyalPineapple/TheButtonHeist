@@ -31,9 +31,11 @@ extension TheFence {
         let batchStart = CFAbsoluteTimeGetCurrent()
 
         for (index, step) in steps.enumerated() {
-            let commandName = step["command"] as? String ?? "?"
+            let originalCommandName = step["command"] as? String ?? "?"
             do {
-                let response = try await execute(request: step)
+                let normalizedStep = try Self.normalizedBatchStep(step, index: index)
+                let commandName = normalizedStep["command"] as? String ?? "?"
+                let response = try await execute(request: normalizedStep)
                 results.append(response.jsonDict() ?? ["status": "ok"])
 
                 let outcome = stepOutcome(response: response)
@@ -65,7 +67,7 @@ extension TheFence {
                 ]
                 results.append(errorDict)
                 stepSummaries.append(BatchStepSummary(
-                    command: commandName, deltaKind: nil, screenName: nil, screenId: nil,
+                    command: originalCommandName, deltaKind: nil, screenName: nil, screenId: nil,
                     expectationMet: nil, elementCount: nil, error: error.localizedDescription
                 ))
                 if policy == .stopOnError {
@@ -94,6 +96,18 @@ extension TheFence {
             stepSummaries: stepSummaries,
             netDelta: netDelta
         )
+    }
+
+    private static func normalizedBatchStep(
+        _ step: [String: Any],
+        index: Int
+    ) throws -> [String: Any] {
+        switch FenceOperationCatalog.normalizeBatchStep(step) {
+        case .success(let normalizedStep):
+            return normalizedStep
+        case .failure(let error):
+            throw FenceError.invalidRequest("run_batch step \(index): \(error.message)")
+        }
     }
 
     private func skippedStepSummaries(
