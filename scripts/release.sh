@@ -104,6 +104,23 @@ if [[ "$LOCAL_SHA" != "$REMOTE_SHA" ]]; then
     exit 1
 fi
 
+# Bump parser dependency if submodule is ahead of latest tag
+SUBMODULE_DIR="submodules/AccessibilitySnapshotBH"
+if [[ -d "$SUBMODULE_DIR" ]]; then
+    SUB_SHA=$(git -C "$SUBMODULE_DIR" rev-parse HEAD 2>/dev/null || true)
+    LATEST_PARSER_TAG=$(git -C "$SUBMODULE_DIR" tag -l --sort=-v:refname | head -1)
+    if [[ -n "$LATEST_PARSER_TAG" && -n "$SUB_SHA" ]]; then
+        TAGGED_SHA=$(git -C "$SUBMODULE_DIR" rev-parse "$LATEST_PARSER_TAG")
+        if [[ "$SUB_SHA" != "$TAGGED_SHA" ]]; then
+            echo "  Parser submodule ahead of $LATEST_PARSER_TAG — bumping..."
+            "$SCRIPT_DIR/bump-parser.sh"
+            git push origin main
+            LOCAL_SHA=$(git rev-parse HEAD)
+            echo "  ✓ Parser bumped, new HEAD: $(echo "$LOCAL_SHA" | cut -c1-8)"
+        fi
+    fi
+fi
+
 # CI must have passed on this commit — wait up to 20 minutes
 if [[ "$RUN_TESTS" == false ]]; then
     echo "  Waiting for CI on $(echo "$LOCAL_SHA" | cut -c1-8)..."
