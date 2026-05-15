@@ -183,9 +183,8 @@ extension TheStash {
         let hierarchyHits = currentScreen.hierarchy.matches(matcher, mode: .exact, limit: limit)
         var seenIds = Set<String>()
         return hierarchyHits.compactMap { match -> ScreenElement? in
-            guard let heistId = currentScreen.heistIdByElement[match.element],
-                  let element = currentScreen.findElement(heistId: heistId),
-                  seenIds.insert(heistId).inserted else { return nil }
+            guard let element = screenElement(for: match.element, in: .visible),
+                  seenIds.insert(element.heistId).inserted else { return nil }
             return element
         }
     }

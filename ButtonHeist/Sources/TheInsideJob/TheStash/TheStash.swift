@@ -96,14 +96,14 @@ final class TheStash {
     /// this is the live viewport. Use `liveViewportIds` when you specifically
     /// need "what's on screen right now".
     var viewportIds: Set<String> {
-        currentScreen.heistIds
+        heistIds(in: .known)
     }
 
     /// HeistIds of elements present in the live hierarchy from the most
     /// recent parse — i.e. on-screen right now. Strictly a subset of
     /// `viewportIds` after an exploration union has been committed.
     var liveViewportIds: Set<String> {
-        Set(currentScreen.heistIdByElement.values)
+        heistIds(in: .visible)
     }
 
     /// HeistId of the element whose live object is currently first responder.
@@ -134,6 +134,14 @@ final class TheStash {
         let screenElement: ScreenElement
 
         var element: AccessibilityElement { screenElement.element }
+    }
+
+    /// Which part of the committed interface state a lookup should read.
+    enum InterfaceElementScope {
+        /// Elements in the live accessibility hierarchy from the most recent parse.
+        case visible
+        /// Elements retained on the committed screen value, including an exploration union.
+        case known
     }
 
     /// Three-case result from `resolveTarget` — diagnostics are produced
@@ -270,7 +278,7 @@ final class TheStash {
     func resolveTarget(_ target: ElementTarget) -> TargetResolution {
         switch target {
         case .heistId(let heistId):
-            guard let entry = currentScreen.findElement(heistId: heistId) else {
+            guard let entry = screenElement(heistId: heistId, in: .known) else {
                 return .notFound(diagnostics: Diagnostics.heistIdNotFound(
                     heistId,
                     knownIds: currentScreen.elements.keys,
@@ -281,6 +289,41 @@ final class TheStash {
         case .matcher(let matcher, let ordinal):
             return resolveMatcher(matcher, ordinal: ordinal)
         }
+    }
+
+    /// HeistIds for either the live hierarchy or the committed known screen.
+    func heistIds(in scope: InterfaceElementScope) -> Set<String> {
+        switch scope {
+        case .visible:
+            return Set(currentScreen.heistIdByElement.values)
+        case .known:
+            return currentScreen.heistIds
+        }
+    }
+
+    /// Looks up an element by heistId in the selected scope.
+    ///
+    /// `.known` reads the committed `Screen.elements` map, including any
+    /// exploration union. `.visible` only returns ids backed by the latest live
+    /// hierarchy parse.
+    func screenElement(heistId: String, in scope: InterfaceElementScope) -> ScreenElement? {
+        guard let entry = currentScreen.findElement(heistId: heistId) else { return nil }
+        switch scope {
+        case .visible:
+            return currentScreen.heistIdByElement.values.contains(heistId) ? entry : nil
+        case .known:
+            return entry
+        }
+    }
+
+    /// Looks up the screen entry for a live accessibility element.
+    ///
+    /// Because the input is a live element, this first resolves through
+    /// `heistIdByElement`. Off-screen known elements cannot be found with this
+    /// overload.
+    func screenElement(for element: AccessibilityElement, in scope: InterfaceElementScope) -> ScreenElement? {
+        guard let heistId = currentScreen.heistIdByElement[element] else { return nil }
+        return screenElement(heistId: heistId, in: scope)
     }
 
     private func resolveMatcher(_ matcher: ElementMatcher, ordinal: Int?) -> TargetResolution {
@@ -319,11 +362,12 @@ final class TheStash {
         return resolveTarget(effectiveTarget).resolved
     }
 
-    /// Live existence check — does any current accessibility-tree element match this target?
+    /// Existence check for wait-style predicates.
+    /// Matcher targets are live hierarchy checks; heistIds are known-state checks.
     func hasTarget(_ target: ElementTarget) -> Bool {
         switch target {
         case .heistId(let heistId):
-            return currentScreen.elements[heistId] != nil
+            return screenElement(heistId: heistId, in: .known) != nil
         case .matcher(let matcher, _):
             return currentScreen.hierarchy.hasMatch(matcher, mode: .exact)
         }
