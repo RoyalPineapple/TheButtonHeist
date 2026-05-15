@@ -117,7 +117,7 @@ extension TheFence {
     private struct StepOutcome {
         let isFailed: Bool
         let delta: InterfaceDelta?
-        /// Whether this step carried an explicit expectation tier that counts
+        /// Whether this step carried an explicit expectation that counts
         /// toward the batch's expectations-met/checked totals.
         let expectationCounted: Bool
         /// Whether the explicit expectation was met. Only meaningful when

@@ -298,13 +298,13 @@ Three levels of specificity:
 
 **"Something should change"**
 ```json
-{"tool": "activate", "arguments": {"heistId": "save-button", "expect": "elements_changed"}}
+{"tool": "activate", "arguments": {"heistId": "save-button", "expect": {"type": "elements_changed"}}}
 ```
 Met if any elements were added, removed, or updated. You're saying: "this action should do *something* visible."
 
 **"We should navigate"**
 ```json
-{"tool": "activate", "arguments": {"heistId": "next-button", "expect": "screen_changed"}}
+{"tool": "activate", "arguments": {"heistId": "next-button", "expect": {"type": "screen_changed"}}}
 ```
 Met only if the view controller identity changed (a push, modal, or tab switch). More specific than `elements_changed`.
 
@@ -341,7 +341,7 @@ Every field on an `element_updated` expectation other than `type` is optional. Y
   {"expect": {"type": "element_updated", "heistId": "total", "property": "value", "newValue": "$47.99"}}
   ```
 
-This is the "say what you care about" model. If you know the heistId but not the property, say so. If you know the expected new value but not the old one, say so. If you only know that *something* on *some element* should update, `"elements_changed"` covers it.
+This is the "say what you care about" model. If you know the heistId but not the property, say so. If you know the expected new value but not the old one, say so. If you only know that *something* on *some element* should update, `{"type": "elements_changed"}` covers it.
 
 ### What happens when expectations fail
 
@@ -359,10 +359,10 @@ The `actual` field tells you what *did* happen, so you can adapt. An unmet expec
 
 Use them whenever you have a hypothesis about what an action should do:
 
-- **Navigating**: `"expect": "screen_changed"` after tapping a navigation link
+- **Navigating**: `"expect": {"type": "screen_changed"}` after tapping a navigation link
 - **Form filling**: `"expect": {"type": "element_updated", "heistId": "field-id", "property": "value"}` after typing
 - **Toggling**: `"expect": {"type": "element_updated", "heistId": "switch-id", "property": "value", "newValue": "1"}` after flipping a switch
-- **Deleting**: `"expect": "elements_changed"` after swiping to delete a row
+- **Deleting**: `"expect": {"type": "elements_changed"}` after swiping to delete a row
 
 Don't use them when you genuinely don't know what will happen (exploratory interaction). They're assertions, not discovery tools.
 
@@ -387,7 +387,7 @@ Deltas tell you *what* changed. Expectations tell you *whether what changed matc
       {"command": "type_text", "text": "user@example.com", "expect": {"type": "element_updated", "property": "value"}},
       {"command": "activate", "heistId": "password-field"},
       {"command": "type_text", "text": "hunter2", "expect": {"type": "element_updated", "property": "value"}},
-      {"command": "activate", "heistId": "login-button", "expect": "screen_changed"}
+      {"command": "activate", "heistId": "login-button", "expect": {"type": "screen_changed"}}
     ],
     "policy": "stop_on_error"
   }

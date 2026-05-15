@@ -136,6 +136,102 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertNil(dictionary["heistId"])
     }
 
+    func testToRequestDictionaryNormalizesLegacyStringExpectation() {
+        let step = HeistEvidence(
+            command: "activate",
+            arguments: ["expect": .string("screen_changed")]
+        )
+
+        let dictionary = step.toRequestDictionary()
+        let expect = dictionary["expect"] as? [String: Any]
+
+        XCTAssertEqual(expect?["type"] as? String, "screen_changed")
+    }
+
+    func testToRequestDictionaryNormalizesLegacyExpectationArrayAsCompound() {
+        let step = HeistEvidence(
+            command: "activate",
+            arguments: [
+                "expect": .array([
+                    .object([
+                        "elementUpdated": .object([
+                            "property": .string("value"),
+                            "newValue": .string("Completed"),
+                        ]),
+                    ]),
+                    .object([
+                        "elementAppeared": .object([
+                            "label": .string("8 items remaining"),
+                            "traits": .array([.string("staticText")]),
+                        ]),
+                    ]),
+                ]),
+            ]
+        )
+
+        let dictionary = step.toRequestDictionary()
+        let expect = dictionary["expect"] as? [String: Any]
+        let expectations = expect?["expectations"] as? [[String: Any]]
+        let first = expectations?.first
+        let second = expectations?.dropFirst().first
+        let matcher = second?["matcher"] as? [String: Any]
+
+        XCTAssertEqual(expect?["type"] as? String, "compound")
+        XCTAssertEqual(expectations?.count, 2)
+        XCTAssertEqual(first?["type"] as? String, "element_updated")
+        XCTAssertEqual(first?["property"] as? String, "value")
+        XCTAssertEqual(first?["newValue"] as? String, "Completed")
+        XCTAssertEqual(second?["type"] as? String, "element_appeared")
+        XCTAssertEqual(matcher?["label"] as? String, "8 items remaining")
+        XCTAssertEqual(matcher?["traits"] as? [String], ["staticText"])
+    }
+
+    func testToRequestDictionaryNormalizesLegacyWrappedExpectationObject() {
+        let step = HeistEvidence(
+            command: "activate",
+            arguments: [
+                "expect": .object([
+                    "elementDisappeared": .object([
+                        "label": .string("Loading"),
+                        "traits": .array([.string("staticText")]),
+                    ]),
+                ]),
+            ]
+        )
+
+        let dictionary = step.toRequestDictionary()
+        let expect = dictionary["expect"] as? [String: Any]
+        let matcher = expect?["matcher"] as? [String: Any]
+
+        XCTAssertEqual(expect?["type"] as? String, "element_disappeared")
+        XCTAssertEqual(matcher?["label"] as? String, "Loading")
+        XCTAssertEqual(matcher?["traits"] as? [String], ["staticText"])
+    }
+
+    func testToRequestDictionaryNormalizesNestedCompoundObjectExpectations() {
+        let step = HeistEvidence(
+            command: "activate",
+            arguments: [
+                "expect": .object([
+                    "type": .string("compound"),
+                    "expectations": .array([
+                        .string("elements_changed"),
+                        .object(["elementUpdated": .object(["heistId": .string("counter")])]),
+                    ]),
+                ]),
+            ]
+        )
+
+        let dictionary = step.toRequestDictionary()
+        let expect = dictionary["expect"] as? [String: Any]
+        let expectations = expect?["expectations"] as? [[String: Any]]
+
+        XCTAssertEqual(expect?["type"] as? String, "compound")
+        XCTAssertEqual(expectations?.first?["type"] as? String, "elements_changed")
+        XCTAssertEqual(expectations?.dropFirst().first?["type"] as? String, "element_updated")
+        XCTAssertEqual(expectations?.dropFirst().first?["heistId"] as? String, "counter")
+    }
+
     // MARK: - Heist Value
 
     func testHeistValueRoundTrips() throws {

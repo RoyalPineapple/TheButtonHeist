@@ -778,14 +778,14 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testWaitForChangeWithExpectPassesValidation() async {
         await assertPassesValidation(
-            ["command": "wait_for_change", "expect": "screen_changed"]
+            ["command": "wait_for_change", "expect": ["type": "screen_changed"]]
         )
     }
 
     @ButtonHeistActor
     func testWaitForChangeWithTimeoutPassesValidation() async {
         await assertPassesValidation(
-            ["command": "wait_for_change", "expect": "elements_changed", "timeout": 5.0]
+            ["command": "wait_for_change", "expect": ["type": "elements_changed"], "timeout": 5.0]
         )
     }
 
@@ -793,7 +793,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testWaitForChangeSendsCorrectMessage() async {
         let (fence, mockConn) = makeConnectedFence()
         _ = try? await fence.execute(request: [
-            "command": "wait_for_change", "expect": "screen_changed", "timeout": 8.0
+            "command": "wait_for_change", "expect": ["type": "screen_changed"], "timeout": 8.0
         ])
         guard let (message, _) = mockConn.sent.last,
               case .waitForChange(let target) = message else {
@@ -827,10 +827,22 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testParseExpectationScreenChangedSnakeCase() async throws {
+    func testParseExpectationScreenChangedObject() async throws {
         let (fence, _) = makeConnectedFence()
-        let result = try fence.parseExpectation(["expect": "screen_changed"])
+        let result = try fence.parseExpectation(["expect": ["type": "screen_changed"]])
         XCTAssertEqual(result, .screenChanged)
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationStringScreenChangedThrows() async {
+        let (fence, _) = makeConnectedFence()
+        XCTAssertThrowsError(try fence.parseExpectation(["expect": "screen_changed"])) { error in
+            guard case FenceError.invalidRequest(let msg) = error else {
+                XCTFail("Expected FenceError.invalidRequest, got \(error)")
+                return
+            }
+            XCTAssertTrue(msg.contains("expected object"))
+        }
     }
 
     @ButtonHeistActor
@@ -841,7 +853,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 XCTFail("Expected FenceError.invalidRequest, got \(error)")
                 return
             }
-            XCTAssertTrue(msg.contains("Unknown expectation tier"))
+            XCTAssertTrue(msg.contains("expected object"))
         }
     }
 
@@ -853,7 +865,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 XCTFail("Expected FenceError.invalidRequest, got \(error)")
                 return
             }
-            XCTAssertTrue(msg.contains("Unknown expectation tier"))
+            XCTAssertTrue(msg.contains("expected object"))
         }
     }
 
@@ -865,7 +877,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 XCTFail("Expected FenceError.invalidRequest, got \(error)")
                 return
             }
-            XCTAssertTrue(msg.contains("Unknown expectation tier"))
+            XCTAssertTrue(msg.contains("expected object"))
         }
     }
 
@@ -877,7 +889,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 XCTFail("Expected FenceError.invalidRequest, got \(error)")
                 return
             }
-            XCTAssertTrue(msg.contains("Unknown expectation tier"))
+            XCTAssertTrue(msg.contains("expected object"))
         }
     }
 
@@ -902,6 +914,23 @@ final class TheFenceHandlerTests: XCTestCase {
                 return
             }
             XCTAssertTrue(msg.contains("Invalid expectation type"))
+        }
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationTopLevelArrayThrows() async {
+        let (fence, _) = makeConnectedFence()
+        XCTAssertThrowsError(try fence.parseExpectation([
+            "expect": [
+                ["type": "screen_changed"],
+                ["type": "elements_changed"],
+            ],
+        ])) { error in
+            guard case FenceError.invalidRequest(let msg) = error else {
+                XCTFail("Expected FenceError.invalidRequest, got \(error)")
+                return
+            }
+            XCTAssertTrue(msg.contains("expected object"))
         }
     }
 
@@ -977,7 +1006,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "expect": [
                 "type": "compound",
                 "expectations": [
-                    "screen_changed",
+                    ["type": "screen_changed"],
                     ["type": "element_updated", "heistId": "counter"] as [String: Any],
                 ] as [Any],
             ] as [String: Any]
@@ -992,6 +1021,26 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testParseExpectationDiscriminatorCompoundRejectsStringSubExpectation() async {
+        let (fence, _) = makeConnectedFence()
+        XCTAssertThrowsError(try fence.parseExpectation([
+            "expect": [
+                "type": "compound",
+                "expectations": [
+                    "screen_changed",
+                    ["type": "elements_changed"] as [String: Any],
+                ] as [Any],
+            ] as [String: Any],
+        ])) { error in
+            guard case FenceError.invalidRequest(let msg) = error else {
+                XCTFail("Expected FenceError.invalidRequest, got \(error)")
+                return
+            }
+            XCTAssertTrue(msg.contains("must be objects"))
+        }
+    }
+
+    @ButtonHeistActor
     func testParseExpectationDiscriminatorUnknownTypeThrows() async {
         let (fence, _) = makeConnectedFence()
         XCTAssertThrowsError(try fence.parseExpectation([
@@ -1002,6 +1051,37 @@ final class TheFenceHandlerTests: XCTestCase {
                 return
             }
             XCTAssertTrue(msg.contains("Unknown expectation type"))
+        }
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationDiscriminatorCoversAllWireTypes() async throws {
+        let (fence, _) = makeConnectedFence()
+        let cases: [(type: String, payload: [String: Any], expected: ActionExpectation)] = [
+            ("screen_changed", ["type": "screen_changed"], .screenChanged),
+            ("elements_changed", ["type": "elements_changed"], .elementsChanged),
+            ("element_updated", ["type": "element_updated"], .elementUpdated()),
+            (
+                "element_appeared",
+                ["type": "element_appeared", "matcher": ["label": "Cart"]],
+                .elementAppeared(ElementMatcher(label: "Cart"))
+            ),
+            (
+                "element_disappeared",
+                ["type": "element_disappeared", "matcher": ["label": "Spinner"]],
+                .elementDisappeared(ElementMatcher(label: "Spinner"))
+            ),
+            (
+                "compound",
+                ["type": "compound", "expectations": [["type": "screen_changed"]]],
+                .compound([.screenChanged])
+            ),
+        ]
+
+        XCTAssertEqual(Set(cases.map(\.type)), Set(ActionExpectation.wireTypeValues))
+        for testCase in cases {
+            let result = try fence.parseExpectation(["expect": testCase.payload])
+            XCTAssertEqual(result, testCase.expected, "Failed to parse \(testCase.type)")
         }
     }
 
@@ -1020,7 +1100,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let response = try await fence.execute(request: [
             "command": "run_batch",
             "steps": [
-                ["command": "activate", "identifier": "btn1", "expect": "elements_changed"],
+                ["command": "activate", "identifier": "btn1", "expect": ["type": "elements_changed"]],
                 ["command": "activate", "identifier": "btn2"],
             ] as [[String: Any]],
         ])
@@ -1045,8 +1125,8 @@ final class TheFenceHandlerTests: XCTestCase {
         let response = try await fence.execute(request: [
             "command": "run_batch",
             "steps": [
-                ["command": "activate", "identifier": "btn1", "expect": "screen_changed"],
-                ["command": "activate", "identifier": "btn2", "expect": "elements_changed"],
+                ["command": "activate", "identifier": "btn1", "expect": ["type": "screen_changed"]],
+                ["command": "activate", "identifier": "btn2", "expect": ["type": "elements_changed"]],
             ] as [[String: Any]],
         ])
 
@@ -1125,7 +1205,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "command": "run_batch",
             "policy": "stop_on_error",
             "steps": [
-                ["command": "activate", "identifier": "btn1", "expect": "screen_changed"],
+                ["command": "activate", "identifier": "btn1", "expect": ["type": "screen_changed"]],
                 ["command": "activate", "identifier": "btn2"],
             ] as [[String: Any]],
         ])

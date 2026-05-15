@@ -156,13 +156,13 @@ Matchers are **exact or miss**. `"label": "Sign"` does not match "Sign In" — t
 
 ## Expectation failed
 
-Expectation input uses snake_case (`screen_changed`, `elements_changed`), but the output in error messages uses camelCase (`screenChanged`, `elementsChanged`, `noChange`). Both refer to the same delta kinds.
+Expectation object `type` values use snake_case (`screen_changed`, `elements_changed`), but the output in error messages uses camelCase (`screenChanged`, `elementsChanged`, `noChange`). Both refer to the same delta kinds.
 
 ### "expected screenChanged, got elementsChanged"
 
 The action changed elements on the current screen but didn't navigate. The button may update in-place rather than pushing a new screen (e.g., an inline form validation, a disclosure toggle, a state change).
 
-**Fix:** Read the delta to see what actually changed. If the behavior is correct, adjust your expectation to `"elements_changed"` or use `elementUpdated` to check the specific change. Note: `screen_changed` is strict — `elements_changed` is more lenient because a `screenChanged` delta also satisfies `elements_changed`.
+**Fix:** Read the delta to see what actually changed. If the behavior is correct, adjust your expectation to `{"type": "elements_changed"}` or use `element_updated` to check the specific change. Note: `screen_changed` is strict — `elements_changed` is more lenient because a `screenChanged` delta also satisfies `elements_changed`.
 
 ### "expected elementUpdated, got no element updates"
 

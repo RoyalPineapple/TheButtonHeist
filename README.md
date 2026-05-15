@@ -169,7 +169,7 @@ Each command can declare what should happen with `expect`. Button Heist checks t
 {
   "command": "activate",
   "target": {"heistId": "button_login"},
-  "expect": "screen_changed"
+  "expect": {"type": "screen_changed"}
 }
 ```
 
@@ -188,8 +188,8 @@ The agent says what it expects. Button Heist says whether it happened.
   "command": "run_batch",
   "steps": [
     {"command": "type_text", "target": {"heistId": "textfield_email"}, "text": "user@example.com",
-     "expect": {"element_updated": {"heistId": "textfield_email", "property": "value", "newValue": "user@example.com"}}},
-    {"command": "activate", "target": {"heistId": "button_submit"}, "expect": "screen_changed"}
+     "expect": {"type": "element_updated", "heistId": "textfield_email", "property": "value", "newValue": "user@example.com"}},
+    {"command": "activate", "target": {"heistId": "button_submit"}, "expect": {"type": "screen_changed"}}
   ]
 }
 ```

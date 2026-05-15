@@ -44,6 +44,38 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
+    func testExpectationArgumentParserNormalizesShorthand() throws {
+        let parsed = try ExpectationArgumentParser.parse("screen_changed")
+
+        XCTAssertEqual(parsed["type"] as? String, "screen_changed")
+    }
+
+    func testExpectationArgumentParserAcceptsJsonObject() throws {
+        let parsed = try ExpectationArgumentParser.parse(#"{"type":"element_updated","property":"value"}"#)
+
+        XCTAssertEqual(parsed["type"] as? String, "element_updated")
+        XCTAssertEqual(parsed["property"] as? String, "value")
+    }
+
+    func testExpectationArgumentParserRejectsUnknownString() {
+        XCTAssertThrowsError(try ExpectationArgumentParser.parse("layout_changed"))
+    }
+
+    func testHumanParserNormalizesChangeExpectationShortcut() {
+        let request = ReplSession.parseHumanInput("change expect=screen_changed")
+        let expect = request["expect"] as? [String: Any]
+
+        XCTAssertEqual(request["command"] as? String, TheFence.Command.waitForChange.rawValue)
+        XCTAssertEqual(expect?["type"] as? String, "screen_changed")
+    }
+
+    func testHumanParserNormalizesChangeExpectationJsonObject() {
+        let request = ReplSession.parseHumanInput(#"change expect='{"type":"elements_changed"}'"#)
+        let expect = request["expect"] as? [String: Any]
+
+        XCTAssertEqual(expect?["type"] as? String, "elements_changed")
+    }
+
     private func topLevelCommandNames() -> [String] {
         ButtonHeistApp.configuration.subcommands.map { commandType in
             commandType.configuration.commandName ?? String(describing: commandType)

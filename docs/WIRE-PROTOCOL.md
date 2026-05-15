@@ -533,7 +533,7 @@ Dismiss the keyboard by resigning first responder.
 Wait for the UI to change in a way that matches an expectation. With no expectation, returns on any tree change. With `expect`, rides through intermediate states (e.g. spinners) until the expectation is met.
 
 ```json
-{"buttonHeistVersion":"<calver>","type":"waitForChange","payload":{"expect":"screen_changed","timeout":10}}
+{"buttonHeistVersion":"<calver>","type":"waitForChange","payload":{"expect":{"type":"screen_changed"},"timeout":10}}
 ```
 
 | Field | Type | Description |
@@ -1315,18 +1315,9 @@ Every action implicitly checks delivery (`success == true`). If delivery fails, 
 
 The `expect` field classifies what kind of outcome the caller was going for. Expectations follow a **"say what you know"** design: provide only the fields you care about, omit what you don't. Omitted fields are wildcards. The framework scans the result for any match.
 
-#### Short forms
+#### Object form
 
-Two shorthand string values are accepted inline at the `expect` field for the two most common tiers:
-
-| Value | Equivalent object | Description |
-|-------|-------------------|-------------|
-| `"screen_changed"` | `{"type": "screen_changed"}` | Expected `interfaceDelta.kind == "screenChanged"` |
-| `"elements_changed"` | `{"type": "elements_changed"}` | Expected `interfaceDelta.kind == "elementsChanged"` or `"screenChanged"` (superset rule) |
-
-#### Full object form
-
-Every `ActionExpectation` serializes to a JSON object with a `type` discriminator. All forms below are accepted at the `expect` field; the server parses the string short forms above into the equivalent object.
+Every `ActionExpectation` serializes to a JSON object with a `type` discriminator. The `expect` field accepts this object form only.
 
 | `type` | Payload | Description |
 |--------|---------|-------------|
@@ -1351,11 +1342,11 @@ Examples:
 
 For `element_updated`, all four payload fields (`heistId`, `property`, `oldValue`, `newValue`) are optional — provide more to tighten the check, fewer to loosen it. When both `oldValue` and `newValue` are provided they must match the same `PropertyChange` entry.
 
-The `property` field accepts these values: `"label"`, `"value"`, `"traits"`, `"hint"`, `"actions"`, `"frame"`, `"activationPoint"`.
+The `property` field accepts these values: `"label"`, `"value"`, `"traits"`, `"hint"`, `"actions"`, `"frame"`, `"activationPoint"`, `"customContent"`.
 
 For `compound`, nesting is allowed — a `compound` may contain other `compound` entries.
 
-**Breaking change in protocol 7.0**: prior versions used Swift's compiler-synthesized Codable shape for `ActionExpectation`, which wrapped `elementUpdated` / `elementAppeared` / `elementDisappeared` / `compound` in legacy container keys rather than using the `type` discriminator. Callers sending typed expectations must update to the new shape. The short string forms (`"screen_changed"`, `"elements_changed"`) are unchanged.
+**Breaking change in protocol 7.0**: prior versions used Swift's compiler-synthesized Codable shape for `ActionExpectation`, which wrapped `elementUpdated` / `elementAppeared` / `elementDisappeared` / `compound` in legacy container keys rather than using the `type` discriminator. Callers sending typed expectations must update to the new shape.
 
 When an expectation is checked, the Fence response includes an `expectation` object:
 
@@ -1780,8 +1771,7 @@ The current shape, beyond what is described in the message reference above:
   flatten for source compat but does not appear on the wire.
 - `ActionExpectation` uses an explicit `type` discriminator
   (`{"type": "element_updated", …}`) rather than Swift-synthesized Codable.
-  String short forms (`"screen_changed"`, `"elements_changed"`) are
-  unaffected.
+  The `expect` field accepts the object form only.
 - `InterfaceDelta` is a discriminated union with cases `noChange` /
   `elementsChanged` / `screenChanged`. `elementsChanged.edits` and
   `screenChanged.postEdits` both nest the same `ElementEdits` object;
