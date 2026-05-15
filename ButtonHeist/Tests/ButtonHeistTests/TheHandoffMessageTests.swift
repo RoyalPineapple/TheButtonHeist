@@ -147,15 +147,18 @@ final class TheHandoffMessageTests: XCTestCase {
     // MARK: - .sessionLocked
 
     @ButtonHeistActor
-    func testSessionLockedTransitionsToFailed() async {
+    func testSessionLockedTransitionsToFailed() async throws {
         let handoff = TheHandoff()
         var receivedPayload: SessionLockedPayload?
         handoff.onSessionLocked = { receivedPayload = $0 }
 
-        let payload = SessionLockedPayload(message: "Session busy", activeConnections: 2)
+        let payload = SessionLockedPayload(
+            message: "Session busy; owner driver id: driver-a; active connections: 2; remaining timeout: 10s.",
+            activeConnections: 2
+        )
         handoff.handleServerMessage(.sessionLocked(payload), requestId: nil)
 
-        assertFailed(handoff.connectionPhase, failure: .sessionLocked("Session busy"))
+        assertFailed(handoff.connectionPhase, failure: .sessionLocked(payload.message))
         XCTAssertEqual(receivedPayload?.activeConnections, 2)
     }
 

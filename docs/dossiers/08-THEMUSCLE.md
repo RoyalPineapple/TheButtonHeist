@@ -175,6 +175,6 @@ stateDiagram-v2
 ### LOW PRIORITY
 
 **Session connections tracked by client ID integers**
-- `activeSessionConnections` is a computed property derived from the `SessionState` enum: returns `connections` from `.active(driverId:, connections:)`, empty set otherwise
-- Session state is modeled as `SessionState` enum with three cases: `.idle`, `.active(driverId: String, connections: Set<Int>)`, `.draining(driverId: String, releaseTimer: Task<Void, Never>)`
+- `activeSessionConnections` is a computed property derived from the `SessionPhase` enum: returns `connections` from `.active(driverId:, connections:)`, empty set otherwise
+- Session state is modeled as `SessionPhase` enum with three cases: `.idle`, `.active(driverId: String, connections: Set<Int>)`, `.draining(driverId: String, releaseTimer: Task<Void, Never>, releaseDeadline: Date)`
 - Client IDs come from `SimpleSocketServer` connection tracking (incrementing `Int` counter)

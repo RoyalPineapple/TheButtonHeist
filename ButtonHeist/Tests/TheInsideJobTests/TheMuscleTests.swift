@@ -114,6 +114,13 @@ final class TheMuscleTests: XCTestCase {
         }
     }
 
+    private func sessionLockedPayloads(from responses: [Data]) -> [SessionLockedPayload] {
+        responses.compactMap { data in
+            guard case .sessionLocked(let payload) = decodeServerMessage(data) else { return nil }
+            return payload
+        }
+    }
+
     private func performHello(clientId: Int, respond: @escaping @Sendable (Data) -> Void) async {
         guard let data = try? JSONEncoder().encode(RequestEnvelope(message: .clientHello)) else {
             XCTFail("Failed to encode clientHello")
@@ -257,12 +264,15 @@ final class TheMuscleTests: XCTestCase {
         let connections = await muscle.activeSessionConnections
         XCTAssertFalse(connections.contains(2))
 
-        let serverMessages = responses().compactMap { decodeServerMessage($0) }
-        let hasSessionLocked = serverMessages.contains { msg in
-            if case .sessionLocked = msg { return true }
-            return false
-        }
-        XCTAssertTrue(hasSessionLocked, "Should send sessionLocked to different driver")
+        let payload = try XCTUnwrap(
+            sessionLockedPayloads(from: responses()).first,
+            "Should send sessionLocked to different driver"
+        )
+        XCTAssertEqual(
+            payload.message,
+            "Session is locked by another driver; owner driver id: driver-a; active connections: 1."
+        )
+        XCTAssertEqual(payload.activeConnections, 1)
     }
 
     func testSessionReleasedAfterAllDisconnect() async throws {
@@ -323,12 +333,24 @@ final class TheMuscleTests: XCTestCase {
         try await authenticate(clientId: 2, token: "test-token", driverId: "driver-b", respond: respond)
         await flushCallbacks()
 
-        let serverMessages = responses().compactMap { decodeServerMessage($0) }
-        let hasSessionLocked = serverMessages.contains { msg in
-            if case .sessionLocked = msg { return true }
-            return false
-        }
-        XCTAssertTrue(hasSessionLocked, "Different driver should be blocked during grace period")
+        let payload = try XCTUnwrap(
+            sessionLockedPayloads(from: responses()).first,
+            "Different driver should be blocked during grace period"
+        )
+        XCTAssertEqual(payload.activeConnections, 0)
+        XCTAssertTrue(payload.message.contains("owner driver id: driver-a"))
+        XCTAssertTrue(payload.message.contains("active connections: 0"))
+        XCTAssertTrue(payload.message.contains("remaining timeout:"))
+    }
+
+    func testTokenBackedSessionLockDoesNotExposeTokenAsOwner() async throws {
+        try await authenticate(clientId: 1, token: "test-token", respond: respondSink())
+
+        let (respond, responses) = collectResponses()
+        try await authenticate(clientId: 2, token: "test-token", driverId: "driver-b", respond: respond)
+
+        let payload = try XCTUnwrap(sessionLockedPayloads(from: responses()).first)
+        XCTAssertFalse(payload.message.contains("test-token"))
     }
 
     // MARK: - Token Lifecycle Tests

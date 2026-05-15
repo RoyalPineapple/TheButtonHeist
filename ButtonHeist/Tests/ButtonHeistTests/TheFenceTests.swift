@@ -920,6 +920,27 @@ final class TheFenceTests: XCTestCase {
         XCTAssertTrue(FenceError.actionTimeout.failureDetails.hint?.contains("same session") == true)
     }
 
+    func testSessionLockedFormattingIncludesDiagnosticsAndRecovery() {
+        let payload = SessionLockedPayload(
+            message: "Session is locked; owner driver id: driver-a; active connections: 0; remaining timeout: 8s.",
+            activeConnections: 0
+        )
+        let response = FenceResponse.failure(FenceError.sessionLocked(payload.message))
+
+        let compact = response.compactFormatted()
+        XCTAssertTrue(compact.contains("owner driver id: driver-a"))
+        XCTAssertTrue(compact.contains("active connections: 0"))
+        XCTAssertTrue(compact.contains("remaining timeout: 8s"))
+        XCTAssertTrue(compact.contains("hint: Wait for the current driver"))
+        XCTAssertTrue(compact.contains("BUTTONHEIST_DRIVER_ID"))
+
+        let json = response.jsonDict()
+        XCTAssertEqual(json?["errorCode"] as? String, "session.locked")
+        XCTAssertTrue((json?["message"] as? String)?.contains("owner driver id: driver-a") == true)
+        XCTAssertTrue((json?["message"] as? String)?.contains("remaining timeout: 8s") == true)
+        XCTAssertTrue((json?["hint"] as? String)?.contains("BUTTONHEIST_DRIVER_ID") == true)
+    }
+
     func testFenceErrorTaxonomy() {
         let cases: [(FenceError, String, FailurePhase, Bool, String?)] = [
             (.invalidRequest("bad"), "request.invalid", .request, false, "Fix the request"),
