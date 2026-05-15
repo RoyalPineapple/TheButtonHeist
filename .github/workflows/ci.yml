@@ -277,6 +277,13 @@ jobs:
               -destination "$DEST" build
           done
 
+      - name: Run BH Demo CLI smoke
+        timeout-minutes: 5
+        run: |
+          set -eo pipefail
+          APP=$(ls -td ~/Library/Developer/Xcode/DerivedData/ButtonHeist*/Build/Products/Debug-iphonesimulator/BHDemo.app | head -1)
+          scripts/e2e-demo-smoke.sh --skip-generate --sim-udid "$SIM_UDID" --app "$APP"
+
       - name: Measure framework sizes
         run: |
           DERIVED=$(ls -td ~/Library/Developer/Xcode/DerivedData/ButtonHeist*/Build/Products/Debug-iphonesimulator/ | head -1)
