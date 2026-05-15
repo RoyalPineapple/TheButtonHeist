@@ -64,6 +64,8 @@ public enum FenceError: Error, LocalizedError {
                 Session locked: \(message)
                   Another driver is currently connected. Wait for it to disconnect
                   or for the session to time out.
+                  If this is your own stale session, retry with the same BUTTONHEIST_DRIVER_ID
+                  or restart the app to release it.
                 """
         case .authFailed(let message):
             return """
@@ -159,7 +161,8 @@ public enum FenceError: Error, LocalizedError {
         case .connectionFailed:
             return "Is the app running? Check 'buttonheist list' to see available devices."
         case .sessionLocked:
-            return "Wait for the current driver to disconnect or for the session to time out."
+            return "Wait for the current driver to disconnect or for the session to time out. " +
+                "If this is your own stale session, retry with the same BUTTONHEIST_DRIVER_ID or restart the app."
         case .authFailed:
             return "Retry without --token to request a fresh session."
         case .notConnected:

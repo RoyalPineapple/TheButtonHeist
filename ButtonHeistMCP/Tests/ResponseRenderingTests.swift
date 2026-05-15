@@ -60,6 +60,24 @@ struct ResponseRenderingTests {
         #expect(texts[2] == FenceResponse.ok(message: "done").compactFormatted())
     }
 
+    @Test("MCP renders session-lock diagnostics")
+    func rendersSessionLockDiagnostics() {
+        let payload = SessionLockedPayload(
+            message: "Session is locked; owner driver id: driver-a; active connections: 0; remaining timeout: 8s.",
+            activeConnections: 0
+        )
+        let response = FenceResponse.failure(FenceError.sessionLocked(payload.message))
+
+        let result = ButtonHeistMCPServer.renderResponse(response, backgroundDeltas: [])
+        let texts = textContents(result)
+
+        #expect(result.isError == true)
+        #expect(texts.count == 1)
+        #expect(texts[0].contains("owner driver id: driver-a"))
+        #expect(texts[0].contains("remaining timeout: 8s"))
+        #expect(texts[0].contains("BUTTONHEIST_DRIVER_ID"))
+    }
+
     private func textContents(_ result: CallTool.Result) -> [String] {
         result.content.compactMap { content in
             if case .text(let text, _, _) = content { return text }

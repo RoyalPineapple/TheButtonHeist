@@ -31,12 +31,15 @@ final class SessionLockTests: XCTestCase {
             }
         }
 
-        let payload = SessionLockedPayload(message: "Session held by another driver", activeConnections: 1)
+        let payload = SessionLockedPayload(
+            message: "Session held by another driver; owner driver id: driver-a; active connections: 1; remaining timeout: 5s.",
+            activeConnections: 1
+        )
         try conn.handleMessage(encode(.sessionLocked(payload)))
 
         XCTAssertFalse(conn.isConnected)
         if case .sessionLocked(let msg) = disconnectReason {
-            XCTAssertEqual(msg, "Session held by another driver")
+            XCTAssertEqual(msg, payload.message)
         } else {
             XCTFail("Expected sessionLocked disconnect reason, got \(String(describing: disconnectReason))")
         }
@@ -54,11 +57,14 @@ final class SessionLockTests: XCTestCase {
             }
         }
 
-        let payload = SessionLockedPayload(message: "Another driver active", activeConnections: 3)
+        let payload = SessionLockedPayload(
+            message: "Another driver active; owner driver id: driver-a; active connections: 3.",
+            activeConnections: 3
+        )
         try conn.handleMessage(encode(.sessionLocked(payload)))
 
         XCTAssertNotNil(receivedPayload)
-        XCTAssertEqual(receivedPayload?.message, "Another driver active")
+        XCTAssertEqual(receivedPayload?.message, "Another driver active; owner driver id: driver-a; active connections: 3.")
         XCTAssertEqual(receivedPayload?.activeConnections, 3)
     }
 

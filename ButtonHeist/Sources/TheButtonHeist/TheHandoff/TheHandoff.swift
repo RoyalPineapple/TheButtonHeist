@@ -91,7 +91,8 @@ final class TheHandoff {
             case .authFailed:
                 return "Retry without a token to request a fresh session."
             case .sessionLocked:
-                return "Wait for the current driver to disconnect or for the session to time out."
+                return "Wait for the current driver to disconnect or for the session to time out. " +
+                    "If this is your own stale session, retry with the same BUTTONHEIST_DRIVER_ID or restart the app."
             case .timeout:
                 return "Check that the app is running with Button Heist enabled; use 'buttonheist list' to see available devices."
             case .noDeviceFound:

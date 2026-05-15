@@ -195,7 +195,7 @@ actor TheMuscle {
         /// A driver owns the session with at least one live connection.
         case active(driverId: String, connections: Set<Int>)
         /// All connections disconnected; session will release when the timer fires.
-        case draining(driverId: String, releaseTimer: Task<Void, Never>)
+        case draining(driverId: String, releaseTimer: Task<Void, Never>, releaseDeadline: Date)
     }
 
     private var sessionPhase: SessionPhase = .idle
@@ -209,7 +209,7 @@ actor TheMuscle {
         switch sessionPhase {
         case .idle: return nil
         case .active(let driverId, _): return driverId
-        case .draining(let driverId, _): return driverId
+        case .draining(let driverId, _, _): return driverId
         }
     }
 
@@ -616,22 +616,81 @@ actor TheMuscle {
             logger.info("Client \(clientId) joined existing session")
             return true
 
-        case .draining(let activeId, let timer) where driverIdentity == activeId:
+        case .draining(let activeId, let timer, _) where driverIdentity == activeId:
             timer.cancel()
             sessionPhase = .active(driverId: activeId, connections: [clientId])
             logger.info("Client \(clientId) rejoined session during grace period")
             return true
 
-        case .active, .draining:
-            let payload = SessionLockedPayload(
-                message: "Session is locked by another driver. Session will time out after \(Int(sessionReleaseTimeout))s of inactivity.",
-                activeConnections: activeSessionConnections.count
+        case .active(let driverId, let connections):
+            rejectClientForSessionLock(
+                clientId,
+                payload: sessionLockPayload(ownerDriverId: exposedDriverId(from: driverId), activeConnections: connections.count),
+                respond: respond
             )
-            sendMessage(.sessionLocked(payload), respond: respond)
-            logger.warning("Client \(clientId) rejected — session locked (\(self.activeSessionConnections.count) active connection(s))")
-            scheduleDelayedDisconnect(clientId)
+            return false
+
+        case .draining(let driverId, _, let releaseDeadline):
+            let remainingTimeoutSeconds = max(0, releaseDeadline.timeIntervalSince(Date()))
+            rejectClientForSessionLock(
+                clientId,
+                payload: sessionLockPayload(
+                    ownerDriverId: exposedDriverId(from: driverId),
+                    activeConnections: 0,
+                    remainingTimeoutSeconds: remainingTimeoutSeconds
+                ),
+                respond: respond
+            )
             return false
         }
+    }
+
+    private func rejectClientForSessionLock(
+        _ clientId: Int,
+        payload: SessionLockedPayload,
+        respond: @escaping @Sendable (Data) -> Void
+    ) {
+        sendMessage(.sessionLocked(payload), respond: respond)
+        logger.warning("Client \(clientId) rejected - \(payload.message, privacy: .public)")
+        scheduleDelayedDisconnect(clientId)
+    }
+
+    private func sessionLockPayload(
+        ownerDriverId: String?,
+        activeConnections: Int,
+        remainingTimeoutSeconds: TimeInterval? = nil
+    ) -> SessionLockedPayload {
+        SessionLockedPayload(
+            message: sessionLockMessage(
+                ownerDriverId: ownerDriverId,
+                activeConnections: activeConnections,
+                remainingTimeoutSeconds: remainingTimeoutSeconds
+            ),
+            activeConnections: activeConnections
+        )
+    }
+
+    private func sessionLockMessage(
+        ownerDriverId: String?,
+        activeConnections: Int,
+        remainingTimeoutSeconds: TimeInterval? = nil
+    ) -> String {
+        var details = ["Session is locked by another driver"]
+        if let ownerDriverId, !ownerDriverId.isEmpty {
+            details.append("owner driver id: \(ownerDriverId)")
+        }
+        details.append("active connections: \(activeConnections)")
+        if let remainingTimeoutSeconds {
+            details.append("remaining timeout: \(Int(max(remainingTimeoutSeconds, 0).rounded(.up)))s")
+        }
+        return details.joined(separator: "; ") + "."
+    }
+
+    /// Extract the user-facing driver ID, or nil for token-backed sessions so auth tokens never leak.
+    private func exposedDriverId(from driverIdentity: String) -> String? {
+        let prefix = "driver:"
+        guard driverIdentity.hasPrefix(prefix) else { return nil }
+        return String(driverIdentity.dropFirst(prefix.count))
     }
 
     private func claimSession(driverIdentity: String, clientId: Int) async {
@@ -660,8 +719,9 @@ actor TheMuscle {
         connections.remove(clientId)
         if connections.isEmpty {
             logger.info("All session connections gone, starting \(self.sessionReleaseTimeout)s release timer")
+            let releaseDeadline = Date().addingTimeInterval(sessionReleaseTimeout)
             let timer = makeReleaseTimer()
-            sessionPhase = .draining(driverId: driverId, releaseTimer: timer)
+            sessionPhase = .draining(driverId: driverId, releaseTimer: timer, releaseDeadline: releaseDeadline)
         } else {
             sessionPhase = .active(driverId: driverId, connections: connections)
         }
@@ -669,7 +729,7 @@ actor TheMuscle {
 
     /// Cancel the release timer if currently draining.
     private func cancelTimerIfDraining() {
-        if case .draining(_, let timer) = sessionPhase {
+        if case .draining(_, let timer, _) = sessionPhase {
             timer.cancel()
         }
     }
@@ -691,10 +751,11 @@ actor TheMuscle {
         case .active:
             // Connections exist — no timer needed; timer starts on last disconnect
             return
-        case .draining(let driverId, let oldTimer):
+        case .draining(let driverId, let oldTimer, _):
             oldTimer.cancel()
+            let releaseDeadline = Date().addingTimeInterval(sessionReleaseTimeout)
             let timer = makeReleaseTimer()
-            sessionPhase = .draining(driverId: driverId, releaseTimer: timer)
+            sessionPhase = .draining(driverId: driverId, releaseTimer: timer, releaseDeadline: releaseDeadline)
         }
     }
 

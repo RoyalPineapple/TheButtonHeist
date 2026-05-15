@@ -249,13 +249,19 @@ final class AuthMessageTests: XCTestCase {
     // MARK: - Session Locking
 
     func testSessionLockedEncodeDecode() throws {
-        let payload = SessionLockedPayload(message: "Session is locked", activeConnections: 2)
+        let payload = SessionLockedPayload(
+            message: "Session is locked by another driver; owner driver id: driver-a; active connections: 2; remaining timeout: 13s.",
+            activeConnections: 2
+        )
         let message = ServerMessage.sessionLocked(payload)
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
 
         if case .sessionLocked(let decodedPayload) = decoded {
-            XCTAssertEqual(decodedPayload.message, "Session is locked")
+            XCTAssertEqual(
+                decodedPayload.message,
+                "Session is locked by another driver; owner driver id: driver-a; active connections: 2; remaining timeout: 13s."
+            )
             XCTAssertEqual(decodedPayload.activeConnections, 2)
         } else {
             XCTFail("Expected sessionLocked, got \(decoded)")
