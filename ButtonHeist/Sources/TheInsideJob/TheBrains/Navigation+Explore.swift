@@ -289,9 +289,7 @@ extension Navigation {
             container: { isInside, current in isInside || current == container },
             element: { element, _, isInside -> (element: AccessibilityElement, origin: CGPoint?)? in
                 guard isInside,
-                      let heistId = self.stash.currentScreen.heistIdByElement[element],
-                      self.stash.viewportIds.contains(heistId),
-                      let entry = self.stash.currentScreen.findElement(heistId: heistId) else { return nil }
+                      let entry = self.stash.screenElement(for: element, in: .visible) else { return nil }
                 return (element: entry.element, origin: entry.contentSpaceOrigin)
             }
         )

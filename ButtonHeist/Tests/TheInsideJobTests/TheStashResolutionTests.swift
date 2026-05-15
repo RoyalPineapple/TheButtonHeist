@@ -45,24 +45,24 @@ final class TheStashResolutionTests: XCTestCase {
     /// Accumulated hierarchy nodes for matcher resolution.
     private var hierarchyNodes: [AccessibilityHierarchy] = []
     /// Accumulated elements (in registration order).
-    private var registeredEntries: [(element: AccessibilityElement, heistId: String)] = []
+    private var registeredEntries: [(element: AccessibilityElement, heistId: String, isLive: Bool)] = []
 
     /// Register an element into the current Screen. Rebuilds the screen value
     /// on every call so individual tests don't have to think about the
     /// memberwise init. `Screen.heistIdByElement` is the matcher path lookup.
     private func register(_ element: AccessibilityElement, heistId: String, index: Int) {
         hierarchyNodes.append(.element(element, traversalIndex: index))
-        registeredEntries.append((element, heistId))
+        registeredEntries.append((element, heistId, true))
         rebuildScreen()
     }
 
     /// Element registration that only adds the leaf to the heistId→entry map
     /// without putting it in the live hierarchy. Off-screen entries return
-    /// `.notFound` through `resolveTarget`; this helper is used by
+    /// nil from visible-scoped accessors; this helper is used by
     /// `selectElements()` and `findElement(heistId:)` tests that assert the
     /// union shape across viewport and off-viewport entries.
     private func registerOffScreen(_ element: AccessibilityElement, heistId: String) {
-        registeredEntries.append((element, heistId))
+        registeredEntries.append((element, heistId, false))
         rebuildScreen()
     }
 
@@ -78,7 +78,9 @@ final class TheStashResolutionTests: XCTestCase {
                 scrollView: nil
             )
             elements[entry.heistId] = screenElement
-            heistIdByElement[entry.element] = entry.heistId
+            if entry.isLive {
+                heistIdByElement[entry.element] = entry.heistId
+            }
         }
         bagman.currentScreen = Screen(
             elements: elements,
@@ -386,6 +388,29 @@ final class TheStashResolutionTests: XCTestCase {
             XCTFail("Expected .notFound under strict off-screen rule, got \(result)")
             return
         }
+    }
+
+    func testScopedHeistIdsSeparateVisibleFromKnownUnion() {
+        let onScreen = element(label: "Visible", traits: .button)
+        let offScreen = element(label: "Long List", traits: .button)
+        register(onScreen, heistId: "button_visible", index: 0)
+        registerOffScreen(offScreen, heistId: "long_list_button")
+
+        XCTAssertEqual(bagman.heistIds(in: .visible), ["button_visible"])
+        XCTAssertEqual(bagman.heistIds(in: .known), ["button_visible", "long_list_button"])
+        XCTAssertEqual(bagman.liveViewportIds, bagman.heistIds(in: .visible))
+        XCTAssertEqual(bagman.viewportIds, bagman.heistIds(in: .known))
+    }
+
+    func testScopedScreenElementRequiresVisibleScopeForLiveLookup() {
+        let onScreen = element(label: "Visible", traits: .button)
+        let offScreen = element(label: "Long List", traits: .button)
+        register(onScreen, heistId: "button_visible", index: 0)
+        registerOffScreen(offScreen, heistId: "long_list_button")
+
+        XCTAssertNotNil(bagman.screenElement(heistId: "button_visible", in: .visible))
+        XCTAssertNil(bagman.screenElement(heistId: "long_list_button", in: .visible))
+        XCTAssertNotNil(bagman.screenElement(heistId: "long_list_button", in: .known))
     }
 
     /// hasTarget — and wait_for absent by extension — must report off-screen
