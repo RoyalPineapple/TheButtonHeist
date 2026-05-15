@@ -1,0 +1,38 @@
+{
+  "version": 2,
+  "app": "com.buttonheist.testapp",
+  "recorded": "2026-05-15T00:00:00Z",
+  "steps": [
+    {
+      "command": "activate",
+      "label": "Controls Demo",
+      "traits": [
+        "button"
+      ],
+      "expect": {
+        "type": "screen_changed"
+      }
+    },
+    {
+      "command": "activate",
+      "label": "Display",
+      "traits": [
+        "button"
+      ],
+      "expect": {
+        "type": "screen_changed"
+      }
+    },
+    {
+      "command": "activate",
+      "label": "Controls Demo",
+      "traits": [
+        "button",
+        "backButton"
+      ],
+      "expect": {
+        "type": "screen_changed"
+      }
+    }
+  ]
+}
