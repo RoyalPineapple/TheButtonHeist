@@ -298,37 +298,27 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(candidates.map(\.container), [horizontal, vertical])
     }
 
-    func testPrioritizeScrollSearchCandidatesPromotesPreferredAxisAfterMerge() {
-        let horizontalContentSize = CGSize(width: 1200, height: 200)
-        let verticalContentSize = CGSize(width: 320, height: 1600)
+    func testScrollSearchCandidatesPreserveTreeOrderWithinPreferredAndFallbackGroups() {
         let horizontal = makeScrollableContainer(
-            contentSize: horizontalContentSize,
+            contentSize: CGSize(width: 1200, height: 200),
             frame: CGRect(x: 0, y: 0, width: 320, height: 200)
         )
-        let vertical = makeScrollableContainer(
-            contentSize: verticalContentSize,
+        let verticalOne = makeScrollableContainer(
+            contentSize: CGSize(width: 320, height: 1600),
             frame: CGRect(x: 0, y: 220, width: 320, height: 400)
         )
-        let candidates: [(target: Navigation.ScrollableTarget, container: AccessibilityContainer)] = [
-            (
-                .swipeable(frame: horizontal.frame, contentSize: horizontalContentSize),
-                horizontal
-            ),
-            (
-                .swipeable(frame: vertical.frame, contentSize: verticalContentSize),
-                vertical
-            )
-        ]
-
-        let prioritized = brains.navigation.prioritizeScrollSearchCandidates(
-            candidates,
-            preferredAxis: .vertical
+        let verticalTwo = makeScrollableContainer(
+            contentSize: CGSize(width: 320, height: 1800),
+            frame: CGRect(x: 0, y: 640, width: 320, height: 400)
         )
+        installScrollableContainers([horizontal, verticalOne, verticalTwo])
 
-        XCTAssertEqual(prioritized.map(\.container), [vertical, horizontal])
+        let candidates = brains.navigation.scrollSearchCandidates(preferredAxis: .vertical)
+
+        XCTAssertEqual(candidates.map(\.container), [verticalOne, verticalTwo, horizontal])
     }
 
-    func testNextScrollSearchCandidateUsesKnownSiblingAfterFirstContainerExhausted() {
+    func testFindScrollTargetUsesKnownSiblingAfterFirstContainerExhausted() {
         let first = makeScrollableContainer(
             contentSize: CGSize(width: 320, height: 2000),
             frame: CGRect(x: 0, y: 0, width: 320, height: 400)
@@ -338,11 +328,10 @@ final class TheBrainsScrollTests: XCTestCase {
             frame: CGRect(x: 0, y: 420, width: 320, height: 400)
         )
         installScrollableContainers([first, sibling])
-        let candidates = brains.navigation.scrollSearchCandidates(preferredAxis: .vertical)
 
-        let result = brains.navigation.nextScrollSearchCandidate(
-            from: candidates,
-            exhausted: [first]
+        let result = brains.navigation.findScrollTarget(
+            preferredAxis: .vertical,
+            excluding: [first]
         )
 
         XCTAssertEqual(result?.container, sibling)
