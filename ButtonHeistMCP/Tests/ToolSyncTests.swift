@@ -101,8 +101,8 @@ struct ToolSyncTests {
         }
     }
 
-    @Test("MCP dispatch switch covers all tools")
-    func dispatchSwitchCoversAllTools() {
+    @Test("MCP direct tools stay aligned with direct commands")
+    func directToolsStayAlignedWithDirectCommands() {
         // Tools that are purely grouped (no matching direct command name)
         let purelyGroupedToolNames: Set<String> = ["gesture"]
 

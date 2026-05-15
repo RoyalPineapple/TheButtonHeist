@@ -1224,6 +1224,87 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(summaries[1].error, "skipped: stop_on_error stopped batch after step 0")
     }
 
+    @ButtonHeistActor
+    func testBatchRoutesNestedMCPToolShapesBeforeExecution() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        mockConn.autoResponse = { _ in
+            .actionResult(ActionResult(success: true, method: .activate))
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "run_batch",
+            "steps": [
+                ["command": "gesture", "type": "swipe", "direction": "left"],
+                ["command": "scroll", "mode": "search", "label": "Done"],
+                ["command": "edit_action", "action": "dismiss"],
+            ] as [[String: Any]],
+        ])
+
+        guard case .batch(let results, _, let failedIndex, _, _, _, let summaries, _) = response else {
+            XCTFail("Expected batch response, got \(response)")
+            return
+        }
+        XCTAssertEqual(results.count, 3)
+        XCTAssertNil(failedIndex)
+        XCTAssertEqual(summaries.map(\.command), ["swipe", "element_search", "dismiss_keyboard"])
+    }
+
+    @ButtonHeistActor
+    func testBatchStillAcceptsRawFenceCommandShapes() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        mockConn.autoResponse = { _ in
+            .actionResult(ActionResult(success: true, method: .activate))
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "run_batch",
+            "steps": [
+                ["command": "swipe", "direction": "left"],
+                ["command": "scroll_to_visible", "label": "Done"],
+                ["command": "dismiss_keyboard"],
+            ] as [[String: Any]],
+        ])
+
+        guard case .batch(let results, _, let failedIndex, _, _, _, let summaries, _) = response else {
+            XCTFail("Expected batch response, got \(response)")
+            return
+        }
+        XCTAssertEqual(results.count, 3)
+        XCTAssertNil(failedIndex)
+        XCTAssertEqual(summaries.map(\.command), ["swipe", "scroll_to_visible", "dismiss_keyboard"])
+    }
+
+    @ButtonHeistActor
+    func testBatchReportsNestedRoutingErrorsWithStepIndex() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        mockConn.autoResponse = { _ in
+            .actionResult(ActionResult(success: true, method: .activate))
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "run_batch",
+            "policy": "stop_on_error",
+            "steps": [
+                ["command": "activate", "identifier": "first"],
+                ["command": "gesture"],
+                ["command": "activate", "identifier": "skipped"],
+            ] as [[String: Any]],
+        ])
+
+        guard case .batch(let results, _, let failedIndex, _, _, _, let summaries, _) = response else {
+            XCTFail("Expected batch response, got \(response)")
+            return
+        }
+        XCTAssertEqual(results.count, 2)
+        XCTAssertEqual(failedIndex, 1)
+        XCTAssertEqual(summaries.map(\.command), ["activate", "gesture", "activate"])
+        XCTAssertEqual(
+            summaries[1].error,
+            "run_batch step 1: Missing required parameter: type"
+        )
+        XCTAssertEqual(summaries[2].error, "skipped: stop_on_error stopped batch after step 1")
+    }
+
     // MARK: - Explore via get_interface --full
 
     @ButtonHeistActor
