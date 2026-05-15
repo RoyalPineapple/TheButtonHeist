@@ -47,12 +47,16 @@ Start the MCP host or agent from the worktree you are testing. If a host loaded 
 
 Exporting these variables after the host has already launched does not update an already-running MCP server process. Start a fresh MCP session or agent after changing the target environment.
 
-**Reload after rebuilds.** MCP hosts usually keep the server process alive for the lifetime of the loaded MCP session. Rebuilding `ButtonHeistMCP` updates the binary on disk, but an already-loaded server keeps running the old code. If tool behavior still matches the previous build, end the MCP session or start a fresh agent/host from this worktree.
+**Reload after rebuilds.** MCP hosts usually keep the server process alive for the lifetime of the loaded MCP session. Rebuilding `ButtonHeistMCP` updates the binary on disk, but an already-loaded server keeps running the old code. End the MCP session or start a fresh agent/host from this worktree after each rebuild. If tool behavior still matches the previous build after restarting, verify the host resolved `.mcp.json` from the correct worktree.
 
 **Run against a simulator endpoint:**
 
 ```bash
 TASK_SLUG="mcp-reload-debug"
+SIM_UDID=$(xcrun simctl create "$TASK_SLUG" "iPhone 16 Pro")
+xcrun simctl boot "$SIM_UDID"
+xcrun simctl bootstatus "$SIM_UDID" -b
+
 INSIDEJOB_PORT=$((RANDOM % 10000 + 20000))
 
 SIMCTL_CHILD_INSIDEJOB_PORT="$INSIDEJOB_PORT" \
