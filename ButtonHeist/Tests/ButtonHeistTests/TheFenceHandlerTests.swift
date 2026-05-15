@@ -1054,6 +1054,37 @@ final class TheFenceHandlerTests: XCTestCase {
         }
     }
 
+    @ButtonHeistActor
+    func testParseExpectationDiscriminatorCoversAllWireTypes() async throws {
+        let (fence, _) = makeConnectedFence()
+        let cases: [(type: String, payload: [String: Any], expected: ActionExpectation)] = [
+            ("screen_changed", ["type": "screen_changed"], .screenChanged),
+            ("elements_changed", ["type": "elements_changed"], .elementsChanged),
+            ("element_updated", ["type": "element_updated"], .elementUpdated()),
+            (
+                "element_appeared",
+                ["type": "element_appeared", "matcher": ["label": "Cart"]],
+                .elementAppeared(ElementMatcher(label: "Cart"))
+            ),
+            (
+                "element_disappeared",
+                ["type": "element_disappeared", "matcher": ["label": "Spinner"]],
+                .elementDisappeared(ElementMatcher(label: "Spinner"))
+            ),
+            (
+                "compound",
+                ["type": "compound", "expectations": [["type": "screen_changed"]]],
+                .compound([.screenChanged])
+            ),
+        ]
+
+        XCTAssertEqual(Set(cases.map(\.type)), Set(ActionExpectation.wireTypeValues))
+        for testCase in cases {
+            let result = try fence.parseExpectation(["expect": testCase.payload])
+            XCTAssertEqual(result, testCase.expected, "Failed to parse \(testCase.type)")
+        }
+    }
+
     // MARK: - Batch Expectation Counting
 
     @ButtonHeistActor

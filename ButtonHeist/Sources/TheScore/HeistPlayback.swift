@@ -150,10 +150,15 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
         if let ordinal { dictionary["ordinal"] = ordinal }
 
         for (key, playbackValue) in arguments {
-            dictionary[key] = playbackValue.toAny()
+            dictionary[key] = Self.requestValue(for: key, playbackValue: playbackValue).toAny()
         }
 
         return dictionary
+    }
+
+    private static func requestValue(for key: String, playbackValue: HeistValue) -> HeistValue {
+        guard key == "expect" else { return playbackValue }
+        return playbackValue.normalizingLegacyExpectation()
     }
 
     /// Build a scroll_to_visible request from this step's element matcher.
@@ -260,6 +265,107 @@ public enum HeistValue: Codable, Sendable, Equatable {
             }
             return .object(result)
         default:
+            return nil
+        }
+    }
+}
+
+// MARK: - Legacy Expectation Playback
+
+private extension HeistValue {
+    func normalizingLegacyExpectation() -> HeistValue {
+        switch self {
+        case .string(let value):
+            return Self.normalizedStringExpectation(value) ?? self
+        case .array(let values):
+            return .object([
+                "type": .string("compound"),
+                "expectations": .array(values.map { $0.normalizingLegacyExpectation() }),
+            ])
+        case .object(let object):
+            if object["type"] != nil {
+                return .object(Self.normalizedObjectExpectation(object))
+            }
+            return Self.normalizedLegacyWrapper(object) ?? self
+        case .int, .double, .bool:
+            return self
+        }
+    }
+
+    private static func normalizedStringExpectation(_ value: String) -> HeistValue? {
+        switch value {
+        case "screen_changed", "screenChanged":
+            return .object(["type": .string("screen_changed")])
+        case "elements_changed", "elementsChanged":
+            return .object(["type": .string("elements_changed")])
+        default:
+            return nil
+        }
+    }
+
+    private static func normalizedObjectExpectation(_ object: [String: HeistValue]) -> [String: HeistValue] {
+        guard case .string("compound")? = object["type"] else { return object }
+
+        var normalized = object
+        if case .array(let expectations)? = object["expectations"] {
+            normalized["expectations"] = .array(expectations.map { $0.normalizingLegacyExpectation() })
+        }
+        return normalized
+    }
+
+    private static func normalizedLegacyWrapper(_ object: [String: HeistValue]) -> HeistValue? {
+        guard object.count == 1, let (key, payload) = object.first else { return nil }
+
+        switch key {
+        case "screenChanged", "screen_changed":
+            return .object(["type": .string("screen_changed")])
+        case "elementsChanged", "elements_changed":
+            return .object(["type": .string("elements_changed")])
+        case "elementUpdated", "element_updated":
+            guard var fields = payload.objectPayload else { return nil }
+            fields["type"] = .string("element_updated")
+            return .object(fields)
+        case "elementAppeared", "element_appeared":
+            return matcherExpectation(type: "element_appeared", payload: payload)
+        case "elementDisappeared", "element_disappeared":
+            return matcherExpectation(type: "element_disappeared", payload: payload)
+        case "compound":
+            guard let expectations = payload.expectationArrayPayload else { return nil }
+            return .object([
+                "type": .string("compound"),
+                "expectations": .array(expectations.map { $0.normalizingLegacyExpectation() }),
+            ])
+        default:
+            return nil
+        }
+    }
+
+    private static func matcherExpectation(type: String, payload: HeistValue) -> HeistValue {
+        .object([
+            "type": .string(type),
+            "matcher": payload.unlabeledPayload ?? payload,
+        ])
+    }
+
+    var objectPayload: [String: HeistValue]? {
+        guard case .object(let object) = self else { return nil }
+        return object
+    }
+
+    var unlabeledPayload: HeistValue? {
+        guard case .object(let object) = self else { return nil }
+        return object["_0"]
+    }
+
+    var expectationArrayPayload: [HeistValue]? {
+        switch self {
+        case .array(let values):
+            return values
+        case .object(let object):
+            if case .array(let values)? = object["_0"] { return values }
+            if case .array(let values)? = object["expectations"] { return values }
+            return nil
+        case .string, .int, .double, .bool:
             return nil
         }
     }

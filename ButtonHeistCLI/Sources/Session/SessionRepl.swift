@@ -309,8 +309,17 @@ nonisolated extension ReplSession {
 
         // Interpret positional arguments based on command context
         interpretPositionalArgs(command: command, positional: positional, into: &result)
+        normalizeExpectationArgument(in: &result)
 
         return result
+    }
+
+    private static func normalizeExpectationArgument(in result: inout [String: Any]) {
+        guard let rawExpectation = result["expect"] as? String,
+              let expectation = try? ExpectationArgumentParser.parse(rawExpectation) else {
+            return
+        }
+        result["expect"] = expectation
     }
 
     private static func interpretPositionalArgs(command: String, positional: [String], into result: inout [String: Any]) {
