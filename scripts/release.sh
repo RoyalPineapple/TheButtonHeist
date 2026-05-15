@@ -104,20 +104,17 @@ if [[ "$LOCAL_SHA" != "$REMOTE_SHA" ]]; then
     exit 1
 fi
 
-# Bump parser dependency if submodule is ahead of latest tag
+# Bump parser dependency if the submodule needs a new tag or Package.swift is stale.
 SUBMODULE_DIR="submodules/AccessibilitySnapshotBH"
 if [[ -d "$SUBMODULE_DIR" ]]; then
-    SUB_SHA=$(git -C "$SUBMODULE_DIR" rev-parse HEAD 2>/dev/null || true)
-    LATEST_PARSER_TAG=$(git -C "$SUBMODULE_DIR" tag -l --sort=-v:refname | head -1)
-    if [[ -n "$LATEST_PARSER_TAG" && -n "$SUB_SHA" ]]; then
-        TAGGED_SHA=$(git -C "$SUBMODULE_DIR" rev-parse "$LATEST_PARSER_TAG")
-        if [[ "$SUB_SHA" != "$TAGGED_SHA" ]]; then
-            echo "  Parser submodule ahead of $LATEST_PARSER_TAG — bumping..."
-            "$SCRIPT_DIR/bump-parser.sh"
-            git push origin main
-            LOCAL_SHA=$(git rev-parse HEAD)
-            echo "  ✓ Parser bumped, new HEAD: $(echo "$LOCAL_SHA" | cut -c1-8)"
-        fi
+    git submodule update --init --recursive "$SUBMODULE_DIR"
+    BEFORE_PARSER_BUMP=$(git rev-parse HEAD)
+    "$SCRIPT_DIR/bump-parser.sh"
+    AFTER_PARSER_BUMP=$(git rev-parse HEAD)
+    if [[ "$BEFORE_PARSER_BUMP" != "$AFTER_PARSER_BUMP" ]]; then
+        git push origin main
+        LOCAL_SHA="$AFTER_PARSER_BUMP"
+        echo "  ✓ Parser dependency bumped, new HEAD: $(echo "$LOCAL_SHA" | cut -c1-8)"
     fi
 fi
 
