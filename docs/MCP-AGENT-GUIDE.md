@@ -57,6 +57,11 @@ SIM_UDID=$(xcrun simctl create "$TASK_SLUG" "iPhone 16 Pro")
 xcrun simctl boot "$SIM_UDID"
 xcrun simctl bootstatus "$SIM_UDID" -b
 
+xcodebuild -workspace ButtonHeist.xcworkspace -scheme "BH Demo" \
+  -destination "platform=iOS Simulator,id=$SIM_UDID" build
+APP=$(ls -td ~/Library/Developer/Xcode/DerivedData/ButtonHeist*/Build/Products/Debug-iphonesimulator/BHDemo.app | head -1)
+xcrun simctl install "$SIM_UDID" "$APP"
+
 INSIDEJOB_PORT=$((RANDOM % 10000 + 20000))
 
 SIMCTL_CHILD_INSIDEJOB_PORT="$INSIDEJOB_PORT" \
@@ -76,6 +81,13 @@ BUTTONHEIST_DEVICE="127.0.0.1:$INSIDEJOB_PORT" \
 BUTTONHEIST_TOKEN="$TASK_SLUG" \
 BUTTONHEIST_DRIVER_ID="$TASK_SLUG" \
 ./scripts/buttonheist-mcp.sh
+```
+
+When the session is done, shut down and delete the dedicated simulator:
+
+```bash
+xcrun simctl shutdown "$SIM_UDID"
+xcrun simctl delete "$SIM_UDID"
 ```
 
 ## The Server Is Always Watching
