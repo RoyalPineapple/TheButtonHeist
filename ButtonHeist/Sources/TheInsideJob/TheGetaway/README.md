@@ -18,7 +18,7 @@ The getaway driver — runs all comms between the wire and the crew.
 2. **Observation level** — requestScreen, waitForIdle (`brains.executeWaitForIdle`), waitForChange (`brains.executeWaitForChange`)
 3. **Action level** (blocked for observers) — recording start/stop, or `brains.executeCommand(message)` for all action commands
 
-Before dispatching actions, checks `brains.computeBackgroundDelta()` — if the screen changed while the agent was thinking and the action targets a heistId, returns a synthetic "screen changed" result instead of executing the stale action.
+Before dispatching actions, checks `brains.computeBackgroundDelta()` — if the screen changed while the agent was thinking and the command targets a specific element, fails before execution and returns the current delta.
 
 ### Encode / decode / send
 

@@ -1,5 +1,7 @@
 #if canImport(UIKit)
 import XCTest
+import UIKit
+@testable import AccessibilitySnapshotParser
 import TheScore
 @testable import TheInsideJob
 
@@ -121,6 +123,43 @@ final class TheGetawayTests: XCTestCase {
             Set([1, 2, 3]),
             "All three clients must reach helloValidated; if any clientConnected lost its race against its dataReceived, that client would be missing"
         )
+    }
+
+    // MARK: - Stale Targeted Actions
+
+    func testStaleTargetedActionAfterScreenChangeReturnsFailureWithDeltaContext() async throws {
+        let (getaway, _, _) = await makeGetaway()
+        seedScreen(getaway.brains, elements: [("Home", .header, "home_header"), ("Old", .button, "button_old")])
+        getaway.brains.recordSentState(viewportHash: 1)
+        seedScreen(getaway.brains, elements: [("Settings", .header, "settings_header"), ("New", .button, "button_new")])
+
+        let result = getaway.staleTargetedActionFailure(
+            for: .touchTap(.init(elementTarget: .heistId("button_old"))),
+            backgroundDelta: screenChangedDelta()
+        )
+
+        let unwrapped = try XCTUnwrap(result)
+        XCTAssertFalse(unwrapped.success)
+        XCTAssertEqual(unwrapped.method, .syntheticTap)
+        XCTAssertEqual(unwrapped.errorKind, .actionFailed)
+        XCTAssertEqual(unwrapped.screenId, "settings")
+        XCTAssertTrue(unwrapped.interfaceDelta?.isScreenChanged == true)
+        XCTAssertTrue(unwrapped.message?.contains("target became stale after a screen change") == true)
+        XCTAssertTrue(unwrapped.message?.contains("retry against the current interface") == true)
+    }
+
+    func testStaleWaitForTargetDoesNotUseActionFailurePath() async {
+        let (getaway, _, _) = await makeGetaway()
+        seedScreen(getaway.brains, elements: [("Home", .header, "home_header"), ("Old", .button, "button_old")])
+        getaway.brains.recordSentState(viewportHash: 1)
+        seedScreen(getaway.brains, elements: [("Settings", .header, "settings_header")])
+
+        let result = getaway.staleTargetedActionFailure(
+            for: .waitFor(.init(elementTarget: .heistId("button_old"), timeout: 0.1)),
+            backgroundDelta: screenChangedDelta()
+        )
+
+        XCTAssertNil(result, "waitFor is wait-only; stale action failure semantics are only for targeted actions")
     }
 
     // MARK: - Recording auto-finish
@@ -537,6 +576,28 @@ final class TheGetawayTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(5))
         }
         XCTFail("waitFor timed out after \(timeout)")
+    }
+
+    private func seedScreen(
+        _ brains: TheBrains,
+        elements: [(label: String, traits: UIAccessibilityTraits, heistId: String)]
+    ) {
+        let pairs: [(AccessibilityElement, String)] = elements.map { entry in
+            let element = AccessibilityElement.make(
+                label: entry.label,
+                traits: entry.traits,
+                respondsToUserInteraction: false
+            )
+            return (element, entry.heistId)
+        }
+        brains.stash.currentScreen = .makeForTests(elements: pairs)
+    }
+
+    private func screenChangedDelta() -> InterfaceDelta {
+        .screenChanged(.init(
+            elementCount: 1,
+            newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+        ))
     }
 }
 #endif // canImport(UIKit)

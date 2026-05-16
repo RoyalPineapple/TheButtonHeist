@@ -300,16 +300,7 @@ final class TheGetaway {
                 }
                 let backgroundDelta = await brains.computeBackgroundDelta()
 
-                if let backgroundDelta, backgroundDelta.isScreenChanged,
-                   brains.screenChangedSinceLastSent,
-                   message.actionTarget != nil {
-                    let lastScreen = brains.lastSentScreenId ?? "unknown"
-                    var builder = ActionResultBuilder(method: .waitForChange, screenName: brains.screenName, screenId: brains.screenId)
-                    builder.message = "Screen changed while you were thinking"
-                        + " (\(lastScreen) → \(brains.screenId ?? "unknown"))"
-                        + " — action skipped, here is the current state"
-                    builder.interfaceDelta = backgroundDelta
-                    let actionResult = builder.success()
+                if let actionResult = staleTargetedActionFailure(for: message, backgroundDelta: backgroundDelta) {
                     await recordAndBroadcast(command: message, actionResult: actionResult, requestId: requestId, respond: respond)
                     return
                 }
@@ -318,6 +309,27 @@ final class TheGetaway {
                 await recordAndBroadcast(command: message, actionResult: actionResult, requestId: requestId, backgroundDelta: backgroundDelta, respond: respond)
             }
         }
+    }
+
+    func staleTargetedActionFailure(for message: ClientMessage, backgroundDelta: InterfaceDelta?) -> ActionResult? {
+        guard let backgroundDelta, backgroundDelta.isScreenChanged,
+              brains.screenChangedSinceLastSent,
+              message.isStaleSensitiveTargetedAction else {
+            return nil
+        }
+
+        let lastScreen = brains.lastSentScreenId ?? "unknown"
+        let currentScreen = brains.screenId ?? "unknown"
+        var builder = ActionResultBuilder(
+            method: TheBrains.diagnosticMethod(for: message),
+            screenName: brains.screenName,
+            screenId: brains.screenId
+        )
+        builder.message = "Action skipped because target became stale after a screen change; "
+            + "retry against the current interface. Screen changed while you were thinking "
+            + "(\(lastScreen) -> \(currentScreen))."
+        builder.interfaceDelta = backgroundDelta
+        return builder.failure(errorKind: .actionFailed)
     }
 
     // MARK: - Encode / Decode
@@ -528,6 +540,53 @@ private extension ServerMessage {
     var isScreenshot: Bool {
         if case .screen = self { return true }
         return false
+    }
+}
+
+private extension ClientMessage {
+    var isStaleSensitiveTargetedAction: Bool {
+        switch self {
+        case .activate,
+             .increment,
+             .decrement,
+             .performCustomAction,
+             .rotor,
+             .touchTap,
+             .touchLongPress,
+             .touchSwipe,
+             .touchDrag,
+             .touchPinch,
+             .touchRotate,
+             .touchTwoFingerTap,
+             .typeText,
+             .scroll,
+             .scrollToVisible,
+             .elementSearch,
+             .scrollToEdge:
+            return actionTarget != nil
+        case .clientHello,
+             .authenticate,
+             .requestInterface,
+             .subscribe,
+             .unsubscribe,
+             .ping,
+             .status,
+             .touchDrawPath,
+             .touchDrawBezier,
+             .editAction,
+             .setPasteboard,
+             .getPasteboard,
+             .resignFirstResponder,
+             .waitForIdle,
+             .waitFor,
+             .waitForChange,
+             .requestScreen,
+             .explore,
+             .startRecording,
+             .stopRecording,
+             .watch:
+            return false
+        }
     }
 }
 
