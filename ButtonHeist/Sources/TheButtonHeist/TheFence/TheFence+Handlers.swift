@@ -519,11 +519,7 @@ extension TheFence {
     }
 
     private func startWithoutImplicitObservation() async throws {
-        let previousAutoSubscribe = handoff.autoSubscribe
-        handoff.autoSubscribe = false
-        defer { handoff.autoSubscribe = previousAutoSubscribe }
-
-        try await start()
+        try await start(autoSubscribe: false)
     }
 
     func handleConnect(_ args: [String: Any]) async throws -> FenceResponse {

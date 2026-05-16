@@ -542,12 +542,12 @@ public final class TheFence {
     }
 
     /// Connect to a device and optionally enable auto-reconnect.
-    public func start() async throws {
+    public func start(autoSubscribe: Bool = true) async throws {
         if handoff.isConnected {
             return
         }
 
-        try await connect()
+        try await connect(autoSubscribe: autoSubscribe)
         if config.autoReconnect {
             let filter = config.deviceFilter ?? EnvironmentKey.buttonheistDevice.value
             handoff.setupAutoReconnect(filter: filter)
@@ -968,25 +968,26 @@ public final class TheFence {
         applyPostRecordCacheUpdate(cacheUpdate)
     }
 
-    private func connect() async throws {
+    private func connect(autoSubscribe: Bool = true) async throws {
         if let directDevice = config.directDevice {
-            try await connectDirect(to: directDevice)
+            try await connectDirect(to: directDevice, autoSubscribe: autoSubscribe)
             return
         }
         let filter = config.deviceFilter ?? EnvironmentKey.buttonheistDevice.value
         do {
             try await handoff.connectWithDiscovery(
                 filter: filter,
-                timeout: config.connectionTimeout
+                timeout: config.connectionTimeout,
+                autoSubscribe: autoSubscribe
             )
         } catch let error as TheHandoff.ConnectionError {
             throw FenceError(error)
         }
     }
 
-    private func connectDirect(to device: DiscoveredDevice) async throws {
+    private func connectDirect(to device: DiscoveredDevice, autoSubscribe: Bool) async throws {
         handoff.onStatus?("Connecting to \(device.name)...")
-        handoff.connect(to: device)
+        handoff.connect(to: device, autoSubscribe: autoSubscribe)
         do {
             try await handoff.waitForConnectionResult(timeout: config.connectionTimeout)
         } catch let error as TheHandoff.ConnectionError {
