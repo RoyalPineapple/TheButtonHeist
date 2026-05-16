@@ -538,7 +538,7 @@ Wait for the UI to change in a way that matches an expectation. With `expect`, t
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `expect` | `ActionExpectation?` | The change to wait for — `"screen_changed"`, `"elements_changed"`, or a JSON expectation object. When nil, any tree change satisfies. |
+| `expect` | `ActionExpectation?` | The change to wait for — prefer an object such as `{"type":"screen_changed"}`. Legacy top-level strings `"screen_changed"` and `"elements_changed"` are accepted by the Fence parser. When nil, any tree change satisfies. |
 | `timeout` | `Double?` | Max wait time in seconds (default: 10, max: 30) |
 
 Returns an `actionResult` with `method: "waitForChange"` and an `interfaceDelta` describing what changed. If the current state already satisfies a state predicate such as `element_appeared`, `element_disappeared`, or `element_updated` with `newValue`, the result can succeed with `noChange`. On timeout, returns `success: false` with `errorKind: "timeout"`.
@@ -1319,7 +1319,7 @@ The `expect` field classifies what kind of outcome the caller was going for. Exp
 
 #### Object form
 
-Every `ActionExpectation` serializes to a JSON object with a `type` discriminator. The `expect` field accepts this object form only.
+Every `ActionExpectation` serializes to a JSON object with a `type` discriminator. The schema advertises object expectations; the parser accepts legacy top-level simple strings (`"screen_changed"` and `"elements_changed"`) by normalizing them before validation. Compound sub-expectations remain object-only.
 
 | `type` | Payload | Description |
 |--------|---------|-------------|

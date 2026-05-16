@@ -1064,15 +1064,17 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testParseExpectationStringScreenChangedThrows() async {
+    func testParseExpectationLegacyStringScreenChanged() async throws {
         let (fence, _) = makeConnectedFence()
-        XCTAssertThrowsError(try fence.parseExpectation(["expect": "screen_changed"])) { error in
-            guard case FenceError.invalidRequest(let msg) = error else {
-                XCTFail("Expected FenceError.invalidRequest, got \(error)")
-                return
-            }
-            XCTAssertTrue(msg.contains("expected object"))
-        }
+        let result = try fence.parseExpectation(["expect": "screen_changed"])
+        XCTAssertEqual(result, .screenChanged)
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationLegacyStringElementsChanged() async throws {
+        let (fence, _) = makeConnectedFence()
+        let result = try fence.parseExpectation(["expect": "elements_changed"])
+        XCTAssertEqual(result, .elementsChanged)
     }
 
     @ButtonHeistActor
@@ -1083,7 +1085,8 @@ final class TheFenceHandlerTests: XCTestCase {
                 XCTFail("Expected FenceError.invalidRequest, got \(error)")
                 return
             }
-            XCTAssertTrue(msg.contains("expected object"))
+            XCTAssertTrue(msg.contains("Unknown expectation string"))
+            XCTAssertTrue(msg.contains("Valid: screen_changed, elements_changed"))
         }
     }
 
@@ -1095,7 +1098,21 @@ final class TheFenceHandlerTests: XCTestCase {
                 XCTFail("Expected FenceError.invalidRequest, got \(error)")
                 return
             }
-            XCTAssertTrue(msg.contains("expected object"))
+            XCTAssertTrue(msg.contains("Unknown expectation string"))
+            XCTAssertTrue(msg.contains("Valid: screen_changed, elements_changed"))
+        }
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationElementUpdatedStringThrows() async {
+        let (fence, _) = makeConnectedFence()
+        XCTAssertThrowsError(try fence.parseExpectation(["expect": "element_updated"])) { error in
+            guard case FenceError.invalidRequest(let msg) = error else {
+                XCTFail("Expected FenceError.invalidRequest, got \(error)")
+                return
+            }
+            XCTAssertTrue(msg.contains("Unknown expectation string"))
+            XCTAssertTrue(msg.contains("Valid: screen_changed, elements_changed"))
         }
     }
 
@@ -1107,7 +1124,8 @@ final class TheFenceHandlerTests: XCTestCase {
                 XCTFail("Expected FenceError.invalidRequest, got \(error)")
                 return
             }
-            XCTAssertTrue(msg.contains("expected object"))
+            XCTAssertTrue(msg.contains("Unknown expectation string"))
+            XCTAssertTrue(msg.contains("Valid: screen_changed, elements_changed"))
         }
     }
 
@@ -1119,7 +1137,8 @@ final class TheFenceHandlerTests: XCTestCase {
                 XCTFail("Expected FenceError.invalidRequest, got \(error)")
                 return
             }
-            XCTAssertTrue(msg.contains("expected object"))
+            XCTAssertTrue(msg.contains("Unknown expectation string"))
+            XCTAssertTrue(msg.contains("Valid: screen_changed, elements_changed"))
         }
     }
 
@@ -1185,6 +1204,19 @@ final class TheFenceHandlerTests: XCTestCase {
             result,
             .elementUpdated(heistId: "counter", property: .value, newValue: "5")
         )
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationFromLegacyHeistPlaybackDictionary() async throws {
+        let (fence, _) = makeConnectedFence()
+        let step = HeistEvidence(
+            command: "activate",
+            arguments: ["expect": .string("screen_changed")]
+        )
+
+        let result = try fence.parseExpectation(step.toRequestDictionary())
+
+        XCTAssertEqual(result, .screenChanged)
     }
 
     // MARK: - Parse Expectation: Discriminator Wire Shape
