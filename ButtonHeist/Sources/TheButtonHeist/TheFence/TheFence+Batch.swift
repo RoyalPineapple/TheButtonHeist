@@ -141,7 +141,7 @@ extension TheFence {
             let result = expectation
             let counted = result?.expectation != nil
             let met = counted ? result?.met : nil
-            let failed = result.map { !$0.met } ?? false
+            let failed = !actionResult.success || (result.map { !$0.met } ?? false)
             return StepOutcome(
                 isFailed: failed,
                 delta: actionResult.interfaceDelta,

@@ -1402,6 +1402,53 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testBatchStopsOnFailedActionResult() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        let delta: InterfaceDelta = .screenChanged(.init(
+            elementCount: 2,
+            newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+        ))
+        mockConn.autoResponse = { _ in
+            .actionResult(ActionResult(
+                success: false,
+                method: .activate,
+                message: "Action skipped because target became stale after a screen change; retry against the current interface.",
+                errorKind: .actionFailed,
+                interfaceDelta: delta
+            ))
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "run_batch",
+            "policy": "stop_on_error",
+            "steps": [
+                ["command": "activate", "identifier": "stale-button"],
+                ["command": "activate", "identifier": "later-button"],
+            ] as [[String: Any]],
+        ])
+
+        guard case .batch(let results, _, let failedIndex, _, _, _, let summaries, _) = response else {
+            XCTFail("Expected batch response, got \(response)")
+            return
+        }
+        XCTAssertEqual(results.count, 1, "Batch should stop after the failed action result")
+        XCTAssertEqual(failedIndex, 0)
+        let activateCommands = mockConn.sent.filter { sent in
+            if case .activate = sent.0 { return true }
+            return false
+        }
+        XCTAssertEqual(
+            activateCommands.count,
+            1,
+            "Later batch steps must not dispatch after a stale targeted action failure"
+        )
+        XCTAssertEqual(summaries.count, 2)
+        XCTAssertEqual(summaries[0].deltaKind, "screenChanged")
+        XCTAssertEqual(summaries[0].error, "Action skipped because target became stale after a screen change; retry against the current interface.")
+        XCTAssertEqual(summaries[1].error, "skipped: stop_on_error stopped batch after step 0")
+    }
+
+    @ButtonHeistActor
     func testBatchStopOnErrorSummarizesSkippedSteps() async throws {
         let (fence, mockConn) = makeConnectedFence()
         mockConn.autoResponse = { _ in
