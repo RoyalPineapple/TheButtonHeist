@@ -8,21 +8,31 @@ extension TheFence {
 
     /// Parse the `"expect"` field off a CLI/MCP request dictionary into a typed
     /// `ActionExpectation`. Returns `nil` when no expectation is set. The
-    /// accepted shape is the discriminator object used by `ActionExpectation`'s
-    /// wire encoding: `{"type": "...", …}`. Compound expectations use the same
-    /// object form with `{"type": "compound", "expectations": [...]}`.
+    /// preferred shape is the discriminator object used by `ActionExpectation`'s
+    /// wire encoding: `{"type": "...", …}`. For legacy raw clients, the simple
+    /// strings `"screen_changed"` and `"elements_changed"` are normalized to the
+    /// same object form before validation. Compound expectations use object
+    /// sub-expectations with `{"type": "compound", "expectations": [...]}`.
     func parseExpectation(_ dictionary: [String: Any]) throws -> ActionExpectation? {
         guard let expect = dictionary["expect"] else { return nil }
-        guard let dict = expect as? [String: Any] else {
-            throw FenceError.invalidRequest(
-                "Invalid expectation type: expected object with a \"type\" discriminator"
-            )
-        }
-        return try FenceExpectationParser.decode(dict)
+        return try FenceExpectationParser.decode(expect)
     }
 }
 
 private enum FenceExpectationParser {
+    static func decode(_ value: Any) throws -> ActionExpectation {
+        if let object = value as? [String: Any] {
+            return try decode(object)
+        }
+        if let legacyString = value as? String {
+            return try decodeLegacyString(legacyString)
+        }
+        throw FenceError.invalidRequest(
+            "Invalid expectation type: expected object with a \"type\" discriminator " +
+                "or legacy string (\(validLegacyStringTypes))"
+        )
+    }
+
     static func decode(_ object: [String: Any]) throws -> ActionExpectation {
         do {
             let data = try JSONSerialization.data(withJSONObject: object)
@@ -40,6 +50,22 @@ private enum FenceExpectationParser {
 
     private static var validTypes: String {
         ActionExpectation.wireTypeValues.joined(separator: ", ")
+    }
+
+    private static var validLegacyStringTypes: String {
+        "screen_changed, elements_changed"
+    }
+
+    private static func decodeLegacyString(_ string: String) throws -> ActionExpectation {
+        switch string {
+        case "screen_changed", "elements_changed":
+            return try decode(["type": string] as [String: Any])
+        default:
+            throw FenceError.invalidRequest(
+                "Unknown expectation string: \"\(string)\". Valid: \(validLegacyStringTypes). " +
+                    "The schema advertises object expectations; use {\"type\": \"screen_changed\"}."
+            )
+        }
     }
 
     private static func message(for error: DecodingError, object: [String: Any]) -> String {
