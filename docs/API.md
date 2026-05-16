@@ -608,6 +608,15 @@ cd ButtonHeistMCP && swift build -c release
 | `run_batch` | Execute an ordered batch of Fence requests in one MCP call | `steps` (required), `policy` |
 | `get_session_state` | Read-only summary of the current macOS-side session state | — |
 
+`get_session_state` reports the current connection phase and the last known failure/disconnect reason without doing observation work. It does not send `requestInterface` or `explore`.
+
+Additive payload fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `phase` | `String` | Current handoff phase: `disconnected`, `connecting`, `connected`, or `failed` |
+| `lastFailure` | `Object?` | Present when a typed failed/disconnected reason is known. Contains `errorCode`, failure `phase`, `retryable`, and optional `message`/`hint` |
+
 All tools use strict schemas (`additionalProperties: false`) for the call shape — only documented parameters are accepted. Semantic validation happens in TheFence handlers, which report malformed fields as `schema validation failed for <field>: observed <type/value>; expected <type/range/enum>`.
 
 `wait_for_change` is server-owned: with an expectation, TheInsideJob checks the current settled state first, then holds the request open until a later settled scan satisfies the same predicate or the timeout clears it.

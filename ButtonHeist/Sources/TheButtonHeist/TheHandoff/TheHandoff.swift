@@ -184,7 +184,7 @@ final class TheHandoff {
     private(set) var isDiscovering: Bool = false
     private(set) var connectionPhase: ConnectionPhase = .disconnected
     private(set) var reconnectPolicy: ReconnectPolicy = .disabled
-    private var connectionAttemptDisconnectReason: DisconnectReason?
+    private var connectionAttemptFailure: ConnectionError?
 
     /// Continuations awaiting a terminal connection-phase transition. Each
     /// continuation is resumed exactly once when the phase next becomes
@@ -195,18 +195,18 @@ final class TheHandoff {
     // MARK: - State Transitions
 
     private func transitionToConnecting(device: DiscoveredDevice) {
-        connectionAttemptDisconnectReason = nil
+        connectionAttemptFailure = nil
         connectionPhase = .connecting(device: device)
     }
 
     private func transitionToConnected(device: DiscoveredDevice, keepaliveTask: Task<Void, Never>) {
-        connectionAttemptDisconnectReason = nil
+        connectionAttemptFailure = nil
         connectionPhase = .connected(ConnectedSession(device: device, keepaliveTask: keepaliveTask))
         resumePhaseAwaiters(with: .success(()))
     }
 
     private func transitionToFailed(_ failure: ConnectionError) {
-        connectionAttemptDisconnectReason = nil
+        connectionAttemptFailure = failure
         let wasActive: Bool
         switch connectionPhase {
         case .connecting, .connected:
@@ -236,21 +236,23 @@ final class TheHandoff {
         }
         connectionPhase = .disconnected
         if wasActive {
-            connectionAttemptDisconnectReason = reason
             if let reason {
-                resumePhaseAwaiters(with: .failure(ConnectionError.disconnected(reason)))
+                let failure = ConnectionError.disconnected(reason)
+                connectionAttemptFailure = failure
+                resumePhaseAwaiters(with: .failure(failure))
             } else {
+                let failure = ConnectionError.connectionFailed(
+                    "Disconnected during connection attempt. The app may have been busy, suspended, or restarted before the handshake completed."
+                )
                 resumePhaseAwaiters(
-                    with: .failure(ConnectionError.connectionFailed(
-                        "Disconnected during connection attempt. The app may have been busy, suspended, or restarted before the handshake completed."
-                    ))
+                    with: .failure(failure)
                 )
             }
         } else if reason == nil {
             // No active transition and no new cause: clear any stale attempt cause.
             // If a cause arrives after the first disconnect, keep the original cause
             // because it is the one waitForConnectionResult reports on the fast path.
-            connectionAttemptDisconnectReason = nil
+            connectionAttemptFailure = nil
         }
     }
 
@@ -274,6 +276,30 @@ final class TheHandoff {
     var isConnected: Bool {
         if case .connected = connectionPhase { return true }
         return false
+    }
+
+    var connectionPhaseName: String {
+        switch connectionPhase {
+        case .disconnected:
+            return "disconnected"
+        case .connecting:
+            return "connecting"
+        case .connected:
+            return "connected"
+        case .failed:
+            return "failed"
+        }
+    }
+
+    var connectionDiagnosticFailure: ConnectionError? {
+        switch connectionPhase {
+        case .failed(let failure):
+            return failure
+        case .disconnected:
+            return connectionAttemptFailure
+        case .connecting, .connected:
+            return nil
+        }
     }
 
     var connectedDevice: DiscoveredDevice? {
@@ -693,8 +719,8 @@ final class TheHandoff {
         case .failed(let failure):
             throw failure
         case .disconnected:
-            if let reason = connectionAttemptDisconnectReason {
-                throw ConnectionError.disconnected(reason)
+            if let failure = connectionAttemptFailure {
+                throw failure
             }
             throw ConnectionError.connectionFailed(
                 "Disconnected during connection attempt. The app may have been busy, suspended, or restarted before the handshake completed."
@@ -749,7 +775,9 @@ final class TheHandoff {
     /// transition to `.connected` after the awaiters have already failed,
     /// leaving the handoff silently connected with an orphaned keepalive.
     private func failPhaseAwaitersWithTimeout() {
-        resumePhaseAwaiters(with: .failure(ConnectionError.timeout))
+        let failure = ConnectionError.timeout
+        connectionAttemptFailure = failure
+        resumePhaseAwaiters(with: .failure(failure))
         // After resuming awaiters, drop any in-flight connection. The
         // transitionToDisconnected call is now a no-op for awaiters because
         // resumePhaseAwaiters cleared the list, but it still tears down the
