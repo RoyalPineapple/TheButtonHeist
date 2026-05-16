@@ -25,11 +25,24 @@ extension TheFence {
                 timestamp: Date(),
                 tree: exploreResult.elements.map { .element($0) }
             )
-            return .interface(interface, detail: detail, explore: exploreResult)
+            let filtered = try filteredInterface(interface, args: args)
+            return .interface(
+                filtered.interface,
+                detail: detail,
+                filteredFrom: filtered.filteredFrom,
+                explore: exploreResult
+            )
         }
 
         let interface = try await sendAndAwaitInterface(.requestInterface, timeout: Timeouts.actionSeconds)
+        let filtered = try filteredInterface(interface, args: args)
+        return .interface(filtered.interface, detail: detail, filteredFrom: filtered.filteredFrom)
+    }
 
+    private func filteredInterface(
+        _ interface: Interface,
+        args: [String: Any]
+    ) throws -> (interface: Interface, filteredFrom: Int?) {
         // Matcher-based filtering takes precedence over heistId list
         let matcher = try elementMatcher(args)
         if matcher.hasPredicates {
@@ -39,7 +52,7 @@ extension TheFence {
                 timestamp: interface.timestamp,
                 tree: filtered.map { .element($0) }
             )
-            return .interface(filteredInterface, detail: detail, filteredFrom: total)
+            return (filteredInterface, total)
         }
 
         if let filterIds = try args.schemaStringArray("elements"), !filterIds.isEmpty {
@@ -49,9 +62,9 @@ extension TheFence {
                 timestamp: interface.timestamp,
                 tree: filtered.map { .element($0) }
             )
-            return .interface(filteredInterface, detail: detail, filteredFrom: interface.elements.count)
+            return (filteredInterface, interface.elements.count)
         }
-        return .interface(interface, detail: detail)
+        return (interface, nil)
     }
 
     private func getInterfaceScope(_ args: [String: Any]) throws -> GetInterfaceScope {

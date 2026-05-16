@@ -77,6 +77,40 @@ final class TheFenceHandlerTests: XCTestCase {
         }
     }
 
+    private func testElement(
+        _ heistId: String,
+        label: String,
+        identifier: String? = nil,
+        traits: [HeistTrait] = []
+    ) -> HeistElement {
+        HeistElement(
+            heistId: heistId,
+            description: label,
+            label: label,
+            value: nil,
+            identifier: identifier,
+            traits: traits,
+            frameX: 0,
+            frameY: 0,
+            frameWidth: 10,
+            frameHeight: 10,
+            actions: traits.contains(.button) ? [.activate] : []
+        )
+    }
+
+    private func exploredActionResult(elements: [HeistElement]) -> ActionResult {
+        ActionResult(
+            success: true,
+            method: .explore,
+            payload: .explore(ExploreResult(
+                elements: elements,
+                scrollCount: 1,
+                containersExplored: 1,
+                explorationTime: 0.1
+            ))
+        )
+    }
+
     // MARK: - Argument Parsing Helpers
 
     func testStringArg() {
@@ -1710,6 +1744,136 @@ final class TheFenceHandlerTests: XCTestCase {
         guard let (fullMessage, _) = fullMock.sent.last,
               case .explore = fullMessage else {
             XCTFail("Expected scope=full to send explore, got \(String(describing: fullMock.sent.last))")
+            return
+        }
+    }
+
+    @ButtonHeistActor
+    func testGetInterfaceFullScopeAppliesMatcherFilterAfterExplore() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        let submit = testElement("submit", label: "Submit", traits: [.button])
+        let cancel = testElement("cancel", label: "Cancel", traits: [.button])
+        let exploreResponse = exploredActionResult(elements: [submit, cancel])
+        mockConn.autoResponse = { message in
+            switch message {
+            case .explore:
+                return .actionResult(exploreResponse)
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "get_interface",
+            "scope": "full",
+            "label": "Submit",
+        ])
+
+        guard let (message, _) = mockConn.sent.last,
+              case .explore = message else {
+            XCTFail("Expected full scope to send explore, got \(String(describing: mockConn.sent.last))")
+            return
+        }
+
+        let json = response.jsonDict()!
+        XCTAssertEqual(json["filteredFrom"] as? Int, 2)
+        let explore = json["explore"] as? [String: Any]
+        XCTAssertEqual(explore?["elementCount"] as? Int, 2)
+        let interface = json["interface"] as! [String: Any]
+        let tree = interface["tree"] as! [[String: Any]]
+        XCTAssertEqual(tree.count, 1)
+        let element = tree[0]["element"] as! [String: Any]
+        XCTAssertEqual(element["heistId"] as? String, "submit")
+    }
+
+    @ButtonHeistActor
+    func testGetInterfaceFullScopeAppliesElementsFilterAfterExplore() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        let first = testElement("first", label: "First")
+        let second = testElement("second", label: "Second")
+        let exploreResponse = exploredActionResult(elements: [first, second])
+        mockConn.autoResponse = { message in
+            switch message {
+            case .explore:
+                return .actionResult(exploreResponse)
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "get_interface",
+            "scope": "full",
+            "elements": ["second"],
+        ])
+
+        let json = response.jsonDict()!
+        XCTAssertEqual(json["filteredFrom"] as? Int, 2)
+        let interface = json["interface"] as! [String: Any]
+        let tree = interface["tree"] as! [[String: Any]]
+        XCTAssertEqual(tree.count, 1)
+        let element = tree[0]["element"] as! [String: Any]
+        XCTAssertEqual(element["heistId"] as? String, "second")
+    }
+
+    @ButtonHeistActor
+    func testGetInterfaceVisibleScopeStillAppliesMatcherFilter() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        let submit = testElement("submit", label: "Submit", traits: [.button])
+        let cancel = testElement("cancel", label: "Cancel", traits: [.button])
+        mockConn.autoResponse = { message in
+            switch message {
+            case .requestInterface:
+                return .interface(Interface(timestamp: Date(), tree: [.element(submit), .element(cancel)]))
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "get_interface",
+            "scope": "visible",
+            "label": "Cancel",
+        ])
+
+        guard let (message, _) = mockConn.sent.last,
+              case .requestInterface = message else {
+            XCTFail("Expected visible scope to send requestInterface, got \(String(describing: mockConn.sent.last))")
+            return
+        }
+
+        let json = response.jsonDict()!
+        XCTAssertEqual(json["filteredFrom"] as? Int, 2)
+        let interface = json["interface"] as! [String: Any]
+        let tree = interface["tree"] as! [[String: Any]]
+        XCTAssertEqual(tree.count, 1)
+        let element = tree[0]["element"] as! [String: Any]
+        XCTAssertEqual(element["heistId"] as? String, "cancel")
+    }
+
+    @ButtonHeistActor
+    func testGetInterfaceDetailDoesNotChangeScopeDispatch() async {
+        let (fullFence, fullMock) = makeConnectedFence()
+        _ = try? await fullFence.execute(request: [
+            "command": "get_interface",
+            "scope": "full",
+            "detail": "full",
+        ])
+        guard let (fullMessage, _) = fullMock.sent.last,
+              case .explore = fullMessage else {
+            XCTFail("Expected detail=full with scope=full to send explore, got \(String(describing: fullMock.sent.last))")
+            return
+        }
+
+        let (visibleFence, visibleMock) = makeConnectedFence()
+        _ = try? await visibleFence.execute(request: [
+            "command": "get_interface",
+            "scope": "visible",
+            "detail": "summary",
+        ])
+        guard let (visibleMessage, _) = visibleMock.sent.last,
+              case .requestInterface = visibleMessage else {
+            XCTFail("Expected detail=summary with scope=visible to send requestInterface, got \(String(describing: visibleMock.sent.last))")
             return
         }
     }
