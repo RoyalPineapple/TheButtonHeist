@@ -2,6 +2,11 @@ import ArgumentParser
 import Foundation
 import ButtonHeist
 
+enum CLIGetInterfaceScope: String, ExpressibleByArgument, CaseIterable {
+    case full
+    case visible
+}
+
 struct GetInterfaceCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "get_interface",
@@ -13,7 +18,10 @@ struct GetInterfaceCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
     @OptionGroup var timeoutOption: TimeoutOption
 
-    @Flag(help: "Explore the full screen including off-screen content in scroll views")
+    @Option(help: "Interface scope: full (default) or visible")
+    var scope: CLIGetInterfaceScope?
+
+    @Flag(help: "Legacy alias for --scope full")
     var full: Bool = false
 
     @ButtonHeistActor
@@ -22,12 +30,14 @@ struct GetInterfaceCommand: AsyncParsableCommand {
             "command": TheFence.Command.getInterface.rawValue,
             "timeout": timeoutOption.timeout,
         ]
+        if let scope { request["scope"] = scope.rawValue }
         if full { request["full"] = true }
+        let effectiveScope = scope ?? .full
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
             request: request,
-            statusMessage: full ? "Exploring screen..." : "Requesting interface..."
+            statusMessage: effectiveScope == .full ? "Exploring screen..." : "Requesting interface..."
         )
     }
 }

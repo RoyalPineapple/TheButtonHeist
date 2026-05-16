@@ -44,6 +44,13 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
+    func testGetInterfaceScopeOptionsMatchFenceScope() {
+        XCTAssertEqual(
+            Set(CLIGetInterfaceScope.allCases.map(\.rawValue)),
+            Set(GetInterfaceScope.allCases.map(\.rawValue))
+        )
+    }
+
     func testExpectationArgumentParserNormalizesShorthand() throws {
         let parsed = try ExpectationArgumentParser.parse("screen_changed")
 

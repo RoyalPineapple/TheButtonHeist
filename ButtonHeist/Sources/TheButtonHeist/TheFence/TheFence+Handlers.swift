@@ -11,11 +11,11 @@ extension TheFence {
     // MARK: - Handler: Interface
 
     func handleGetInterface(_ args: [String: Any] = [:]) async throws -> FenceResponse {
-        let full = try args.schemaBoolean("full") ?? true
+        let scope = try getInterfaceScope(args)
         let detail = try args.schemaEnum("detail", as: InterfaceDetail.self) ?? .summary
 
-        // Full mode (default): explore the screen, return all discovered elements
-        if full {
+        // Full scope (default): explore the screen, return all discovered elements.
+        if scope == .full {
             let result = try await sendAndAwaitAction(.explore, timeout: Timeouts.exploreSeconds)
             lastActionHistory = .completed(result)
             guard case .explore(let exploreResult) = result.payload else {
@@ -52,6 +52,14 @@ extension TheFence {
             return .interface(filteredInterface, detail: detail, filteredFrom: interface.elements.count)
         }
         return .interface(interface, detail: detail)
+    }
+
+    private func getInterfaceScope(_ args: [String: Any]) throws -> GetInterfaceScope {
+        if let scope = try args.schemaEnum("scope", as: GetInterfaceScope.self) {
+            return scope
+        }
+        let legacyFull = try args.schemaBoolean("full") ?? true
+        return legacyFull ? .full : .visible
     }
 
     // MARK: - Handler: Screen

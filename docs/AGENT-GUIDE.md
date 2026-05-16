@@ -101,9 +101,9 @@ Each line is one element. The first token is the **heistId** — a stable identi
 
 ### The visibility problem: scroll views hide elements
 
-`get_interface` returns what's visible *right now*. But iOS apps are full of scroll views — lists, forms, collection views, nested scroll containers — and elements below the fold don't exist in the accessibility tree until they're scrolled into view. If you're looking at a long settings screen, you might see 12 elements, but there are 40 more waiting below the visible area.
+`get_interface` with `scope: "visible"` returns what's visible *right now*. But iOS apps are full of scroll views — lists, forms, collection views, nested scroll containers — and elements below the fold don't exist in the accessibility tree until they're scrolled into view. If you're looking at a long settings screen, you might see 12 elements, but there are 40 more waiting below the visible area.
 
-This means an element you need to interact with might not show up in `get_interface` at all. It's not missing — it's just off-screen, and the system hasn't rendered it yet. You have three strategies for dealing with this:
+This means an element you need to interact with might not show up in a visible-scoped `get_interface` at all. It's not missing — it's just off-screen, and the system hasn't rendered it yet. You have three strategies for dealing with this:
 
 **Strategy 1: Search while scrolling.** If you know what the element looks like (label, identifier, traits), `element_search` will scroll through containers on screen, checking after each scroll, and stops when the element appears. In MCP, this is the `scroll` tool with `mode: "search"`:
 
@@ -113,10 +113,10 @@ This means an element you need to interact with might not show up in `get_interf
 
 This is the right choice when you know what you're looking for but don't know where it is. The response tells you how many scrolls it took and returns the element's heistId once found.
 
-**Strategy 2: Full census.** If you need a complete inventory of everything on the screen — not just what's visible — use `get_interface` with `full: true`:
+**Strategy 2: Full census.** If you need a complete inventory of everything on the screen — not just what's visible — use `get_interface` with `scope: "full"` (the default):
 
 ```json
-{"tool": "get_interface", "arguments": {"full": true}}
+{"tool": "get_interface", "arguments": {"scope": "full"}}
 ```
 
 This explores every scrollable container on screen: scrolling page by page to discover all off-screen content, then restoring the original scroll positions. You get back every element the screen contains, including ones that were never visible. The response includes stats on what the exploration found:
@@ -132,7 +132,7 @@ This explores every scrollable container on screen: scrolling page by page to di
 }
 ```
 
-Use `full: true` when you need to understand the entire screen before acting — surveying a long form, counting items in a list, or planning a multi-step interaction across elements that aren't all visible at once.
+Use `scope: "full"` when you need to understand the entire screen before acting — surveying a long form, counting items in a list, or planning a multi-step interaction across elements that aren't all visible at once. `full: true` remains a legacy alias.
 
 **Strategy 3: Scroll manually.** When you want more control, scroll explicitly and check the delta:
 
@@ -145,7 +145,7 @@ The delta shows you which elements appeared (`+`) and disappeared (`-`) as conte
 **When to use which:**
 - You know the unseen element's label → `element_search` / `scroll mode=search`
 - You already discovered the element and need to return to it → `scroll_to_visible` / `scroll mode=to_visible`
-- You need the full picture → `get_interface` with `full: true`
+- You need the full picture → `get_interface` with `scope: "full"`
 - You're exploring or want step-by-step control → `scroll` + read deltas
 - The element is already visible → just use its heistId directly
 
@@ -446,14 +446,14 @@ Attach expectations to actions where you have a clear hypothesis. They cost noth
 
 ### Progressive disclosure
 
-Start with `get_interface` for the current screen. If you need more, filter by traits or labels. If a specific element is not visible, use `element_search`; if you need everything, use `full: true`. Use `scroll_to_visible` to return to a known `heistId` while it is still present in the current or preserved screen snapshot. Each level costs more time — escalate only when the cheaper option isn't enough.
+Start with `get_interface` for the current screen. If you need more, filter by traits or labels. If a specific element is not visible, use `element_search`; if you need everything, use `scope: "full"`. Use `scroll_to_visible` to return to a known `heistId` while it is still present in the current or preserved screen snapshot. Each level costs more time — escalate only when the cheaper option isn't enough.
 
 ## Quick Reference
 
 | Task | Tool | Key Parameters |
 |------|------|----------------|
-| Read visible UI | `get_interface` | `detail`, `label`, `traits` |
-| Read all UI (scroll-discovered) | `get_interface` | `full: true` |
+| Read visible UI | `get_interface` | `scope: "visible"`, `detail`, `label`, `traits` |
+| Read all UI (scroll-discovered) | `get_interface` | `scope: "full"` |
 | Find unseen off-screen element | `scroll mode=search` / `element_search` | `label`/`identifier` |
 | Return to known off-screen element | `scroll mode=to_visible` / `scroll_to_visible` | `heistId` |
 | Tap/activate a control | `activate` | `heistId`, `action` |
