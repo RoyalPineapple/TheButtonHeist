@@ -94,6 +94,23 @@ final class WaitForIntegrationTests: XCTestCase {
         return await insideJob.brains.performWaitFor(target: waitTarget)
     }
 
+    private func waitForChange(
+        expectation: ActionExpectation,
+        timeout: Double? = nil
+    ) async -> ActionResult {
+        await insideJob.brains.executeWaitForChange(
+            timeout: timeout ?? 5.0,
+            expectation: expectation
+        )
+    }
+
+    @discardableResult
+    private func refreshAndRecordSentState() -> Bool {
+        guard insideJob.brains.refresh() != nil else { return false }
+        insideJob.brains.recordSentState()
+        return true
+    }
+
     // MARK: - 1. Element already present — returns immediately
 
     func testWaitForAlreadyPresentReturnsImmediately() async throws {
@@ -313,6 +330,139 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertEqual(result.method, .waitFor)
         XCTAssertEqual(result.message, "absent confirmed after 0.0s")
         XCTAssertNil(result.errorKind)
+    }
+
+    // MARK: - wait_for_change current state
+
+    func testWaitForChangeElementAppearedAlreadyPresentReturnsImmediately() async throws {
+        let label = addLabel("WaitForChange-AlreadyPresent")
+        defer { label.removeFromSuperview() }
+
+        let result = await waitForChange(
+            expectation: .elementAppeared(ElementMatcher(label: "WaitForChange-AlreadyPresent")),
+            timeout: 5.0
+        )
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(result.method, .waitForChange)
+        XCTAssertEqual(result.message, "expectation already met by current state (0.0s)")
+        guard case .noChange = result.interfaceDelta else {
+            return XCTFail("Expected noChange delta, got \(String(describing: result.interfaceDelta))")
+        }
+    }
+
+    func testWaitForChangeElementDisappearedAlreadyAbsentReturnsImmediately() async throws {
+        let result = await waitForChange(
+            expectation: .elementDisappeared(ElementMatcher(label: "WaitForChange-NeverExisted")),
+            timeout: 5.0
+        )
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(result.method, .waitForChange)
+        XCTAssertEqual(result.message, "expectation already met by current state (0.0s)")
+        guard case .noChange = result.interfaceDelta else {
+            return XCTFail("Expected noChange delta, got \(String(describing: result.interfaceDelta))")
+        }
+    }
+
+    func testWaitForChangeElementAppearedAfterBaselineReturnsThroughChangePath() async throws {
+        let baseline = addLabel("WaitForChange-Baseline")
+        defer { baseline.removeFromSuperview() }
+        XCTAssertTrue(refreshAndRecordSentState())
+
+        let addTask = Task { @MainActor in
+            await Task.yield()
+            await Task.yield()
+            _ = self.addLabel("WaitForChange-Delayed")
+        }
+
+        let result = await waitForChange(
+            expectation: .elementAppeared(ElementMatcher(label: "WaitForChange-Delayed")),
+            timeout: 5.0
+        )
+        await addTask.value
+        for subview in window.subviews where subview.accessibilityLabel == "WaitForChange-Delayed" {
+            subview.removeFromSuperview()
+        }
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(result.method, .waitForChange)
+        XCTAssertTrue(result.message?.contains("expectation met after") == true)
+        guard case .elementsChanged = result.interfaceDelta else {
+            return XCTFail("Expected elementsChanged delta, got \(String(describing: result.interfaceDelta))")
+        }
+    }
+
+    func testWaitForChangeElementsChangedFallsThroughCurrentStateCheck() async throws {
+        let baseline = addLabel("WaitForChange-ElementsBaseline")
+        defer { baseline.removeFromSuperview() }
+        XCTAssertTrue(refreshAndRecordSentState())
+
+        let changed = addLabel("WaitForChange-ElementsChanged")
+        defer { changed.removeFromSuperview() }
+
+        let result = await waitForChange(
+            expectation: .elementsChanged,
+            timeout: 5.0
+        )
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(result.method, .waitForChange)
+        XCTAssertTrue(result.message?.contains("expectation met after") == true)
+        guard case .elementsChanged = result.interfaceDelta else {
+            return XCTFail("Expected elementsChanged delta, got \(String(describing: result.interfaceDelta))")
+        }
+    }
+
+    func testWaitForChangeElementDisappearedTimesOutWhenElementStillPresent() async throws {
+        let label = addLabel("WaitForChange-StillPresent")
+        defer { label.removeFromSuperview() }
+
+        let result = await waitForChange(
+            expectation: .elementDisappeared(ElementMatcher(label: "WaitForChange-StillPresent")),
+            timeout: 0.2
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .waitForChange)
+        XCTAssertEqual(result.errorKind, .timeout)
+        XCTAssertTrue(result.message?.contains("expectation not met") == true)
+    }
+
+    func testWaitForChangeElementUpdatedWithOldValueRequiresObservedUpdate() async throws {
+        let label = addLabel("WaitForChange-UpdateOldValue")
+        label.accessibilityValue = "Ready"
+        defer { label.removeFromSuperview() }
+
+        let result = await waitForChange(
+            expectation: .elementUpdated(
+                property: .value,
+                oldValue: "Loading",
+                newValue: "Ready"
+            ),
+            timeout: 0.2
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .waitForChange)
+        XCTAssertEqual(result.errorKind, .timeout)
+    }
+
+    func testWaitForChangeCompoundTimesOutWhenCurrentStatePartiallyMatches() async throws {
+        let label = addLabel("WaitForChange-CompoundPresent")
+        defer { label.removeFromSuperview() }
+
+        let result = await waitForChange(
+            expectation: .compound([
+                .elementAppeared(ElementMatcher(label: "WaitForChange-CompoundPresent")),
+                .elementAppeared(ElementMatcher(label: "WaitForChange-CompoundMissing")),
+            ]),
+            timeout: 0.2
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .waitForChange)
+        XCTAssertEqual(result.errorKind, .timeout)
     }
 }
 #endif
