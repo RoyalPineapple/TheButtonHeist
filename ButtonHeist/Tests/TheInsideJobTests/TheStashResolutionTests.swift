@@ -412,6 +412,53 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertNotNil(bagman.screenElement(heistId: "long_list_button", in: .known))
     }
 
+    func testResolveVisibleTargetFailsClosedForAmbiguousMatcher() {
+        let save1 = element(label: "Save", value: "draft")
+        let save2 = element(label: "Save", value: "final")
+        register(save1, heistId: "button_save_1", index: 0)
+        register(save2, heistId: "button_save_2", index: 1)
+
+        let result = bagman.resolveVisibleTarget(.matcher(ElementMatcher(label: "Save")))
+
+        guard case .ambiguous(let candidates, let diagnostics) = result else {
+            XCTFail("Expected visible ambiguity, got \(result)")
+            return
+        }
+        XCTAssertEqual(candidates.count, 2)
+        XCTAssertTrue(diagnostics.contains("2 elements match"))
+    }
+
+    func testResolveVisibleTargetPreservesExplicitOrdinalOutOfRange() {
+        let save = element(label: "Save", traits: .button)
+        register(save, heistId: "button_save", index: 0)
+
+        let result = bagman.resolveVisibleTarget(.matcher(ElementMatcher(label: "Save"), ordinal: 4))
+
+        guard case .notFound(let diagnostics) = result else {
+            XCTFail("Expected ordinal miss, got \(result)")
+            return
+        }
+        XCTAssertTrue(diagnostics.contains("ordinal 4 requested"))
+        XCTAssertTrue(diagnostics.contains("1 match"))
+    }
+
+    func testResolveVisibleTargetRequiresLiveHierarchy() {
+        let visible = element(label: "Visible", traits: .button)
+        let offScreen = element(label: "Below Fold", traits: .button)
+        register(visible, heistId: "button_visible", index: 0)
+        registerOffScreen(offScreen, heistId: "below_fold_button")
+
+        let knownResult = bagman.resolveTarget(.matcher(ElementMatcher(label: "Below Fold")))
+        XCTAssertEqual(knownResult.resolved?.screenElement.heistId, "below_fold_button")
+
+        let visibleResult = bagman.resolveVisibleTarget(.matcher(ElementMatcher(label: "Below Fold")))
+        guard case .notFound(let diagnostics) = visibleResult else {
+            XCTFail("Expected visible miss, got \(visibleResult)")
+            return
+        }
+        XCTAssertTrue(diagnostics.contains("No match for"))
+    }
+
     func testKnownOnlyEntryWithStaleObjectIsNotDispatchableUntilVisible() {
         let offScreen = element(label: "Below Fold", traits: .button)
         let object = UIButton(type: .system)

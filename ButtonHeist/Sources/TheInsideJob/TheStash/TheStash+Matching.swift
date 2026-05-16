@@ -180,10 +180,18 @@ extension TheStash {
     /// entries first, then known entries retained from exploration. Viewport
     /// reachability is handled by action execution, not by target resolution.
     func matchScreenElements(_ matcher: ElementMatcher, limit: Int) -> [ScreenElement] {
+        matchScreenElements(matcher, limit: limit, in: currentScreen)
+    }
+
+    func matchScreenElements(
+        _ matcher: ElementMatcher,
+        limit: Int,
+        in screen: Screen
+    ) -> [ScreenElement] {
         guard limit > 0 else { return [] }
         var matches: [ScreenElement] = []
         matches.reserveCapacity(limit)
-        for entry in selectElements() where entry.element.matches(matcher, mode: .exact) {
+        for entry in selectElements(in: screen) where entry.element.matches(matcher, mode: .exact) {
             matches.append(entry)
             if matches.count == limit { break }
         }

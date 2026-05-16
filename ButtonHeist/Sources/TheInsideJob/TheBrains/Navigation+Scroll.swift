@@ -33,7 +33,7 @@ extension Navigation {
         let reason: ScrollTargetDiagnosticReason
 
         func message(for screenElement: TheStash.ScreenElement) -> String {
-            let element = Self.elementDescription(screenElement)
+            let element = Navigation.describeScrollTarget(screenElement)
             switch reason {
             case .noScrollView:
                 return "scroll target failed: observed \(element) with no live scrollable ancestor; "
@@ -46,16 +46,6 @@ extension Navigation {
                     + "\(Self.axisDescription(available)); expected \(Self.axisDescription(required)); "
                     + "try a matching scroll direction or target an element inside a matching scroll container"
             }
-        }
-
-        private static func elementDescription(_ screenElement: TheStash.ScreenElement) -> String {
-            if let label = screenElement.element.label, !label.isEmpty {
-                return "\"\(label)\" (heistId: \(screenElement.heistId))"
-            }
-            if let identifier = screenElement.element.identifier, !identifier.isEmpty {
-                return "identifier \"\(identifier)\" (heistId: \(screenElement.heistId))"
-            }
-            return "heistId \(screenElement.heistId)"
         }
 
         private static func axisDescription(_ axis: ScrollAxis) -> String {
@@ -360,8 +350,10 @@ extension Navigation {
 
         stash.refresh()
 
-        // Already visible — ensure it's in the comfort zone and return
-        if let found = stash.resolveFirstMatch(elementTarget) {
+        // Already visible — ensure it's in the comfort zone and return.
+        // Known entries can guide a jump, but only the live visible hierarchy
+        // can prove scroll_to_visible success.
+        if let found = stash.resolveVisibleTarget(elementTarget).resolved {
             guard ensureOnScreenSync(found) else {
                 return .failure(
                     .scrollToVisible,
@@ -375,24 +367,27 @@ extension Navigation {
         }
 
         // Known element with recorded position — one-shot jump
-        if case .heistId(let heistId) = elementTarget,
-           let entry = (recordedScreen ?? stash.currentScreen).findElement(heistId: heistId),
+        let knownScreen = recordedScreen ?? stash.currentScreen
+        if let entry = knownOffscreenEntry(for: elementTarget, in: knownScreen),
            stash.jumpToRecordedPosition(entry) != nil {
             await tripwire.yieldRealFrames(Self.postJumpRealFrames)
             refresh()
-            if let found = stash.resolveFirstMatch(elementTarget) {
+            var liveResolution = stash.resolveVisibleTarget(elementTarget)
+            if let found = liveResolution.resolved {
                 let didEnsure = ensureOnScreenSync(found)
                 await tripwire.yieldRealFrames(Self.postJumpRealFrames)
                 refresh()
-                if didEnsure, stash.resolveFirstMatch(elementTarget) != nil {
+                liveResolution = stash.resolveVisibleTarget(elementTarget)
+                if didEnsure, liveResolution.resolved != nil {
                     return TheSafecracker.InteractionResult(success: true, method: .scrollToVisible, message: nil, value: nil)
                 }
             }
-            return .failure(.scrollToVisible, message: "Element not visible after scrolling to recorded position")
+            let suffix = liveResolution.diagnostics.isEmpty ? "" : ": \(liveResolution.diagnostics)"
+            return .failure(.scrollToVisible, message: "Element not visible after scrolling to recorded position\(suffix)")
         }
 
         return .failure(.scrollToVisible,
-                        message: "Element not in current screen or has no recorded scroll position. Use element_search to find unseen elements.")
+                        message: scrollToVisibleFailureMessage(for: elementTarget, in: knownScreen))
     }
 
     // MARK: - Element Search (Iterative)
@@ -428,8 +423,7 @@ extension Navigation {
         }
 
         // If we have a recorded position, try the one-shot path first
-        if case .heistId(let heistId) = searchTarget,
-           let entry = (recordedScreen ?? stash.currentScreen).findElement(heistId: heistId),
+        if let entry = knownOffscreenEntry(for: searchTarget, in: recordedScreen),
            let savedOffset = stash.jumpToRecordedPosition(entry) {
             await tripwire.yieldRealFrames(Self.postJumpRealFrames)
             refresh()
@@ -730,21 +724,55 @@ extension Navigation {
     /// recorded position when an element scrolled out of view since the last
     /// exploration committed.
     ///
-    /// Returns nil if the element is already on-screen or unknown. Post-0.2.25
-    /// the screen value is the only source of truth — once a refresh evicts
-    /// the heistId from `currentScreen`, it's unreachable.
-    func knownOffscreenEntry(for target: ElementTarget) -> Screen.ScreenElement? {
+    /// Returns nil if the element is already on-screen or unknown. Callers that
+    /// preserve a known semantic screen across a visible refresh pass it in
+    /// directly so the refresh does not erase the offscreen target before the
+    /// scroll decision.
+    func knownOffscreenEntry(for target: ElementTarget, in screen: Screen? = nil) -> Screen.ScreenElement? {
+        let screen = screen ?? stash.currentScreen
         let visible = stash.visibleIds
-        switch target {
-        case .heistId(let heistId):
-            guard !visible.contains(heistId) else { return nil }
-            return stash.currentScreen.findElement(heistId: heistId)
-        case .matcher:
-            guard let resolved = stash.resolveTarget(target).resolved,
-                  !visible.contains(resolved.screenElement.heistId)
-            else { return nil }
-            return resolved.screenElement
+        guard let resolved = stash.resolveTarget(target, in: screen).resolved,
+              !visible.contains(resolved.screenElement.heistId)
+        else { return nil }
+        return resolved.screenElement
+    }
+
+    func scrollToVisibleFailureMessage(for target: ElementTarget, in screen: Screen? = nil) -> String {
+        let screen = screen ?? stash.currentScreen
+        switch stash.resolveTarget(target, in: screen) {
+        case .resolved(let resolved):
+            return scrollToVisibleKnownTargetFailureMessage(resolved.screenElement)
+        case .notFound(let diagnostics), .ambiguous(_, let diagnostics):
+            return diagnostics
         }
+    }
+
+    private func scrollToVisibleKnownTargetFailureMessage(_ entry: Screen.ScreenElement) -> String {
+        let description = Self.describeScrollTarget(entry)
+        if entry.contentSpaceOrigin == nil {
+            return "scroll_to_visible failed: known target \(description) has no recorded scroll position; "
+                + "use element_search to find it by scrolling"
+        }
+        guard let scrollView = entry.scrollView else {
+            return "scroll_to_visible failed: known target \(description) has no live scrollable ancestor; "
+                + "use element_search to find it by scrolling"
+        }
+        if scrollView.bhIsUnsafeForProgrammaticScrolling {
+            return "scroll_to_visible failed: known target \(description) is inside a scroll view that is "
+                + "unsafe for programmatic scrolling; use element_search to use semantic search"
+        }
+        return "scroll_to_visible failed: known target \(description) could not be moved to its recorded position; "
+            + "use element_search to find it by scrolling"
+    }
+
+    nonisolated private static func describeScrollTarget(_ screenElement: TheStash.ScreenElement) -> String {
+        if let label = screenElement.element.label, !label.isEmpty {
+            return "\"\(label)\" (heistId: \(screenElement.heistId))"
+        }
+        if let identifier = screenElement.element.identifier, !identifier.isEmpty {
+            return "identifier \"\(identifier)\" (heistId: \(screenElement.heistId))"
+        }
+        return "heistId \(screenElement.heistId)"
     }
 
     // MARK: - Scroll Target Resolution

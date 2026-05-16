@@ -494,15 +494,25 @@ final class TheBrainsScrollTests: XCTestCase {
     /// Install a Screen whose `elements` includes an entry that's not in the
     /// live hierarchy — simulating an element retained from a previous
     /// exploration commit that has since scrolled off.
-    private func installScreenWithOffViewportEntry(
+    private func makeScreenWithOffViewportEntry(
         liveHierarchy: [(AccessibilityElement, String)],
         offViewport: [(AccessibilityElement, String, CGPoint?)]
-    ) {
-        brains.stash.currentScreen = .makeForTests(
+    ) -> Screen {
+        .makeForTests(
             elements: liveHierarchy.map { ($0.0, $0.1) },
             offViewport: offViewport.map {
                 Screen.OffViewportEntry($0.0, heistId: $0.1, contentSpaceOrigin: $0.2)
             }
+        )
+    }
+
+    private func installScreenWithOffViewportEntry(
+        liveHierarchy: [(AccessibilityElement, String)],
+        offViewport: [(AccessibilityElement, String, CGPoint?)]
+    ) {
+        brains.stash.currentScreen = makeScreenWithOffViewportEntry(
+            liveHierarchy: liveHierarchy,
+            offViewport: offViewport
         )
     }
 
@@ -516,6 +526,25 @@ final class TheBrainsScrollTests: XCTestCase {
 
         let entry = brains.navigation.knownOffscreenEntry(for: .heistId("button_item"))
         XCTAssertNotNil(entry, "Should return entry when heistId is not in live viewport")
+        XCTAssertEqual(entry?.heistId, "button_item")
+    }
+
+    func testKnownOffscreenEntryByHeistIdUsesRecordedScreenAfterVisibleRefresh() {
+        let visible = makeElement(label: "Visible")
+        let element = makeElement(label: "Item")
+        let recordedScreen = makeScreenWithOffViewportEntry(
+            liveHierarchy: [(visible, "visible_element")],
+            offViewport: [(element, "button_item", CGPoint(x: 0, y: 2000))]
+        )
+        brains.stash.currentScreen = .makeForTests(
+            elements: [(visible, "visible_element")]
+        )
+
+        let entry = brains.navigation.knownOffscreenEntry(
+            for: .heistId("button_item"),
+            in: recordedScreen
+        )
+
         XCTAssertEqual(entry?.heistId, "button_item")
     }
 
@@ -545,6 +574,25 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(entry?.heistId, "button_item")
     }
 
+    func testKnownOffscreenEntryByMatcherUsesRecordedScreenAfterVisibleRefresh() {
+        let visible = makeElement(label: "Visible")
+        let element = makeElement(label: "Item")
+        let recordedScreen = makeScreenWithOffViewportEntry(
+            liveHierarchy: [(visible, "visible_element")],
+            offViewport: [(element, "button_item", CGPoint(x: 0, y: 2000))]
+        )
+        brains.stash.currentScreen = .makeForTests(
+            elements: [(visible, "visible_element")]
+        )
+
+        let entry = brains.navigation.knownOffscreenEntry(
+            for: .matcher(ElementMatcher(label: "Item")),
+            in: recordedScreen
+        )
+
+        XCTAssertEqual(entry?.heistId, "button_item")
+    }
+
     func testKnownOffscreenEntryByMatcherReturnsNilWhenMatchIsLive() {
         let element = makeElement(label: "Item")
         installScreenWithOffViewportEntry(
@@ -556,6 +604,154 @@ final class TheBrainsScrollTests: XCTestCase {
             for: .matcher(ElementMatcher(label: "Item"))
         )
         XCTAssertNil(entry, "Should return nil when matcher hit is already in the live viewport")
+    }
+
+    func testKnownOffscreenEntryKeepsFreshVisibleGeometryAuthoritative() {
+        let visibleElement = makeElement(label: "Item")
+        let recordedElement = makeElement(label: "Item")
+        let recordedScreen = makeScreenWithOffViewportEntry(
+            liveHierarchy: [],
+            offViewport: [(recordedElement, "button_item", CGPoint(x: 0, y: 2000))]
+        )
+        brains.stash.currentScreen = .makeForTests(
+            elements: [(visibleElement, "button_item")]
+        )
+
+        let entry = brains.navigation.knownOffscreenEntry(
+            for: .matcher(ElementMatcher(label: "Item")),
+            in: recordedScreen
+        )
+
+        XCTAssertNil(
+            entry,
+            "Once the target is in the fresh visible parse, scroll_to_visible should use live geometry"
+        )
+    }
+
+    func testScrollToVisibleUnknownTargetUsesRecordedScreenDiagnostics() {
+        let visible = makeElement(label: "Visible")
+        let recordedScreen = makeScreenWithOffViewportEntry(
+            liveHierarchy: [(visible, "visible_element")],
+            offViewport: []
+        )
+        brains.stash.currentScreen = .makeForTests(
+            elements: [(visible, "visible_element")]
+        )
+
+        let message = brains.navigation.scrollToVisibleFailureMessage(
+            for: .heistId("missing_button"),
+            in: recordedScreen
+        )
+
+        XCTAssertTrue(message.contains("Element not found"))
+        XCTAssertTrue(message.contains("missing_button"))
+        XCTAssertTrue(message.contains("1 known element"))
+        XCTAssertTrue(message.contains("get_interface"))
+    }
+
+    func testScrollToVisibleVisibleAmbiguousMatcherFailsClosed() async throws {
+        let rootView = UIView()
+        rootView.backgroundColor = .white
+        rootView.addSubview(makeButton(label: "Duplicate", frame: CGRect(x: 40, y: 120, width: 260, height: 44)))
+        rootView.addSubview(makeButton(label: "Duplicate", frame: CGRect(x: 40, y: 180, width: 260, height: 44)))
+
+        let window = try installModalWindow(rootView: rootView)
+        defer {
+            window.rootViewController?.view.accessibilityViewIsModal = false
+            window.isHidden = true
+        }
+        await brains.tripwire.yieldFrames(3)
+
+        let result = await brains.navigation.executeScrollToVisible(
+            ScrollToVisibleTarget(elementTarget: .matcher(ElementMatcher(label: "Duplicate")))
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .scrollToVisible)
+        XCTAssertTrue(
+            result.message?.contains("2 elements match") ?? false,
+            "Expected ambiguity diagnostic, got \(String(describing: result.message))"
+        )
+    }
+
+    func testScrollToVisiblePreservesVisibleMatcherOrdinalOutOfRange() async throws {
+        let rootView = UIView()
+        rootView.backgroundColor = .white
+        rootView.addSubview(makeButton(label: "Save", frame: CGRect(x: 40, y: 120, width: 260, height: 44)))
+
+        let window = try installModalWindow(rootView: rootView)
+        defer {
+            window.rootViewController?.view.accessibilityViewIsModal = false
+            window.isHidden = true
+        }
+        await brains.tripwire.yieldFrames(3)
+
+        let result = await brains.navigation.executeScrollToVisible(
+            ScrollToVisibleTarget(elementTarget: .matcher(ElementMatcher(label: "Save"), ordinal: 3))
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .scrollToVisible)
+        XCTAssertTrue(
+            result.message?.contains("ordinal 3 requested") ?? false,
+            "Expected ordinal diagnostic, got \(String(describing: result.message))"
+        )
+    }
+
+    func testScrollToVisiblePostJumpAmbiguousLiveTargetFailsClosed() async throws {
+        let rootView = UIView()
+        rootView.backgroundColor = .white
+        let scrollView = AccessibilityRevealingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        scrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let firstTarget = makeAccessibleView(label: "Jump Target", frame: CGRect(x: 40, y: 900, width: 240, height: 44))
+        let secondTarget = makeAccessibleView(label: "Jump Target", frame: CGRect(x: 40, y: 960, width: 240, height: 44))
+        scrollView.revealedElements = [firstTarget, secondTarget]
+        scrollView.updateAccessibilityVisibility()
+        scrollView.addSubview(firstTarget)
+        scrollView.addSubview(secondTarget)
+        rootView.addSubview(scrollView)
+
+        let window = try installModalWindow(rootView: rootView)
+        defer {
+            window.rootViewController?.view.accessibilityViewIsModal = false
+            window.isHidden = true
+        }
+        await brains.tripwire.yieldFrames(3)
+        guard brains.refresh() != nil else {
+            throw XCTSkip("No live hierarchy available for scroll_to_visible post-jump regression test")
+        }
+        if !brains.stash.matchScreenElements(ElementMatcher(label: "Jump Target"), limit: 1).isEmpty {
+            throw XCTSkip("Parser exposed offscreen scroll content before the jump")
+        }
+
+        let recordedElement = makeElement(label: "Jump Target", traits: .button)
+        let recordedEntry = TheStash.ScreenElement(
+            heistId: "recorded_jump_target",
+            contentSpaceOrigin: CGPoint(x: 40, y: 900),
+            element: recordedElement,
+            object: nil,
+            scrollView: scrollView
+        )
+        let recordedScreen = Screen(
+            elements: [recordedEntry.heistId: recordedEntry],
+            hierarchy: [],
+            containerStableIds: [:],
+            heistIdByElement: [:],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
+
+        let result = await brains.navigation.executeScrollToVisible(
+            ScrollToVisibleTarget(elementTarget: .matcher(ElementMatcher(label: "Jump Target"))),
+            recordedScreen: recordedScreen
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .scrollToVisible)
+        XCTAssertTrue(
+            result.message?.contains("2 elements match") ?? false,
+            "Expected post-jump ambiguity diagnostic, got \(String(describing: result.message))"
+        )
     }
 
     // MARK: - resolveScrollTarget
@@ -884,6 +1080,40 @@ final class TheBrainsScrollTests: XCTestCase {
         )
     }
 
+    private func makeButton(label: String, frame: CGRect) -> UIButton {
+        let button = UIButton(type: .system)
+        button.setTitle(label, for: .normal)
+        button.accessibilityLabel = label
+        button.isAccessibilityElement = true
+        button.frame = frame
+        return button
+    }
+
+    private func makeAccessibleView(label: String, frame: CGRect) -> UIView {
+        let view = UIView(frame: frame)
+        view.backgroundColor = .white
+        view.accessibilityLabel = label
+        view.accessibilityTraits = .button
+        view.isAccessibilityElement = true
+        return view
+    }
+
+    private func installModalWindow(rootView: UIView) throws -> UIWindow {
+        let windowScene = try requireForegroundWindowScene()
+        let viewController = UIViewController()
+        viewController.view = rootView
+        viewController.view.frame = UIScreen.main.bounds
+        viewController.view.accessibilityViewIsModal = true
+
+        let window = UIWindow(windowScene: windowScene)
+        window.windowLevel = .alert + 30
+        window.rootViewController = viewController
+        window.frame = UIScreen.main.bounds
+        window.isHidden = false
+        window.layoutIfNeeded()
+        return window
+    }
+
     private func requireForegroundWindowScene() throws -> UIWindowScene {
         guard let scene = UIApplication.shared.connectedScenes
             .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
@@ -946,6 +1176,29 @@ final class TheBrainsScrollTests: XCTestCase {
             label.isAccessibilityElement = true
             label.frame = CGRect(x: 40, y: 120, width: 280, height: 44)
             view.addSubview(label)
+        }
+    }
+
+    private final class AccessibilityRevealingScrollView: UIScrollView {
+        var revealedElements: [UIView] = []
+        private let revealThreshold: CGFloat = 500
+
+        override var contentOffset: CGPoint {
+            didSet {
+                updateAccessibilityVisibility()
+            }
+        }
+
+        override func setContentOffset(_ contentOffset: CGPoint, animated: Bool) {
+            super.setContentOffset(contentOffset, animated: animated)
+            updateAccessibilityVisibility(for: contentOffset)
+        }
+
+        func updateAccessibilityVisibility(for offset: CGPoint? = nil) {
+            let isRevealed = (offset ?? contentOffset).y >= revealThreshold
+            for element in revealedElements {
+                element.isAccessibilityElement = isRevealed
+            }
         }
     }
 }
