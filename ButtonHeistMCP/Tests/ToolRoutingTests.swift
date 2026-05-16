@@ -129,18 +129,61 @@ struct ToolRoutingTests {
         #expect(error.message == "schema validation failed for type: observed missing; expected enum one of one_finger_tap, long_press, swipe, drag, pinch, rotate, two_finger_tap, draw_path, draw_bezier")
     }
 
-    @Test("raw grouped commands stay batch-only")
-    func rawGroupedCommandsStayBatchOnly() throws {
-        let topLevelResult = ButtonHeistMCPServer.routeToolRequest(name: "swipe", arguments: [:])
-        guard case .failure(let error) = topLevelResult else {
-            Issue.record("Expected top-level routing failure")
-            return
-        }
-        #expect(error.message == "Unknown tool: swipe")
+    @Test("top-level raw grouped commands report canonical grouped tool shape")
+    func topLevelRawGroupedCommandsReportCanonicalGroupedToolShape() {
+        let cases: [(toolName: String, message: String)] = [
+            (
+                "swipe",
+                "Tool \"swipe\" is grouped under \"gesture\"; call gesture with type=\"swipe\"."
+            ),
+            (
+                "scroll_to_visible",
+                "Tool \"scroll_to_visible\" is grouped under \"scroll\"; call scroll with mode=\"to_visible\"."
+            ),
+            (
+                "element_search",
+                "Tool \"element_search\" is grouped under \"scroll\"; call scroll with mode=\"search\"."
+            ),
+            (
+                "scroll_to_edge",
+                "Tool \"scroll_to_edge\" is grouped under \"scroll\"; call scroll with mode=\"to_edge\"."
+            ),
+            (
+                "dismiss_keyboard",
+                "Tool \"dismiss_keyboard\" is grouped under \"edit_action\"; call edit_action with action=\"dismiss\"."
+            ),
+        ]
 
-        let batchStep = try normalizedBatchStep(["command": "swipe", "direction": "up"])
-        #expect(batchStep["command"] as? String == "swipe")
-        #expect(batchStep["direction"] as? String == "up")
+        for routeCase in cases {
+            let result = ButtonHeistMCPServer.routeToolRequest(name: routeCase.toolName, arguments: [:])
+            guard case .failure(let error) = result else {
+                Issue.record("Expected top-level routing failure for \(routeCase.toolName)")
+                continue
+            }
+            #expect(error.message == routeCase.message)
+        }
+    }
+
+    @Test("raw grouped commands stay accepted in batch")
+    func rawGroupedCommandsStayAcceptedInBatch() throws {
+        let steps = try normalizeBatchSteps([
+            ["command": "swipe", "direction": "up"],
+            ["command": "scroll_to_visible", "heistId": "element-1"],
+            ["command": "element_search", "label": "Done"],
+            ["command": "scroll_to_edge", "heistId": "scroll-view", "edge": "bottom"],
+            ["command": "dismiss_keyboard"],
+        ])
+
+        #expect(steps[0]["command"] as? String == "swipe")
+        #expect(steps[0]["direction"] as? String == "up")
+        #expect(steps[1]["command"] as? String == "scroll_to_visible")
+        #expect(steps[1]["heistId"] as? String == "element-1")
+        #expect(steps[2]["command"] as? String == "element_search")
+        #expect(steps[2]["label"] as? String == "Done")
+        #expect(steps[3]["command"] as? String == "scroll_to_edge")
+        #expect(steps[3]["heistId"] as? String == "scroll-view")
+        #expect(steps[3]["edge"] as? String == "bottom")
+        #expect(steps[4]["command"] as? String == "dismiss_keyboard")
     }
 
     @Test("all registered tools route through the catalog")
