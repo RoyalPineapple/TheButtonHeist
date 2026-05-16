@@ -521,6 +521,16 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertTrue(bagman.hasTarget(.heistId("visible_button")))
     }
 
+    func testHasTargetHonorsExplicitOrdinal() {
+        let save1 = element(label: "Save", value: "draft")
+        let save2 = element(label: "Save", value: "final")
+        register(save1, heistId: "button_save_1", index: 0)
+        register(save2, heistId: "button_save_2", index: 1)
+
+        XCTAssertTrue(bagman.hasTarget(.matcher(ElementMatcher(label: "Save"), ordinal: 1)))
+        XCTAssertFalse(bagman.hasTarget(.matcher(ElementMatcher(label: "Save"), ordinal: 2)))
+    }
+
     func testRegisteredElementResolvesWithoutMarkPresented() {
         let element = element(label: "Combobox", traits: .button)
         register(element, heistId: "button_combobox", index: 0)

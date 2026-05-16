@@ -146,7 +146,8 @@ extension TheBrains {
             guard !result.success else { return nil }
             switch result.failureKind {
             case .treeUnavailable: return .actionFailed
-            case .timeout, .none: return .timeout
+            case .timeout: return .timeout
+            case .none: return .elementNotFound
             }
         }()
 
@@ -168,14 +169,9 @@ extension TheBrains {
         guard await refreshSemanticStateForWait(target: elementTarget) else {
             return .failure(.waitFor, message: TheBrains.treeUnavailableMessage, failureKind: .treeUnavailable)
         }
-        if target.resolvedAbsent {
-            if !stash.hasTarget(elementTarget) {
-                return .init(success: true, method: .waitFor, message: "absent confirmed after 0.0s", value: nil)
-            }
-        } else {
-            if stash.hasTarget(elementTarget) {
-                return .init(success: true, method: .waitFor, message: "matched immediately", value: nil)
-            }
+        var resolution = stash.resolveTarget(elementTarget)
+        if let result = waitForResult(resolution: resolution, absent: target.resolvedAbsent, elapsed: nil) {
+            return result
         }
 
         while ContinuousClock.now < deadline {
@@ -184,20 +180,59 @@ extension TheBrains {
                 return .failure(.waitFor, message: TheBrains.treeUnavailableMessage, failureKind: .treeUnavailable)
             }
             let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
-            if target.resolvedAbsent {
-                if !stash.hasTarget(elementTarget) {
-                    return .init(success: true, method: .waitFor, message: "absent confirmed after \(elapsed)s", value: nil)
-                }
-            } else {
-                if stash.hasTarget(elementTarget) {
-                    return .init(success: true, method: .waitFor, message: "matched after \(elapsed)s", value: nil)
-                }
+            resolution = stash.resolveTarget(elementTarget)
+            if let result = waitForResult(resolution: resolution, absent: target.resolvedAbsent, elapsed: elapsed) {
+                return result
             }
         }
 
         let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
-        let reason = target.resolvedAbsent ? "element still present" : "element not found"
-        return .failure(.waitFor, message: "timed out after \(elapsed)s (\(reason))", failureKind: .timeout)
+        let message = waitForTimeoutMessage(
+            absent: target.resolvedAbsent,
+            elapsed: elapsed,
+            resolution: resolution
+        )
+        return .failure(.waitFor, message: message, failureKind: .timeout)
+    }
+
+    private func waitForResult(
+        resolution: TheStash.TargetResolution,
+        absent: Bool,
+        elapsed: String?
+    ) -> TheSafecracker.InteractionResult? {
+        switch (absent, resolution) {
+        case (true, .notFound):
+            return .init(
+                success: true,
+                method: .waitFor,
+                message: "absent confirmed after \(elapsed ?? "0.0")s",
+                value: nil
+            )
+        case (true, .ambiguous(_, let diagnostics)):
+            return .failure(.waitFor, message: diagnostics)
+        case (true, .resolved):
+            return nil
+        case (false, .resolved):
+            let message = elapsed.map { "matched after \($0)s" } ?? "matched immediately"
+            return .init(success: true, method: .waitFor, message: message, value: nil)
+        case (false, .ambiguous(_, let diagnostics)):
+            return .failure(.waitFor, message: diagnostics)
+        case (false, .notFound):
+            return nil
+        }
+    }
+
+    private func waitForTimeoutMessage(
+        absent: Bool,
+        elapsed: String,
+        resolution: TheStash.TargetResolution
+    ) -> String {
+        let reason = absent ? "element still present" : "element not found"
+        let diagnostics = resolution.diagnostics
+        guard !diagnostics.isEmpty else {
+            return "timed out after \(elapsed)s (\(reason))"
+        }
+        return "timed out after \(elapsed)s (\(reason): \(diagnostics))"
     }
 
     /// `wait_for` predicates observe the fresh semantic hierarchy, not just the

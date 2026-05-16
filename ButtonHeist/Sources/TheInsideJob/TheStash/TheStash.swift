@@ -542,15 +542,16 @@ final class TheStash {
         return resolveTarget(effectiveTarget).resolved
     }
 
-    /// Existence check for wait-style predicates. Both heistIds and matchers
-    /// read the committed semantic screen; action execution owns any viewport
-    /// work needed to make a matched element reachable.
+    /// Boolean existence check for callers that only need present-vs-missing
+    /// target semantics. Ambiguous matches count as present, and explicit
+    /// ordinals must resolve at the requested index instead of falling back to
+    /// the first match.
     func hasTarget(_ target: ElementTarget) -> Bool {
-        switch target {
-        case .heistId(let heistId):
-            return screenElement(heistId: heistId, in: .known) != nil
-        case .matcher(let matcher, _):
-            return !matchScreenElements(matcher, limit: 1).isEmpty
+        switch resolveTarget(target) {
+        case .resolved, .ambiguous:
+            return true
+        case .notFound:
+            return false
         }
     }
 

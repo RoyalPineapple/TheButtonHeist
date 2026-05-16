@@ -67,7 +67,7 @@ extension Navigation {
             union = union.merging(parsed)
         }
 
-        if let target, stash.resolveFirstMatch(target) != nil {
+        if let target, hasTerminalExplorationResolution(target) {
             manifest.explorationTime = CACurrentMediaTime() - startTime
             return manifest
         }
@@ -214,7 +214,7 @@ extension Navigation {
 
             if result.inserted.isEmpty { break }
 
-            if let target, stash.resolveFirstMatch(target) != nil {
+            if let target, hasTerminalExplorationResolution(target) {
                 await restoreAndMarkExplored(
                     scrollTarget: scrollTarget, savedVisualOrigin: savedVisualOrigin,
                     container: container,
@@ -239,6 +239,15 @@ extension Navigation {
     }
 
     // MARK: - Exploration Helpers
+
+    private func hasTerminalExplorationResolution(_ target: ElementTarget) -> Bool {
+        switch stash.resolveTarget(target) {
+        case .resolved, .ambiguous:
+            return true
+        case .notFound:
+            return false
+        }
+    }
 
     private func restoreAndMarkExplored(
         scrollTarget: ScrollableTarget,
