@@ -144,11 +144,7 @@ extension TheBrains {
         let result = await executeWaitFor(target)
         let errorKind: ErrorKind? = {
             guard !result.success else { return nil }
-            switch result.failureKind {
-            case .treeUnavailable: return .actionFailed
-            case .timeout: return .timeout
-            case .none: return .elementNotFound
-            }
+            return Self.waitForErrorKind(for: result.failureKind)
         }()
 
         return await actionResultWithDelta(
@@ -233,6 +229,17 @@ extension TheBrains {
             return "timed out after \(elapsed)s (\(reason))"
         }
         return "timed out after \(elapsed)s (\(reason): \(diagnostics))"
+    }
+
+    static func waitForErrorKind(for failureKind: TheSafecracker.FailureKind?) -> ErrorKind {
+        switch failureKind {
+        case .treeUnavailable:
+            return .actionFailed
+        case .timeout:
+            return .timeout
+        case .none:
+            return .elementNotFound
+        }
     }
 
     /// `wait_for` predicates observe the fresh semantic hierarchy, not just the
