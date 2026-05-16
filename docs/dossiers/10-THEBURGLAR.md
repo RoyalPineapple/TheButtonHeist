@@ -59,7 +59,7 @@ for container in scrollableContainers {
 stash.currentScreen = union                                        // final union committed
 ```
 
-Mid-cycle writes to `currentScreen` are intentional: scroll-page termination heuristics (`stash.viewportIds == before`) read the latest page-only state. The union only becomes the agent-visible "full tree" at the end of the walk.
+Mid-cycle writes to `currentScreen` are intentional: scroll-page termination heuristics (`stash.visibleIds == before`) read the latest page-only viewport. The union only becomes the known semantic "full tree" at the end of the walk.
 
 ## Dependencies
 

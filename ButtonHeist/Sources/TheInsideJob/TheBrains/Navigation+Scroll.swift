@@ -69,9 +69,9 @@ extension Navigation {
         _ target: ScrollableTarget,
         direction: UIAccessibilityScrollDirection,
         animated: Bool = true
-    ) async -> (moved: Bool, previousOnScreen: Set<String>) {
-        let before = stash.viewportIds
-        let beforeAnchor = viewportAnchorSignature()
+    ) async -> (moved: Bool, previousVisibleIds: Set<String>) {
+        let before = stash.visibleIds
+        let beforeAnchor = visibleAnchorSignature()
 
         switch target {
         case .uiScrollView(let sv):
@@ -97,7 +97,7 @@ extension Navigation {
             )
             guard dispatched else { return (false, before) }
             let moved = await settleSwipeMotion(
-                previousOnScreen: before,
+                previousVisibleIds: before,
                 previousAnchor: beforeAnchor,
                 requireDirectionChangeSettle: isDirectionChange
             )
@@ -109,7 +109,7 @@ extension Navigation {
     /// Parse through post-gesture spring/inertia and consider the swipe settled
     /// when no new elements are discovered for a short consecutive frame window.
     private func settleSwipeMotion(
-        previousOnScreen: Set<String>,
+        previousVisibleIds: Set<String>,
         previousAnchor: Int?,
         requireDirectionChangeSettle: Bool
     ) async -> Bool {
@@ -118,20 +118,20 @@ extension Navigation {
             : .sameDirection
         var state = SettleSwipeLoopState(
             profile: profile,
-            previousViewport: previousOnScreen,
+            previousVisibleIds: previousVisibleIds,
             previousAnchor: previousAnchor
         )
-        var knownHeistIds = stash.viewportIds
+        var seenVisibleIds = stash.visibleIds
 
         while true {
             refresh()
-            let currentHeistIds = stash.viewportIds
-            let newHeistIds = currentHeistIds.subtracting(knownHeistIds)
-            knownHeistIds.formUnion(newHeistIds)
+            let currentVisibleIds = stash.visibleIds
+            let newHeistIds = currentVisibleIds.subtracting(seenVisibleIds)
+            seenVisibleIds.formUnion(newHeistIds)
 
             let step = state.advance(
-                viewportIds: stash.viewportIds,
-                anchorSignature: viewportAnchorSignature(),
+                visibleIds: currentVisibleIds,
+                anchorSignature: visibleAnchorSignature(),
                 newHeistIds: newHeistIds
             )
             if case .done = step { break }
@@ -146,8 +146,8 @@ extension Navigation {
     /// The returned hash is **in-process only** — Swift's hash seed is
     /// randomized per launch, so never persist, log, or compare these values
     /// across processes.
-    private func viewportAnchorSignature() -> Int? {
-        let anchors = stash.viewportIds.compactMap { heistId -> String? in
+    private func visibleAnchorSignature() -> Int? {
+        let anchors = stash.visibleIds.compactMap { heistId -> String? in
             guard let entry = stash.currentScreen.findElement(heistId: heistId),
                   let origin = entry.contentSpaceOrigin else { return nil }
             return "\(heistId):\(Int(origin.x.rounded())):\(Int(origin.y.rounded()))"
@@ -360,7 +360,7 @@ extension Navigation {
         let requestedAxis = Self.requiredAxis(for: searchDirection)
         var candidates = scrollSearchCandidates(preferredAxis: requestedAxis)
         var progress = ScrollSearchProgress(
-            initialVisibleHeistIds: stash.currentScreen.heistIds,
+            initialVisibleHeistIds: stash.visibleIds,
             knownContainers: Set(candidates.map(\.container)),
             maxScrolls: Self.scrollSearchMaxScrolls
         )
@@ -381,7 +381,7 @@ extension Navigation {
            let savedOffset = stash.jumpToRecordedPosition(entry) {
             await tripwire.yieldRealFrames(Self.postJumpRealFrames)
             refresh()
-            progress.recordVisibleHeistIds(stash.currentScreen.heistIds)
+            progress.recordVisibleHeistIds(stash.visibleIds)
             refreshScrollSearchCandidates(
                 preferredAxis: requestedAxis,
                 candidates: &candidates,
@@ -397,7 +397,7 @@ extension Navigation {
             stash.restoreScrollPosition(entry, to: savedOffset)
             await tripwire.yieldRealFrames(Self.postJumpRealFrames)
             refresh()
-            progress.recordVisibleHeistIds(stash.currentScreen.heistIds)
+            progress.recordVisibleHeistIds(stash.visibleIds)
             refreshScrollSearchCandidates(
                 preferredAxis: requestedAxis,
                 candidates: &candidates,
@@ -430,7 +430,7 @@ extension Navigation {
                 continue
             }
 
-            progress.markScrolledPage(in: container, visibleHeistIds: stash.currentScreen.heistIds)
+            progress.markScrolledPage(in: container, visibleHeistIds: stash.visibleIds)
             refreshScrollSearchCandidates(
                 preferredAxis: requestedAxis,
                 candidates: &candidates,
@@ -449,7 +449,7 @@ extension Navigation {
                 )
             }
 
-            if stash.viewportIds == before { progress.markContainerExhausted(container) }
+            if stash.visibleIds == before { progress.markContainerExhausted(container) }
         }
 
         return searchNotFoundResult(progress: progress)
@@ -465,7 +465,7 @@ extension Navigation {
         _ = ensureOnScreenSync(found)
         await tripwire.yieldRealFrames(Self.postJumpRealFrames)
         stash.refresh()
-        progress.recordVisibleHeistIds(stash.currentScreen.heistIds)
+        progress.recordVisibleHeistIds(stash.visibleIds)
         guard let fresh = stash.resolveFirstMatch(searchTarget) else { return nil }
         return searchFoundResult(
             fresh, scrollCount: scrollCount,
@@ -627,7 +627,7 @@ extension Navigation {
     }
 
     func ensureOnScreen(for target: ElementTarget) async {
-        if let entry = offViewportRegistryEntry(for: target),
+        if let entry = knownOffscreenEntry(for: target),
            stash.jumpToRecordedPosition(entry) != nil {
             _ = await tripwire.waitForAllClear(timeout: Self.postJumpSettleTimeout)
             refresh()
@@ -671,7 +671,7 @@ extension Navigation {
         )
     }
 
-    // MARK: - Off-Viewport Registry Lookup
+    // MARK: - Known Offscreen Lookup
 
     /// Find a known element that matches `target` but is NOT in the live
     /// viewport. Used by `scroll_to_visible` and `element_search` to jump to a
@@ -681,15 +681,15 @@ extension Navigation {
     /// Returns nil if the element is already on-screen or unknown. Post-0.2.25
     /// the screen value is the only source of truth — once a refresh evicts
     /// the heistId from `currentScreen`, it's unreachable.
-    func offViewportRegistryEntry(for target: ElementTarget) -> Screen.ScreenElement? {
-        let live = stash.liveViewportIds
+    func knownOffscreenEntry(for target: ElementTarget) -> Screen.ScreenElement? {
+        let visible = stash.visibleIds
         switch target {
         case .heistId(let heistId):
-            guard !live.contains(heistId) else { return nil }
+            guard !visible.contains(heistId) else { return nil }
             return stash.currentScreen.findElement(heistId: heistId)
         case .matcher:
             guard let resolved = stash.resolveTarget(target).resolved,
-                  !live.contains(resolved.screenElement.heistId)
+                  !visible.contains(resolved.screenElement.heistId)
             else { return nil }
             return resolved.screenElement
         }
