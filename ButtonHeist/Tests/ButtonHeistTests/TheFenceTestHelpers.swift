@@ -25,7 +25,7 @@ enum TheFenceFixtures {
 }
 
 @ButtonHeistActor
-func makeConnectedFence() -> (TheFence, MockConnection) {
+func makeConnectedFence(configuration: TheFence.Configuration = .init()) -> (TheFence, MockConnection) {
     let mockConn = MockConnection()
     mockConn.serverInfo = TheFenceFixtures.testServerInfo
     mockConn.autoResponse = { message in
@@ -50,7 +50,7 @@ func makeConnectedFence() -> (TheFence, MockConnection) {
     let mockDisc = MockDiscovery()
     mockDisc.discoveredDevices = [TheFenceFixtures.testDevice]
 
-    let fence = TheFence(configuration: .init())
+    let fence = TheFence(configuration: configuration)
     fence.handoff.makeDiscovery = { mockDisc }
     fence.handoff.makeConnection = { _, _, _ in mockConn }
 

@@ -1756,7 +1756,7 @@ final class TheFenceTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testBackgroundExpectationConsumesOnlyMatchingDelta() async throws {
+    func testWaitForChangeExpectationConsumesOnlyMatchingDelta() async throws {
         let device = DiscoveredDevice(
             id: "mock-device",
             name: "MockApp#test",
@@ -1780,8 +1780,7 @@ final class TheFenceTests: XCTestCase {
         fence.handoff.onBackgroundDelta?(.screenChanged(.init(elementCount: 7, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: []))))
 
         let response = try await fence.execute(request: [
-            "command": "activate",
-            "heistId": "stale_button",
+            "command": "wait_for_change",
             "expect": ["type": "screen_changed"],
         ])
 
@@ -1828,7 +1827,7 @@ final class TheFenceTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testExpectationShortCircuitOnBackgroundDelta() async throws {
+    func testWaitForChangeExpectationShortCircuitsOnBackgroundDelta() async throws {
         let device = DiscoveredDevice(
             id: "mock-device",
             name: "MockApp#test",
@@ -1857,14 +1856,12 @@ final class TheFenceTests: XCTestCase {
         let delta: InterfaceDelta = .screenChanged(.init(elementCount: 1, newInterface: fullInterface))
         fence.handoff.onBackgroundDelta?(delta)
 
-        // Execute an action with expect screen_changed — should short-circuit
+        // wait_for_change may satisfy a late call from a queued background delta.
         let response = try await fence.execute(request: [
-            "command": "activate",
-            "heistId": "stale_button",
+            "command": "wait_for_change",
             "expect": ["type": "screen_changed"],
         ])
 
-        // Should return success with "already met" rather than elementNotFound
         if case .action(let result, let expectation) = response {
             XCTAssertTrue(result.success)
             XCTAssertEqual(result.message, "expectation already met by background change")
@@ -1872,6 +1869,221 @@ final class TheFenceTests: XCTestCase {
             XCTAssertEqual(expectation?.met, true)
             XCTAssertEqual(mockDiscovery.startCount, 0, "Short-circuit should avoid discovery")
             XCTAssertEqual(mockConnection.connectCount, 0, "Short-circuit should avoid connection")
+        } else {
+            XCTFail("Expected action response, got \(response)")
+        }
+    }
+
+    @ButtonHeistActor
+    func testQueuedBackgroundExpectationStillDispatchesAction() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        mockConn.autoResponse = { message in
+            switch message {
+            case .activate:
+                return .actionResult(ActionResult(
+                    success: true,
+                    method: .activate,
+                    interfaceDelta: .noChange(.init(elementCount: 1))
+                ))
+            case .waitForChange:
+                return .actionResult(ActionResult(
+                    success: true,
+                    method: .waitForChange,
+                    message: "expectation already met by current state (0.0s)",
+                    interfaceDelta: .noChange(.init(elementCount: 1))
+                ))
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+        fence.handoff.onBackgroundDelta?(.screenChanged(.init(
+            elementCount: 7,
+            newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+        )))
+
+        let response = try await fence.execute(request: [
+            "command": "activate",
+            "heistId": "stale_button",
+            "expect": ["type": "screen_changed"],
+        ])
+
+        XCTAssertTrue(mockConn.sent.contains { sent, _ in
+            if case .activate = sent { return true }
+            return false
+        }, "Action must dispatch even when a queued background delta already matches")
+        if case .action(_, let expectation) = response {
+            XCTAssertEqual(expectation?.met, true)
+        } else {
+            XCTFail("Expected action response, got \(response)")
+        }
+
+        let queued = fence.drainBackgroundDelta()
+        XCTAssertEqual(queued?.isScreenChanged, true)
+        XCTAssertEqual(queued?.elementCount, 7)
+    }
+
+    @ButtonHeistActor
+    func testDelayedActionExpectationWaitsUntilMet() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        let appeared = HeistElement(
+            description: "Label", label: "Ready", value: nil, identifier: nil,
+            frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
+            actions: []
+        )
+        mockConn.autoResponse = { message in
+            switch message {
+            case .activate:
+                return .actionResult(ActionResult(
+                    success: true,
+                    method: .activate,
+                    interfaceDelta: .noChange(.init(elementCount: 1))
+                ))
+            case .waitForChange:
+                return .actionResult(ActionResult(
+                    success: true,
+                    method: .waitForChange,
+                    message: "expectation met after 0.1s",
+                    interfaceDelta: .elementsChanged(.init(
+                        elementCount: 2,
+                        edits: ElementEdits(added: [appeared])
+                    ))
+                ))
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "activate",
+            "heistId": "button",
+            "expect": [
+                "type": "element_appeared",
+                "matcher": ["label": "Ready"],
+            ],
+        ])
+
+        let sentNames = mockConn.sent.map { $0.0.canonicalName }
+        XCTAssertTrue(sentNames.contains("activate"))
+        XCTAssertTrue(sentNames.contains("wait_for_change"))
+        if case .action(let result, let expectation) = response {
+            XCTAssertEqual(result.method, .waitForChange)
+            XCTAssertEqual(expectation?.met, true)
+        } else {
+            XCTFail("Expected action response, got \(response)")
+        }
+    }
+
+    @ButtonHeistActor
+    func testNeverSatisfiedActionExpectationReturnsLastWaitResult() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        mockConn.autoResponse = { message in
+            switch message {
+            case .activate:
+                return .actionResult(ActionResult(
+                    success: true,
+                    method: .activate,
+                    interfaceDelta: .noChange(.init(elementCount: 1))
+                ))
+            case .waitForChange:
+                return .actionResult(ActionResult(
+                    success: false,
+                    method: .waitForChange,
+                    message: "expectation not met after 0.1s",
+                    errorKind: .timeout,
+                    interfaceDelta: .elementsChanged(.init(elementCount: 3, edits: ElementEdits()))
+                ))
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "activate",
+            "heistId": "button",
+            "expect": ["type": "screen_changed"],
+        ])
+
+        if case .action(let result, let expectation) = response {
+            XCTAssertFalse(result.success)
+            XCTAssertEqual(result.method, .waitForChange)
+            XCTAssertEqual(result.errorKind, .timeout)
+            XCTAssertEqual(result.interfaceDelta?.kindRawValue, "elementsChanged")
+            XCTAssertEqual(expectation?.met, false)
+            XCTAssertEqual(expectation?.actual, "expectation not met after 0.1s")
+        } else {
+            XCTFail("Expected action response, got \(response)")
+        }
+    }
+
+    @ButtonHeistActor
+    func testClientSideActionExpectationTimeoutReturnsInitialActionResult() async throws {
+        let (fence, mockConn) = makeConnectedFence(configuration: .init(postActionExpectationTimeoutBuffer: 0))
+        mockConn.autoResponse = { message in
+            switch message {
+            case .activate:
+                mockConn.autoResponse = nil
+                return .actionResult(ActionResult(
+                    success: true,
+                    method: .activate,
+                    interfaceDelta: .noChange(.init(elementCount: 1))
+                ))
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "activate",
+            "heistId": "button",
+            "timeout": 0.01,
+            "expect": ["type": "screen_changed"],
+        ])
+
+        if case .action(let result, let expectation) = response {
+            XCTAssertTrue(result.success)
+            XCTAssertEqual(result.method, .activate)
+            XCTAssertEqual(expectation?.met, false)
+        } else {
+            XCTFail("Expected action response, got \(response)")
+        }
+    }
+
+    @ButtonHeistActor
+    func testImmediateActionExpectationDoesNotWaitForChange() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        mockConn.autoResponse = { message in
+            switch message {
+            case .activate:
+                return .actionResult(ActionResult(
+                    success: true,
+                    method: .activate,
+                    interfaceDelta: .screenChanged(.init(
+                        elementCount: 1,
+                        newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+                    ))
+                ))
+            case .waitForChange:
+                XCTFail("Immediate expectation should not send wait_for_change")
+                return .actionResult(ActionResult(success: false, method: .waitForChange))
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "activate",
+            "heistId": "button",
+            "expect": ["type": "screen_changed"],
+        ])
+
+        let waitMessages = mockConn.sent.filter { sent, _ in
+            if case .waitForChange = sent { return true }
+            return false
+        }
+        XCTAssertTrue(waitMessages.isEmpty)
+        if case .action(let result, let expectation) = response {
+            XCTAssertEqual(result.method, .activate)
+            XCTAssertEqual(expectation?.met, true)
         } else {
             XCTFail("Expected action response, got \(response)")
         }

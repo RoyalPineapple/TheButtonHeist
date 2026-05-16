@@ -376,6 +376,8 @@ public final class TheFence {
         var fileConfig: ButtonHeistFileConfig?
         /// Direct host:port target with optional TLS fingerprint from config.
         var directDevice: DiscoveredDevice?
+        /// Extra client-side headroom beyond a server-owned wait timeout.
+        var postActionExpectationTimeoutBuffer: TimeInterval
 
         init(
             deviceFilter: String? = nil,
@@ -383,7 +385,8 @@ public final class TheFence {
             token: String? = nil,
             autoReconnect: Bool = true,
             fileConfig: ButtonHeistFileConfig? = nil,
-            directDevice: DiscoveredDevice? = nil
+            directDevice: DiscoveredDevice? = nil,
+            postActionExpectationTimeoutBuffer: TimeInterval = 5
         ) {
             self.deviceFilter = deviceFilter
             self.connectionTimeout = connectionTimeout
@@ -391,6 +394,7 @@ public final class TheFence {
             self.autoReconnect = autoReconnect
             self.fileConfig = fileConfig
             self.directDevice = directDevice
+            self.postActionExpectationTimeoutBuffer = postActionExpectationTimeoutBuffer
         }
     }
 
@@ -561,8 +565,8 @@ public final class TheFence {
     /// Execute a command from a dictionary request. Auto-connects if not
     /// already connected.
     ///
-    /// Reads as a pipeline: parse → short-circuit against background deltas
-    /// → dispatch → record post-dispatch effects → validate against the
+    /// Reads as a pipeline: parse → optional wait-only background match
+    /// → dispatch → record post-dispatch effects → validate/wait against the
     /// caller's expectation. Each step is its own private method.
     public func execute(request: [String: Any]) async throws -> FenceResponse {
         let parsed: ParsedRequest
@@ -573,12 +577,14 @@ public final class TheFence {
         }
         if let immediate = parsed.immediateResponse { return immediate }
 
-        if let backgroundResponse = responseIfBackgroundExpectationMet(
+        if parsed.command == .waitForChange,
+           let backgroundResponse = responseIfBackgroundExpectationMet(
             parsed.expectation, requestId: parsed.requestId
-        ) {
+           ) {
             return backgroundResponse
         }
 
+        let preDispatchBackgroundCount = backgroundDeltas.count
         let dispatched = try await dispatchCommand(parsed)
         lastLatencyMs = dispatched.durationMs
         logResponse(requestId: parsed.requestId, response: dispatched.response, durationMs: dispatched.durationMs)
@@ -587,10 +593,13 @@ public final class TheFence {
             parsed: parsed,
             response: dispatched.response
         )
-        return validateActionResponse(
+        return try await validateActionResponse(
             dispatched.response,
+            command: parsed.command,
             expectation: parsed.expectation,
-            preActionCache: postRecord.preActionCache
+            expectationTimeout: parsed.expectationTimeout,
+            preActionCache: postRecord.preActionCache,
+            postDispatchBackgroundStartIndex: preDispatchBackgroundCount
         )
     }
 
@@ -602,6 +611,7 @@ public final class TheFence {
         let originalRequest: [String: Any]
         let dispatchArgs: [String: Any]
         let expectation: ActionExpectation?
+        let expectationTimeout: Double?
         /// Non-nil when the command short-circuits before dispatch (help/quit/exit).
         let immediateResponse: FenceResponse?
     }
@@ -627,6 +637,7 @@ public final class TheFence {
                 originalRequest: request,
                 dispatchArgs: request,
                 expectation: nil,
+                expectationTimeout: nil,
                 immediateResponse: .error("Unknown command: \(commandString). Use 'help' for available commands.")
             )
         }
@@ -637,12 +648,14 @@ public final class TheFence {
                 originalRequest: request,
                 dispatchArgs: request,
                 expectation: nil,
+                expectationTimeout: nil,
                 immediateResponse: immediate
             )
         }
         let requestId = (request["requestId"] as? String) ?? UUID().uuidString
         logCommand(requestId: requestId, command: command, request: request)
         let expectation = try parseExpectation(request)
+        let expectationTimeout = expectation == nil ? nil : try request.schemaNumber("timeout")
 
         var dispatchArgs = request
         dispatchArgs["_requestId"] = requestId
@@ -653,6 +666,7 @@ public final class TheFence {
             originalRequest: request,
             dispatchArgs: dispatchArgs,
             expectation: expectation,
+            expectationTimeout: expectationTimeout,
             immediateResponse: nil
         )
     }
@@ -721,12 +735,15 @@ public final class TheFence {
 
     private func responseIfBackgroundExpectationMet(
         _ expectation: ActionExpectation?,
-        requestId: String
+        requestId: String,
+        startingAt startIndex: Int = 0
     ) -> FenceResponse? {
         guard let expectation else { return nil }
+        let boundedStartIndex = min(max(startIndex, 0), backgroundDeltas.count)
 
         var matched: (index: Int, result: ActionResult, validation: ExpectationResult)?
-        for (index, backgroundDelta) in backgroundDeltas.enumerated() {
+        for index in backgroundDeltas.indices.dropFirst(boundedStartIndex) {
+            let backgroundDelta = backgroundDeltas[index]
             let syntheticResult = ActionResult(
                 success: true,
                 method: .waitForChange,
@@ -860,9 +877,12 @@ public final class TheFence {
 
     private func validateActionResponse(
         _ response: FenceResponse,
+        command: Command,
         expectation: ActionExpectation?,
-        preActionCache: [String: HeistElement]
-    ) -> FenceResponse {
+        expectationTimeout: Double?,
+        preActionCache: [String: HeistElement],
+        postDispatchBackgroundStartIndex: Int
+    ) async throws -> FenceResponse {
         if let actionResult = response.actionResult {
             let delivery = ActionExpectation.validateDelivery(actionResult)
             if !delivery.met {
@@ -871,7 +891,7 @@ public final class TheFence {
             if let expectation {
                 // wait_for_change sends the expectation to the iOS server; a
                 // successful result means the server observed or already held it.
-                if actionResult.method == .waitForChange {
+                if command == .waitForChange {
                     return .action(
                         result: actionResult,
                         expectation: ExpectationResult(
@@ -884,11 +904,68 @@ public final class TheFence {
                 let validation = expectation.validate(
                     against: actionResult, preActionElements: preActionCache
                 )
-                return .action(result: actionResult, expectation: validation)
+                if validation.met {
+                    return .action(result: actionResult, expectation: validation)
+                }
+                return try await waitForPostActionExpectation(
+                    expectation,
+                    initialResult: actionResult,
+                    initialValidation: validation,
+                    timeout: expectationTimeout,
+                    backgroundStartIndex: postDispatchBackgroundStartIndex
+                )
             }
         }
 
         return response
+    }
+
+    private func waitForPostActionExpectation(
+        _ expectation: ActionExpectation,
+        initialResult: ActionResult,
+        initialValidation: ExpectationResult,
+        timeout: Double?,
+        backgroundStartIndex: Int
+    ) async throws -> FenceResponse {
+        if let backgroundResponse = responseIfBackgroundExpectationMet(
+            expectation,
+            requestId: UUID().uuidString,
+            startingAt: backgroundStartIndex
+        ) {
+            updateInterfaceCacheForExpectationWait(backgroundResponse)
+            return backgroundResponse
+        }
+
+        let target = WaitForChangeTarget(expect: expectation, timeout: timeout)
+        do {
+            let waitResult = try await sendAndAwaitAction(
+                .waitForChange(target),
+                timeout: target.resolvedTimeout + config.postActionExpectationTimeoutBuffer
+            )
+            lastActionHistory = .completed(waitResult)
+            let waitValidation: ExpectationResult = if waitResult.method == .waitForChange {
+                ExpectationResult(
+                    met: waitResult.success,
+                    expectation: expectation,
+                    actual: waitResult.message ?? waitResult.interfaceDelta?.kindRawValue
+                )
+            } else {
+                expectation.validate(against: waitResult)
+            }
+            let response = FenceResponse.action(
+                result: waitResult,
+                expectation: waitValidation
+            )
+            updateInterfaceCacheForExpectationWait(response)
+            return response
+        } catch FenceError.actionTimeout {
+            return .action(result: initialResult, expectation: initialValidation)
+        }
+    }
+
+    private func updateInterfaceCacheForExpectationWait(_ response: FenceResponse) {
+        let cacheUpdate = updateInterfaceCache(for: response, preActionCache: lastInterfaceCache)
+        applyPostRecordCacheUpdate(cacheUpdate)
     }
 
     private func connect() async throws {
