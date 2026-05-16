@@ -850,6 +850,33 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testTypeTextRejectsEmptyText() async {
+        await assertValidationError(
+            ["command": "type_text", "text": ""],
+            equals: "schema validation failed for text: observed string \"\"; expected non-empty string"
+        )
+    }
+
+    @ButtonHeistActor
+    func testTypeTextRejectsNonPositiveDeleteCount() async {
+        await assertValidationError(
+            ["command": "type_text", "deleteCount": 0],
+            equals: "schema validation failed for deleteCount: observed integer 0; expected integer >= 1"
+        )
+        await assertValidationError(
+            ["command": "type_text", "deleteCount": -1],
+            equals: "schema validation failed for deleteCount: observed integer -1; expected integer >= 1"
+        )
+    }
+
+    @ButtonHeistActor
+    func testTypeTextWithClearFirstOnlyPassesValidation() async {
+        await assertPassesValidation(
+            ["command": "type_text", "clearFirst": true]
+        )
+    }
+
+    @ButtonHeistActor
     func testTypeTextWithTextPassesValidation() async {
         await assertPassesValidation(
             ["command": "type_text", "text": "hello"]
@@ -860,6 +887,13 @@ final class TheFenceHandlerTests: XCTestCase {
     func testTypeTextWithDeleteCountPassesValidation() async {
         await assertPassesValidation(
             ["command": "type_text", "deleteCount": 5]
+        )
+    }
+
+    @ButtonHeistActor
+    func testTypeTextWithTextAndDeleteCountPassesValidation() async {
+        await assertPassesValidation(
+            ["command": "type_text", "text": "hello", "deleteCount": 5]
         )
     }
 
