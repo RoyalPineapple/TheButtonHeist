@@ -66,12 +66,58 @@ public enum FenceOperationCatalog {
             return .failure(FenceOperationRoutingError(message: "Unknown tool: \(name)"))
         }
         guard allowRawFenceCommands || command.mcpExposure == .directTool else {
+            if let message = groupedToolRoutingMessage(for: command) {
+                return .failure(FenceOperationRoutingError(message: message))
+            }
             return .failure(FenceOperationRoutingError(message: "Unknown tool: \(name)"))
         }
 
         var request = arguments
         request["command"] = name
         return .success(request)
+    }
+
+    private static func groupedToolRoutingMessage(for command: TheFence.Command) -> String? {
+        switch command.mcpExposure {
+        case .groupedUnder("gesture"):
+            return groupedToolRoutingMessage(
+                rawToolName: command.rawValue,
+                groupedToolName: "gesture",
+                selectorName: "type",
+                selectorValue: command.rawValue
+            )
+
+        case .groupedUnder("scroll"):
+            guard let mode = ScrollMode.allCases.first(where: { $0.canonicalCommand == command.rawValue }) else {
+                return nil
+            }
+            return groupedToolRoutingMessage(
+                rawToolName: command.rawValue,
+                groupedToolName: "scroll",
+                selectorName: "mode",
+                selectorValue: mode.rawValue
+            )
+
+        case .groupedUnder("edit_action") where command == .dismissKeyboard:
+            return groupedToolRoutingMessage(
+                rawToolName: command.rawValue,
+                groupedToolName: "edit_action",
+                selectorName: "action",
+                selectorValue: "dismiss"
+            )
+
+        default:
+            return nil
+        }
+    }
+
+    private static func groupedToolRoutingMessage(
+        rawToolName: String,
+        groupedToolName: String,
+        selectorName: String,
+        selectorValue: String
+    ) -> String {
+        "Tool \"\(rawToolName)\" is grouped under \"\(groupedToolName)\"; call \(groupedToolName) with \(selectorName)=\"\(selectorValue)\"."
     }
 
     private static func routeGesture(_ arguments: [String: Any]) -> Result<[String: Any], FenceOperationRoutingError> {
