@@ -171,6 +171,8 @@ final class TheStashResolutionTests: XCTestCase {
         }
         XCTAssertTrue(candidates[0].contains("id=save1"))
         XCTAssertTrue(candidates[1].contains("id=save2"))
+        XCTAssertTrue(candidates[0].contains("heistId: save1"))
+        XCTAssertTrue(candidates[0].contains("visible"))
     }
 
     func testMatcherNoMatchReturnsNotFound() {
@@ -183,6 +185,8 @@ final class TheStashResolutionTests: XCTestCase {
             return
         }
         XCTAssertTrue(diagnostics.contains("No match for"))
+        XCTAssertTrue(diagnostics.contains("Next:"))
+        XCTAssertTrue(diagnostics.contains("exact label"))
     }
 
     func testMatcherNearMissDiagnostics() {
@@ -196,6 +200,34 @@ final class TheStashResolutionTests: XCTestCase {
         }
         XCTAssertTrue(diagnostics.contains("near miss"), "Should show near-miss: \(diagnostics)")
         XCTAssertTrue(diagnostics.contains("value"), "Should identify value as divergent field")
+    }
+
+    func testMatcherNearMissIncludesOffscreenKnownElement() {
+        let visible = element(label: "Visible", traits: .button)
+        let offscreen = element(label: "Long List", traits: .button)
+        register(visible, heistId: "button_visible", index: 0)
+        registerOffScreen(offscreen, heistId: "long_list_button")
+
+        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Long")))
+        guard case .notFound(let diagnostics) = result else {
+            XCTFail("Expected .notFound, got \(result)")
+            return
+        }
+        XCTAssertTrue(diagnostics.contains("Long List"), "Should suggest known offscreen candidate: \(diagnostics)")
+        XCTAssertTrue(diagnostics.contains("long_list_button"))
+        XCTAssertTrue(diagnostics.contains("offscreen"))
+        XCTAssertTrue(diagnostics.contains("unreachable"))
+    }
+
+    func testEmptyMatcherMissIncludesNextTargetingMove() {
+        let result = bagman.resolveTarget(.matcher(ElementMatcher()))
+        guard case .notFound(let diagnostics) = result else {
+            XCTFail("Expected .notFound, got \(result)")
+            return
+        }
+        XCTAssertTrue(diagnostics.contains("<empty matcher>"))
+        XCTAssertTrue(diagnostics.contains("Next:"))
+        XCTAssertTrue(diagnostics.contains("get_interface"))
     }
 
     // MARK: - TargetResolution Convenience Properties
@@ -242,6 +274,7 @@ final class TheStashResolutionTests: XCTestCase {
             return
         }
         XCTAssertTrue(diagnostics.contains("known hierarchy is empty"))
+        XCTAssertTrue(diagnostics.contains("Next:"))
     }
 
     // MARK: - Ordinal Selection
@@ -277,6 +310,8 @@ final class TheStashResolutionTests: XCTestCase {
         }
         XCTAssertTrue(diagnostics.contains("ordinal 5 requested"))
         XCTAssertTrue(diagnostics.contains("2 matches"))
+        XCTAssertTrue(diagnostics.contains("Next:"))
+        XCTAssertTrue(diagnostics.contains("ordinal 0...1"))
     }
 
     func testOrdinalNilPreservesAmbiguousBehavior() {
@@ -313,6 +348,7 @@ final class TheStashResolutionTests: XCTestCase {
             return
         }
         XCTAssertTrue(diagnostics.contains("non-negative"))
+        XCTAssertTrue(diagnostics.contains("Next:"))
     }
 
     func testOrdinalZeroOnNoMatchReturnsNotFound() {
@@ -323,6 +359,7 @@ final class TheStashResolutionTests: XCTestCase {
         }
         XCTAssertTrue(diagnostics.contains("ordinal 0 requested"))
         XCTAssertTrue(diagnostics.contains("0 matches"))
+        XCTAssertTrue(diagnostics.contains("Next:"))
     }
 
     // MARK: - Early-Exit Matching
@@ -457,6 +494,7 @@ final class TheStashResolutionTests: XCTestCase {
             return
         }
         XCTAssertTrue(diagnostics.contains("No match for"))
+        XCTAssertTrue(diagnostics.contains("scope: visible"), "Should identify failed resolution scope: \(diagnostics)")
     }
 
     func testKnownOnlyEntryWithStaleObjectIsNotDispatchableUntilVisible() {

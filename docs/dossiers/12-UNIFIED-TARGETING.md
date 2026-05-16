@@ -124,7 +124,7 @@ flowchart TD
     D -->|No| F["Return .notFound(diagnostics)"]
 
     B -->|".matcher(m, ordinal)"| G{ordinal set?}
-    G -->|Yes| ORD["matchScreenElements(matcher, limit: ordinal+1)<br/>Walks currentScreen.hierarchy"]
+    G -->|Yes| ORD["matchScreenElements(matcher, limit: ordinal+1)<br/>Walks selectElements()"]
     ORD --> ORDCHK{ordinal < hits.count?}
     ORDCHK -->|Yes| E
     ORDCHK -->|No| F
@@ -136,7 +136,7 @@ flowchart TD
     I -->|2+ matches| AMB["Return .ambiguous(candidates, diagnostics)<br/>Hint: use ordinal 0–N to select one"]
 ```
 
-`matchScreenElements` walks `currentScreen.hierarchy` to find matching `AccessibilityElement`s, then resolves each hit to a `ScreenElement` via `currentScreen.heistIdByElement[element]` → `currentScreen.elements[heistId]`. The reverse index `heistIdByElement` is computed once during `buildScreen(from:)` and stored on the `Screen` value.
+`matchScreenElements` walks `selectElements()` to find matching `ScreenElement`s in the same order agents see: live hierarchy entries first, then known-only entries retained from exploration. The reverse index `heistIdByElement` is still computed once during `buildScreen(from:)` and stored on the `Screen` value for live hierarchy lookups and wire-tree construction.
 
 ## Error Diagnostics: Progressive Disclosure
 
@@ -182,7 +182,7 @@ The goal: every error message answers the obvious next question. "Why didn't it 
 
 ## Matching Infrastructure (TheStash+Matching.swift)
 
-Matching operates on the **canonical `AccessibilityElement` tree**, not wire types. There is exactly one search surface: `currentScreen.hierarchy`. Resolution paths (`matchScreenElements`, `hasTarget`, `HeistElement.matches`) walk the hierarchy and compare predicates against the canonical `AccessibilityElement`s. There is no flat-array fallback — pre-0.2.25 `cachedElements` was removed when the registry was eliminated.
+Matching operates on canonical `AccessibilityElement` values, not wire types. Server-side resolution paths (`matchScreenElements`, `hasTarget`) walk `selectElements()` so matcher resolution sees the committed semantic screen, including known-only entries from exploration. Client-side `HeistElement.matches` evaluates the same exact predicate semantics against wire elements. There is no registry fallback — pre-0.2.25 `cachedElements` was removed when the registry was eliminated.
 
 ### Match evaluation (AccessibilityElement.matches)
 
@@ -260,6 +260,6 @@ There is no element registry post-0.2.25. TheStash holds exactly one mutable fie
 
 `HeistId resolution` (`resolveTarget(.heistId)`) is O(1) dictionary lookup into `currentScreen.elements`. There is no presentation gate — if a heistId is in `currentScreen.elements`, it resolves. (Exploration unions older elements into `currentScreen` so heistIds for off-viewport elements still resolve until the next non-exploration `parse()` overwrites the screen.)
 
-`Matcher resolution` walks `currentScreen.hierarchy` looking for matching `AccessibilityElement`s, then resolves each hit via `currentScreen.heistIdByElement[element]` (keyed on `AccessibilityElement`, not traversal index) → `currentScreen.elements[heistId]` to recover the `ScreenElement`. Both indices are computed once during `buildScreen(from:)` and never mutated.
+`Matcher resolution` walks `selectElements()` looking for matching `ScreenElement`s. This keeps live entries in traversal order and appends known-only entries retained from exploration, so matcher resolution and matcher diagnostics share the same candidate scope.
 
 Matching always operates on canonical `AccessibilityElement` types, never on wire types. `Screen.merging(_:)` is last-read-wins on conflicting heistIds — the most recently parsed element wins, matching the agent-visible "fresh state beats stale state" rule for exploration unions.

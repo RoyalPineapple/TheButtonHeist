@@ -52,25 +52,25 @@ extension TheStash {
 
     static func matcherNotFound(
         _ matcher: ElementMatcher,
-        hierarchy: [AccessibilityHierarchy],
         screenElements: [Screen.ScreenElement],
-        knownHeistIds: Set<String>,
-        traversalOrder: [String: Int]
+        visibleHeistIds: Set<String>,
+        resolutionScope: ResolutionScope
     ) -> String {
         let query = formatMatcher(matcher)
+        let formattedQuery = query.isEmpty ? "<empty matcher>" : query
 
         // Tier 1: Near-miss — relax one predicate at a time to find what diverged.
-        if let nearMiss = findNearMiss(for: matcher, in: hierarchy) {
-            return "No match for: \(query)\n\(nearMiss)"
+        if let nearMiss = findNearMiss(for: matcher, in: screenElements, visibleHeistIds: visibleHeistIds) {
+            return "No match for: \(formattedQuery) (scope: \(resolutionScope.rawValue))\n\(nearMiss)"
         }
 
         // Tier 2: Nothing close — dump a compact summary.
         let summary = compactElementSummary(
             screenElements: screenElements,
-            knownHeistIds: knownHeistIds,
-            traversalOrder: traversalOrder
+            visibleHeistIds: visibleHeistIds,
+            resolutionScope: resolutionScope.rawValue
         )
-        return "No match for: \(query)\n\(summary)"
+        return "No match for: \(formattedQuery) (scope: \(resolutionScope.rawValue))\n\(summary)"
     }
 
     /// Format a matcher's predicates as a human-readable query string.
@@ -97,7 +97,8 @@ extension TheStash {
     /// Resolution itself is exact-or-miss.
     static func findNearMiss(
         for matcher: ElementMatcher,
-        in hierarchy: [AccessibilityHierarchy]
+        in screenElements: [Screen.ScreenElement],
+        visibleHeistIds: Set<String>
     ) -> String? {
         let relaxations: [Relaxation] = [
             matcher.value.map { _ in
@@ -149,13 +150,18 @@ extension TheStash {
         let suggestionCap = 3
         for relaxation in relaxations {
             guard relaxation.relaxed.hasPredicates else { continue }
-            let hits = hierarchy.matches(relaxation.relaxed, mode: .substring, limit: suggestionCap + 1)
+            let hits = matchCandidates(relaxation.relaxed, in: screenElements, mode: .substring, limit: suggestionCap + 1)
             guard !hits.isEmpty else { continue }
-            let deduped = dedupedPreservingOrder(hits.map { relaxation.actual($0.element) })
+            let deduped = dedupedPreservingOrder(hits.map {
+                suggestionValue(
+                    field: relaxation.field,
+                    actual: relaxation.actual($0.element),
+                    candidate: $0,
+                    visibleHeistIds: visibleHeistIds
+                )
+            })
             let candidates = deduped.prefix(suggestionCap)
-            let suggestion = candidates
-                .map { "\(relaxation.field)=\"\($0)\"" }
-                .joined(separator: ", ")
+            let suggestion = candidates.joined(separator: ", ")
             let suffix = deduped.count > suggestionCap ? ", ..." : ""
             return "near miss: matched all fields except \(relaxation.field) — did you mean \(suggestion)\(suffix)?"
         }
@@ -167,13 +173,18 @@ extension TheStash {
         // substring search reaches user-visible output; resolution itself
         // remains strictly exact-or-miss.
         for relaxation in relaxations where !relaxation.relaxed.hasPredicates {
-            let substringHits = hierarchy.matches(matcher, mode: .substring, limit: suggestionCap + 1)
+            let substringHits = matchCandidates(matcher, in: screenElements, mode: .substring, limit: suggestionCap + 1)
             guard !substringHits.isEmpty else { continue }
-            let deduped = dedupedPreservingOrder(substringHits.map { relaxation.actual($0.element) })
+            let deduped = dedupedPreservingOrder(substringHits.map {
+                suggestionValue(
+                    field: relaxation.field,
+                    actual: relaxation.actual($0.element),
+                    candidate: $0,
+                    visibleHeistIds: visibleHeistIds
+                )
+            })
             let candidates = deduped.prefix(suggestionCap)
-            let suggestion = candidates
-                .map { "\(relaxation.field)=\"\($0)\"" }
-                .joined(separator: ", ")
+            let suggestion = candidates.joined(separator: ", ")
             let suffix = deduped.count > suggestionCap ? ", ..." : ""
             return "near miss: \(relaxation.field) matched as substring only — did you mean \(suggestion)\(suffix)?"
         }
@@ -184,19 +195,19 @@ extension TheStash {
     /// Capped at 20 elements to avoid flooding the response.
     static func compactElementSummary(
         screenElements: [Screen.ScreenElement],
-        knownHeistIds: Set<String>,
-        traversalOrder: [String: Int]
+        visibleHeistIds: Set<String>,
+        resolutionScope: String = "known"
     ) -> String {
         let cap = 20
-        let knownElements = screenElements
-            .filter { knownHeistIds.contains($0.heistId) }
-            .sorted { (traversalOrder[$0.heistId] ?? Int.max) < (traversalOrder[$1.heistId] ?? Int.max) }
-        if knownElements.isEmpty {
-            return "known hierarchy is empty (0 elements)"
+        if screenElements.isEmpty {
+            return """
+                \(resolutionScope) hierarchy is empty (0 elements)
+                Next: call get_interface(full: true) or wait for the target to appear, then retry with an exact label, identifier, heistId, or ordinal.
+                """
         }
-        let noun = knownElements.count == 1 ? "element" : "elements"
-        var lines = ["\(knownElements.count) known \(noun):"]
-        for entry in knownElements.prefix(cap) {
+        let noun = screenElements.count == 1 ? "element" : "elements"
+        var lines = ["\(screenElements.count) \(resolutionScope) \(noun):"]
+        for entry in screenElements.prefix(cap) {
             let element = entry.element
             var parts: [String] = []
             if let label = element.label, !label.isEmpty { parts.append("label=\"\(label)\"") }
@@ -206,17 +217,61 @@ extension TheStash {
                 .filter { element.traits.contains($0.trait) }
                 .map(\.name)
             if !traitNames.isEmpty { parts.append("[\(traitNames.joined(separator: ","))]") }
+            parts.append(availabilityDescription(for: entry, visibleHeistIds: visibleHeistIds))
             lines.append("  \(parts.joined(separator: " "))")
         }
-        if knownElements.count > cap {
-            lines.append("  ... and \(knownElements.count - cap) more")
+        if screenElements.count > cap {
+            lines.append("  ... and \(screenElements.count - cap) more")
         }
+        lines.append(
+            "Next: target one listed element by exact label, identifier, heistId, or ordinal; "
+                + "call get_interface(full: true) if the target may be offscreen."
+        )
         return lines.joined(separator: "\n")
     }
 
-    /// Drop duplicate strings from the candidate list while keeping the first
-    /// occurrence's position. Near-miss output gets noisy when several elements
-    /// share the same label/identifier, so we collapse them before joining.
+    private static func matchCandidates(
+        _ matcher: ElementMatcher,
+        in screenElements: [Screen.ScreenElement],
+        mode: MatchMode,
+        limit: Int
+    ) -> [Screen.ScreenElement] {
+        guard limit > 0 else { return [] }
+        var hits: [Screen.ScreenElement] = []
+        hits.reserveCapacity(limit)
+        for entry in screenElements where entry.element.matches(matcher, mode: mode) {
+            hits.append(entry)
+            if hits.count == limit { break }
+        }
+        return hits
+    }
+
+    private static func suggestionValue(
+        field: String,
+        actual: String,
+        candidate: Screen.ScreenElement,
+        visibleHeistIds: Set<String>
+    ) -> String {
+        "\(field)=\"\(actual)\" \(availabilityDescription(for: candidate, visibleHeistIds: visibleHeistIds))"
+    }
+
+    static func availabilityDescription(
+        for candidate: Screen.ScreenElement,
+        visibleHeistIds: Set<String>
+    ) -> String {
+        if visibleHeistIds.contains(candidate.heistId) {
+            return "(heistId: \(candidate.heistId), visible)"
+        }
+
+        var details = ["heistId: \(candidate.heistId)", "offscreen"]
+        if candidate.contentSpaceOrigin == nil || candidate.scrollView == nil {
+            details.append("unreachable")
+        }
+        return "(\(details.joined(separator: ", ")))"
+    }
+
+    /// Drop duplicate formatted candidates while keeping the first occurrence's
+    /// position, so repeated parse entries don't make near-miss output noisy.
     private static func dedupedPreservingOrder(_ values: [String]) -> [String] {
         var seen: Set<String> = []
         return values.filter { seen.insert($0).inserted }

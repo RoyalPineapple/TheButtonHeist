@@ -32,7 +32,7 @@ Single-snapshot screen state, target resolution, wire conversion, and screen cap
 
 5. **`TheStash+Matching.swift`** — `matchScreenElements(matcher, limit:)` walks `selectElements()` so matchers see the committed semantic state, not just the live viewport. **Exact-or-miss**: `AccessibilityElement.matches(_:mode:)` defers to `ElementMatcher.stringEquals` (TheScore) for byte-for-byte server/client equivalence: case-insensitive equality with typography folding. Unknown trait names fail-safe to a miss. `MatchMode.substring` is reserved for `Diagnostics.findNearMiss`; resolution itself never uses substring.
 
-6. **`Diagnostics.swift`** — Pure static namespace. `heistIdNotFound` finds similar IDs by bidirectional substring check across `currentScreen.elements`. `matcherNotFound` tries relaxations in order (drop value → traits → label → identifier), checking each against the live hierarchy, then falls back to a compact known-element summary.
+6. **`Diagnostics.swift`** — Pure static namespace. `heistIdNotFound` finds similar IDs by bidirectional substring check across `currentScreen.elements`. `matcherNotFound` tries relaxations in order (drop value → traits → label → identifier), checking each against `selectElements()` so suggestions use the same candidate scope as matcher resolution, then falls back to a compact known-element summary.
 
 7. **`Interactivity.swift`** — `isInteractive(element:)` checks three conditions: `respondsToUserInteraction`, interactive trait bitmask, or has custom actions. `checkInteractivity` also checks `.notEnabled` for blocking and surfaces an advisory `warning` when an element has only static traits.
 
