@@ -12,10 +12,12 @@ final class TheFenceTests: XCTestCase {
     func testElementMatcherRejectsUnknownTrait() async {
         let fence = TheFence(configuration: .init())
         let args: [String: Any] = ["traits": ["madeUpTrait"]]
+        let expectedError = "schema validation failed for traits[0]: observed string \"madeUpTrait\"; " +
+            "expected enum one of \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))"
         XCTAssertThrowsError(try fence.elementMatcher(args)) { error in
             XCTAssertEqual(
                 error.localizedDescription,
-                "schema validation failed for traits[0]: observed string \"madeUpTrait\"; expected enum one of \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))"
+                expectedError
             )
         }
     }
@@ -24,10 +26,12 @@ final class TheFenceTests: XCTestCase {
     func testElementMatcherRejectsUnknownExcludeTrait() async {
         let fence = TheFence(configuration: .init())
         let args: [String: Any] = ["excludeTraits": ["bogus"]]
+        let expectedError = "schema validation failed for excludeTraits[0]: observed string \"bogus\"; " +
+            "expected enum one of \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))"
         XCTAssertThrowsError(try fence.elementMatcher(args)) { error in
             XCTAssertEqual(
                 error.localizedDescription,
-                "schema validation failed for excludeTraits[0]: observed string \"bogus\"; expected enum one of \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))"
+                expectedError
             )
         }
     }

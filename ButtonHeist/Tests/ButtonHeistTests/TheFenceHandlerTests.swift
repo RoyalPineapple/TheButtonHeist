@@ -748,6 +748,8 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testRotorRejectsInvalidTextRangeOffsets() async {
+        let expectedError = "schema validation failed for currentTextStartOffset/currentTextEndOffset: " +
+            "observed 8..<4; expected integer range with start >= 0 and end >= start"
         await assertValidationError(
             [
                 "command": "rotor",
@@ -756,7 +758,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 "currentTextStartOffset": 8,
                 "currentTextEndOffset": 4,
             ],
-            equals: "schema validation failed for currentTextStartOffset/currentTextEndOffset: observed 8..<4; expected integer range with start >= 0 and end >= start"
+            equals: expectedError
         )
     }
 
@@ -1533,9 +1535,12 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(results.count, 2)
         XCTAssertEqual(failedIndex, 1)
         XCTAssertEqual(summaries.map(\.command), ["activate", "gesture", "activate"])
+        let expectedError = "run_batch step 1: schema validation failed for type: observed missing; " +
+            "expected enum one of one_finger_tap, long_press, swipe, drag, pinch, rotate, two_finger_tap, " +
+            "draw_path, draw_bezier"
         XCTAssertEqual(
             summaries[1].error,
-            "run_batch step 1: schema validation failed for type: observed missing; expected enum one of one_finger_tap, long_press, swipe, drag, pinch, rotate, two_finger_tap, draw_path, draw_bezier"
+            expectedError
         )
         XCTAssertEqual(summaries[2].error, "skipped: stop_on_error stopped batch after step 1")
     }
