@@ -955,6 +955,10 @@ final class TheFenceTests: XCTestCase {
             ),
             (.connectionTimeout, "setup.timeout", .setup, true, "buttonheist list"),
             (.connectionFailed("refused"), "connection.failed", .transport, true, "buttonheist list"),
+            (
+                .connectionFailure(ConnectionFailure(disconnectReason: .missingFingerprint)),
+                "tls.missing_fingerprint", .tls, false, "TLS certificate fingerprint"
+            ),
             (.sessionLocked("busy"), "session.locked", .session, true, "current driver"),
             (.authFailed("denied"), "auth.failed", .authentication, false, "without --token"),
             (.notConnected, "connection.not_connected", .request, true, "retry the command"),
@@ -1016,6 +1020,21 @@ final class TheFenceTests: XCTestCase {
         XCTAssertEqual(requestTimeout.phase, .request)
     }
 
+    func testConnectionFailureFormattingPreservesDisconnectCause() {
+        let response = FenceResponse.failure(FenceError(TheHandoff.ConnectionError.disconnected(.missingFingerprint)))
+
+        let compact = response.compactFormatted()
+        XCTAssertTrue(compact.contains("error[tls.missing_fingerprint tls retryable=false]"))
+        XCTAssertTrue(compact.contains("connection failed in tls: observed No TLS fingerprint available"))
+        XCTAssertTrue(compact.contains("hint: Use a loopback simulator target"))
+
+        let json = response.jsonDict()
+        XCTAssertEqual(json?["errorCode"] as? String, "tls.missing_fingerprint")
+        XCTAssertEqual(json?["phase"] as? String, "tls")
+        XCTAssertEqual(json?["retryable"] as? Bool, false)
+        XCTAssertTrue((json?["message"] as? String)?.contains("connection failed in tls") == true)
+    }
+
     @ButtonHeistActor
     func testDisconnectCancelsPendingActionWaitWithReason() async {
         let fence = TheFence(configuration: .init())
@@ -1030,10 +1049,13 @@ final class TheFenceTests: XCTestCase {
         do {
             _ = try await waitTask.value
             XCTFail("Expected pending wait to fail")
-        } catch FenceError.connectionFailed(let message) {
-            XCTAssertTrue(message.contains("Connection closed by server"))
+        } catch FenceError.connectionFailure(let failure) {
+            XCTAssertEqual(failure.errorCode, "transport.server_closed")
+            XCTAssertEqual(failure.phase, .transport)
+            XCTAssertTrue(failure.retryable)
+            XCTAssertTrue(failure.message.contains("Connection closed by server"))
         } catch {
-            XCTFail("Expected connectionFailed, got \(error)")
+            XCTFail("Expected connectionFailure, got \(error)")
         }
     }
 
@@ -1051,10 +1073,13 @@ final class TheFenceTests: XCTestCase {
         do {
             _ = try await waitTask.value
             XCTFail("Expected pending recording wait to fail")
-        } catch FenceError.connectionFailed(let message) {
-            XCTAssertTrue(message.contains("Connection closed by server"))
+        } catch FenceError.connectionFailure(let failure) {
+            XCTAssertEqual(failure.errorCode, "transport.server_closed")
+            XCTAssertEqual(failure.phase, .transport)
+            XCTAssertTrue(failure.retryable)
+            XCTAssertTrue(failure.message.contains("Connection closed by server"))
         } catch {
-            XCTFail("Expected connectionFailed, got \(error)")
+            XCTFail("Expected connectionFailure, got \(error)")
         }
     }
 

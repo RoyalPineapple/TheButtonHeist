@@ -100,7 +100,7 @@ A `DiscoveredDevice` is constructed with the IPv6 tunnel address and the configu
 |-----------|----------------|
 | `certFingerprint` present | `makeTLSParameters(expectedFingerprint:)` — custom verify block |
 | No fingerprint, loopback endpoint | `makeLoopbackTLSParameters()` — accepts any certificate |
-| No fingerprint, non-loopback | Refuses connection, fires `.disconnected(.certificateMismatch)` |
+| No fingerprint, non-loopback | Refuses connection, fires `.disconnected(.missingFingerprint)` |
 
 **Certificate fingerprint pinning**: `makeTLSParameters` sets a `sec_protocol_options_set_verify_block` that extracts the leaf DER certificate, computes `SHA256` over it, formats the result as `"sha256:<hex>"`, and compares to the expected fingerprint. Minimum TLS version is TLS 1.3.
 
@@ -134,7 +134,16 @@ sequenceDiagram
 | `.sessionLocked(String)` | `sessionLocked` message received |
 | `.protocolMismatch(String)` | Version mismatch in envelope |
 | `.localDisconnect` | `forceDisconnect()` called |
-| `.certificateMismatch` | Non-loopback connection attempted without fingerprint |
+| `.certificateMismatch` | TLS certificate fingerprint verification failed |
+| `.missingFingerprint` | Non-loopback connection attempted without fingerprint |
+
+Connection-attempt failures preserve the `DisconnectReason` through `TheHandoff.ConnectionError.disconnected` so TheFence can surface typed metadata instead of parsing display strings. The rendered connection failure message follows:
+
+```text
+connection failed in <phase>: observed <disconnect cause>; <hint>
+```
+
+The retry decision comes from the same typed cause. Transport drops such as `.networkError` and `.serverClosed` are retryable; TLS pinning failures, missing fingerprints, protocol mismatches, auth failures, buffer overflows, and local disconnects are not. Session locks are retryable after the current owner releases the session.
 
 ## Device Resolution (`DeviceResolver`)
 

@@ -22,6 +22,41 @@ public enum FailurePhase: String, Sendable, Equatable, CaseIterable {
     case server
 }
 
+/// Typed connection-attempt failure preserved from the lower-level disconnect cause.
+public struct ConnectionFailure: Equatable, Sendable {
+    public let message: String
+    public let errorCode: String
+    public let phase: FailurePhase
+    public let retryable: Bool
+    public let hint: String?
+
+    public init(
+        message: String,
+        errorCode: String,
+        phase: FailurePhase,
+        retryable: Bool,
+        hint: String?
+    ) {
+        self.message = message
+        self.errorCode = errorCode
+        self.phase = phase
+        self.retryable = retryable
+        self.hint = hint
+    }
+}
+
+extension ConnectionFailure {
+    init(disconnectReason reason: DisconnectReason) {
+        self.init(
+            message: reason.connectionFailureMessage,
+            errorCode: reason.failureCode,
+            phase: reason.phase,
+            retryable: reason.retryable,
+            hint: reason.hint
+        )
+    }
+}
+
 /// Errors thrown by TheFence during command dispatch, connection, and action execution.
 public enum FenceError: Error, LocalizedError {
     case invalidRequest(String)
@@ -29,6 +64,7 @@ public enum FenceError: Error, LocalizedError {
     case noMatchingDevice(filter: String, available: [String])
     case connectionTimeout
     case connectionFailed(String)
+    case connectionFailure(ConnectionFailure)
     case sessionLocked(String)
     case authFailed(String)
     case notConnected
@@ -59,6 +95,8 @@ public enum FenceError: Error, LocalizedError {
                 Connection failed: \(message)
                   Hint: Is the app running? Check 'buttonheist list' to see available devices.
                 """
+        case .connectionFailure(let failure):
+            return failure.message
         case .sessionLocked(let message):
             return """
                 Session locked: \(message)
@@ -102,6 +140,8 @@ public enum FenceError: Error, LocalizedError {
             return "setup.timeout"
         case .connectionFailed:
             return "connection.failed"
+        case .connectionFailure(let failure):
+            return failure.errorCode
         case .sessionLocked:
             return "session.locked"
         case .authFailed:
@@ -127,6 +167,8 @@ public enum FenceError: Error, LocalizedError {
             return .setup
         case .connectionFailed:
             return .transport
+        case .connectionFailure(let failure):
+            return failure.phase
         case .sessionLocked:
             return .session
         case .authFailed:
@@ -141,6 +183,8 @@ public enum FenceError: Error, LocalizedError {
         case .noDeviceFound, .connectionTimeout, .connectionFailed, .sessionLocked,
              .notConnected, .actionTimeout:
             return true
+        case .connectionFailure(let failure):
+            return failure.retryable
         case .invalidRequest, .noMatchingDevice, .authFailed, .actionFailed:
             return false
         case .serverError(let serverError):
@@ -160,6 +204,8 @@ public enum FenceError: Error, LocalizedError {
             return "Is the app running? Check 'buttonheist list' to see available devices."
         case .connectionFailed:
             return "Is the app running? Check 'buttonheist list' to see available devices."
+        case .connectionFailure(let failure):
+            return failure.hint
         case .sessionLocked:
             return "Wait for the current driver to disconnect or for the session to time out. " +
                 "If this is your own stale session, retry with the same BUTTONHEIST_DRIVER_ID or restart the app."
@@ -291,6 +337,7 @@ extension FenceError {
     init(_ connectionError: TheHandoff.ConnectionError) {
         switch connectionError {
         case .connectionFailed(let message): self = .connectionFailed(message)
+        case .disconnected(let reason): self = .connectionFailure(ConnectionFailure(disconnectReason: reason))
         case .authFailed(let reason): self = .authFailed(reason)
         case .sessionLocked(let message): self = .sessionLocked(message)
         case .timeout: self = .connectionTimeout
@@ -457,7 +504,7 @@ public final class TheFence {
         handoff.onDisconnected = { [weak self] reason in
             self?.backgroundDeltas.removeAll()
             self?.cancelAllPendingRequests(
-                error: FenceError.connectionFailed(reason.displayMessage)
+                error: FenceError.connectionFailure(ConnectionFailure(disconnectReason: reason))
             )
         }
     }
