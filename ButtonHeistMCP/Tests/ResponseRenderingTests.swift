@@ -78,6 +78,23 @@ struct ResponseRenderingTests {
         #expect(texts[0].contains("BUTTONHEIST_DRIVER_ID"))
     }
 
+    @Test("MCP preserves compact action failure method and kind")
+    func rendersCompactActionFailureContract() {
+        let actionResult = ActionResult(
+            success: false,
+            method: .activate,
+            message: "No element matching label \"Buy\"",
+            errorKind: .elementNotFound
+        )
+        let response = FenceResponse.action(result: actionResult)
+
+        let result = ButtonHeistMCPServer.renderResponse(response, backgroundDeltas: [])
+        let texts = textContents(result)
+
+        #expect(result.isError == true)
+        #expect(texts == ["activate: error[elementNotFound]: No element matching label \"Buy\""])
+    }
+
     private func textContents(_ result: CallTool.Result) -> [String] {
         result.content.compactMap { content in
             if case .text(let text, _, _) = content { return text }
