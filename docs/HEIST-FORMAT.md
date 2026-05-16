@@ -182,7 +182,7 @@ The `_recorded` key carries debugging context from recording time. It is preserv
 
 ## Durable Recording
 
-Evidence is written incrementally to `heist.jsonl` in the session directory as each action is recorded (append-only JSONL, same pattern as `session.jsonl`). If the session crashes or disconnects before `stop_heist`, the evidence captured up to that point is preserved on disk and recoverable.
+Evidence is written incrementally to `heist.jsonl` in the session directory after each action succeeds and its explicit expectation is satisfied (append-only JSONL, same pattern as `session.jsonl`). Actions without explicit expectations are recorded on successful delivery. If the session crashes or disconnects before `stop_heist`, the evidence captured up to that point is preserved on disk and recoverable.
 
 `stop_heist` reads the evidence back from `heist.jsonl`, wraps it in the `HeistPlayback` envelope, and writes the final `.heist` file to the specified output path.
 

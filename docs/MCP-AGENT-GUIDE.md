@@ -124,7 +124,7 @@ Each level narrows what counts as success. The more specific, the more a failure
 
 ## Recording Heists
 
-`start_heist` / `stop_heist` capture your session as a replayable .heist file. The recording is automatic — every successful action becomes a step — but the quality depends entirely on how you approach it.
+`start_heist` / `stop_heist` capture your session as a replayable .heist file. The recording is automatic: a recorded step exists only after the action succeeded and its explicit expectation was satisfied. Actions without explicit expectations keep the existing successful-action recording behavior.
 
 **Prime the interface first.** Call `get_interface` before your first action. The recorder converts heistIds to portable matchers behind the scenes, but needs cached element data to do it well.
 
@@ -132,7 +132,7 @@ Each level narrows what counts as success. The more specific, the more a failure
 
 **One action, one purpose.** Each step should do exactly one thing and verify it. Don't chain five taps and check at the end — check after each one. This makes replay failures precise: step 7 failed means the 7th interaction broke.
 
-**Read the delta before moving on.** If your expectation wasn't met, understand why before continuing. The recording only captures successful actions — continuing after a missed expectation means the heist may not replay the same way.
+**Read the delta before moving on.** If your expectation wasn't met, understand why before continuing. The recording skips actions with missed expectations, so continuing after one means the heist will omit that interaction.
 
 ## Efficiency
 

@@ -2115,6 +2115,166 @@ final class TheFenceTests: XCTestCase {
         }
     }
 
+    // MARK: - Heist Recording Expectations
+
+    @ButtonHeistActor
+    func testHeistRecordingSkipsActionWhenExplicitExpectationFails() async throws {
+        let (fence, mockConn) = makeConnectedFence(configuration: .init(postActionExpectationTimeoutBuffer: 0))
+        mockConn.autoResponse = { message in
+            switch message {
+            case .activate:
+                mockConn.autoResponse = nil
+                return .actionResult(ActionResult(
+                    success: true,
+                    method: .activate,
+                    interfaceDelta: .noChange(.init(elementCount: 1))
+                ))
+            case .requestInterface:
+                return .interface(Interface(timestamp: Date(timeIntervalSince1970: 0), tree: []))
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+        try await startHeistRecording(on: fence)
+
+        let response = try await fence.execute(request: [
+            "command": "activate",
+            "label": "No Change",
+            "timeout": 0.01,
+            "expect": ["type": "screen_changed"],
+        ])
+
+        if case .action(let result, let expectation) = response {
+            XCTAssertTrue(result.success)
+            XCTAssertEqual(result.method, .activate)
+            XCTAssertEqual(expectation?.met, false)
+        } else {
+            XCTFail("Expected action response, got \(response)")
+        }
+        XCTAssertEqual(heistEvidenceCount(in: fence), 0)
+        try? await fence.bookKeeper.closeSession()
+    }
+
+    @ButtonHeistActor
+    func testHeistRecordingRecordsActionWhenExplicitExpectationIsMet() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        mockConn.autoResponse = { message in
+            switch message {
+            case .activate:
+                return .actionResult(ActionResult(
+                    success: true,
+                    method: .activate,
+                    interfaceDelta: .screenChanged(.init(
+                        elementCount: 0,
+                        newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+                    ))
+                ))
+            case .waitForChange:
+                XCTFail("Immediate screen_changed expectation should not wait")
+                return .actionResult(ActionResult(success: false, method: .waitForChange))
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+        try await startHeistRecording(on: fence)
+
+        let response = try await fence.execute(request: [
+            "command": "activate",
+            "label": "Continue",
+            "expect": ["type": "screen_changed"],
+        ])
+
+        if case .action(_, let expectation) = response {
+            XCTAssertEqual(expectation?.met, true)
+        } else {
+            XCTFail("Expected action response, got \(response)")
+        }
+        XCTAssertEqual(heistEvidenceCount(in: fence), 1)
+
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("heist")
+        defer { try? FileManager.default.removeItem(at: output) }
+        let stopResponse = try await fence.execute(request: [
+            "command": "stop_heist",
+            "output": output.path,
+        ])
+        if case .heistStopped(_, let stepCount) = stopResponse {
+            XCTAssertEqual(stepCount, 1)
+        } else {
+            XCTFail("Expected heistStopped response, got \(stopResponse)")
+        }
+        let heist = try TheBookKeeper.readHeist(from: output)
+        XCTAssertEqual(heist.steps.count, 1)
+        XCTAssertEqual(heist.steps[0].command, "activate")
+        try? await fence.bookKeeper.closeSession()
+    }
+
+    @ButtonHeistActor
+    func testHeistRecordingRecordsSuccessfulActionWithoutExpectation() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        mockConn.autoResponse = { message in
+            switch message {
+            case .activate:
+                return .actionResult(ActionResult(
+                    success: true,
+                    method: .activate,
+                    interfaceDelta: .noChange(.init(elementCount: 1))
+                ))
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+        try await startHeistRecording(on: fence)
+
+        let response = try await fence.execute(request: [
+            "command": "activate",
+            "label": "Plain Success",
+        ])
+
+        if case .action(let result, let expectation) = response {
+            XCTAssertTrue(result.success)
+            XCTAssertNil(expectation)
+        } else {
+            XCTFail("Expected action response, got \(response)")
+        }
+        XCTAssertEqual(heistEvidenceCount(in: fence), 1)
+        try? await fence.bookKeeper.closeSession()
+    }
+
+    @ButtonHeistActor
+    func testHeistRecordingSkipsFailedActionResult() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        mockConn.autoResponse = { message in
+            switch message {
+            case .activate:
+                return .actionResult(ActionResult(
+                    success: false,
+                    method: .activate,
+                    message: "element not found",
+                    errorKind: .elementNotFound
+                ))
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+        try await startHeistRecording(on: fence)
+
+        let response = try await fence.execute(request: [
+            "command": "activate",
+            "label": "Missing",
+        ])
+
+        if case .action(let result, let expectation) = response {
+            XCTAssertFalse(result.success)
+            XCTAssertEqual(expectation?.met, false)
+        } else {
+            XCTFail("Expected action response, got \(response)")
+        }
+        XCTAssertEqual(heistEvidenceCount(in: fence), 0)
+        try? await fence.bookKeeper.closeSession()
+    }
+
     // MARK: - Action Timeout Preserves Connection
 
     /// An action timeout means "this single command took too long" — it does not
@@ -2337,5 +2497,26 @@ final class TheFenceTests: XCTestCase {
             fence.handoff.isConnected,
             "Connection must remain live after a sibling-only timeout"
         )
+    }
+
+    @ButtonHeistActor
+    private func startHeistRecording(on fence: TheFence) async throws {
+        let response = try await fence.execute(request: [
+            "command": "start_heist",
+            "identifier": "record-verified-actions-\(UUID().uuidString)",
+            "app": "com.example.app",
+        ])
+        guard case .heistStarted = response else {
+            return XCTFail("Expected heistStarted response, got \(response)")
+        }
+    }
+
+    @ButtonHeistActor
+    private func heistEvidenceCount(in fence: TheFence) -> Int? {
+        guard case .active(let session) = fence.bookKeeper.phase,
+              case .recording(let recording) = session.heistRecording else {
+            return nil
+        }
+        return recording.evidenceCount
     }
 }

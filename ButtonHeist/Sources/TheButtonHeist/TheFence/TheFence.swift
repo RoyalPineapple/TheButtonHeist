@@ -329,6 +329,7 @@ private extension FenceResponse {
     var succeededForHeistRecording: Bool {
         if case .error = self { return false }
         if let actionResult, !actionResult.success { return false }
+        if case .action(_, let expectation) = self, expectation?.met == false { return false }
         return true
     }
 }
@@ -589,18 +590,22 @@ public final class TheFence {
         lastLatencyMs = dispatched.durationMs
         logResponse(requestId: parsed.requestId, response: dispatched.response, durationMs: dispatched.durationMs)
 
-        let postRecord = recordPostDispatchEffects(
-            parsed: parsed,
-            response: dispatched.response
-        )
-        return try await validateActionResponse(
+        let postDispatch = capturePostDispatchEffects(response: dispatched.response)
+        let validatedResponse = try await validateActionResponse(
             dispatched.response,
             command: parsed.command,
             expectation: parsed.expectation,
             expectationTimeout: parsed.expectationTimeout,
-            preActionCache: postRecord.preActionCache,
+            preActionCache: postDispatch.preActionCache,
             postDispatchBackgroundStartIndex: preDispatchBackgroundCount
         )
+        recordHeistEvidence(
+            command: parsed.command,
+            request: parsed.originalRequest,
+            response: validatedResponse,
+            cacheUpdate: postDispatch.cacheUpdate
+        )
+        return validatedResponse
     }
 
     // MARK: - Execute Pipeline
@@ -621,8 +626,9 @@ public final class TheFence {
         let durationMs: Int
     }
 
-    private struct PostRecordOutcome {
+    private struct PostDispatchOutcome {
         let preActionCache: [String: HeistElement]
+        let cacheUpdate: ResponseCacheUpdate
     }
 
     /// Parse and validate a raw request dictionary into typed fields.
@@ -682,24 +688,15 @@ public final class TheFence {
         )
     }
 
-    /// Update the interface cache, write heist evidence, and replay any
-    /// post-record cache replacement that follows a screen change.
+    /// Update the interface cache and retain the evidence cache for later
+    /// recording, after final expectation validation has completed.
     /// Returns the pre-action cache snapshot for downstream expectation
     /// validation (elementDisappeared resolves removed heistIds against it).
-    private func recordPostDispatchEffects(
-        parsed: ParsedRequest,
-        response: FenceResponse
-    ) -> PostRecordOutcome {
+    private func capturePostDispatchEffects(response: FenceResponse) -> PostDispatchOutcome {
         let preActionCache = lastInterfaceCache
         let cacheUpdate = updateInterfaceCache(for: response, preActionCache: preActionCache)
-        recordHeistEvidence(
-            command: parsed.command,
-            request: parsed.originalRequest,
-            response: response,
-            cacheUpdate: cacheUpdate
-        )
         applyPostRecordCacheUpdate(cacheUpdate)
-        return PostRecordOutcome(preActionCache: preActionCache)
+        return PostDispatchOutcome(preActionCache: preActionCache, cacheUpdate: cacheUpdate)
     }
 
     private struct ResponseCacheUpdate {
