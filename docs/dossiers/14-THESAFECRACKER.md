@@ -137,7 +137,7 @@ flowchart TD
 | `func deleteBackward()` | `deleteFromInput` + `drainTaskQueue()` |
 | `private func drainTaskQueue()` | `taskQueue.waitUntilAllTasksAreFinished` |
 
-TheSafecracker's `isKeyboardVisible()` checks `tripwire.keyboardVisibleFlag` first (notification-driven, immediate), then falls back to `KeyboardBridge.shared()?.hasActiveInput` for hardware-keyboard scenarios.
+TheSafecracker treats text entry as active only when `KeyboardBridge.shared()?.hasActiveInput` is true: the keyboard singleton must have a focused `UIKeyInput` delegate. `isKeyboardVisible()` checks `tripwire.keyboardVisibleFlag` first (notification-driven, immediate), then falls back to the same active-input signal for hardware-keyboard scenarios.
 
 ## Gesture Catalog
 

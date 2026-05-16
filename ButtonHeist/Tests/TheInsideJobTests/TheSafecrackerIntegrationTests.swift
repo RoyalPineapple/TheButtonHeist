@@ -144,7 +144,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         window.addSubview(textField)
 
         textField.becomeFirstResponder()
-        try await waitForKeyboardBridge()
+        try await waitForActiveTextInput()
 
         let result = await safecracker.typeText("hello")
         XCTAssertTrue(result, "typeText should succeed when keyboard is active")
@@ -160,7 +160,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         window.addSubview(textField)
 
         textField.becomeFirstResponder()
-        try await waitForKeyboardBridge()
+        try await waitForActiveTextInput()
 
         let deleted = await safecracker.deleteText(count: 5)
         XCTAssertTrue(deleted, "deleteText should succeed")
@@ -173,6 +173,20 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         // deleteText(count: 0) should return true immediately regardless of keyboard state
         let result = await safecracker.deleteText(count: 0)
         XCTAssertTrue(result)
+    }
+
+    func testActiveTextInputRequiresFocusedEditableResponder() async throws {
+        let textField = UITextField()
+        textField.frame = CGRect(x: 50, y: 400, width: 200, height: 44)
+        window.addSubview(textField)
+
+        XCTAssertFalse(safecracker.hasActiveTextInput())
+
+        textField.becomeFirstResponder()
+        try await waitForActiveTextInput()
+        XCTAssertTrue(safecracker.hasActiveTextInput())
+
+        await teardownKeyboard(textField: textField)
     }
 
     // MARK: - Edit Actions
@@ -194,15 +208,15 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
 
     // MARK: - Private Helpers
 
-    private func waitForKeyboardBridge() async throws {
+    private func waitForActiveTextInput() async throws {
         for _ in 0..<20 {
-            if KeyboardBridge.shared() != nil { return }
-            // Polls the UIKit keyboard singleton — no signal to await on.
+            if safecracker.hasActiveTextInput() { return }
+            // Polls UIKit's private keyboard delegate state — no public signal to await on.
             // swiftlint:disable:next agent_test_task_sleep
             try await Task.sleep(for: .milliseconds(100))
         }
-        guard KeyboardBridge.shared() != nil else {
-            XCTFail("Keyboard bridge not available after 2s")
+        guard safecracker.hasActiveTextInput() else {
+            XCTFail("Active text input not available after 2s")
             return
         }
     }

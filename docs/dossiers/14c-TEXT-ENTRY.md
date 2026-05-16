@@ -5,9 +5,11 @@
 
 Text entry bypasses the UIKit touch system entirely and speaks to `UIKeyboardImpl` through `KeyboardBridge` — a dedicated `@MainActor struct` that wraps all private API access via `ObjCRuntime`. This is the same technique used by the KIF testing framework. It works with both software and hardware keyboards.
 
+**Invariant:** Text entry is a focus transaction: resolve one editable target, make it first responder, wait for an active `UIKeyInput` delegate, then mutate text through that input path.
+
 ## The 5-Step Pipeline
 
-`executeTypeText` orchestrates five steps. All are optional — any combination of focus, clear, delete, type can be requested.
+`executeTypeText` orchestrates five steps. Focus is mandatory: either the command provides an `elementTarget` to tap, or a text input must already be active. Once focus is established, any combination of clear, delete, and type can be requested.
 
 ```mermaid
 flowchart TD
@@ -28,7 +30,7 @@ flowchart TD
     HasInput -->|yes| CheckClear
 
     CheckClear{clearFirst?}
-    CheckClear -->|yes| Clear["Step 2: clearText()<br/>UITextInput select-all + delete"]
+    CheckClear -->|yes| Clear["Step 2: clearText()<br/>responder-chain select-all + keyboard delete"]
     CheckClear -->|no| CheckDelete
 
     Clear --> CheckDelete{deleteCount > 0?}
@@ -55,17 +57,9 @@ If `elementTarget` is provided, `ensureOnScreen(for:)` scrolls the element into 
 
 ### Step 2: Clear existing text
 
-Only runs if `clearFirst == true`. Uses the `UITextInput` protocol, not the keyboard:
+Only runs if `clearFirst == true`. Uses the responder chain to select all text, waits 50ms for the selection to settle, then sends one keyboard delete through the active `KeyboardBridge`.
 
-1. Gets the first responder and casts it to `(any UITextInput)` inline via `firstResponderView() as? (any UITextInput)`
-2. Builds a range from `beginningOfDocument` to `endOfDocument`
-3. Sets `selectedTextRange = fullRange` (selects all)
-4. Waits 50ms for the selection to register
-5. Calls `KeyboardBridge.shared()?.deleteBackward()`, or falls back to `textInput.deleteBackward()` directly on the UITextInput
-
-The 50ms yield after setting `selectedTextRange` exists because the keyboard's internal state needs a run-loop turn to treat the selection as the "current" range for the subsequent delete.
-
-Returns true immediately if the range is empty (nothing to clear).
+The 50ms yield exists because UIKit needs a run-loop turn to route `selectAll(_:)` to the current responder before the subsequent delete.
 
 ### Step 3: Delete characters
 
@@ -105,7 +99,7 @@ Uses `sharedInstance`, not `activeInstance`. The difference matters:
 
 ### `hasActiveTextInput()`
 
-Checks whether `KeyboardBridge.shared()` returns non-nil. If the `UIKeyboardImpl.sharedInstance` singleton is resolvable, text input is possible.
+Checks whether `KeyboardBridge.shared()?.hasActiveInput` is true. The `UIKeyboardImpl.sharedInstance` singleton can exist without a focused text field; readiness requires its delegate to conform to `UIKeyInput`.
 
 ### Keyboard visibility tracking (TheTripwire)
 
@@ -125,18 +119,11 @@ This notification-based approach was adopted because on iOS 26, `UIKeyboardImpl`
 
 The drain is encapsulated in `KeyboardBridge` and runs synchronously on the main actor after each `type()` or `deleteBackward()` call, before the `interKeyDelay` sleep.
 
-## First Responder Resolution
+## First Responder Routing
 
-Two methods in TheSafecracker do multi-window walks via `UIApplication.shared.connectedScenes`:
+TheSafecracker does not walk the view hierarchy to find the first responder for text mutation. Standard edit operations (`selectAll`, `copy`, `paste`, `cut`, `resignFirstResponder`) route through `UIApplication.shared.sendAction(..., to: nil, ...)`, which lets UIKit dispatch to the current responder. Text mutation routes through `KeyboardBridge` only after `hasActiveTextInput()` confirms that `UIKeyboardImpl.delegate` is a `UIKeyInput`.
 
-| Method | Returns | Used by |
-|--------|---------|---------|
-| `firstResponderView()` | `UIView?` | `resignFirstResponder`, `clearText` (cast to `UITextInput` inline) |
-| `findFirstResponder(in:)` | `UIView?` (recursive DFS) | Called by `firstResponderView()` |
-
-`clearText` casts the result inline: `firstResponderView() as? (any UITextInput)`. Returns nil if the first responder doesn't conform (e.g., a button that somehow became first responder).
-
-**Note:** `ensureFirstResponderOnScreen()` (in TheStash, not TheSafecracker) uses `tripwire.currentFirstResponder()` to find the first responder, not `firstResponderView()`. See [14a-SCROLLING.md](14a-SCROLLING.md) for the auto-scroll entry points.
+`ensureFirstResponderOnScreen()` is a navigation concern, not a text mutation concern. It uses `tripwire.currentFirstResponder()` when edit and pasteboard commands need the human-visible focused field scrolled into view. See [14a-SCROLLING.md](14a-SCROLLING.md) for the auto-scroll entry points.
 
 ## Edit Actions
 
@@ -164,7 +151,7 @@ With `to: nil`, UIKit walks the responder chain from the first responder upward 
 |----------|-------|---------|
 | `defaultInterKeyDelay` | 30ms | Default delay between each keypress |
 | `maxInterKeyDelay` | 500ms | Upper clamp applied in `executeTypeText` |
-| 50ms yield | hardcoded | `clearText` — after setting `selectedTextRange` |
+| 50ms yield | hardcoded | `clearText` — after sending responder-chain `selectAll` |
 | 100ms poll | hardcoded | Step 1 — keyboard readiness polling interval |
 | 2s timeout | 20 × 100ms | Step 1 — max wait for keyboard to appear |
 | 100ms settle | hardcoded | Step 5 — before readback |
@@ -175,7 +162,7 @@ The effective `interKeyDelay` is `min(defaultInterKeyDelay, maxInterKeyDelay)` =
 
 - **UIKeyboardImpl present.** The `sharedInstance` singleton must be resolvable via ObjC runtime. This is a private class that has existed since iOS 2 and is stable across versions.
 - **addInputString: and deleteFromInput selectors.** These must exist on `UIKeyboardImpl`. Both are KIF-validated patterns.
-- **UITextInput conformance for clearText.** The first responder must conform to `UITextInput` (UITextField, UITextView, and custom conformers). `UIKeyInput`-only conformers (rare) will fail the clear operation.
+- **Active UIKeyInput delegate.** The keyboard bridge must have a delegate that conforms to `UIKeyInput`. This is stricter than resolving `UIKeyboardImpl.sharedInstance`, which can exist even when no editable responder is focused.
 - **Main actor.** All text methods interact with UIKit responder chain and must run on the main thread.
 
 ## Limitations
@@ -184,7 +171,7 @@ The effective `interKeyDelay` is `min(defaultInterKeyDelay, maxInterKeyDelay)` =
 - **No secure text field detection.** Typing into secure fields (password fields) works, but the readback in Step 5 returns the masked value or nil, not the actual typed text.
 - **Single-character granularity.** Each character is a separate `addInputString:` call with a sleep between. Emoji sequences and complex Unicode clusters work (Swift `Character` handles them), but the per-character delay adds up for long strings.
 - **No IME / multi-stage input.** CJK input methods that require composition (pinyin, kana) are not supported — characters are injected as final text, bypassing the composition stage.
-- **clearText depends on UITextInput.** If the first responder only conforms to `UIKeyInput` (not `UITextInput`), clearing fails. This is rare in practice — UITextField and UITextView both conform to `UITextInput`.
+- **clearText depends on responder-chain select-all.** If the focused input does not implement `selectAll(_:)`, the follow-up delete behaves like a single backspace rather than a full clear.
 - **Hardware keyboard drain timing.** `drainTaskQueue` may behave differently with hardware keyboards since the task queue processing path differs. In practice this hasn't been an issue because the drain is synchronous.
 
 ## Error Cases

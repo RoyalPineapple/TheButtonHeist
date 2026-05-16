@@ -327,13 +327,13 @@ final class TheSafecracker {
     /// keyboard scenarios.
     func isKeyboardVisible() -> Bool {
         if keyboardVisibleFlag { return true }
-        return KeyboardBridge.shared()?.hasActiveInput ?? false
+        return activeKeyboardInput() != nil
     }
 
     /// Type text by injecting characters into the active keyboard.
     /// Routes through KeyboardBridge → UIKeyboardImpl.addInputString: per character.
     func typeText(_ text: String, interKeyDelay: UInt64 = TheSafecracker.defaultInterKeyDelay) async -> Bool {
-        guard let keyboard = KeyboardBridge.shared() else { return false }
+        guard let keyboard = activeKeyboardInput() else { return false }
         for char in text {
             keyboard.type(char)
             guard await Task.cancellableSleep(nanoseconds: interKeyDelay) else { break }
@@ -345,7 +345,7 @@ final class TheSafecracker {
     /// Routes through KeyboardBridge → UIKeyboardImpl.deleteFromInput per character.
     func deleteText(count: Int, interKeyDelay: UInt64 = TheSafecracker.defaultInterKeyDelay) async -> Bool {
         guard count > 0 else { return true }
-        guard let keyboard = KeyboardBridge.shared() else { return false }
+        guard let keyboard = activeKeyboardInput() else { return false }
         for _ in 0..<count {
             keyboard.deleteBackward()
             guard await Task.cancellableSleep(nanoseconds: interKeyDelay) else { break }
@@ -361,11 +361,8 @@ final class TheSafecracker {
         guard await Task.cancellableSleep(for: Self.selectionSettleDelay) else { return false }
 
         // Delete via keyboard bridge (preferred) or responder chain
-        if let keyboard = KeyboardBridge.shared() {
-            keyboard.deleteBackward()
-        } else {
-            return false
-        }
+        guard let keyboard = activeKeyboardInput() else { return false }
+        keyboard.deleteBackward()
         return true
     }
 
@@ -386,11 +383,16 @@ final class TheSafecracker {
 
     // MARK: - Public: Text Input Readiness
 
-    /// Whether a text input is ready to accept typed characters.
-    /// KeyboardBridge resolves UIKeyboardImpl.sharedInstance — if present,
-    /// the keyboard is ready in both software and hardware modes.
+    /// Whether a focused text input is ready to accept typed characters.
     func hasActiveTextInput() -> Bool {
-        KeyboardBridge.shared() != nil
+        activeKeyboardInput() != nil
+    }
+
+    private func activeKeyboardInput() -> KeyboardBridge? {
+        guard let keyboard = KeyboardBridge.shared(), keyboard.hasActiveInput else {
+            return nil
+        }
+        return keyboard
     }
 
     // MARK: - Internal: Single-Finger Primitives (delegate to N-finger)

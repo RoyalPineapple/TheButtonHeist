@@ -457,38 +457,7 @@ final class Actions {
     // MARK: - Text Entry
 
     func executeTypeText(_ target: TypeTextTarget) async -> TheSafecracker.InteractionResult {
-        if let elementTarget = target.elementTarget {
-            await navigation.ensureOnScreen(for: elementTarget)
-            let resolution = stash.resolveTarget(elementTarget)
-            guard let resolved = resolution.resolved else {
-                return .failure(.elementNotFound, message: resolution.diagnostics)
-            }
-
-            let point = resolved.element.activationPoint
-            guard await safecracker.tap(at: point) else {
-                return .failure(.typeText, message: "Failed to tap target element to bring up keyboard")
-            }
-            safecracker.showFingerprint(at: point)
-
-            var inputReady = false
-            for _ in 0..<TheSafecracker.keyboardPollMaxAttempts {
-                guard await Task.cancellableSleep(for: TheSafecracker.keyboardPollInterval) else { break }
-                if safecracker.hasActiveTextInput() {
-                    inputReady = true
-                    break
-                }
-            }
-
-            if !inputReady {
-                return .failure(.typeText, message: "No active text input after tapping element. The element may not be a text field.")
-            }
-        } else {
-            guard safecracker.hasActiveTextInput() else {
-                let message = "No active text input. Provide an elementTarget to focus a text field, "
-                    + "or ensure a text field is already focused."
-                return .failure(.typeText, message: message)
-            }
-        }
+        if let failure = await focusTextInput(target.elementTarget) { return failure }
 
         let interKeyDelay = min(TheSafecracker.defaultInterKeyDelay, TheSafecracker.maxInterKeyDelay)
         if target.clearFirst == true {
@@ -520,6 +489,42 @@ final class Actions {
         }
 
         return TheSafecracker.InteractionResult(success: true, method: .typeText, message: nil, value: fieldValue)
+    }
+
+    private func focusTextInput(_ elementTarget: ElementTarget?) async -> TheSafecracker.InteractionResult? {
+        guard let elementTarget else {
+            guard safecracker.hasActiveTextInput() else {
+                let message = "No active text input. Provide an elementTarget to focus a text field, "
+                    + "or ensure a text field is already focused."
+                return .failure(.typeText, message: message)
+            }
+            return nil
+        }
+
+        await navigation.ensureOnScreen(for: elementTarget)
+        let resolution = stash.resolveTarget(elementTarget)
+        guard let resolved = resolution.resolved else {
+            return .failure(.elementNotFound, message: resolution.diagnostics)
+        }
+
+        let point = resolved.element.activationPoint
+        guard await safecracker.tap(at: point) else {
+            return .failure(.typeText, message: "Failed to tap target element to bring up keyboard")
+        }
+        safecracker.showFingerprint(at: point)
+
+        guard await waitForActiveTextInput() else {
+            return .failure(.typeText, message: "No active text input after tapping element. The element may not be a text field.")
+        }
+        return nil
+    }
+
+    private func waitForActiveTextInput() async -> Bool {
+        for _ in 0..<TheSafecracker.keyboardPollMaxAttempts {
+            guard await Task.cancellableSleep(for: TheSafecracker.keyboardPollInterval) else { return false }
+            if safecracker.hasActiveTextInput() { return true }
+        }
+        return false
     }
 
     // MARK: - Duration Helpers
