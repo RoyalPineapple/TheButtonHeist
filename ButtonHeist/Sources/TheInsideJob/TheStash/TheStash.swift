@@ -542,9 +542,10 @@ final class TheStash {
         return resolveTarget(effectiveTarget).resolved
     }
 
-    /// Boolean existence check for target predicates. Ambiguity still means the
-    /// target is present for absence checks, while explicit ordinals must
-    /// resolve at the requested index instead of falling back to the first match.
+    /// Boolean existence check for callers that only need present-vs-missing
+    /// target semantics. Ambiguous matches count as present, and explicit
+    /// ordinals must resolve at the requested index instead of falling back to
+    /// the first match.
     func hasTarget(_ target: ElementTarget) -> Bool {
         switch resolveTarget(target) {
         case .resolved, .ambiguous:
