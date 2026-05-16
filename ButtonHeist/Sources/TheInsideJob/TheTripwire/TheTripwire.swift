@@ -29,7 +29,7 @@ final class TheTripwire {
         let fingerprint: PresentationFingerprint
         let hasRelevantAnimations: Bool
         let topmostVC: ObjectIdentifier?
-        let tripwireSignal: TripwireSignal = .empty
+        let tripwireSignal: TripwireSignal
         let windowCount: Int
 
         // Derived settle state
@@ -430,7 +430,7 @@ final class TheTripwire {
     /// as a rule for excluding lower windows from the accessibility tree.
     static func windowStackSignal(for windows: [UIWindow]) -> WindowStackSignal {
         WindowStackSignal(windows: windows.map { window in
-            WindowStackSignal.WindowSignal(
+            WindowSignal(
                 id: ObjectIdentifier(window),
                 level: window.windowLevel.rawValue,
                 isKeyWindow: window.isKeyWindow

@@ -139,7 +139,7 @@ import TheScore
     }
 
     private static func selectedTabMarker(in hierarchy: [AccessibilityHierarchy]) -> Marker? {
-        hierarchy.compactMap(
+        let markers: [Marker] = hierarchy.compactMap(
             first: 1,
             context: false,
             container: { isInTabBar, container in
@@ -150,7 +150,8 @@ import TheScore
                 guard isInTabBar, element.traits.contains(.selected) else { return nil }
                 return marker(for: element)
             }
-        ).first
+        )
+        return markers.first
     }
 
     private static func rootShapeTokens(in hierarchy: [AccessibilityHierarchy]) -> [String] {
