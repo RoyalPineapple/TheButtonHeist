@@ -13,6 +13,24 @@ private final class ActionActivationOverrideView: UIView {
     }
 }
 
+private final class ActionGeometryView: UIView {
+    private let testActivationPoint: CGPoint
+
+    init(activationPoint: CGPoint) {
+        self.testActivationPoint = activationPoint
+        super.init(frame: .zero)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var accessibilityActivationPoint: CGPoint {
+        get { testActivationPoint }
+        set {}
+    }
+}
+
 @MainActor
 final class TheBrainsActionTests: XCTestCase {
 
@@ -440,6 +458,87 @@ final class TheBrainsActionTests: XCTestCase {
         ])
     }
 
+    func testElementTargetedPointActionFailsWhenElementRemainsKnownOnly() async {
+        let stalePoint = CGPoint(x: 333, y: 777)
+        let element = AccessibilityElement.make(
+            label: "Below Fold",
+            traits: .button,
+            shape: .frame(CGRect(x: 300, y: 750, width: 66, height: 54)),
+            activationPoint: stalePoint
+        )
+        installScreen(offViewport: [.init(element, heistId: "below_fold_button")])
+
+        var dispatchedPoint: CGPoint?
+        let result = await brains.actions.performPointAction(
+            elementTarget: .heistId("below_fold_button"),
+            pointX: nil,
+            pointY: nil,
+            method: .syntheticTap
+        ) { point in
+            dispatchedPoint = point
+            return true
+        }
+
+        XCTAssertFalse(result.success)
+        XCTAssertNil(dispatchedPoint, "Known-only targets must not dispatch their stored activation point")
+        XCTAssertDiagnostic(result.message, contains: [
+            "gesture target unavailable",
+            "method=syntheticTap",
+            "phase=targeting",
+            "heistId=\"below_fold_button\"",
+            "visible=false",
+            "element-derived gesture points require a live reachable element",
+        ])
+    }
+
+    func testElementTargetedPointActionUsesLiveActivationPoint() async {
+        let stalePoint = CGPoint(x: 10, y: 20)
+        let livePoint = CGPoint(x: 123, y: 456)
+        let heistId = "live_button"
+        let element = AccessibilityElement.make(
+            label: "Live",
+            traits: .button,
+            shape: .frame(CGRect(x: 0, y: 0, width: 40, height: 40)),
+            activationPoint: stalePoint
+        )
+        let liveObject = ActionGeometryView(activationPoint: livePoint)
+        liveObject.accessibilityFrame = CGRect(x: 100, y: 430, width: 46, height: 52)
+        installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
+
+        var dispatchedPoint: CGPoint?
+        let result = await brains.actions.performPointAction(
+            elementTarget: .heistId(heistId),
+            pointX: nil,
+            pointY: nil,
+            method: .syntheticTap
+        ) { point in
+            dispatchedPoint = point
+            return true
+        }
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(dispatchedPoint, livePoint)
+        XCTAssertNotEqual(dispatchedPoint, stalePoint)
+    }
+
+    func testRawCoordinatePointActionDispatchesUnchanged() async {
+        let rawPoint = CGPoint(x: 222, y: 333)
+
+        var dispatchedPoint: CGPoint?
+        let result = await brains.actions.performPointAction(
+            elementTarget: nil,
+            pointX: Double(rawPoint.x),
+            pointY: Double(rawPoint.y),
+            method: .syntheticTap
+        ) { point in
+            dispatchedPoint = point
+            return true
+        }
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(dispatchedPoint, rawPoint)
+    }
+
     // MARK: - clearCache
 
     func testClearCacheResetsStash() {
@@ -507,6 +606,14 @@ final class TheBrainsActionTests: XCTestCase {
         brains.stash.currentScreen = .makeForTests(
             elements: elements.map { ($0.0, $0.1) },
             objects: objects
+        )
+    }
+
+    private func installScreen(
+        offViewport: [Screen.OffViewportEntry]
+    ) {
+        brains.stash.currentScreen = .makeForTests(
+            offViewport: offViewport
         )
     }
 

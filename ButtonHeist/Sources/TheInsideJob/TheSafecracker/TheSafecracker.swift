@@ -4,7 +4,7 @@ import UIKit
 import TheScore
 
 /// Result of resolving a screen coordinate from an element target or explicit point.
-/// Shared between TheStash (resolution) and TheBrains (consumption).
+/// Shared by gesture point resolution and gesture dispatch.
 ///
 /// `@MainActor` justification: carries `TheSafecracker.InteractionResult` which
 /// references MainActor-bound state — isolation aligns with consumers.

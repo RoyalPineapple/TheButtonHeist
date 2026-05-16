@@ -36,7 +36,7 @@ TheBrains keeps the post-action delta cycle, dispatch, wait handlers, and broadc
 
 3. **`Actions.swift`** — Two generic pipelines and all `executeXxx` methods:
    - `performElementAction(target:method:action:)` — `navigation.ensureOnScreen` → `stash.resolveTarget` → checkInteractivity → action closure. Used by activate, increment, decrement, customAction.
-   - `performPointAction(elementTarget:pointX:pointY:action:)` — resolvePoint → action closure → showFingerprint. Used by tap, longPress, drag, pinch, rotate, twoFingerTap.
+   - `performPointAction(elementTarget:pointX:pointY:action:)` — `navigation.ensureOnScreen` when element-targeted → live geometry resolution or raw coordinate passthrough → action closure → showFingerprint. Used by tap, longPress, drag, pinch, rotate, twoFingerTap.
    - `executeSwipe` has two paths: unit-point (element-relative 0-1 coordinates resolved against frame) and absolute-point.
    - `executeTypeText` is the longest: optional `navigation.ensureOnScreen` + tap-to-focus → poll for active text input → optional clear/delete → type string → refresh → re-resolve for value readback.
 

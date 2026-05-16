@@ -89,6 +89,17 @@ import TheScore
             + "try target a visible element or choose a point inside an app window."
     }
 
+    static func gestureTargetUnavailable(
+        method: ActionMethod,
+        element: TheStash.ScreenElement,
+        isVisible: Bool
+    ) -> String {
+        "gesture target unavailable: observed method=\(method.rawValue) phase=targeting "
+            + "\(formatElement(element)) visible=\(isVisible); "
+            + "element-derived gesture points require a live reachable element after positioning; "
+            + "try scroll_to_visible, element_search, or refresh with get_interface before retrying."
+    }
+
     // MARK: - Private Helpers
 
     private static func adjustableBoundary(_ method: ActionMethod) -> String {

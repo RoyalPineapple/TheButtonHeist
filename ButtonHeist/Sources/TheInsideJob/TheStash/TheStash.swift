@@ -284,6 +284,26 @@ final class TheStash {
         )
     }
 
+    func liveActivationPoint(for screenElement: ScreenElement) -> CGPoint? {
+        guard let object = dispatchObject(for: screenElement) else { return nil }
+        let point = object.accessibilityActivationPoint
+        guard point.x.isFinite, point.y.isFinite else { return nil }
+        return point
+    }
+
+    func liveFrame(for screenElement: ScreenElement) -> CGRect? {
+        guard let object = dispatchObject(for: screenElement) else { return nil }
+        let frame = object.accessibilityFrame
+        guard !frame.isNull,
+              !frame.isEmpty,
+              frame.origin.x.isFinite,
+              frame.origin.y.isFinite,
+              frame.size.width.isFinite,
+              frame.size.height.isFinite
+        else { return nil }
+        return frame
+    }
+
     func performCustomAction(named name: String, on screenElement: ScreenElement) -> CustomActionOutcome {
         guard let object = dispatchObject(for: screenElement) else { return .deallocated }
         guard let action = object.accessibilityCustomActions?
@@ -501,28 +521,6 @@ final class TheStash {
 
     func checkElementInteractivity(_ screenElement: ScreenElement) -> InteractivityCheck {
         Interactivity.checkInteractivity(screenElement.element, object: dispatchObject(for: screenElement))
-    }
-
-    func resolvePoint(
-        from elementTarget: ElementTarget?,
-        pointX: Double?,
-        pointY: Double?
-    ) -> PointResolution {
-        if let elementTarget {
-            let resolution = resolveTarget(elementTarget)
-            guard let resolved = resolution.resolved else {
-                return .failure(.failure(.elementNotFound, message: resolution.diagnostics))
-            }
-            return .success(resolved.element.activationPoint)
-        } else if let xCoord = pointX, let yCoord = pointY {
-            return .success(CGPoint(x: xCoord, y: yCoord))
-        } else {
-            return .failure(.failure(.elementNotFound, message: "No target specified"))
-        }
-    }
-
-    func resolveFrame(for elementTarget: ElementTarget) -> CGRect? {
-        resolveTarget(elementTarget).resolved?.element.shape.frame
     }
 
     // MARK: - Traversal Order Index
