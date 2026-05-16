@@ -715,18 +715,13 @@ extension Navigation {
         screenElement: TheStash.ScreenElement,
         axis: ScrollAxis? = nil
     ) -> ScrollableTarget? {
-        if let sv = screenElement.scrollView {
-            guard !sv.bhIsUnsafeForProgrammaticScrolling else { return nil }
+        guard let sv = screenElement.scrollView,
+              !sv.bhIsUnsafeForProgrammaticScrolling else { return nil }
 
-            let target: ScrollableTarget = .uiScrollView(sv)
-            if let axis, !Self.scrollableAxis(of: target).contains(axis) {
-                if let (axisTarget, _) = scrollCandidates(selecting: .required(axis)).first {
-                    return axisTarget
-                }
-            }
-            return target
-        }
-        return nil
+        let target: ScrollableTarget = .uiScrollView(sv)
+        guard let axis else { return target }
+        guard Self.scrollableAxis(of: target).contains(axis) else { return nil }
+        return target
     }
 
     // MARK: - Direction Mapping

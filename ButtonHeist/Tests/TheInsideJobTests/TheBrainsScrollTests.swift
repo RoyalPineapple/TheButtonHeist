@@ -551,7 +551,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertNil(target)
     }
 
-    func testResolveScrollTargetWithAxisMismatchReturnsScrollViewWhenNoFallback() {
+    func testResolveScrollTargetReturnsNilWhenNearestScrollViewCannotScrollRequestedAxis() {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
         scrollView.contentSize = CGSize(width: 400, height: 200)
 
@@ -566,11 +566,57 @@ final class TheBrainsScrollTests: XCTestCase {
         let target = brains.navigation.resolveScrollTarget(
             screenElement: screenElement, axis: .vertical
         )
-        // When axis doesn't match and no fallback container exists in the hierarchy,
-        // the code still returns the element's own scroll view.
+        XCTAssertNil(target)
+    }
+
+    func testResolveScrollTargetDoesNotFallbackToUnrelatedAxisContainer() {
+        let unrelatedVerticalContainer = makeScrollableContainer(
+            contentSize: CGSize(width: 320, height: 2000),
+            frame: CGRect(x: 0, y: 0, width: 320, height: 400)
+        )
+        installScrollableContainers([unrelatedVerticalContainer])
+
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
+        scrollView.contentSize = CGSize(width: 1200, height: 200)
+
+        let screenElement = TheStash.ScreenElement(
+            heistId: "item",
+            contentSpaceOrigin: nil,
+            element: makeElement(),
+            object: nil,
+            scrollView: scrollView
+        )
+
+        let target = brains.navigation.resolveScrollTarget(
+            screenElement: screenElement, axis: .vertical
+        )
+        XCTAssertNil(target)
+    }
+
+    func testResolveScrollTargetReturnsNearestScrollViewWhenAxisMatches() {
+        let unrelatedHorizontalContainer = makeScrollableContainer(
+            contentSize: CGSize(width: 2000, height: 320),
+            frame: CGRect(x: 0, y: 0, width: 400, height: 320)
+        )
+        installScrollableContainers([unrelatedHorizontalContainer])
+
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
+        scrollView.contentSize = CGSize(width: 400, height: 1200)
+
+        let screenElement = TheStash.ScreenElement(
+            heistId: "item",
+            contentSpaceOrigin: nil,
+            element: makeElement(),
+            object: nil,
+            scrollView: scrollView
+        )
+
+        let target = brains.navigation.resolveScrollTarget(
+            screenElement: screenElement, axis: .vertical
+        )
         if case .uiScrollView(let sv) = target {
             XCTAssertTrue(sv === scrollView,
-                          "Should return the element's scroll view when no fallback exists")
+                          "Should return the element's own scroll view")
         } else {
             XCTFail("Expected .uiScrollView, got \(String(describing: target))")
         }
