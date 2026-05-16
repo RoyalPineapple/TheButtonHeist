@@ -8,7 +8,7 @@
 
 TheBrains is an orchestrator class with two internal components:
 
-- **`Navigation`** — scroll and exploration engine. Owns `ScrollableTarget`, `SettleSwipeLoopState`, `ScreenManifest`, `ContainerExploreState`, `lastSwipeDirectionByTarget`, `containerExploreStates`. Drives TheSafecracker's scroll primitives.
+- **`Navigation`** — scroll and exploration engine. Owns `ScrollableTarget`, `SettleSwipeLoopState`, `ScreenManifest`, and `lastSwipeDirectionByTarget`. Drives TheSafecracker's scroll primitives.
 - **`Actions`** — the 21 `executeXxx` action handlers, plus `performElementAction` / `performPointAction` generic pipelines and duration helpers.
 
 `Navigation` and `Actions` are *internal components of TheBrains*, not crew members in their own right — neutral noun-style names. Both are owned by TheBrains (`let navigation: Navigation`, `let actions: Actions`) and share the same TheStash / TheSafecracker / TheTripwire references. Actions holds a reference to Navigation because `executeTypeText` calls `navigation.ensureFirstResponderOnScreen()` after focusing a field — the only known cross-component call.
@@ -20,7 +20,7 @@ TheBrains itself keeps the post-action delta cycle (`captureBeforeState`, `actio
 1. **Command dispatch (`TheBrains+Dispatch.swift`)** — `executeCommand(_:)` routes `ClientMessage` to the appropriate handler: accessibility actions, touch gestures, text/scroll/search, or explore. Switch closures call `actions.executeXxx(...)` or `navigation.executeScroll(...)` etc.
 2. **Action execution (`Actions.swift`)** — Two generic pipelines: `performElementAction` (element-targeted: navigation.ensureOnScreen → resolve → check interactivity → perform action) and `performPointAction` (coordinate-targeted gestures). Most `executeXxx` methods are thin wrappers over these pipelines; `executeSwipe` and `executeTypeText` are specialized multi-step flows.
 3. **Scroll orchestration (`Navigation+Scroll.swift`)** — `executeScroll`, `executeScrollToEdge`, `executeScrollToVisible` (one-shot jump to known position), `executeElementSearch` (iterative page-by-page search for unseen elements). See [14a-SCROLLING.md](14a-SCROLLING.md).
-4. **Screen exploration (`Navigation+Explore.swift`)** — `exploreAndPrune()` scrolls every scrollable container to discover all elements, using `containerExploreStates` fingerprint caching to skip unchanged containers. The exploration accumulator is a local `var union: Screen`; the final union is committed by writing it back into `stash.currentScreen`.
+4. **Screen exploration (`Navigation+Explore.swift`)** — `exploreAndPrune()` scrolls reachable scrollable containers to discover semantic content and restores their visual position. The exploration accumulator is a local `var union: Screen`; the final union is committed by writing it back into `stash.currentScreen`. Targeted exploration may stop early once the target resolves.
 5. **Delta cycle (`TheBrains.swift`)** — `captureBeforeState()` captures a `BeforeState` token; after the action, `actionResultWithDelta(before:)` short-circuits failure responses from the before snapshot, and on success runs the multi-cycle settle, parses via TheStash, detects screen changes, applies, asks Navigation to explore, and computes the delta. When a screen change is detected but the post-change parse stays empty after 10 repop attempts, `settled: false` is reported so the wire reflects an unhealthy snapshot rather than a confident one.
 6. **Post-action settle and transient capture (`SettleSession.swift`)** — `SettleSession` (owned and instantiated per call) drives a closure-based polling loop against TheStash and TheTripwire. It returns `.settled` after `cyclesRequired` consecutive identical AX-tree fingerprints, `.screenChanged` if topVC changes mid-loop, `.cancelled` if the surrounding task is cancelled, or `.timedOut` after the hard deadline. Elements observed mid-loop but absent from baseline ∪ final are returned as `InterfaceDelta.transient` via `SettleSession.transientElements`. Spinners (`UIAccessibilityTraits.updatesFrequently`) are masked out of both the fingerprint and `TimelineKey`.
 7. **Refresh convenience** — `refresh()` delegates to `stash.refresh()`. TheBurglar is TheStash's private implementation detail — TheBrains never references it.
@@ -40,7 +40,7 @@ graph TD
     subgraph Navigation["Navigation (internal component, @MainActor)"]
         NavCore["Navigation.swift<br/>State + nested types"]
         NavScroll["Navigation+Scroll.swift<br/>Scroll orchestration,<br/>ensureOnScreen, ScrollableTarget"]
-        NavExplore["Navigation+Explore.swift<br/>Off-screen content discovery,<br/>container fingerprint caching"]
+        NavExplore["Navigation+Explore.swift<br/>Off-screen semantic content discovery"]
     end
 
     subgraph Actions["Actions (internal component, @MainActor)"]
@@ -102,11 +102,9 @@ flowchart TD
     CANC -->|settled / screenChanged / timedOut| E["stash.parse() → ParseResult<br/>(no mutation yet)"]
 
     E --> F{Screen change?<br/>VC identity OR topology}
-    F -->|Yes| G["Clear navigation.containerExploreStates<br/>(before apply)"]
-    F -->|No| H["stash.apply(ParseResult)"]
-    G --> H
+    F --> H["stash.apply(ParseResult)"]
 
-    H --> I["navigation.exploreAndPrune()<br/>(fingerprint-cached re-explore)"]
+    H --> I["navigation.exploreAndPrune()<br/>(semantic re-explore + restore)"]
     I --> J["stash.selectElements()"]
     J --> K["InterfaceDiff.computeDelta(before, after, afterTree)"]
     K --> L["Return ActionResult<br/>with delta + explore stats"]
@@ -116,9 +114,8 @@ flowchart TD
 
 | Store | Lives on | Lifetime | Purpose |
 |-------|----------|----------|---------|
-| `containerExploreStates` | Navigation | Screen | Cached fingerprint + heistIds per scrollable container |
 | `lastSwipeDirectionByTarget` | Navigation | Across swipes | Last direction per swipeable target key (drives direction-change settle profile) |
-| `lastSentState` | TheBrains | Between responses | Snapshot (treeHash, beforeState, screenId) of the last reply sent to the driver, used by `computeBackgroundDelta` and the wait-for-change fast path |
+| `lastSentState` | TheBrains | Between responses | Snapshot (semantic treeHash, viewportHash, beforeState, screenId) of the last reply sent to the driver, used by `computeBackgroundDelta` and the wait-for-change fast path |
 
 ## Ownership Model
 
@@ -133,9 +130,9 @@ flowchart TD
 |------|----------------|
 | `TheBrains.swift` | Orchestrator class: BeforeState, SentState, actionResultWithDelta, refresh, wait handlers, clearCache, navigation + actions ownership, typealiases + forwarders for test compatibility |
 | `TheBrains+Dispatch.swift` | Command routing: dispatches to `actions.executeXxx` / `navigation.executeXxx` |
-| `Navigation.swift` | Type + init + state (`lastSwipeDirectionByTarget`, `containerExploreStates`) + nested types (`ScrollableTarget`, `ScrollAxis`, `SettleSwipeProfile`, `SettleSwipeLoopState`, `ContainerExploreState`, `ScreenManifest`) |
+| `Navigation.swift` | Type + init + state (`lastSwipeDirectionByTarget`) + nested types (`ScrollableTarget`, `ScrollAxis`, `SettleSwipeProfile`, `SettleSwipeLoopState`, `ScreenManifest`) |
 | `Navigation+Scroll.swift` | Scroll orchestration, scroll-to-visible (one-shot), element-search (iterative), ensure-on-screen, axis/direction mapping, safe swipe frame |
-| `Navigation+Explore.swift` | Off-screen content discovery, container fingerprint caching, presentation-obscuring detection |
+| `Navigation+Explore.swift` | Off-screen semantic content discovery, target-aware exploration, scroll-position restore, presentation-obscuring detection |
 | `Actions.swift` | Unified element/point action pipelines, all 21 executeXxx methods, duration helpers |
 | `SettleSession.swift` | Multi-cycle AX-tree settle loop with inline transient capture; `SettleOutcome`, `TimelineKey`, `SettleSession.transientElements` |
 | `ActionResultBuilder.swift` | Builds `ActionResult` with compile-time separation of success/failure fields |

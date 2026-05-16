@@ -280,22 +280,12 @@ final class TheBrainsActionTests: XCTestCase {
 
     // MARK: - clearCache
 
-    func testClearCacheResetsStashAndExploreState() {
+    func testClearCacheResetsStash() {
         let element = makeElement(label: "Item")
         installScreen(elements: [(element, "test_id")])
-        brains.navigation.containerExploreStates[
-            AccessibilityContainer(
-                type: .scrollable(contentSize: CGSize(width: 375, height: 2000)),
-                frame: .zero
-            )
-        ] = Navigation.ContainerExploreState(
-            visibleSubtreeFingerprint: 1,
-            discoveredHeistIds: ["x"]
-        )
 
         brains.clearCache()
 
-        XCTAssertTrue(brains.navigation.containerExploreStates.isEmpty)
         XCTAssertEqual(brains.stash.currentScreen, .empty)
     }
 

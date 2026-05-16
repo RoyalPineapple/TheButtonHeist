@@ -165,7 +165,7 @@ extension TheBrains {
         let deadline = ContinuousClock.now + .seconds(target.resolvedTimeout)
         let start = CFAbsoluteTimeGetCurrent()
 
-        guard stash.refresh() != nil else {
+        guard await refreshSemanticStateForWait(target: elementTarget) else {
             return .failure(.waitFor, message: TheBrains.treeUnavailableMessage, failureKind: .treeUnavailable)
         }
         if target.resolvedAbsent {
@@ -180,7 +180,7 @@ extension TheBrains {
 
         while ContinuousClock.now < deadline {
             _ = await tripwire.waitForAllClear(timeout: 1.0)
-            guard stash.refresh() != nil else {
+            guard await refreshSemanticStateForWait(target: elementTarget) else {
                 return .failure(.waitFor, message: TheBrains.treeUnavailableMessage, failureKind: .treeUnavailable)
             }
             let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
@@ -198,6 +198,15 @@ extension TheBrains {
         let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
         let reason = target.resolvedAbsent ? "element still present" : "element not found"
         return .failure(.waitFor, message: "timed out after \(elapsed)s (\(reason))", failureKind: .timeout)
+    }
+
+    /// `wait_for` predicates observe the fresh semantic hierarchy, not just the
+    /// current viewport. Exploration may stop as soon as the target is found;
+    /// if it is not found, all reachable scroll containers are scanned.
+    private func refreshSemanticStateForWait(target: ElementTarget) async -> Bool {
+        guard stash.refresh() != nil else { return false }
+        _ = await navigation.exploreAndPrune(target: target)
+        return true
     }
 
     /// Full screen exploration.

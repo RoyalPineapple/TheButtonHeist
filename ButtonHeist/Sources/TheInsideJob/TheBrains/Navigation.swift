@@ -10,8 +10,7 @@ import AccessibilitySnapshotParser
 ///
 /// Internal component of TheBrains. Owns the scroll engine
 /// (`ScrollableTarget`, `SettleSwipeLoopState`, swipe settle) and
-/// the explore engine (`ScreenManifest`, `ContainerExploreState`,
-/// container fingerprint caching). Drives TheSafecracker's scroll
+/// the explore engine (`ScreenManifest`). Drives TheSafecracker's scroll
 /// primitives against TheStash's hierarchy view.
 @MainActor
 final class Navigation {
@@ -24,9 +23,6 @@ final class Navigation {
 
     /// Last dispatched swipe direction per swipeable target key.
     var lastSwipeDirectionByTarget: [String: UIAccessibilityScrollDirection] = [:]
-
-    /// Cached state from the last explore of each scrollable container.
-    var containerExploreStates: [AccessibilityContainer: ContainerExploreState] = [:]
 
     // MARK: - Init
 
@@ -218,12 +214,6 @@ final class Navigation {
         static let vertical   = ScrollAxis(rawValue: 1 << 1)
     }
 
-    /// Cached state from the last explore of each scrollable container.
-    struct ContainerExploreState {
-        let visibleSubtreeFingerprint: Int
-        let discoveredHeistIds: Set<String>
-    }
-
     /// Bookkeeping for a single exploration pass.
     ///
     /// Only fields that are actually consumed downstream (by `ExploreResult` or
@@ -346,7 +336,6 @@ final class Navigation {
     // MARK: - Clear
 
     func clearCache() {
-        containerExploreStates.removeAll()
         lastSwipeDirectionByTarget.removeAll()
     }
 }

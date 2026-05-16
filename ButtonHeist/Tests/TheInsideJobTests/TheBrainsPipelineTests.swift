@@ -117,29 +117,64 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     func testRecordSentStatePopulatesAllFields() {
         seedScreen(elements: [("Home", .header, "home_header"), ("A", .button, "button_a")])
+        let viewportHash = brains.stash.wireTreeHash()
 
         brains.recordSentState()
 
         let sent = brains.lastSentState
         XCTAssertNotNil(sent)
         XCTAssertEqual(sent?.screenId, "home")
+        XCTAssertEqual(sent?.viewportHash, viewportHash)
         XCTAssertNotEqual(sent?.treeHash, 0,
                           "treeHash should be non-zero for a non-empty screen")
         XCTAssertEqual(brains.lastSentScreenId, "home")
     }
 
-    func testRecordSentStateWithHashAvoidsWireConversion() {
+    func testRecordSentStateUsesKnownSemanticElements() {
+        let visible = AccessibilityElement.make(
+            label: "Visible",
+            traits: .button,
+            respondsToUserInteraction: false
+        )
+        let offViewport = AccessibilityElement.make(
+            label: "Below fold",
+            traits: .button,
+            respondsToUserInteraction: false
+        )
+        brains.stash.currentScreen = .makeForTests(
+            elements: [(visible, "button_visible")],
+            offViewport: [.init(offViewport, heistId: "button_below_fold")]
+        )
+        let liveViewportHash = brains.stash.wireTreeHash()
+
+        brains.recordSentState()
+
+        let sent = brains.lastSentState
+        XCTAssertEqual(
+            Set(sent?.beforeState.snapshot.map(\.heistId) ?? []),
+            ["button_visible", "button_below_fold"]
+        )
+        XCTAssertNotEqual(
+            sent?.treeHash,
+            liveViewportHash,
+            "Sent state should hash the known semantic set, not only the live viewport tree"
+        )
+    }
+
+    func testRecordSentStateWithViewportHashKeepsSemanticHashDomain() {
         seedScreen(elements: [("Screen X", .header, "screen_x_header"), ("A", .button, "button_a")])
+        let semanticHash = brains.captureSemanticState().treeHash
 
-        brains.recordSentState(treeHash: 42)
+        brains.recordSentState(viewportHash: 42)
 
-        XCTAssertEqual(brains.lastSentState?.treeHash, 42)
+        XCTAssertEqual(brains.lastSentState?.treeHash, semanticHash)
+        XCTAssertEqual(brains.lastSentState?.viewportHash, 42)
         XCTAssertEqual(brains.lastSentState?.screenId, "screen_x")
     }
 
     func testScreenChangedSinceLastSentDetectsIdTransition() {
         seedScreen(elements: [("Home", .header, "home_header")])
-        brains.recordSentState(treeHash: 1)
+        brains.recordSentState(viewportHash: 1)
         XCTAssertFalse(brains.screenChangedSinceLastSent)
 
         seedScreen(elements: [("Settings", .header, "settings_header")])
@@ -159,18 +194,19 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     // MARK: - computeBackgroundDelta Guards
 
-    func testComputeBackgroundDeltaReturnsNilWithoutPriorSend() {
-        XCTAssertNil(brains.computeBackgroundDelta(),
-                     "No prior send means no comparison baseline, so return nil")
+    func testComputeBackgroundDeltaReturnsNilWithoutPriorSend() async {
+        let delta = await brains.computeBackgroundDelta()
+        XCTAssertNil(delta, "No prior send means no comparison baseline, so return nil")
     }
 
-    func testComputeBackgroundDeltaReturnsNilWhenTreeHashIsZero() {
-        // A treeHash of 0 is the sentinel for "not set" — even if lastSentState exists,
+    func testComputeBackgroundDeltaReturnsNilWhenViewportHashIsZero() async {
+        // A viewportHash of 0 is the sentinel for "not set" — even if lastSentState exists,
         // the delta must be suppressed to avoid false positives.
         seedScreen(elements: [("A", .button, "button_a")])
-        brains.recordSentState(treeHash: 0)
+        brains.recordSentState(viewportHash: 0)
 
-        XCTAssertNil(brains.computeBackgroundDelta())
+        let delta = await brains.computeBackgroundDelta()
+        XCTAssertNil(delta)
     }
 
     // MARK: - Unsupported Diagnostics
@@ -267,9 +303,9 @@ final class TheBrainsPipelineTests: XCTestCase {
                         "exploreAndPrune always commits a screen value")
     }
 
-    func testExploreScreenCachesDiscoveredIdsForSwipeableContainer() async throws {
+    func testExploreScreenExploresSwipeableContainer() async throws {
         guard brains.refresh() != nil else {
-            throw XCTSkip("No live hierarchy available for swipeable explore cache test")
+            throw XCTSkip("No live hierarchy available for swipeable explore test")
         }
         guard let container = brains.stash.currentHierarchy.scrollableContainers.first(where: {
             guard let view = brains.stash.scrollableContainerViews[$0] else { return true }
@@ -282,8 +318,6 @@ final class TheBrainsPipelineTests: XCTestCase {
         let manifest = await brains.navigation.exploreScreen(union: &union)
 
         XCTAssertTrue(manifest.exploredContainers.contains(container))
-        XCTAssertNotNil(brains.navigation.containerExploreStates[container],
-                        "Swipeable containers should be explored and cached")
     }
 
     // MARK: - Helpers
