@@ -68,7 +68,7 @@ final class ScreenClassifierTests: XCTestCase {
     func testRootShapeReplacementWithoutNavigationMarkersIsScreenChange() {
         let before = screen(elements: [element(label: "Search", traits: .searchField)])
         let after = screen(elements: [
-            element(label: "Inbox", traits: .header),
+            element(label: "Inbox", traits: .button),
             element(label: "Compose", traits: .button),
             element(label: "Settings", traits: .button),
         ])
