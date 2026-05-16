@@ -25,25 +25,23 @@ extension TheStash {
 
     enum Diagnostics {
 
-    /// Diagnostic for an heistId that isn't in the current screen. By the time
-    /// we land here, `ensureOnScreen` has already tried to recover it, so the
-    /// id is either stale (the screen changed since the agent's last
-    /// `get_interface`) or it never existed. The message says so and points at
-    /// the two recovery moves the agent has: refetch the interface, or switch
-    /// to a matcher predicate so the lookup can hunt the exploration union.
+    /// Diagnostic for an heistId that isn't in the committed semantic screen.
+    /// By the time we land here, `ensureOnScreen` has already tried to recover
+    /// it, so the id is either stale (the hierarchy changed since the agent's
+    /// last `get_interface`) or it never existed.
     static func heistIdNotFound(
         _ heistId: String,
         knownIds: some Collection<String>,
-        viewportCount: Int
+        knownCount: Int
     ) -> String {
         let similar = knownIds.sorted()
             .filter { $0.contains(heistId) || heistId.contains($0) }
         if similar.isEmpty {
             return """
-                Element not found: "\(heistId)" — likely scrolled off or the \
-                screen changed since your last get_interface (\(viewportCount) \
-                elements on screen now); refetch via get_interface, or target \
-                by label/identifier with a matcher.
+                Element not found: "\(heistId)" — likely stale or the hierarchy \
+                changed since your last get_interface (\(knownCount) known \
+                elements now); refetch via get_interface, or target by \
+                label/identifier with a matcher.
                 """
         }
         return """
@@ -56,7 +54,7 @@ extension TheStash {
         _ matcher: ElementMatcher,
         hierarchy: [AccessibilityHierarchy],
         screenElements: [Screen.ScreenElement],
-        viewportHeistIds: Set<String>,
+        knownHeistIds: Set<String>,
         traversalOrder: [String: Int]
     ) -> String {
         let query = formatMatcher(matcher)
@@ -69,7 +67,7 @@ extension TheStash {
         // Tier 2: Nothing close — dump a compact summary.
         let summary = compactElementSummary(
             screenElements: screenElements,
-            viewportHeistIds: viewportHeistIds,
+            knownHeistIds: knownHeistIds,
             traversalOrder: traversalOrder
         )
         return "No match for: \(query)\n\(summary)"
@@ -182,22 +180,23 @@ extension TheStash {
         return nil
     }
 
-    /// Compact summary of on-screen elements for total-miss fallback.
+    /// Compact summary of known elements for total-miss fallback.
     /// Capped at 20 elements to avoid flooding the response.
     static func compactElementSummary(
         screenElements: [Screen.ScreenElement],
-        viewportHeistIds: Set<String>,
+        knownHeistIds: Set<String>,
         traversalOrder: [String: Int]
     ) -> String {
         let cap = 20
-        let visibleElements = screenElements
-            .filter { viewportHeistIds.contains($0.heistId) }
+        let knownElements = screenElements
+            .filter { knownHeistIds.contains($0.heistId) }
             .sorted { (traversalOrder[$0.heistId] ?? Int.max) < (traversalOrder[$1.heistId] ?? Int.max) }
-        if visibleElements.isEmpty {
-            return "screen is empty (0 elements)"
+        if knownElements.isEmpty {
+            return "known hierarchy is empty (0 elements)"
         }
-        var lines = ["\(visibleElements.count) elements on screen:"]
-        for entry in visibleElements.prefix(cap) {
+        let noun = knownElements.count == 1 ? "element" : "elements"
+        var lines = ["\(knownElements.count) known \(noun):"]
+        for entry in knownElements.prefix(cap) {
             let element = entry.element
             var parts: [String] = []
             if let label = element.label, !label.isEmpty { parts.append("label=\"\(label)\"") }
@@ -209,8 +208,8 @@ extension TheStash {
             if !traitNames.isEmpty { parts.append("[\(traitNames.joined(separator: ","))]") }
             lines.append("  \(parts.joined(separator: " "))")
         }
-        if visibleElements.count > cap {
-            lines.append("  ... and \(visibleElements.count - cap) more")
+        if knownElements.count > cap {
+            lines.append("  ... and \(knownElements.count - cap) more")
         }
         return lines.joined(separator: "\n")
     }

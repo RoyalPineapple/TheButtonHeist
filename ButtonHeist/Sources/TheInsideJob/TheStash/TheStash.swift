@@ -26,23 +26,17 @@ final class TheStash {
 
     /// The one piece of mutable state — the latest committed screen value.
     ///
-    /// **Dual contract — same field, two phases:**
+    /// **One field, two shapes:**
     ///
-    /// 1. **Outside an exploration cycle** (and during one, between scrolls)
-    ///    `currentScreen` is **page-only**: the result of the most recent
-    ///    `parse()`. `heistIds`/`viewportIds` reflect exactly what's on screen
-    ///    right now. This is what the settle loop and `scrollOnePageAndSettle`
-    ///    termination heuristics need — they compare `stash.viewportIds`
-    ///    across frames to detect movement, which only works if the field
-    ///    flips with each commit after parse.
+    /// 1. **After a plain parse** `currentScreen` is page-only: its known
+    ///    semantic set is exactly the live hierarchy. Scroll-settle heuristics
+    ///    compare this shape between frames to detect movement.
     ///
-    /// 2. **At the end of `Navigation.exploreAndPrune`** the local `union: Screen`
-    ///    accumulator is committed here. The unioned `elements` map now
-    ///    includes off-screen heistIds observed during scrolling, but the
-    ///    page-only fields (`hierarchy`, `heistIdByElement`,
-    ///    `firstResponderHeistId`) still come from the last parse via
-    ///    `Screen.merging` semantics. Hence `viewportIds` becomes a superset
-    ///    of `liveViewportIds` until the next non-exploration parse.
+    /// 2. **After `Navigation.exploreAndPrune`** the local `union: Screen`
+    ///    accumulator is committed here. `elements` becomes the whole known
+    ///    hierarchy discovered by scrolling, while live-only fields (`hierarchy`,
+    ///    `heistIdByElement`, `firstResponderHeistId`) still come from the last
+    ///    parse via `Screen.merging`.
     ///
     /// **Writer audit** — the call sites that set this field:
     /// - `refresh()` — single parse + commit (page-only)
@@ -52,8 +46,8 @@ final class TheStash {
     /// - `clearCache()` / `clearScreen()` — reset to `.empty`
     /// - `TheBrains.actionResultWithDelta` — page-only commit after settle
     ///
-    /// Readers that specifically want "what's on screen right now" (vs the
-    /// post-exploration union) read `liveViewportIds`, not `viewportIds`.
+    /// Readers that specifically want "what's reachable in the latest parse"
+    /// read `liveViewportIds`; target resolution reads the known semantic set.
     var currentScreen: Screen = .empty
 
     private var pendingRotorState: PendingRotorState = .none
@@ -91,7 +85,7 @@ final class TheStash {
         return result
     }
 
-    /// HeistIds of all elements in the current screen value.
+    /// HeistIds of all known elements in the current screen value.
     ///
     /// After an exploration commit this includes elements that were observed
     /// during scrolling and are no longer on-screen; after a plain `refresh()`
@@ -386,9 +380,9 @@ final class TheStash {
     /// Resolve a target to a unique element. Returns `.resolved` on success,
     /// `.notFound` or `.ambiguous` with diagnostics on failure.
     ///
-    /// Off-screen behaviour: heistId-targeted lookups are strict. If the id
-    /// is not in `currentScreen.elements`, resolution fails with a near-miss
-    /// suggestion. There is no fall-back to a previously-seen position.
+    /// Resolution reads the committed semantic state. If an element is not in
+    /// `currentScreen.elements`, resolution fails with a near-miss suggestion.
+    /// Live coordinate revalidation happens later in action execution.
     func resolveTarget(_ target: ElementTarget) -> TargetResolution {
         switch target {
         case .heistId(let heistId):
@@ -399,7 +393,7 @@ final class TheStash {
                 return .notFound(diagnostics: Diagnostics.heistIdNotFound(
                     heistId,
                     knownIds: currentScreen.elements.keys,
-                    viewportCount: currentScreen.elements.count
+                    knownCount: currentScreen.elements.count
                 ))
             }
             return .resolved(ResolvedTarget(screenElement: entry))
@@ -479,14 +473,15 @@ final class TheStash {
         return resolveTarget(effectiveTarget).resolved
     }
 
-    /// Existence check for wait-style predicates.
-    /// Matcher targets are live hierarchy checks; heistIds are known-state checks.
+    /// Existence check for wait-style predicates. Both heistIds and matchers
+    /// read the committed semantic screen; action execution owns any viewport
+    /// work needed to make a matched element reachable.
     func hasTarget(_ target: ElementTarget) -> Bool {
         switch target {
         case .heistId(let heistId):
             return screenElement(heistId: heistId, in: .known) != nil
         case .matcher(let matcher, _):
-            return currentScreen.hierarchy.hasMatch(matcher, mode: .exact)
+            return !matchScreenElements(matcher, limit: 1).isEmpty
         }
     }
 
@@ -539,7 +534,7 @@ final class TheStash {
         Diagnostics.matcherNotFound(
             matcher, hierarchy: currentScreen.hierarchy,
             screenElements: selectElements(),
-            viewportHeistIds: currentScreen.heistIds,
+            knownHeistIds: currentScreen.heistIds,
             traversalOrder: buildTraversalOrderIndex()
         )
     }

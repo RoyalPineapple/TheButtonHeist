@@ -8,7 +8,7 @@ import AccessibilitySnapshotParser
 
 // MARK: - Screen Exploration
 //
-// Scrolls every scrollable container to discover all elements on screen.
+// Scrolls every scrollable container to discover the whole reachable hierarchy.
 // Container fingerprint caching skips unchanged containers on re-explore.
 //
 // Post-0.2.25: TheStash has no exploration mode. The accumulator is a local
@@ -22,10 +22,10 @@ import AccessibilitySnapshotParser
 //   1. During a cycle (between scrolls): page-only, rebound by each parse —
 //      this is what `stash.viewportIds`, `liveViewportIds`, and
 //      `firstResponderHeistId` read.
-//   2. At end-of-cycle: the committed union — `elements` includes off-screen
-//      heistIds; `hierarchy` and the live indices still come from the final
-//      parse (see `Screen.merging`). Strict heistId resolution still works
-//      from `elements`; off-screen elements need a re-scroll to act on.
+//   2. At end-of-cycle: the committed union — `elements` includes known
+//      semantic entries; `hierarchy` and the live indices still come from the
+//      final parse (see `Screen.merging`). Target resolution reads `elements`;
+//      action execution re-scrolls before using live coordinates.
 
 extension Navigation {
 
@@ -36,9 +36,8 @@ extension Navigation {
 
     /// Explore and accumulate the unioned screen. The local `union: Screen`
     /// holds every element seen during this exploration; the final union is
-    /// committed to `stash.currentScreen` so subsequent operations can act on
-    /// off-screen content (with the documented strict-by-default activation
-    /// rule for later refreshes).
+    /// committed to `stash.currentScreen` so subsequent operations can target
+    /// known semantic content while action execution owns reachability.
     ///
     /// Phase contract on `stash.currentScreen`:
     /// - During this call, `stash.currentScreen` is **page-only** — rebound
@@ -50,14 +49,14 @@ extension Navigation {
     func exploreAndPrune(target: ElementTarget? = nil) async -> ScreenManifest {
         var union = stash.currentScreen
         let manifest = await exploreScreen(target: target, union: &union)
-        // End-of-cycle union commit: `currentScreen.elements` now contains
-        // off-screen heistIds. `liveViewportIds` still reflects the last
-        // parsed page; `viewportIds` is the union.
+        // End-of-cycle union commit: `currentScreen.elements` now contains the
+        // known semantic set. `liveViewportIds` still reflects the last parsed
+        // page; `viewportIds` is the union.
         stash.currentScreen = union
         return manifest
     }
 
-    /// Scroll all scrollable containers to discover every element on screen.
+    /// Scroll all scrollable containers to discover reachable elements.
     /// Accumulates discovered elements into `union`. Mid-exploration writes
     /// to `stash.currentScreen` happen as scrolls land — those are the live
     /// viewport, used by termination heuristics.

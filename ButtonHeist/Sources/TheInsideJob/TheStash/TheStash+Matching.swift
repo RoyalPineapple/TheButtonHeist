@@ -176,17 +176,18 @@ extension TheStash {
     /// equality with typography folding on string fields, exact bitmask comparison
     /// on traits. There is no substring fallback — a miss is a miss, and the agent
     /// gets structured suggestions through the `.notFound` diagnostic path. Matches
-    /// are returned in hierarchy traversal order; off-screen lookup is gone with
-    /// the registry (post-0.2.25 the screen value is the only source of truth).
+    /// are returned in the committed screen's semantic order: live hierarchy
+    /// entries first, then known entries retained from exploration. Viewport
+    /// reachability is handled by action execution, not by target resolution.
     func matchScreenElements(_ matcher: ElementMatcher, limit: Int) -> [ScreenElement] {
         guard limit > 0 else { return [] }
-        let hierarchyHits = currentScreen.hierarchy.matches(matcher, mode: .exact, limit: limit)
-        var seenIds = Set<String>()
-        return hierarchyHits.compactMap { match -> ScreenElement? in
-            guard let element = screenElement(for: match.element, in: .visible),
-                  seenIds.insert(element.heistId).inserted else { return nil }
-            return element
+        var matches: [ScreenElement] = []
+        matches.reserveCapacity(limit)
+        for entry in selectElements() where entry.element.matches(matcher, mode: .exact) {
+            matches.append(entry)
+            if matches.count == limit { break }
         }
+        return matches
     }
 
 }

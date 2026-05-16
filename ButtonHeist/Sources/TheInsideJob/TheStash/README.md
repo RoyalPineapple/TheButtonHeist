@@ -1,6 +1,6 @@
 # TheStash
 
-Single-snapshot screen state, target resolution, wire conversion, and screen capture. No persistent element registry — every `apply()` replaces `currentScreen` wholesale. Exploration accumulates per-page parses into a local union in TheBrains+Exploration and commits the union back as the final snapshot.
+Single-snapshot screen state, target resolution, wire conversion, and screen capture. No persistent element registry — every parse replaces `currentScreen` wholesale. Exploration accumulates per-page parses into a local union in TheBrains+Exploration and commits the union back as the known semantic snapshot.
 
 ## Reading order
 
@@ -22,7 +22,7 @@ Single-snapshot screen state, target resolution, wire conversion, and screen cap
 
    **Tree read helpers** — `wireTree()` and `wireTreeHash()` compute the wire tree of `currentScreen` via `WireConversion.toWireTree(from:)`. They are not facades — they read state. Element-level wire conversion (`WireConversion.toWire`, `WireConversion.traitNames`) and delta computation (`InterfaceDiff.computeDelta`) are pure transforms; callers invoke them directly.
 
-   **`selectElements()`** — returns live hierarchy elements in traversal order, then off-viewport elements (from the post-explore union) sorted by heistId. Deterministic across runs.
+   **`selectElements()`** — returns live hierarchy elements in traversal order, then known-only elements (from the post-explore union) sorted by heistId. Deterministic across runs.
 
 3. **`IdAssignment.swift`** — Pure static namespace. `assign(_:)` generates heistIds in two phases: base ID (developer identifier if stable, else synthesized from trait+label), then suffix disambiguation (`_1`, `_2`, ... for all instances of a duplicate). `synthesizeBaseId` picks from a ranked trait list (`backButton` → `tabBarItem` → `searchField` → `textEntry` → `switchButton` → `adjustable` → `header` → `button` → `link` → `image` → `tabBar`) and slugifies the label. Value is excluded for stability. **Wire-format-stable** — agents rely on synthesis being predictable, do not change without a major version bump.
 
@@ -30,9 +30,9 @@ Single-snapshot screen state, target resolution, wire conversion, and screen cap
 
 4a. **`InterfaceDiff.swift`** — Pure static namespace (caseless `@MainActor enum`). `computeDelta(before:after:beforeTree:beforeTreeHash:afterTree:isScreenChange:)` has three paths: screen changed → full new `Interface`; fast no-change check via hierarchy hash + tree-edit fallback; something changed → lift to wire via `WireConversion.toWire`, then `computeElementEdits` + `computeTreeEdits` (with functional-move pairing inference to collapse churn that's really a move). Owns the four delta-internal types: `WireTreeRecord`, `ElementIdentitySignature`, `ElementStateSignature`, `ElementPairingSignature`.
 
-5. **`TheStash+Matching.swift`** — `matchScreenElements(matcher, limit:)` walks `currentScreen.hierarchy` (live only — off-viewport explored elements are NOT in the matcher path), maps hits through `currentScreen.heistIdByElement`. **Exact-or-miss**: `AccessibilityElement.matches(_:mode:)` defers to `ElementMatcher.stringEquals` (TheScore) for byte-for-byte server/client equivalence: case-insensitive equality with typography folding. Unknown trait names fail-safe to a miss. `MatchMode.substring` is reserved for `Diagnostics.findNearMiss`; resolution itself never uses substring.
+5. **`TheStash+Matching.swift`** — `matchScreenElements(matcher, limit:)` walks `selectElements()` so matchers see the committed semantic state, not just the live viewport. **Exact-or-miss**: `AccessibilityElement.matches(_:mode:)` defers to `ElementMatcher.stringEquals` (TheScore) for byte-for-byte server/client equivalence: case-insensitive equality with typography folding. Unknown trait names fail-safe to a miss. `MatchMode.substring` is reserved for `Diagnostics.findNearMiss`; resolution itself never uses substring.
 
-6. **`Diagnostics.swift`** — Pure static namespace. `heistIdNotFound` finds similar IDs by bidirectional substring check across `currentScreen.elements`. `matcherNotFound` tries relaxations in order (drop value → traits → label → identifier), checking each against the hierarchy.
+6. **`Diagnostics.swift`** — Pure static namespace. `heistIdNotFound` finds similar IDs by bidirectional substring check across `currentScreen.elements`. `matcherNotFound` tries relaxations in order (drop value → traits → label → identifier), checking each against the live hierarchy, then falls back to a compact known-element summary.
 
 7. **`Interactivity.swift`** — `isInteractive(element:)` checks three conditions: `respondsToUserInteraction`, interactive trait bitmask, or has custom actions. `checkInteractivity` also checks `.notEnabled` for blocking and surfaces an advisory `warning` when an element has only static traits.
 
@@ -42,6 +42,6 @@ Single-snapshot screen state, target resolution, wire conversion, and screen cap
 
 ## Exploration discipline
 
-`TheBrains+Exploration.exploreAndPrune` owns the union accumulator as a local `var union: Screen`. Each scroll page calls `stash.refresh()` (commits page-only state for termination heuristics), then `union = union.merging(stash.currentScreen)`. After all pages, `stash.currentScreen = union` commits the full tree. No mode flag, no inExploreCycle state.
+`TheBrains+Exploration.exploreAndPrune` owns the union accumulator as a local `var union: Screen`. Each scroll page calls `stash.refresh()` (commits page-only state for termination heuristics), then `union = union.merging(stash.currentScreen)`. After all pages, `stash.currentScreen = union` commits the known semantic tree. No mode flag, no inExploreCycle state.
 
 > Full dossier: [`docs/dossiers/11-THESTASH.md`](../../../../docs/dossiers/11-THESTASH.md)

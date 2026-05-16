@@ -25,8 +25,8 @@ import AccessibilitySnapshotParser
 /// — so they cannot drift from the underlying tree.
 struct Screen: Equatable {
 
-    /// HeistId → element entry. `Set(elements.keys)` is the viewport heistId
-    /// set — there's no separate `viewportIds` field.
+    /// HeistId → element entry. `Set(elements.keys)` is the committed known
+    /// semantic set, including exploration results that are not currently live.
     let elements: [String: ScreenElement]
 
     /// The parsed accessibility hierarchy. Used for matcher resolution,

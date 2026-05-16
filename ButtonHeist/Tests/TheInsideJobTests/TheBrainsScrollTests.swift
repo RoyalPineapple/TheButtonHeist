@@ -508,6 +508,34 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertNil(entry, "Should return nil when heistId is in live viewport")
     }
 
+    func testOffViewportEntryByMatcherReturnsKnownEntryOutsideLiveHierarchy() {
+        let other = makeElement(label: "Other")
+        let element = makeElement(label: "Item")
+        installScreenWithOffViewportEntry(
+            liveHierarchy: [(other, "other_element")],
+            offViewport: [(element, "button_item", CGPoint(x: 0, y: 2000))]
+        )
+
+        let entry = brains.navigation.offViewportRegistryEntry(
+            for: .matcher(ElementMatcher(label: "Item"))
+        )
+        XCTAssertNotNil(entry, "Should return known matcher hit when it is not in the live viewport")
+        XCTAssertEqual(entry?.heistId, "button_item")
+    }
+
+    func testOffViewportEntryByMatcherReturnsNilWhenMatchIsLive() {
+        let element = makeElement(label: "Item")
+        installScreenWithOffViewportEntry(
+            liveHierarchy: [(element, "button_item")],
+            offViewport: []
+        )
+
+        let entry = brains.navigation.offViewportRegistryEntry(
+            for: .matcher(ElementMatcher(label: "Item"))
+        )
+        XCTAssertNil(entry, "Should return nil when matcher hit is already in the live viewport")
+    }
+
     // MARK: - resolveScrollTarget
 
     func testResolveScrollTargetReturnsNilWhenNoScrollView() {
