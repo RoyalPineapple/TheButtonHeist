@@ -359,6 +359,19 @@ struct ToolSyncTests {
         }
     }
 
+    @Test("type_text schema rejects no-op scalar values")
+    func typeTextSchemaRejectsNoOpScalarValues() {
+        guard let typeText = ToolDefinitions.all.first(where: { $0.name == "type_text" }),
+              let textSchema = extractPropertySchema(from: typeText, property: "text"),
+              let deleteCountSchema = extractPropertySchema(from: typeText, property: "deleteCount") else {
+            Issue.record("type_text is missing text or deleteCount schema")
+            return
+        }
+
+        #expect(extractIntField(from: textSchema, key: "minLength") == 1)
+        #expect(extractIntField(from: deleteCountSchema, key: "minimum") == 1)
+    }
+
     // MARK: - Exhaustiveness
 
     @Test("Tool input schemas avoid Claude-incompatible composition keywords")
@@ -573,5 +586,13 @@ struct ToolSyncTests {
             return nil
         }
         return string
+    }
+
+    private func extractIntField(from schema: [String: Value], key: String) -> Int? {
+        guard let value = schema[key],
+              case .int(let int) = value else {
+            return nil
+        }
+        return int
     }
 }

@@ -226,7 +226,9 @@ For elements with named actions (steppers, sliders):
 {"tool": "type_text", "arguments": {"heistId": "email-field", "text": "user@example.com"}}
 ```
 
-Optionally clear the field first:
+Targeted, non-secure `type_text` focuses the target and reports the final target value. Targetless typing uses whatever editable element already has focus; treat it as a lower-level operation for advanced flows until focus transactions land.
+
+Optionally clear the field first. `clearFirst` by itself is valid, but empty `text` and non-positive `deleteCount` are rejected:
 ```json
 {"tool": "type_text", "arguments": {"heistId": "email-field", "text": "new text", "clearFirst": true}}
 ```
@@ -383,10 +385,8 @@ Deltas tell you *what* changed. Expectations tell you *whether what changed matc
   "tool": "run_batch",
   "arguments": {
     "steps": [
-      {"command": "activate", "heistId": "email-field"},
-      {"command": "type_text", "text": "user@example.com", "expect": {"type": "element_updated", "property": "value"}},
-      {"command": "activate", "heistId": "password-field"},
-      {"command": "type_text", "text": "hunter2", "expect": {"type": "element_updated", "property": "value"}},
+      {"command": "type_text", "heistId": "email-field", "text": "user@example.com", "expect": {"type": "element_updated", "property": "value"}},
+      {"command": "type_text", "heistId": "password-field", "text": "hunter2", "expect": {"type": "element_updated", "property": "value"}},
       {"command": "activate", "heistId": "login-button", "expect": {"type": "screen_changed"}}
     ],
     "policy": "stop_on_error"
