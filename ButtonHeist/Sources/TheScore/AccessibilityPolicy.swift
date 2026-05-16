@@ -100,12 +100,22 @@ public enum AccessibilityPolicy {
         .tabBar,
     ]
 
-    // MARK: - Screen Classification
+    // MARK: - Tab Switch Persistence Threshold
 
-    /// A selected tab marker changing is the tab-switch signal. This threshold
-    /// is the fallback for tabbed screens that keep tab chrome but replace most
-    /// non-tab content without exposing a selected-marker change. Raising it
-    /// classifies more replacements as new screens; lowering it classifies more
-    /// as same-screen updates.
+    /// Persistence ratio below which a tab bar content swap counts as a
+    /// tab switch (screen change) rather than a scroll.
+    ///
+    /// When comparing two parses that both contain a tab bar, the parser
+    /// computes the fraction of non-tab-bar content labels that persist
+    /// across the snapshots. If fewer than this fraction persist, the
+    /// transition is classified as a screen change. Consumed by
+    /// `TheBurglar.isTopologyChanged` (server-side topology detection),
+    /// whose result flows into `TheBrains.actionResultWithDelta` and
+    /// `TheBrains.computeDelta` to decide whether an action produced a
+    /// new screen.
+    ///
+    /// Locked at `0.4` by `AccessibilityPolicyTests`. Changes to this
+    /// threshold alter screen-change semantics and should be made with a
+    /// clear empirical justification.
     public static let tabSwitchPersistThreshold: Double = 0.4
 }

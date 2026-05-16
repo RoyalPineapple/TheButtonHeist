@@ -110,8 +110,10 @@ final class AccessibilityPolicyTests: XCTestCase {
         XCTAssertLessThan(AccessibilityPolicy.tabSwitchPersistThreshold, 1.0)
     }
 
-    /// Locks the fallback threshold used when tab chrome persists but the
-    /// selected tab marker does not expose the screen change directly.
+    /// Locks the current value at `0.4`. Changing this threshold alters
+    /// screen-change semantics consumed by `TheBurglar.isTopologyChanged`
+    /// and downstream delta computation in `TheBrains`. Any change should
+    /// have a clear empirical justification documented in the PR.
     func testTabSwitchPersistThresholdValueLocked() {
         XCTAssertEqual(AccessibilityPolicy.tabSwitchPersistThreshold, 0.4)
     }
