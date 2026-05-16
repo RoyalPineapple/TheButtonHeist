@@ -185,7 +185,8 @@ extension FenceResponse {
 
     private static func compactActionFailure(_ result: ActionResult) -> String {
         let message = result.message ?? result.method.rawValue
-        var text = "\(result.method.rawValue): error[\(compactActionErrorKind(result).rawValue)]: \(message)"
+        let errorCode = Self.actionFailureDetails(result)?.errorCode ?? compactActionErrorKind(result).rawValue
+        var text = "\(result.method.rawValue): error[\(errorCode)]: \(message)"
         if let screenId = result.screenId {
             text = "\(screenId) | \(text)"
         }

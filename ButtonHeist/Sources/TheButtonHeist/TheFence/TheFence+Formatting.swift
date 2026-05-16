@@ -97,6 +97,27 @@ public enum FenceResponse {
         }
     }
 
+    static func actionFailureDetails(_ result: ActionResult) -> FailureDetails? {
+        guard !result.success,
+              result.errorKind == nil || result.errorKind == .actionFailed,
+              result.message == Self.accessibilityTreeUnavailableMessage
+        else {
+            return nil
+        }
+
+        return FailureDetails(
+            errorCode: "request.accessibility_tree_unavailable",
+            phase: .request,
+            retryable: true,
+            hint: "Wait for a traversable app window, then refresh the interface or retry the command."
+        )
+    }
+
+    // Keep this literal in sync with `TheBrains.treeUnavailableMessage`; this
+    // bridges tree-unavailable `actionFailed` wire results to local diagnostics.
+    private static let accessibilityTreeUnavailableMessage =
+        "Could not access accessibility tree: no traversable app windows"
+
     // MARK: - Human Formatting
 
     public func humanFormatted() -> String {

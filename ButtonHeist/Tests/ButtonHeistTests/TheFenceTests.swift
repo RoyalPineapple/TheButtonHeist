@@ -556,6 +556,22 @@ final class TheFenceTests: XCTestCase {
         XCTAssertEqual(text, "checkout | waitFor: error[timeout]: Timed out after 2.0s waiting for element")
     }
 
+    func testCompactTreeUnavailableActionUsesLocalDiagnosticCode() {
+        let result = ActionResult(
+            success: false,
+            method: .waitFor,
+            message: "Could not access accessibility tree: no traversable app windows",
+            errorKind: .actionFailed
+        )
+
+        let text = FenceResponse.action(result: result).compactFormatted()
+
+        XCTAssertEqual(
+            text,
+            "waitFor: error[request.accessibility_tree_unavailable]: Could not access accessibility tree: no traversable app windows"
+        )
+    }
+
     func testActionWithoutExpectationFormatting() {
         let result = ActionResult(success: true, method: .activate)
         let response = FenceResponse.action(result: result)
@@ -644,6 +660,46 @@ final class TheFenceTests: XCTestCase {
         let json = response.jsonDict()!
         XCTAssertEqual(json["status"] as? String, "ok")
         XCTAssertNil(json["expectation"])
+    }
+
+    func testTreeUnavailableActionJSONIncludesLocalDiagnosticDetails() {
+        let result = ActionResult(
+            success: false,
+            method: .explore,
+            message: "Could not access accessibility tree: no traversable app windows",
+            errorKind: .actionFailed
+        )
+        let response = FenceResponse.action(result: result)
+
+        let json = response.jsonDict()!
+
+        XCTAssertEqual(json["status"] as? String, "error")
+        XCTAssertEqual(json["errorClass"] as? String, "actionFailed")
+        XCTAssertEqual(json["errorCode"] as? String, "request.accessibility_tree_unavailable")
+        XCTAssertEqual(json["phase"] as? String, "request")
+        XCTAssertEqual(json["retryable"] as? Bool, true)
+        XCTAssertTrue((json["hint"] as? String)?.contains("traversable app window") == true)
+    }
+
+    func testTreeUnavailableActionWithNilErrorKindStillUsesLocalDiagnosticDetails() {
+        let result = ActionResult(
+            success: false,
+            method: .waitFor,
+            message: "Could not access accessibility tree: no traversable app windows",
+            errorKind: nil
+        )
+
+        let details = FenceResponse.actionFailureDetails(result)
+        let compact = FenceResponse.action(result: result).compactFormatted()
+        let json = FenceResponse.action(result: result).jsonDict()!
+
+        XCTAssertEqual(details?.errorCode, "request.accessibility_tree_unavailable")
+        XCTAssertEqual(
+            compact,
+            "waitFor: error[request.accessibility_tree_unavailable]: Could not access accessibility tree: no traversable app windows"
+        )
+        XCTAssertEqual(json["errorClass"] as? String, "actionFailed")
+        XCTAssertEqual(json["errorCode"] as? String, "request.accessibility_tree_unavailable")
     }
 
     // MARK: - FenceResponse.expectationResultDict

@@ -288,6 +288,14 @@ extension FenceResponse {
 
         if !result.success {
             payload["errorClass"] = Self.actionErrorClass(result)
+            if let details = Self.actionFailureDetails(result) {
+                payload["errorCode"] = details.errorCode
+                payload["phase"] = details.phase.rawValue
+                payload["retryable"] = details.retryable
+                if let hint = details.hint {
+                    payload["hint"] = hint
+                }
+            }
         }
 
         return payload

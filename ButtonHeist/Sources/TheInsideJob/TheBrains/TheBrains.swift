@@ -17,7 +17,9 @@ import AccessibilitySnapshotParser
 @MainActor
 final class TheBrains {
 
-    static let treeUnavailableMessage = "Could not access accessibility tree"
+    // Keep this literal in sync with `FenceResponse.accessibilityTreeUnavailableMessage`;
+    // TheFence uses it to enrich wire-compatible `actionFailed` results locally.
+    static let treeUnavailableMessage = "Could not access accessibility tree: no traversable app windows"
 
     let stash: TheStash
     let safecracker: TheSafecracker

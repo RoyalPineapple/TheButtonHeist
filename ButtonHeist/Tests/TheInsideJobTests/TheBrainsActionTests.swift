@@ -645,10 +645,10 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .waitForIdle)
         XCTAssertEqual(result.errorKind, .actionFailed)
-        // The exact `message` here is user-facing copy, not a control-flow
-        // contract. Anchor on `errorKind` for behavioural assertions; this one
-        // sanity-check on the literal stays so a wording regression is visible.
-        XCTAssertEqual(result.message, "Could not access accessibility tree")
+        // The wire kind stays actionFailed for compatibility. The factual
+        // message is what lets TheFence surface the local tree-unavailable
+        // diagnostic without adding a new ErrorKind raw value.
+        XCTAssertEqual(result.message, "Could not access accessibility tree: no traversable app windows")
     }
 
     func testExecuteCommandExploreFailsWhenAccessibilityTreeUnavailable() async {
@@ -672,6 +672,15 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .waitFor)
         XCTAssertEqual(result.errorKind, .actionFailed)
+    }
+
+    func testWaitForTreeUnavailableFailureKindMapsToActionFailed() {
+        XCTAssertEqual(
+            TheBrains.waitForErrorKind(for: .treeUnavailable),
+            .actionFailed
+        )
+        XCTAssertEqual(TheBrains.waitForErrorKind(for: .timeout), .timeout)
+        XCTAssertEqual(TheBrains.waitForErrorKind(for: nil), .elementNotFound)
     }
 
     // MARK: - Helpers
