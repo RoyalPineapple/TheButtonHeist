@@ -4,6 +4,19 @@
 
 Button Heist is a remote iOS UI automation system structured as a heist crew. An iOS framework (TheInsideJob) embeds inside a target app as a TLS-encrypted server, while macOS tooling discovers, connects (with certificate fingerprint pinning via Bonjour), and sends commands to interact with the app's UI programmatically.
 
+## Operating Doctrines
+
+These one-sentence rules keep subsystem behavior from drifting back into paragraph-shaped code:
+
+| Area | Doctrine | Primary docs |
+|------|----------|--------------|
+| Targeting | Resolve targets against the canonical accessibility tree with exact-or-miss semantics. | [12-UNIFIED-TARGETING.md](12-UNIFIED-TARGETING.md) |
+| Screen state | Parse into a `Screen` value, then commit by assignment. | [11-THESTASH.md](11-THESTASH.md) |
+| Exploration | Full interface reads may move the viewport internally, but must restore before returning. | [14a-SCROLLING.md](14a-SCROLLING.md) |
+| Resolved scrolling | Direct scroll commands move only the resolved element's stored scroll view, and only on an axis that can reveal it. | [14a-SCROLLING.md](14a-SCROLLING.md) |
+| Scroll search | Global scroll-container scanning belongs to `element_search`, not resolved target actions. | [14a-SCROLLING.md](14a-SCROLLING.md) |
+| Window scope | Parse windows from top down until a modal boundary or the key window stops the band. | [15-THETRIPWIRE.md](15-THETRIPWIRE.md), [10-THEBURGLAR.md](10-THEBURGLAR.md) |
+
 ## Crew Roster
 
 The dossiers are numbered to be read in order. Start at the entry point a user actually touches (the CLI), follow a command into the app, watch it find and act on an element, and observe the way out. The wire protocol (TheScore) lives at the end as reference material — skim it when you need to know exactly what a message looks like on the wire.
