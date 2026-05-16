@@ -26,6 +26,7 @@ final class TheTripwireTests: XCTestCase {
             fingerprint: .init(positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5),
             hasRelevantAnimations: false,
             topmostVC: nil,
+            tripwireSignal: .empty,
             windowCount: 1,
             quietFrames: 2
         )
@@ -40,6 +41,7 @@ final class TheTripwireTests: XCTestCase {
             fingerprint: .init(positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5),
             hasRelevantAnimations: false,
             topmostVC: nil,
+            tripwireSignal: .empty,
             windowCount: 1,
             quietFrames: 5
         )
@@ -54,6 +56,7 @@ final class TheTripwireTests: XCTestCase {
             fingerprint: .init(positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5),
             hasRelevantAnimations: true,
             topmostVC: nil,
+            tripwireSignal: .empty,
             windowCount: 1,
             quietFrames: 5
         )
@@ -68,6 +71,7 @@ final class TheTripwireTests: XCTestCase {
             fingerprint: .init(positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5),
             hasRelevantAnimations: false,
             topmostVC: nil,
+            tripwireSignal: .empty,
             windowCount: 1,
             quietFrames: 1
         )
@@ -85,6 +89,7 @@ final class TheTripwireTests: XCTestCase {
             fingerprint: .init(positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5),
             hasRelevantAnimations: false,
             topmostVC: ObjectIdentifier(vc),
+            tripwireSignal: .empty,
             windowCount: 3,
             quietFrames: 2
         )
@@ -206,41 +211,6 @@ final class TheTripwireTests: XCTestCase {
         tripwire.startPulse()
         XCTAssertTrue(tripwire.isPulseRunning)
         // No crash, no double-registration
-    }
-
-    // MARK: - isScreenChange (VC identity — unchanged from before)
-
-    func testIsScreenChangeBothNilReturnsFalse() {
-        XCTAssertFalse(tripwire.isScreenChange(before: nil, after: nil))
-    }
-
-    func testIsScreenChangeBeforeNilAfterSetReturnsTrue() {
-        let vc = UIViewController()
-        let id = ObjectIdentifier(vc)
-        XCTAssertTrue(tripwire.isScreenChange(before: nil, after: id))
-    }
-
-    func testIsScreenChangeBeforeSetAfterNilReturnsTrue() {
-        let vc = UIViewController()
-        let id = ObjectIdentifier(vc)
-        XCTAssertTrue(tripwire.isScreenChange(before: id, after: nil))
-    }
-
-    func testIsScreenChangeSameIdentityReturnsFalse() {
-        let vc = UIViewController()
-        let id = ObjectIdentifier(vc)
-        XCTAssertFalse(tripwire.isScreenChange(before: id, after: id))
-    }
-
-    func testIsScreenChangeDifferentIdentityReturnsTrue() {
-        let vc1 = UIViewController()
-        let vc2 = UIViewController()
-        XCTAssertTrue(
-            tripwire.isScreenChange(
-                before: ObjectIdentifier(vc1),
-                after: ObjectIdentifier(vc2)
-            )
-        )
     }
 
     // MARK: - PresentationFingerprint.matches (pure value type)
@@ -489,17 +459,29 @@ final class TheTripwireTests: XCTestCase {
         override var presentedViewController: UIViewController? { fakePresented }
     }
 
+    private final class AlwaysKeyWindow: UIWindow {
+        override var isKeyWindow: Bool { true }
+    }
+
     /// Build a UIWindow on the active scene without making it visible —
     /// callers pass the window directly into `filterToAccessibleWindows`,
     /// so it never appears in the test host's `getTraversableWindows()`.
     private func makeWindow(level: UIWindow.Level, rootVC: UIViewController? = nil) -> UIWindow {
+        makeWindow(level: level, rootVC: rootVC, type: UIWindow.self)
+    }
+
+    private func makeWindow<Window: UIWindow>(
+        level: UIWindow.Level,
+        rootVC: UIViewController? = nil,
+        type: Window.Type
+    ) -> Window {
         guard let scene = UIApplication.shared.connectedScenes
             .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
         else {
             XCTFail("No active window scene")
-            return UIWindow()
+            return Window()
         }
-        let window = UIWindow(windowScene: scene)
+        let window = Window(windowScene: scene)
         window.windowLevel = level
         window.frame = UIScreen.main.bounds
         window.rootViewController = rootVC
@@ -511,14 +493,14 @@ final class TheTripwireTests: XCTestCase {
         XCTAssertTrue(result.isEmpty)
     }
 
-    func testFilterToAccessibleWindowsReturnsKeyWindowAloneWhenNoOverlaysExist() {
-        let keyWindow = makeWindow(level: .normal, rootVC: UIViewController())
-        let input = [(window: keyWindow, rootView: keyWindow as UIView)]
+    func testFilterToAccessibleWindowsReturnsSingleAppWindowWhenNoOverlaysExist() {
+        let appWindow = makeWindow(level: .normal, rootVC: UIViewController())
+        let input = [(window: appWindow, rootView: appWindow as UIView)]
 
-        let result = TheTripwire.filterToAccessibleWindows(input, isKeyWindow: { $0 === keyWindow })
+        let result = TheTripwire.filterToAccessibleWindows(input)
 
         XCTAssertEqual(result.count, 1)
-        XCTAssertTrue(result.first?.window === keyWindow)
+        XCTAssertTrue(result.first?.window === appWindow)
     }
 
     func testFilterToAccessibleWindowsIncludesAlertLevelNonModalWindowAndBaseWindow() {
@@ -529,7 +511,7 @@ final class TheTripwireTests: XCTestCase {
             (window: base, rootView: base as UIView),
         ]
 
-        let result = TheTripwire.filterToAccessibleWindows(input, isKeyWindow: { $0 === base })
+        let result = TheTripwire.filterToAccessibleWindows(input)
 
         XCTAssertEqual(result.count, 2)
         XCTAssertTrue(result[0].window === alertLevelWindow)
@@ -544,7 +526,7 @@ final class TheTripwireTests: XCTestCase {
             (window: base, rootView: base as UIView),
         ]
 
-        let result = TheTripwire.filterToAccessibleWindows(input, isKeyWindow: { $0 === base })
+        let result = TheTripwire.filterToAccessibleWindows(input)
 
         XCTAssertEqual(result.count, 2)
         XCTAssertTrue(result[0].window === overlay)
@@ -568,7 +550,7 @@ final class TheTripwireTests: XCTestCase {
         XCTAssertTrue(result.first?.rootView === deepest.view, "Should return deepest presented VC's view")
     }
 
-    func testFilterToAccessibleWindowsFallsBackToAllWhenNoKeyWindowExists() {
+    func testFilterToAccessibleWindowsIncludesLowerAppWindows() {
         let a = makeWindow(level: .normal, rootVC: UIViewController())
         let b = makeWindow(level: .normal - 1, rootVC: UIViewController())
         let input = [
@@ -578,74 +560,95 @@ final class TheTripwireTests: XCTestCase {
 
         let result = TheTripwire.filterToAccessibleWindows(input)
 
-        XCTAssertEqual(result.count, 2, "All windows returned when no branch matches")
+        XCTAssertEqual(result.count, 2, "All app windows should be returned")
     }
 
-    func testFilterToAccessibleWindowsKeepsMultipleOverlaysAboveKeyWindow() {
+    func testFilterToAccessibleWindowsKeepsMultipleOverlaysAndLowerWindows() {
         let overlayA = makeWindow(level: UIWindow.Level(rawValue: 2000), rootVC: UIViewController())
         let overlayB = makeWindow(level: UIWindow.Level(rawValue: 1999), rootVC: UIViewController())
-        let keyWindow = makeWindow(level: .normal, rootVC: UIViewController())
+        let appWindow = makeWindow(level: .normal, rootVC: UIViewController())
         let lower = makeWindow(level: .normal - 1, rootVC: UIViewController())
 
         let input = [
             (window: overlayA, rootView: overlayA as UIView),
             (window: overlayB, rootView: overlayB as UIView),
-            (window: keyWindow, rootView: keyWindow as UIView),
+            (window: appWindow, rootView: appWindow as UIView),
             (window: lower, rootView: lower as UIView),
         ]
 
-        let result = TheTripwire.filterToAccessibleWindows(input, isKeyWindow: { $0 === keyWindow })
+        let result = TheTripwire.filterToAccessibleWindows(input)
 
-        XCTAssertEqual(result.count, 3)
+        XCTAssertEqual(result.count, 4)
         XCTAssertTrue(result[0].window === overlayA)
         XCTAssertTrue(result[1].window === overlayB)
-        XCTAssertTrue(result[2].window === keyWindow)
-        XCTAssertFalse(result.contains(where: { $0.window === lower }))
+        XCTAssertTrue(result[2].window === appWindow)
+        XCTAssertTrue(result[3].window === lower)
     }
 
-    func testFilterToAccessibleWindowsKeepsOverlayAboveKeyWindowAndDropsLowerWindows() {
+    func testFilterToAccessibleWindowsKeepsOverlayAppWindowAndLowerWindows() {
         let overlay = makeWindow(level: .alert, rootVC: UIViewController())
-        let keyWindow = makeWindow(level: .normal, rootVC: UIViewController())
+        let appWindow = makeWindow(level: .normal, rootVC: UIViewController())
         let lower = makeWindow(level: .normal - 1, rootVC: UIViewController())
 
         let input = [
             (window: overlay, rootView: overlay as UIView),
-            (window: keyWindow, rootView: keyWindow as UIView),
+            (window: appWindow, rootView: appWindow as UIView),
             (window: lower, rootView: lower as UIView),
         ]
 
-        let result = TheTripwire.filterToAccessibleWindows(input, isKeyWindow: { $0 === keyWindow })
+        let result = TheTripwire.filterToAccessibleWindows(input)
 
-        XCTAssertEqual(result.count, 2)
+        XCTAssertEqual(result.count, 3)
         XCTAssertTrue(result[0].window === overlay)
-        XCTAssertTrue(result[1].window === keyWindow)
-        XCTAssertFalse(result.contains(where: { $0.window === lower }))
+        XCTAssertTrue(result[1].window === appWindow)
+        XCTAssertTrue(result[2].window === lower)
     }
 
-    func testFilterToAccessibleWindowsDropsPassthroughAndKeepsThroughKeyWindow() {
+    func testFilterToAccessibleWindowsDoesNotStopAtElevatedKeyWindow() {
+        let cardReader = makeWindow(
+            level: UIWindow.Level(rawValue: UIWindow.Level.alert.rawValue - 1),
+            rootVC: UIViewController(),
+            type: AlwaysKeyWindow.self
+        )
+        cardReader.frame = CGRect(x: 0, y: 0, width: 80, height: 80)
+        let appWindow = makeWindow(level: .normal, rootVC: UIViewController())
+
+        let input = [
+            (window: cardReader as UIWindow, rootView: cardReader as UIView),
+            (window: appWindow, rootView: appWindow as UIView),
+        ]
+
+        let result = TheTripwire.filterToAccessibleWindows(input)
+
+        XCTAssertTrue(cardReader.isKeyWindow)
+        XCTAssertEqual(result.count, 2)
+        XCTAssertTrue(result[0].window === cardReader)
+        XCTAssertTrue(result[1].window === appWindow)
+    }
+
+    func testFilterToAccessibleWindowsDropsPassthroughAndKeepsAppWindows() {
         let keyboard = makeWindow(level: .statusBar, rootVC: UIViewController())
         let overlay = makeWindow(level: .alert, rootVC: UIViewController())
-        let keyWindow = makeWindow(level: .normal, rootVC: UIViewController())
+        let appWindow = makeWindow(level: .normal, rootVC: UIViewController())
         let lower = makeWindow(level: .normal - 1, rootVC: UIViewController())
 
         let input = [
             (window: keyboard, rootView: keyboard as UIView),
             (window: overlay, rootView: overlay as UIView),
-            (window: keyWindow, rootView: keyWindow as UIView),
+            (window: appWindow, rootView: appWindow as UIView),
             (window: lower, rootView: lower as UIView),
         ]
 
         let result = TheTripwire.filterToAccessibleWindows(
             input,
-            isPassthrough: { $0 === keyboard },
-            isKeyWindow: { $0 === keyWindow }
+            isPassthrough: { $0 === keyboard }
         )
 
-        XCTAssertEqual(result.count, 2)
+        XCTAssertEqual(result.count, 3)
         XCTAssertFalse(result.contains(where: { $0.window === keyboard }))
         XCTAssertTrue(result[0].window === overlay)
-        XCTAssertTrue(result[1].window === keyWindow)
-        XCTAssertFalse(result.contains(where: { $0.window === lower }))
+        XCTAssertTrue(result[1].window === appWindow)
+        XCTAssertTrue(result[2].window === lower)
     }
 
     func testFilterToAccessibleWindowsIncludesOverlayAndPresentedBaseWindow() {
@@ -661,7 +664,7 @@ final class TheTripwireTests: XCTestCase {
             (window: baseWindow, rootView: baseWindow as UIView),
         ]
 
-        let result = TheTripwire.filterToAccessibleWindows(input, isKeyWindow: { $0 === baseWindow })
+        let result = TheTripwire.filterToAccessibleWindows(input)
 
         XCTAssertEqual(result.count, 2)
         XCTAssertTrue(result[0].window === overlay)
@@ -789,7 +792,7 @@ final class TheTripwireTests: XCTestCase {
     func testTopmostViewControllerSkipsPassthroughWindow() {
         // Frontmost window is a system passthrough — its rootVC must not be
         // chosen as the topmost VC, otherwise a keyboard appearance would
-        // register as a screen change and stale every screenChanged delta.
+        // trigger unnecessary parse work.
         let keyboardVC = UIViewController()
         let appVC = UIViewController()
         let keyboard = makeWindow(level: .alert, rootVC: keyboardVC)
@@ -845,13 +848,10 @@ final class TheTripwireTests: XCTestCase {
         XCTAssertNil(result, "Only passthrough windows present — no topmost VC")
     }
 
-    func testKeyboardAppearanceAndDisappearanceDoNotTriggerScreenChange() {
-        // The contract: a software keyboard sliding in or out over the
-        // current screen is not a screen change. The same app VC must be
-        // reported across all three phases (no keyboard → keyboard up →
-        // keyboard dismissed) so isScreenChange() compares equal and
-        // downstream callers don't poison their action delta / settle
-        // logic with a false screenChanged flag.
+    func testKeyboardAppearanceAndDisappearanceKeepSameTopmostViewController() {
+        // A software keyboard sliding in or out over the current screen
+        // should not hide the app's topmost controller from the Tripwire
+        // signal.
         let appVC = UIViewController()
         let appWindow = makeWindow(level: .normal, rootVC: appVC)
         let keyboard = makeWindow(level: .alert, rootVC: UIViewController())
@@ -869,17 +869,10 @@ final class TheTripwireTests: XCTestCase {
             ("keyboard dismissed", appOnly),
         ]
 
-        let vcIds = phases.map { phase -> ObjectIdentifier? in
+        for phase in phases {
             let vc = TheTripwire.topmostViewController(in: phase.windows, isPassthrough: isKeyboard)
             XCTAssertTrue(vc === appVC,
                           "Topmost VC must remain the app VC across phase '\(phase.label)'")
-            return vc.map(ObjectIdentifier.init)
-        }
-
-        // Every transition between phases must report no screen change.
-        for (before, after) in zip(vcIds, vcIds.dropFirst()) {
-            XCTAssertFalse(tripwire.isScreenChange(before: before, after: after),
-                           "Keyboard appearance/disappearance must not register as a screen change")
         }
     }
 

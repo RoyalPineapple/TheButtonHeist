@@ -8,8 +8,8 @@ import AccessibilitySnapshotParser
 
 /// The crew member who breaks in and takes what he finds.
 ///
-/// TheBurglar reads the live accessibility tree, assigns heistIds, and detects
-/// screen changes. Pure helpers — he has no mutable state. TheStash invokes
+/// TheBurglar reads the live accessibility tree and assigns heistIds. Pure
+/// helpers — he has no mutable state. TheStash invokes
 /// him via `parse()` to obtain a `Screen` value, then commits or merges it on
 /// its own schedule.
 ///
@@ -135,86 +135,6 @@ final class TheBurglar {
             return parsedResult
         }
         return hierarchy.sortedElements.first
-    }
-
-    // MARK: - Topology-Based Screen Change
-
-    /// Did the accessibility topology change between two element snapshots?
-    func isTopologyChanged(
-        before: [AccessibilityElement],
-        after: [AccessibilityElement],
-        beforeHierarchy: [AccessibilityHierarchy],
-        afterHierarchy: [AccessibilityHierarchy]
-    ) -> Bool {
-        let backButtonTrait = UIAccessibilityTraits.fromNames(["backButton"])
-        let hadBackButton = before.contains { $0.traits.contains(backButtonTrait) }
-        let hasBackButton = after.contains { $0.traits.contains(backButtonTrait) }
-        if hadBackButton != hasBackButton { return true }
-
-        let beforeHeaders = Set(before.compactMap { $0.traits.contains(.header) ? $0.label : nil })
-        let afterHeaders = Set(after.compactMap { $0.traits.contains(.header) ? $0.label : nil })
-        if !beforeHeaders.isEmpty, !afterHeaders.isEmpty, beforeHeaders.isDisjoint(with: afterHeaders) {
-            return true
-        }
-
-        // Tab bar content change: if the hierarchy contains a .tabBar container and the
-        // elements outside that container were largely replaced, a tab switch occurred.
-        if isTabBarContentChanged(beforeHierarchy: beforeHierarchy, afterHierarchy: afterHierarchy) {
-            return true
-        }
-
-        return false
-    }
-
-    /// Returns true when the content outside a tab bar container changed between snapshots.
-    private func isTabBarContentChanged(
-        beforeHierarchy: [AccessibilityHierarchy],
-        afterHierarchy: [AccessibilityHierarchy]
-    ) -> Bool {
-        let beforePartition = partitionByTabBar(beforeHierarchy)
-        let afterPartition = partitionByTabBar(afterHierarchy)
-        guard beforePartition.hasTabBar, afterPartition.hasTabBar else { return false }
-
-        let beforeContent = beforePartition.contentLabels
-        let afterContent = afterPartition.contentLabels
-        guard !beforeContent.isEmpty, !afterContent.isEmpty else { return false }
-
-        let beforeCounts = beforeContent.reduce(into: [:]) { counts, label in counts[label, default: 0] += 1 }
-        let afterCounts = afterContent.reduce(into: [:]) { counts, label in counts[label, default: 0] += 1 }
-        let matchedCount = beforeCounts.reduce(0) { running, pair in
-            running + min(pair.value, afterCounts[pair.key] ?? 0)
-        }
-
-        let maxCount = max(beforeContent.count, afterContent.count)
-        let persistRatio = Double(matchedCount) / Double(maxCount)
-        return persistRatio < AccessibilityPolicy.tabSwitchPersistThreshold
-    }
-
-    private struct TabBarPartition {
-        let hasTabBar: Bool
-        let contentLabels: [String]
-    }
-
-    /// Walk the hierarchy tree, separating elements inside `.tabBar` containers from content.
-    private func partitionByTabBar(_ hierarchy: [AccessibilityHierarchy]) -> TabBarPartition {
-        var hasTabBar = false
-        let contentLabels: [String] = hierarchy.compactMap(
-            context: false,
-            container: { insideTabBar, container in
-                if case .tabBar = container.type {
-                    hasTabBar = true
-                    return true
-                }
-                return insideTabBar
-            },
-            element: { element, _, insideTabBar in
-                if !insideTabBar, let label = element.label {
-                    return label
-                }
-                return nil
-            }
-        )
-        return TabBarPartition(hasTabBar: hasTabBar, contentLabels: contentLabels)
     }
 
     // MARK: - Container Content-Frame Building

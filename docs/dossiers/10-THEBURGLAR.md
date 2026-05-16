@@ -11,7 +11,7 @@ TheBurglar breaks in and takes what he finds:
 1. **Parse pipeline** — `parse()` reads the live accessibility tree into an immutable `ParseResult` value type via `AccessibilityHierarchyParser` with `elementVisitor` + `containerVisitor` closures. Does not mutate TheStash. Performs temporary UIKit visibility tweaks (search-bar reveal/restore) during the read.
 2. **Screen factory** — `buildScreen(from:)` is the pure value-producing path: takes a `ParseResult`, walks the hierarchy with context propagation, assigns heistIds via `IdAssignment.assign`, detects first responder, and returns a fresh `Screen` value. Does NOT touch TheStash. Callers decide when/how to commit.
 3. **Refresh convenience** — `refresh(into:)` chains `parse()` + `buildScreen(from:)` and assigns the result to `stash.currentScreen`. The single-snapshot path used by most non-explore callers.
-4. **Topology-based screen change detection** — `isTopologyChanged(before:after:beforeHierarchy:afterHierarchy:)` detects navigation changes via three signals: back button trait (private `0x8000000`) appearance/disappearance, header label disjointness, and tab-bar content swap (persistence ratio of non-tab-bar labels falls below the tab-switch threshold).
+4. **Modal-boundary reporting** — `parse()` stops lower-window parsing when `AccessibilityHierarchyParser` reports a modal boundary container. Screen-change classification lives in TheBrains' `ScreenClassifier`.
 5. **Search bar reveal** — temporarily unhides `UISearchController` bars hidden by `hidesSearchBarWhenScrolling` during parsing, restoring them afterward.
 
 ## Architecture
@@ -38,7 +38,7 @@ The exploration accumulator lives on `Navigation` (TheBrains' navigation compone
 
 - TheBurglar is **created and owned by TheStash** (via `init`), stored as a `private let` on TheStash. Production code reaches it via TheStash facades; type visibility remains module-internal for unit testing.
 - TheBurglar **does not write to TheStash.** It returns values. The caller (TheStash for single-shot, Navigation+Explore for accumulated union) decides when to commit. This is the load-bearing 0.2.25 invariant — parse and commit are separable, so accumulation can live in the caller's stack as a local variable.
-- TheBrains calls `stash.refresh()` for the simple parse-and-commit case, or `stash.parse()` + `stash.buildScreen(from:)` separately when it needs to inspect parse results before committing (e.g., topology comparison in the delta cycle, or page-by-page union accumulation during exploration).
+- TheBrains calls `stash.refresh()` for the simple parse-and-commit case, or `stash.parse()` + `stash.buildScreen(from:)` separately when it needs to inspect parse results before committing (e.g., post-action classification, or page-by-page union accumulation during exploration).
 - TheBurglar has **no mutable instance state** — its stored properties are injected dependencies (`parser`, `tripwire`).
 
 ## The exploration discipline
@@ -63,7 +63,7 @@ Mid-cycle writes to `currentScreen` are intentional: scroll-page termination heu
 
 ## Dependencies
 
-- **TheTripwire** (injected via `init(tripwire:)`) — provides the top-down window band through the key window, excluding system passthrough windows and resolving each presentation chain to its deepest presented view. TheBurglar stops parsing lower windows when the parser reports a modal boundary container.
+- **TheTripwire** (injected via `init(tripwire:)`) — provides top-down app windows, excluding system passthrough windows and resolving each presentation chain to its deepest presented view. TheBurglar stops parsing lower windows when the parser reports a modal boundary container.
 - **AccessibilityHierarchyParser** (from AccessibilitySnapshotBH submodule) — traverses the accessibility tree via `elementVisitor` and `containerVisitor` closures.
 - **TheStash.IdAssignment** — assigns heistIds to parsed elements. Synthesis is content-derived and wire-format-stable: same element content → same heistId, every time.
 - **TheStash.Screen** — the value type returned by `buildScreen(from:)`.
@@ -73,7 +73,7 @@ Mid-cycle writes to `currentScreen` are intentional: scroll-page termination heu
 - `apply(_:to:)` (the registry-mutating path) deleted.
 - `buildScreen(from:)` introduced as the pure value-producing factory.
 - TheBurglar no longer reaches into TheStash. Returns values; callers commit.
-- Topology change detection (`isTopologyChanged`) unchanged.
+- Screen-change classification moved out to TheBrains' `ScreenClassifier`.
 - Search-bar reveal unchanged.
 
 The behavioral change visible to agents: heistIds from a previous `get_interface` no longer resolve in a later `activate` if the element is no longer in the union (e.g., scrolled off-screen *between* explore cycles). Within a single cycle the union accumulates everything observed during the scroll walk, identical to pre-0.2.25 behavior. See `.context/audit/0.2.25-screen-value-type.md` for the design rationale and empirical motivation.

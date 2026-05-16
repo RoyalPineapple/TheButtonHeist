@@ -499,13 +499,7 @@ final class TheSafecracker {
     /// following KIF's pattern from UIApplication-KIFAdditions.m.
     /// Returns the first window whose hitTest succeeds at the point.
     private func windowForPoint(_ point: CGPoint) -> UIWindow? {
-        let allWindows = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap { $0.windows }
-            .filter { !($0 is TheFingerprints.FingerprintWindow) && !$0.isHidden }
-            .sorted { $0.windowLevel > $1.windowLevel }
-
-        for window in allWindows {
+        for window in TheTripwire.orderedVisibleWindows() {
             let windowPoint = window.convert(point, from: nil)
             if window.hitTest(windowPoint, with: nil) != nil {
                 return window

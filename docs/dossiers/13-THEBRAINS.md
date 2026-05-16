@@ -21,8 +21,8 @@ TheBrains itself keeps the post-action delta cycle (`captureBeforeState`, `actio
 2. **Action execution (`Actions.swift`)** — Two generic pipelines: `performElementAction` (element-targeted: navigation.ensureOnScreen → resolve → check interactivity → perform action) and `performPointAction` (coordinate-targeted gestures). Most `executeXxx` methods are thin wrappers over these pipelines; `executeSwipe` and `executeTypeText` are specialized multi-step flows.
 3. **Scroll orchestration (`Navigation+Scroll.swift`)** — `executeScroll`, `executeScrollToEdge`, `executeScrollToVisible` (one-shot jump to known position), `executeElementSearch` (iterative page-by-page search for unseen elements). See [14a-SCROLLING.md](14a-SCROLLING.md).
 4. **Screen exploration (`Navigation+Explore.swift`)** — `exploreAndPrune()` scrolls reachable scrollable containers to discover semantic content and restores their visual position. The exploration accumulator is a local `var union: Screen`; the final union is committed by writing it back into `stash.currentScreen`. Targeted exploration may stop early once the target resolves.
-5. **Delta cycle (`TheBrains.swift`)** — `captureBeforeState()` captures a `BeforeState` token; after the action, `actionResultWithDelta(before:)` short-circuits failure responses from the before snapshot, and on success runs the multi-cycle settle, parses via TheStash, detects screen changes, applies, asks Navigation to explore, and computes the delta. When a screen change is detected but the post-change parse stays empty after 10 repop attempts, `settled: false` is reported so the wire reflects an unhealthy snapshot rather than a confident one.
-6. **Post-action settle and transient capture (`SettleSession.swift`)** — `SettleSession` (owned and instantiated per call) drives a closure-based polling loop against TheStash and TheTripwire. It returns `.settled` after `cyclesRequired` consecutive identical AX-tree fingerprints, `.screenChanged` if topVC changes mid-loop, `.cancelled` if the surrounding task is cancelled, or `.timedOut` after the hard deadline. Elements observed mid-loop but absent from baseline ∪ final are returned as `InterfaceDelta.transient` via `SettleSession.transientElements`. Spinners (`UIAccessibilityTraits.updatesFrequently`) are masked out of both the fingerprint and `TimelineKey`.
+5. **Delta cycle (`TheBrains.swift`)** — `captureBeforeState()` captures a `BeforeState` token; after the action, `actionResultWithDelta(before:)` short-circuits failure responses from the before snapshot, and on success runs the multi-cycle settle, parses via TheStash, lets `ScreenClassifier` classify the parsed result, applies, asks Navigation to explore, and computes the delta. When a screen change is detected but the post-change parse stays empty after 10 repop attempts, `settled: false` is reported so the wire reflects an unhealthy snapshot rather than a confident one.
+6. **Post-action settle and transient capture (`SettleSession.swift`)** — `SettleSession` (owned and instantiated per call) drives a closure-based polling loop against TheStash and TheTripwire. It returns `.settled` after `cyclesRequired` consecutive identical AX-tree fingerprints, `.tripwireTriggered` if Tripwire says the tree should be checked now, `.cancelled` if the surrounding task is cancelled, or `.timedOut` after the hard deadline. A Tripwire trigger is allowed to classify as no-change after parsing. Elements observed mid-loop but absent from baseline ∪ final are returned as `InterfaceDelta.transient` via `SettleSession.transientElements`. Spinners (`UIAccessibilityTraits.updatesFrequently`) are masked out of both the fingerprint and `TimelineKey`.
 7. **Refresh convenience** — `refresh()` delegates to `stash.refresh()`. TheBurglar is TheStash's private implementation detail — TheBrains never references it.
 8. **Wait handlers (`TheBrains.swift`)** — `executeWaitForIdle(timeout:)` and `executeWaitForChange(timeout:expectation:)`.
 9. **Response state tracking (`TheBrains.swift`)** — `SentState`, `recordSentState`, `computeBackgroundDelta`, `screenChangedSinceLastSent`, `lastSentScreenId`.
@@ -99,9 +99,9 @@ flowchart TD
     B -->|Yes| D["SettleSession.run<br/>(3 stable cycles or 5s timeout;<br/>updatesFrequently masked)"]
     D --> CANC{Outcome}
     CANC -->|cancelled| C
-    CANC -->|settled / screenChanged / timedOut| E["stash.parse() → ParseResult<br/>(no mutation yet)"]
+    CANC -->|settled / Tripwire triggered / timedOut| E["stash.parse() → ParseResult<br/>(no mutation yet)"]
 
-    E --> F{Screen change?<br/>VC identity OR topology}
+    E --> F{ScreenClassifier<br/>no-change / elements / screen}
     F --> H["stash.apply(ParseResult)"]
 
     H --> I["navigation.exploreAndPrune()<br/>(semantic re-explore + restore)"]
@@ -142,7 +142,7 @@ flowchart TD
 
 - **TheStash** (owned) — element registry, target resolution, wire conversion, parse pipeline (TheBurglar is TheStash's private detail)
 - **TheSafecracker** (owned) — raw gesture synthesis (fallback tap, scroll primitives, text entry, edit actions)
-- **TheTripwire** (injected) — settle detection, VC identity, window access
+- **TheTripwire** (injected) — settle detection, check triggers, window access
 
 ## Acceptance Criteria
 

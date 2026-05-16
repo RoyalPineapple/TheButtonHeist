@@ -6,9 +6,11 @@
 
 ## Overview
 
-TheTripwire is the UI state sensor for TheInsideJob. It owns a single persistent `CADisplayLink` that fires at ~10 Hz, sampling the entire layer tree, view controller hierarchy, first responder, and input state on every tick. Multiple concurrent callers can wait for the UI to settle, each tracking their own quiet-frame count against an independent deadline.
+TheTripwire is the UI state sensor for TheInsideJob. It owns a single persistent `CADisplayLink` that fires at ~10 Hz, sampling the layer tree, public navigation state, and ordered visible windows on every tick. Multiple concurrent callers can wait for the UI to settle, each tracking their own quiet-frame count against an independent deadline.
 
-TheTripwire never reads the accessibility tree. It reads UIKit timing signals (layers, animations, VCs, keyboard notifications). TheStash reads the accessibility tree. The two are cleanly separated.
+TheTripwire never reads the accessibility tree. It reads UIKit timing signals (layers, animations, public navigation state, window stack). TheStash reads the accessibility tree. The two are cleanly separated.
+
+Tripwire is a check signal, not a classifier: when Tripwire triggers, TheBrains re-parses the accessibility tree and `ScreenClassifier` decides whether the parsed result is no-change, element-change, or screen-change.
 
 ## Nested Types
 
@@ -19,7 +21,7 @@ TheTripwire never reads the accessibility tree. It reads UIKit timing signals (l
 | `PresentationFingerprint` | `struct` | Sum of all presentation layer positions and opacities |
 | `LayerScan` | `struct` | Accumulator filled during `scanLayers()` |
 | `SettleWaiter` | `private struct` | Per-caller state for `waitForSettle` |
-| `RunningContext` | `private class` | Mutable context that exists only while the pulse is running — holds link, tick count, keyboard/text flags, settle waiters |
+| `RunningContext` | `private class` | Mutable context that exists only while the pulse is running — holds link, tick count, latest reading, settle waiters |
 | `PulsePhase` | `private enum` | State machine: `.idle` or `.running(RunningContext)` |
 | `PulseTick` | file-private top-level `class` | `NSObject` target for `CADisplayLink` (weak-ref indirection) |
 
@@ -29,15 +31,12 @@ TheTripwire runs a single `CADisplayLink` at ~10 Hz. Every tick runs the full se
 
 1. `CATransaction.flush()` — commit deferred SwiftUI layout
 2. `scanLayers()` — single layer-tree walk for fingerprint, animations, layout, window count
-3. Sample VC identity (`topmostViewController`) and first responder (`currentFirstResponder`)
-4. Read keyboard/text-input flags (set by notification observers)
-5. Build a `PulseReading` snapshot with all signals + derived quiet-frame count
-6. Diff against the previous `latestReading` and fire `PulseTransition` callbacks for any changes
-7. Resolve settle waiters
+3. Sample Tripwire signal (`topmostViewController`, public navigation state, ordered visible windows)
+4. Build a `PulseReading` snapshot with all signals + derived quiet-frame count
+5. Diff against the previous `latestReading` and fire `PulseTransition` callbacks for any changes
+6. Resolve settle waiters
 
 **`latestReading` is the single source of truth.** There are no shadow variables — the new reading is diffed directly against the previous one for transition detection.
-
-Keyboard and text-input flags (`keyboardVisibleFlag`, `textInputActiveFlag`) are set synchronously by `NotificationCenter` observers and read into the pulse reading each tick. `TheSafecracker.isKeyboardVisible()` reads `keyboardVisibleFlag` directly for immediate queries outside the tick cadence.
 
 ```mermaid
 graph TD
@@ -55,19 +54,11 @@ graph TD
             WinCount["windowCount"]
         end
 
-        subgraph VCIdentity["View Controller Identity (every tick)"]
+        subgraph TripwireSignal["Tripwire Signal (every tick)"]
             TopVC["topmostViewController()"]
             DeepVC["deepestViewController(from:)"]
-            ScreenChange["isScreenChange(before:after:)"]
-        end
-
-        subgraph Focus["First Responder (every tick)"]
-            FirstResp["currentFirstResponder()"]
-        end
-
-        subgraph Keyboard["Keyboard & Text Input (notification-driven, read every tick)"]
-            KBFlag["keyboardVisibleFlag"]
-            TextFlag["textInputActiveFlag"]
+            NavSignal["navigationSignal(for:)"]
+            WindowSignal["windowStackSignal(for:)"]
         end
 
         subgraph Settle["Settle Wait (per-waiter)"]
@@ -89,20 +80,18 @@ graph TD
     DisplayLink --> PulseTick
     PulseTick -->|"weak ref"| OnTick
     OnTick -->|"every tick"| Scan
-    OnTick -->|"every tick"| VCIdentity
-    OnTick -->|"every tick"| Focus
-    OnTick -->|"every tick"| Keyboard
+    OnTick -->|"every tick"| TripwireSignal
     OnTick -->|"every tick"| Settle
 
     subgraph Consumers["Consumers"]
         IJ["TheInsideJob"]
         BM["TheStash"]
-        SC["TheSafecracker"]
+    SC["TheSafecracker"]
     end
 
     IJ -->|"owns, sets onTransition"| TheTripwire
-    BM -->|"getAccessibleWindows/getTraversableWindows,<br/>waitForAllClear, yieldFrames, isScreenChange"| TheTripwire
-    SC -->|"weak ref, keyboardVisibleFlag"| TheTripwire
+    BM -->|"getAccessibleWindows/getTraversableWindows,<br/>waitForAllClear, yieldFrames, tripwireSignal"| TheTripwire
+    SC -->|"waitForAllClear"| TheTripwire
 ```
 
 ## The Pulse Model
@@ -115,7 +104,7 @@ graph TD
 2. Creates `CADisplayLink(target: pulseTarget, selector: handleTick)` — the display link retains `PulseTick`, not `TheTripwire`. If `TheTripwire` deallocates, `handleTick` sees `nil` and invalidates the link.
 3. Sets `preferredFrameRateRange(minimum: 8, maximum: 12, preferred: 10)`.
 4. Adds to `.main` run loop, `.common` mode (fires during scrolling too).
-5. Starts keyboard/text-input notification observers.
+5. Starts the pulse.
 
 `stopPulse()` invalidates the link, resumes all pending settle waiters with `false`, and resets all state.
 
@@ -128,8 +117,6 @@ flowchart LR
     subgraph EveryTick["Every Tick (~10 Hz)"]
         SL["scanLayers()"]
         VC["topmostViewController()"]
-        FR["currentFirstResponder()"]
-        KB["keyboard/text-input flags"]
         QF["quietFrameCount update"]
         SW["resolveSettleWaiters()"]
     end
@@ -142,12 +129,10 @@ Every tick builds a complete `PulseReading` snapshot from all current signal val
 1. **`CATransaction.flush()`** — commits SwiftUI's deferred implicit layout before sampling.
 2. **`scanLayers()`** — single DFS walk of every layer in every traversable window. Returns `LayerScan` with fingerprint, animation flag, layout flag, window count.
 3. **Quiet frame logic** — a tick is quiet if: no pending layout, no relevant animations, AND fingerprint matches previous. Quiet increments `quietFrameCount`; not quiet resets to 0.
-4. **VC identity** — `topmostViewController()` wrapped in `ObjectIdentifier`. Change fires `.screenChanged(from:to:)`.
-5. **First responder** — `currentFirstResponder()` wrapped in `ObjectIdentifier`. Change fires `.focusChanged(from:to:)`.
-6. **Keyboard/text-input flags** — read from notification-driven flags on `RunningContext`. Changes fire `.keyboardChanged(visible:)` and `.textInputChanged(active:)`.
-7. **Build `PulseReading`** from all current signal values.
-8. **Settle edge detection** — fires `.settled` on false→true, `.unsettled` on true→false.
-9. **`resolveSettleWaiters()`** — increments or resets each waiter's quiet count, resumes those that are done.
+4. **Tripwire signal** — `topmostViewController()`, public navigation state, and ordered visible windows. Change fires `.tripwireTriggered(from:to:)`.
+5. **Build `PulseReading`** from all current signal values.
+6. **Settle edge detection** — fires `.settled` on false→true, `.unsettled` on true→false.
+7. **`resolveSettleWaiters()`** — increments or resets each waiter's quiet count, resumes those that are done.
 
 ## `scanLayers()` — Single Combined Layer Walk
 
@@ -254,30 +239,6 @@ This is used by `TheStash`'s scroll scan loop and scroll-to-edge re-jump loop. T
 
 A heavier variant of `yieldFrames` that uses `Task.sleep` instead of `Task.yield()` to give `CADisplayLink` animations time to process. Required for accessibility SPI scroll methods that queue animated scrolls — `Task.yield()` alone doesn't advance the animation. Default interval is 16ms (one display frame).
 
-## Keyboard and Text Input Tracking
-
-### Keyboard (notification-driven)
-
-Three notifications → `keyboardVisibleFlag`:
-
-- `keyboardWillShowNotification` → `true` immediately
-- `keyboardDidHideNotification` → `false` immediately
-- `keyboardDidChangeFrameNotification` → frame-based check: end frame must intersect screen bounds with `height > 0` and `origin.y < screenBounds.height` (handles floating/undocked keyboards)
-
-### Text input (notification-driven)
-
-`UITextField` and `UITextView` begin/end editing notifications → `textInputActiveFlag`.
-
-### Promotion to pulse
-
-These flags are set synchronously when the notification fires and read into the `PulseReading` on every tick. Changes fire `PulseTransition` events immediately on the next tick. TheSafecracker reads `keyboardVisibleFlag` directly for immediate queries outside the tick cadence.
-
-## First Responder Tracking
-
-`currentFirstResponder()` walks every subview in every traversable window (frontmost first), depth-first, calling `view.isFirstResponder`. Returns the first match.
-
-Sampled every tick (~10 Hz). Identity change (via `ObjectIdentifier`) fires `.focusChanged(from:to:)`.
-
 ## View Controller Walk
 
 ```mermaid
@@ -293,27 +254,23 @@ flowchart TD
     Children --> Deepest["Return VC"]
 ```
 
-Sampled every tick. Identity change fires `.screenChanged(from:to:)`.
+Sampled every tick. A changed Tripwire signal fires `.tripwireTriggered(from:to:)`, which means "parse and check now." It does not guarantee that the parsed accessibility interface changed.
 
-### Topology supplement (TheStash)
+### Parsed Screen Classification
 
-For cases where the VC is reused (e.g., Workflow-style navigation), TheStash supplements with topology-based detection:
-- **Back button trait** (bit 27): presence/absence change = screen change
-- **Header labels**: if both before/after have headers and they're completely disjoint = screen change
+TheBrains classifies screen changes after parsing, not inside TheTripwire:
+- **Modal boundary**: parsed modal container changed = screen change
+- **Navigation marker**: selected tab, back button, or primary header changed = screen change
+- **Root shape replacement**: most structural accessibility roles were replaced = screen change
+- **Stable interaction context**: the same parsed first responder can keep filtered-list churn on the same screen
 
-The combined gate in `actionResultWithDelta`:
-```
-tripwire.isScreenChange(before:after:) || isTopologyChanged(before:after:)
-```
+Window-stack changes are Tripwire triggers only. Key-window status is input routing, not accessibility scope.
 
 ## `PulseTransition` Events
 
 | Transition | Trigger | Cadence |
 |-----------|---------|---------|
-| `.screenChanged(from:to:)` | VC identity change | Every tick |
-| `.focusChanged(from:to:)` | First responder change | Every tick |
-| `.keyboardChanged(visible:)` | Keyboard flag change | Every tick |
-| `.textInputChanged(active:)` | Text input flag change | Every tick |
+| `.tripwireTriggered(from:to:)` | Tripwire signal differs from the prior tick | Every tick |
 | `.settled` | quiet → settled edge | Every tick |
 | `.unsettled` | settled → not-quiet edge | Every tick |
 
@@ -332,7 +289,7 @@ Used by `scanLayers()` for visual fingerprinting and screenshot capture so visua
 
 `getAccessibleWindows()` starts from the traversable set and applies the accessibility parse scope:
 - System passthrough windows (`UIRemoteKeyboardWindow`, `UITextEffectsWindow`) are dropped because they sit above the app but do not contain app content.
-- The remaining top-down window band is kept through the key window. Windows below the key window are ignored.
+- Every remaining app window is preserved. Key-window status is input routing, not accessibility scope.
 - Each remaining window with a presented-view-controller chain is parsed from the deepest presented view.
 - `TheTripwire` does not walk views for `accessibilityViewIsModal`. The parser reports modal boundary containers, and `TheBurglar` stops parsing lower windows when that signal appears.
 
@@ -347,23 +304,23 @@ graph LR
     SC["TheSafecracker"] -->|"weak var tripwire"| TW
 
     TW -->|".settled → broadcastCurrentHierarchy()"| IJ
-    TW -->|"window access, waitForAllClear, isScreenChange, topmostVC"| BM
-    TW -->|"keyboardVisibleFlag (direct read)"| SC
+    TW -->|"window access, waitForAllClear, tripwireSignal, topmostVC"| BM
+    TW -->|"waitForAllClear"| SC
 ```
 
 - **TheInsideJob** owns the instance. Sets `onTransition` in `start()`, calls `startPulse()`/`stopPulse()` on suspend/resume. On `.settled`, broadcasts hierarchy if invalidated.
-- **TheStash** holds a strong ref passed at init. Uses accessible windows for parsing, traversable windows for capture, `waitForAllClear()` post-action, `topmostViewController()` and `isScreenChange()` for delta computation.
-- **TheSafecracker** holds a weak ref. Reads `keyboardVisibleFlag` directly for `isKeyboardVisible()`. Uses `waitForAllClear()` for scroll-settle in `ensureOnScreen`.
+- **TheStash** holds a strong ref passed at init. Uses accessible windows for parsing, traversable windows for capture, and `waitForAllClear()` post-action.
+- **TheSafecracker** uses `waitForAllClear()` for scroll-settle in `ensureOnScreen`.
 
 ## Design Decisions
 
 - **Persistent pulse over on-demand sampling**: A single ~10 Hz clock replaces ad-hoc polling loops and per-settle display links. Lower overhead, better timing coherence, and the pulse detects transitions even when no one is actively waiting.
-- **Flat cadence**: All signals are sampled on every tick. The simplicity of running all checks unconditionally outweighs the marginal CPU savings of tiered sampling — VC walks and first responder searches are cheap at ~10 Hz.
+- **Flat cadence**: All Tripwire signals are sampled on every tick. The simplicity of running all checks unconditionally outweighs the marginal CPU savings of tiered sampling.
 - **Weak-ref indirection via PulseTick**: `CADisplayLink` retains its target. If TheTripwire were the target, deallocating it would leave a dangling display link. The `PulseTick` intermediary checks a weak ref and self-invalidates.
 - **`CATransaction.flush()` before scanning**: SwiftUI batches layout commits. Without the flush, `scanLayers()` would see stale layer positions and report false "quiet" readings.
 - **Per-waiter quiet frames**: Global quiet-frame count can't serve multiple concurrent callers with different start times. Each waiter tracks its own count from registration, preventing false positives from stale settle state.
-- **Separation from TheStash**: TheTripwire reads UIKit timing signals; TheStash reads the accessibility tree. Neither imports the other's domain. The shared surface is window selection plus settle/screen-change signals.
-- **VC identity over element overlap**: `ObjectIdentifier` comparison of the topmost VC is cheaper and more reliable than the old heuristic of element identifier overlap ratios.
+- **Separation from TheStash**: TheTripwire reads UIKit timing signals; TheStash reads the accessibility tree. Neither imports the other's domain. The shared surface is window selection plus settle and Tripwire triggers.
+- **Tripwire trigger over screen-change guess**: cheap UIKit changes prompt a parse; parsed accessibility signatures decide no-change, element-change, or screen-change.
 - **Presentation layer fingerprinting**: Summing `CALayer.presentation()` positions/opacities catches any layer movement without enumerating specific animation types. The tolerances (0.5 pt position, 0.05 opacity) filter sub-pixel noise while catching all perceptible motion.
 
 ## Items Flagged for Review

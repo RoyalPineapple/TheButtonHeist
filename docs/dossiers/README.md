@@ -15,7 +15,7 @@ These one-sentence rules keep subsystem behavior from drifting back into paragra
 | Exploration | Full interface reads may move the viewport internally, but must restore before returning. | [14a-SCROLLING.md](14a-SCROLLING.md) |
 | Resolved scrolling | Direct scroll commands move only the resolved element's stored scroll view, and only on an axis that can reveal it. | [14a-SCROLLING.md](14a-SCROLLING.md) |
 | Scroll search | Global scroll-container scanning belongs to `element_search`, not resolved target actions. | [14a-SCROLLING.md](14a-SCROLLING.md) |
-| Window scope | Parse windows from top down until a modal boundary or the key window stops the band. | [15-THETRIPWIRE.md](15-THETRIPWIRE.md), [10-THEBURGLAR.md](10-THEBURGLAR.md) |
+| Window scope | Parse every app window top down until the parser reports a modal boundary; key-window status is not accessibility scope. | [15-THETRIPWIRE.md](15-THETRIPWIRE.md), [10-THEBURGLAR.md](10-THEBURGLAR.md) |
 
 ## Crew Roster
 
@@ -41,7 +41,7 @@ The dossiers are numbered to be read in order. Start at the entry point a user a
 ### Inside Team — Finding the Element
 | # | Crew Member | Alias | Primary Role |
 |---|-------------|-------|-------------|
-| 10 | [TheBurglar](10-THEBURGLAR.md) | The Acquisition Specialist | Hierarchy parsing, parse/apply pipeline, topology detection |
+| 10 | [TheBurglar](10-THEBURGLAR.md) | The Acquisition Specialist | Hierarchy parsing, parse/apply pipeline, modal-boundary reporting |
 | 11 | [TheStash](11-THESTASH.md) | The Score Handler | Element registry, target resolution, wire conversion, screen capture |
 | 12 | [Unified Targeting](12-UNIFIED-TARGETING.md) | *(cross-cutting)* | Element resolution pipeline: TheFence → ElementTarget → TheStash.resolveTarget → action execution |
 
@@ -57,7 +57,7 @@ The dossiers are numbered to be read in order. Start at the entry point a user a
 ### Inside Team — Observation Layer
 | # | Crew Member | Alias | Primary Role |
 |---|-------------|-------|-------------|
-| 15 | [TheTripwire](15-THETRIPWIRE.md) | The Early Warning System | Animation detection, VC identity, presentation layer fingerprinting |
+| 15 | [TheTripwire](15-THETRIPWIRE.md) | The Early Warning System | Animation detection, Tripwire triggers, presentation layer fingerprinting |
 | 16 | [TheStakeout](16-THESTAKEOUT.md) | The Lookout | Screen recording, video encoding |
 | 17 | [TheFingerprints](17-THEFINGERPRINTS.md) | The Evidence | Visual touch indicators, overlay included in recordings |
 

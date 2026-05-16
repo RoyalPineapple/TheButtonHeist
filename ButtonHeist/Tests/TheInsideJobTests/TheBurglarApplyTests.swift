@@ -268,27 +268,6 @@ final class TheBurglarApplyTests: XCTestCase {
                      "Element with no enclosing scroll view should have nil contentSpaceOrigin")
     }
 
-    // MARK: - isTopologyChanged (via stash)
-
-    func testTopologyChangedOnBackButtonAppearing() {
-        let before = [makeElement(label: "Home", traits: .header)]
-        let backButtonTrait = UIAccessibilityTraits(rawValue: 1 << 27)
-        let after = [
-            makeElement(label: "Home", traits: .header),
-            makeElement(label: "Back", traits: backButtonTrait),
-        ]
-        XCTAssertTrue(stash.isTopologyChanged(
-            before: before, after: after, beforeHierarchy: [], afterHierarchy: []
-        ))
-    }
-
-    func testTopologyUnchangedWhenSameHeaders() {
-        let elements = [makeElement(label: "Settings", traits: .header)]
-        XCTAssertFalse(stash.isTopologyChanged(
-            before: elements, after: elements, beforeHierarchy: [], afterHierarchy: []
-        ))
-    }
-
     // MARK: - Helpers
 
     private func makeElement(

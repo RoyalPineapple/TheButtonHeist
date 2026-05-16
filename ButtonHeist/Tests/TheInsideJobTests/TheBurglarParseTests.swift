@@ -122,17 +122,17 @@ final class TheBurglarParseTests: XCTestCase {
         )
     }
 
-    func testParseStopsAtKeyWindowWhenNoModalBoundaryAppears() throws {
+    func testParseIncludesAllAppWindowsWhenNoModalBoundaryAppears() throws {
         let windowScene = try requireForegroundWindowScene()
 
         let result = withNoTraversableWindows {
             let overlay = makeWindow(windowScene: windowScene, level: .alert)
-            let keyWindow = makeWindow(windowScene: windowScene, level: .normal, makeKey: true)
+            let appWindow = makeWindow(windowScene: windowScene, level: .normal, makeKey: true)
             let lower = makeWindow(windowScene: windowScene, level: .normal - 1)
 
             defer {
                 overlay.isHidden = true
-                keyWindow.isHidden = true
+                appWindow.isHidden = true
                 lower.isHidden = true
             }
 
@@ -140,17 +140,17 @@ final class TheBurglarParseTests: XCTestCase {
         }
 
         guard let result else {
-            XCTFail("Expected parse result for windows through key window")
+            XCTFail("Expected parse result for all app windows")
             return
         }
 
         let values = semanticGroupValues(in: result.hierarchy)
         XCTAssertTrue(values.contains("windowLevel: \(UIWindow.Level.alert.rawValue)"))
         XCTAssertTrue(values.contains("windowLevel: \(UIWindow.Level.normal.rawValue)"))
-        XCTAssertFalse(values.contains("windowLevel: \((UIWindow.Level.normal - 1).rawValue)"))
+        XCTAssertTrue(values.contains("windowLevel: \((UIWindow.Level.normal - 1).rawValue)"))
     }
 
-    func testParseStopsBeforeKeyWindowWhenModalBoundaryAppearsAboveIt() throws {
+    func testParseStopsBelowModalBoundaryAboveAppWindow() throws {
         let windowScene = try requireForegroundWindowScene()
 
         let result = withNoTraversableWindows {
@@ -177,7 +177,7 @@ final class TheBurglarParseTests: XCTestCase {
         XCTAssertFalse(values.contains("windowLevel: \(UIWindow.Level.normal.rawValue)"))
     }
 
-    func testParseIgnoresModalBoundaryBelowKeyWindow() throws {
+    func testParseKeepsWindowsAboveLowerModalBoundary() throws {
         let windowScene = try requireForegroundWindowScene()
 
         let result = withNoTraversableWindows {
@@ -194,13 +194,15 @@ final class TheBurglarParseTests: XCTestCase {
         }
 
         guard let result else {
-            XCTFail("Expected parse result for key window above modal")
+            XCTFail("Expected parse result for upper window and lower modal")
             return
         }
 
         let labels = result.hierarchy.sortedElements.compactMap(\.label)
+        let values = semanticGroupValues(in: result.hierarchy)
         XCTAssertTrue(labels.contains("Window \(Int(UIWindow.Level.alert.rawValue))"))
-        XCTAssertFalse(labels.contains("Window \(Int(UIWindow.Level.normal.rawValue))"))
+        XCTAssertTrue(labels.contains("Modal Boundary"))
+        XCTAssertTrue(values.contains("windowLevel: \(UIWindow.Level.normal.rawValue)"))
     }
 
     func testParseStopsAtFrontmostModalBoundary() throws {

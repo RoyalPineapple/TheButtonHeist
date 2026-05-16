@@ -843,19 +843,6 @@ final class TheStash {
         return screen
     }
 
-    /// Did the accessibility topology change between two snapshots?
-    func isTopologyChanged(
-        before: [AccessibilityElement],
-        after: [AccessibilityElement],
-        beforeHierarchy: [AccessibilityHierarchy],
-        afterHierarchy: [AccessibilityHierarchy]
-    ) -> Bool {
-        burglar.isTopologyChanged(
-            before: before, after: after,
-            beforeHierarchy: beforeHierarchy, afterHierarchy: afterHierarchy
-        )
-    }
-
     // MARK: - Tree Read Helpers
 
     /// Convert the current screen's hierarchy to canonical wire form. Every

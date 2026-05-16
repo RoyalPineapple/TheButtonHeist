@@ -2,6 +2,8 @@
 
 10 Hz UI pulse. Samples all timing signals on a single `CADisplayLink`, gates settle decisions, and emits transition events. Zero crew dependencies — pure sensor.
 
+Tripwire is a check signal, not a classifier: when Tripwire triggers, TheBrains re-parses the accessibility tree and then the parsed hierarchy decides whether the result is no-change, element-change, or screen-change.
+
 ## The one file
 
 **`TheTripwire.swift`** — `@MainActor final class`.
@@ -17,10 +19,10 @@
    - Checks `animationKeys()` — ignores `_UIParallaxMotionEffect` and `match-` prefixed keys
    - Returns `LayerScan` with a `PresentationFingerprint`
 3. Compute `isQuiet`: no pending layout AND no relevant animations AND fingerprint matches previous (0.5pt position tolerance, 0.05 opacity tolerance)
-4. Get `topmostViewController()` identity — walks presented → nav → tab → children
+4. Get `tripwireSignal()` — top VC identity, public navigation state, and ordered visible windows
 5. Build `PulseReading` with `quietFrames = isQuiet ? (prev + 1) : 0`
 6. Diff against previous reading:
-   - VC identity changed → fire `onTransition?(.screenChanged(from:to:))`
+   - Tripwire triggered → fire `onTransition?(.tripwireTriggered(from:to:))`
    - Newly settled → fire `.settled`
    - Newly unsettled → fire `.unsettled`
 7. `resolveSettleWaiters(context:now:isQuiet:)` — check each waiter
@@ -35,7 +37,7 @@ Each `waitForSettle(timeout:requiredQuietFrames:)` caller gets its own `SettleWa
 
 `getTraversableWindows()` — all non-hidden, non-zero-bounds windows from the `foregroundActive` scene, sorted by `windowLevel` descending. Filters out `TheFingerprints.FingerprintWindow` instances.
 
-`getAccessibleWindows()` — calls `getTraversableWindows()`, drops system passthrough windows (keyboard/text effects), returns the top-down window band through the key window, and resolves each window with a presentation chain to its deepest presented view. Modal boundaries are reported by the accessibility parser and consumed by `TheBurglar`, not detected by walking views here.
+`getAccessibleWindows()` — calls `getTraversableWindows()`, drops system passthrough windows (keyboard/text effects), preserves every remaining app window, and resolves each window with a presentation chain to its deepest presented view. Modal boundaries are reported by the accessibility parser and consumed by `TheBurglar`, not detected by walking views here.
 
 ### State machine
 
@@ -45,6 +47,7 @@ Each `waitForSettle(timeout:requiredQuietFrames:)` caller gets its own `SettleWa
 
 - `yieldFrames(_:)` — lightweight: `CATransaction.flush()` + `Task.yield()`. For scroll loops needing layout but not full settle.
 - `yieldRealFrames(_:intervalMs:)` — heavier: `Task.sleep` between frames. For animated scroll SPI.
-- `isScreenChange(before:after:)` — compares `ObjectIdentifier?` values.
+- `tripwireSignal()` — cheap UIKit signal/context signal. It never classifies no-change vs element-change vs screen-change.
+- `didTripwireTrigger(before:after:)` — compares tripwire signals.
 
 > Full dossier: [`docs/dossiers/15-THETRIPWIRE.md`](../../../../docs/dossiers/15-THETRIPWIRE.md)

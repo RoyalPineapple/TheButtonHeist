@@ -24,9 +24,10 @@ TheBrains keeps the post-action delta cycle, dispatch, wait handlers, and broadc
 
 2. **`TheBrains.swift`** — Core class. Key types:
 
-   - `BeforeState` — frozen snapshot (sorted elements, raw parsed elements, hierarchy, VC identity) taken before every action.
+   - `BeforeState` — frozen snapshot (sorted elements, raw parsed elements, hierarchy, tripwire signal, parsed screen signature) taken before every action.
    - **`refresh()`** — delegates to `stash.refresh()`.
-   - **`actionResultWithDelta(before:)`** — the convergence point. On failure: immediate return from before-snapshot. On success: settle via `tripwire.waitForAllClear(1s)` → `stash.parse()` → screen-change detection (VC identity OR topology) → `stash.apply()` → `navigation.exploreAndPrune()` → snapshot → `InterfaceDiff.computeDelta()` → re-resolve target for post-action element metadata → `ActionResultBuilder.success()`.
+   - **`ScreenClassifier.swift`** — parsed accessibility signatures classify no-change, element-change, and screen-change. Tripwire triggers parsing; parsed signatures decide.
+   - **`actionResultWithDelta(before:)`** — the convergence point. On failure: immediate return from before-snapshot. On success: settle until stable or Tripwire-triggered → `stash.parse()` → `ScreenClassifier.classify(before:after:)` → `stash.apply()` → `navigation.exploreAndPrune()` → snapshot → `InterfaceDiff.computeDelta()` → re-resolve target for post-action element metadata → `ActionResultBuilder.success()`.
 
    **Response state** — `SentState` struct (semantic `treeHash`, cheap `viewportHash`, beforeState, screenId) tracks the last response sent to the driver. `recordSentState()` snapshots current state; `computeBackgroundDelta()` first checks the viewport hash and only explores when the visible tree changed. TheGetaway calls `recordSentState()` after every send.
 

@@ -89,7 +89,8 @@ final class TheBrains {
         let hierarchy: [AccessibilityHierarchy]
         let tree: [InterfaceNode]
         let treeHash: Int
-        let viewController: ObjectIdentifier?
+        let tripwireSignal: TheTripwire.TripwireSignal
+        let screenSnapshot: ScreenClassifier.Snapshot
         let screenId: String?
     }
 
@@ -103,7 +104,8 @@ final class TheBrains {
             hierarchy: stash.currentHierarchy,
             tree: tree,
             treeHash: treeHash,
-            viewController: tripwire.topmostViewController().map(ObjectIdentifier.init),
+            tripwireSignal: tripwire.tripwireSignal(),
+            screenSnapshot: ScreenClassifier.snapshot(of: stash.currentScreen),
             screenId: stash.lastScreenId
         )
     }
@@ -121,7 +123,8 @@ final class TheBrains {
             hierarchy: stash.currentHierarchy,
             tree: tree,
             treeHash: tree.hashValue,
-            viewController: tripwire.topmostViewController().map(ObjectIdentifier.init),
+            tripwireSignal: tripwire.tripwireSignal(),
+            screenSnapshot: ScreenClassifier.snapshot(of: stash.currentScreen),
             screenId: stash.lastScreenId
         )
     }
@@ -150,13 +153,10 @@ final class TheBrains {
 
         let start = CFAbsoluteTimeGetCurrent()
         let settleSession = SettleSession.live(stash: stash, tripwire: tripwire)
-        // Pass the baseline top-VC explicitly: it's the same snapshot
-        // captured in `before.viewController`, so the screen-change
-        // check inside the loop compares the live VC against a stable
-        // known-good reference rather than re-querying the provider for
-        // a value that might drift (or, in scripted test seams, advance
-        // the script and consume the baseline as the first element).
-        let settleResult = await settleSession.run(start: start, baselineTopVC: before.viewController)
+        // Tripwire triggers the post-action parse early, but the parsed
+        // accessibility signature below decides no-change, element-change,
+        // or screen-change.
+        let settleResult = await settleSession.run(start: start, baselineTripwireSignal: before.tripwireSignal)
         let settleMs = settleResult.outcome.timeMs
         var didSettle = settleResult.outcome.didSettleCleanly
         if case .cancelled(let cancelMs) = settleResult.outcome {
@@ -171,14 +171,13 @@ final class TheBrains {
 
         var afterScreen = stash.parse()
 
-        let afterVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
         let afterElements = afterScreen?.hierarchy.sortedElements ?? []
-        let afterHierarchy = afterScreen?.hierarchy ?? []
-        let isScreenChange = tripwire.isScreenChange(before: before.viewController, after: afterVC)
-            || stash.isTopologyChanged(
-                before: before.elements, after: afterElements,
-                beforeHierarchy: before.hierarchy, afterHierarchy: afterHierarchy
-            )
+        let afterSnapshotForClassification = afterScreen.map(ScreenClassifier.snapshot(of:)) ?? ScreenClassifier.snapshot(of: .empty)
+        let classification = ScreenClassifier.classify(
+            before: before.screenSnapshot,
+            after: afterSnapshotForClassification
+        )
+        let isScreenChange = classification.isScreenChange
         if isScreenChange && afterElements.isEmpty {
             let repopulated = await repopulateAfterScreenChange(into: &afterScreen)
             if !repopulated { didSettle = false }
@@ -230,8 +229,8 @@ final class TheBrains {
         switch outcome {
         case .settled(let ms):
             insideJobLogger.info("Post-action settle: settled in \(ms)ms")
-        case .screenChanged(let ms):
-            insideJobLogger.info("Post-action settle: screen changed mid-loop after \(ms)ms")
+        case .tripwireTriggered(let ms):
+            insideJobLogger.info("Post-action settle: Tripwire triggered mid-loop after \(ms)ms")
         case .timedOut(let ms):
             insideJobLogger.info("Post-action settle: timed out after \(ms)ms")
         case .cancelled(let ms):
@@ -261,26 +260,27 @@ final class TheBrains {
     /// Should the post-action delta omit the `transient` list?
     ///
     /// `SettleSession.elementsByKey` accumulates every element seen during
-    /// the multi-cycle loop. On a clean settle (no screen change) the
-    /// "appeared then disappeared" elements really are transient — a
-    /// spinner, a loading overlay, a snackbar. On a screen change the
+    /// the multi-cycle loop. On a clean settle (no Tripwire trigger and no
+    /// parsed screen change), the "appeared then disappeared" elements
+    /// really are transient — a spinner, a loading overlay, a snackbar.
+    /// On a screen change the
     /// same accumulation includes the *previous screen's* elements,
     /// which are stale-not-transient: they didn't come and go as part of
     /// this action, they're just no longer the active screen. Reporting
     /// them as `transient` claims the wrong thing and pollutes the delta
     /// with elements the agent can no longer see or act on.
     ///
-    /// Both signals matter:
-    /// - `.screenChanged` outcome: the loop preempted itself on a VC
-    ///   change. Suppress transients.
-    /// - `isScreenChange` flag: the post-action diff (VC swap OR topology
-    ///   replacement) concluded the screen changed even if the settle
-    ///   loop reached `.settled`. Same reasoning, same suppression.
+    /// Both checks matter:
+    /// - `.tripwireTriggered` outcome: the loop preempted itself because a
+    ///   cheap UIKit-side condition changed. Suppress transients because
+    ///   the settle timeline is not a clean same-screen sequence.
+    /// - `isScreenChange` flag: the parsed signature concluded the screen
+    ///   changed even if the settle loop reached `.settled`.
     static func shouldSuppressTransient(
         settleOutcome: SettleOutcome,
         isScreenChange: Bool
     ) -> Bool {
-        if case .screenChanged = settleOutcome { return true }
+        if case .tripwireTriggered = settleOutcome { return true }
         return isScreenChange
     }
 
@@ -421,7 +421,10 @@ final class TheBrains {
     /// Whether the screen changed since the last response (for fast-redirect logic).
     var screenChangedSinceLastSent: Bool {
         guard case .sent(let sent) = broadcastHistory else { return false }
-        return sent.screenId != stash.lastScreenId
+        return ScreenClassifier.classify(
+            before: sent.beforeState.screenSnapshot,
+            after: ScreenClassifier.snapshot(of: stash.currentScreen)
+        ).isScreenChange
     }
 
     /// Screen ID from the last response, for diagnostic messages.
@@ -720,16 +723,10 @@ final class TheBrains {
         before: BeforeState,
         after: BeforeState
     ) -> InterfaceDelta {
-        let hasComparableHierarchies = !before.hierarchy.isEmpty && !after.hierarchy.isEmpty
-        let isScreenChange = tripwire.isScreenChange(
-            before: before.viewController,
-            after: after.viewController
-        ) || before.screenId != after.screenId || (
-            hasComparableHierarchies && stash.isTopologyChanged(
-                before: before.elements, after: after.elements,
-                beforeHierarchy: before.hierarchy, afterHierarchy: after.hierarchy
-            )
-        )
+        let isScreenChange = ScreenClassifier.classify(
+            before: before.screenSnapshot,
+            after: after.screenSnapshot
+        ).isScreenChange
         return TheStash.InterfaceDiff.computeDelta(
             before: before.snapshot, after: after.snapshot,
             beforeTree: before.tree,
@@ -743,14 +740,10 @@ final class TheBrains {
         before: BeforeState,
         afterSnapshot: [Screen.ScreenElement]
     ) -> InterfaceDelta {
-        let afterElements = stash.currentHierarchy.sortedElements
-        let isScreenChange = tripwire.isScreenChange(
-            before: before.viewController,
-            after: tripwire.topmostViewController().map(ObjectIdentifier.init)
-        ) || before.screenId != stash.lastScreenId || stash.isTopologyChanged(
-            before: before.elements, after: afterElements,
-            beforeHierarchy: before.hierarchy, afterHierarchy: stash.currentHierarchy
-        )
+        let isScreenChange = ScreenClassifier.classify(
+            before: before.screenSnapshot,
+            after: ScreenClassifier.snapshot(of: stash.currentScreen)
+        ).isScreenChange
         return TheStash.InterfaceDiff.computeDelta(
             before: before.snapshot, after: afterSnapshot,
             beforeTree: before.tree,
