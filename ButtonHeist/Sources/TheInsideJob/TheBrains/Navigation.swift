@@ -74,16 +74,16 @@ final class Navigation {
         var maxFrames: Int
         /// Consecutive frames with no newly-discovered elements needed to exit.
         var requiredIdleFrames: Int
-        /// Consecutive frames with an unchanged viewport set needed to exit.
-        var requiredStableViewportFrames: Int
+        /// Consecutive frames with an unchanged visible id set needed to exit.
+        var requiredStableVisibleFrames: Int
 
         static let directionChange = SettleSwipeProfile(
             minFrames: 6, maxFrames: 24,
-            requiredIdleFrames: 2, requiredStableViewportFrames: 3
+            requiredIdleFrames: 2, requiredStableVisibleFrames: 3
         )
         static let sameDirection = SettleSwipeProfile(
             minFrames: 1, maxFrames: 3,
-            requiredIdleFrames: 1, requiredStableViewportFrames: 1
+            requiredIdleFrames: 1, requiredStableVisibleFrames: 1
         )
     }
 
@@ -99,9 +99,9 @@ final class Navigation {
     /// implementations; each watches a different signal because the callers
     /// need different answers:
     ///
-    /// 1. `SettleSwipeLoopState` (here) — viewport heistId set + content-space
+    /// 1. `SettleSwipeLoopState` (here) — visible heistId set + content-space
     ///    anchor signature, interleaved frame-by-frame with `stash.refresh()`.
-    ///    Answers "did the swipe move us, and has the viewport stopped
+    ///    Answers "did the swipe move us, and has the visible set stopped
     ///    accepting new heistIds?" — the only signal that distinguishes
     ///    spring-bounce-then-settle from edge-rejected gestures.
     /// 2. `SettleSession` (`SettleSession.swift`) — AX-tree fingerprint
@@ -119,45 +119,45 @@ final class Navigation {
     /// AX tree, so it can't tell whether new heistIds are still arriving.
     struct SettleSwipeLoopState: Equatable {
         let profile: SettleSwipeProfile
-        let previousViewport: Set<String>
+        let previousVisibleIds: Set<String>
         let previousAnchor: Int?
 
         private(set) var moved = false
         private(set) var frame = 0
-        private var lastViewport: Set<String>
+        private var lastVisibleIds: Set<String>
         private var idleFramesWithoutNew = 0
-        private var stableViewportFrames = 0
+        private var stableVisibleFrames = 0
 
         init(
             profile: SettleSwipeProfile,
-            previousViewport: Set<String>,
+            previousVisibleIds: Set<String>,
             previousAnchor: Int?
         ) {
             self.profile = profile
-            self.previousViewport = previousViewport
+            self.previousVisibleIds = previousVisibleIds
             self.previousAnchor = previousAnchor
-            self.lastViewport = previousViewport
+            self.lastVisibleIds = previousVisibleIds
         }
 
-        /// Advance one frame. Pass the current viewport id set, the current
+        /// Advance one frame. Pass the current visible id set, the current
         /// anchor signature (nil if content-space origins unavailable), and
         /// the heistIds newly discovered this frame.
         mutating func advance(
-            viewportIds: Set<String>,
+            visibleIds: Set<String>,
             anchorSignature: Int?,
             newHeistIds: Set<String>
         ) -> SettleSwipeStep {
             if let previousAnchor, let anchorSignature {
                 if anchorSignature != previousAnchor { moved = true }
-            } else if viewportIds != previousViewport {
+            } else if visibleIds != previousVisibleIds {
                 moved = true
             }
 
-            if viewportIds == lastViewport {
-                stableViewportFrames += 1
+            if visibleIds == lastVisibleIds {
+                stableVisibleFrames += 1
             } else {
-                lastViewport = viewportIds
-                stableViewportFrames = 0
+                lastVisibleIds = visibleIds
+                stableVisibleFrames = 0
             }
 
             if newHeistIds.isEmpty {
@@ -170,7 +170,7 @@ final class Navigation {
 
             if frame >= profile.minFrames,
                idleFramesWithoutNew >= profile.requiredIdleFrames,
-               stableViewportFrames >= profile.requiredStableViewportFrames {
+               stableVisibleFrames >= profile.requiredStableVisibleFrames {
                 return .done
             }
             if frame >= profile.maxFrames {

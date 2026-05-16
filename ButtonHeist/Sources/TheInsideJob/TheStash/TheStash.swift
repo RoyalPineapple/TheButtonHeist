@@ -47,7 +47,7 @@ final class TheStash {
     /// - `TheBrains.actionResultWithDelta` — page-only commit after settle
     ///
     /// Readers that specifically want "what's reachable in the latest parse"
-    /// read `liveViewportIds`; target resolution reads the known semantic set.
+    /// read `visibleIds`; target resolution reads the known semantic set.
     var currentScreen: Screen = .empty
 
     private var pendingRotorState: PendingRotorState = .none
@@ -89,17 +89,17 @@ final class TheStash {
     ///
     /// After an exploration commit this includes elements that were observed
     /// during scrolling and are no longer on-screen; after a plain `refresh()`
-    /// this is the live viewport. Use `liveViewportIds` when you specifically
+    /// this is the live viewport. Use `visibleIds` when you specifically
     /// need "what's on screen right now".
-    var viewportIds: Set<String> {
-        heistIds(in: .known)
+    var knownIds: Set<String> {
+        ids(in: .known)
     }
 
     /// HeistIds of elements present in the live hierarchy from the most
     /// recent parse — i.e. on-screen right now. Strictly a subset of
-    /// `viewportIds` after an exploration union has been committed.
-    var liveViewportIds: Set<String> {
-        heistIds(in: .visible)
+    /// `knownIds` after an exploration union has been committed.
+    var visibleIds: Set<String> {
+        ids(in: .visible)
     }
 
     /// HeistId of the element whose live object is currently first responder.
@@ -164,7 +164,7 @@ final class TheStash {
     // MARK: - Element Actions
 
     func hasInteractiveObject(_ screenElement: ScreenElement) -> Bool {
-        Interactivity.isInteractive(element: screenElement.element, object: screenElement.object)
+        Interactivity.isInteractive(element: screenElement.element, object: dispatchObject(for: screenElement))
     }
 
     /// Outcome of `activate(_:)`.
@@ -175,20 +175,20 @@ final class TheStash {
     }
 
     func activate(_ screenElement: ScreenElement) -> ActivateOutcome {
-        guard let object = screenElement.object else { return .objectDeallocated }
+        guard let object = dispatchObject(for: screenElement) else { return .objectDeallocated }
         return object.accessibilityActivate() ? .success : .refused
     }
 
     @discardableResult
     func increment(_ screenElement: ScreenElement) -> Bool {
-        guard let object = screenElement.object else { return false }
+        guard let object = dispatchObject(for: screenElement) else { return false }
         object.accessibilityIncrement()
         return true
     }
 
     @discardableResult
     func decrement(_ screenElement: ScreenElement) -> Bool {
-        guard let object = screenElement.object else { return false }
+        guard let object = dispatchObject(for: screenElement) else { return false }
         object.accessibilityDecrement()
         return true
     }
@@ -273,7 +273,7 @@ final class TheStash {
     }
 
     func liveGeometry(for screenElement: ScreenElement) -> LiveGeometry? {
-        guard let object = screenElement.object,
+        guard let object = dispatchObject(for: screenElement),
               let scrollView = screenElement.scrollView else { return nil }
         let frame = object.accessibilityFrame
         guard !frame.isNull, !frame.isEmpty else { return nil }
@@ -285,7 +285,7 @@ final class TheStash {
     }
 
     func performCustomAction(named name: String, on screenElement: ScreenElement) -> CustomActionOutcome {
-        guard let object = screenElement.object else { return .deallocated }
+        guard let object = dispatchObject(for: screenElement) else { return .deallocated }
         guard let action = object.accessibilityCustomActions?
             .first(where: { $0.name == name }) else {
             return .noSuchAction
@@ -300,12 +300,26 @@ final class TheStash {
         return .noSuchAction
     }
 
+    private func dispatchObject(for screenElement: ScreenElement) -> NSObject? {
+        if visibleIds.contains(screenElement.heistId) {
+            return screenElement.object
+        }
+        if case .active(let pending) = pendingRotorState,
+           pending.screenElement.heistId == screenElement.heistId {
+            return pending.object
+        }
+        if currentScreen.findElement(heistId: screenElement.heistId) == nil {
+            return screenElement.object
+        }
+        return nil
+    }
+
     func performRotor(
         _ target: RotorTarget,
         direction: RotorDirection,
         on screenElement: ScreenElement
     ) -> RotorOutcome {
-        guard let object = screenElement.object else { return .deallocated }
+        guard let object = dispatchObject(for: screenElement) else { return .deallocated }
         let rotors = object.accessibilityCustomRotors ?? []
         guard !rotors.isEmpty else { return .noRotors }
 
@@ -336,7 +350,7 @@ final class TheStash {
         predicate.searchDirection = direction.uiAccessibilityDirection
         if let currentHeistId = target.currentHeistId {
             guard let current = resolveTarget(.heistId(currentHeistId)).resolved?.screenElement,
-                  let currentObject = current.object else {
+                  let currentObject = dispatchObject(for: current) else {
                 return .currentItemUnavailable(currentHeistId)
             }
             let currentRange: UITextRange?
@@ -403,12 +417,12 @@ final class TheStash {
     }
 
     /// HeistIds for either the live hierarchy or the committed known screen.
-    func heistIds(in scope: InterfaceElementScope) -> Set<String> {
+    func ids(in scope: InterfaceElementScope) -> Set<String> {
         switch scope {
         case .visible:
-            return Set(currentScreen.heistIdByElement.values)
+            return currentScreen.visibleIds
         case .known:
-            return currentScreen.heistIds
+            return currentScreen.knownIds
         }
     }
 
@@ -486,7 +500,7 @@ final class TheStash {
     }
 
     func checkElementInteractivity(_ screenElement: ScreenElement) -> InteractivityCheck {
-        Interactivity.checkInteractivity(screenElement.element, object: screenElement.object)
+        Interactivity.checkInteractivity(screenElement.element, object: dispatchObject(for: screenElement))
     }
 
     func resolvePoint(
@@ -534,7 +548,7 @@ final class TheStash {
         Diagnostics.matcherNotFound(
             matcher, hierarchy: currentScreen.hierarchy,
             screenElements: selectElements(),
-            knownHeistIds: currentScreen.heistIds,
+            knownHeistIds: currentScreen.knownIds,
             traversalOrder: buildTraversalOrderIndex()
         )
     }
@@ -632,7 +646,7 @@ final class TheStash {
         }
         return ParsedRotorResultObject(
             screenElement: cached,
-            isInCurrentHierarchy: liveViewportIds.contains(cached.heistId)
+            isInCurrentHierarchy: visibleIds.contains(cached.heistId)
         )
     }
 
@@ -731,7 +745,7 @@ final class TheStash {
         let root = "rotor_result_\(base)"
         var candidate = root
         var suffix = 2
-        while currentScreen.heistIds.contains(candidate) {
+        while currentScreen.knownIds.contains(candidate) {
             candidate = "\(root)_\(suffix)"
             suffix += 1
         }

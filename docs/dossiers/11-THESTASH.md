@@ -176,8 +176,8 @@ Computed accessors proxy through `currentScreen`:
 | Accessor | Source |
 |----------|--------|
 | `currentHierarchy` | `currentScreen.hierarchy` |
-| `viewportIds` | `currentScreen.heistIds` (all-known after union; live-viewport after refresh) |
-| `liveViewportIds` | `Set(currentScreen.heistIdByElement.values)` (strictly on-screen now) |
+| `knownIds` | `currentScreen.knownIds` (all known semantic entries; after an exploration union this includes off-viewport entries) |
+| `visibleIds` | `currentScreen.visibleIds` (strictly backed by the latest parsed live hierarchy) |
 | `firstResponderHeistId` | `currentScreen.firstResponderHeistId` |
 | `lastScreenName`, `lastScreenId` | derived from `currentScreen.hierarchy` |
 | `scrollableContainerViews` | unwraps the weak-view wrappers from `currentScreen.scrollableContainerViews` |

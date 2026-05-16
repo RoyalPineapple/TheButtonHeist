@@ -12,7 +12,7 @@ import AccessibilitySnapshotParser
 ///
 /// `Screen` is the currency type for the resolution layer post-0.2.25. It
 /// replaces the dozen mutable fields previously held on TheStash
-/// (`heistIdIndex`, `currentHierarchy`, `reverseIndex`, `viewportIds`,
+/// (`heistIdIndex`, `currentHierarchy`, `reverseIndex`, `knownIds`,
 /// `currentContainers`, `firstResponderHeistId`, `lastScreenName`, ...) with
 /// a single immutable value. TheStash holds exactly one mutable field of
 /// this type — `currentScreen` — and rebinds it on every parse / merge.
@@ -168,9 +168,14 @@ struct Screen: Equatable {
         TheScore.slugify(name)
     }
 
-    /// The heistId set of every element on screen.
-    var heistIds: Set<String> {
+    /// The heistId set of every element in the committed semantic screen.
+    var knownIds: Set<String> {
         Set(elements.keys)
+    }
+
+    /// The heistId set backed by the latest parsed live hierarchy.
+    var visibleIds: Set<String> {
+        Set(heistIdByElement.values)
     }
 
     // MARK: - Lookup

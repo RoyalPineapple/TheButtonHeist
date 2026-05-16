@@ -127,9 +127,9 @@ extension TheBrains {
     }
 
     private func recordedScreenIfCurrentViewportStillMatches(_ screenBeforeRefresh: Screen) -> Screen? {
-        let currentViewportIds = stash.currentScreen.heistIds
+        let currentVisibleIds = stash.currentScreen.visibleIds
         guard !screenBeforeRefresh.elements.isEmpty,
-              currentViewportIds.isSubset(of: screenBeforeRefresh.heistIds) else {
+              currentVisibleIds.isSubset(of: screenBeforeRefresh.knownIds) else {
             return nil
         }
         return screenBeforeRefresh

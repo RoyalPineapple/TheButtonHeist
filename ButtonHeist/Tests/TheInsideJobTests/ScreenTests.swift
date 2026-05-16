@@ -51,8 +51,12 @@ final class ScreenTests: XCTestCase {
         XCTAssertNil(Screen.empty.id)
     }
 
-    func testEmptyHeistIdsIsEmpty() {
-        XCTAssertTrue(Screen.empty.heistIds.isEmpty)
+    func testEmptyKnownIdsIsEmpty() {
+        XCTAssertTrue(Screen.empty.knownIds.isEmpty)
+    }
+
+    func testEmptyVisibleIdsIsEmpty() {
+        XCTAssertTrue(Screen.empty.visibleIds.isEmpty)
     }
 
     // MARK: - findElement
@@ -146,7 +150,7 @@ final class ScreenTests: XCTestCase {
 
         let merged = lhs.merging(rhs)
 
-        XCTAssertEqual(merged.heistIds, ["a_button", "b_button", "c_button", "d_button"])
+        XCTAssertEqual(merged.knownIds, ["a_button", "b_button", "c_button", "d_button"])
     }
 
     // MARK: - merging — conflict rule

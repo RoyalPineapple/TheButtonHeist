@@ -467,7 +467,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(axis.isEmpty)
     }
 
-    // MARK: - Off-Viewport Entry
+    // MARK: - Known Offscreen Entry
 
     /// Install a Screen whose `elements` includes an entry that's not in the
     /// live hierarchy — simulating an element retained from a previous
@@ -484,7 +484,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
     }
 
-    func testOffViewportEntryByHeistIdReturnsWhenOffScreen() {
+    func testKnownOffscreenEntryByHeistIdReturnsWhenOffScreen() {
         let other = makeElement(label: "Other")
         let element = makeElement(label: "Item")
         installScreenWithOffViewportEntry(
@@ -492,23 +492,23 @@ final class TheBrainsScrollTests: XCTestCase {
             offViewport: [(element, "button_item", CGPoint(x: 0, y: 2000))]
         )
 
-        let entry = brains.navigation.offViewportRegistryEntry(for: .heistId("button_item"))
+        let entry = brains.navigation.knownOffscreenEntry(for: .heistId("button_item"))
         XCTAssertNotNil(entry, "Should return entry when heistId is not in live viewport")
         XCTAssertEqual(entry?.heistId, "button_item")
     }
 
-    func testOffViewportEntryByHeistIdReturnsNilWhenOnScreen() {
+    func testKnownOffscreenEntryByHeistIdReturnsNilWhenOnScreen() {
         let element = makeElement(label: "Item")
         installScreenWithOffViewportEntry(
             liveHierarchy: [(element, "button_item")],
             offViewport: []
         )
 
-        let entry = brains.navigation.offViewportRegistryEntry(for: .heistId("button_item"))
+        let entry = brains.navigation.knownOffscreenEntry(for: .heistId("button_item"))
         XCTAssertNil(entry, "Should return nil when heistId is in live viewport")
     }
 
-    func testOffViewportEntryByMatcherReturnsKnownEntryOutsideLiveHierarchy() {
+    func testKnownOffscreenEntryByMatcherReturnsKnownEntryOutsideLiveHierarchy() {
         let other = makeElement(label: "Other")
         let element = makeElement(label: "Item")
         installScreenWithOffViewportEntry(
@@ -516,21 +516,21 @@ final class TheBrainsScrollTests: XCTestCase {
             offViewport: [(element, "button_item", CGPoint(x: 0, y: 2000))]
         )
 
-        let entry = brains.navigation.offViewportRegistryEntry(
+        let entry = brains.navigation.knownOffscreenEntry(
             for: .matcher(ElementMatcher(label: "Item"))
         )
         XCTAssertNotNil(entry, "Should return known matcher hit when it is not in the live viewport")
         XCTAssertEqual(entry?.heistId, "button_item")
     }
 
-    func testOffViewportEntryByMatcherReturnsNilWhenMatchIsLive() {
+    func testKnownOffscreenEntryByMatcherReturnsNilWhenMatchIsLive() {
         let element = makeElement(label: "Item")
         installScreenWithOffViewportEntry(
             liveHierarchy: [(element, "button_item")],
             offViewport: []
         )
 
-        let entry = brains.navigation.offViewportRegistryEntry(
+        let entry = brains.navigation.knownOffscreenEntry(
             for: .matcher(ElementMatcher(label: "Item"))
         )
         XCTAssertNil(entry, "Should return nil when matcher hit is already in the live viewport")
@@ -625,11 +625,11 @@ final class TheBrainsScrollTests: XCTestCase {
     func testSettleLoopSameDirectionExitsAfterOneStableFrame() {
         var state = Navigation.SettleSwipeLoopState(
             profile: .sameDirection,
-            previousViewport: ["a"],
+            previousVisibleIds: ["a"],
             previousAnchor: 100
         )
         let step1 = state.advance(
-            viewportIds: ["b"],
+            visibleIds: ["b"],
             anchorSignature: 200,
             newHeistIds: []
         )
@@ -637,30 +637,30 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(state.moved, "Anchor differs, motion detected")
 
         let step2 = state.advance(
-            viewportIds: ["b"],
+            visibleIds: ["b"],
             anchorSignature: 200,
             newHeistIds: []
         )
-        XCTAssertEqual(step2, .done, "Same-direction profile exits once stable frame count hits 1")
+        XCTAssertEqual(step2, .done, "Same-direction profile exits once stable visible count hits 1")
         XCTAssertTrue(state.moved)
     }
 
     func testSettleLoopDirectionChangeHonorsMinFrames() {
         var state = Navigation.SettleSwipeLoopState(
             profile: .directionChange,
-            previousViewport: ["a"],
+            previousVisibleIds: ["a"],
             previousAnchor: 100
         )
         for frameIndex in 0..<5 {
             let step = state.advance(
-                viewportIds: ["a"],
+                visibleIds: ["a"],
                 anchorSignature: 100,
                 newHeistIds: []
             )
             XCTAssertEqual(step, .continue, "Frame \(frameIndex + 1) must not exit before minFrames=6")
         }
         let finalStep = state.advance(
-            viewportIds: ["a"],
+            visibleIds: ["a"],
             anchorSignature: 100,
             newHeistIds: []
         )
@@ -671,19 +671,19 @@ final class TheBrainsScrollTests: XCTestCase {
     func testSettleLoopExitsAtMaxFramesWhenConditionsNeverSettle() {
         var state = Navigation.SettleSwipeLoopState(
             profile: .directionChange,
-            previousViewport: ["a"],
+            previousVisibleIds: ["a"],
             previousAnchor: 100
         )
         for frameIndex in 0..<23 {
             let step = state.advance(
-                viewportIds: ["id-\(frameIndex)"],
+                visibleIds: ["id-\(frameIndex)"],
                 anchorSignature: 200 + frameIndex,
                 newHeistIds: ["id-\(frameIndex)"]
             )
             XCTAssertEqual(step, .continue, "Frame \(frameIndex + 1) churns, should continue")
         }
         let finalStep = state.advance(
-            viewportIds: ["id-final"],
+            visibleIds: ["id-final"],
             anchorSignature: 999,
             newHeistIds: ["id-final"]
         )
@@ -694,20 +694,20 @@ final class TheBrainsScrollTests: XCTestCase {
     func testSettleLoopMovedLatchesAndNeverClears() {
         var state = Navigation.SettleSwipeLoopState(
             profile: .directionChange,
-            previousViewport: ["a"],
+            previousVisibleIds: ["a"],
             previousAnchor: 100
         )
         XCTAssertFalse(state.moved)
 
         _ = state.advance(
-            viewportIds: ["a"],
+            visibleIds: ["a"],
             anchorSignature: 200,
             newHeistIds: []
         )
         XCTAssertTrue(state.moved, "Differing anchor flags motion")
 
         _ = state.advance(
-            viewportIds: ["a"],
+            visibleIds: ["a"],
             anchorSignature: 100,
             newHeistIds: []
         )
@@ -717,11 +717,11 @@ final class TheBrainsScrollTests: XCTestCase {
     func testSettleLoopFallsBackToViewportDiffWhenAnchorsUnavailable() {
         var state = Navigation.SettleSwipeLoopState(
             profile: .directionChange,
-            previousViewport: ["a"],
+            previousVisibleIds: ["a"],
             previousAnchor: nil
         )
         _ = state.advance(
-            viewportIds: ["b"],
+            visibleIds: ["b"],
             anchorSignature: nil,
             newHeistIds: []
         )
@@ -729,17 +729,17 @@ final class TheBrainsScrollTests: XCTestCase {
     }
 
     func testSettleLoopEdgeBounceDoesNotReportMotion() {
-        // Regression guard for the claim that viewportAnchorSignature
+        // Regression guard for the claim that visibleAnchorSignature
         // filters out edge-bounce false positives. When content-space
         // anchors are unchanged across frames, viewport id shuffles
         // (element reorder, reparse flicker) must NOT count as motion.
         var state = Navigation.SettleSwipeLoopState(
             profile: .directionChange,
-            previousViewport: ["a", "b"],
+            previousVisibleIds: ["a", "b"],
             previousAnchor: 500
         )
         _ = state.advance(
-            viewportIds: ["a", "c"],
+            visibleIds: ["a", "c"],
             anchorSignature: 500,
             newHeistIds: ["c"]
         )

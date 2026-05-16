@@ -395,10 +395,10 @@ final class TheStashResolutionTests: XCTestCase {
         register(onScreen, heistId: "button_visible", index: 0)
         registerOffScreen(offScreen, heistId: "long_list_button")
 
-        XCTAssertEqual(bagman.heistIds(in: .visible), ["button_visible"])
-        XCTAssertEqual(bagman.heistIds(in: .known), ["button_visible", "long_list_button"])
-        XCTAssertEqual(bagman.liveViewportIds, bagman.heistIds(in: .visible))
-        XCTAssertEqual(bagman.viewportIds, bagman.heistIds(in: .known))
+        XCTAssertEqual(bagman.ids(in: .visible), ["button_visible"])
+        XCTAssertEqual(bagman.ids(in: .known), ["button_visible", "long_list_button"])
+        XCTAssertEqual(bagman.visibleIds, bagman.ids(in: .visible))
+        XCTAssertEqual(bagman.knownIds, bagman.ids(in: .known))
     }
 
     func testScopedScreenElementRequiresVisibleScopeForLiveLookup() {
@@ -410,6 +410,52 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertNotNil(bagman.screenElement(heistId: "button_visible", in: .visible))
         XCTAssertNil(bagman.screenElement(heistId: "long_list_button", in: .visible))
         XCTAssertNotNil(bagman.screenElement(heistId: "long_list_button", in: .known))
+    }
+
+    func testKnownOnlyEntryWithStaleObjectIsNotDispatchableUntilVisible() {
+        let offScreen = element(label: "Below Fold", traits: .button)
+        let object = UIButton(type: .system)
+        object.accessibilityFrame = CGRect(x: 0, y: 0, width: 100, height: 44)
+        let scrollView = UIScrollView()
+        let entry = Screen.ScreenElement(
+            heistId: "below_fold_button",
+            contentSpaceOrigin: CGPoint(x: 0, y: 2_000),
+            element: offScreen,
+            object: object,
+            scrollView: scrollView
+        )
+
+        bagman.currentScreen = Screen(
+            elements: [entry.heistId: entry],
+            hierarchy: [],
+            containerStableIds: [:],
+            heistIdByElement: [:],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
+
+        guard let resolved = bagman.resolveTarget(.heistId("below_fold_button")).resolved else {
+            XCTFail("Known-only heistId should still resolve")
+            return
+        }
+        XCTAssertEqual(resolved.screenElement.heistId, "below_fold_button")
+        XCTAssertNil(bagman.screenElement(heistId: "below_fold_button", in: .visible))
+        XCTAssertNil(bagman.liveGeometry(for: resolved.screenElement))
+        XCTAssertFalse(bagman.increment(resolved.screenElement))
+
+        bagman.currentScreen = Screen(
+            elements: [entry.heistId: entry],
+            hierarchy: [.element(offScreen, traversalIndex: 0)],
+            containerStableIds: [:],
+            heistIdByElement: [offScreen: entry.heistId],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
+
+        let refreshed = bagman.resolveTarget(.heistId("below_fold_button")).resolved?.screenElement
+        XCTAssertNotNil(bagman.screenElement(heistId: "below_fold_button", in: .visible))
+        XCTAssertTrue(refreshed.map { bagman.increment($0) } ?? false)
+        XCTAssertNotNil(refreshed.flatMap { bagman.liveGeometry(for: $0) })
     }
 
     /// `hasTarget` powers wait-style predicates, so it must use the same

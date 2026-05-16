@@ -26,7 +26,7 @@ A `ScrollableTarget` enum wraps a discovered scrollable container with two tiers
 .swipeable(CGRect, CGSize)             — synthetic swipe gesture (universal)
 ```
 
-`scrollOnePageAndSettle(_:direction:animated:)` dispatches through these tiers and waits for layout to settle (one `yieldFrames` + one `refresh`). UIScrollView gets direct `setContentOffset` manipulation. Everything else (e.g. SwiftUI's `PlatformContainer`) gets a synthetic swipe at the container's screen-space frame. Returns a `(moved: Bool, previousOnScreen: Set<String>)` tuple so callers can detect stagnation without a second refresh.
+`scrollOnePageAndSettle(_:direction:animated:)` dispatches through these tiers and waits for layout to settle (one `yieldFrames` + one `refresh`). UIScrollView gets direct `setContentOffset` manipulation. Everything else (e.g. SwiftUI's `PlatformContainer`) gets a synthetic swipe at the container's screen-space frame. Returns a `(moved: Bool, previousVisibleIds: Set<String>)` tuple so callers can detect stagnation against the latest parsed viewport without a second refresh.
 
 ### Axis-Aware Resolution
 
