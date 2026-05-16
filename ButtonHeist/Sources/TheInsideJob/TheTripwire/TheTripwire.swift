@@ -2,17 +2,17 @@
 #if DEBUG
 import UIKit
 
-/// Detects UI state changes without touching the accessibility tree.
+/// Detects UIKit tripwire triggers without touching the accessibility tree.
 ///
 /// TheTripwire monitors UIKit signals via a persistent ~10 Hz pulse — a single
 /// CADisplayLink that samples all UI state on one clock. Every tick runs the
 /// full set of checks: layer scan (fingerprint, animations, layout), VC
-/// identity, first responder, keyboard/text-input flags, and window count.
+/// identity, public navigation state, and ordered visible windows.
 ///
 /// The pulse answers three questions:
 /// 1. **Is the UI settled?** (no animations, no pending layout, stable fingerprint)
-/// 2. **Did the screen change?** (VC identity comparison)
-/// 3. **What transitioned?** (settle/unsettle, screen change, keyboard change)
+/// 2. **Should the accessibility tree be checked again?** (Tripwire triggered)
+/// 3. **What transitioned?** (settle/unsettle, Tripwire triggered)
 ///
 /// The accessibility tree is TheStash's domain; TheTripwire never reads it.
 @MainActor
@@ -29,6 +29,7 @@ final class TheTripwire {
         let fingerprint: PresentationFingerprint
         let hasRelevantAnimations: Bool
         let topmostVC: ObjectIdentifier?
+        let tripwireSignal: TripwireSignal = .empty
         let windowCount: Int
 
         // Derived settle state
@@ -45,7 +46,55 @@ final class TheTripwire {
     enum PulseTransition {
         case settled
         case unsettled
-        case screenChanged(from: ObjectIdentifier?, to: ObjectIdentifier?)
+        case tripwireTriggered(from: TripwireSignal?, to: TripwireSignal)
+    }
+
+    /// Cheap UIKit-side identity used to decide whether to re-check the
+    /// accessibility tree. A changed Tripwire signal means "parse and check";
+    /// it does not guarantee the parsed interface changed.
+    struct TripwireSignal: Equatable {
+        static let empty = TripwireSignal(
+            topmostVC: nil,
+            navigation: .empty,
+            windowStack: .empty
+        )
+
+        let topmostVC: ObjectIdentifier?
+        let navigation: NavigationSignal
+        let windowStack: WindowStackSignal
+    }
+
+    /// Public UIKit navigation state sampled from the topmost controller. This
+    /// catches SwiftUI NavigationStack-style changes that remain inside one
+    /// hosting controller, without walking SwiftUI's private view tree.
+    struct NavigationSignal: Equatable {
+        static let empty = NavigationSignal(
+            navigationDepth: nil,
+            title: nil,
+            backButtonTitle: nil,
+            selectedTabIndex: nil,
+            presentedViewController: nil
+        )
+
+        let navigationDepth: Int?
+        let title: String?
+        let backButtonTitle: String?
+        let selectedTabIndex: Int?
+        let presentedViewController: ObjectIdentifier?
+    }
+
+    /// Ordered visible window identity. Key-window status is deliberately part
+    /// of the Tripwire signal, not an accessibility-scope filter.
+    struct WindowStackSignal: Equatable {
+        static let empty = WindowStackSignal(windows: [])
+
+        let windows: [WindowSignal]
+
+        struct WindowSignal: Equatable {
+            let id: ObjectIdentifier
+            let level: CGFloat
+            let isKeyWindow: Bool
+        }
     }
 
     // MARK: - Presentation Layer Fingerprinting
@@ -288,7 +337,8 @@ final class TheTripwire {
             && !scan.hasRelevantAnimations
             && (prev?.fingerprint.matches(fingerprint) ?? true)
 
-        let vcId = topmostViewController().map(ObjectIdentifier.init)
+        let tripwireSignal = tripwireSignal()
+        let vcId = tripwireSignal.topmostVC
 
         let reading = PulseReading(
             tick: context.tickCount,
@@ -297,14 +347,15 @@ final class TheTripwire {
             fingerprint: fingerprint,
             hasRelevantAnimations: scan.hasRelevantAnimations,
             topmostVC: vcId,
+            tripwireSignal: tripwireSignal,
             windowCount: scan.windowCount,
             quietFrames: isQuiet ? (prev?.quietFrames ?? 0) + 1 : 0
         )
         context.latestReading = reading
 
-        // Diff against previous reading and fire transitions
-        if vcId != prev?.topmostVC {
-            onTransition?(.screenChanged(from: prev?.topmostVC, to: vcId))
+        // Diff against previous reading and fire transitions.
+        if tripwireSignal != prev?.tripwireSignal {
+            onTransition?(.tripwireTriggered(from: prev?.tripwireSignal, to: tripwireSignal))
         }
         if reading.isSettled && !(prev?.isSettled ?? false) {
             onTransition?(.settled)
@@ -338,30 +389,83 @@ final class TheTripwire {
 
     // MARK: - Window Access
 
-    /// All visible, non-fingerprint windows in foreground-active scenes, sorted
-    /// by window level (front to back). Collects from all `UIWindowScene`s — not
-    /// just key windows — so system-managed windows (popup menus, action sheets,
-    /// alerts presented in their own UIWindow) are included without leaking
-    /// inactive multi-window scenes into the accessibility tree.
-    func getTraversableWindows() -> [(window: UIWindow, rootView: UIView)] {
+    /// All visible windows in foreground-active scenes, sorted by window level
+    /// (front to back). Collects from all `UIWindowScene`s — not just key
+    /// windows — so system-managed windows (popup menus, action sheets, alerts
+    /// presented in their own UIWindow) are included without leaking inactive
+    /// multi-window scenes into the accessibility tree.
+    static func orderedVisibleWindows(includeFingerprints: Bool = false) -> [UIWindow] {
         UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .filter { $0.activationState == .foregroundActive }
             .flatMap { $0.windows }
             .filter { window in
-                !(window is TheFingerprints.FingerprintWindow)
+                (includeFingerprints || !(window is TheFingerprints.FingerprintWindow))
                     && !window.isHidden
                     && window.bounds.size != .zero
             }
             .sorted { $0.windowLevel > $1.windowLevel }
+    }
+
+    /// All visible, non-fingerprint windows in foreground-active scenes, sorted
+    /// by window level (front to back).
+    func getTraversableWindows() -> [(window: UIWindow, rootView: UIView)] {
+        Self.orderedVisibleWindows()
             .map { ($0, $0 as UIView) }
+    }
+
+    /// Tripwire identity sampled from public UIKit state without touching AX.
+    func tripwireSignal() -> TripwireSignal {
+        let windows = Self.orderedVisibleWindows()
+        let entries = windows.map { ($0, $0 as UIView) }
+        let topmost = Self.topmostViewController(in: entries)
+        return TripwireSignal(
+            topmostVC: topmost.map(ObjectIdentifier.init),
+            navigation: Self.navigationSignal(for: topmost),
+            windowStack: Self.windowStackSignal(for: windows)
+        )
+    }
+
+    /// Ordered visible window identity. Used as a change signal only; never
+    /// as a rule for excluding lower windows from the accessibility tree.
+    static func windowStackSignal(for windows: [UIWindow]) -> WindowStackSignal {
+        WindowStackSignal(windows: windows.map { window in
+            WindowStackSignal.WindowSignal(
+                id: ObjectIdentifier(window),
+                level: window.windowLevel.rawValue,
+                isKeyWindow: window.isKeyWindow
+            )
+        })
+    }
+
+    /// Public navigation signal for UIKit and SwiftUI-hosted screens.
+    static func navigationSignal(for viewController: UIViewController?) -> NavigationSignal {
+        guard let viewController else { return .empty }
+
+        let navigationController = (viewController as? UINavigationController)
+            ?? viewController.navigationController
+        let tabBarController = (viewController as? UITabBarController)
+            ?? viewController.tabBarController
+        let navigationItem = viewController.navigationItem
+        let topNavigationItem = navigationController?.navigationBar.topItem
+
+        return NavigationSignal(
+            navigationDepth: navigationController?.viewControllers.count,
+            title: navigationItem.title ?? viewController.title ?? topNavigationItem?.title,
+            backButtonTitle: navigationItem.backButtonTitle
+                ?? navigationItem.backBarButtonItem?.title
+                ?? topNavigationItem?.backButtonTitle
+                ?? topNavigationItem?.backBarButtonItem?.title,
+            selectedTabIndex: tabBarController?.selectedIndex,
+            presentedViewController: viewController.presentedViewController.map(ObjectIdentifier.init)
+        )
     }
 
     /// Windows that can be handed to the accessibility parser.
     ///
     /// This filter intentionally does not inspect the view hierarchy for
-    /// `accessibilityViewIsModal`. It takes the visible window band from the
-    /// frontmost window through the key window. The parser owns modal-scope
+    /// `accessibilityViewIsModal`. It excludes system passthrough windows and
+    /// preserves every remaining app window. The parser owns modal-scope
     /// discovery, and `TheBurglar` stops parsing lower windows when the parser
     /// emits a modal boundary container.
     ///
@@ -369,9 +473,7 @@ final class TheTripwire {
     /// 1. **System passthrough windows** — keyboard and text-effects windows
     ///    are excluded because they sit above `.normal` but contain no app
     ///    content the agent can usefully act on.
-    /// 2. **Key window anchor** — lower windows beneath the key window are
-    ///    ignored; the key window is UIKit's user-interaction owner.
-    /// 3. **Modal presentation** — each window whose root VC has a presented
+    /// 2. **Modal presentation** — each window whose root VC has a presented
     ///    VC is parsed from the deepest presented VC's view, matching what
     ///    `UIPresentationController` exposes to UIKit's AX for that window.
     ///
@@ -412,18 +514,12 @@ final class TheTripwire {
     /// UIKit window classes.
     static func filterToAccessibleWindows(
         _ windows: [(window: UIWindow, rootView: UIView)],
-        isPassthrough: (UIWindow) -> Bool = isSystemPassthroughWindow,
-        isKeyWindow: (UIWindow) -> Bool = { $0.isKeyWindow }
+        isPassthrough: (UIWindow) -> Bool = isSystemPassthroughWindow
     ) -> [(window: UIWindow, rootView: UIView)] {
         guard !windows.isEmpty else { return [] }
 
         let appWindows = windows.filter { !isPassthrough($0.window) }
-        let visibleBand = if let keyIndex = appWindows.firstIndex(where: { isKeyWindow($0.window) }) {
-            Array(appWindows[...keyIndex])
-        } else {
-            appWindows
-        }
-        let accessibleWindows = visibleBand.map { deepestPresentedEntry($0) ?? $0 }
+        let accessibleWindows = appWindows.map { deepestPresentedEntry($0) ?? $0 }
 
         return accessibleWindows.isEmpty ? windows : accessibleWindows
     }
@@ -485,10 +581,11 @@ final class TheTripwire {
         return vc
     }
 
-    /// Did the view controller change? Compares VC identity before and after an action.
-    func isScreenChange(before: ObjectIdentifier?, after: ObjectIdentifier?) -> Bool {
-        guard let before, let after else { return before != nil || after != nil }
-        return before != after
+    /// Did Tripwire trigger? This prompts parsing only; parsed accessibility
+    /// signatures classify the result as no-change, element-change, or
+    /// screen-change.
+    func didTripwireTrigger(before: TripwireSignal, after: TripwireSignal) -> Bool {
+        before != after
     }
 
     // MARK: - Standalone Queries

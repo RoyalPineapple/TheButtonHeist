@@ -112,7 +112,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertNil(brains.lastSentState)
         XCTAssertNil(brains.lastSentScreenId)
         XCTAssertFalse(brains.screenChangedSinceLastSent,
-                       "No prior send means the screen-change tripwire must be false")
+                       "No prior send means there is no baseline for screen-change classification")
     }
 
     func testRecordSentStatePopulatesAllFields() {
@@ -179,7 +179,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         seedScreen(elements: [("Settings", .header, "settings_header")])
         XCTAssertTrue(brains.screenChangedSinceLastSent,
-                      "Current screenId differs from the one captured in lastSentState")
+                      "A changed parsed screen signature should report a screen change")
     }
 
     func testClearCacheResetsSentState() {
@@ -231,13 +231,13 @@ final class TheBrainsPipelineTests: XCTestCase {
     /// transition. Those are stale, not transient, and must not be surfaced
     /// under the delta's `transient` list when the action triggered a
     /// screen change.
-    func testShouldSuppressTransientOnScreenChangedOutcome() {
+    func testShouldSuppressTransientOnTripwireTriggeredOutcome() {
         XCTAssertTrue(
             TheBrains.shouldSuppressTransient(
-                settleOutcome: .screenChanged(timeMs: 120),
+                settleOutcome: .tripwireTriggered(timeMs: 120),
                 isScreenChange: false
             ),
-            "A .screenChanged settle outcome alone must suppress transients"
+            "A .tripwireTriggered settle outcome alone must suppress transients"
         )
     }
 
@@ -247,7 +247,7 @@ final class TheBrainsPipelineTests: XCTestCase {
                 settleOutcome: .settled(timeMs: 300),
                 isScreenChange: true
             ),
-            "Even when the settle loop reached .settled, a VC/topology screen change must suppress transients"
+            "Even when the settle loop reached .settled, a parsed screen change must suppress transients"
         )
     }
 

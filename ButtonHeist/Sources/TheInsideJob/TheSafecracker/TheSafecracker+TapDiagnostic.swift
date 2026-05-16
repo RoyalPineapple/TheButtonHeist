@@ -41,13 +41,7 @@ extension TheSafecracker {
     ///
     /// This is a side-effect-free probe; calling it does not deliver a touch.
     func tapReceiverDiagnostic(at point: CGPoint) -> TapReceiverDiagnostic? {
-        let windows = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap { $0.windows }
-            .filter { !($0 is TheFingerprints.FingerprintWindow) && !$0.isHidden }
-            .sorted { $0.windowLevel > $1.windowLevel }
-
-        for window in windows {
+        for window in TheTripwire.orderedVisibleWindows() {
             let windowPoint = window.convert(point, from: nil)
             guard let receiver = window.hitTest(windowPoint, with: nil) else { continue }
 

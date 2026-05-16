@@ -124,7 +124,7 @@ All gestures share four building blocks in `TheSafecracker.swift`:
 
 Single-finger convenience wrappers (`touchDown`, `moveTo`, `touchUp`) call the array versions with a one-element array.
 
-**`windowForPoint(_:)`** finds the target window by collecting all windows from `UIApplication.shared.connectedScenes`, filtering out `TheFingerprints.FingerprintWindow` and hidden windows, sorting by descending `windowLevel`, and returning the first that passes `hitTest`.
+**`windowForPoint(_:)`** finds the target window by iterating `TheTripwire.orderedVisibleWindows()` frontmost first and returning the first window that passes `hitTest`.
 
 **`activeTouches`** stores the `[SyntheticTouch]` array for the gesture's lifetime. `moveTouches` enforces `points.count == activeTouches.count`. Because `TheSafecracker` is `@MainActor`, all gesture methods are actor-serialized — no concurrent touch state conflicts.
 

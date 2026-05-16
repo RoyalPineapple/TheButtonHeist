@@ -7,7 +7,7 @@ Reads the live accessibility tree and builds a `Screen` value for TheStash to co
 **`TheBurglar.swift`** — `@MainActor final class` with no mutable instance state (stored deps: `AccessibilityHierarchyParser` + `TheTripwire`).
 
 **`parse()`** — the read-only path:
-1. `tripwire.getAccessibleWindows()` — top-down window band through the key window.
+1. `tripwire.getAccessibleWindows()` — top-down app windows, excluding system passthrough windows.
 2. For each window: `parser.parseAccessibilityHierarchy(in: rootView, elementVisitor:, containerVisitor:)`. `elementVisitor` captures `element → object` mappings; `containerVisitor` captures `container → UIView` for scrollable containers and stops parsing lower windows when it sees a modal boundary container.
 3. Multi-window: wraps each window's tree in a `.container(semanticGroup)` node with the window class name.
 4. Returns `ParseResult(elements:, hierarchy:, objects:, scrollViews:)` — `elements` is the flat traversal-ordered list, `hierarchy` is the tree.
@@ -20,10 +20,7 @@ Reads the live accessibility tree and builds a `Screen` value for TheStash to co
 
 Callers decide what to do with the returned `Screen` — assign to `stash.currentScreen` for a fresh snapshot, or merge into a local accumulator during exploration. TheBurglar never reaches into TheStash.
 
-**`isTopologyChanged(before:after:)`** — screen change detection:
-- Back-button trait presence change
-- Header label set disjointness (both non-empty, no overlap → changed)
-- Tab bar content persistence ratio < 0.4 → tab switch detected
+Screen-change classification lives in TheBrains' `ScreenClassifier`; TheBurglar only reports parsed hierarchy shape and modal boundary containers.
 
 **`refresh(into:)`** — convenience that calls `parse()` + `buildScreen(from:)` and assigns the result to `stash.currentScreen`.
 

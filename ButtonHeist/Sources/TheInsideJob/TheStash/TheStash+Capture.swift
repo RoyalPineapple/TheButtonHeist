@@ -28,12 +28,7 @@ extension TheStash {
     /// from foreground-active scenes so system-managed popup windows are included
     /// without compositing inactive multi-window scenes into recordings.
     func captureScreenForRecording() -> UIImage? {
-        let allWindows = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .filter { $0.activationState == .foregroundActive }
-            .flatMap { $0.windows }
-            .filter { !$0.isHidden && $0.bounds.size != .zero }
-            .sorted { $0.windowLevel < $1.windowLevel }
+        let allWindows = TheTripwire.orderedVisibleWindows(includeFingerprints: true).reversed()
 
         guard let background = allWindows.first else { return nil }
         let bounds = background.bounds

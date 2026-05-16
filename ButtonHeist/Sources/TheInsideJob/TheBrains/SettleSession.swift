@@ -13,10 +13,10 @@ enum SettleOutcome: Equatable {
     /// The AX tree reached `cyclesRequired` consecutive stable cycles.
     case settled(timeMs: Int)
 
-    /// Topmost VC changed during the loop. The caller hands off to the
-    /// existing animation-aware repopulation handler, which is the right
-    /// signal for "is the slide-in animation done?".
-    case screenChanged(timeMs: Int)
+    /// Tripwire observed a cheap UIKit-side condition that should be checked.
+    /// The caller should parse again and let the parsed accessibility
+    /// signature classify the result.
+    case tripwireTriggered(timeMs: Int)
 
     /// The hard timeout elapsed while the tree was still changing.
     case timedOut(timeMs: Int)
@@ -29,19 +29,19 @@ enum SettleOutcome: Equatable {
 
     var timeMs: Int {
         switch self {
-        case .settled(let ms), .screenChanged(let ms), .timedOut(let ms), .cancelled(let ms):
+        case .settled(let ms), .tripwireTriggered(let ms), .timedOut(let ms), .cancelled(let ms):
             return ms
         }
     }
 
     /// True when the response represents a UI state we believe in —
     /// either the loop reached multi-cycle stability, or the settle loop
-    /// was preempted by a screen transition (the caller's existing
-    /// repopulation pipeline takes over and produces a valid snapshot of
-    /// the new screen). `.timedOut` and `.cancelled` return false.
+    /// was preempted because Tripwire triggered. The caller parses immediately,
+    /// and the classifier may still return no change. `.timedOut` and
+    /// `.cancelled` return false.
     var didSettleCleanly: Bool {
         switch self {
-        case .settled, .screenChanged: return true
+        case .settled, .tripwireTriggered: return true
         case .timedOut, .cancelled: return false
         }
     }
@@ -153,10 +153,11 @@ extension AccessibilityElement {
 
     typealias ParseProvider = @MainActor () -> Screen?
     typealias TopVCProvider = @MainActor () -> ObjectIdentifier?
+    typealias TripwireSignalProvider = @MainActor () -> TheTripwire.TripwireSignal
     typealias Sleeper = @Sendable (UInt64) async throws -> Void
 
     let parseProvider: ParseProvider
-    let topVCProvider: TopVCProvider
+    let tripwireSignalProvider: TripwireSignalProvider
     let sleeper: Sleeper
     let cyclesRequired: Int
     let cycleIntervalMs: Int
@@ -170,8 +171,32 @@ extension AccessibilityElement {
         cycleIntervalMs: Int = SettleSession.defaultCycleIntervalMs,
         timeoutMs: Int = SettleSession.defaultTimeoutMs
     ) {
+        self.init(
+            parseProvider: parseProvider,
+            tripwireSignalProvider: {
+                TheTripwire.TripwireSignal(
+                    topmostVC: topVCProvider(),
+                    navigation: .empty,
+                    windowStack: .empty
+                )
+            },
+            sleeper: sleeper,
+            cyclesRequired: cyclesRequired,
+            cycleIntervalMs: cycleIntervalMs,
+            timeoutMs: timeoutMs
+        )
+    }
+
+    init(
+        parseProvider: @escaping ParseProvider,
+        tripwireSignalProvider: @escaping TripwireSignalProvider,
+        sleeper: @escaping Sleeper = { try await Task.sleep(nanoseconds: $0) },
+        cyclesRequired: Int = SettleSession.defaultCyclesRequired,
+        cycleIntervalMs: Int = SettleSession.defaultCycleIntervalMs,
+        timeoutMs: Int = SettleSession.defaultTimeoutMs
+    ) {
         self.parseProvider = parseProvider
-        self.topVCProvider = topVCProvider
+        self.tripwireSignalProvider = tripwireSignalProvider
         self.sleeper = sleeper
         self.cyclesRequired = cyclesRequired
         self.cycleIntervalMs = cycleIntervalMs
@@ -185,7 +210,7 @@ extension AccessibilityElement {
     static func live(stash: TheStash, tripwire: TheTripwire) -> SettleSession {
         SettleSession(
             parseProvider: { stash.parse() },
-            topVCProvider: { tripwire.topmostViewController().map(ObjectIdentifier.init) }
+            tripwireSignalProvider: { tripwire.tripwireSignal() }
         )
     }
 
@@ -206,11 +231,25 @@ extension AccessibilityElement {
     /// in scripted test seams (where the same closure was called once
     /// for the baseline and again per cycle) and makes the contract:
     /// "the provider answers `the current top VC` and nothing else."
-    /// Production callers pass the same value they used to populate
-    /// `BeforeState.viewController`, so the screen-change check is
-    /// against a stable known-good reference rather than the first
-    /// element of an in-flight sequence.
+    /// Production callers now use `run(start:baselineTripwireSignal:)`. This
+    /// overload remains for tests and older call seams that only model VC
+    /// identity.
     func run(start: CFAbsoluteTime, baselineTopVC: ObjectIdentifier?) async -> Outcome {
+        await run(
+            start: start,
+            baselineTripwireSignal: TheTripwire.TripwireSignal(
+                topmostVC: baselineTopVC,
+                navigation: .empty,
+                windowStack: .empty
+            )
+        )
+    }
+
+    /// Same loop as `run(start:baselineTopVC:)`, with the full tripwire signal.
+    /// Production uses this path so visible window/navigation/key changes prompt
+    /// an immediate parse. The caller then classifies the parsed result, which
+    /// may be no-change, element-change, or screen-change.
+    func run(start: CFAbsoluteTime, baselineTripwireSignal: TheTripwire.TripwireSignal) async -> Outcome {
         let cycleNs = UInt64(cycleIntervalMs) * 1_000_000
         let deadline = start + Double(timeoutMs) / 1000
 
@@ -244,10 +283,10 @@ extension AccessibilityElement {
                 )
             }
 
-            let nowVC = topVCProvider()
-            if nowVC != baselineTopVC {
+            let nowTripwireSignal = tripwireSignalProvider()
+            if nowTripwireSignal != baselineTripwireSignal {
                 return Outcome(
-                    outcome: .screenChanged(timeMs: Self.elapsedMs(since: start)),
+                    outcome: .tripwireTriggered(timeMs: Self.elapsedMs(since: start)),
                     elementsByKey: elementsByKey
                 )
             }

@@ -47,9 +47,9 @@ final class SettleSessionTests: XCTestCase {
     /// entries feed the post-sleep parses. The last entry is repeated
     /// indefinitely if the loop runs longer than the script.
     ///
-    /// `topVCSequence` feeds only the per-cycle top-VC checks inside the
-    /// loop — the baseline top-VC is now passed explicitly to `run(...)`
-    /// so the provider never has to answer for the pre-action snapshot.
+    /// `topVCSequence` feeds the legacy top-VC Tripwire seam inside the loop —
+    /// the baseline top-VC is passed explicitly to `run(...)` so the
+    /// provider never has to answer for the pre-action snapshot.
     private func makeSession(
         script: [Screen?],
         cyclesRequired: Int = 3,
@@ -153,7 +153,7 @@ final class SettleSessionTests: XCTestCase {
 
     // MARK: - Screen Change
 
-    func testScreenChangeAbortsLoopAndSettlesCleanly() async {
+    func testTripwireTriggerAbortsLoopAndSettlesCleanly() async {
         let stable = makeParseResult([makeElement(label: "A", traits: .staticText)])
         let placeholder = ObjectIdentifier(NSObject())
         // Baseline is passed in explicitly as `nil`; every call to the
@@ -170,13 +170,13 @@ final class SettleSessionTests: XCTestCase {
 
         let outcome = await session.run(start: CFAbsoluteTimeGetCurrent(), baselineTopVC: nil)
 
-        if case .screenChanged = outcome.outcome {
+        if case .tripwireTriggered = outcome.outcome {
             // Expected.
         } else {
-            XCTFail("Expected .screenChanged, got \(outcome.outcome)")
+            XCTFail("Expected .tripwireTriggered, got \(outcome.outcome)")
         }
         XCTAssertTrue(outcome.outcome.didSettleCleanly,
-                      ".screenChanged should report didSettleCleanly == true")
+                      ".tripwireTriggered should report didSettleCleanly == true")
     }
 
     // MARK: - Explicit Baseline (PR #330 H1)
@@ -216,7 +216,7 @@ final class SettleSessionTests: XCTestCase {
     /// Inverse of the above: baseline differs from the provider's value
     /// from the first cycle, so the very first post-sleep comparison
     /// triggers a screen change. No script-position offset needed.
-    func testExplicitBaselineDifferingFromProviderTriggersScreenChange() async {
+    func testExplicitBaselineDifferingFromProviderTriggersTripwire() async {
         let stable = makeParseResult([makeElement(label: "A", traits: .staticText)])
         let baselineObject = NSObject()
         let liveObject = NSObject()
@@ -234,10 +234,10 @@ final class SettleSessionTests: XCTestCase {
         _ = baselineObject // keep alive
         _ = liveObject // keep alive
 
-        if case .screenChanged = outcome.outcome {
+        if case .tripwireTriggered = outcome.outcome {
             // Expected.
         } else {
-            XCTFail("Differing baseline vs provider must surface .screenChanged, got \(outcome.outcome)")
+            XCTFail("Differing baseline vs provider must surface .tripwireTriggered, got \(outcome.outcome)")
         }
     }
 

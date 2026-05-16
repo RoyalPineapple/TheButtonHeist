@@ -56,7 +56,8 @@ extension TheStash {
         afterTree: [InterfaceNode],
         isScreenChange: Bool
     ) -> InterfaceDelta {
-        // Screen changed: VC identity differs → return full new interface
+        // Screen changed: parsed screen signature says this is a new screen,
+        // so return the full new interface.
         if isScreenChange {
             let fullInterface = Interface(timestamp: Date(), tree: afterTree)
             return .screenChanged(InterfaceDelta.ScreenChanged(
