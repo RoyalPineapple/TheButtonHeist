@@ -9,7 +9,6 @@ import AccessibilitySnapshotParser
 // MARK: - Screen Exploration
 //
 // Scrolls every scrollable container to discover the whole reachable hierarchy.
-// Container fingerprint caching skips unchanged containers on re-explore.
 //
 // Post-0.2.25: TheStash has no exploration mode. The accumulator is a local
 // `var union: Screen` in exploreAndPrune; the final union is committed by
@@ -74,8 +73,6 @@ extension Navigation {
         }
 
         manifest.addPendingContainers(stash.currentHierarchy.scrollableContainers)
-        var containerFingerprints = stash.currentHierarchy.containerFingerprints
-
         while !manifest.pendingContainers.isEmpty {
             let batch = manifest.pendingContainers
                 .map { (container: $0, overflow: Self.totalOverflow(of: $0)) }
@@ -91,14 +88,6 @@ extension Navigation {
                 if let view = stash.scrollableContainerViews[container],
                    view.window != nil,
                    Self.isObscuredByPresentation(view: view) {
-                    manifest.markExplored(container)
-                    continue
-                }
-
-                let currentFingerprint = containerFingerprints[container] ?? 0
-                if let cached = containerExploreStates[container],
-                   cached.visibleSubtreeFingerprint == currentFingerprint,
-                   target == nil {
                     manifest.markExplored(container)
                     continue
                 }
@@ -128,7 +117,6 @@ extension Navigation {
                     container: container, scrollTarget: scrollTarget,
                     hasHOverflow: hasHOverflow, hasVOverflow: hasVOverflow,
                     target: target, manifest: &manifest,
-                    containerFingerprints: &containerFingerprints,
                     union: &union
                 )
                 if found {
@@ -151,7 +139,6 @@ extension Navigation {
         hasVOverflow: Bool,
         target: ElementTarget?,
         manifest: inout ScreenManifest,
-        containerFingerprints: inout [AccessibilityContainer: Int],
         union: inout Screen
     ) async -> Bool {
         let savedVisualOrigin: CGPoint? = {
@@ -228,22 +215,20 @@ extension Navigation {
             if result.inserted.isEmpty { break }
 
             if let target, stash.resolveFirstMatch(target) != nil {
-                await restoreAndCache(
+                await restoreAndMarkExplored(
                     scrollTarget: scrollTarget, savedVisualOrigin: savedVisualOrigin,
                     container: container,
-                    discoveredElements: accumulated,
-                    manifest: &manifest, containerFingerprints: &containerFingerprints,
+                    manifest: &manifest,
                     union: &union
                 )
                 return true
             }
         }
 
-        await restoreAndCache(
+        await restoreAndMarkExplored(
             scrollTarget: scrollTarget, savedVisualOrigin: savedVisualOrigin,
             container: container,
-            discoveredElements: accumulated,
-            manifest: &manifest, containerFingerprints: &containerFingerprints,
+            manifest: &manifest,
             union: &union
         )
 
@@ -255,13 +240,11 @@ extension Navigation {
 
     // MARK: - Exploration Helpers
 
-    private func restoreAndCache(
+    private func restoreAndMarkExplored(
         scrollTarget: ScrollableTarget,
         savedVisualOrigin: CGPoint?,
         container: AccessibilityContainer,
-        discoveredElements: [AccessibilityElement],
         manifest: inout ScreenManifest,
-        containerFingerprints: inout [AccessibilityContainer: Int],
         union: inout Screen
     ) async {
         if case .uiScrollView(let scrollView) = scrollTarget,
@@ -272,14 +255,7 @@ extension Navigation {
                 union = union.merging(parsed)
             }
         }
-        containerFingerprints = stash.currentHierarchy.containerFingerprints
         manifest.markExplored(container)
-        let fingerprint = containerFingerprints[container] ?? 0
-        updateContainerExploreCache(
-            container,
-            fingerprint: fingerprint,
-            discoveredHeistIds: resolveHeistIds(for: discoveredElements)
-        )
     }
 
     private func visibleElementsInContainer(_ container: AccessibilityContainer) -> ContainerPage {
@@ -302,10 +278,6 @@ extension Navigation {
         )
     }
 
-    private func resolveHeistIds(for elements: [AccessibilityElement]) -> Set<String> {
-        Set(elements.compactMap { stash.currentScreen.heistIdByElement[$0] })
-    }
-
     private static func restoreVisualOrigin(_ visualOrigin: CGPoint, in scrollView: UIScrollView) {
         let insets = scrollView.adjustedContentInset
         let restoredOffset = CGPoint(
@@ -319,17 +291,6 @@ extension Navigation {
             y: max(-insets.top, min(restoredOffset.y, maxY))
         )
         scrollView.setContentOffset(clampedOffset, animated: false)
-    }
-
-    private func updateContainerExploreCache(
-        _ container: AccessibilityContainer,
-        fingerprint: Int,
-        discoveredHeistIds: Set<String>
-    ) {
-        containerExploreStates[container] = ContainerExploreState(
-            visibleSubtreeFingerprint: fingerprint,
-            discoveredHeistIds: discoveredHeistIds
-        )
     }
 
     // MARK: - Container Overflow

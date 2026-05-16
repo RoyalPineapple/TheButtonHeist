@@ -1,7 +1,7 @@
 #if canImport(UIKit)
 // Integration tests for performWaitFor — the settle-event polling loop that waits
 // for an element to appear or disappear. Requires the BH Demo test host
-// since wait_for polls the live accessibility tree via TheStash.
+// since wait_for polls the semantic accessibility tree via TheStash.
 import XCTest
 @testable import TheInsideJob
 @testable import TheScore
@@ -67,6 +67,22 @@ final class WaitForIntegrationTests: XCTestCase {
         }
         window.addSubview(label)
         return label
+    }
+
+    @discardableResult
+    private func addScrollViewWithOffscreenLabel(_ text: String) -> UIScrollView {
+        let scrollView = UIScrollView(frame: CGRect(x: 10, y: 100, width: 220, height: 120))
+        scrollView.contentSize = CGSize(width: 220, height: 640)
+        scrollView.isAccessibilityElement = false
+
+        let label = UILabel(frame: CGRect(x: 10, y: 480, width: 180, height: 44))
+        label.text = text
+        label.accessibilityLabel = text
+        label.isAccessibilityElement = true
+        scrollView.addSubview(label)
+
+        window.addSubview(scrollView)
+        return scrollView
     }
 
     private func waitFor(
@@ -264,6 +280,23 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertEqual(unwrapped.method, .waitFor)
         XCTAssertTrue(unwrapped.message?.contains("absent confirmed") == true)
         XCTAssertNil(unwrapped.errorKind)
+    }
+
+    func testWaitForAbsentTreatsOffscreenScrollableElementAsPresent() async throws {
+        let scrollView = addScrollViewWithOffscreenLabel("WaitFor-Offscreen-StillHere")
+        defer { scrollView.removeFromSuperview() }
+
+        let response = await waitFor(
+            target: .matcher(ElementMatcher(label: "WaitFor-Offscreen-StillHere")),
+            absent: true,
+            timeout: 2.0
+        )
+        let result = try XCTUnwrap(response)
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .waitFor)
+        XCTAssertEqual(result.errorKind, .timeout)
+        XCTAssertTrue(result.message?.contains("element still present") == true)
     }
 
     // MARK: - Absent already absent returns immediately

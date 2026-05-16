@@ -76,6 +76,7 @@ final class TheBrains {
         let tree: [InterfaceNode]
         let treeHash: Int
         let viewController: ObjectIdentifier?
+        let screenId: String?
     }
 
     /// Capture the current state for delta computation before an action.
@@ -88,7 +89,26 @@ final class TheBrains {
             hierarchy: stash.currentHierarchy,
             tree: tree,
             treeHash: treeHash,
-            viewController: tripwire.topmostViewController().map(ObjectIdentifier.init)
+            viewController: tripwire.topmostViewController().map(ObjectIdentifier.init),
+            screenId: stash.lastScreenId
+        )
+    }
+
+    /// Capture the known semantic state as a flat wire tree. Exploration unions
+    /// off-viewport entries into `currentScreen.elements`, while `wireTree()`
+    /// intentionally follows the latest live hierarchy. Change predicates use
+    /// this semantic tree so viewport position is not mistaken for state.
+    func captureSemanticState() -> BeforeState {
+        let snapshot = stash.selectElements()
+        let tree = TheStash.WireConversion.toWire(snapshot).map(InterfaceNode.element)
+        return BeforeState(
+            snapshot: snapshot,
+            elements: snapshot.map(\.element),
+            hierarchy: stash.currentHierarchy,
+            tree: tree,
+            treeHash: tree.hashValue,
+            viewController: tripwire.topmostViewController().map(ObjectIdentifier.init),
+            screenId: stash.lastScreenId
         )
     }
 
@@ -145,10 +165,6 @@ final class TheBrains {
                 before: before.elements, after: afterElements,
                 beforeHierarchy: before.hierarchy, afterHierarchy: afterHierarchy
             )
-        if isScreenChange {
-            navigation.containerExploreStates.removeAll()
-        }
-
         if isScreenChange && afterElements.isEmpty {
             let repopulated = await repopulateAfterScreenChange(into: &afterScreen)
             if !repopulated { didSettle = false }
@@ -305,6 +321,7 @@ final class TheBrains {
     /// State captured after each response sent to the driver.
     struct SentState {
         let treeHash: Int
+        let viewportHash: Int
         let beforeState: BeforeState
         let screenId: String?
     }
@@ -328,19 +345,23 @@ final class TheBrains {
 
     /// Snapshot current state as "last sent" — call after every response to the driver.
     func recordSentState() {
+        let state = captureSemanticState()
         broadcastHistory = .sent(SentState(
-            treeHash: stash.wireTreeHash(),
-            beforeState: captureBeforeState(),
-            screenId: stash.lastScreenId
+            treeHash: state.treeHash,
+            viewportHash: stash.wireTreeHash(),
+            beforeState: state,
+            screenId: state.screenId
         ))
     }
 
-    /// Record sent state from an already-known hash (avoids redundant wire conversion).
-    func recordSentState(treeHash: Int) {
+    /// Record sent state when the caller already has the current viewport hash.
+    func recordSentState(viewportHash: Int) {
+        let state = captureSemanticState()
         broadcastHistory = .sent(SentState(
-            treeHash: treeHash,
-            beforeState: captureBeforeState(),
-            screenId: stash.lastScreenId
+            treeHash: state.treeHash,
+            viewportHash: viewportHash,
+            beforeState: state,
+            screenId: state.screenId
         ))
     }
 
@@ -366,16 +387,20 @@ final class TheBrains {
     // MARK: - Background Delta
 
     /// Check if the accessibility tree changed since the last response.
-    func computeBackgroundDelta() -> InterfaceDelta? {
-        guard case .sent(let sent) = broadcastHistory, sent.treeHash != 0 else { return nil }
+    func computeBackgroundDelta() async -> InterfaceDelta? {
+        guard case .sent(let sent) = broadcastHistory,
+              sent.treeHash != 0,
+              sent.viewportHash != 0 else { return nil }
         guard refresh() != nil else { return nil }
-        let snapshot = stash.selectElements()
-        let currentHash = stash.wireTreeHash()
-        guard currentHash != sent.treeHash else { return nil }
+        guard stash.wireTreeHash() != sent.viewportHash else { return nil }
+
+        _ = await navigation.exploreAndPrune()
+        let current = captureSemanticState()
+        guard current.treeHash != sent.treeHash else { return nil }
 
         return computeDelta(
             before: sent.beforeState,
-            afterSnapshot: snapshot
+            after: current
         )
     }
 
@@ -415,19 +440,24 @@ final class TheBrains {
     func executeWaitForChange(timeout: TimeInterval, expectation: ActionExpectation?) async -> ActionResult {
         let start = CFAbsoluteTimeGetCurrent()
 
-        let before = captureBeforeState()
-
-        guard let initial = refreshAndSnapshot() else {
+        guard let initial = await refreshSemanticSnapshot() else {
             return treeUnavailableResult(method: .waitForChange)
         }
+
+        let baseline: BeforeState = {
+            if case .sent(let sent) = broadcastHistory, sent.treeHash != 0 {
+                return sent.beforeState
+            }
+            return initial
+        }()
 
         // Fast path: tree already changed since the last response
         let lastHash: Int = {
             if case .sent(let sent) = broadcastHistory { return sent.treeHash }
             return 0
         }()
-        if lastHash != 0, initial.wireHash != lastHash {
-            let delta = computeDelta(before: before, afterSnapshot: initial.snapshot)
+        if lastHash != 0, initial.treeHash != lastHash {
+            let delta = computeDelta(before: baseline, after: initial)
             if let result = evaluateWaitForChange(
                 delta: delta, afterSnapshot: initial.snapshot, expectation: expectation,
                 start: start, round: 0, message: "already changed (0.0s)"
@@ -438,7 +468,7 @@ final class TheBrains {
 
         // Slow path: poll until a change lands or we time out
         let deadline = CFAbsoluteTimeGetCurrent() + timeout
-        var beforeWireHash = initial.wireHash
+        var beforeWireHash = initial.treeHash
         var round = 0
 
         while CFAbsoluteTimeGetCurrent() < deadline {
@@ -446,12 +476,12 @@ final class TheBrains {
             guard remaining > 0 else { break }
 
             _ = await tripwire.waitForAllClear(timeout: min(remaining, 1.0))
-            guard let current = refreshAndSnapshot() else { continue }
+            guard let current = await refreshSemanticSnapshot() else { continue }
             round += 1
 
-            if current.wireHash == beforeWireHash { continue }
+            if current.treeHash == beforeWireHash { continue }
 
-            let delta = computeDelta(before: before, afterSnapshot: current.snapshot)
+            let delta = computeDelta(before: baseline, after: current)
             let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
 
             if let result = evaluateWaitForChange(
@@ -461,14 +491,16 @@ final class TheBrains {
                 return result
             }
 
-            beforeWireHash = current.wireHash
+            beforeWireHash = current.treeHash
             insideJobLogger.debug("wait_for_change round \(round): \(delta.kindRawValue), expectation not yet met")
         }
 
         // Timeout
         let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
-        let afterSnapshot = refreshAndSnapshot()?.snapshot ?? []
-        let delta = computeDelta(before: before, afterSnapshot: afterSnapshot)
+        let current = await refreshSemanticSnapshot()
+        let afterSnapshot = current?.snapshot ?? []
+        let delta = current.map { computeDelta(before: baseline, after: $0) }
+            ?? InterfaceDelta.noChange(.init(elementCount: 0))
         var builder = ActionResultBuilder(method: .waitForChange, snapshot: afterSnapshot)
         builder.message = expectation != nil
             ? "timed out after \(elapsed)s — expectation not met"
@@ -502,11 +534,33 @@ final class TheBrains {
 
     // MARK: - Private Helpers
 
-    private func refreshAndSnapshot() -> (snapshot: [Screen.ScreenElement], wireHash: Int)? {
+    private func refreshSemanticSnapshot() async -> BeforeState? {
         guard refresh() != nil else { return nil }
-        let snapshot = stash.selectElements()
-        let wireHash = stash.wireTreeHash()
-        return (snapshot, wireHash)
+        _ = await navigation.exploreAndPrune()
+        return captureSemanticState()
+    }
+
+    private func computeDelta(
+        before: BeforeState,
+        after: BeforeState
+    ) -> InterfaceDelta {
+        let hasComparableHierarchies = !before.hierarchy.isEmpty && !after.hierarchy.isEmpty
+        let isScreenChange = tripwire.isScreenChange(
+            before: before.viewController,
+            after: after.viewController
+        ) || before.screenId != after.screenId || (
+            hasComparableHierarchies && stash.isTopologyChanged(
+                before: before.elements, after: after.elements,
+                beforeHierarchy: before.hierarchy, afterHierarchy: after.hierarchy
+            )
+        )
+        return TheStash.InterfaceDiff.computeDelta(
+            before: before.snapshot, after: after.snapshot,
+            beforeTree: before.tree,
+            beforeTreeHash: before.treeHash,
+            afterTree: after.tree,
+            isScreenChange: isScreenChange
+        )
     }
 
     private func computeDelta(
@@ -517,7 +571,7 @@ final class TheBrains {
         let isScreenChange = tripwire.isScreenChange(
             before: before.viewController,
             after: tripwire.topmostViewController().map(ObjectIdentifier.init)
-        ) || stash.isTopologyChanged(
+        ) || before.screenId != stash.lastScreenId || stash.isTopologyChanged(
             before: before.elements, after: afterElements,
             beforeHierarchy: before.hierarchy, afterHierarchy: stash.currentHierarchy
         )

@@ -4,7 +4,7 @@ Command execution engine. Takes a `ClientMessage`, works it through refresh → 
 
 TheBrains is the orchestrator. Two internal components handle the heavy lifting:
 
-- **`Navigation`** — scroll orchestration and screen exploration. Owns `ScrollableTarget`, `SettleSwipeLoopState`, `ScreenManifest`, `ContainerExploreState`, `lastSwipeDirectionByTarget`, `containerExploreStates`. Public entry points are `executeScroll`, `executeScrollToVisible`, `executeScrollToEdge`, `executeElementSearch`, `exploreAndPrune`, `ensureOnScreen`, `ensureFirstResponderOnScreen`.
+- **`Navigation`** — scroll orchestration and screen exploration. Owns `ScrollableTarget`, `SettleSwipeLoopState`, `ScreenManifest`, and `lastSwipeDirectionByTarget`. Public entry points are `executeScroll`, `executeScrollToVisible`, `executeScrollToEdge`, `executeElementSearch`, `exploreAndPrune`, `ensureOnScreen`, `ensureFirstResponderOnScreen`.
 - **`Actions`** — the 21 `executeXxx` action handlers (activate, increment, decrement, customAction, editAction, setPasteboard, getPasteboard, resignFirstResponder, tap, longPress, swipe, drag, pinch, rotate, twoFingerTap, drawPath, drawBezier, typeText, plus the `performElementAction` / `performPointAction` generic pipelines and duration helpers).
 
 Both components are owned by TheBrains (`let navigation: Navigation`, `let actions: Actions`) and share the same TheStash / TheSafecracker / TheTripwire references. They are *internal components of TheBrains*, not crew members in their own right — neutral noun-style names. Actions holds a reference to Navigation so `executeTypeText` can call `navigation.ensureFirstResponderOnScreen()` after focusing a field.
@@ -17,7 +17,7 @@ TheBrains keeps the post-action delta cycle, dispatch, wait handlers, and broadc
 
    - **`performInteraction`** (most commands) — refresh → captureBeforeState → action closure → actionResultWithDelta. Used by all accessibility actions and touch gestures. The action closure calls `actions.executeXxx(target)` or `navigation.executeScroll(target)` etc.
    - **`performElementSearch`** — same shape but the scroll loop in `navigation.executeElementSearch` manages its own refresh/settle internally. Patches `ScrollSearchResult` onto the result.
-   - **`performWaitFor`** — polls `stash.hasTarget(elementTarget)` in a settle loop until found/absent or timeout.
+   - **`performWaitFor`** — polls the fresh semantic hierarchy in a settle loop until found/absent or timeout.
    - **`performExplore`** — calls `navigation.exploreAndPrune()`, assembles the result inline (doesn't use `actionResultWithDelta`; needs full wire elements in `ExploreResult`).
 
    Two private helpers `executeAccessibilityAction` and `executeTouchGesture` are second-level switches that unpack the associated value and call `performInteraction` with the specific `actions.executeXxx` closure.
@@ -28,7 +28,7 @@ TheBrains keeps the post-action delta cycle, dispatch, wait handlers, and broadc
    - **`refresh()`** — delegates to `stash.refresh()`.
    - **`actionResultWithDelta(before:)`** — the convergence point. On failure: immediate return from before-snapshot. On success: settle via `tripwire.waitForAllClear(1s)` → `stash.parse()` → screen-change detection (VC identity OR topology) → `stash.apply()` → `navigation.exploreAndPrune()` → snapshot → `InterfaceDiff.computeDelta()` → re-resolve target for post-action element metadata → `ActionResultBuilder.success()`.
 
-   **Response state** — `SentState` struct (treeHash, beforeState, screenId) tracks the last response sent to the driver. `recordSentState()` snapshots current state; `computeBackgroundDelta()` compares against it. TheGetaway calls `recordSentState()` after every send.
+   **Response state** — `SentState` struct (semantic `treeHash`, cheap `viewportHash`, beforeState, screenId) tracks the last response sent to the driver. `recordSentState()` snapshots current state; `computeBackgroundDelta()` first checks the viewport hash and only explores when the visible tree changed. TheGetaway calls `recordSentState()` after every send.
 
    **Wait handlers** — `executeWaitForIdle(timeout:)` and `executeWaitForChange(timeout:expectation:)` live here (not in TheGetaway) because they're accessibility-level work: refresh, settle, delta, expectation evaluation. The wait-for-change handler has a fast path (tree already changed since last response) and a slow path (poll loop with `tripwire.waitForAllClear`).
 
@@ -40,11 +40,11 @@ TheBrains keeps the post-action delta cycle, dispatch, wait handlers, and broadc
    - `executeSwipe` has two paths: unit-point (element-relative 0-1 coordinates resolved against frame) and absolute-point.
    - `executeTypeText` is the longest: optional `navigation.ensureOnScreen` + tap-to-focus → poll for active text input → optional clear/delete → type string → refresh → re-resolve for value readback. After focusing, it calls `navigation.ensureFirstResponderOnScreen()` — this is the only documented cross-component call from Actions into Navigation.
 
-4. **`Navigation.swift`** — Type declaration, init, state (`lastSwipeDirectionByTarget`, `containerExploreStates`), and the nested types `SettleSwipeProfile`, `SettleSwipeStep`, `SettleSwipeLoopState`, `ScrollableTarget`, `ScrollAxis`, `ContainerExploreState`, `ScreenManifest`. Plus `refresh()` and `clearCache()` helpers.
+4. **`Navigation.swift`** — Type declaration, init, state (`lastSwipeDirectionByTarget`), and the nested types `SettleSwipeProfile`, `SettleSwipeStep`, `SettleSwipeLoopState`, `ScrollableTarget`, `ScrollAxis`, `ScreenManifest`. Plus `refresh()` and `clearCache()` helpers.
 
 5. **`Navigation+Scroll.swift`** — `executeScroll` does one page. `executeScrollToVisible` tries three strategies: already visible → content-space one-shot jump → failure. `executeElementSearch` tries four: visible → one-shot → page-by-page loop (up to 200 scrolls) → not found. `ensureOnScreen` pre-scrolls off-viewport elements and nudges into the comfort zone (frame inset by 1/6). Direction mapping, axis detection, and `safeSwipeFrame` (tab-bar-aware clip) also live here.
 
-6. **`Navigation+Explore.swift`** — `exploreAndPrune()` builds a local `var union: Screen`, runs `exploreScreen()`, then writes `stash.currentScreen = union`. Per container: checks fingerprint cache (skip if unchanged) → scrolls to leading edge → pages through accumulating elements via `stitchPage` → restores visual origin for `UIScrollView` targets → caches state. Exploration uses `ScrollableTarget` so non-`UIScrollView` containers use swipe fallback. `ScreenManifest` bookkeeping lives in `Navigation.swift`.
+6. **`Navigation+Explore.swift`** — `exploreAndPrune()` builds a local `var union: Screen`, runs `exploreScreen()`, then writes `stash.currentScreen = union`. Per container: scrolls to leading edge → pages through accumulating elements via `stitchPage` → restores visual origin for `UIScrollView` targets. Exploration uses `ScrollableTarget` so non-`UIScrollView` containers use swipe fallback. `ScreenManifest` bookkeeping lives in `Navigation.swift`.
 
 7. **`ActionResultBuilder.swift`** — Assembles `ActionResult` from method + snapshot. Two init paths (from `[ScreenElement]` or explicit screenName/Id). Two terminal methods: `success(scrollSearchResult:exploreResult:)` and `failure(errorKind:)`.
 

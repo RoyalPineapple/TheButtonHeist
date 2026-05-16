@@ -298,7 +298,7 @@ final class TheGetaway {
                 if let stakeout {
                     await stakeout.noteActivity()
                 }
-                let backgroundDelta = brains.computeBackgroundDelta()
+                let backgroundDelta = await brains.computeBackgroundDelta()
 
                 if let backgroundDelta, backgroundDelta.isScreenChanged,
                    brains.screenChangedSinceLastSent,
@@ -495,7 +495,7 @@ final class TheGetaway {
         let payload = brains.currentInterface()
         insideJobLogger.info("Interface: \(payload.elements.count) visible elements")
         sendMessage(.interface(payload), requestId: requestId, respond: respond)
-        brains.recordSentState(treeHash: payload.tree.hashValue)
+        brains.recordSentState(viewportHash: payload.tree.hashValue)
     }
 
     // MARK: - Screen Capture
