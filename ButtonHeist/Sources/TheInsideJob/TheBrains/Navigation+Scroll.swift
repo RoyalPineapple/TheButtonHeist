@@ -130,7 +130,7 @@ extension Navigation {
             seenVisibleIds.formUnion(newHeistIds)
 
             let step = state.advance(
-                visibleIds: stash.visibleIds,
+                visibleIds: currentVisibleIds,
                 anchorSignature: visibleAnchorSignature(),
                 newHeistIds: newHeistIds
             )
