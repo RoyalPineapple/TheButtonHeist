@@ -55,20 +55,22 @@ final class TheBurglarParseTests: XCTestCase {
     func testParseWrapsEachWindowWithSemanticGroupInMultiWindowMode() throws {
         let windowScene = try requireForegroundWindowScene()
 
-        // Use levels below .normal so the test windows are ordered beneath the
-        // host window without changing the foreground overlay stack.
-        let levelA = UIWindow.Level(rawValue: -1001)
-        let levelB = UIWindow.Level(rawValue: -1002)
+        let levelA = UIWindow.Level(rawValue: 1999)
+        let levelB = UIWindow.Level.normal
 
-        let windowA = makeWindow(windowScene: windowScene, level: levelA)
-        let windowB = makeWindow(windowScene: windowScene, level: levelB)
+        let result = withNoTraversableWindows {
+            let windowA = makeWindow(windowScene: windowScene, level: levelA)
+            let windowB = makeWindow(windowScene: windowScene, level: levelB, makeKey: true)
 
-        defer {
-            windowA.isHidden = true
-            windowB.isHidden = true
+            defer {
+                windowA.isHidden = true
+                windowB.isHidden = true
+            }
+
+            return stash.parse()
         }
 
-        guard let result = stash.parse() else {
+        guard let result else {
             XCTFail("Expected parse result for multi-window scene")
             return
         }
@@ -120,6 +122,179 @@ final class TheBurglarParseTests: XCTestCase {
         )
     }
 
+    func testParseStopsAtKeyWindowWhenNoModalBoundaryAppears() throws {
+        let windowScene = try requireForegroundWindowScene()
+
+        let result = withNoTraversableWindows {
+            let overlay = makeWindow(windowScene: windowScene, level: .alert)
+            let keyWindow = makeWindow(windowScene: windowScene, level: .normal, makeKey: true)
+            let lower = makeWindow(windowScene: windowScene, level: .normal - 1)
+
+            defer {
+                overlay.isHidden = true
+                keyWindow.isHidden = true
+                lower.isHidden = true
+            }
+
+            return stash.parse()
+        }
+
+        guard let result else {
+            XCTFail("Expected parse result for windows through key window")
+            return
+        }
+
+        let values = semanticGroupValues(in: result.hierarchy)
+        XCTAssertTrue(values.contains("windowLevel: \(UIWindow.Level.alert.rawValue)"))
+        XCTAssertTrue(values.contains("windowLevel: \(UIWindow.Level.normal.rawValue)"))
+        XCTAssertFalse(values.contains("windowLevel: \((UIWindow.Level.normal - 1).rawValue)"))
+    }
+
+    func testParseStopsBeforeKeyWindowWhenModalBoundaryAppearsAboveIt() throws {
+        let windowScene = try requireForegroundWindowScene()
+
+        let result = withNoTraversableWindows {
+            let modalOverlay = makeWindow(windowScene: windowScene, level: .alert)
+            addModalBoundary(to: modalOverlay)
+
+            let keyWindow = makeWindow(windowScene: windowScene, level: .normal, makeKey: true)
+
+            defer {
+                modalOverlay.isHidden = true
+                keyWindow.isHidden = true
+            }
+
+            return stash.parse()
+        }
+
+        guard let result else {
+            XCTFail("Expected parse result for modal overlay")
+            return
+        }
+
+        let values = semanticGroupValues(in: result.hierarchy)
+        XCTAssertTrue(values.contains("windowLevel: \(UIWindow.Level.alert.rawValue)"))
+        XCTAssertFalse(values.contains("windowLevel: \(UIWindow.Level.normal.rawValue)"))
+    }
+
+    func testParseIgnoresModalBoundaryBelowKeyWindow() throws {
+        let windowScene = try requireForegroundWindowScene()
+
+        let result = withNoTraversableWindows {
+            let lowerModal = makeWindow(windowScene: windowScene, level: .normal)
+            addModalBoundary(to: lowerModal)
+            let keyWindow = makeWindow(windowScene: windowScene, level: .alert, makeKey: true)
+
+            defer {
+                keyWindow.isHidden = true
+                lowerModal.isHidden = true
+            }
+
+            return stash.parse()
+        }
+
+        guard let result else {
+            XCTFail("Expected parse result for key window above modal")
+            return
+        }
+
+        let labels = result.hierarchy.sortedElements.compactMap(\.label)
+        XCTAssertTrue(labels.contains("Window \(Int(UIWindow.Level.alert.rawValue))"))
+        XCTAssertFalse(labels.contains("Window \(Int(UIWindow.Level.normal.rawValue))"))
+    }
+
+    func testParseStopsAtFrontmostModalBoundary() throws {
+        let windowScene = try requireForegroundWindowScene()
+
+        let result = withNoTraversableWindows {
+            let upperModal = makeWindow(windowScene: windowScene, level: UIWindow.Level(rawValue: 2000))
+            addModalBoundary(to: upperModal)
+            let lowerModal = makeWindow(windowScene: windowScene, level: UIWindow.Level(rawValue: 100))
+            addModalBoundary(to: lowerModal)
+            let keyWindow = makeWindow(windowScene: windowScene, level: .normal, makeKey: true)
+
+            defer {
+                upperModal.isHidden = true
+                lowerModal.isHidden = true
+                keyWindow.isHidden = true
+            }
+
+            return stash.parse()
+        }
+
+        guard let result else {
+            XCTFail("Expected parse result for stacked modal windows")
+            return
+        }
+
+        let values = semanticGroupValues(in: result.hierarchy)
+        XCTAssertTrue(values.contains("windowLevel: 2000.0"))
+        XCTAssertFalse(values.contains("windowLevel: 100.0"))
+        XCTAssertFalse(values.contains("windowLevel: \(UIWindow.Level.normal.rawValue)"))
+    }
+
+    func testParseKeepsOverlaysAboveModalBoundaryAndDropsLowerWindows() throws {
+        let windowScene = try requireForegroundWindowScene()
+        let modalLevel = UIWindow.Level(rawValue: 100)
+
+        let result = withNoTraversableWindows {
+            let overlayA = makeWindow(windowScene: windowScene, level: UIWindow.Level(rawValue: 2000))
+            let overlayB = makeWindow(windowScene: windowScene, level: UIWindow.Level(rawValue: 1999))
+            let modalWindow = makeWindow(windowScene: windowScene, level: modalLevel)
+            addModalBoundary(to: modalWindow)
+            let keyWindow = makeWindow(windowScene: windowScene, level: .normal, makeKey: true)
+
+            defer {
+                overlayA.isHidden = true
+                overlayB.isHidden = true
+                modalWindow.isHidden = true
+                keyWindow.isHidden = true
+            }
+
+            return stash.parse()
+        }
+
+        guard let result else {
+            XCTFail("Expected parse result for overlay and modal windows")
+            return
+        }
+
+        let values = semanticGroupValues(in: result.hierarchy)
+        XCTAssertTrue(values.contains("windowLevel: 2000.0"))
+        XCTAssertTrue(values.contains("windowLevel: 1999.0"))
+        XCTAssertTrue(values.contains("windowLevel: \(modalLevel.rawValue)"))
+        XCTAssertFalse(values.contains("windowLevel: \(UIWindow.Level.normal.rawValue)"))
+    }
+
+    func testParseTreatsDeepModalSubviewAsWindowBoundary() throws {
+        let windowScene = try requireForegroundWindowScene()
+
+        let result = withNoTraversableWindows {
+            let overlay = makeWindow(windowScene: windowScene, level: .alert)
+            let modalWindow = makeWindow(windowScene: windowScene, level: .normal, makeKey: true)
+            addModalBoundary(to: modalWindow, nestingDepth: 3)
+            let lower = makeWindow(windowScene: windowScene, level: .normal - 1)
+
+            defer {
+                overlay.isHidden = true
+                modalWindow.isHidden = true
+                lower.isHidden = true
+            }
+
+            return stash.parse()
+        }
+
+        guard let result else {
+            XCTFail("Expected parse result for deep modal boundary")
+            return
+        }
+
+        let values = semanticGroupValues(in: result.hierarchy)
+        XCTAssertTrue(values.contains("windowLevel: \(UIWindow.Level.alert.rawValue)"))
+        XCTAssertTrue(values.contains("windowLevel: \(UIWindow.Level.normal.rawValue)"))
+        XCTAssertFalse(values.contains("windowLevel: \((UIWindow.Level.normal - 1).rawValue)"))
+    }
+
     func testParseIncludesPopoverContentSiblingAfterDismissRegion() throws {
         let windowScene = try requireForegroundWindowScene()
 
@@ -168,7 +343,11 @@ final class TheBurglarParseTests: XCTestCase {
         )
     }
 
-    private func makeWindow(windowScene: UIWindowScene, level: UIWindow.Level) -> UIWindow {
+    private func makeWindow(
+        windowScene: UIWindowScene,
+        level: UIWindow.Level,
+        makeKey: Bool = false
+    ) -> UIWindow {
         let vc = UIViewController()
         vc.view.backgroundColor = .white
         let label = UILabel()
@@ -180,8 +359,32 @@ final class TheBurglarParseTests: XCTestCase {
         window.windowLevel = level
         window.rootViewController = vc
         window.frame = UIScreen.main.bounds
-        window.isHidden = false
+        if makeKey {
+            window.makeKeyAndVisible()
+        } else {
+            window.isHidden = false
+        }
         return window
+    }
+
+    private func addModalBoundary(to window: UIWindow, nestingDepth: Int = 0) {
+        var parent = window.rootViewController?.view ?? window
+        for _ in 0..<nestingDepth {
+            let wrapper = UIView(frame: parent.bounds)
+            parent.addSubview(wrapper)
+            parent = wrapper
+        }
+
+        let modal = UIView(frame: parent.bounds)
+        modal.accessibilityViewIsModal = true
+        modal.isAccessibilityElement = false
+
+        let label = UILabel(frame: CGRect(x: 20, y: 60, width: 220, height: 44))
+        label.text = "Modal Boundary"
+        label.isAccessibilityElement = true
+        modal.addSubview(label)
+
+        parent.addSubview(modal)
     }
 
     private func semanticGroupValues(in hierarchy: [AccessibilityHierarchy]) -> [String] {

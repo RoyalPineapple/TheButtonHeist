@@ -7,8 +7,8 @@ Reads the live accessibility tree and builds a `Screen` value for TheStash to co
 **`TheBurglar.swift`** — `@MainActor final class` with no mutable instance state (stored deps: `AccessibilityHierarchyParser` + `TheTripwire`).
 
 **`parse()`** — the read-only path:
-1. `tripwire.getAccessibleWindows()` — modal-aware window list.
-2. For each window: `parser.parseAccessibilityHierarchy(in: rootView, elementVisitor:, containerVisitor:)`. `elementVisitor` captures `element → object` mappings; `containerVisitor` captures `container → UIView` for scrollable containers.
+1. `tripwire.getAccessibleWindows()` — top-down window band through the key window.
+2. For each window: `parser.parseAccessibilityHierarchy(in: rootView, elementVisitor:, containerVisitor:)`. `elementVisitor` captures `element → object` mappings; `containerVisitor` captures `container → UIView` for scrollable containers and stops parsing lower windows when it sees a modal boundary container.
 3. Multi-window: wraps each window's tree in a `.container(semanticGroup)` node with the window class name.
 4. Returns `ParseResult(elements:, hierarchy:, objects:, scrollViews:)` — `elements` is the flat traversal-ordered list, `hierarchy` is the tree.
 

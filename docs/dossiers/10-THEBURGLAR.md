@@ -63,7 +63,7 @@ Mid-cycle writes to `currentScreen` are intentional: scroll-page termination heu
 
 ## Dependencies
 
-- **TheTripwire** (injected via `init(tripwire:)`) — provides `getAccessibleWindows()` for the parse root. Explicit `accessibilityViewIsModal` windows are exclusive; otherwise system passthrough windows are dropped, elevated non-modal windows remain additive, and each window with a presentation chain is parsed from its deepest presented view.
+- **TheTripwire** (injected via `init(tripwire:)`) — provides the top-down window band through the key window, excluding system passthrough windows and resolving each presentation chain to its deepest presented view. TheBurglar stops parsing lower windows when the parser reports a modal boundary container.
 - **AccessibilityHierarchyParser** (from AccessibilitySnapshotBH submodule) — traverses the accessibility tree via `elementVisitor` and `containerVisitor` closures.
 - **TheStash.IdAssignment** — assigns heistIds to parsed elements. Synthesis is content-derived and wire-format-stable: same element content → same heistId, every time.
 - **TheStash.Screen** — the value type returned by `buildScreen(from:)`.
