@@ -561,7 +561,8 @@ enum ToolDefinitions {
         description: """
             Establish or switch the active connection to an iOS device running TheInsideJob. \
             Three patterns: target=NAME from .buttonheist.json, device=HOST:PORT + token, or \
-            BUTTONHEIST_DEVICE/BUTTONHEIST_TOKEN env vars. Tears down any existing session first.
+            BUTTONHEIST_DEVICE/BUTTONHEIST_TOKEN env vars. Tears down any existing session first. \
+            Returns session state; call get_interface explicitly to observe UI hierarchy.
             """,
         inputSchema: [
             "type": "object",

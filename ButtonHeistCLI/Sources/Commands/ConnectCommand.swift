@@ -12,11 +12,12 @@ struct ConnectCommand: AsyncParsableCommand {
         commandName: "connect",
         abstract: "Connect to an iOS device running TheInsideJob",
         discussion: """
-            With no arguments, reconnects to the currently configured target. \
+            With no arguments, establishes the currently configured session. \
             Resolution order: --device flag, BUTTONHEIST_DEVICE env var, then \
             the default target in .buttonheist.json (or ~/.config/buttonheist/config.json).
 
-            With an explicit positional device, connects to that host:port directly.
+            With an explicit positional device, connects to that host:port directly. \
+            This command returns session state; use get_interface to observe UI hierarchy.
 
             Examples:
               buttonheist connect                       # Reconnect using configured target
@@ -62,12 +63,17 @@ struct ConnectCommand: AsyncParsableCommand {
                 """)
         }
 
-        try await CLIRunner.run(
-            connection: resolvedConnection,
-            format: output.format,
-            request: ["command": TheFence.Command.getInterface.rawValue],
-            statusMessage: "Connecting..."
-        )
+        let fence = TheFence(configuration: resolved.fenceConfiguration)
+        fence.onStatus = { message in
+            if !resolvedConnection.quiet { logStatus(message) }
+        }
+        defer { fence.stop() }
+
+        let response = try await fence.execute(request: ["command": TheFence.Command.connect.rawValue])
+        CLIRunner.outputResponse(response, format: output.format ?? .auto)
+        if response.isFailure {
+            throw ExitCode.failure
+        }
     }
 }
 

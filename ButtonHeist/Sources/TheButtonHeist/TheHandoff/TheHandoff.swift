@@ -410,6 +410,7 @@ final class TheHandoff {
 
     private var discovery: (any DeviceDiscovering)?
     private var connection: (any DeviceConnecting)?
+    private var connectionAutoSubscribe: Bool = true
 
     var hasActiveDiscoverySession: Bool {
         discovery != nil
@@ -581,8 +582,9 @@ final class TheHandoff {
 
     // MARK: - Connection
 
-    func connect(to device: DiscoveredDevice) {
+    func connect(to device: DiscoveredDevice, autoSubscribe: Bool? = nil) {
         disconnect()
+        connectionAutoSubscribe = autoSubscribe ?? self.autoSubscribe
         transitionToConnecting(device: device)
 
         connection = makeConnection(device, token, effectiveDriverId)
@@ -627,7 +629,7 @@ final class TheHandoff {
         switch message {
         case .info(let info):
             mutateConnectedSession { $0.serverInfo = info }
-            if autoSubscribe {
+            if connectionAutoSubscribe {
                 connection?.send(.subscribe)
                 connection?.send(.requestInterface)
             }
@@ -852,7 +854,11 @@ final class TheHandoff {
     /// Starts discovery if not already active, polls until a matching device appears
     /// or the timeout expires. Suspends on `waitForConnectionResult` for the
     /// connection outcome.
-    func connectWithDiscovery(filter: String?, timeout: TimeInterval = 30) async throws {
+    func connectWithDiscovery(
+        filter: String?,
+        timeout: TimeInterval = 30,
+        autoSubscribe: Bool? = nil
+    ) async throws {
         onStatus?("Searching for iOS devices...")
         let startedDiscovery = !hasActiveDiscoverySession
         if startedDiscovery { startDiscovery() }
@@ -869,7 +875,7 @@ final class TheHandoff {
         onStatus?("Found: \(displayName(for: device))")
         onStatus?("Connecting...")
 
-        connect(to: device)
+        connect(to: device, autoSubscribe: autoSubscribe)
         try await waitForConnectionResult(timeout: timeout)
         onStatus?("Connected to \(displayName(for: device))")
     }

@@ -521,6 +521,15 @@ extension TheFence {
 
     // MARK: - Handler: Connect (runtime target switching)
 
+    private func establishSessionOnly() async throws -> FenceResponse {
+        try await startWithoutImplicitObservation()
+        return .sessionState(payload: currentSessionState())
+    }
+
+    private func startWithoutImplicitObservation() async throws {
+        try await start(autoSubscribe: false)
+    }
+
     func handleConnect(_ args: [String: Any]) async throws -> FenceResponse {
         let targetName = try args.schemaString("target")
         let device = try args.schemaString("device")
@@ -550,8 +559,10 @@ extension TheFence {
                 name: targetName,
                 certFingerprint: target.certFingerprint
             )
+        } else if handoff.isConnected || config.deviceFilter != nil || config.directDevice != nil {
+            return try await establishSessionOnly()
         } else {
-            return .error("Must specify 'target' (named config target) or 'device' (host:port)")
+            return .error("Must specify 'target' (named config target), 'device' (host:port), or configure BUTTONHEIST_DEVICE/.buttonheist.json")
         }
 
         let previousConfig = config
@@ -571,7 +582,7 @@ extension TheFence {
         config = newConfig
 
         do {
-            try await start()
+            try await startWithoutImplicitObservation()
         } catch {
             config = previousConfig
             handoff.token = previousToken
@@ -579,7 +590,7 @@ extension TheFence {
             let connectionFailureDetails = connectionFailure?.failureDetails
             let connectionFailureMessage = connectionFailure?.coreMessage ?? error.displayMessage
             do {
-                try await start()
+                try await startWithoutImplicitObservation()
             } catch {
                 let restoreFailure = error as? FenceError
                 // Prefer restore details when available; otherwise keep the original connection failure typed.
@@ -598,7 +609,7 @@ extension TheFence {
             )
         }
 
-        return try await handleGetInterface()
+        return .sessionState(payload: currentSessionState())
     }
 
     func handleListTargets() -> FenceResponse {
