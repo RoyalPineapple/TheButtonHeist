@@ -26,6 +26,7 @@ final class TheTripwireTests: XCTestCase {
             fingerprint: .init(positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5),
             hasRelevantAnimations: false,
             topmostVC: nil,
+            tripwireSignal: .empty,
             windowCount: 1,
             quietFrames: 2
         )
@@ -40,6 +41,7 @@ final class TheTripwireTests: XCTestCase {
             fingerprint: .init(positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5),
             hasRelevantAnimations: false,
             topmostVC: nil,
+            tripwireSignal: .empty,
             windowCount: 1,
             quietFrames: 5
         )
@@ -54,6 +56,7 @@ final class TheTripwireTests: XCTestCase {
             fingerprint: .init(positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5),
             hasRelevantAnimations: true,
             topmostVC: nil,
+            tripwireSignal: .empty,
             windowCount: 1,
             quietFrames: 5
         )
@@ -68,6 +71,7 @@ final class TheTripwireTests: XCTestCase {
             fingerprint: .init(positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5),
             hasRelevantAnimations: false,
             topmostVC: nil,
+            tripwireSignal: .empty,
             windowCount: 1,
             quietFrames: 1
         )
@@ -85,6 +89,7 @@ final class TheTripwireTests: XCTestCase {
             fingerprint: .init(positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5),
             hasRelevantAnimations: false,
             topmostVC: ObjectIdentifier(vc),
+            tripwireSignal: .empty,
             windowCount: 3,
             quietFrames: 2
         )
