@@ -66,7 +66,8 @@ final class TheBurglar {
         var allScrollViews: [AccessibilityContainer: UIView] = [:]
 
         for (window, rootView) in windows {
-            autoreleasepool {
+            let containsModalBoundary = autoreleasepool { () -> Bool in
+                var containsModalBoundary = false
                 let windowTree = parser.parseAccessibilityHierarchy(
                     in: rootView,
                     rotorResultLimit: 0,
@@ -76,6 +77,9 @@ final class TheBurglar {
                     containerVisitor: { container, object in
                         if case .scrollable = container.type, let view = object as? UIView {
                             allScrollViews[container] = view
+                        }
+                        if container.isModalBoundary {
+                            containsModalBoundary = true
                         }
                     }
                 )
@@ -94,6 +98,12 @@ final class TheBurglar {
                 } else {
                     allHierarchy.append(contentsOf: windowTree)
                 }
+
+                return containsModalBoundary
+            }
+
+            if containsModalBoundary {
+                break
             }
         }
 

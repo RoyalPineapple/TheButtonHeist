@@ -331,10 +331,10 @@ Sorts by `windowLevel` descending (frontmost first). Returns `[(window: UIWindow
 Used by `scanLayers()` for visual fingerprinting and screenshot capture so visual work sees the full composited window stack.
 
 `getAccessibleWindows()` starts from the traversable set and applies the accessibility parse scope:
-- If any window contains `accessibilityViewIsModal` (searched up to four view levels deep), that modal window and non-passthrough windows above it are included; lower windows are blocked.
 - System passthrough windows (`UIRemoteKeyboardWindow`, `UITextEffectsWindow`) are dropped because they sit above the app but do not contain app content.
-- Elevated non-modal windows remain additive with lower app windows; window level alone is not a modal signal.
+- The remaining top-down window band is kept through the key window. Windows below the key window are ignored.
 - Each remaining window with a presented-view-controller chain is parsed from the deepest presented view.
+- `TheTripwire` does not walk views for `accessibilityViewIsModal`. The parser reports modal boundary containers, and `TheBurglar` stops parsing lower windows when that signal appears.
 
 Used by `TheBurglar.parse()` for accessibility hierarchy parsing, invoked through `stash.refresh()`.
 

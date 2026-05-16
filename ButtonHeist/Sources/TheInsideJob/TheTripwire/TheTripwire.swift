@@ -357,22 +357,25 @@ final class TheTripwire {
             .map { ($0, $0 as UIView) }
     }
 
-    /// Windows filtered for accessibility tree parsing. Mirrors the filtering
-    /// VoiceOver applies — explicit modal contexts hide everything beneath
-    /// them, while non-modal overlay windows remain additive.
+    /// Windows that can be handed to the accessibility parser.
+    ///
+    /// This filter intentionally does not inspect the view hierarchy for
+    /// `accessibilityViewIsModal`. It takes the visible window band from the
+    /// frontmost window through the key window. The parser owns modal-scope
+    /// discovery, and `TheBurglar` stops parsing lower windows when the parser
+    /// emits a modal boundary container.
     ///
     /// Resolution steps, in order:
-    /// 1. **Explicit modal flag** — any window containing a view with
-    ///    `accessibilityViewIsModal` set blocks lower windows; higher
-    ///    non-passthrough windows remain visible and accessible.
-    /// 2. **System passthrough windows** — keyboard and text-effects windows
+    /// 1. **System passthrough windows** — keyboard and text-effects windows
     ///    are excluded because they sit above `.normal` but contain no app
     ///    content the agent can usefully act on.
+    /// 2. **Key window anchor** — lower windows beneath the key window are
+    ///    ignored; the key window is UIKit's user-interaction owner.
     /// 3. **Modal presentation** — each window whose root VC has a presented
     ///    VC is parsed from the deepest presented VC's view, matching what
     ///    `UIPresentationController` exposes to UIKit's AX for that window.
     ///
-    /// If none match, all traversable non-passthrough windows are returned.
+    /// If no app windows remain, the full traversable input is returned.
     ///
     /// For screenshots, use `getTraversableWindows()` — visual compositing should
     /// include all windows so the dimmed background remains visible.
@@ -409,17 +412,18 @@ final class TheTripwire {
     /// UIKit window classes.
     static func filterToAccessibleWindows(
         _ windows: [(window: UIWindow, rootView: UIView)],
-        isPassthrough: (UIWindow) -> Bool = isSystemPassthroughWindow
+        isPassthrough: (UIWindow) -> Bool = isSystemPassthroughWindow,
+        isKeyWindow: (UIWindow) -> Bool = { $0.isKeyWindow }
     ) -> [(window: UIWindow, rootView: UIView)] {
         guard !windows.isEmpty else { return [] }
 
-        if let modalIndex = windows.firstIndex(where: { containsModalView($0.window) }) {
-            let modalScope = windows[...modalIndex].filter { !isPassthrough($0.window) }
-            return modalScope.isEmpty ? Array(windows[...modalIndex]) : modalScope
-        }
-
         let appWindows = windows.filter { !isPassthrough($0.window) }
-        let accessibleWindows = appWindows.map { deepestPresentedEntry($0) ?? $0 }
+        let visibleBand = if let keyIndex = appWindows.firstIndex(where: { isKeyWindow($0.window) }) {
+            Array(appWindows[...keyIndex])
+        } else {
+            appWindows
+        }
+        let accessibleWindows = visibleBand.map { deepestPresentedEntry($0) ?? $0 }
 
         return accessibleWindows.isEmpty ? windows : accessibleWindows
     }
@@ -434,19 +438,6 @@ final class TheTripwire {
         let chain = Array(sequence(first: rootVC, next: \.presentedViewController))
         guard let deepest = chain.last, deepest !== rootVC else { return nil }
         return (window: entry.window, rootView: deepest.view)
-    }
-
-    /// Check whether a window contains a view with `accessibilityViewIsModal`.
-    /// Walks up to 4 levels deep to account for UIKit's internal wrapper views
-    /// (e.g. `UITransitionView`, `UIDropShadowView`) inserted between the window
-    /// and the view controller's content.
-    private static func containsModalView(_ window: UIWindow) -> Bool {
-        func check(_ view: UIView, depth: Int) -> Bool {
-            if view.accessibilityViewIsModal { return true }
-            guard depth > 0 else { return false }
-            return view.subviews.contains { check($0, depth: depth - 1) }
-        }
-        return check(window, depth: 4)
     }
 
     // MARK: - View Controller Identity
