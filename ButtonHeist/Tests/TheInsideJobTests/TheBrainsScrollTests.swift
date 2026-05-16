@@ -614,12 +614,10 @@ final class TheBrainsScrollTests: XCTestCase {
         let target = brains.navigation.resolveScrollTarget(
             screenElement: screenElement, axis: .vertical
         )
-        if case .uiScrollView(let sv) = target {
-            XCTAssertTrue(sv === scrollView,
-                          "Should return the element's own scroll view")
-        } else {
-            XCTFail("Expected .uiScrollView, got \(String(describing: target))")
-        }
+        XCTAssertTrue(
+            target === scrollView,
+            "Should return the element's stored scroll view"
+        )
     }
 
     // MARK: - SettleSwipeLoopState (Pure Decision Logic)

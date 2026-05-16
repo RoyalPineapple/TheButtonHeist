@@ -55,11 +55,6 @@ final class Navigation {
     /// that animation to land.
     static let postJumpRealFrames: Int = 20
 
-    /// Maximum pages `scroll_to_edge` will walk before declaring the edge
-    /// unreachable. Paired with `scrollSearchMaxScrolls`; the asymmetry is
-    /// intentional (search is broader than edge-seek).
-    static let scrollToEdgeMaxPages: Int = 50
-
     /// Maximum successful page scrolls `element_search` will perform before
     /// returning a capped, non-exhaustive failure.
     static let scrollSearchMaxScrolls: Int = ScrollSearchProgress.defaultMaxScrolls

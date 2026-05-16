@@ -241,14 +241,16 @@ extension Navigation {
             return .failure(.elementNotFound, message: resolution.diagnostics)
         }
         let axis = Self.requiredAxis(for: target.direction)
-        guard let scrollTarget = resolveScrollTarget(
+        guard let scrollView = resolveScrollTarget(
             screenElement: resolved.screenElement, axis: axis
         ) else {
             return .failure(.scroll, message: "No scrollable ancestor found for element")
         }
 
         let uiDirection = Self.uiScrollDirection(for: target.direction)
-        let (success, _) = await scrollOnePageAndSettle(scrollTarget, direction: uiDirection)
+        let (success, _) = await scrollOnePageAndSettle(
+            .uiScrollView(scrollView), direction: uiDirection
+        )
         return TheSafecracker.InteractionResult(
             success: success, method: .scroll,
             message: success ? nil : "Already at edge",
@@ -266,29 +268,13 @@ extension Navigation {
             return .failure(.elementNotFound, message: resolution.diagnostics)
         }
         let axis = Self.requiredAxis(for: target.edge)
-        guard let scrollTarget = resolveScrollTarget(
+        guard let scrollView = resolveScrollTarget(
             screenElement: resolved.screenElement, axis: axis
         ) else {
             return .failure(.scrollToEdge, message: "No scrollable ancestor found for element")
         }
 
-        let moved: Bool
-        switch scrollTarget {
-        case .uiScrollView(let sv):
-            moved = safecracker.scrollToEdge(sv, edge: target.edge)
-        case .swipeable:
-            let direction = Self.edgeDirection(for: target.edge)
-            var didMove = false
-            for _ in 0..<Self.scrollToEdgeMaxPages {
-                let (stepped, before) = await scrollOnePageAndSettle(
-                    scrollTarget, direction: direction
-                )
-                if !stepped { break }
-                didMove = true
-                if stash.viewportIds == before { break }
-            }
-            moved = didMove
-        }
+        let moved = safecracker.scrollToEdge(scrollView, edge: target.edge)
 
         return TheSafecracker.InteractionResult(
             success: moved, method: .scrollToEdge,
@@ -714,14 +700,13 @@ extension Navigation {
     func resolveScrollTarget(
         screenElement: TheStash.ScreenElement,
         axis: ScrollAxis? = nil
-    ) -> ScrollableTarget? {
+    ) -> UIScrollView? {
         guard let sv = screenElement.scrollView,
               !sv.bhIsUnsafeForProgrammaticScrolling else { return nil }
 
-        let target: ScrollableTarget = .uiScrollView(sv)
-        guard let axis else { return target }
-        guard Self.scrollableAxis(of: target).contains(axis) else { return nil }
-        return target
+        guard let axis else { return sv }
+        guard Self.scrollableAxis(of: .uiScrollView(sv)).contains(axis) else { return nil }
+        return sv
     }
 
     // MARK: - Direction Mapping
