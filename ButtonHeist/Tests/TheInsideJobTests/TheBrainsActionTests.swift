@@ -147,7 +147,14 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .elementDeallocated)
-        XCTAssertTrue(result.message?.contains("deallocated") ?? false)
+        XCTAssertDiagnostic(result.message, contains: [
+            "adjustable action failed",
+            "heistId=\"volume_slider\"",
+            "label=\"Volume\"",
+            "traits=[adjustable]",
+            "liveObject=deallocated",
+            "try refresh with get_interface",
+        ])
     }
 
     func testExecuteDecrementFailsWhenElementObjectIsDeallocated() async {
@@ -162,7 +169,14 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .elementDeallocated)
-        XCTAssertTrue(result.message?.contains("deallocated") ?? false)
+        XCTAssertDiagnostic(result.message, contains: [
+            "adjustable action failed",
+            "heistId=\"brightness_slider\"",
+            "label=\"Brightness\"",
+            "traits=[adjustable]",
+            "liveObject=deallocated",
+            "try refresh with get_interface",
+        ])
     }
 
     func testExecuteIncrementFailsWhenElementIsNotAdjustable() async {
@@ -178,7 +192,14 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .increment)
-        XCTAssertEqual(result.message, "Element is not adjustable")
+        XCTAssertDiagnostic(result.message, contains: [
+            "adjustable action failed",
+            "heistId=\"live_button\"",
+            "label=\"Live\"",
+            "traits=[button]",
+            "actions=[activate]",
+            "try target an element with trait adjustable",
+        ])
     }
 
     func testExecuteDecrementFailsWhenElementIsNotAdjustable() async {
@@ -194,7 +215,14 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .decrement)
-        XCTAssertEqual(result.message, "Element is not adjustable")
+        XCTAssertDiagnostic(result.message, contains: [
+            "adjustable action failed",
+            "heistId=\"live_button\"",
+            "label=\"Live\"",
+            "traits=[button]",
+            "actions=[activate]",
+            "try target an element with trait adjustable",
+        ])
     }
 
     func testExecuteCustomActionFailsWhenElementObjectIsDeallocated() async {
@@ -211,7 +239,75 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .elementDeallocated)
-        XCTAssertTrue(result.message?.contains("deallocated") ?? false)
+        XCTAssertDiagnostic(result.message, contains: [
+            "custom action failed",
+            "heistId=\"options_button\"",
+            "label=\"Options\"",
+            "liveObject=deallocated",
+            "try refresh with get_interface",
+        ])
+    }
+
+    func testExecuteCustomActionMissingReportsAvailableCustomActions() async {
+        let heistId = "options_button"
+        let liveObject = UIButton(type: .system)
+        registerScreenElement(
+            heistId: heistId,
+            element: makeElement(
+                label: "Options",
+                traits: .button,
+                customActions: [.init(name: "Delete"), .init(name: "Archive")]
+            ),
+            object: liveObject
+        )
+
+        let result = await brains.actions.executeCustomAction(
+            CustomActionTarget(elementTarget: .heistId(heistId), actionName: "Share")
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .customAction)
+        XCTAssertDiagnostic(result.message, contains: [
+            "custom action failed",
+            "requestedAction=\"Share\"",
+            "heistId=\"options_button\"",
+            "label=\"Options\"",
+            "actions=[activate, Delete, Archive]",
+            "try use one of custom actions [\"Delete\", \"Archive\"]",
+        ])
+    }
+
+    func testExecuteCustomActionDeclinedReportsAlternatives() async {
+        let heistId = "options_button"
+        let liveObject = UIButton(type: .system)
+        liveObject.accessibilityCustomActions = [
+            UIAccessibilityCustomAction(name: "Delete") { _ in false },
+            UIAccessibilityCustomAction(name: "Archive") { _ in true },
+        ]
+        registerScreenElement(
+            heistId: heistId,
+            element: makeElement(
+                label: "Options",
+                traits: .button,
+                customActions: [.init(name: "Delete"), .init(name: "Archive")]
+            ),
+            object: liveObject
+        )
+
+        let result = await brains.actions.executeCustomAction(
+            CustomActionTarget(elementTarget: .heistId(heistId), actionName: "Delete")
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .customAction)
+        XCTAssertDiagnostic(result.message, contains: [
+            "custom action failed",
+            "requestedAction=\"Delete\" declined by handler",
+            "heistId=\"options_button\"",
+            "label=\"Options\"",
+            "actions=[activate, Delete, Archive]",
+            "try use another custom action [\"Archive\"]",
+        ])
     }
 
     func testExecuteActivateSucceedsForNoTraitElementWithActivationOverride() async {
@@ -276,6 +372,72 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .increment)
+    }
+
+    func testExecuteTypeTextWithoutActiveInputReportsFocusState() async {
+        _ = brains.safecracker.resignFirstResponder()
+
+        let result = await brains.actions.executeTypeText(TypeTextTarget(text: "hello"))
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .typeText)
+        XCTAssertDiagnostic(result.message, contains: [
+            "text entry failed",
+            "focus=none",
+            "keyboardVisible=false",
+            "activeTextInput=false",
+            "try provide elementTarget for a text field",
+        ])
+    }
+
+    func testExecuteEditActionWithoutResponderReportsFocusState() async {
+        _ = brains.safecracker.resignFirstResponder()
+
+        let result = await brains.actions.executeEditAction(EditActionTarget(action: .copy))
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .editAction)
+        XCTAssertDiagnostic(result.message, contains: [
+            "edit action failed",
+            "action=\"copy\"",
+            "focus=none",
+            "keyboardVisible=false",
+            "activeTextInput=false",
+            "try focus editable text before copy",
+        ])
+    }
+
+    func testExecuteResignFirstResponderWithoutResponderReportsFocusState() async {
+        _ = brains.safecracker.resignFirstResponder()
+
+        let result = await brains.actions.executeResignFirstResponder()
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .resignFirstResponder)
+        XCTAssertDiagnostic(result.message, contains: [
+            "resign first responder failed",
+            "focus=none",
+            "keyboardVisible=false",
+            "activeTextInput=false",
+            "try focus a text input before dismissing the keyboard",
+        ])
+    }
+
+    func testExecuteTapOutsideWindowReportsGestureDispatchState() async {
+        let result = await brains.actions.executeTap(
+            TouchTapTarget(pointX: -10_000, pointY: -10_000)
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .syntheticTap)
+        XCTAssertDiagnostic(result.message, contains: [
+            "gesture dispatch failed",
+            "method=syntheticTap",
+            "phase=dispatch",
+            "point=(-10000,-10000)",
+            "window=none",
+            "try target a visible element",
+        ])
     }
 
     // MARK: - clearCache
@@ -350,9 +512,35 @@ final class TheBrainsActionTests: XCTestCase {
 
     private func makeElement(
         label: String? = nil,
-        traits: UIAccessibilityTraits = .none
+        traits: UIAccessibilityTraits = .none,
+        customActions: [AccessibilityElement.CustomAction] = []
     ) -> AccessibilityElement {
-        .make(label: label, traits: traits, respondsToUserInteraction: false)
+        .make(
+            label: label,
+            traits: traits,
+            customActions: customActions,
+            respondsToUserInteraction: false
+        )
+    }
+
+    private func XCTAssertDiagnostic(
+        _ message: String?,
+        contains fragments: [String],
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        guard let message else {
+            XCTFail("Expected diagnostic message", file: file, line: line)
+            return
+        }
+        for fragment in fragments {
+            XCTAssertTrue(
+                message.contains(fragment),
+                "Expected diagnostic to contain '\(fragment)'. Message: \(message)",
+                file: file,
+                line: line
+            )
+        }
     }
 
     private func withNoTraversableWindows<T>(
