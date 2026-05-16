@@ -814,6 +814,18 @@ public final class TheFence {
                 return .action(result: actionResult, expectation: delivery)
             }
             if let expectation {
+                // wait_for_change sends the expectation to the iOS server; a
+                // successful result means the server observed or already held it.
+                if actionResult.method == .waitForChange {
+                    return .action(
+                        result: actionResult,
+                        expectation: ExpectationResult(
+                            met: actionResult.success,
+                            expectation: expectation,
+                            actual: actionResult.message ?? actionResult.interfaceDelta?.kindRawValue
+                        )
+                    )
+                }
                 let validation = expectation.validate(
                     against: actionResult, preActionElements: preActionCache
                 )

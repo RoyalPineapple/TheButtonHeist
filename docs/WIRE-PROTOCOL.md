@@ -530,7 +530,7 @@ Dismiss the keyboard by resigning first responder.
 
 ### waitForChange
 
-Wait for the UI to change in a way that matches an expectation. With no expectation, returns on any tree change. With `expect`, rides through intermediate states (e.g. spinners) until the expectation is met.
+Wait for the UI to change in a way that matches an expectation. With `expect`, the server checks the current settled state first, then watches settled changes until the expectation is true. With no expectation, returns on any post-baseline tree change.
 
 ```json
 {"buttonHeistVersion":"<calver>","type":"waitForChange","payload":{"expect":{"type":"screen_changed"},"timeout":10}}
@@ -541,9 +541,11 @@ Wait for the UI to change in a way that matches an expectation. With no expectat
 | `expect` | `ActionExpectation?` | The change to wait for — `"screen_changed"`, `"elements_changed"`, or a JSON expectation object. When nil, any tree change satisfies. |
 | `timeout` | `Double?` | Max wait time in seconds (default: 10, max: 30) |
 
-Returns an `actionResult` with `method: "waitForChange"` and an `interfaceDelta` describing what changed. On timeout, returns `success: false` with `errorKind: "timeout"`.
+Returns an `actionResult` with `method: "waitForChange"` and an `interfaceDelta` describing what changed. If the current state already satisfies a state predicate such as `element_appeared`, `element_disappeared`, or `element_updated` with `newValue`, the result can succeed with `noChange`. On timeout, returns `success: false` with `errorKind: "timeout"`.
 
-**Fast path**: if the tree already changed since the last response (while the agent was thinking), returns immediately with the accumulated delta.
+For `waitForChange`, `element_disappeared` is a current-state predicate: it is met when no current settled element matches the predicate. It does not require proving that the element existed earlier and was removed.
+
+**Fast paths**: if the current state already satisfies the expectation, returns immediately. If the tree already changed since the last response (while the agent was thinking), returns immediately with the accumulated delta.
 
 **Example flow**: `activate pay_now_button expect="screen_changed"` → delta shows spinner, expectation not met → `waitForChange expect="screen_changed" timeout=10` → receipt screen arrives, expectation met.
 

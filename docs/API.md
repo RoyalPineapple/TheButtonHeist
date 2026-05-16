@@ -610,6 +610,10 @@ cd ButtonHeistMCP && swift build -c release
 
 All tools use strict schemas (`additionalProperties: false`) — only documented parameters are accepted.
 
+`wait_for_change` is server-owned: with an expectation, TheInsideJob checks the current settled state first, then holds the request open until a later settled scan satisfies the same predicate or the timeout clears it.
+
+For `wait_for_change`, `element_disappeared` is satisfied by current absence. It does not require proving a prior arrival and removal event.
+
 #### activate
 
 The primary way to interact with buttons, links, and controls. Uses the activation-first pattern: tries `accessibilityActivate()` (like VoiceOver double-tap) first, falls back to synthetic tap at the element's activation point. Provide a `heistId` from `get_interface` or flat matcher fields such as `identifier`, `label`, `traits`, and optional `ordinal`.

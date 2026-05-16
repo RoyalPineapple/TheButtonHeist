@@ -885,6 +885,62 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testWaitForChangeTrustsServerSideExpectationEvaluation() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        mockConn.autoResponse = { message in
+            guard case .waitForChange = message else {
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+            return .actionResult(ActionResult(
+                success: true,
+                method: .waitForChange,
+                message: "expectation already met by current state (0.0s)",
+                interfaceDelta: .noChange(.init(elementCount: 1))
+            ))
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "wait_for_change",
+            "expect": ["type": "element_disappeared", "matcher": ["label": "Loading"]],
+        ])
+
+        guard case .action(_, let expectation) = response else {
+            return XCTFail("Expected action response, got \(response)")
+        }
+        XCTAssertEqual(expectation?.met, true)
+        XCTAssertEqual(expectation?.actual, "expectation already met by current state (0.0s)")
+    }
+
+    @ButtonHeistActor
+    func testWaitForChangeTimeoutDoesNotClaimExpectationMet() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        mockConn.autoResponse = { message in
+            guard case .waitForChange = message else {
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+            return .actionResult(ActionResult(
+                success: false,
+                method: .waitForChange,
+                message: "timed out after 0.2s — expectation not met",
+                errorKind: .timeout,
+                interfaceDelta: .noChange(.init(elementCount: 1))
+            ))
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "wait_for_change",
+            "expect": ["type": "element_disappeared", "matcher": ["label": "Loading"]],
+            "timeout": 0.2,
+        ])
+
+        guard case .action(_, let expectation) = response else {
+            return XCTFail("Expected action response, got \(response)")
+        }
+        XCTAssertEqual(expectation?.met, false)
+        XCTAssertEqual(expectation?.actual, "timed out after 0.2s — expectation not met")
+    }
+
+    @ButtonHeistActor
     func testWaitForChangeNoArgsSendsNilExpect() async {
         let (fence, mockConn) = makeConnectedFence()
         _ = try? await fence.execute(request: [

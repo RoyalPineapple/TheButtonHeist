@@ -7,7 +7,7 @@ Button Heist drives iOS apps through the accessibility layer — the same interf
 1. **See** — `get_interface` returns every visible element with a heistId, label, value, traits, and actions.
 2. **Act** — `activate`, `type_text`, `scroll`, `gesture` — target by heistId or matcher. Always attach `expect` when you know what should change.
 3. **Read the response** — every response tells you two things: what your action did (`interfaceDelta`) and what changed while you were thinking (`[background: ...]`). If either answers your question, skip `get_interface`.
-4. **Wait if needed** — when the delta shows a transient state (spinner, loading overlay) and your expectation wasn't met, call `wait_for_change` with the same expectation. The server rides through intermediate states and returns when the real change lands. If the change already happened in the background, `wait_for_change` returns instantly.
+4. **Wait if needed** — when the delta shows a transient state (spinner, loading overlay) and your expectation wasn't met, call `wait_for_change` with the same expectation. The server checks the current state first, then watches settled changes until the expectation is true. If the change already happened in the background, `wait_for_change` returns instantly.
 5. **Repeat** — only re-fetch when you need elements you haven't seen.
 
 ## Choosing Tools
@@ -18,7 +18,9 @@ Button Heist drives iOS apps through the accessibility layer — the same interf
 
 **Finding**: `scroll` with mode "to_visible" when you've seen an element before but it scrolled off-screen. `scroll` with mode "search" when you've never seen it — scrolls every container looking for a match. `wait_for` when you know a specific element will appear.
 
-**Waiting**: `wait_for_change` when the UI is updating asynchronously — network requests, timers, animations completing. Pass an expectation object to wait for the specific outcome: `expect={"type":"screen_changed"}` rides through loading spinners until the real navigation happens. With no expectation, returns on any tree change. This is the correct response when your action produced a transient state (spinner appeared, interactive elements disappeared) and you need the final result.
+**Waiting**: `wait_for_change` when the UI is updating asynchronously — network requests, timers, animations completing. Pass an expectation object to wait for the specific outcome: `expect={"type":"screen_changed"}` rides through loading spinners until the real navigation happens. With `expect`, the server first checks whether the current state already satisfies it, then blocks until a later settled scan does. With no expectation, returns on any tree change. This is the correct response when your action produced a transient state (spinner appeared, interactive elements disappeared) and you need the final result.
+
+For `wait_for_change`, `element_disappeared` means the element is absent from the current settled hierarchy. It does not require Button Heist to prove the element existed and then vanished.
 
 **Composing**: `run_batch` for multi-step sequences in a single call. Attach `expect` to each step for inline verification.
 

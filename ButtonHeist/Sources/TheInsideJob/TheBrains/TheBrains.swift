@@ -25,6 +25,18 @@ final class TheBrains {
     let navigation: Navigation
     let actions: Actions
 
+    private enum WaitForChangePhase {
+        case idle
+        case waiting(WaitForChangePredicate)
+    }
+
+    private struct WaitForChangePredicate {
+        let expectation: ActionExpectation?
+        let deadline: CFAbsoluteTime
+    }
+
+    private var waitForChangePhase: WaitForChangePhase = .idle
+
     init(tripwire: TheTripwire) {
         self.tripwire = tripwire
         let stash = TheStash(tripwire: tripwire)
@@ -436,9 +448,24 @@ final class TheBrains {
 
     // MARK: - Wait For Change
 
-    /// Run the wait-for-change pipeline: fast path (already changed) or slow path (poll loop).
+    /// Install one wait predicate, check current state, then watch settled changes until it matches.
     func executeWaitForChange(timeout: TimeInterval, expectation: ActionExpectation?) async -> ActionResult {
         let start = CFAbsoluteTimeGetCurrent()
+
+        guard let predicate = installWaitForChangePredicate(
+            expectation: expectation,
+            timeout: timeout,
+            start: start
+        ) else {
+            var builder = ActionResultBuilder(
+                method: .waitForChange,
+                screenName: stash.lastScreenName,
+                screenId: stash.lastScreenId
+            )
+            builder.message = "wait_for_change already in progress"
+            return builder.failure(errorKind: .actionFailed)
+        }
+        defer { waitForChangePhase = .idle }
 
         guard let initial = await refreshSemanticSnapshot() else {
             return treeUnavailableResult(method: .waitForChange)
@@ -450,6 +477,19 @@ final class TheBrains {
             }
             return initial
         }()
+        let preWaitElements = Dictionary(
+            uniqueKeysWithValues: TheStash.WireConversion.toWire(baseline.snapshot).map {
+                ($0.heistId, $0)
+            }
+        )
+
+        if let expectation = predicate.expectation,
+           validateCurrentState(expectation, snapshot: initial.snapshot).met {
+            var builder = ActionResultBuilder(method: .waitForChange, snapshot: initial.snapshot)
+            builder.message = "expectation already met by current state (0.0s)"
+            builder.interfaceDelta = .noChange(.init(elementCount: initial.snapshot.count))
+            return builder.success()
+        }
 
         // Fast path: tree already changed since the last response
         let lastHash: Int = {
@@ -459,7 +499,8 @@ final class TheBrains {
         if lastHash != 0, initial.treeHash != lastHash {
             let delta = computeDelta(before: baseline, after: initial)
             if let result = evaluateWaitForChange(
-                delta: delta, afterSnapshot: initial.snapshot, expectation: expectation,
+                delta: delta, afterSnapshot: initial.snapshot, expectation: predicate.expectation,
+                preWaitElements: preWaitElements,
                 start: start, round: 0, message: "already changed (0.0s)"
             ) {
                 return result
@@ -467,12 +508,11 @@ final class TheBrains {
         }
 
         // Slow path: poll until a change lands or we time out
-        let deadline = CFAbsoluteTimeGetCurrent() + timeout
         var beforeWireHash = initial.treeHash
         var round = 0
 
-        while CFAbsoluteTimeGetCurrent() < deadline {
-            let remaining = deadline - CFAbsoluteTimeGetCurrent()
+        while CFAbsoluteTimeGetCurrent() < predicate.deadline {
+            let remaining = predicate.deadline - CFAbsoluteTimeGetCurrent()
             guard remaining > 0 else { break }
 
             _ = await tripwire.waitForAllClear(timeout: min(remaining, 1.0))
@@ -485,7 +525,8 @@ final class TheBrains {
             let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
 
             if let result = evaluateWaitForChange(
-                delta: delta, afterSnapshot: current.snapshot, expectation: expectation,
+                delta: delta, afterSnapshot: current.snapshot, expectation: predicate.expectation,
+                preWaitElements: preWaitElements,
                 start: start, round: round, message: "changed after \(elapsed)s (\(round) rounds)"
             ) {
                 return result
@@ -502,17 +543,32 @@ final class TheBrains {
         let delta = current.map { computeDelta(before: baseline, after: $0) }
             ?? InterfaceDelta.noChange(.init(elementCount: 0))
         var builder = ActionResultBuilder(method: .waitForChange, snapshot: afterSnapshot)
-        builder.message = expectation != nil
+        builder.message = predicate.expectation != nil
             ? "timed out after \(elapsed)s — expectation not met"
             : "timed out after \(elapsed)s — no change detected"
         builder.interfaceDelta = delta
         return builder.failure(errorKind: .timeout)
     }
 
+    private func installWaitForChangePredicate(
+        expectation: ActionExpectation?,
+        timeout: TimeInterval,
+        start: CFAbsoluteTime
+    ) -> WaitForChangePredicate? {
+        guard case .idle = waitForChangePhase else { return nil }
+        let predicate = WaitForChangePredicate(
+            expectation: expectation,
+            deadline: start + timeout
+        )
+        waitForChangePhase = .waiting(predicate)
+        return predicate
+    }
+
     private func evaluateWaitForChange(
         delta: InterfaceDelta,
         afterSnapshot: [Screen.ScreenElement],
         expectation: ActionExpectation?,
+        preWaitElements: [String: HeistElement],
         start: CFAbsoluteTime,
         round: Int,
         message: String
@@ -525,11 +581,129 @@ final class TheBrains {
             return builder.success()
         }
 
-        guard expectation.validate(against: builder.success()).met else { return nil }
+        let currentState = validateCurrentState(expectation, snapshot: afterSnapshot)
+        if currentState.met {
+            let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
+            builder.message = "expectation met after \(elapsed)s (\(round) rounds)"
+            return builder.success()
+        }
+
+        guard expectation.validate(
+            against: builder.success(),
+            preActionElements: preWaitElements
+        ).met else { return nil }
 
         let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
         builder.message = "expectation met after \(elapsed)s (\(round) rounds)"
         return builder.success()
+    }
+
+    private func validateCurrentState(
+        _ expectation: ActionExpectation,
+        snapshot: [Screen.ScreenElement]
+    ) -> ExpectationResult {
+        validateCurrentState(
+            expectation,
+            elements: TheStash.WireConversion.toWire(snapshot)
+        )
+    }
+
+    private func validateCurrentState(
+        _ expectation: ActionExpectation,
+        elements: [HeistElement]
+    ) -> ExpectationResult {
+        switch expectation {
+        case .screenChanged:
+            return ExpectationResult(
+                met: false, expectation: expectation,
+                actual: "requires observed screen change"
+            )
+        case .elementsChanged:
+            return ExpectationResult(
+                met: false, expectation: expectation,
+                actual: "requires observed element change"
+            )
+        case .elementUpdated(let heistId, let property, let oldValue, let newValue):
+            return validateElementUpdatedCurrentState(
+                heistId: heistId, property: property,
+                oldValue: oldValue, newValue: newValue,
+                expectation: expectation,
+                elements: elements
+            )
+        case .elementAppeared(let matcher):
+            let present = elements.contains { $0.matches(matcher) }
+            return ExpectationResult(
+                met: present, expectation: expectation,
+                actual: present ? "present" : "not present"
+            )
+        case .elementDisappeared(let matcher):
+            let present = elements.contains { $0.matches(matcher) }
+            return ExpectationResult(
+                met: !present, expectation: expectation,
+                actual: present ? "still present" : "absent"
+            )
+        case .compound(let expectations):
+            let failures = expectations.compactMap { subExpectation -> String? in
+                let result = validateCurrentState(subExpectation, elements: elements)
+                guard !result.met else { return nil }
+                return "\(subExpectation.summaryDescription): \(result.actual ?? "failed")"
+            }
+            guard !failures.isEmpty else {
+                return ExpectationResult(met: true, expectation: expectation, actual: nil)
+            }
+            return ExpectationResult(
+                met: false, expectation: expectation,
+                actual: failures.joined(separator: "; ")
+            )
+        }
+    }
+
+    private func validateElementUpdatedCurrentState(
+        heistId: String?,
+        property: ElementProperty?,
+        oldValue: String?,
+        newValue: String?,
+        expectation: ActionExpectation,
+        elements: [HeistElement]
+    ) -> ExpectationResult {
+        guard oldValue == nil else {
+            return ExpectationResult(
+                met: false, expectation: expectation,
+                actual: "oldValue requires observed update"
+            )
+        }
+        guard let newValue else {
+            return ExpectationResult(
+                met: false, expectation: expectation,
+                actual: "newValue required for current state"
+            )
+        }
+
+        let candidates = elements.filter { element in
+            guard let heistId else { return true }
+            return element.heistId == heistId
+        }
+        guard !candidates.isEmpty else {
+            return ExpectationResult(met: false, expectation: expectation, actual: "element not found")
+        }
+
+        let properties = property.map { [$0] } ?? ElementProperty.allCases
+        let matched = candidates.contains { element in
+            properties.contains { element.currentStateValue(for: $0) == newValue }
+        }
+        guard !matched else {
+            return ExpectationResult(met: true, expectation: expectation, actual: nil)
+        }
+
+        let observed = candidates.prefix(5).map { element in
+            let values = properties
+                .map { property in
+                    "\(property.rawValue): \(element.currentStateValue(for: property) ?? "nil")"
+                }
+                .joined(separator: ", ")
+            return "\(element.heistId): \(values)"
+        }.joined(separator: "; ")
+        return ExpectationResult(met: false, expectation: expectation, actual: observed)
     }
 
     // MARK: - Private Helpers
@@ -607,6 +781,47 @@ final class TheBrains {
         set { stash.stakeout = newValue }
     }
 
+}
+
+private extension HeistElement {
+    func currentStateValue(for property: ElementProperty) -> String? {
+        switch property {
+        case .label:
+            return label
+        case .value:
+            return value
+        case .traits:
+            return traits.map(\.rawValue).joined(separator: ", ")
+        case .hint:
+            return hint
+        case .actions:
+            return actions.map(\.description).joined(separator: ", ")
+        case .frame:
+            return "\(Int(frameX)),\(Int(frameY)),\(Int(frameWidth)),\(Int(frameHeight))"
+        case .activationPoint:
+            return "\(Int(activationPointX)),\(Int(activationPointY))"
+        case .customContent:
+            return customContent?.formattedCurrentStateValue
+        case .rotors:
+            guard let rotors, !rotors.isEmpty else { return nil }
+            return rotors.map(\.name).joined(separator: ", ")
+        }
+    }
+}
+
+private extension Array where Element == HeistCustomContent {
+    var formattedCurrentStateValue: String? {
+        let formatted = compactMap { item -> String? in
+            switch (item.label.isEmpty, item.value.isEmpty) {
+            case (false, false): return "\(item.label): \(item.value)"
+            case (false, true): return item.label
+            case (true, false): return item.value
+            case (true, true): return nil
+            }
+        }
+        guard !formatted.isEmpty else { return nil }
+        return formatted.joined(separator: "; ")
+    }
 }
 
 #endif // DEBUG
