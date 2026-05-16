@@ -335,10 +335,11 @@ final class TargetConfigTests: XCTestCase {
         let fence = makeMockFence(fileConfig: config)
 
         let response = try await fence.execute(request: ["command": "connect", "target": "sim2"])
-        guard case .interface = response else {
-            XCTFail("Expected interface response, got \(response)")
+        guard case .sessionState(let payload) = response else {
+            XCTFail("Expected sessionState response, got \(response)")
             return
         }
+        XCTAssertEqual(payload["connected"] as? Bool, true)
         XCTAssertEqual(fence.config.deviceFilter, "127.0.0.1:1456")
         XCTAssertEqual(fence.config.token, "tok2")
     }
@@ -352,10 +353,11 @@ final class TargetConfigTests: XCTestCase {
             "device": "127.0.0.1:9999",
             "token": "direct-tok",
         ])
-        guard case .interface = response else {
-            XCTFail("Expected interface response, got \(response)")
+        guard case .sessionState(let payload) = response else {
+            XCTFail("Expected sessionState response, got \(response)")
             return
         }
+        XCTAssertEqual(payload["connected"] as? Bool, true)
         XCTAssertEqual(fence.config.deviceFilter, "127.0.0.1:9999")
         XCTAssertEqual(fence.config.token, "direct-tok")
     }

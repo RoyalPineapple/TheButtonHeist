@@ -457,6 +457,8 @@ public enum Command: String, CaseIterable, Sendable {
 
 Single source of truth for the 38 supported commands. Each case has a `rawValue` matching the wire-format string (e.g., `.oneFingerTap` → `"one_finger_tap"`). `Command.allCases` replaces the former hand-maintained string array.
 
+`connect` establishes the session and returns session state; observation starts with `get_interface`. It verifies transport, handshake/auth, and session ownership, but it does not request, parse, or explore the UI hierarchy.
+
 **Location**: `ButtonHeist/Sources/TheButtonHeist/TheFence+CommandCatalog.swift`
 
 ### FenceResponse
@@ -607,6 +609,7 @@ cd ButtonHeistMCP && swift build -c release
 | `get_pasteboard` | Read text from the general pasteboard | `expect` |
 | `run_batch` | Execute an ordered batch of Fence requests in one MCP call | `steps` (required), `policy` |
 | `get_session_state` | Read-only summary of the current macOS-side session state | — |
+| `connect` | Establish or switch the active session and return session state. Observation starts with `get_interface`. | `target`, `device`, `token` |
 
 All tools use strict schemas (`additionalProperties: false`) for the call shape — only documented parameters are accepted. Semantic validation happens in TheFence handlers, which report malformed fields as `schema validation failed for <field>: observed <type/value>; expected <type/range/enum>`.
 
@@ -1457,6 +1460,14 @@ All subcommands that connect to a device accept these connection options:
 | `BUTTONHEIST_SESSION_TIMEOUT` | Default idle timeout in seconds for `buttonheist session` (overridden by `--session-timeout`) |
 
 Flags always take precedence over environment variables.
+
+### buttonheist connect
+
+Establish a configured session and print session state. This command no longer implies UI observation; run `buttonheist get_interface` when you want the current hierarchy.
+
+```
+USAGE: buttonheist connect [OPTIONS] [DEVICE]
+```
 
 ### buttonheist list_devices
 

@@ -111,6 +111,64 @@ final class TheFenceHandlerTests: XCTestCase {
         )
     }
 
+    // MARK: - Connect
+
+    @ButtonHeistActor
+    func testConnectReturnsSessionStateWithoutInterfaceObservation() async throws {
+        let mockConn = MockConnection()
+        mockConn.serverInfo = TheFenceFixtures.testServerInfo
+
+        let mockDiscovery = MockDiscovery()
+        mockDiscovery.discoveredDevices = [TheFenceFixtures.testDevice]
+
+        let fence = TheFence(configuration: .init(
+            deviceFilter: "MockApp",
+            autoReconnect: false
+        ))
+        fence.handoff.makeDiscovery = { mockDiscovery }
+        fence.handoff.makeConnection = { _, _, _ in mockConn }
+
+        let previousReachability = makeReachabilityConnection
+        makeReachabilityConnection = { _ in
+            let probe = MockConnection()
+            probe.emitTransportReadyOnConnect = true
+            probe.autoResponse = { message in
+                if case .status = message {
+                    return .status(StatusPayload(
+                        identity: StatusIdentity(
+                            appName: "Mock", bundleIdentifier: "com.test",
+                            appBuild: "1", deviceName: "Mock",
+                            systemVersion: "18.0", buttonHeistVersion: "0.0.1"
+                        ),
+                        session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
+                    ))
+                }
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+            return probe
+        }
+        defer { makeReachabilityConnection = previousReachability }
+
+        XCTAssertFalse(fence.handoff.isConnected)
+        XCTAssertFalse(mockConn.isConnected)
+        let response = try await fence.execute(request: ["command": "connect"])
+
+        guard case .sessionState(let payload) = response else {
+            return XCTFail("Expected sessionState response, got \(response)")
+        }
+        XCTAssertEqual(payload["connected"] as? Bool, true)
+        XCTAssertEqual(mockConn.connectCount, 1)
+
+        for (message, _) in mockConn.sent {
+            switch message {
+            case .requestInterface, .explore:
+                XCTFail("connect must not send UI observation message \(message)")
+            default:
+                break
+            }
+        }
+    }
+
     // MARK: - Argument Parsing Helpers
 
     func testStringArg() {
