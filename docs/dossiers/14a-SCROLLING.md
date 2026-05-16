@@ -133,7 +133,7 @@ Three commands expose scrolling directly to agents. These are not auto-scroll â€
 
 Scrolls the resolved element's stored scroll view by one page in the given direction. "One page" is the scroll view's frame dimension minus a 44pt overlap, so the user retains context across pages.
 
-`resolveScrollTarget` returns the element's stored scroll view from the accessibility hierarchy (`screenElement.scrollView`) only when that scroll view supports the requested axis. It never borrows an unrelated container from the global hierarchy. If no owned scroll view can reveal that axis, the command fails closed with "No scrollable ancestor found for element." If the owned scroll view supports the axis but is already at its limit, `scrollByPage` returns false ("Already at edge").
+`resolveScrollTarget` returns the element's stored scroll view from the accessibility hierarchy (`screenElement.scrollView`) only when that scroll view supports the requested axis. It never borrows an unrelated container from the global hierarchy. If no owned scroll view can reveal that axis, the command fails closed with a scroll-target diagnostic that names the observed element and whether the failure was no live scrollable ancestor, an unsafe programmatic scroll view, or an axis mismatch. If the owned scroll view supports the axis but is already at its limit, `scrollByPage` returns false with an edge diagnostic.
 
 Offsets are clamped to valid content bounds. Returns `false` if already at the edge.
 

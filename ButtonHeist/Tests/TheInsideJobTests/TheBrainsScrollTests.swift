@@ -56,22 +56,25 @@ final class TheBrainsScrollTests: XCTestCase {
             throw XCTSkip("No live hierarchy available for UIPageViewController regression test")
         }
 
-        let unsafeContainers = brains.stash.scrollableContainerViews.compactMap { entry -> AccessibilityContainer? in
+        let unsafeTargets = brains.stash.scrollableContainerViews.compactMap { entry -> (
+            AccessibilityContainer,
+            UIScrollView
+        )? in
             let (container, view) = entry
             guard let scrollView = view as? UIScrollView,
                   scrollView.bhIsUnsafeForProgrammaticScrolling else {
                 return nil
             }
-            return container
+            return (container, scrollView)
         }
-        guard !unsafeContainers.isEmpty else {
+        guard !unsafeTargets.isEmpty else {
             throw XCTSkip("UIPageViewController did not expose _UIQueuingScrollView on this OS")
         }
 
         var union = brains.stash.currentScreen
         let manifest = await brains.navigation.exploreScreen(union: &union)
 
-        for container in unsafeContainers {
+        for (container, _) in unsafeTargets {
             XCTAssertTrue(
                 manifest.exploredContainers.contains(container),
                 "Unsafe page-view scroll containers should be marked explored without programmatic scrolling"
@@ -82,6 +85,25 @@ final class TheBrainsScrollTests: XCTestCase {
                 $0.element.label == "Page One Visible Label"
             },
             "Visible page content should remain discoverable without scrolling the queuing scroll view"
+        )
+
+        let unsafeScreenElement = TheStash.ScreenElement(
+            heistId: "unsafe_page_item",
+            contentSpaceOrigin: nil,
+            element: makeElement(label: "Unsafe Page Item"),
+            object: nil,
+            scrollView: unsafeTargets[0].1
+        )
+        guard case .failed(let diagnostic) = brains.navigation.resolveScrollTargetResult(
+            screenElement: unsafeScreenElement
+        ) else {
+            return XCTFail("Expected unsafe programmatic scroll diagnostic")
+        }
+        XCTAssertEqual(
+            diagnostic.message(for: unsafeScreenElement),
+            "scroll target failed: observed \"Unsafe Page Item\" (heistId: unsafe_page_item) "
+                + "inside a scroll view that is unsafe for programmatic scrolling; try element_search "
+                + "to use semantic search"
         )
     }
 
@@ -542,13 +564,24 @@ final class TheBrainsScrollTests: XCTestCase {
         let screenElement = TheStash.ScreenElement(
             heistId: "item",
             contentSpaceOrigin: nil,
-            element: makeElement(),
+            element: makeElement(label: "Item"),
             object: UILabel(),
             scrollView: nil
         )
 
         let target = brains.navigation.resolveScrollTarget(screenElement: screenElement)
         XCTAssertNil(target)
+
+        guard case .failed(let diagnostic) = brains.navigation.resolveScrollTargetResult(
+            screenElement: screenElement
+        ) else {
+            return XCTFail("Expected missing scroll target diagnostic")
+        }
+        XCTAssertEqual(
+            diagnostic.message(for: screenElement),
+            "scroll target failed: observed \"Item\" (heistId: item) with no live scrollable ancestor; "
+                + "try element_search or target an element inside a scroll container"
+        )
     }
 
     func testResolveScrollTargetReturnsNilWhenNearestScrollViewCannotScrollRequestedAxis() {
@@ -567,6 +600,19 @@ final class TheBrainsScrollTests: XCTestCase {
             screenElement: screenElement, axis: .vertical
         )
         XCTAssertNil(target)
+
+        guard case .failed(let diagnostic) = brains.navigation.resolveScrollTargetResult(
+            screenElement: screenElement,
+            axis: .vertical
+        ) else {
+            return XCTFail("Expected axis mismatch diagnostic")
+        }
+        XCTAssertEqual(
+            diagnostic.message(for: screenElement),
+            "scroll target failed: observed heistId item inside a scroll view that supports no scrolling; "
+                + "expected vertical scrolling; try a matching scroll direction or target an element "
+                + "inside a matching scroll container"
+        )
     }
 
     func testResolveScrollTargetDoesNotFallbackToUnrelatedAxisContainer() {
