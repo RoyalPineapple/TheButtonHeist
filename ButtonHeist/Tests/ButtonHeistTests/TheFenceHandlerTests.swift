@@ -38,6 +38,27 @@ final class TheFenceHandlerTests: XCTestCase {
         }
     }
 
+    /// Assert that executing a request returns a `.error(...)` response with the exact message.
+    @ButtonHeistActor
+    private func assertValidationError(
+        _ request: [String: Any],
+        equals expected: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        let (fence, _) = makeConnectedFence()
+        do {
+            let response = try await fence.execute(request: request)
+            if case .error(let message, _) = response {
+                XCTAssertEqual(message, expected, file: file, line: line)
+            } else {
+                XCTFail("Expected .error response, got: \(response)", file: file, line: line)
+            }
+        } catch {
+            XCTFail("Unexpected throw: \(error)", file: file, line: line)
+        }
+    }
+
     /// Assert that executing a request passes validation (returns a non-error response).
     @ButtonHeistActor
     private func assertPassesValidation(
@@ -189,6 +210,42 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertNil(try fence.elementTarget([:]))
     }
 
+    // MARK: - Schema Validation Diagnostics
+
+    @ButtonHeistActor
+    func testSchemaValidationReportsBadFieldType() async {
+        await assertValidationError(
+            ["command": "type_text", "text": 3],
+            equals: "schema validation failed for text: observed integer 3; expected string"
+        )
+    }
+
+    @ButtonHeistActor
+    func testSchemaValidationReportsBadCoercedValue() async {
+        await assertValidationError(
+            ["command": "wait_for_change", "timeout": "forever"],
+            equals: "schema validation failed for timeout: observed string \"forever\"; expected number"
+        )
+    }
+
+    @ButtonHeistActor
+    func testSchemaValidationReportsRangeFailure() async {
+        await assertValidationError(
+            ["command": "start_recording", "fps": 16],
+            equals: "schema validation failed for fps: observed integer 16; expected integer in 1...15"
+        )
+    }
+
+    @ButtonHeistActor
+    func testSchemaValidatedCoercionsStillWork() async {
+        await assertPassesValidation(
+            ["command": "type_text", "deleteCount": "5"]
+        )
+        await assertPassesValidation(
+            ["command": "type_text", "clearFirst": "1"]
+        )
+    }
+
     // MARK: - Dispatch: Unknown Command
 
     @ButtonHeistActor
@@ -242,7 +299,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testSwipeInvalidDirection() async {
         await assertValidationError(
             ["command": "swipe", "direction": "diagonal"],
-            contains: "Invalid direction"
+            equals: "schema validation failed for direction: observed string \"diagonal\"; expected enum one of up, down, left, right"
         )
     }
 
@@ -291,7 +348,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testDragMissingEndCoordinates() async {
         await assertValidationError(
             ["command": "drag", "startX": 10.0, "startY": 10.0],
-            contains: "endX and endY are required"
+            equals: "schema validation failed for endX: observed missing; expected number"
         )
     }
 
@@ -323,7 +380,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testPinchMissingScale() async {
         await assertValidationError(
             ["command": "pinch"],
-            contains: "scale is required"
+            equals: "schema validation failed for scale: observed missing; expected number"
         )
     }
 
@@ -385,7 +442,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testRotateMissingAngle() async {
         await assertValidationError(
             ["command": "rotate"],
-            contains: "angle is required"
+            equals: "schema validation failed for angle: observed missing; expected number"
         )
     }
 
@@ -419,7 +476,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testDrawPathMissingPoints() async {
         await assertValidationError(
             ["command": "draw_path"],
-            contains: "points must be an array"
+            equals: "schema validation failed for points: observed missing; expected array of objects"
         )
     }
 
@@ -435,7 +492,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testDrawPathInvalidPointData() async {
         await assertValidationError(
             ["command": "draw_path", "points": [["x": "bad", "y": "data"]]],
-            contains: "numeric x and y"
+            equals: "schema validation failed for points[0].x: observed string \"bad\"; expected number"
         )
     }
 
@@ -455,7 +512,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testDrawBezierMissingStart() async {
         await assertValidationError(
             ["command": "draw_bezier"],
-            contains: "startX and startY are required"
+            equals: "schema validation failed for startX: observed missing; expected number"
         )
     }
 
@@ -463,7 +520,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testDrawBezierMissingSegments() async {
         await assertValidationError(
             ["command": "draw_bezier", "startX": 0.0, "startY": 0.0],
-            contains: "segments array is required"
+            equals: "schema validation failed for segments: observed missing; expected array of objects"
         )
     }
 
@@ -481,7 +538,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ["command": "draw_bezier", "startX": 0.0, "startY": 0.0, "segments": [
                 ["cp1X": 1.0, "cp1Y": 2.0],
             ]],
-            contains: "cp1X, cp1Y, cp2X, cp2Y, endX, endY"
+            equals: "schema validation failed for segments[0].cp2X: observed missing; expected number"
         )
     }
 
@@ -500,7 +557,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testScrollMissingDirection() async {
         await assertValidationError(
             ["command": "scroll", "identifier": "scrollView"],
-            contains: "direction is required"
+            equals: "schema validation failed for direction: observed missing; expected enum one of up, down, left, right, next, previous"
         )
     }
 
@@ -508,7 +565,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testScrollInvalidDirection() async {
         await assertValidationError(
             ["command": "scroll", "identifier": "scrollView", "direction": "diagonal"],
-            contains: "Invalid direction"
+            equals: "schema validation failed for direction: observed string \"diagonal\"; expected enum one of up, down, left, right, next, previous"
         )
     }
 
@@ -553,7 +610,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testScrollToEdgeMissingEdge() async {
         await assertValidationError(
             ["command": "scroll_to_edge", "identifier": "scrollView"],
-            contains: "edge is required"
+            equals: "schema validation failed for edge: observed missing; expected enum one of top, bottom, left, right"
         )
     }
 
@@ -561,7 +618,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testScrollToEdgeInvalidEdge() async {
         await assertValidationError(
             ["command": "scroll_to_edge", "identifier": "scrollView", "edge": "middle"],
-            contains: "Invalid edge"
+            equals: "schema validation failed for edge: observed string \"middle\"; expected enum one of top, bottom, left, right"
         )
     }
 
@@ -625,7 +682,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testPerformCustomActionMissingAction() async {
         await assertValidationError(
             ["command": "perform_custom_action", "identifier": "myElement"],
-            contains: "action is required"
+            equals: "schema validation failed for action: observed missing; expected string"
         )
     }
 
@@ -640,7 +697,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testPerformCustomActionRejectsActionNameKey() async {
         await assertValidationError(
             ["command": "perform_custom_action", "identifier": "myElement", "actionName": "doSomething"],
-            contains: "action is required"
+            equals: "schema validation failed for action: observed missing; expected string"
         )
     }
 
@@ -656,7 +713,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testRotorNegativeIndex() async {
         await assertValidationError(
             ["command": "rotor", "identifier": "myElement", "rotorIndex": -1],
-            contains: "rotorIndex must be non-negative"
+            equals: "schema validation failed for rotorIndex: observed integer -1; expected integer >= 0"
         )
     }
 
@@ -664,7 +721,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testRotorInvalidDirection() async {
         await assertValidationError(
             ["command": "rotor", "identifier": "myElement", "direction": "sideways"],
-            contains: "Invalid direction"
+            equals: "schema validation failed for direction: observed string \"sideways\"; expected enum one of next, previous"
         )
     }
 
@@ -685,12 +742,14 @@ final class TheFenceHandlerTests: XCTestCase {
                 "currentTextStartOffset": 4,
                 "currentTextEndOffset": 8,
             ],
-            contains: "currentHeistId is required"
+            equals: "schema validation failed for currentHeistId: observed missing; expected string"
         )
     }
 
     @ButtonHeistActor
     func testRotorRejectsInvalidTextRangeOffsets() async {
+        let expectedError = "schema validation failed for currentTextStartOffset/currentTextEndOffset: " +
+            "observed 8..<4; expected integer range with start >= 0 and end >= start"
         await assertValidationError(
             [
                 "command": "rotor",
@@ -699,7 +758,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 "currentTextStartOffset": 8,
                 "currentTextEndOffset": 4,
             ],
-            contains: "current text range offsets"
+            equals: expectedError
         )
     }
 
@@ -774,7 +833,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testEditActionMissingAction() async {
         await assertValidationError(
             ["command": "edit_action"],
-            contains: "action is required"
+            equals: "schema validation failed for action: observed missing; expected enum one of copy, paste, cut, select, selectAll"
         )
     }
 
@@ -791,7 +850,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testSetPasteboardMissingText() async {
         await assertValidationError(
             ["command": "set_pasteboard"],
-            contains: "text is required"
+            equals: "schema validation failed for text: observed missing; expected string"
         )
     }
 
@@ -1476,9 +1535,12 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(results.count, 2)
         XCTAssertEqual(failedIndex, 1)
         XCTAssertEqual(summaries.map(\.command), ["activate", "gesture", "activate"])
+        let expectedError = "run_batch step 1: schema validation failed for type: observed missing; " +
+            "expected enum one of one_finger_tap, long_press, swipe, drag, pinch, rotate, two_finger_tap, " +
+            "draw_path, draw_bezier"
         XCTAssertEqual(
             summaries[1].error,
-            "run_batch step 1: Missing required parameter: type"
+            expectedError
         )
         XCTAssertEqual(summaries[2].error, "skipped: stop_on_error stopped batch after step 1")
     }
@@ -1530,16 +1592,16 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testPlayHeistMissingInputThrows() async {
+    func testPlayHeistMissingInputReturnsSchemaError() async {
         let (fence, _) = makeConnectedFence()
         do {
-            _ = try await fence.execute(request: ["command": "play_heist"])
-            XCTFail("Expected FenceError.invalidRequest to be thrown")
-        } catch {
-            guard case FenceError.invalidRequest(let message) = error else {
-                return XCTFail("Expected FenceError.invalidRequest, got \(error)")
+            let response = try await fence.execute(request: ["command": "play_heist"])
+            guard case .error(let message, _) = response else {
+                return XCTFail("Expected .error response, got \(response)")
             }
-            XCTAssertTrue(message.contains("requires an 'input' path"))
+            XCTAssertEqual(message, "schema validation failed for input: observed missing; expected string")
+        } catch {
+            XCTFail("Unexpected throw: \(error)")
         }
     }
 
@@ -1577,15 +1639,11 @@ final class TheFenceHandlerTests: XCTestCase {
         try fence.bookKeeper.beginSession(identifier: "stop-heist-missing-output")
         try fence.bookKeeper.startHeistRecording(app: "com.test.mock")
 
-        do {
-            _ = try await fence.execute(request: ["command": "stop_heist"])
-            XCTFail("Expected FenceError.invalidRequest to be thrown")
-        } catch {
-            guard case FenceError.invalidRequest(let message) = error else {
-                return XCTFail("Expected FenceError.invalidRequest, got \(error)")
-            }
-            XCTAssertTrue(message.contains("requires an 'output' path"))
+        let response = try await fence.execute(request: ["command": "stop_heist"])
+        guard case .error(let message, _) = response else {
+            return XCTFail("Expected .error response, got \(response)")
         }
+        XCTAssertEqual(message, "schema validation failed for output: observed missing; expected string")
 
         XCTAssertTrue(fence.bookKeeper.isRecordingHeist)
     }

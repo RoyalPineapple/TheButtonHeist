@@ -608,7 +608,7 @@ cd ButtonHeistMCP && swift build -c release
 | `run_batch` | Execute an ordered batch of Fence requests in one MCP call | `steps` (required), `policy` |
 | `get_session_state` | Read-only summary of the current macOS-side session state | — |
 
-All tools use strict schemas (`additionalProperties: false`) — only documented parameters are accepted.
+All tools use strict schemas (`additionalProperties: false`) for the call shape — only documented parameters are accepted. Semantic validation happens in TheFence handlers, which report malformed fields as `schema validation failed for <field>: observed <type/value>; expected <type/range/enum>`.
 
 `wait_for_change` is server-owned: with an expectation, TheInsideJob checks the current settled state first, then holds the request open until a later settled scan satisfies the same predicate or the timeout clears it.
 

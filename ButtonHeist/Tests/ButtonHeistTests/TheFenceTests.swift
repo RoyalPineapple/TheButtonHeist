@@ -12,12 +12,13 @@ final class TheFenceTests: XCTestCase {
     func testElementMatcherRejectsUnknownTrait() async {
         let fence = TheFence(configuration: .init())
         let args: [String: Any] = ["traits": ["madeUpTrait"]]
+        let expectedError = "schema validation failed for traits[0]: observed string \"madeUpTrait\"; " +
+            "expected enum one of \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))"
         XCTAssertThrowsError(try fence.elementMatcher(args)) { error in
-            guard case FenceError.invalidRequest(let message) = error else {
-                XCTFail("Expected FenceError.invalidRequest, got \(error)")
-                return
-            }
-            XCTAssertTrue(message.contains("Unknown trait 'madeUpTrait'"))
+            XCTAssertEqual(
+                error.localizedDescription,
+                expectedError
+            )
         }
     }
 
@@ -25,12 +26,13 @@ final class TheFenceTests: XCTestCase {
     func testElementMatcherRejectsUnknownExcludeTrait() async {
         let fence = TheFence(configuration: .init())
         let args: [String: Any] = ["excludeTraits": ["bogus"]]
+        let expectedError = "schema validation failed for excludeTraits[0]: observed string \"bogus\"; " +
+            "expected enum one of \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))"
         XCTAssertThrowsError(try fence.elementMatcher(args)) { error in
-            guard case FenceError.invalidRequest(let message) = error else {
-                XCTFail("Expected FenceError.invalidRequest, got \(error)")
-                return
-            }
-            XCTAssertTrue(message.contains("Unknown excludeTrait 'bogus'"))
+            XCTAssertEqual(
+                error.localizedDescription,
+                expectedError
+            )
         }
     }
 
@@ -1077,19 +1079,14 @@ final class TheFenceTests: XCTestCase {
     // MARK: - TheFence execute (error cases)
 
     @ButtonHeistActor
-    func testExecuteWithMissingCommand() async {
+    func testExecuteWithMissingCommandReturnsSchemaError() async throws {
         let fence = TheFence(configuration: .init())
-        do {
-            _ = try await fence.execute(request: [:])
-            XCTFail("Expected FenceError.invalidRequest")
-        } catch let error as FenceError {
-            if case .invalidRequest = error {
-                // Expected
-            } else {
-                XCTFail("Expected invalidRequest, got \(error)")
-            }
-        } catch {
-            XCTFail("Unexpected error type: \(error)")
+        let response = try await fence.execute(request: [:])
+
+        if case .error(let message, _) = response {
+            XCTAssertEqual(message, "schema validation failed for command: observed missing; expected string")
+        } else {
+            XCTFail("Expected .error response, got \(response)")
         }
     }
 

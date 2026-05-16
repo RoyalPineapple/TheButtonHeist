@@ -11,7 +11,8 @@ extension TheFence {
     // MARK: - Handler: Interface
 
     func handleGetInterface(_ args: [String: Any] = [:]) async throws -> FenceResponse {
-        let full = args.boolean("full") ?? true
+        let full = try args.schemaBoolean("full") ?? true
+        let detail = try args.schemaEnum("detail", as: InterfaceDetail.self) ?? .summary
 
         // Full mode (default): explore the screen, return all discovered elements
         if full {
@@ -20,7 +21,6 @@ extension TheFence {
             guard case .explore(let exploreResult) = result.payload else {
                 return .error("Explore failed: \(result.message ?? "unknown error")")
             }
-            let detail = (args["detail"] as? String).flatMap(InterfaceDetail.init) ?? .summary
             let interface = Interface(
                 timestamp: Date(),
                 tree: exploreResult.elements.map { .element($0) }
@@ -29,7 +29,6 @@ extension TheFence {
         }
 
         let interface = try await sendAndAwaitInterface(.requestInterface, timeout: Timeouts.actionSeconds)
-        let detail = (args["detail"] as? String).flatMap(InterfaceDetail.init) ?? .summary
 
         // Matcher-based filtering takes precedence over heistId list
         let matcher = try elementMatcher(args)
@@ -43,7 +42,7 @@ extension TheFence {
             return .interface(filteredInterface, detail: detail, filteredFrom: total)
         }
 
-        if let filterIds = args["elements"] as? [String], !filterIds.isEmpty {
+        if let filterIds = try args.schemaStringArray("elements"), !filterIds.isEmpty {
             let filterSet = Set(filterIds)
             let filtered = interface.elements.filter { filterSet.contains($0.heistId) }
             let filteredInterface = Interface(
@@ -64,7 +63,7 @@ extension TheFence {
         do {
             if let url = try bookKeeper.writeScreenshotIfSinkAvailable(
                 base64Data: screen.pngData,
-                outputPath: args.string("output"),
+                outputPath: try args.schemaString("output"),
                 requestId: artifactRequestId,
                 command: .getScreen,
                 metadata: metadata
@@ -108,8 +107,8 @@ extension TheFence {
 
     private func handleOneFingerTap(_ args: [String: Any]) async throws -> FenceResponse {
         let target = try elementTarget(args)
-        let x = args.number("x")
-        let y = args.number("y")
+        let x = try args.schemaNumber("x")
+        let y = try args.schemaNumber("y")
         if let target {
             return try await sendAction(.touchTap(TouchTapTarget(elementTarget: target)))
         } else if let x, let y {
@@ -120,9 +119,9 @@ extension TheFence {
 
     private func handleLongPress(_ args: [String: Any]) async throws -> FenceResponse {
         let target = try elementTarget(args)
-        let x = args.number("x")
-        let y = args.number("y")
-        let duration = args.number("duration") ?? 0.5
+        let x = try args.schemaNumber("x")
+        let y = try args.schemaNumber("y")
+        let duration = try args.schemaNumber("duration") ?? 0.5
         if let target {
             return try await sendAction(.touchLongPress(LongPressTarget(elementTarget: target, duration: duration)))
         } else if let x, let y {
@@ -132,17 +131,10 @@ extension TheFence {
     }
 
     private func handleSwipe(_ args: [String: Any]) async throws -> FenceResponse {
-        let directionValue = args.string("direction")
-        var direction: SwipeDirection?
-        if let directionValue {
-            direction = SwipeDirection(rawValue: directionValue.lowercased())
-            if direction == nil {
-                return .error("Invalid direction '\(directionValue)'. Valid: \(SwipeDirection.allCases.map(\.rawValue).joined(separator: ", "))")
-            }
-        }
+        let direction = try args.schemaEnum("direction", as: SwipeDirection.self) { $0.lowercased() }
 
-        let start = args.unitPoint("start")
-        let end = args.unitPoint("end")
+        let start = try args.schemaUnitPoint("start")
+        let end = try args.schemaUnitPoint("end")
 
         if (start != nil) != (end != nil) {
             return .error("Unit-point swipe requires both start and end")
@@ -151,55 +143,50 @@ extension TheFence {
         return try await sendAction(
             .touchSwipe(SwipeTarget(
                 elementTarget: try elementTarget(args),
-                startX: args.number("startX"), startY: args.number("startY"),
-                endX: args.number("endX"), endY: args.number("endY"),
+                startX: try args.schemaNumber("startX"), startY: try args.schemaNumber("startY"),
+                endX: try args.schemaNumber("endX"), endY: try args.schemaNumber("endY"),
                 direction: direction,
-                duration: args.number("duration"),
+                duration: try args.schemaNumber("duration"),
                 start: start, end: end
             ))
         )
     }
 
     private func handleDrag(_ args: [String: Any]) async throws -> FenceResponse {
-        guard let endX = args.number("endX"), let endY = args.number("endY") else {
-            return .error("endX and endY are required for drag")
-        }
+        let endX = try args.requiredSchemaNumber("endX")
+        let endY = try args.requiredSchemaNumber("endY")
         return try await sendAction(
             .touchDrag(DragTarget(
                 elementTarget: try elementTarget(args),
-                startX: args.number("startX") ?? args.number("x"),
-                startY: args.number("startY") ?? args.number("y"),
-                endX: endX, endY: endY, duration: args.number("duration")
+                startX: try args.schemaNumber("startX") ?? args.schemaNumber("x"),
+                startY: try args.schemaNumber("startY") ?? args.schemaNumber("y"),
+                endX: endX, endY: endY, duration: try args.schemaNumber("duration")
             ))
         )
     }
 
     private func handlePinch(_ args: [String: Any]) async throws -> FenceResponse {
-        guard let scale = args.number("scale") else {
-            return .error("scale is required for pinch")
-        }
+        let scale = try args.requiredSchemaNumber("scale")
         return try await sendAction(
             .touchPinch(PinchTarget(
                 elementTarget: try elementTarget(args),
-                centerX: args.number("centerX") ?? args.number("x"),
-                centerY: args.number("centerY") ?? args.number("y"),
-                scale: scale, spread: args.number("spread"),
-                duration: args.number("duration")
+                centerX: try args.schemaNumber("centerX") ?? args.schemaNumber("x"),
+                centerY: try args.schemaNumber("centerY") ?? args.schemaNumber("y"),
+                scale: scale, spread: try args.schemaNumber("spread"),
+                duration: try args.schemaNumber("duration")
             ))
         )
     }
 
     private func handleRotate(_ args: [String: Any]) async throws -> FenceResponse {
-        guard let angle = args.number("angle") else {
-            return .error("angle is required for rotate")
-        }
+        let angle = try args.requiredSchemaNumber("angle")
         return try await sendAction(
             .touchRotate(RotateTarget(
                 elementTarget: try elementTarget(args),
-                centerX: args.number("centerX") ?? args.number("x"),
-                centerY: args.number("centerY") ?? args.number("y"),
-                angle: angle, radius: args.number("radius"),
-                duration: args.number("duration")
+                centerX: try args.schemaNumber("centerX") ?? args.schemaNumber("x"),
+                centerY: try args.schemaNumber("centerY") ?? args.schemaNumber("y"),
+                angle: angle, radius: try args.schemaNumber("radius"),
+                duration: try args.schemaNumber("duration")
             ))
         )
     }
@@ -208,23 +195,19 @@ extension TheFence {
         return try await sendAction(
             .touchTwoFingerTap(TwoFingerTapTarget(
                 elementTarget: try elementTarget(args),
-                centerX: args.number("centerX") ?? args.number("x"),
-                centerY: args.number("centerY") ?? args.number("y"),
-                spread: args.number("spread")
+                centerX: try args.schemaNumber("centerX") ?? args.schemaNumber("x"),
+                centerY: try args.schemaNumber("centerY") ?? args.schemaNumber("y"),
+                spread: try args.schemaNumber("spread")
             ))
         )
     }
 
     private func handleDrawPath(_ args: [String: Any]) async throws -> FenceResponse {
-        guard let pointsArray = args["points"] as? [[String: Any]] else {
-            return .error("points must be an array of {x, y} objects")
-        }
-        let pathPoints = pointsArray.compactMap { point -> PathPoint? in
-            guard let x = point.number("x"), let y = point.number("y") else { return nil }
+        let pointsArray = try args.requiredSchemaDictionaryArray("points")
+        let pathPoints = try pointsArray.enumerated().map { index, point -> PathPoint in
+            let x = try schemaNumber(in: point, key: "x", field: "points[\(index)].x")
+            let y = try schemaNumber(in: point, key: "y", field: "points[\(index)].y")
             return PathPoint(x: x, y: y)
-        }
-        guard pathPoints.count == pointsArray.count else {
-            return .error("Each point must have numeric x and y fields")
         }
         guard pathPoints.count >= 2 else {
             return .error("Path requires at least 2 points")
@@ -232,29 +215,24 @@ extension TheFence {
         return try await sendAction(
             .touchDrawPath(DrawPathTarget(
                 points: pathPoints,
-                duration: args.number("duration"),
-                velocity: args.number("velocity")
+                duration: try args.schemaNumber("duration"),
+                velocity: try args.schemaNumber("velocity")
             ))
         )
     }
 
     private func handleDrawBezier(_ args: [String: Any]) async throws -> FenceResponse {
-        guard let startX = args.number("startX"), let startY = args.number("startY") else {
-            return .error("startX and startY are required")
-        }
-        guard let segmentsArray = args["segments"] as? [[String: Any]] else {
-            return .error("segments array is required")
-        }
-        let segments = segmentsArray.compactMap { segment -> BezierSegment? in
-            guard
-                let cp1X = segment.number("cp1X"), let cp1Y = segment.number("cp1Y"),
-                let cp2X = segment.number("cp2X"), let cp2Y = segment.number("cp2Y"),
-                let endX = segment.number("endX"), let endY = segment.number("endY")
-            else { return nil }
+        let startX = try args.requiredSchemaNumber("startX")
+        let startY = try args.requiredSchemaNumber("startY")
+        let segmentsArray = try args.requiredSchemaDictionaryArray("segments")
+        let segments = try segmentsArray.enumerated().map { index, segment -> BezierSegment in
+            let cp1X = try schemaNumber(in: segment, key: "cp1X", field: "segments[\(index)].cp1X")
+            let cp1Y = try schemaNumber(in: segment, key: "cp1Y", field: "segments[\(index)].cp1Y")
+            let cp2X = try schemaNumber(in: segment, key: "cp2X", field: "segments[\(index)].cp2X")
+            let cp2Y = try schemaNumber(in: segment, key: "cp2Y", field: "segments[\(index)].cp2Y")
+            let endX = try schemaNumber(in: segment, key: "endX", field: "segments[\(index)].endX")
+            let endY = try schemaNumber(in: segment, key: "endY", field: "segments[\(index)].endY")
             return BezierSegment(cp1X: cp1X, cp1Y: cp1Y, cp2X: cp2X, cp2Y: cp2Y, endX: endX, endY: endY)
-        }
-        guard segments.count == segmentsArray.count else {
-            return .error("Each segment needs cp1X, cp1Y, cp2X, cp2Y, endX, endY")
         }
         guard !segments.isEmpty else {
             return .error("At least 1 bezier segment is required")
@@ -262,10 +240,21 @@ extension TheFence {
         return try await sendAction(
             .touchDrawBezier(DrawBezierTarget(
                 startX: startX, startY: startY, segments: segments,
-                samplesPerSegment: args.integer("samplesPerSegment"),
-                duration: args.number("duration"), velocity: args.number("velocity")
+                samplesPerSegment: try args.schemaInteger("samplesPerSegment"),
+                duration: try args.schemaNumber("duration"), velocity: try args.schemaNumber("velocity")
             ))
         )
+    }
+
+    private func schemaNumber(in dictionary: [String: Any], key: String, field: String) throws -> Double {
+        do {
+            guard let value = try dictionary.schemaNumber(key) else {
+                throw SchemaValidationError(field: field, observed: nil, expected: "number")
+            }
+            return value
+        } catch let error as SchemaValidationError {
+            throw SchemaValidationError(field: field, observed: error.observed, expected: error.expected)
+        }
     }
 
     // MARK: - Handler: Scroll Actions & Explore
@@ -273,12 +262,7 @@ extension TheFence {
     func handleScrollAction(command: Command, args: [String: Any]) async throws -> FenceResponse {
         switch command {
         case .scroll:
-            guard let directionValue = args.string("direction") else {
-                return .error("direction is required for scroll. Valid: \(ScrollDirection.allCases.map(\.rawValue).joined(separator: ", "))")
-            }
-            guard let direction = ScrollDirection(rawValue: directionValue.lowercased()) else {
-                return .error("Invalid direction '\(directionValue)'. Valid: \(ScrollDirection.allCases.map(\.rawValue).joined(separator: ", "))")
-            }
+            let direction = try args.requiredSchemaEnum("direction", as: ScrollDirection.self) { $0.lowercased() }
             guard let target = try elementTarget(args) else {
                 return .error("Must specify element (heistId or matcher) for scroll")
             }
@@ -297,14 +281,7 @@ extension TheFence {
             guard let target = try elementTarget(args) else {
                 return .error("Must specify heistId or at least one match field (identifier, label, value, traits, or excludeTraits) for element_search")
             }
-            let directionStr = args.string("direction")
-            var direction: ScrollSearchDirection?
-            if let directionStr {
-                direction = ScrollSearchDirection(rawValue: directionStr.lowercased())
-                if direction == nil {
-                    return .error("Invalid direction '\(directionStr)'. Valid: \(ScrollSearchDirection.allCases.map(\.rawValue).joined(separator: ", "))")
-                }
-            }
+            let direction = try args.schemaEnum("direction", as: ScrollSearchDirection.self) { $0.lowercased() }
             let searchTarget = ElementSearchTarget(
                 elementTarget: target,
                 direction: direction
@@ -313,12 +290,7 @@ extension TheFence {
             lastActionHistory = .completed(result)
             return .action(result: result)
         case .scrollToEdge:
-            guard let edgeValue = args.string("edge") else {
-                return .error("edge is required for scroll_to_edge. Valid: \(ScrollEdge.allCases.map(\.rawValue).joined(separator: ", "))")
-            }
-            guard let edge = ScrollEdge(rawValue: edgeValue.lowercased()) else {
-                return .error("Invalid edge '\(edgeValue)'. Valid: \(ScrollEdge.allCases.map(\.rawValue).joined(separator: ", "))")
-            }
+            let edge = try args.requiredSchemaEnum("edge", as: ScrollEdge.self) { $0.lowercased() }
             guard let target = try elementTarget(args) else {
                 return .error("Must specify element (heistId or matcher) for scroll_to_edge")
             }
@@ -341,15 +313,15 @@ extension TheFence {
 
         // Resolve the action name: activate uses "action" param, standalone commands use the command itself
         let actionName: String? = switch command {
-        case .activate: args.string("action")
+        case .activate: try args.schemaString("action")
         case .increment: "increment"
         case .decrement: "decrement"
-        case .performCustomAction: args.string("action")
+        case .performCustomAction: try args.schemaString("action")
         default: nil
         }
 
         guard command != .performCustomAction || actionName != nil else {
-            return .error("action is required")
+            throw SchemaValidationError(field: "action", observed: nil, expected: "string")
         }
 
         // No action → default activation
@@ -383,25 +355,26 @@ extension TheFence {
         guard let target = try elementTarget(args) else {
             return .error("Must specify element (heistId or matcher) for rotor")
         }
-        let directionValue = args.string("direction") ?? RotorDirection.next.rawValue
-        guard let direction = RotorDirection(rawValue: directionValue.lowercased()) else {
-            return .error("Invalid direction '\(directionValue)'. Valid: \(RotorDirection.allCases.map(\.rawValue).joined(separator: ", "))")
+        let direction = try args.schemaEnum("direction", as: RotorDirection.self) { $0.lowercased() } ?? .next
+        if let rotorIndex = try args.schemaInteger("rotorIndex"), rotorIndex < 0 {
+            throw SchemaValidationError(field: "rotorIndex", observed: rotorIndex, expected: "integer >= 0")
         }
-        if let rotorIndex = args.integer("rotorIndex"), rotorIndex < 0 {
-            return .error("rotorIndex must be non-negative")
-        }
-        let currentTextStartOffset = args.integer("currentTextStartOffset")
-        let currentTextEndOffset = args.integer("currentTextEndOffset")
+        let currentTextStartOffset = try args.schemaInteger("currentTextStartOffset")
+        let currentTextEndOffset = try args.schemaInteger("currentTextEndOffset")
         if (currentTextStartOffset == nil) != (currentTextEndOffset == nil) {
             return .error("currentTextStartOffset and currentTextEndOffset must be provided together")
         }
         let currentTextRange: TextRangeReference?
         if let startOffset = currentTextStartOffset, let endOffset = currentTextEndOffset {
-            guard args.string("currentHeistId") != nil else {
-                return .error("currentHeistId is required when continuing from a text range")
+            guard try args.schemaString("currentHeistId") != nil else {
+                throw SchemaValidationError(field: "currentHeistId", observed: nil, expected: "string")
             }
             guard startOffset >= 0, endOffset >= startOffset else {
-                return .error("current text range offsets must be non-negative with end >= start")
+                throw SchemaValidationError(
+                    field: "currentTextStartOffset/currentTextEndOffset",
+                    observed: "\(startOffset)..<\(endOffset)",
+                    expected: "integer range with start >= 0 and end >= start"
+                )
             }
             currentTextRange = TextRangeReference(startOffset: startOffset, endOffset: endOffset)
         } else {
@@ -410,10 +383,10 @@ extension TheFence {
 
         let rotorTarget = RotorTarget(
             elementTarget: target,
-            rotor: args.string("rotor"),
-            rotorIndex: args.integer("rotorIndex"),
+            rotor: try args.schemaString("rotor"),
+            rotorIndex: try args.schemaInteger("rotorIndex"),
             direction: direction,
-            currentHeistId: args.string("currentHeistId"),
+            currentHeistId: try args.schemaString("currentHeistId"),
             currentTextRange: currentTextRange
         )
         return try await sendAction(.rotor(rotorTarget))
@@ -422,9 +395,9 @@ extension TheFence {
     // MARK: - Handler: Text Input
 
     func handleTypeText(_ args: [String: Any]) async throws -> FenceResponse {
-        let text = args.string("text")
-        let deleteCount = args.integer("deleteCount")
-        let clearFirst = args.boolean("clearFirst")
+        let text = try args.schemaString("text")
+        let deleteCount = try args.schemaInteger("deleteCount")
+        let clearFirst = try args.schemaBoolean("clearFirst")
         guard text != nil || deleteCount != nil || clearFirst == true else {
             return .error("Must specify text, deleteCount, clearFirst, or a combination")
         }
@@ -436,21 +409,14 @@ extension TheFence {
     }
 
     func handleEditAction(_ args: [String: Any]) async throws -> FenceResponse {
-        guard let actionString = args.string("action") else {
-            return .error("action is required (\(EditAction.allCases.map(\.rawValue).joined(separator: ", ")))")
-        }
-        guard let action = EditAction(rawValue: actionString) else {
-            return .error("Invalid action '\(actionString)'. Valid: \(EditAction.allCases.map(\.rawValue).joined(separator: ", "))")
-        }
+        let action = try args.requiredSchemaEnum("action", as: EditAction.self)
         return try await sendAction(.editAction(EditActionTarget(action: action)))
     }
 
     // MARK: - Handler: Pasteboard
 
     func handleSetPasteboard(_ args: [String: Any]) async throws -> FenceResponse {
-        guard let text = args.string("text") else {
-            return .error("text is required for set_pasteboard")
-        }
+        let text = try args.requiredSchemaString("text")
         return try await sendAction(.setPasteboard(SetPasteboardTarget(text: text)))
     }
 
@@ -466,8 +432,8 @@ extension TheFence {
         }
         let waitForTarget = WaitForTarget(
             elementTarget: target,
-            absent: args.boolean("absent"),
-            timeout: args.number("timeout")
+            absent: try args.schemaBoolean("absent"),
+            timeout: try args.schemaNumber("timeout")
         )
         let result = try await sendAndAwaitAction(.waitFor(waitForTarget), timeout: waitForTarget.resolvedTimeout + 5)
         lastActionHistory = .completed(result)
@@ -478,7 +444,7 @@ extension TheFence {
 
     func handleWaitForChange(_ args: [String: Any]) async throws -> FenceResponse {
         let expectation = try parseExpectation(args)
-        let timeout = args.number("timeout")
+        let timeout = try args.schemaNumber("timeout")
         let target = WaitForChangeTarget(expect: expectation, timeout: timeout)
         let result = try await sendAndAwaitAction(.waitForChange(target), timeout: target.resolvedTimeout + 5)
         lastActionHistory = .completed(result)
@@ -492,11 +458,19 @@ extension TheFence {
         guard !handoff.isRecording else {
             return .error("Recording already in progress — use stop_recording first")
         }
+        let fps = try args.schemaInteger("fps")
+        if let fps, fps < 1 || fps > 15 {
+            throw SchemaValidationError(field: "fps", observed: fps, expected: "integer in 1...15")
+        }
+        let scale = try args.schemaNumber("scale")
+        if let scale, scale < 0.25 || scale > 1.0 {
+            throw SchemaValidationError(field: "scale", observed: scale, expected: "number in 0.25...1.0")
+        }
         let config = RecordingConfig(
-            fps: args.integer("fps"),
-            scale: args.number("scale"),
-            inactivityTimeout: args.number("inactivity_timeout"),
-            maxDuration: args.number("max_duration")
+            fps: fps,
+            scale: scale,
+            inactivityTimeout: try args.schemaNumber("inactivity_timeout"),
+            maxDuration: try args.schemaNumber("max_duration")
         )
         try await startRecordingAndWait(config: config, timeout: Timeouts.actionSeconds)
         return .ok(message: "Recording started — use stop_recording to retrieve the video")
@@ -519,9 +493,9 @@ extension TheFence {
     // MARK: - Handler: Connect (runtime target switching)
 
     func handleConnect(_ args: [String: Any]) async throws -> FenceResponse {
-        let targetName = args.string("target")
-        let device = args.string("device")
-        let token = args.string("token")
+        let targetName = try args.schemaString("target")
+        let device = try args.schemaString("device")
+        let token = try args.schemaString("token")
 
         let resolvedDevice: String
         let resolvedToken: String?
@@ -621,7 +595,7 @@ extension TheFence {
         do {
             if let url = try bookKeeper.writeRecordingIfSinkAvailable(
                 base64Data: recording.videoData,
-                outputPath: args.string("output"),
+                outputPath: try args.schemaString("output"),
                 requestId: artifactRequestId,
                 command: .stopRecording,
                 metadata: metadata
@@ -646,7 +620,7 @@ extension TheFence {
             }
             return .sessionLog(manifest: manifest)
         case .archiveSession:
-            let deleteSource = args.boolean("delete_source") ?? false
+            let deleteSource = try args.schemaBoolean("delete_source") ?? false
             // Drive whatever phase we observe toward .closed before archiving.
             switch bookKeeper.phase {
             case .idle:
@@ -668,17 +642,15 @@ extension TheFence {
             let (archiveURL, manifest) = try await bookKeeper.archiveSession(deleteSource: deleteSource)
             return .archiveResult(path: archiveURL.path, manifest: manifest)
         case .startHeist:
-            let app = args.string("app") ?? "com.buttonheist.testapp"
+            let app = try args.schemaString("app") ?? "com.buttonheist.testapp"
             if bookKeeper.manifest == nil {
-                let identifier = args.string("identifier") ?? "heist"
+                let identifier = try args.schemaString("identifier") ?? "heist"
                 try bookKeeper.beginSession(identifier: identifier)
             }
             try bookKeeper.startHeistRecording(app: app)
             return .heistStarted
         case .stopHeist:
-            guard let outputPath = args.string("output") else {
-                throw FenceError.invalidRequest("stop_heist requires an 'output' path")
-            }
+            let outputPath = try args.requiredSchemaString("output")
             guard let resolvedURL = bookKeeper.validateOutputPath(outputPath) else {
                 throw FenceError.invalidRequest("Invalid output path: must not be empty, contain '..' components, or contain control characters")
             }
@@ -696,9 +668,7 @@ extension TheFence {
         guard case .idle = playbackPhase else {
             throw FenceError.invalidRequest("Cannot nest play_heist inside an active playback")
         }
-        guard let inputPath = args.string("input") else {
-            throw FenceError.invalidRequest("play_heist requires an 'input' path")
-        }
+        let inputPath = try args.requiredSchemaString("input")
         guard let resolvedURL = bookKeeper.validateOutputPath(inputPath) else {
             throw FenceError.invalidRequest("Invalid input path: must not be empty or contain '..' components")
         }

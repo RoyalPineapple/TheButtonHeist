@@ -6,21 +6,17 @@ extension TheFence {
 
     // MARK: - Batch Execution and Session State
 
-    enum BatchPolicy: String {
+    enum BatchPolicy: String, CaseIterable {
         case stopOnError = "stop_on_error"
         case continueOnError = "continue_on_error"
     }
 
     func handleRunBatch(_ args: [String: Any]) async throws -> FenceResponse {
-        guard let steps = args["steps"] as? [[String: Any]], !steps.isEmpty else {
-            throw FenceError.invalidRequest("run_batch requires a non-empty 'steps' array")
+        let steps = try args.requiredSchemaDictionaryArray("steps")
+        guard !steps.isEmpty else {
+            throw SchemaValidationError(field: "steps", observed: "array count 0", expected: "array count >= 1")
         }
-        let policyString = (args["policy"] as? String) ?? BatchPolicy.stopOnError.rawValue
-        guard let policy = BatchPolicy(rawValue: policyString) else {
-            throw FenceError.invalidRequest(
-                "Unknown batch policy: \"\(policyString)\". Valid: stop_on_error, continue_on_error"
-            )
-        }
+        let policy = try args.schemaEnum("policy", as: BatchPolicy.self) ?? .stopOnError
 
         var results: [[String: Any]] = []
         var stepSummaries: [BatchStepSummary] = []

@@ -39,8 +39,13 @@ public enum FenceOperationCatalog {
     public static func normalizeBatchStep(
         _ step: [String: Any]
     ) -> Result<[String: Any], FenceOperationRoutingError> {
-        guard let command = step["command"] as? String else {
-            return .failure(FenceOperationRoutingError(message: "Missing required command"))
+        let command: String
+        do {
+            command = try step.requiredSchemaString("command")
+        } catch let error as SchemaValidationError {
+            return .failure(FenceOperationRoutingError(message: error.message))
+        } catch {
+            return .failure(FenceOperationRoutingError(message: error.localizedDescription))
         }
 
         var arguments = step
@@ -71,24 +76,30 @@ public enum FenceOperationCatalog {
 
     private static func routeGesture(_ arguments: [String: Any]) -> Result<[String: Any], FenceOperationRoutingError> {
         var request = arguments
-        guard let rawType = request.removeValue(forKey: "type") as? String else {
-            return .failure(FenceOperationRoutingError(message: "Missing required parameter: type"))
+        let gestureType: GestureType
+        do {
+            gestureType = try request.requiredSchemaEnum("type", as: GestureType.self)
+        } catch let error as SchemaValidationError {
+            return .failure(FenceOperationRoutingError(message: error.message))
+        } catch {
+            return .failure(FenceOperationRoutingError(message: error.localizedDescription))
         }
-        guard let gestureType = GestureType(rawValue: rawType) else {
-            let valid = GestureType.allCases.map(\.rawValue).joined(separator: ", ")
-            return .failure(FenceOperationRoutingError(message: "Unknown gesture type: \(rawType). Valid: \(valid)"))
-        }
+        request.removeValue(forKey: "type")
         request["command"] = gestureType.rawValue
         return .success(request)
     }
 
     private static func routeScroll(_ arguments: [String: Any]) -> Result<[String: Any], FenceOperationRoutingError> {
         var request = arguments
-        let rawMode = (request.removeValue(forKey: "mode") as? String) ?? ScrollMode.page.rawValue
-        guard let scrollMode = ScrollMode(rawValue: rawMode) else {
-            let valid = ScrollMode.allCases.map(\.rawValue).joined(separator: ", ")
-            return .failure(FenceOperationRoutingError(message: "Unknown scroll mode: \(rawMode). Valid: \(valid)"))
+        let scrollMode: ScrollMode
+        do {
+            scrollMode = try request.schemaEnum("mode", as: ScrollMode.self) ?? .page
+        } catch let error as SchemaValidationError {
+            return .failure(FenceOperationRoutingError(message: error.message))
+        } catch {
+            return .failure(FenceOperationRoutingError(message: error.localizedDescription))
         }
+        request.removeValue(forKey: "mode")
         request["command"] = scrollMode.canonicalCommand
         return .success(request)
     }

@@ -518,7 +518,12 @@ public final class TheFence {
     /// → dispatch → record post-dispatch effects → validate against the
     /// caller's expectation. Each step is its own private method.
     public func execute(request: [String: Any]) async throws -> FenceResponse {
-        let parsed = try parseRequest(request)
+        let parsed: ParsedRequest
+        do {
+            parsed = try parseRequest(request)
+        } catch let error as SchemaValidationError {
+            return .error(error.message)
+        }
         if let immediate = parsed.immediateResponse { return immediate }
 
         if let backgroundResponse = responseIfBackgroundExpectationMet(
@@ -567,9 +572,7 @@ public final class TheFence {
     /// Returns an ImmediateResponse-bearing `ParsedRequest` for help/quit/exit
     /// so the caller short-circuits without logging or dispatching.
     private func parseRequest(_ request: [String: Any]) throws -> ParsedRequest {
-        guard let commandString = request["command"] as? String else {
-            throw FenceError.invalidRequest("Invalid JSON or missing 'command' field")
-        }
+        let commandString = try request.requiredSchemaString("command")
         guard let command = Command(rawValue: commandString) else {
             return ParsedRequest(
                 command: .help,
@@ -711,6 +714,11 @@ public final class TheFence {
         do {
             let response = try await dispatch(command: command, args: args)
             return DispatchResult(response: response, durationMs: elapsedMilliseconds(since: start))
+        } catch let error as SchemaValidationError {
+            return DispatchResult(
+                response: .error(error.message),
+                durationMs: elapsedMilliseconds(since: start)
+            )
         } catch {
             let durationMs = elapsedMilliseconds(since: start)
             logErrorResponse(requestId: requestId, error: error, durationMs: durationMs)
@@ -1017,19 +1025,19 @@ public final class TheFence {
 
     func elementTarget(_ dictionary: [String: Any]) throws -> ElementTarget? {
         ElementTarget(
-            heistId: dictionary.string("heistId"),
+            heistId: try dictionary.schemaString("heistId"),
             matcher: try elementMatcher(dictionary),
-            ordinal: dictionary.integer("ordinal")
+            ordinal: try dictionary.schemaInteger("ordinal")
         )
     }
 
     func elementMatcher(_ dictionary: [String: Any]) throws -> ElementMatcher {
         return ElementMatcher(
-            label: dictionary.string("label"),
-            identifier: dictionary.string("identifier"),
-            value: dictionary.string("value"),
-            traits: try parseTraitNames(dictionary["traits"] as? [String], field: "trait"),
-            excludeTraits: try parseTraitNames(dictionary["excludeTraits"] as? [String], field: "excludeTrait")
+            label: try dictionary.schemaString("label"),
+            identifier: try dictionary.schemaString("identifier"),
+            value: try dictionary.schemaString("value"),
+            traits: try parseTraitNames(try dictionary.schemaStringArray("traits"), field: "traits"),
+            excludeTraits: try parseTraitNames(try dictionary.schemaStringArray("excludeTraits"), field: "excludeTraits")
         )
     }
 
@@ -1038,10 +1046,12 @@ public final class TheFence {
     /// unknown name is encountered. Returns `nil` when `names` is `nil` so
     /// callers can pass a missing field through unchanged.
     private func parseTraitNames(_ names: [String]?, field: String) throws -> [HeistTrait]? {
-        try names?.map { name in
+        try names?.enumerated().map { index, name in
             guard let trait = HeistTrait(rawValue: name) else {
-                throw FenceError.invalidRequest(
-                    "Unknown \(field) '\(name)'. Valid: \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))"
+                throw SchemaValidationError(
+                    field: "\(field)[\(index)]",
+                    observed: name as Any,
+                    expected: SchemaValidationError.expectedEnum(HeistTrait.self)
                 )
             }
             return trait
