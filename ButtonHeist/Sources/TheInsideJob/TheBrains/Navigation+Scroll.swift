@@ -18,6 +18,56 @@ extension Navigation {
 
     typealias ScrollCandidate = (target: ScrollableTarget, container: AccessibilityContainer)
 
+    enum ScrollTargetResolution {
+        case resolved(UIScrollView)
+        case failed(ScrollTargetDiagnostic)
+    }
+
+    enum ScrollTargetDiagnosticReason: Equatable {
+        case noScrollView
+        case unsafeProgrammaticScroll
+        case axisMismatch(required: ScrollAxis, available: ScrollAxis)
+    }
+
+    struct ScrollTargetDiagnostic: Equatable {
+        let reason: ScrollTargetDiagnosticReason
+
+        func message(for screenElement: TheStash.ScreenElement) -> String {
+            let element = Self.elementDescription(screenElement)
+            switch reason {
+            case .noScrollView:
+                return "scroll target failed: observed \(element) with no live scrollable ancestor; "
+                    + "try element_search or target an element inside a scroll container"
+            case .unsafeProgrammaticScroll:
+                return "scroll target failed: observed \(element) inside a scroll view that is unsafe "
+                    + "for programmatic scrolling; try element_search to use semantic search"
+            case .axisMismatch(let required, let available):
+                return "scroll target failed: observed \(element) inside a scroll view that supports "
+                    + "\(Self.axisDescription(available)); expected \(Self.axisDescription(required)); "
+                    + "try a matching scroll direction or target an element inside a matching scroll container"
+            }
+        }
+
+        private static func elementDescription(_ screenElement: TheStash.ScreenElement) -> String {
+            if let label = screenElement.element.label, !label.isEmpty {
+                return "\"\(label)\" (heistId: \(screenElement.heistId))"
+            }
+            if let identifier = screenElement.element.identifier, !identifier.isEmpty {
+                return "identifier \"\(identifier)\" (heistId: \(screenElement.heistId))"
+            }
+            return "heistId \(screenElement.heistId)"
+        }
+
+        private static func axisDescription(_ axis: ScrollAxis) -> String {
+            switch (axis.contains(.horizontal), axis.contains(.vertical)) {
+            case (true, true): return "horizontal and vertical scrolling"
+            case (true, false): return "horizontal scrolling"
+            case (false, true): return "vertical scrolling"
+            case (false, false): return "no scrolling"
+            }
+        }
+    }
+
     private enum ScrollAxisSelection {
         case any
         case required(ScrollAxis)
@@ -241,21 +291,22 @@ extension Navigation {
             return .failure(.elementNotFound, message: resolution.diagnostics)
         }
         let axis = Self.requiredAxis(for: target.direction)
-        guard let scrollView = resolveScrollTarget(
+        switch resolveScrollTargetResult(
             screenElement: resolved.screenElement, axis: axis
-        ) else {
-            return .failure(.scroll, message: "No scrollable ancestor found for element")
+        ) {
+        case .resolved(let scrollView):
+            let uiDirection = Self.uiScrollDirection(for: target.direction)
+            let (success, _) = await scrollOnePageAndSettle(
+                .uiScrollView(scrollView), direction: uiDirection
+            )
+            return TheSafecracker.InteractionResult(
+                success: success, method: .scroll,
+                message: success ? nil : "scroll failed: observed target already at edge; try the opposite direction",
+                value: nil
+            )
+        case .failed(let diagnostic):
+            return .failure(.scroll, message: diagnostic.message(for: resolved.screenElement))
         }
-
-        let uiDirection = Self.uiScrollDirection(for: target.direction)
-        let (success, _) = await scrollOnePageAndSettle(
-            .uiScrollView(scrollView), direction: uiDirection
-        )
-        return TheSafecracker.InteractionResult(
-            success: success, method: .scroll,
-            message: success ? nil : "Already at edge",
-            value: nil
-        )
     }
 
     func executeScrollToEdge(_ target: ScrollToEdgeTarget) async -> TheSafecracker.InteractionResult {
@@ -268,19 +319,20 @@ extension Navigation {
             return .failure(.elementNotFound, message: resolution.diagnostics)
         }
         let axis = Self.requiredAxis(for: target.edge)
-        guard let scrollView = resolveScrollTarget(
+        switch resolveScrollTargetResult(
             screenElement: resolved.screenElement, axis: axis
-        ) else {
-            return .failure(.scrollToEdge, message: "No scrollable ancestor found for element")
+        ) {
+        case .resolved(let scrollView):
+            let moved = safecracker.scrollToEdge(scrollView, edge: target.edge)
+
+            return TheSafecracker.InteractionResult(
+                success: moved, method: .scrollToEdge,
+                message: moved ? nil : "scroll_to_edge failed: observed target already at requested edge",
+                value: nil
+            )
+        case .failed(let diagnostic):
+            return .failure(.scrollToEdge, message: diagnostic.message(for: resolved.screenElement))
         }
-
-        let moved = safecracker.scrollToEdge(scrollView, edge: target.edge)
-
-        return TheSafecracker.InteractionResult(
-            success: moved, method: .scrollToEdge,
-            message: moved ? nil : "Already at edge",
-            value: nil
-        )
     }
 
     static func edgeDirection(for edge: ScrollEdge) -> UIAccessibilityScrollDirection {
@@ -701,12 +753,35 @@ extension Navigation {
         screenElement: TheStash.ScreenElement,
         axis: ScrollAxis? = nil
     ) -> UIScrollView? {
-        guard let sv = screenElement.scrollView,
-              !sv.bhIsUnsafeForProgrammaticScrolling else { return nil }
+        guard case .resolved(let scrollView) = resolveScrollTargetResult(
+            screenElement: screenElement,
+            axis: axis
+        ) else { return nil }
+        return scrollView
+    }
 
-        guard let axis else { return sv }
-        guard Self.scrollableAxis(of: .uiScrollView(sv)).contains(axis) else { return nil }
-        return sv
+    func resolveScrollTargetResult(
+        screenElement: TheStash.ScreenElement,
+        axis: ScrollAxis? = nil
+    ) -> ScrollTargetResolution {
+        guard let scrollView = screenElement.scrollView else {
+            return .failed(ScrollTargetDiagnostic(reason: .noScrollView))
+        }
+
+        guard !scrollView.bhIsUnsafeForProgrammaticScrolling else {
+            return .failed(ScrollTargetDiagnostic(reason: .unsafeProgrammaticScroll))
+        }
+
+        guard let axis else { return .resolved(scrollView) }
+        let availableAxis = Self.scrollableAxis(of: .uiScrollView(scrollView))
+        guard availableAxis.contains(axis) else {
+            return .failed(
+                ScrollTargetDiagnostic(
+                    reason: .axisMismatch(required: axis, available: availableAxis)
+                )
+            )
+        }
+        return .resolved(scrollView)
     }
 
     // MARK: - Direction Mapping
