@@ -363,7 +363,8 @@ final class TheTripwire {
     ///
     /// Resolution steps, in order:
     /// 1. **Explicit modal flag** — any window containing a view with
-    ///    `accessibilityViewIsModal` set (popovers, custom overlays).
+    ///    `accessibilityViewIsModal` set blocks lower windows; higher
+    ///    non-passthrough windows remain visible and accessible.
     /// 2. **System passthrough windows** — keyboard and text-effects windows
     ///    are excluded because they sit above `.normal` but contain no app
     ///    content the agent can usefully act on.
@@ -412,8 +413,9 @@ final class TheTripwire {
     ) -> [(window: UIWindow, rootView: UIView)] {
         guard !windows.isEmpty else { return [] }
 
-        if let modalEntry = windows.first(where: { containsModalView($0.window) }) {
-            return [modalEntry]
+        if let modalIndex = windows.firstIndex(where: { containsModalView($0.window) }) {
+            let modalScope = windows[...modalIndex].filter { !isPassthrough($0.window) }
+            return modalScope.isEmpty ? Array(windows[...modalIndex]) : modalScope
         }
 
         let appWindows = windows.filter { !isPassthrough($0.window) }
