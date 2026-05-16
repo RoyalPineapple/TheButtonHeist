@@ -59,7 +59,7 @@ graph TD
 
 | # | Tool Name | Type | Key Parameters |
 |---|-----------|------|---------------|
-| 1 | `get_interface` | direct | `detail` (`"summary"`/`"full"`), `elements` (heistId filter array) |
+| 1 | `get_interface` | direct | `scope` (`"full"`/`"visible"`), `detail` (`"summary"`/`"full"`), `elements` (heistId filter array) |
 | 2 | `activate` | direct | element target, optional `action` for increment/decrement/custom |
 | 3 | `rotor` | direct | element target, `rotor`/`rotorIndex`, `direction`, `currentHeistId`, text-range cursor offsets |
 | 4 | `type_text` | direct | `text`, `clearFirst`, `deleteCount` |
@@ -96,8 +96,9 @@ graph TD
 ## Key Tool Schemas
 
 ### `get_interface`
+- `scope`: `"full"` (default — explore the whole accessible state, including off-screen scroll content, then restore positions) or `"visible"` (fresh on-screen parse only, no explored union/cache)
 - `detail`: `"summary"` (default — identity fields, traits, and actions only) or `"full"` (adds VoiceOver hint, customContent, frame, and activation point)
-- `full`: `true` to explore the full screen including off-screen content in scroll views (returns all elements, restores scroll positions)
+- `full`: legacy alias for `scope` (`true` -> `"full"`, `false` -> `"visible"`); explicit `scope` wins
 - `elements`: optional `[String]` — heistIds to filter; omit for full interface tree
 - `readOnlyHint: true`, `idempotentHint: true`
 

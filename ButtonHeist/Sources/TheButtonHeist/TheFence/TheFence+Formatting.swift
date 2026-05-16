@@ -8,6 +8,12 @@ public enum InterfaceDetail: String, CaseIterable, Sendable {
     case full
 }
 
+/// Discovery scope for get_interface.
+public enum GetInterfaceScope: String, CaseIterable, Sendable {
+    case full
+    case visible
+}
+
 /// Summary of a single step within a batch execution.
 ///
 /// Consumed by batch formatters to build per-step human/JSON rows. `deltaKind`

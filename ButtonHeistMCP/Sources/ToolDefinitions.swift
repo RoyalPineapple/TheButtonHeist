@@ -155,11 +155,19 @@ enum ToolDefinitions {
         description: """
             Read the UI element hierarchy. Call once on a new screen, then track changes via \
             action deltas — re-fetch only when you need elements the delta didn't cover. \
-            Filter with matcher fields or heistId list; pass full=false for only visible elements.
+            Filter with matcher fields or heistId list; scope defaults to full.
             """,
         inputSchema: .object([
             "type": "object",
             "properties": .object(([
+                "scope": [
+                    "type": "string",
+                    "enum": stringEnumValues(GetInterfaceScope.self),
+                    "description": """
+                        Interface scope. full (default): explore and return the whole accessible state. \
+                        visible: do a fresh on-screen parse only, with no explored union/cache.
+                        """,
+                ],
                 "detail": [
                     "type": "string",
                     "enum": stringEnumValues(InterfaceDetail.self),
@@ -172,8 +180,8 @@ enum ToolDefinitions {
                 "full": [
                     "type": "boolean",
                     "description": """
-                        Full exploration is on by default — set to false to return only \
-                        visible elements (faster, but misses off-screen content in scroll views).
+                        Legacy alias for scope. true maps to scope=full; false maps to \
+                        scope=visible. Explicit scope wins when both are supplied.
                         """,
                 ],
                 "elements": [

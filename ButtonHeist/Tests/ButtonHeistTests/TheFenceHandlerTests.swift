@@ -1545,10 +1545,81 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(summaries[2].error, "skipped: stop_on_error stopped batch after step 1")
     }
 
-    // MARK: - Explore via get_interface --full
+    // MARK: - get_interface scope
 
     @ButtonHeistActor
-    func testGetInterfaceFullSendsExploreMessage() async {
+    func testGetInterfaceDefaultSendsExploreMessage() async {
+        let (fence, mockConn) = makeConnectedFence()
+        _ = try? await fence.execute(request: ["command": "get_interface"])
+        guard let (message, _) = mockConn.sent.last,
+              case .explore = message else {
+            XCTFail("Expected explore message, got \(String(describing: mockConn.sent.last))")
+            return
+        }
+    }
+
+    @ButtonHeistActor
+    func testGetInterfaceScopeFullSendsExploreMessage() async {
+        let (fence, mockConn) = makeConnectedFence()
+        _ = try? await fence.execute(request: ["command": "get_interface", "scope": "full"])
+        guard let (message, _) = mockConn.sent.last,
+              case .explore = message else {
+            XCTFail("Expected explore message, got \(String(describing: mockConn.sent.last))")
+            return
+        }
+    }
+
+    @ButtonHeistActor
+    func testGetInterfaceScopeVisibleRequestsFreshVisibleInterfaceWithGeometry() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        let element = HeistElement(
+            heistId: "visible_button",
+            description: "Visible Button",
+            label: "Visible Button",
+            value: nil,
+            identifier: nil,
+            traits: [.button],
+            frameX: 10,
+            frameY: 20,
+            frameWidth: 120,
+            frameHeight: 44,
+            actions: [.activate]
+        )
+        mockConn.autoResponse = { message in
+            switch message {
+            case .requestInterface:
+                return .interface(Interface(timestamp: Date(), tree: [.element(element)]))
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "get_interface",
+            "scope": "visible",
+            "detail": "full",
+        ])
+
+        guard let (message, _) = mockConn.sent.last,
+              case .requestInterface = message else {
+            XCTFail("Expected requestInterface message, got \(String(describing: mockConn.sent.last))")
+            return
+        }
+
+        let json = response.jsonDict()!
+        let interface = json["interface"] as! [String: Any]
+        XCTAssertNil(json["explore"])
+        let tree = interface["tree"] as! [[String: Any]]
+        let visibleElement = tree[0]["element"] as! [String: Any]
+        XCTAssertEqual(visibleElement["heistId"] as? String, "visible_button")
+        XCTAssertEqual(visibleElement["frameX"] as? Double, 10)
+        XCTAssertEqual(visibleElement["frameY"] as? Double, 20)
+        XCTAssertEqual(visibleElement["frameWidth"] as? Double, 120)
+        XCTAssertEqual(visibleElement["frameHeight"] as? Double, 44)
+    }
+
+    @ButtonHeistActor
+    func testGetInterfaceLegacyFullTrueSendsExploreMessage() async {
         let (fence, mockConn) = makeConnectedFence()
         _ = try? await fence.execute(request: ["command": "get_interface", "full": true])
         guard let (message, _) = mockConn.sent.last,
@@ -1556,6 +1627,52 @@ final class TheFenceHandlerTests: XCTestCase {
             XCTFail("Expected explore message, got \(String(describing: mockConn.sent.last))")
             return
         }
+    }
+
+    @ButtonHeistActor
+    func testGetInterfaceLegacyFullFalseRequestsVisibleInterface() async {
+        let (fence, mockConn) = makeConnectedFence()
+        _ = try? await fence.execute(request: ["command": "get_interface", "full": false])
+        guard let (message, _) = mockConn.sent.last,
+              case .requestInterface = message else {
+            XCTFail("Expected requestInterface message, got \(String(describing: mockConn.sent.last))")
+            return
+        }
+    }
+
+    @ButtonHeistActor
+    func testGetInterfaceScopeWinsOverLegacyFullAlias() async {
+        let (visibleFence, visibleMock) = makeConnectedFence()
+        _ = try? await visibleFence.execute(request: [
+            "command": "get_interface",
+            "scope": "visible",
+            "full": true,
+        ])
+        guard let (visibleMessage, _) = visibleMock.sent.last,
+              case .requestInterface = visibleMessage else {
+            XCTFail("Expected scope=visible to send requestInterface, got \(String(describing: visibleMock.sent.last))")
+            return
+        }
+
+        let (fullFence, fullMock) = makeConnectedFence()
+        _ = try? await fullFence.execute(request: [
+            "command": "get_interface",
+            "scope": "full",
+            "full": false,
+        ])
+        guard let (fullMessage, _) = fullMock.sent.last,
+              case .explore = fullMessage else {
+            XCTFail("Expected scope=full to send explore, got \(String(describing: fullMock.sent.last))")
+            return
+        }
+    }
+
+    @ButtonHeistActor
+    func testGetInterfaceInvalidScopeReturnsSchemaError() async {
+        await assertValidationError(
+            ["command": "get_interface", "scope": "current"],
+            equals: "schema validation failed for scope: observed string \"current\"; expected enum one of full, visible"
+        )
     }
 
     @ButtonHeistActor

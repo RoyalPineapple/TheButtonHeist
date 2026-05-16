@@ -139,7 +139,7 @@ Offsets are clamped to valid content bounds. Returns `false` if already at the e
 
 ### scroll_to_visible (known-position jump)
 
-Jumps directly to a known element's recorded scroll position. This command is for visible elements or `heistId` targets still present in the current or preserved screen snapshot, especially the union produced by the latest `get_interface --full`.
+Jumps directly to a known element's recorded scroll position. This command is for visible elements or `heistId` targets still present in the current or preserved screen snapshot, especially the union produced by the latest `get_interface` with `scope: "full"`.
 
 **Input:** `ScrollToVisibleTarget` containing an `ElementTarget`. If the element is already visible, it is comfort-scrolled if needed. If it is off-screen and has a recorded content-space position, Button Heist jumps to that position and re-resolves the target.
 

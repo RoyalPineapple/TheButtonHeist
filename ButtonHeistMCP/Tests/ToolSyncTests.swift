@@ -272,6 +272,7 @@ struct ToolSyncTests {
     @Test("MCP enum schemas match wire-boundary enums")
     func mcpEnumSchemasMatchWireBoundaryEnums() {
         let getInterface = ToolDefinitions.all.first { $0.name == "get_interface" }
+        #expect(extractEnumValues(from: getInterface, property: "scope") == Set(GetInterfaceScope.allCases.map(\.rawValue)))
         #expect(extractEnumValues(from: getInterface, property: "detail") == Set(InterfaceDetail.allCases.map(\.rawValue)))
 
         let scroll = ToolDefinitions.all.first { $0.name == "scroll" }
@@ -286,6 +287,24 @@ struct ToolSyncTests {
         #expect(
             extractEnumValues(from: editAction, property: "action") ==
                 Set(EditAction.allCases.map(\.rawValue) + ["dismiss"])
+        )
+    }
+
+    @Test("get_interface scope schema is Claude-compatible")
+    func getInterfaceScopeSchemaIsClaudeCompatible() {
+        guard let getInterface = ToolDefinitions.all.first(where: { $0.name == "get_interface" }),
+              let scopeSchema = extractPropertySchema(from: getInterface, property: "scope") else {
+            Issue.record("get_interface.scope missing property schema")
+            return
+        }
+
+        #expect(extractStringField(from: scopeSchema, key: "type") == "string")
+        #expect(extractEnumValues(from: scopeSchema) == Set(GetInterfaceScope.allCases.map(\.rawValue)))
+
+        let violations = unsupportedCompositionKeywordPaths(in: .object(scopeSchema))
+        #expect(
+            violations.isEmpty,
+            "get_interface.scope schema uses unsupported composition keywords at: \(violations.joined(separator: ", "))"
         )
     }
 

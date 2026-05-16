@@ -416,7 +416,7 @@ Directions: `"up"`, `"down"`, `"left"`, `"right"`, `"next"`, `"previous"`.
 
 ### scrollToVisible
 
-Scroll a known registry element into view. This is a one-shot recorded-position jump for elements that are visible now or whose `heistId` is still present in the current or preserved screen snapshot, such as the union produced by the latest `get_interface --full`. For iterative discovery of an unseen or stale element, use `element_search`.
+Scroll a known registry element into view. This is a one-shot recorded-position jump for elements that are visible now or whose `heistId` is still present in the current or preserved screen snapshot, such as the union produced by the latest `get_interface` with `scope: "full"`. For iterative discovery of an unseen or stale element, use `element_search`.
 
 **Target fields:** `heistId`, or flat matcher fields `label`, `identifier`, `value`, `traits`, `excludeTraits`. Use `heistId` for recorded-position jumps. Matcher fields are decoded at the payload root and only resolve elements already present in the current snapshot; there is no nested `match` object.
 
@@ -486,7 +486,7 @@ No payload required.
 
 Returns an `actionResult` with `method: "explore"` and a `payload` of `{"kind": "explore", "data": {...}}` containing the complete element list, scroll count, containers explored, and exploration time.
 
-> **Note**: `explore` is not exposed as a standalone CLI/MCP command. It is dispatched internally by `get_interface` when the `full` parameter is true. See [Element Discovery](#element-discovery) for usage guidance.
+> **Note**: `explore` is not exposed as a standalone CLI/MCP command. It is dispatched internally by `get_interface` when `scope` is `"full"` (the default). The legacy `full: true` alias still selects the same behavior. See [Element Discovery](#element-discovery) for usage guidance.
 
 ### editAction
 
@@ -744,7 +744,7 @@ The `tree` is the canonical wire shape — every element appears exactly once at
 
 ### actionResult
 
-Response to `activate`, `one_finger_tap`, `increment`, `decrement`, `typeText`, `performCustomAction`, `handleAlert`, `setPasteboard`, `getPasteboard`, `scroll`, `scrollToVisible`, `elementSearch`, or `scrollToEdge` commands. Also returned internally by `explore` (dispatched via `get_interface` with `full: true`).
+Response to `activate`, `one_finger_tap`, `increment`, `decrement`, `typeText`, `performCustomAction`, `handleAlert`, `setPasteboard`, `getPasteboard`, `scroll`, `scrollToVisible`, `elementSearch`, or `scrollToEdge` commands. Also returned internally by `explore` (dispatched via `get_interface` with `scope: "full"` or legacy `full: true`).
 
 ```json
 {"buttonHeistVersion":"<calver>","type":"actionResult","payload":{
@@ -909,14 +909,14 @@ sequenceDiagram
     participant TheInsideJob
     participant TheBrains
 
-    Note over Agent,TheBrains: get_interface (visible only)
-    Agent->>TheFence: get_interface
+    Note over Agent,TheBrains: get_interface scope=visible
+    Agent->>TheFence: get_interface(scope: visible)
     TheFence->>TheInsideJob: requestInterface
     TheInsideJob->>TheBrains: snapshotElements()
     TheBrains-->>Agent: interface (visible elements)
 
-    Note over Agent,TheBrains: get_interface --full (explore)
-    Agent->>TheFence: get_interface(full: true)
+    Note over Agent,TheBrains: get_interface scope=full (default explore)
+    Agent->>TheFence: get_interface(scope: full)
     TheFence->>TheInsideJob: explore
     TheInsideJob->>TheBrains: exploreScreen()
 
@@ -937,27 +937,27 @@ Three ways to find elements, each suited to a different situation:
 
 | Command | What it returns | When to use |
 |---------|----------------|-------------|
-| `get_interface` | Visible elements only | Fast reads. You know the element is on screen, or you want the current viewport. |
-| `get_interface` with `full: true` | Every element on screen, including off-screen content | You need to know what exists in scroll views without navigating. Returns the same `interface` response with all elements populated. |
+| `get_interface` with `scope: "visible"` | Visible elements only | Fast reads. You know the element is on screen, or you want the current viewport. |
+| `get_interface` with `scope: "full"` | Every element on screen, including off-screen content | You need to know what exists in scroll views without navigating. Returns the same `interface` response with all elements populated. |
 | `scroll_to_visible` | Jumps to a known registry element, leaves viewport on it | You have a visible target or a `heistId` still present in the current or preserved screen snapshot. Changes the scroll position. |
 | `element_search` | Scrolls until the target element is found, leaves viewport on it | You have not discovered the element yet and need to search scrollable content. |
 
 ### Choosing between full, element_search, and scroll_to_visible
 
-- **`get_interface --full`** is a read operation. It explores, then restores scroll positions. The user sees no change. Use it when you need a census — "what elements are on this screen?" — without committing to navigate anywhere.
+- **`get_interface scope=full`** is a read operation. It explores, then restores scroll positions. The user sees no change. Use it when you need a census — "what elements are on this screen?" — without committing to navigate anywhere. The legacy `full: true` alias selects the same scope.
 
-- **`scroll_to_visible`** is a recorded-position navigation action. It scrolls to a known target and leaves the viewport there so you can interact with the element. Use it when the target is visible now or when a `heistId` is still present in the current/preserved screen snapshot, especially after `get_interface --full`.
+- **`scroll_to_visible`** is a recorded-position navigation action. It scrolls to a known target and leaves the viewport there so you can interact with the element. Use it when the target is visible now or when a `heistId` is still present in the current/preserved screen snapshot, especially after `get_interface` with `scope: "full"`.
 
 - **`element_search`** is an iterative navigation action. It pages through scrollable containers and stops when the target is found. Use it when the element has not been seen yet.
 
 ```mermaid
 flowchart TD
     A[Need to find an element?] --> B{Is it likely visible?}
-    B -->|Yes| C[get_interface]
+    B -->|Yes| C[get_interface scope=visible]
     B -->|No / unsure| D{Need to interact with it?}
     D -->|Yes, already discovered| E[scroll_to_visible<br>Jumps to known element,<br>leaves viewport there]
     D -->|Yes, not yet discovered| I[element_search<br>Pages until found,<br>leaves viewport there]
-    D -->|No, just check existence| F[get_interface --full<br>Census then restore<br>scroll positions]
+    D -->|No, just check existence| F[get_interface scope=full<br>Census then restore<br>scroll positions]
     C --> G{Found it?}
     G -->|Yes| H[activate / scroll / interact]
     G -->|No| D
@@ -967,12 +967,12 @@ flowchart TD
 
 Most agent workflows don't need full exploration. The typical pattern is:
 
-1. `get_interface` — see what's visible
+1. `get_interface` with `scope: "visible"` — see what's visible
 2. `activate` / `scroll` / `swipe` — interact with visible elements
 3. `element_search` — find a specific unseen off-screen element when needed
 4. `scroll_to_visible` — return to a known off-screen `heistId` while it is still present in the current or preserved screen snapshot
 
-Use `get_interface --full` when the screen has deep scrollable content and you need to make decisions based on elements that aren't currently visible (e.g., checking if a specific item exists in a long list before deciding what to do).
+Use `get_interface` with `scope: "full"` when the screen has deep scrollable content and you need to make decisions based on elements that aren't currently visible (e.g., checking if a specific item exists in a long list before deciding what to do).
 
 ## Data Types
 

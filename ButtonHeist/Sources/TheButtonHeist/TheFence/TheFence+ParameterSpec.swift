@@ -166,6 +166,7 @@ extension TheFence.Command {
         // MARK: Interface / observation
         case .getInterface:
             return filter + [
+                .init(key: "scope", type: .string),
                 .init(key: "full", type: .boolean),
                 .init(key: "detail", type: .string),
                 .init(key: "elements", type: .stringArray),

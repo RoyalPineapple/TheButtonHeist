@@ -12,9 +12,9 @@ The most common cause. You carried a heistId across a screen transition — a na
 
 ### The element is off-screen
 
-`get_interface` only returns what's currently visible. If the element is below the fold in a scroll view, it doesn't exist in the accessibility tree yet.
+`get_interface` with `scope: "visible"` only returns what's currently visible. If the element is below the fold in a scroll view, it doesn't exist in the accessibility tree yet.
 
-**Fix:** Use `element_search` with a matcher to find unseen off-screen content. If a `heistId` is still present in the current or preserved screen snapshot, such as the latest `get_interface` with `full: true` union, use `scroll_to_visible` to return to that known position. See the "visibility problem" section in the Agent Guide.
+**Fix:** Use `element_search` with a matcher to find unseen off-screen content. If a `heistId` is still present in the current or preserved screen snapshot, such as the latest `get_interface` with `scope: "full"` union, use `scroll_to_visible` to return to that known position. See the "visibility problem" section in the Agent Guide.
 
 ### You predicted a heistId
 
@@ -124,7 +124,7 @@ No text field is focused. Either the keyboard dismissed between actions, or no t
 
 The element you targeted for scroll isn't inside a scroll view. Static content and fixed headers can't be scrolled.
 
-**Fix:** Target a different element that's actually inside the scrollable area, or use `get_interface` with `full: true` to see the hierarchy and identify the scrollable container.
+**Fix:** Target a different element that's actually inside the scrollable area, or use `get_interface` with `scope: "full"` to see the hierarchy and identify the scrollable container.
 
 ### "Already at edge"
 
