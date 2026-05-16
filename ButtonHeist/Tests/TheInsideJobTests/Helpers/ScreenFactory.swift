@@ -10,14 +10,13 @@ import UIKit
 /// `installScreenWithOffViewportEntry` helpers that all rebuilt the same
 /// `Screen` value from a list of `(AccessibilityElement, heistId)` pairs.
 ///
-/// Off-viewport entries are entries that live in `Screen.elements` (so
-/// `findElement(heistId:)` resolves them) but are not present in the
-/// hierarchy — modeling an element retained from a previous exploration
-/// that has since scrolled out of view.
+/// Known-only entries live in `Screen.elements` (so target resolution sees
+/// them) but are not present in the live hierarchy — modeling an element
+/// retained from a previous exploration that has since scrolled out of view.
 extension Screen {
 
-    /// An entry that is registered but is not in the live hierarchy. Used
-    /// to simulate off-viewport state without a real scrollable container.
+    /// An entry that is registered but is not in the live hierarchy. Used to
+    /// simulate known semantic state without a real scrollable container.
     struct OffViewportEntry {
         let element: AccessibilityElement
         let heistId: String
@@ -31,7 +30,7 @@ extension Screen {
     }
 
     /// Build a `Screen` from a flat list of `(element, heistId)` pairs. The
-    /// hierarchy is constructed from the live pairs in order; off-viewport
+    /// hierarchy is constructed from the live pairs in order; known-only
     /// entries are added to `elements` but not to `hierarchy`.
     static func makeForTests(
         elements liveElements: [(element: AccessibilityElement, heistId: String)] = [],

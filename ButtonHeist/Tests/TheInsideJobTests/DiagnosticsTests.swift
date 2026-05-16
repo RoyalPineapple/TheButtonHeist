@@ -15,13 +15,13 @@ final class DiagnosticsTests: XCTestCase {
         let message = Diagnostics.heistIdNotFound(
             "missing-button",
             knownIds: ["header", "footer", "nav"],
-            viewportCount: 3
+            knownCount: 3
         )
         XCTAssertTrue(message.contains("missing-button"))
-        XCTAssertTrue(message.contains("3 elements"))
+        XCTAssertTrue(message.contains("3 known elements"))
         // When there's no near-miss, the message should hint at the stale-id
         // case and point at the recovery moves.
-        XCTAssertTrue(message.contains("scrolled off"))
+        XCTAssertTrue(message.contains("stale"))
         XCTAssertTrue(message.contains("get_interface"))
         XCTAssertTrue(message.contains("matcher"))
     }
@@ -30,7 +30,7 @@ final class DiagnosticsTests: XCTestCase {
         let message = Diagnostics.heistIdNotFound(
             "button",
             knownIds: ["submit-button", "cancel-button", "header"],
-            viewportCount: 3
+            knownCount: 3
         )
         XCTAssertTrue(message.contains("did you mean"))
         XCTAssertTrue(message.contains("submit-button"))
@@ -48,7 +48,7 @@ final class DiagnosticsTests: XCTestCase {
         let message = Diagnostics.heistIdNotFound(
             "submit-button-primary",
             knownIds: ["submit-button", "cancel"],
-            viewportCount: 2
+            knownCount: 2
         )
         XCTAssertTrue(message.contains("did you mean"))
         XCTAssertTrue(message.contains("submit-button"))
@@ -87,7 +87,7 @@ final class DiagnosticsTests: XCTestCase {
     func testCompactSummaryEmptyScreen() {
         let summary = Diagnostics.compactElementSummary(
             screenElements: [],
-            viewportHeistIds: [],
+            knownHeistIds: [],
             traversalOrder: [:]
         )
         XCTAssertTrue(summary.contains("empty"))
@@ -105,10 +105,10 @@ final class DiagnosticsTests: XCTestCase {
 
         let summary = Diagnostics.compactElementSummary(
             screenElements: [screenElement],
-            viewportHeistIds: ["hello"],
+            knownHeistIds: ["hello"],
             traversalOrder: ["hello": 0]
         )
-        XCTAssertTrue(summary.contains("1 elements"))
+        XCTAssertTrue(summary.contains("1 known element"))
         XCTAssertTrue(summary.contains("Hello"))
     }
 

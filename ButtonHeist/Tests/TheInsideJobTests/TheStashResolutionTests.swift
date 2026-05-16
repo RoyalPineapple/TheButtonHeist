@@ -42,7 +42,7 @@ final class TheStashResolutionTests: XCTestCase {
         )
     }
 
-    /// Accumulated hierarchy nodes for matcher resolution.
+    /// Accumulated live hierarchy nodes for visible-scoped lookups.
     private var hierarchyNodes: [AccessibilityHierarchy] = []
     /// Accumulated elements (in registration order).
     private var registeredEntries: [(element: AccessibilityElement, heistId: String, isLive: Bool)] = []
@@ -57,10 +57,9 @@ final class TheStashResolutionTests: XCTestCase {
     }
 
     /// Element registration that only adds the leaf to the heistId→entry map
-    /// without putting it in the live hierarchy. Off-screen entries return
-    /// nil from visible-scoped accessors; this helper is used by
-    /// `selectElements()` and `findElement(heistId:)` tests that assert the
-    /// union shape across viewport and off-viewport entries.
+    /// without putting it in the live hierarchy. Known entries return nil from
+    /// visible-scoped accessors but still participate in semantic target
+    /// resolution.
     private func registerOffScreen(_ element: AccessibilityElement, heistId: String) {
         registeredEntries.append((element, heistId, false))
         rebuildScreen()
@@ -242,7 +241,7 @@ final class TheStashResolutionTests: XCTestCase {
             XCTFail("Expected .notFound, got \(result)")
             return
         }
-        XCTAssertTrue(diagnostics.contains("screen is empty"))
+        XCTAssertTrue(diagnostics.contains("known hierarchy is empty"))
     }
 
     // MARK: - Ordinal Selection
@@ -372,22 +371,22 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(result[0].heistId, "button_save")
     }
 
-    // MARK: - Strict Off-Screen Rule
+    // MARK: - Known Semantic State
 
-    /// Matcher-based resolution looks only at the live hierarchy. An off-screen
-    /// entry does not participate in matching, so the resolution must miss with
-    /// a useful diagnostic.
-    func testMatcherDoesNotFallBackToOffScreenEntry() {
+    /// Matcher-based resolution reads the committed semantic state. Viewport
+    /// reachability is handled later by action execution.
+    func testMatcherResolvesKnownEntryOutsideLiveHierarchy() {
         let onScreen = element(label: "Visible", traits: .button)
         let offScreen = element(label: "Long List", traits: .button)
         register(onScreen, heistId: "button_visible", index: 0)
         registerOffScreen(offScreen, heistId: "long_list_button")
 
         let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Long List", traits: [.button])))
-        guard case .notFound = result else {
-            XCTFail("Expected .notFound under strict off-screen rule, got \(result)")
+        guard case .resolved(let target) = result else {
+            XCTFail("Expected known semantic match, got \(result)")
             return
         }
+        XCTAssertEqual(target.screenElement.heistId, "long_list_button")
     }
 
     func testScopedHeistIdsSeparateVisibleFromKnownUnion() {
@@ -413,13 +412,13 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertNotNil(bagman.screenElement(heistId: "long_list_button", in: .known))
     }
 
-    /// hasTarget — and wait_for absent by extension — must report off-screen
-    /// matchers as absent. The live hierarchy is the only source of truth.
-    func testHasTargetIgnoresOffScreenMatcher() {
+    /// `hasTarget` powers wait-style predicates, so it must use the same
+    /// semantic-state lookup as resolution instead of leaking viewport state.
+    func testHasTargetFindsKnownMatcherOutsideLiveHierarchy() {
         let offScreen = element(label: "Below Fold", traits: .button)
         registerOffScreen(offScreen, heistId: "below_fold_button")
 
-        XCTAssertFalse(bagman.hasTarget(.matcher(ElementMatcher(label: "Below Fold"))))
+        XCTAssertTrue(bagman.hasTarget(.matcher(ElementMatcher(label: "Below Fold"))))
     }
 
     func testHasTargetFindsLiveHeistIdInViewport() {
