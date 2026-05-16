@@ -4,6 +4,7 @@ import os.log
 import TheScore
 
 private let logger = Logger(subsystem: "com.buttonheist.fence", category: "handlers")
+private let accessibilityAdjustmentCountRange = 1...100
 
 @ButtonHeistActor
 extension TheFence {
@@ -347,11 +348,17 @@ extension TheFence {
 
         // No action → default activation
         guard let actionName else {
+            if args.keys.contains("count") {
+                throw SchemaValidationError(field: "count", observed: args["count"], expected: "only valid with increment or decrement")
+            }
             return try await sendAction(.activate(target))
         }
 
         // "action:foo" prefix forces custom action dispatch (escapes built-in names)
         if actionName.hasPrefix("action:") {
+            if args.keys.contains("count") {
+                throw SchemaValidationError(field: "count", observed: args["count"], expected: "only valid with increment or decrement")
+            }
             let customName = String(actionName.dropFirst("action:".count))
             guard !customName.isEmpty else {
                 return .error("action: prefix requires a name (e.g. \"action:myAction\")")
@@ -363,13 +370,51 @@ extension TheFence {
         // Built-in actions map to their wire messages; everything else is a custom action
         switch actionName {
         case "increment":
-            return try await sendAction(.increment(target))
+            let count = try accessibilityAdjustmentCount(args)
+            return try await sendRepeatedAdjustment(.increment(target), actionName: actionName, count: count)
         case "decrement":
-            return try await sendAction(.decrement(target))
+            let count = try accessibilityAdjustmentCount(args)
+            return try await sendRepeatedAdjustment(.decrement(target), actionName: actionName, count: count)
         default:
+            if args.keys.contains("count") {
+                throw SchemaValidationError(field: "count", observed: args["count"], expected: "only valid with increment or decrement")
+            }
             return try await sendAction(.performCustomAction(
                 CustomActionTarget(elementTarget: target, actionName: actionName)))
         }
+    }
+
+    private func accessibilityAdjustmentCount(_ args: [String: Any]) throws -> Int {
+        let count = try args.schemaInteger("count") ?? 1
+        guard accessibilityAdjustmentCountRange.contains(count) else {
+            throw SchemaValidationError(
+                field: "count",
+                observed: count,
+                expected: "integer in \(accessibilityAdjustmentCountRange.lowerBound)...\(accessibilityAdjustmentCountRange.upperBound)"
+            )
+        }
+        return count
+    }
+
+    private func sendRepeatedAdjustment(
+        _ message: ClientMessage,
+        actionName: String,
+        count: Int
+    ) async throws -> FenceResponse {
+        var finalResult: ActionResult?
+        for repetition in 1...count {
+            let result = try await sendAndAwaitAction(message, timeout: Timeouts.actionSeconds)
+            lastActionHistory = .completed(result)
+            finalResult = result
+            if !result.success && repetition < count {
+                let detail = result.message.map { ": \($0)" } ?? ""
+                return .error("\(actionName) repetition \(repetition) of \(count) failed\(detail)")
+            }
+        }
+        guard let finalResult else {
+            return .error("\(actionName) count produced no action result")
+        }
+        return .action(result: finalResult)
     }
 
     private func handleRotor(_ args: [String: Any]) async throws -> FenceResponse {

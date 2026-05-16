@@ -593,7 +593,7 @@ cd ButtonHeistMCP && swift build -c release
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
 | `get_interface` | Get UI element hierarchy. `scope: "full"` is the default whole accessible state; `scope: "visible"` requests a fresh on-screen parse. | `scope`, `full` (legacy alias), `label`, `identifier`, `value`, `traits`, `excludeTraits` (optional filtering) |
-| `activate` | **Primary interaction tool.** Activate a UI element (activation-first pattern). Pass `action` for named actions (increment, decrement, custom) | `heistId`, `label`, `identifier`, `value`, `traits`, `excludeTraits`, `action`, `expect` |
+| `activate` | **Primary interaction tool.** Activate a UI element (activation-first pattern). Pass `action` for named actions (increment, decrement, custom) | `heistId`, `label`, `identifier`, `value`, `traits`, `excludeTraits`, `action`, `count`, `expect` |
 | `rotor` | Move through an accessibility rotor, defaulting to next | element target, `rotor`/`rotorIndex`, `direction`, `currentHeistId`, text-range cursor offsets, `expect` |
 | `type_text` | Type text / delete characters | `text`, `deleteCount`, `clearFirst`, `heistId`, `label`, `identifier`, `value`, `traits`, `excludeTraits`, `expect` |
 | `get_screen` | Capture PNG screenshot | `output` (file path, optional) |
@@ -634,6 +634,8 @@ Pass `action` to perform a named action instead of default activation:
 - `"increment"` / `"decrement"` — For sliders, steppers
 - Any custom action name from the element's `actions` array
 - Prefix with `"action:"` to force custom action dispatch (e.g., `"action:increment"` dispatches as a custom action named "increment")
+
+For `"increment"` and `"decrement"` only, pass `count` to repeat the same adjustment 1...100 times in one Fence/MCP call. Omitting `count` behaves as `1`; the Fence sends the existing increment/decrement wire command once per repetition.
 
 #### gesture
 

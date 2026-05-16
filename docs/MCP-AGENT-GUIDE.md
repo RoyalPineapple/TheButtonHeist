@@ -14,7 +14,7 @@ Button Heist drives iOS apps through the accessibility layer — the same interf
 
 **Observing**: `get_interface` for element data, `get_screen` for visual context. Start with `get_interface` — it explores the full screen by default, including off-screen content in scroll views. Reach for `get_screen` only when layout or visual state matters.
 
-**Acting**: `activate` is your primary tool — it taps, toggles, follows links. `type_text` for keyboard input. `gesture` with type "swipe" for directional gestures. `scroll` for paging through lists. Prefer `activate` over `gesture` — raw coordinates are fragile and don't record well.
+**Acting**: `activate` is your primary tool — it taps, toggles, follows links. Use `action: "increment"` or `"decrement"` for adjustable controls, with optional `count` to repeat 1...100 times. `type_text` for keyboard input. `gesture` with type "swipe" for directional gestures. `scroll` for paging through lists. Prefer `activate` over `gesture` — raw coordinates are fragile and don't record well.
 
 **Finding**: `scroll` with mode "to_visible" when you've seen an element before but it scrolled off-screen. `scroll` with mode "search" when you've never seen it — scrolls every container looking for a match. `wait_for` when you know a specific element will appear.
 
