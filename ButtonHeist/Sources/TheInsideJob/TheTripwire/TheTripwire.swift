@@ -89,12 +89,12 @@ final class TheTripwire {
         static let empty = WindowStackSignal(windows: [])
 
         let windows: [WindowSignal]
+    }
 
-        struct WindowSignal: Equatable {
-            let id: ObjectIdentifier
-            let level: CGFloat
-            let isKeyWindow: Bool
-        }
+    struct WindowSignal: Equatable {
+        let id: ObjectIdentifier
+        let level: CGFloat
+        let isKeyWindow: Bool
     }
 
     // MARK: - Presentation Layer Fingerprinting

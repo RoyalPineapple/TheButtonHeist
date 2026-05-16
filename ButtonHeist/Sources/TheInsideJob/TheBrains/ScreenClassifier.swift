@@ -10,8 +10,7 @@ import TheScore
 /// Tripwire triggers parsing; this type is the single place that decides
 /// whether the parsed result should be treated as a new screen. Same-screen
 /// element and tree changes are left to `InterfaceDiff`.
-@MainActor
-enum ScreenClassifier {
+@MainActor enum ScreenClassifier { // swiftlint:disable:this agent_main_actor_value_type
 
     struct Snapshot: Equatable {
         let signature: ScreenSignature
@@ -78,8 +77,7 @@ enum ScreenClassifier {
         }
         if beforeSignature.rootShape != afterSignature.rootShape,
            !hasStableInteractionContext(before: before, after: after),
-           isRootShapeReplacement(before: beforeSignature.rootShape, after: afterSignature.rootShape)
-        {
+           isRootShapeReplacement(before: beforeSignature.rootShape, after: afterSignature.rootShape) {
             return .screenChanged(.rootShapeChanged)
         }
         return .sameScreen
@@ -196,7 +194,7 @@ enum ScreenClassifier {
     private static func containerRole(of container: AccessibilityContainer) -> String {
         let suffix = container.isModalBoundary ? ":modal" : ""
         switch container.type {
-        case .semanticGroup(_, let value, let identifier):
+        case .semanticGroup(_, _, let identifier):
             if let identifier = stableIdentifier(identifier) { return "group#\(identifier)\(suffix)" }
             return "group\(suffix)"
         case .list:
