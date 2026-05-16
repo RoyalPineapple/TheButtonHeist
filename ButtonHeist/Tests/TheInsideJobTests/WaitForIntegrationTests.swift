@@ -56,12 +56,12 @@ final class WaitForIntegrationTests: XCTestCase {
     }
 
     @discardableResult
-    private func addLabel(_ text: String, identifier: String? = nil) -> UILabel {
+    private func addLabel(_ text: String, identifier: String? = nil, y: CGFloat = 100) -> UILabel {
         let label = UILabel()
         label.text = text
         label.accessibilityLabel = text
         label.isAccessibilityElement = true
-        label.frame = CGRect(x: 10, y: 100, width: 200, height: 44)
+        label.frame = CGRect(x: 10, y: y, width: 200, height: 44)
         if let identifier {
             label.accessibilityIdentifier = identifier
         }
@@ -129,16 +129,77 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertNil(result.errorKind)
     }
 
+    func testWaitForAmbiguousMatcherDoesNotSatisfyPresence() async throws {
+        let first = addLabel("WaitFor-Ambiguous", y: 100)
+        let second = addLabel("WaitFor-Ambiguous", y: 150)
+        defer {
+            first.removeFromSuperview()
+            second.removeFromSuperview()
+        }
+
+        let response = await waitFor(
+            target: .matcher(ElementMatcher(label: "WaitFor-Ambiguous")),
+            timeout: 5.0
+        )
+        let result = try XCTUnwrap(response)
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .waitFor)
+        XCTAssertEqual(result.errorKind, .elementNotFound)
+        XCTAssertTrue(result.message?.contains("2 elements match") == true)
+        XCTAssertTrue(result.message?.contains("ordinal") == true)
+    }
+
+    func testWaitForExplicitOrdinalHitSatisfiesPresence() async throws {
+        let first = addLabel("WaitFor-OrdinalHit", y: 100)
+        let second = addLabel("WaitFor-OrdinalHit", y: 150)
+        defer {
+            first.removeFromSuperview()
+            second.removeFromSuperview()
+        }
+
+        let response = await waitFor(
+            target: .matcher(ElementMatcher(label: "WaitFor-OrdinalHit"), ordinal: 1),
+            timeout: 5.0
+        )
+        let result = try XCTUnwrap(response)
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(result.method, .waitFor)
+        XCTAssertEqual(result.message, "matched immediately")
+        XCTAssertNil(result.errorKind)
+    }
+
+    func testWaitForExplicitOrdinalOutOfRangeDoesNotFallBackToFirstMatch() async throws {
+        let first = addLabel("WaitFor-OrdinalOutOfRange", y: 100)
+        let second = addLabel("WaitFor-OrdinalOutOfRange", y: 150)
+        defer {
+            first.removeFromSuperview()
+            second.removeFromSuperview()
+        }
+
+        let response = await waitFor(
+            target: .matcher(ElementMatcher(label: "WaitFor-OrdinalOutOfRange"), ordinal: 2),
+            timeout: 0.2
+        )
+        let result = try XCTUnwrap(response)
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .waitFor)
+        XCTAssertEqual(result.errorKind, .timeout)
+        XCTAssertTrue(result.message?.contains("element not found") == true)
+        XCTAssertTrue(result.message?.contains("ordinal 2 requested") == true)
+        XCTAssertTrue(result.message?.contains("2 matches") == true)
+    }
+
     // MARK: - 2. Element appears after a delay
 
     func testWaitForElementAppearsAfterDelay() async throws {
-        // Queue the label-add Task on @MainActor before calling waitFor.
-        // waitFor runs its synchronous prefix (initial hasTarget check returns
-        // false because the label isn't in the tree yet), then suspends on
-        // `tripwire.waitForAllClear`. While suspended the queued addLabel Task
-        // runs; the next pulse tick observes the new label and wait_for resolves
-        // with "matched after …". No wall-clock sleep needed.
+        // Delay the UI mutation by a couple of display frames so the first
+        // semantic snapshot still observes absence and the poll path observes
+        // the later arrival.
         let addTask = Task { @MainActor in
+            await self.insideJob.tripwire.yieldRealFrames(2)
             _ = self.addLabel("WaitFor-Delayed")
         }
 
@@ -157,7 +218,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(unwrapped.success)
         XCTAssertEqual(unwrapped.method, .waitFor)
         let message = try XCTUnwrap(unwrapped.message)
-        XCTAssertTrue(message.contains("matched after"))
+        XCTAssertTrue(message.contains("matched after"), "Unexpected message: \(message)")
         XCTAssertNil(unwrapped.errorKind)
     }
 
@@ -178,6 +239,28 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertEqual(result.method, .waitFor)
         XCTAssertEqual(result.errorKind, .timeout)
         XCTAssertTrue(result.message?.contains("element still present") == true)
+    }
+
+    func testWaitForAbsentAmbiguousMatcherDoesNotSatisfyAbsence() async throws {
+        let first = addLabel("WaitFor-Absent-Ambiguous", y: 100)
+        let second = addLabel("WaitFor-Absent-Ambiguous", y: 150)
+        defer {
+            first.removeFromSuperview()
+            second.removeFromSuperview()
+        }
+
+        let response = await waitFor(
+            target: .matcher(ElementMatcher(label: "WaitFor-Absent-Ambiguous")),
+            absent: true,
+            timeout: 5.0
+        )
+        let result = try XCTUnwrap(response)
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .waitFor)
+        XCTAssertEqual(result.errorKind, .elementNotFound)
+        XCTAssertTrue(result.message?.contains("2 elements match") == true)
+        XCTAssertTrue(result.message?.contains("ordinal") == true)
     }
 
     // MARK: - 4. wait_for absent: true on an element that disappears
@@ -371,8 +454,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(refreshAndRecordSentState())
 
         let addTask = Task { @MainActor in
-            await Task.yield()
-            await Task.yield()
+            await self.insideJob.tripwire.yieldRealFrames(2)
             _ = self.addLabel("WaitForChange-Delayed")
         }
 

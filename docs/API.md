@@ -1067,6 +1067,8 @@ public struct WaitForTarget: Codable, Sendable
 
 Target for `wait_for` command — waits for an element matching a heistId or predicate to appear or disappear.
 
+Presence waits use the same target resolution contract as actions: one exact match succeeds, an explicit `ordinal` selects that match, zero matches keep waiting until timeout, and ambiguous matcher results fail with candidate diagnostics. Absence waits succeed on current absence; ambiguous matcher results are treated as present, not absent.
+
 #### Properties
 
 - `elementTarget: ElementTarget` - Element to wait for, encoded as flat `heistId` or matcher fields
