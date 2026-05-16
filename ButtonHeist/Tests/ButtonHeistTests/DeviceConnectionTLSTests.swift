@@ -53,6 +53,14 @@ final class DeviceConnectionTLSTests: XCTestCase {
         }
     }
 
+    func testDisconnectReasonConnectionFailureMessagePreservesCause() {
+        let message = DisconnectReason.missingFingerprint.connectionFailureMessage
+
+        XCTAssertTrue(message.contains("connection failed in tls"))
+        XCTAssertTrue(message.contains("observed No TLS fingerprint available"))
+        XCTAssertTrue(message.contains("configure the device's TLS certificate fingerprint"))
+    }
+
     // MARK: - DeviceConnection Init (actor-isolated)
 
     @ButtonHeistActor
@@ -79,6 +87,26 @@ final class DeviceConnectionTLSTests: XCTestCase {
 
         let connection = DeviceConnection(device: device)
         XCTAssertNotNil(connection)
+    }
+
+    @ButtonHeistActor
+    func testConnectWithoutFingerprintOnNonLoopbackEmitsMissingFingerprint() async {
+        let device = DiscoveredDevice(
+            id: "test",
+            name: "TestApp#abc",
+            endpoint: NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        )
+        let connection = DeviceConnection(device: device)
+        var disconnectReason: DisconnectReason?
+        connection.onEvent = { event in
+            if case .disconnected(let reason) = event {
+                disconnectReason = reason
+            }
+        }
+
+        connection.connect()
+
+        XCTAssertEqual(disconnectReason, .missingFingerprint)
     }
 
     @ButtonHeistActor

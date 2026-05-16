@@ -39,6 +39,8 @@ extension FenceError {
             return "Connection timed out"
         case .connectionFailed(let message):
             return "Connection failed: \(message)"
+        case .connectionFailure(let failure):
+            return failure.message
         case .sessionLocked(let message):
             return "Session locked: \(message)"
         case .authFailed(let message):

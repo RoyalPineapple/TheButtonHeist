@@ -121,6 +121,61 @@ enum DisconnectReason: Error, LocalizedError {
             return "Use a loopback simulator target or configure the device's TLS certificate fingerprint."
         }
     }
+
+    var connectionFailureMessage: String {
+        let base = "connection failed in \(phase.rawValue): observed \(observedCause)"
+        guard let hint else { return base }
+        return "\(base); \(hint)"
+    }
+
+    private var observedCause: String {
+        errorDescription ?? localizedDescription
+    }
+}
+
+extension DisconnectReason: Equatable {
+    static func == (lhs: DisconnectReason, rhs: DisconnectReason) -> Bool {
+        switch (lhs, rhs) {
+        case (.networkError(let lhsError), .networkError(let rhsError)):
+            let lhsNSError = lhsError as NSError
+            let rhsNSError = rhsError as NSError
+            return lhsNSError.domain == rhsNSError.domain &&
+                lhsNSError.code == rhsNSError.code &&
+                lhsNSError.localizedDescription == rhsNSError.localizedDescription
+        case (.bufferOverflow, .bufferOverflow),
+             (.serverClosed, .serverClosed),
+             (.localDisconnect, .localDisconnect),
+             (.certificateMismatch, .certificateMismatch),
+             (.missingFingerprint, .missingFingerprint):
+            return true
+        case (.authFailed(let lhsReason), .authFailed(let rhsReason)):
+            return lhsReason == rhsReason
+        case (.sessionLocked(let lhsMessage), .sessionLocked(let rhsMessage)):
+            return lhsMessage == rhsMessage
+        case (.protocolMismatch(let lhsMessage), .protocolMismatch(let rhsMessage)):
+            return lhsMessage == rhsMessage
+        default:
+            return false
+        }
+    }
+}
+
+/// `@unchecked Sendable` justification: all access to `reason` is serialized by `lock`.
+private final class TLSFailureTracker: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+    private let lock = NSLock()
+    private var reason: DisconnectReason?
+
+    func record(_ reason: DisconnectReason) {
+        lock.withLock {
+            self.reason = reason
+        }
+    }
+
+    func currentReason() -> DisconnectReason? {
+        lock.withLock {
+            reason
+        }
+    }
 }
 
 /// Single ordered event emitted from an NWConnection's network-queue
@@ -179,6 +234,7 @@ final class DeviceConnection: DeviceConnecting {
     /// Continuation tied to the current connection attempt. Yielded to from
     /// NWConnection's `.global()` callbacks; finished when we tear down.
     private var eventContinuation: AsyncStream<DeviceConnectionEvent>.Continuation?
+    private var tlsFailureTracker: TLSFailureTracker?
 
     init(device: DiscoveredDevice, token: String? = nil, driverId: String? = nil) {
         self.device = device
@@ -192,12 +248,16 @@ final class DeviceConnection: DeviceConnecting {
 
         let parameters: NWParameters
         if let expectedFingerprint {
-            parameters = Self.makeTLSParameters(expectedFingerprint: expectedFingerprint)
+            let tracker = TLSFailureTracker()
+            tlsFailureTracker = tracker
+            parameters = Self.makeTLSParameters(expectedFingerprint: expectedFingerprint, failureTracker: tracker)
             logger.info("TLS enabled, verifying fingerprint: \(expectedFingerprint.prefix(20))...")
         } else if Self.isLoopbackEndpoint(device.endpoint) {
+            tlsFailureTracker = nil
             parameters = Self.makeLoopbackTLSParameters()
             logger.warning("No TLS fingerprint available for loopback endpoint, allowing direct simulator connection")
         } else {
+            tlsFailureTracker = nil
             logger.error("No TLS fingerprint available — refusing plain TCP connection")
             onEvent?(.disconnected(.missingFingerprint))
             return
@@ -252,6 +312,7 @@ final class DeviceConnection: DeviceConnecting {
         eventContinuation = nil
         eventConsumerTask?.cancel()
         eventConsumerTask = nil
+        tlsFailureTracker = nil
     }
 
     func send(_ message: ClientMessage, requestId: String? = nil) {
@@ -307,8 +368,10 @@ final class DeviceConnection: DeviceConnecting {
             startReceiving()
         case .failed(let error):
             logger.error("Connection failed: \(error)")
+            let reason = tlsFailureTracker?.currentReason() ?? .networkError(error)
             connectionState = .disconnected
-            onEvent?(.disconnected(.networkError(error)))
+            tlsFailureTracker = nil
+            onEvent?(.disconnected(reason))
         case .cancelled:
             logger.info("Connection cancelled")
             // Client-initiated teardown paths (disconnect(), .failed, buffer overflow,
@@ -323,6 +386,7 @@ final class DeviceConnection: DeviceConnecting {
                 false
             }
             connectionState = .disconnected
+            tlsFailureTracker = nil
             if wasActive {
                 onEvent?(.disconnected(.serverClosed))
             }
@@ -514,7 +578,10 @@ final class DeviceConnection: DeviceConnecting {
 
 nonisolated extension DeviceConnection {
 
-    fileprivate static func makeTLSParameters(expectedFingerprint: String) -> NWParameters {
+    private static func makeTLSParameters(
+        expectedFingerprint: String,
+        failureTracker: TLSFailureTracker
+    ) -> NWParameters {
         let tlsOptions = NWProtocolTLS.Options()
 
         sec_protocol_options_set_min_tls_protocol_version(
@@ -530,6 +597,7 @@ nonisolated extension DeviceConnection {
                 guard let chain = SecTrustCopyCertificateChain(secTrust) as? [SecCertificate],
                       let leaf = chain.first else {
                     logger.error("TLS verification failed: no server certificate")
+                    failureTracker.record(.certificateMismatch)
                     completionHandler(false)
                     return
                 }
@@ -542,6 +610,7 @@ nonisolated extension DeviceConnection {
                     logger.debug("TLS fingerprint verified")
                 } else {
                     logger.error("TLS fingerprint mismatch: expected=\(expected.prefix(20))... actual=\(actual.prefix(20))...")
+                    failureTracker.record(.certificateMismatch)
                 }
                 completionHandler(matches)
             },

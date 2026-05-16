@@ -19,12 +19,13 @@ final class TheHandoff {
     /// Also used as the associated value in `ConnectionPhase.failed`, which
     /// is why this enum is `Equatable`. Not every case can appear in
     /// `.failed`: the phase-producing cases are `connectionFailed`,
-    /// `authFailed`, and `sessionLocked`; the resolver/timeout cases
+    /// `disconnected`, `authFailed`, and `sessionLocked`; the resolver/timeout cases
     /// (`timeout`, `noDeviceFound`, `noMatchingDevice`) are thrown directly
     /// from `DeviceResolver`/`waitForConnectionResult` and never become a
     /// phase value.
     enum ConnectionError: Error, LocalizedError, Equatable {
         case connectionFailed(String)
+        case disconnected(DisconnectReason)
         case authFailed(String)
         case sessionLocked(String)
         case timeout
@@ -34,6 +35,7 @@ final class TheHandoff {
         var errorDescription: String? {
             switch self {
             case .connectionFailed(let message): return message
+            case .disconnected(let reason): return reason.connectionFailureMessage
             case .authFailed(let reason): return "Authentication failed: \(reason)"
             case .sessionLocked(let message): return "Session locked: \(message)"
             case .timeout: return "Connection timed out"
@@ -47,6 +49,8 @@ final class TheHandoff {
             switch self {
             case .connectionFailed:
                 return "connection.failed"
+            case .disconnected(let reason):
+                return reason.failureCode
             case .authFailed:
                 return "auth.failed"
             case .sessionLocked:
@@ -64,6 +68,8 @@ final class TheHandoff {
             switch self {
             case .connectionFailed:
                 return .transport
+            case .disconnected(let reason):
+                return reason.phase
             case .authFailed:
                 return .authentication
             case .sessionLocked:
@@ -79,6 +85,8 @@ final class TheHandoff {
             switch self {
             case .connectionFailed, .sessionLocked, .timeout, .noDeviceFound:
                 return true
+            case .disconnected(let reason):
+                return reason.retryable
             case .authFailed, .noMatchingDevice:
                 return false
             }
@@ -88,6 +96,8 @@ final class TheHandoff {
             switch self {
             case .connectionFailed:
                 return "Check that the app is running and reachable, then retry."
+            case .disconnected(let reason):
+                return reason.hint
             case .authFailed:
                 return "Retry without a token to request a fresh session."
             case .sessionLocked:
@@ -174,6 +184,7 @@ final class TheHandoff {
     private(set) var isDiscovering: Bool = false
     private(set) var connectionPhase: ConnectionPhase = .disconnected
     private(set) var reconnectPolicy: ReconnectPolicy = .disabled
+    private var connectionAttemptDisconnectReason: DisconnectReason?
 
     /// Continuations awaiting a terminal connection-phase transition. Each
     /// continuation is resumed exactly once when the phase next becomes
@@ -184,15 +195,18 @@ final class TheHandoff {
     // MARK: - State Transitions
 
     private func transitionToConnecting(device: DiscoveredDevice) {
+        connectionAttemptDisconnectReason = nil
         connectionPhase = .connecting(device: device)
     }
 
     private func transitionToConnected(device: DiscoveredDevice, keepaliveTask: Task<Void, Never>) {
+        connectionAttemptDisconnectReason = nil
         connectionPhase = .connected(ConnectedSession(device: device, keepaliveTask: keepaliveTask))
         resumePhaseAwaiters(with: .success(()))
     }
 
     private func transitionToFailed(_ failure: ConnectionError) {
+        connectionAttemptDisconnectReason = nil
         let wasActive: Bool
         switch connectionPhase {
         case .connecting, .connected:
@@ -209,7 +223,7 @@ final class TheHandoff {
         }
     }
 
-    private func transitionToDisconnected() {
+    private func transitionToDisconnected(reason: DisconnectReason? = nil) {
         let wasActive: Bool
         switch connectionPhase {
         case .connecting, .connected:
@@ -222,11 +236,21 @@ final class TheHandoff {
         }
         connectionPhase = .disconnected
         if wasActive {
-            resumePhaseAwaiters(
-                with: .failure(ConnectionError.connectionFailed(
-                    "Disconnected during connection attempt. The app may have been busy, suspended, or restarted before the handshake completed."
-                ))
-            )
+            connectionAttemptDisconnectReason = reason
+            if let reason {
+                resumePhaseAwaiters(with: .failure(ConnectionError.disconnected(reason)))
+            } else {
+                resumePhaseAwaiters(
+                    with: .failure(ConnectionError.connectionFailed(
+                        "Disconnected during connection attempt. The app may have been busy, suspended, or restarted before the handshake completed."
+                    ))
+                )
+            }
+        } else if reason == nil {
+            // No active transition and no new cause: clear any stale attempt cause.
+            // If a cause arrives after the first disconnect, keep the original cause
+            // because it is the one waitForConnectionResult reports on the fast path.
+            connectionAttemptDisconnectReason = nil
         }
     }
 
@@ -553,9 +577,9 @@ final class TheHandoff {
                     self.onDisconnected?(reason)
                     return
                 }
-                self.transitionToDisconnected()
+                self.transitionToDisconnected(reason: reason)
                 self.onDisconnected?(reason)
-                if case .enabled(let filter, let existingReconnectTask) = self.reconnectPolicy {
+                if reason.retryable, case .enabled(let filter, let existingReconnectTask) = self.reconnectPolicy {
                     existingReconnectTask?.cancel()
                     let reconnectTask = Task<Void, Never> { [weak self] in
                         await self?.runAutoReconnect(filter: filter)
@@ -628,7 +652,7 @@ final class TheHandoff {
             logger.info("Received status payload: appName=\(payload.identity.appName, privacy: .public)")
         case .protocolMismatch(let payload):
             let message = "buttonHeistVersion mismatch: server=\(payload.serverButtonHeistVersion), client=\(payload.clientButtonHeistVersion)"
-            transitionToFailed(.connectionFailed(message))
+            transitionToFailed(.disconnected(.protocolMismatch(message)))
             onError?(message)
         case .pong:
             mutateConnectedSession { $0.missedPongCount = 0 }
@@ -669,6 +693,9 @@ final class TheHandoff {
         case .failed(let failure):
             throw failure
         case .disconnected:
+            if let reason = connectionAttemptDisconnectReason {
+                throw ConnectionError.disconnected(reason)
+            }
             throw ConnectionError.connectionFailed(
                 "Disconnected during connection attempt. The app may have been busy, suspended, or restarted before the handshake completed."
             )

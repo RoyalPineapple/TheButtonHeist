@@ -200,6 +200,39 @@ final class TheHandoffStateTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testNonRetryableDisconnectDoesNotTriggerReconnect() async throws {
+        let handoff = TheHandoff()
+        handoff.reconnectInterval = 0.01
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+
+        let disconnected = expectation(description: "disconnect event received")
+        var connectionCount = 0
+        handoff.makeConnection = { _, _, _ in
+            connectionCount += 1
+            let connection = MockConnection()
+            connection.connectEventsOverride = [
+                .disconnected(.missingFingerprint),
+            ]
+            return connection
+        }
+        handoff.onDisconnected = { _ in
+            disconnected.fulfill()
+        }
+
+        let mockDiscovery = MockDiscovery()
+        mockDiscovery.discoveredDevices = [device]
+        handoff.makeDiscovery = { mockDiscovery }
+        handoff.startDiscovery()
+        handoff.setupAutoReconnect(filter: nil)
+
+        handoff.connect(to: device)
+        await fulfillment(of: [disconnected], timeout: 5)
+
+        XCTAssertEqual(connectionCount, 1)
+        XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: nil, reconnectTask: nil))
+    }
+
+    @ButtonHeistActor
     func testDisconnectEventWithDisabledPolicyDoesNotReconnect() async throws {
         let handoff = TheHandoff()
         handoff.reconnectInterval = 0.01
@@ -691,6 +724,34 @@ final class TheHandoffStateTests: XCTestCase {
                 return XCTFail("Expected .authFailed, got \(error)")
             }
             XCTAssertEqual(reason, "bad token")
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    @ButtonHeistActor
+    func testWaitForConnectionResultPreservesDisconnectCause() async {
+        let handoff = TheHandoff()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mock = MockConnection()
+        mock.connectEventsOverride = [
+            .disconnected(.missingFingerprint),
+        ]
+        handoff.makeConnection = { _, _, _ in mock }
+
+        handoff.connect(to: device)
+
+        do {
+            try await handoff.waitForConnectionResult(timeout: 30)
+            XCTFail("Expected disconnect failure")
+        } catch let error as TheHandoff.ConnectionError {
+            guard case .disconnected(let reason) = error else {
+                return XCTFail("Expected .disconnected, got \(error)")
+            }
+            XCTAssertEqual(reason, .missingFingerprint)
+            XCTAssertEqual(error.failureCode, "tls.missing_fingerprint")
+            XCTAssertEqual(error.phase, .tls)
+            XCTAssertFalse(error.retryable)
         } catch {
             XCTFail("Unexpected error: \(error)")
         }
