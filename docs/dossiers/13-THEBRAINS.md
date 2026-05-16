@@ -11,7 +11,7 @@ TheBrains is an orchestrator class with two internal components:
 - **`Navigation`** — scroll and exploration engine. Owns `ScrollableTarget`, `SettleSwipeLoopState`, `ScreenManifest`, and `lastSwipeDirectionByTarget`. Drives TheSafecracker's scroll primitives.
 - **`Actions`** — the 21 `executeXxx` action handlers, plus `performElementAction` / `performPointAction` generic pipelines and duration helpers.
 
-`Navigation` and `Actions` are *internal components of TheBrains*, not crew members in their own right — neutral noun-style names. Both are owned by TheBrains (`let navigation: Navigation`, `let actions: Actions`) and share the same TheStash / TheSafecracker / TheTripwire references. Actions holds a reference to Navigation because targeted text entry calls `navigation.ensureOnScreen(for:)` before tapping a field.
+`Navigation` and `Actions` are *internal components of TheBrains*, not crew members in their own right — neutral noun-style names. Both are owned by TheBrains (`let navigation: Navigation`, `let actions: Actions`) and share the same TheStash / TheSafecracker / TheTripwire references. Actions holds a reference to Navigation because targeted element/point flows use `ensureOnScreen(for:)`, while edit, pasteboard, and resign-first-responder commands use `ensureFirstResponderOnScreen()`.
 
 TheBrains itself keeps the post-action delta cycle (`captureBeforeState`, `actionResultWithDelta`), command dispatch (`executeCommand`), wait handlers (`executeWaitForIdle`, `executeWaitForChange`), response state (`SentState`, `recordSentState`, `computeBackgroundDelta`), and screen-capture passthroughs.
 
@@ -56,7 +56,7 @@ graph TD
     Dispatch --> Actions
     Dispatch --> Navigation
     Dispatch --> Core
-    Actions -->|"navigation.ensureOnScreen"| Navigation
+    Actions -->|"navigation.ensureOnScreen,<br/>ensureFirstResponderOnScreen"| Navigation
     Actions -->|"resolve target"| Stash
     Actions -->|"gestures"| Safecracker
     Navigation -->|"resolve scroll target"| Stash
