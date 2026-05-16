@@ -81,7 +81,7 @@ final class Actions {
         if let elementTarget {
             await navigation.ensureOnScreen(for: elementTarget)
         }
-        switch stash.resolvePoint(from: elementTarget, pointX: pointX, pointY: pointY) {
+        switch resolveGesturePoint(from: elementTarget, pointX: pointX, pointY: pointY, method: method) {
         case .failure(let result):
             return result
         case .success(let point):
@@ -94,6 +94,61 @@ final class Actions {
             )
             return TheSafecracker.InteractionResult(success: success, method: method, message: message, value: nil)
         }
+    }
+
+    private func resolveGesturePoint(
+        from elementTarget: ElementTarget?,
+        pointX: Double?,
+        pointY: Double?,
+        method: ActionMethod
+    ) -> PointResolution {
+        guard let elementTarget else {
+            guard let xCoord = pointX, let yCoord = pointY else {
+                return .failure(.failure(.elementNotFound, message: "No target specified"))
+            }
+            return .success(CGPoint(x: xCoord, y: yCoord))
+        }
+        let resolution = stash.resolveTarget(elementTarget)
+        guard let resolved = resolution.resolved else {
+            return .failure(.failure(.elementNotFound, message: resolution.diagnostics))
+        }
+        guard let point = stash.liveActivationPoint(for: resolved.screenElement) else {
+            return .failure(.failure(
+                method,
+                message: ActionCapabilityDiagnostic.gestureTargetUnavailable(
+                    method: method,
+                    element: resolved.screenElement,
+                    isVisible: stash.visibleIds.contains(resolved.screenElement.heistId)
+                )
+            ))
+        }
+        return .success(point)
+    }
+
+    private enum GestureFrameResolution {
+        case success(CGRect)
+        case failure(TheSafecracker.InteractionResult)
+    }
+
+    private func resolveGestureFrame(
+        for elementTarget: ElementTarget,
+        method: ActionMethod
+    ) -> GestureFrameResolution {
+        let resolution = stash.resolveTarget(elementTarget)
+        guard let resolved = resolution.resolved else {
+            return .failure(.failure(.elementNotFound, message: resolution.diagnostics))
+        }
+        guard let frame = stash.liveFrame(for: resolved.screenElement) else {
+            return .failure(.failure(
+                method,
+                message: ActionCapabilityDiagnostic.gestureTargetUnavailable(
+                    method: method,
+                    element: resolved.screenElement,
+                    isVisible: stash.visibleIds.contains(resolved.screenElement.heistId)
+                )
+            ))
+        }
+        return .success(frame)
     }
 
     // MARK: - Accessibility Actions
@@ -122,7 +177,16 @@ final class Actions {
             }
 
             // Synthetic tap fallback at the post-retry activation point.
-            let tapPoint = retryResolved.element.activationPoint
+            guard let tapPoint = self.stash.liveActivationPoint(for: retryResolved.screenElement) else {
+                return .failure(
+                    .activate,
+                    message: ActionCapabilityDiagnostic.gestureTargetUnavailable(
+                        method: .syntheticTap,
+                        element: retryResolved.screenElement,
+                        isVisible: self.stash.visibleIds.contains(retryResolved.screenElement.heistId)
+                    )
+                )
+            }
             if await self.safecracker.tap(at: tapPoint) {
                 self.safecracker.showFingerprint(at: tapPoint)
                 return TheSafecracker.InteractionResult(success: true, method: .syntheticTap, message: nil, value: nil)
@@ -382,8 +446,12 @@ final class Actions {
                 return .failure(.syntheticSwipe, message: "Unit-point swipe requires an element target")
             }
             await navigation.ensureOnScreen(for: elementTarget)
-            guard let frame = stash.resolveFrame(for: elementTarget) else {
-                return .failure(.elementNotFound, message: "Element not found")
+            let frame: CGRect
+            switch resolveGestureFrame(for: elementTarget, method: .syntheticSwipe) {
+            case .success(let liveFrame):
+                frame = liveFrame
+            case .failure(let result):
+                return result
             }
             let startPoint = CGPoint(
                 x: frame.origin.x + unitStart.x * frame.width,
@@ -412,7 +480,12 @@ final class Actions {
         if let elementTarget = target.elementTarget {
             await navigation.ensureOnScreen(for: elementTarget)
         }
-        switch stash.resolvePoint(from: target.elementTarget, pointX: target.startX, pointY: target.startY) {
+        switch resolveGesturePoint(
+            from: target.elementTarget,
+            pointX: target.startX,
+            pointY: target.startY,
+            method: .syntheticSwipe
+        ) {
         case .failure(let result):
             return result
         case .success(let startPoint):
@@ -632,7 +705,16 @@ final class Actions {
             return .failure(.elementNotFound, message: resolution.diagnostics)
         }
 
-        let point = resolved.element.activationPoint
+        guard let point = stash.liveActivationPoint(for: resolved.screenElement) else {
+            return .failure(
+                .typeText,
+                message: ActionCapabilityDiagnostic.gestureTargetUnavailable(
+                    method: .syntheticTap,
+                    element: resolved.screenElement,
+                    isVisible: stash.visibleIds.contains(resolved.screenElement.heistId)
+                )
+            )
+        }
         guard await safecracker.tap(at: point) else {
             return .failure(
                 .typeText,
