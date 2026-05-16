@@ -400,7 +400,7 @@ Stop an active recording. The server finalizes the video and sends a `recording`
 
 ### scroll
 
-Scroll the nearest scroll view ancestor of a target element by approximately one page in the given direction. Uses direct `setContentOffset` manipulation for UIScrollView, synthetic swipe for other scrollable containers.
+Scroll the resolved element's stored scroll view by approximately one page in the given direction. The scroll view must support the requested axis; Button Heist does not fall back to unrelated global containers for resolved target actions. Use `elementSearch` when the goal is to scan scrollable content for an unseen target.
 
 **By identifier:**
 ```json
@@ -465,7 +465,7 @@ Search for an element by scrolling through scroll views. Uses an `ElementTarget`
 
 ### scrollToEdge
 
-Scroll the nearest scroll view ancestor to an edge (top, bottom, left, right).
+Scroll the resolved element's stored scroll view to an edge (top, bottom, left, right). The scroll view must support the requested axis; unrelated containers are not considered.
 
 **By identifier:**
 ```json
@@ -1214,7 +1214,7 @@ Enum values: `"up"`, `"down"`, `"left"`, `"right"`, `"next"`, `"previous"`.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `elementTarget` | `ActionTarget?` | Element to scroll from (bubbles up to nearest scroll view ancestor) |
+| `elementTarget` | `ActionTarget?` | Element whose stored scroll view should move on the requested axis |
 | `direction` | `ScrollDirection` | Scroll direction |
 
 ### ScrollEdge
@@ -1225,7 +1225,7 @@ Enum values: `"top"`, `"bottom"`, `"left"`, `"right"`.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `elementTarget` | `ActionTarget?` | Element whose nearest scroll view ancestor to scroll |
+| `elementTarget` | `ActionTarget?` | Element whose stored scroll view should move to the requested edge |
 | `edge` | `ScrollEdge` | Which edge to scroll to |
 
 ### ElementMatcher
