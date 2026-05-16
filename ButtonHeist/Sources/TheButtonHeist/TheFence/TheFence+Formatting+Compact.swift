@@ -45,8 +45,7 @@ extension FenceResponse {
                 stepSummaries: stepSummaries, netDelta: netDelta
             )
         case .sessionState(let payload):
-            let connected = payload["connected"] as? Bool ?? false
-            return connected ? "session: connected" : "session: not connected"
+            return Self.compactSessionState(payload)
         case .targets(let targets, let defaultTarget):
             if targets.isEmpty { return "no targets configured" }
             return targets.sorted(by: { $0.key < $1.key }).map { name, target in
@@ -69,6 +68,42 @@ extension FenceResponse {
             if let failure { text += " [\(failure.step.command): \(failure.errorMessage)]" }
             return text
         }
+    }
+
+    private static func compactSessionState(_ payload: [String: Any]) -> String {
+        let phase = payload["phase"] as? String
+        let connected = payload["connected"] as? Bool ?? false
+        switch phase {
+        case "connected":
+            return "session: connected"
+        case "connecting":
+            return "session: connecting"
+        case "failed":
+            return compactSessionStateFailure(payload, label: "failed") ?? "session: failed"
+        case "disconnected":
+            return compactSessionStateFailure(payload, label: "disconnected") ?? "session: not connected"
+        default:
+            return connected ? "session: connected" : "session: not connected"
+        }
+    }
+
+    private static func compactSessionStateFailure(_ payload: [String: Any], label: String) -> String? {
+        guard let failure = payload["lastFailure"] as? [String: Any] else {
+            return nil
+        }
+        let code = failure["errorCode"] as? String
+        let hint = failure["hint"] as? String
+        let message = failure["message"] as? String
+        var text = "session: \(label)"
+        if let code {
+            text += " (\(code))"
+        }
+        if let hint {
+            text += ": \(hint)"
+        } else if let message {
+            text += ": \(message)"
+        }
+        return text
     }
 
     private func compactActionResult(_ result: ActionResult, expectation: ExpectationResult?) -> String {

@@ -196,6 +196,7 @@ extension TheFence {
         var payload: [String: Any] = [
             "status": "ok",
             "connected": connected,
+            "phase": handoff.connectionPhaseName,
         ]
         if let device = handoff.connectedDevice {
             payload["deviceName"] = handoff.displayName(for: device)
@@ -206,6 +207,20 @@ extension TheFence {
         payload["isRecording"] = handoff.isRecording
         payload["actionTimeoutSeconds"] = Timeouts.actionSeconds
         payload["longActionTimeoutSeconds"] = Timeouts.longActionSeconds
+        if let failure = handoff.connectionDiagnosticFailure {
+            var failurePayload: [String: Any] = [
+                "errorCode": failure.failureCode,
+                "phase": failure.phase.rawValue,
+                "retryable": failure.retryable,
+            ]
+            if let message = failure.errorDescription {
+                failurePayload["message"] = message
+            }
+            if let hint = failure.hint {
+                failurePayload["hint"] = hint
+            }
+            payload["lastFailure"] = failurePayload
+        }
 
         if let last = lastActionResult {
             payload["lastAction"] = [

@@ -141,9 +141,7 @@ public enum FenceResponse {
             if checked > 0 { text += " [expectations: \(met)/\(checked) met]" }
             return text
         case .sessionState(let payload):
-            let connected = payload["connected"] as? Bool ?? false
-            let device = payload["deviceName"] as? String ?? "unknown"
-            return connected ? "Session: connected to \(device)" : "Session: not connected"
+            return Self.formatSessionStateHuman(payload)
         case .targets(let targets, let defaultTarget):
             return formatTargetList(targets, defaultTarget: defaultTarget)
         case .sessionLog(let manifest):
@@ -165,6 +163,53 @@ public enum FenceResponse {
                 text += "\n  error: \(failure.errorMessage)"
             }
             return text
+        }
+    }
+
+    private static func formatSessionStateHuman(_ payload: [String: Any]) -> String {
+        let phase = payload["phase"] as? String
+        let connected = payload["connected"] as? Bool ?? false
+        let device = payload["deviceName"] as? String ?? "unknown"
+        switch phase {
+        case "connected":
+            return "Session: connected to \(device)"
+        case "connecting":
+            return "Session: connecting"
+        case "failed":
+            if let failure = sessionStateFailureSummary(payload) {
+                return "Session: failed (\(failure))"
+            }
+            return "Session: failed"
+        case "disconnected":
+            if let failure = sessionStateFailureSummary(payload) {
+                return "Session: disconnected (\(failure))"
+            }
+            return "Session: not connected"
+        default:
+            return connected ? "Session: connected to \(device)" : "Session: not connected"
+        }
+    }
+
+    private static func sessionStateFailureSummary(_ payload: [String: Any]) -> String? {
+        guard let failure = payload["lastFailure"] as? [String: Any] else {
+            return nil
+        }
+        let code = failure["errorCode"] as? String
+        let hint = failure["hint"] as? String
+        let message = failure["message"] as? String
+        switch (code, hint, message) {
+        case let (code?, hint?, _):
+            return "\(code): \(hint)"
+        case let (code?, nil, message?):
+            return "\(code): \(message)"
+        case let (code?, nil, nil):
+            return code
+        case let (nil, hint?, _):
+            return hint
+        case let (nil, nil, message?):
+            return message
+        case (nil, nil, nil):
+            return nil
         }
     }
 

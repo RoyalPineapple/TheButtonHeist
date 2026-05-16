@@ -157,6 +157,29 @@ final class TheFenceTests: XCTestCase {
         XCTAssertTrue(text.contains("hint: retry | inspect logs"))
     }
 
+    func testCompactSessionStateDistinguishesFailedFromDisconnected() {
+        let failed = FenceResponse.sessionState(payload: [
+            "status": "ok",
+            "connected": false,
+            "phase": "failed",
+            "lastFailure": [
+                "errorCode": "session.locked",
+                "hint": "Reconnect after the active client releases the session.",
+            ],
+        ])
+        let disconnected = FenceResponse.sessionState(payload: [
+            "status": "ok",
+            "connected": false,
+            "phase": "disconnected",
+        ])
+
+        XCTAssertEqual(
+            failed.compactFormatted(),
+            "session: failed (session.locked): Reconnect after the active client releases the session."
+        )
+        XCTAssertEqual(disconnected.compactFormatted(), "session: not connected")
+    }
+
     func testHelpResponseFormatting() {
         let response = FenceResponse.help(commands: ["one_finger_tap", "swipe"])
         let formatted = response.humanFormatted()
@@ -1185,12 +1208,114 @@ final class TheFenceTests: XCTestCase {
 
         if case .sessionState(let payload) = response {
             XCTAssertEqual(payload["connected"] as? Bool, false)
+            XCTAssertEqual(payload["phase"] as? String, "disconnected")
+            XCTAssertNil(payload["lastFailure"])
         } else {
             XCTFail("Expected sessionState response, got \(response)")
         }
 
         XCTAssertEqual(mockDiscovery.startCount, 0)
         XCTAssertEqual(mockConnection.connectCount, 0)
+    }
+
+    @ButtonHeistActor
+    func testGetSessionStateConnectedReportsPhaseAndPreservesPayloadFields() async throws {
+        let mockConnection = MockConnection()
+        mockConnection.serverInfo = TheFenceFixtures.testServerInfo
+
+        let fence = TheFence(configuration: .init())
+        fence.handoff.autoSubscribe = false
+        fence.handoff.makeConnection = { _, _, _ in mockConnection }
+        fence.handoff.connect(to: TheFenceFixtures.testDevice)
+
+        let response = try await fence.execute(request: ["command": "get_session_state"])
+
+        guard case .sessionState(let payload) = response else {
+            return XCTFail("Expected sessionState response, got \(response)")
+        }
+        XCTAssertEqual(payload["connected"] as? Bool, true)
+        XCTAssertEqual(payload["phase"] as? String, "connected")
+        XCTAssertEqual(payload["deviceName"] as? String, "MockApp")
+        XCTAssertEqual(payload["appName"] as? String, "MockApp")
+        XCTAssertEqual(payload["connectionType"] as? String, "network")
+        XCTAssertEqual(payload["isRecording"] as? Bool, false)
+        XCTAssertEqual(payload["actionTimeoutSeconds"] as? TimeInterval, Timeouts.actionSeconds)
+        XCTAssertEqual(payload["longActionTimeoutSeconds"] as? TimeInterval, Timeouts.longActionSeconds)
+        XCTAssertNil(payload["lastFailure"])
+    }
+
+    @ButtonHeistActor
+    func testGetSessionStateFailedAuthReportsFailureDetails() async throws {
+        let fence = TheFence(configuration: .init())
+        fence.handoff.handleServerMessage(
+            .error(ServerError(kind: .authFailure, message: "bad token")),
+            requestId: nil
+        )
+
+        let response = try await fence.execute(request: ["command": "get_session_state"])
+
+        guard case .sessionState(let payload) = response else {
+            return XCTFail("Expected sessionState response, got \(response)")
+        }
+        XCTAssertEqual(payload["connected"] as? Bool, false)
+        XCTAssertEqual(payload["phase"] as? String, "failed")
+        let failure = try XCTUnwrap(payload["lastFailure"] as? [String: Any])
+        XCTAssertEqual(failure["errorCode"] as? String, "auth.failed")
+        XCTAssertEqual(failure["phase"] as? String, "auth")
+        XCTAssertEqual(failure["retryable"] as? Bool, false)
+        XCTAssertEqual(failure["message"] as? String, "Authentication failed: bad token")
+        XCTAssertEqual(failure["hint"] as? String, "Retry without a token to request a fresh session.")
+    }
+
+    @ButtonHeistActor
+    func testGetSessionStateDisconnectedWithKnownReasonReportsFailureDetails() async throws {
+        let mockConnection = MockConnection()
+        mockConnection.connectEventsOverride = [
+            .connected,
+            .disconnected(.serverClosed),
+        ]
+
+        let fence = TheFence(configuration: .init())
+        fence.handoff.autoSubscribe = false
+        fence.handoff.makeConnection = { _, _, _ in mockConnection }
+        fence.handoff.connect(to: TheFenceFixtures.testDevice)
+
+        let response = try await fence.execute(request: ["command": "get_session_state"])
+
+        guard case .sessionState(let payload) = response else {
+            return XCTFail("Expected sessionState response, got \(response)")
+        }
+        XCTAssertEqual(payload["connected"] as? Bool, false)
+        XCTAssertEqual(payload["phase"] as? String, "disconnected")
+        let failure = try XCTUnwrap(payload["lastFailure"] as? [String: Any])
+        XCTAssertEqual(failure["errorCode"] as? String, "transport.server_closed")
+        XCTAssertEqual(failure["phase"] as? String, "transport")
+        XCTAssertEqual(failure["retryable"] as? Bool, true)
+        XCTAssertEqual(failure["hint"] as? String, "Check that the app is still running and reachable, then retry.")
+    }
+
+    @ButtonHeistActor
+    func testGetSessionStateSendsNoHierarchyObservationMessages() async throws {
+        let mockConnection = MockConnection()
+        mockConnection.serverInfo = TheFenceFixtures.testServerInfo
+
+        let fence = TheFence(configuration: .init())
+        fence.handoff.autoSubscribe = false
+        fence.handoff.makeConnection = { _, _, _ in mockConnection }
+        fence.handoff.connect(to: TheFenceFixtures.testDevice)
+        mockConnection.sent.removeAll()
+
+        _ = try await fence.execute(request: ["command": "get_session_state"])
+
+        let hierarchyMessages = mockConnection.sent.filter { message, _ in
+            switch message {
+            case .requestInterface, .explore:
+                return true
+            default:
+                return false
+            }
+        }
+        XCTAssertTrue(hierarchyMessages.isEmpty)
     }
 
     // MARK: - BookKeeper Command Dispatch
