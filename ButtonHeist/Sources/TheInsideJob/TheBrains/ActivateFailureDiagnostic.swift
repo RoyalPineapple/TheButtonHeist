@@ -64,10 +64,57 @@ enum ActivateFailureDiagnostic {
             lines.append("- traits: \(traitNames.joined(separator: ","))")
         }
 
+        let tryNext = tryNextLine(
+            element: element,
+            activateOutcome: activateOutcome,
+            tapAttempted: tapAttempted,
+            tapReceiver: tapReceiver,
+            screenBounds: screenBounds
+        )
+        lines.append("- tryNext: \(tryNext)")
+
         return lines.joined(separator: "\n")
     }
 
     // MARK: - Private Helpers
+
+    private static func tryNextLine(
+        element: AccessibilityElement,
+        activateOutcome: TheStash.ActivateOutcome,
+        tapAttempted: Bool,
+        tapReceiver: TheSafecracker.TapReceiverDiagnostic?,
+        screenBounds: CGRect
+    ) -> String {
+        if !screenBounds.contains(element.shape.frame) {
+            return "scroll the element into view, then refetch with get_interface before retrying activate"
+        }
+
+        if activateOutcome == .objectDeallocated {
+            return "refetch with get_interface and retarget the refreshed element before retrying activate"
+        }
+
+        guard tapAttempted else {
+            return "retarget an element whose actions include activate, then retry activate"
+        }
+
+        guard let tapReceiver else {
+            return "wait for a visible app window, then refetch with get_interface before retrying activate"
+        }
+
+        if tapReceiver.hiddenInChain {
+            return "wait for the target to become visible, then refetch with get_interface before retrying activate"
+        }
+
+        if tapReceiver.interactionDisabledInChain {
+            return "wait for the target to become enabled, then refetch with get_interface before retrying activate"
+        }
+
+        if tapReceiver.isSwiftUIGestureContainer {
+            return "retarget the accessible control inside the SwiftUI container before retrying activate"
+        }
+
+        return "retarget from a fresh get_interface snapshot before retrying activate"
+    }
 
     private static func formatReceiverLine(_ receiver: TheSafecracker.TapReceiverDiagnostic) -> String {
         var parts = ["- syntheticTap.receiver:", receiver.receiverClass]

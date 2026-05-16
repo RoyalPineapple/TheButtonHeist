@@ -357,7 +357,13 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .activate)
-        XCTAssertEqual(result.message, "Element does not support activate")
+        XCTAssertDiagnostic(result.message, contains: [
+            "activate failed",
+            "heistId=\"plain_label\"",
+            "label=\"Plain label\"",
+            "actions=[]",
+            "try retarget an element whose actions include activate",
+        ])
     }
 
     func testExecuteActivateBlocksDisabledElementWithActivationOverride() async {
@@ -539,6 +545,85 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(dispatchedPoint, rawPoint)
     }
 
+    func testExecuteRotorWithoutCustomRotorsReportsNextStep() async {
+        let heistId = "plain_rotor_host"
+        let liveObject = UIView()
+        registerScreenElement(
+            heistId: heistId,
+            element: makeElement(label: "Plain rotor host", traits: .button),
+            object: liveObject
+        )
+
+        let result = await brains.actions.executeRotor(
+            RotorTarget(elementTarget: .heistId(heistId), rotor: "Errors")
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .rotor)
+        XCTAssertDiagnostic(result.message, contains: [
+            "rotor failed",
+            "attempted rotor=\"Errors\" direction=next",
+            "heistId=\"plain_rotor_host\"",
+            "availableRotors=[]",
+            "observed customRotors=[]",
+            "try target an element exposing custom rotors",
+        ])
+    }
+
+    func testExecuteRotorNotFoundReportsAvailableRotorsAndNextStep() async {
+        let heistId = "rotor_host"
+        let liveObject = UIView()
+        liveObject.accessibilityCustomRotors = [
+            UIAccessibilityCustomRotor(name: "Warnings") { _ in nil },
+        ]
+        registerScreenElement(
+            heistId: heistId,
+            element: makeElement(
+                label: "Rotor host",
+                traits: .button,
+                customRotors: [.init(name: "Warnings")]
+            ),
+            object: liveObject
+        )
+
+        let result = await brains.actions.executeRotor(
+            RotorTarget(elementTarget: .heistId(heistId), rotor: "Errors")
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .rotor)
+        XCTAssertDiagnostic(result.message, contains: [
+            "rotor failed",
+            "attempted rotor=\"Errors\" direction=next",
+            "requestedRotor=\"Errors\"",
+            "availableRotors=[\"Warnings\"]",
+            "try use one of available rotors [\"Warnings\"]",
+        ])
+    }
+
+    func testExecuteRotorDiagnosticsMergeLiveRotors() async {
+        let heistId = "rotor_host"
+        let liveObject = UIView()
+        liveObject.accessibilityCustomRotors = [
+            UIAccessibilityCustomRotor(name: "Warnings") { _ in nil },
+        ]
+        registerScreenElement(
+            heistId: heistId,
+            element: makeElement(label: "Rotor host", traits: .button),
+            object: liveObject
+        )
+
+        let result = await brains.actions.executeRotor(
+            RotorTarget(elementTarget: .heistId(heistId), rotor: "Errors")
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertDiagnostic(result.message, contains: [
+            "availableRotors=[\"Warnings\"]",
+            "try use one of available rotors [\"Warnings\"]",
+        ])
+    }
+
     // MARK: - clearCache
 
     func testClearCacheResetsStash() {
@@ -620,12 +705,14 @@ final class TheBrainsActionTests: XCTestCase {
     private func makeElement(
         label: String? = nil,
         traits: UIAccessibilityTraits = .none,
-        customActions: [AccessibilityElement.CustomAction] = []
+        customActions: [AccessibilityElement.CustomAction] = [],
+        customRotors: [AccessibilityElement.CustomRotor] = []
     ) -> AccessibilityElement {
         .make(
             label: label,
             traits: traits,
             customActions: customActions,
+            customRotors: customRotors,
             respondsToUserInteraction: false
         )
     }

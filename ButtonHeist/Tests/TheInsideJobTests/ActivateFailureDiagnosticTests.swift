@@ -62,6 +62,19 @@ final class ActivateFailureDiagnosticTests: XCTestCase {
         XCTAssertFalse(message.contains("liveObject: deallocated"))
     }
 
+    func testRefusedOutcomeIncludesTryNextLine() {
+        let receiver = makeReceiver(receiverClass: "UIButton", receiverAxLabel: "Charge $16.99")
+        let message = ActivateFailureDiagnostic.build(
+            element: makeElement(),
+            traitNames: ["button"],
+            activateOutcome: .refused,
+            tapAttempted: true,
+            tapReceiver: receiver,
+            screenBounds: screenBounds
+        )
+        XCTAssertTrue(message.contains("tryNext: retarget from a fresh get_interface snapshot"))
+    }
+
     func testDeallocatedOutcomeIncludesLiveObjectLine() {
         let message = ActivateFailureDiagnostic.build(
             element: makeElement(),
@@ -73,6 +86,19 @@ final class ActivateFailureDiagnosticTests: XCTestCase {
         )
         XCTAssertTrue(message.contains("liveObject: deallocated"))
         XCTAssertFalse(message.contains("accessibilityActivate"))
+    }
+
+    func testDeallocatedOutcomeIncludesTryNextLine() {
+        let message = ActivateFailureDiagnostic.build(
+            element: makeElement(),
+            traitNames: ["button"],
+            activateOutcome: .objectDeallocated,
+            tapAttempted: true,
+            tapReceiver: makeReceiver(),
+            screenBounds: screenBounds
+        )
+        XCTAssertTrue(message.contains("tryNext: refetch with get_interface"))
+        XCTAssertTrue(message.contains("retarget the refreshed element"))
     }
 
     // MARK: - Receiver Line
@@ -121,6 +147,18 @@ final class ActivateFailureDiagnosticTests: XCTestCase {
         XCTAssertTrue(disabledMsg.contains("syntheticTap.userInteractionEnabled: false"))
     }
 
+    func testInteractionDisabledReceiverIncludesTryNextLine() {
+        let message = ActivateFailureDiagnostic.build(
+            element: makeElement(), traitNames: ["button"],
+            activateOutcome: .refused, tapAttempted: true,
+            tapReceiver: makeReceiver(interactionDisabledInChain: true),
+            screenBounds: screenBounds
+        )
+
+        XCTAssertTrue(message.contains("tryNext: wait for the target to become enabled"))
+        XCTAssertTrue(message.contains("refetch with get_interface"))
+    }
+
     func testHiddenFlagOnlyAppearsWhenTrue() {
         let visibleReceiver = makeReceiver(hiddenInChain: false)
         let hiddenReceiver = makeReceiver(hiddenInChain: true)
@@ -137,6 +175,18 @@ final class ActivateFailureDiagnosticTests: XCTestCase {
         )
         XCTAssertFalse(visibleMsg.contains("syntheticTap.hidden"))
         XCTAssertTrue(hiddenMsg.contains("syntheticTap.hidden: true"))
+    }
+
+    func testHiddenReceiverIncludesTryNextLine() {
+        let message = ActivateFailureDiagnostic.build(
+            element: makeElement(), traitNames: ["button"],
+            activateOutcome: .refused, tapAttempted: true,
+            tapReceiver: makeReceiver(hiddenInChain: true),
+            screenBounds: screenBounds
+        )
+
+        XCTAssertTrue(message.contains("tryNext: wait for the target to become visible"))
+        XCTAssertTrue(message.contains("refetch with get_interface"))
     }
 
     func testSwiftUIGestureContainerNoteAppearsOnlyForSwiftUI() {
@@ -157,6 +207,17 @@ final class ActivateFailureDiagnosticTests: XCTestCase {
         XCTAssertTrue(swiftUIMsg.contains("SwiftUI gesture container"))
     }
 
+    func testSwiftUIGestureContainerIncludesTryNextLine() {
+        let message = ActivateFailureDiagnostic.build(
+            element: makeElement(), traitNames: ["button"],
+            activateOutcome: .refused, tapAttempted: true,
+            tapReceiver: makeReceiver(receiverClass: "UIKitGestureContainer", isSwiftUIGestureContainer: true),
+            screenBounds: screenBounds
+        )
+
+        XCTAssertTrue(message.contains("tryNext: retarget the accessible control inside the SwiftUI container"))
+    }
+
     func testNoTargetableWindowLineWhenReceiverIsNil() {
         let message = ActivateFailureDiagnostic.build(
             element: makeElement(),
@@ -167,6 +228,19 @@ final class ActivateFailureDiagnosticTests: XCTestCase {
             screenBounds: screenBounds
         )
         XCTAssertTrue(message.contains("syntheticTap: no targetable window at activation point"))
+    }
+
+    func testNoTargetableWindowIncludesTryNextLine() {
+        let message = ActivateFailureDiagnostic.build(
+            element: makeElement(),
+            traitNames: ["button"],
+            activateOutcome: .refused,
+            tapAttempted: true,
+            tapReceiver: nil,
+            screenBounds: screenBounds
+        )
+        XCTAssertTrue(message.contains("tryNext: wait for a visible app window"))
+        XCTAssertTrue(message.contains("refetch with get_interface"))
     }
 
     func testNoSyntheticTapLineWhenTapNotAttempted() {
@@ -208,6 +282,20 @@ final class ActivateFailureDiagnosticTests: XCTestCase {
         )
         XCTAssertTrue(message.contains("onScreen: false"))
         XCTAssertTrue(message.contains("screen: 393x852"))
+    }
+
+    func testOffscreenFrameIncludesTryNextLine() {
+        let offScreenElement = makeElement(frame: CGRect(x: 12, y: 1000, width: 80, height: 40))
+        let message = ActivateFailureDiagnostic.build(
+            element: offScreenElement,
+            traitNames: ["button"],
+            activateOutcome: .refused,
+            tapAttempted: true,
+            tapReceiver: makeReceiver(),
+            screenBounds: screenBounds
+        )
+        XCTAssertTrue(message.contains("tryNext: scroll the element into view"))
+        XCTAssertTrue(message.contains("refetch with get_interface"))
     }
 
     // MARK: - Frame and Activation Point

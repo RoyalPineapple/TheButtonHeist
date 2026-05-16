@@ -23,6 +23,14 @@ import TheScore
         "\(boundary) failed: observed \(formatElement(element)); try refresh with get_interface before retrying."
     }
 
+    static func unsupportedElementAction(
+        _ method: ActionMethod,
+        element: TheStash.ScreenElement
+    ) -> String {
+        "\(method.rawValue) failed: observed \(formatElement(element)); "
+            + "try retarget an element whose actions include \(method.rawValue)."
+    }
+
     static func missingCustomAction(
         _ requestedAction: String,
         element: TheStash.ScreenElement
@@ -111,7 +119,7 @@ import TheScore
         }
     }
 
-    private static func formatElement(_ screenElement: TheStash.ScreenElement) -> String {
+    static func formatElement(_ screenElement: TheStash.ScreenElement) -> String {
         let element = screenElement.element
         var parts = [
             "element",
@@ -199,21 +207,30 @@ import TheScore
         return names
     }
 
+    static func availableRotors(for screenElement: TheStash.ScreenElement) -> [String] {
+        var names = screenElement.element.customRotors.map(\.name).filter { !$0.isEmpty }
+        let liveNames = screenElement.object?.accessibilityCustomRotors?
+            .map(\.name)
+            .filter { !$0.isEmpty } ?? []
+        appendUnique(liveNames, to: &names)
+        return names
+    }
+
     private static func appendUnique(_ additions: [String], to names: inout [String]) {
         for name in additions where !names.contains(name) {
             names.append(name)
         }
     }
 
-    private static func formatList(_ values: [String]) -> String {
+    static func formatList(_ values: [String]) -> String {
         "[\(values.joined(separator: ", "))]"
     }
 
-    private static func formatQuotedList(_ values: [String]) -> String {
+    static func formatQuotedList(_ values: [String]) -> String {
         "[\(values.map(quote).joined(separator: ", "))]"
     }
 
-    private static func quote(_ value: String) -> String {
+    static func quote(_ value: String) -> String {
         let escaped = value
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")

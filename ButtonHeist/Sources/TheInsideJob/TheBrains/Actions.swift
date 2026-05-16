@@ -63,7 +63,10 @@ final class Actions {
                 if let warning { insideJobLogger.warning("\(warning)") }
             }
             guard stash.hasInteractiveObject(resolved.screenElement) else {
-                return .failure(method, message: "Element does not support \(method.rawValue)")
+                return .failure(
+                    method,
+                    message: ActionCapabilityDiagnostic.unsupportedElementAction(method, element: resolved.screenElement)
+                )
             }
         }
         return await action(resolved) ?? .failure(method, message: "\(method.rawValue) failed")
@@ -303,62 +306,13 @@ final class Actions {
             method: method,
             requireInteractive: false
         ) { resolved in
-            switch self.stash.performRotor(target, direction: direction, on: resolved.screenElement) {
-            case .deallocated:
-                return .failure(.elementDeallocated, message: "Element deallocated before rotor step")
-            case .noRotors:
-                return .failure(method, message: "Element has no custom rotors")
-            case .noSuchRotor(let available):
-                return .failure(
-                    method,
-                    message: "Rotor not found. Available: \(available.joined(separator: ", "))"
-                )
-            case .ambiguousRotor(let available):
-                return .failure(
-                    method,
-                    message: "Multiple rotors available: \(available.joined(separator: ", ")). Specify rotor or rotorIndex."
-                )
-            case .currentItemUnavailable(let heistId):
-                return .failure(.elementNotFound, message: "Current rotor item '\(heistId)' is not available")
-            case .currentTextRangeUnavailable:
-                return .failure(method, message: "Current rotor text range is not available")
-            case .noResult(let rotorName):
-                return .failure(
-                    method,
-                    message: "Rotor '\(rotorName)' returned no \(direction.rawValue) result"
-                )
-            case .resultTargetUnavailable(let rotorName):
-                return .failure(
-                    method,
-                    message: "Rotor '\(rotorName)' returned a result without an accessibility target"
-                )
-            case .resultTargetNotParsed(let rotorName):
-                return .failure(
-                    method,
-                    message: "Rotor '\(rotorName)' returned a target outside the parsed accessibility hierarchy"
-                )
-            case .succeeded(let hit):
-                let found = hit.screenElement.map(TheStash.WireConversion.toWire)
-                var message = "Rotor '\(hit.rotor)' found"
-                if let found {
-                    message += " \(found.heistId)"
-                }
-                if let textRange = hit.textRange {
-                    message += " text range \(textRange.rangeDescription)"
-                }
-                return TheSafecracker.InteractionResult(
-                    success: true,
-                    method: method,
-                    message: message,
-                    value: nil,
-                    rotorResult: RotorResult(
-                        rotor: hit.rotor,
-                        direction: direction,
-                        foundElement: found,
-                        textRange: hit.textRange
-                    )
-                )
-            }
+            let outcome = self.stash.performRotor(target, direction: direction, on: resolved.screenElement)
+            return Self.rotorInteractionResult(
+                outcome: outcome,
+                target: target,
+                direction: direction,
+                element: resolved.screenElement
+            )
         }
     }
 
@@ -443,7 +397,11 @@ final class Actions {
 
         if let unitStart, let unitEnd {
             guard let elementTarget = target.elementTarget else {
-                return .failure(.syntheticSwipe, message: "Unit-point swipe requires an element target")
+                return .failure(
+                    .syntheticSwipe,
+                    message: "synthetic swipe failed: observed unit start/end points without elementTarget; "
+                        + "try providing elementTarget or use absolute startX/startY/endX/endY."
+                )
             }
             await navigation.ensureOnScreen(for: elementTarget)
             let frame: CGRect
@@ -501,7 +459,11 @@ final class Actions {
                 case .right: endPoint = CGPoint(x: startPoint.x + dist, y: startPoint.y)
                 }
             } else {
-                return .failure(.syntheticSwipe, message: "No end point or direction")
+                return .failure(
+                    .syntheticSwipe,
+                    message: "synthetic swipe failed: observed missing end point and direction; "
+                        + "try providing endX/endY or direction."
+                )
             }
             let duration = clampDuration(target.duration ?? 0.15)
             let success = await safecracker.swipe(from: startPoint, to: endPoint, duration: duration)
@@ -747,6 +709,136 @@ final class Actions {
             if safecracker.hasActiveTextInput() { return true }
         }
         return false
+    }
+
+    // MARK: - Diagnostic Helpers
+
+    private static func rotorInteractionResult(
+        outcome: TheStash.RotorOutcome,
+        target: RotorTarget,
+        direction: RotorDirection,
+        element: TheStash.ScreenElement
+    ) -> TheSafecracker.InteractionResult {
+        switch outcome {
+        case .succeeded(let hit):
+            return rotorSuccessResult(hit, direction: direction)
+        case .deallocated:
+            return rotorFailure(
+                .elementDeallocated,
+                observed: "liveObject=deallocated before rotor step",
+                target: target,
+                element: element,
+                suggestion: "refresh with get_interface and retarget the refreshed element"
+            )
+        case .noRotors:
+            return rotorFailure(.rotor, observed: "customRotors=[]", target: target, element: element,
+                                suggestion: "target an element exposing custom rotors")
+        case .noSuchRotor(let available):
+            return rotorFailure(.rotor, observed: "requestedRotor=\(ActionCapabilityDiagnostic.quote(target.rotor ?? "")) "
+                                + "availableRotors=\(ActionCapabilityDiagnostic.formatQuotedList(available))",
+                                target: target, element: element,
+                                suggestion: "use one of available rotors \(ActionCapabilityDiagnostic.formatQuotedList(available))")
+        case .ambiguousRotor(let available):
+            return rotorFailure(.rotor, observed: "ambiguousRotor=\(ActionCapabilityDiagnostic.quote(target.rotor ?? "")) "
+                                + "availableRotors=\(ActionCapabilityDiagnostic.formatQuotedList(available))",
+                                target: target, element: element,
+                                suggestion: "specify rotorIndex or an exact rotor name")
+        case .currentItemUnavailable(let heistId):
+            return rotorFailure(
+                .elementNotFound,
+                observed: "currentHeistId=\(ActionCapabilityDiagnostic.quote(heistId)) is not available",
+                                target: target, element: element,
+                                suggestion: "use the heistId returned by the previous rotor result after refetching")
+        case .currentTextRangeUnavailable:
+            return rotorFailure(.rotor, observed: "currentTextRange is not available", target: target, element: element,
+                                suggestion: "use the text range returned by the previous rotor result after refetching")
+        case .noResult(let rotorName):
+            return rotorFailure(
+                .rotor,
+                observed: "rotor=\(ActionCapabilityDiagnostic.quote(rotorName)) returned no \(direction.rawValue) result",
+                                target: target, element: element,
+                                suggestion: "try the opposite rotor direction or stop at the current item")
+        case .resultTargetUnavailable(let rotorName):
+            return rotorFailure(
+                .rotor,
+                observed: "rotor=\(ActionCapabilityDiagnostic.quote(rotorName)) returned a result without an accessibility target",
+                                target: target, element: element,
+                                suggestion: "refetch with get_interface and retry the rotor from a visible target")
+        case .resultTargetNotParsed(let rotorName):
+            return rotorFailure(
+                .rotor,
+                observed: "rotor=\(ActionCapabilityDiagnostic.quote(rotorName)) returned a target outside the parsed hierarchy",
+                                target: target, element: element,
+                                suggestion: "refetch with get_interface before acting on the rotor result")
+        }
+    }
+
+    private static func rotorSuccessResult(
+        _ hit: TheStash.RotorHit,
+        direction: RotorDirection
+    ) -> TheSafecracker.InteractionResult {
+        let found = hit.screenElement.map(TheStash.WireConversion.toWire)
+        var message = "Rotor '\(hit.rotor)' found"
+        if let found {
+            message += " \(found.heistId)"
+        }
+        if let textRange = hit.textRange {
+            message += " text range \(textRange.rangeDescription)"
+        }
+        return TheSafecracker.InteractionResult(
+            success: true,
+            method: .rotor,
+            message: message,
+            value: nil,
+            rotorResult: RotorResult(
+                rotor: hit.rotor,
+                direction: direction,
+                foundElement: found,
+                textRange: hit.textRange
+            )
+        )
+    }
+
+    private static func rotorFailure(
+        _ method: ActionMethod,
+        observed: String,
+        target: RotorTarget,
+        element: TheStash.ScreenElement,
+        suggestion: String
+    ) -> TheSafecracker.InteractionResult {
+        .failure(
+            method,
+            message: rotorDiagnostic(
+                observed: observed,
+                target: target,
+                element: element,
+                suggestion: suggestion
+            )
+        )
+    }
+
+    private static func rotorDiagnostic(
+        observed: String,
+        target: RotorTarget,
+        element: TheStash.ScreenElement,
+        suggestion: String
+    ) -> String {
+        var attempted: [String] = []
+        if let rotor = target.rotor {
+            attempted.append("rotor=\(ActionCapabilityDiagnostic.quote(rotor))")
+        } else {
+            attempted.append("rotor")
+        }
+        if let rotorIndex = target.rotorIndex {
+            attempted.append("rotorIndex=\(rotorIndex)")
+        }
+        attempted.append("direction=\(target.resolvedDirection.rawValue)")
+
+        let availableRotors = ActionCapabilityDiagnostic.availableRotors(for: element)
+        return "rotor failed: attempted \(attempted.joined(separator: " ")) "
+            + "on \(ActionCapabilityDiagnostic.formatElement(element)) "
+            + "availableRotors=\(ActionCapabilityDiagnostic.formatQuotedList(availableRotors)); "
+            + "observed \(observed); try \(suggestion)."
     }
 
     // MARK: - Duration Helpers
