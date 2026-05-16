@@ -257,8 +257,8 @@ enum ToolDefinitions {
         inputSchema: .object([
             "type": "object",
             "properties": .object(elementTargetProperties.merging([
-                "text": ["type": "string", "description": "Text to type character-by-character"],
-                "deleteCount": ["type": "integer", "description": "Number of delete key taps before typing"],
+                "text": ["type": "string", "minLength": 1, "description": "Text to type character-by-character"],
+                "deleteCount": ["type": "integer", "minimum": 1, "description": "Number of delete key taps before typing"],
                 "clearFirst": ["type": "boolean", "description": "Clear all existing text before typing (select-all + delete)"],
                 "expect": expectProperty,
             ] as [String: Value]) { _, new in new }),

@@ -419,9 +419,17 @@ extension TheFence {
         let text = try args.schemaString("text")
         let deleteCount = try args.schemaInteger("deleteCount")
         let clearFirst = try args.schemaBoolean("clearFirst")
+
+        if let text, text.isEmpty {
+            throw SchemaValidationError(field: "text", observed: text as Any, expected: "non-empty string")
+        }
+        if let deleteCount, deleteCount <= 0 {
+            throw SchemaValidationError(field: "deleteCount", observed: deleteCount, expected: "integer >= 1")
+        }
         guard text != nil || deleteCount != nil || clearFirst == true else {
             return .error("Must specify text, deleteCount, clearFirst, or a combination")
         }
+
         let result = try await sendAndAwaitAction(.typeText(TypeTextTarget(
             text: text, deleteCount: deleteCount, clearFirst: clearFirst, elementTarget: try elementTarget(args)
         )), timeout: Timeouts.longActionSeconds)

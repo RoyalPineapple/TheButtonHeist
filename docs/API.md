@@ -937,8 +937,8 @@ public struct TypeTextTarget: Codable, Sendable
 
 #### Properties
 
-- `text: String?` - Text to type character-by-character (nil if only deleting)
-- `deleteCount: Int?` - Number of delete key taps before typing
+- `text: String?` - Non-empty text to type character-by-character (nil if only deleting or clearing)
+- `deleteCount: Int?` - Positive number of delete key taps before typing
 - `elementTarget: ActionTarget?` - Element to tap for focus and value readback
 
 ### CustomActionTarget
@@ -1550,14 +1550,14 @@ All gesture commands accept a positional heistId, `--heist-id`, or matcher field
 
 ### buttonheist type_text
 
-Type text into a field by tapping keyboard keys.
+Type text into a field by tapping keyboard keys. Targeted non-secure typing focuses the target and reports the final target value. Targetless typing depends on existing editable focus and is a lower-level operation for advanced flows.
 
 ```
 USAGE: buttonheist type_text [OPTIONS]
 
 OPTIONS:
-  --text <text>           Text to type
-  --delete <n>            Number of characters to delete before typing
+  --text <text>           Non-empty text to type
+  --delete <n>            Positive number of characters to delete before typing
   <target>                Element heistId (focuses field, reads value back)
   --identifier, -id <id>  Element identifier (focuses field, reads value back)
   --label, -l <label>     Element label (focuses field, reads value back)
@@ -1566,7 +1566,7 @@ OPTIONS:
   -q, --quiet             Suppress status messages
 ```
 
-Outputs the current text field value to stdout after the operation. If no element target is provided, outputs "success".
+Outputs the current text field value to stdout after a targeted non-secure operation. If no element target is provided, outputs "success".
 
 Examples:
 ```bash
