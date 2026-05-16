@@ -498,7 +498,7 @@ final class TheTripwireTests: XCTestCase {
         try await assertUIAlertControllerIsExclusive(style: .actionSheet)
     }
 
-    func testGetAccessibleWindowsModalFlagBeatsOverlay() {
+    func testGetAccessibleWindowsKeepsOverlayAboveModalAndDropsLowerWindows() {
         guard let windowScene = UIApplication.shared.connectedScenes
             .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
         else {
@@ -506,9 +506,9 @@ final class TheTripwireTests: XCTestCase {
             return
         }
 
-        // Lower window flagged modal; higher overlay window has no flag.
-        // Modal flag takes precedence (it's checked first), so the lower
-        // flagged window wins.
+        // Lower window flagged modal; higher overlay window has no flag. The
+        // modal blocks windows below it, but the overlay remains accessible
+        // because it is visibly above the modal in the window stack.
         let flaggedWindow = UIWindow(windowScene: windowScene)
         flaggedWindow.windowLevel = .normal + 1
         flaggedWindow.frame = UIScreen.main.bounds
@@ -522,19 +522,24 @@ final class TheTripwireTests: XCTestCase {
         overlayWindow.frame = UIScreen.main.bounds
         overlayWindow.isHidden = false
 
+        let lowerWindow = UIWindow(windowScene: windowScene)
+        lowerWindow.windowLevel = .normal
+        lowerWindow.frame = UIScreen.main.bounds
+        lowerWindow.isHidden = false
+
         defer {
             flaggedWindow.isHidden = true
             overlayWindow.isHidden = true
+            lowerWindow.isHidden = true
             modalView.removeFromSuperview()
         }
 
         let accessible = tripwire.getAccessibleWindows()
 
-        XCTAssertEqual(accessible.count, 1)
-        XCTAssertTrue(
-            accessible.first?.window === flaggedWindow,
-            "Modal flag should win over overlay-window check"
-        )
+        XCTAssertEqual(accessible.count, 2)
+        XCTAssertTrue(accessible[0].window === overlayWindow)
+        XCTAssertTrue(accessible[1].window === flaggedWindow)
+        XCTAssertFalse(accessible.contains(where: { $0.window === lowerWindow }))
     }
 
     func testGetAccessibleWindowsPicksFrontmostModal() {
@@ -819,9 +824,10 @@ final class TheTripwireTests: XCTestCase {
         XCTAssertEqual(result.count, 2, "All windows returned when no branch matches")
     }
 
-    func testFilterToAccessibleWindowsModalFlagBeatsOverlayInPureFilter() {
+    func testFilterToAccessibleWindowsKeepsOverlayAboveModalAndDropsLowerWindows() {
         let overlay = makeWindow(level: .alert, rootVC: UIViewController())
         let flagged = makeWindow(level: .normal, rootVC: UIViewController())
+        let lower = makeWindow(level: .normal - 1, rootVC: UIViewController())
         let modalView = UIView()
         modalView.accessibilityViewIsModal = true
         flagged.addSubview(modalView)
@@ -830,12 +836,40 @@ final class TheTripwireTests: XCTestCase {
         let input = [
             (window: overlay, rootView: overlay as UIView),
             (window: flagged, rootView: flagged as UIView),
+            (window: lower, rootView: lower as UIView),
         ]
 
         let result = TheTripwire.filterToAccessibleWindows(input)
 
-        XCTAssertEqual(result.count, 1)
-        XCTAssertTrue(result.first?.window === flagged, "Modal flag should win over overlay")
+        XCTAssertEqual(result.count, 2)
+        XCTAssertTrue(result[0].window === overlay, "Higher overlay should stay accessible above modal")
+        XCTAssertTrue(result[1].window === flagged, "Modal window should be included")
+        XCTAssertFalse(result.contains(where: { $0.window === lower }), "Lower windows should remain blocked")
+    }
+
+    func testFilterToAccessibleWindowsDropsPassthroughAboveModal() {
+        let keyboard = makeWindow(level: .statusBar, rootVC: UIViewController())
+        let overlay = makeWindow(level: .alert, rootVC: UIViewController())
+        let flagged = makeWindow(level: .normal, rootVC: UIViewController())
+        let lower = makeWindow(level: .normal - 1, rootVC: UIViewController())
+        let modalView = UIView()
+        modalView.accessibilityViewIsModal = true
+        flagged.addSubview(modalView)
+        defer { modalView.removeFromSuperview() }
+
+        let input = [
+            (window: keyboard, rootView: keyboard as UIView),
+            (window: overlay, rootView: overlay as UIView),
+            (window: flagged, rootView: flagged as UIView),
+            (window: lower, rootView: lower as UIView),
+        ]
+
+        let result = TheTripwire.filterToAccessibleWindows(input, isPassthrough: { $0 === keyboard })
+
+        XCTAssertEqual(result.count, 2)
+        XCTAssertFalse(result.contains(where: { $0.window === keyboard }))
+        XCTAssertTrue(result[0].window === overlay)
+        XCTAssertTrue(result[1].window === flagged)
     }
 
     func testFilterToAccessibleWindowsIncludesOverlayAndPresentedBaseWindow() {
