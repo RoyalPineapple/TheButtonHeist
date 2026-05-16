@@ -14,7 +14,7 @@ TheFence is the brain of the outside operation:
 4. **Session bookkeeping** - delegates session logs, artifact storage, and archival to TheBookKeeper
 5. **Request-response correlation** - tracks pending requests via `PendingRequestTracker<T>` (generic, requestId-keyed continuation tracker with timeout support), matches responses to waiting async callers
 6. **Async wait methods** - `waitForActionResult`, `waitForInterface`, `waitForScreen`, `waitForRecording` with timeout handling
-7. **Argument parsing** - extracts typed args from JSON dictionaries
+7. **Argument parsing** - extracts typed args from JSON dictionaries and owns semantic validation diagnostics (`schema validation failed for <field>: observed <type/value>; expected <type/range/enum>`)
 8. **Response formatting** - produces both human-readable and JSON responses (`FenceResponse`)
 9. **Session management** - persistent connection for CLI session and MCP modes
 10. **Output path validation** - rejects `..` path components in `get_screen` and `stop_recording` output paths to prevent path traversal; resolves paths via `URL.standardized` before writing

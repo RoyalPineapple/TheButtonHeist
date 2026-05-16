@@ -29,7 +29,7 @@ struct ToolRoutingTests {
             Issue.record("Expected routing failure")
             return
         }
-        #expect(error.message == "Missing required parameter: type")
+        #expect(error.message == "schema validation failed for type: observed missing; expected enum one of one_finger_tap, long_press, swipe, drag, pinch, rotate, two_finger_tap, draw_path, draw_bezier")
     }
 
     @Test("scroll modes route to concrete commands")
@@ -66,7 +66,7 @@ struct ToolRoutingTests {
             Issue.record("Expected routing failure")
             return
         }
-        #expect(error.message.contains("Unknown scroll mode: sideways"))
+        #expect(error.message == "schema validation failed for mode: observed string \"sideways\"; expected enum one of page, to_visible, search, to_edge")
     }
 
     @Test("edit_action dismiss routes to dismiss_keyboard")
@@ -126,7 +126,7 @@ struct ToolRoutingTests {
             Issue.record("Expected routing failure")
             return
         }
-        #expect(error.message == "Missing required parameter: type")
+        #expect(error.message == "schema validation failed for type: observed missing; expected enum one of one_finger_tap, long_press, swipe, drag, pinch, rotate, two_finger_tap, draw_path, draw_bezier")
     }
 
     @Test("raw grouped commands stay batch-only")
