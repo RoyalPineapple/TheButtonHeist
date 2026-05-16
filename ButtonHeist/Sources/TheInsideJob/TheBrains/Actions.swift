@@ -87,7 +87,12 @@ final class Actions {
         case .success(let point):
             let success = await action(point)
             if success { safecracker.showFingerprint(at: point) }
-            return TheSafecracker.InteractionResult(success: success, method: method, message: nil, value: nil)
+            let message = success ? nil : ActionCapabilityDiagnostic.gestureDispatchFailed(
+                method: method,
+                point: point,
+                receiver: safecracker.tapReceiverDiagnostic(at: point)
+            )
+            return TheSafecracker.InteractionResult(success: success, method: method, message: message, value: nil)
         }
     }
 
@@ -144,10 +149,22 @@ final class Actions {
     func executeIncrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
         await performElementAction(target: target, method: .increment) { resolved in
             guard resolved.element.traits.contains(.adjustable) else {
-                return .failure(.increment, message: "Element is not adjustable")
+                return .failure(
+                    .increment,
+                    message: ActionCapabilityDiagnostic.nonAdjustableAction(
+                        .increment,
+                        element: resolved.screenElement
+                    )
+                )
             }
             guard self.stash.increment(resolved.screenElement) else {
-                return .failure(.elementDeallocated, message: "Element deallocated before increment")
+                return .failure(
+                    .elementDeallocated,
+                    message: ActionCapabilityDiagnostic.elementDeallocated(
+                        boundary: "adjustable action",
+                        element: resolved.screenElement
+                    )
+                )
             }
             self.safecracker.showFingerprint(at: resolved.element.activationPoint)
             return TheSafecracker.InteractionResult(success: true, method: .increment, message: nil, value: nil)
@@ -157,10 +174,22 @@ final class Actions {
     func executeDecrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
         await performElementAction(target: target, method: .decrement) { resolved in
             guard resolved.element.traits.contains(.adjustable) else {
-                return .failure(.decrement, message: "Element is not adjustable")
+                return .failure(
+                    .decrement,
+                    message: ActionCapabilityDiagnostic.nonAdjustableAction(
+                        .decrement,
+                        element: resolved.screenElement
+                    )
+                )
             }
             guard self.stash.decrement(resolved.screenElement) else {
-                return .failure(.elementDeallocated, message: "Element deallocated before decrement")
+                return .failure(
+                    .elementDeallocated,
+                    message: ActionCapabilityDiagnostic.elementDeallocated(
+                        boundary: "adjustable action",
+                        element: resolved.screenElement
+                    )
+                )
             }
             self.safecracker.showFingerprint(at: resolved.element.activationPoint)
             return TheSafecracker.InteractionResult(success: true, method: .decrement, message: nil, value: nil)
@@ -171,11 +200,29 @@ final class Actions {
         await performElementAction(target: target.elementTarget, method: .customAction) { resolved in
             switch self.stash.performCustomAction(named: target.actionName, on: resolved.screenElement) {
             case .deallocated:
-                return .failure(.elementDeallocated, message: "Element deallocated before custom action")
+                return .failure(
+                    .elementDeallocated,
+                    message: ActionCapabilityDiagnostic.elementDeallocated(
+                        boundary: "custom action",
+                        element: resolved.screenElement
+                    )
+                )
             case .noSuchAction:
-                return .failure(.customAction, message: "Action '\(target.actionName)' not found")
+                return .failure(
+                    .customAction,
+                    message: ActionCapabilityDiagnostic.missingCustomAction(
+                        target.actionName,
+                        element: resolved.screenElement
+                    )
+                )
             case .declined:
-                return .failure(.customAction, message: "Action '\(target.actionName)' declined by handler")
+                return .failure(
+                    .customAction,
+                    message: ActionCapabilityDiagnostic.declinedCustomAction(
+                        target.actionName,
+                        element: resolved.screenElement
+                    )
+                )
             case .succeeded:
                 return TheSafecracker.InteractionResult(
                     success: true, method: .customAction, message: nil, value: nil
@@ -256,7 +303,12 @@ final class Actions {
     func executeEditAction(_ target: EditActionTarget) async -> TheSafecracker.InteractionResult {
         await navigation.ensureFirstResponderOnScreen()
         let success = safecracker.performEditAction(target.action)
-        return TheSafecracker.InteractionResult(success: success, method: .editAction, message: nil, value: nil)
+        let message = success ? nil : ActionCapabilityDiagnostic.editActionFailed(
+            target.action,
+            stash: stash,
+            safecracker: safecracker
+        )
+        return TheSafecracker.InteractionResult(success: success, method: .editAction, message: message, value: nil)
     }
 
     func executeSetPasteboard(_ target: SetPasteboardTarget) async -> TheSafecracker.InteractionResult {
@@ -281,7 +333,10 @@ final class Actions {
         let success = safecracker.resignFirstResponder()
         return TheSafecracker.InteractionResult(
             success: success, method: .resignFirstResponder,
-            message: success ? nil : "No first responder found",
+            message: success ? nil : ActionCapabilityDiagnostic.resignFirstResponderFailed(
+                stash: stash,
+                safecracker: safecracker
+            ),
             value: nil
         )
     }
@@ -340,7 +395,17 @@ final class Actions {
             )
             let duration = clampDuration(target.duration ?? 0.15)
             let success = await safecracker.swipe(from: startPoint, to: endPoint, duration: duration)
-            return TheSafecracker.InteractionResult(success: success, method: .syntheticSwipe, message: nil, value: nil)
+            let message = success ? nil : ActionCapabilityDiagnostic.gestureDispatchFailed(
+                method: .syntheticSwipe,
+                point: startPoint,
+                receiver: safecracker.tapReceiverDiagnostic(at: startPoint)
+            )
+            return TheSafecracker.InteractionResult(
+                success: success,
+                method: .syntheticSwipe,
+                message: message,
+                value: nil
+            )
         }
 
         // Absolute-point swipe: resolve start point, compute end from direction or explicit coords
@@ -367,7 +432,17 @@ final class Actions {
             }
             let duration = clampDuration(target.duration ?? 0.15)
             let success = await safecracker.swipe(from: startPoint, to: endPoint, duration: duration)
-            return TheSafecracker.InteractionResult(success: success, method: .syntheticSwipe, message: nil, value: nil)
+            let message = success ? nil : ActionCapabilityDiagnostic.gestureDispatchFailed(
+                method: .syntheticSwipe,
+                point: startPoint,
+                receiver: safecracker.tapReceiverDiagnostic(at: startPoint)
+            )
+            return TheSafecracker.InteractionResult(
+                success: success,
+                method: .syntheticSwipe,
+                message: message,
+                value: nil
+            )
         }
     }
 
@@ -429,7 +504,17 @@ final class Actions {
         }
         let duration = resolveDuration(target.duration, velocity: target.velocity, points: cgPoints)
         let success = await safecracker.drawPath(points: cgPoints, duration: duration)
-        return TheSafecracker.InteractionResult(success: success, method: .syntheticDrawPath, message: nil, value: nil)
+        let message = success ? nil : ActionCapabilityDiagnostic.gestureDispatchFailed(
+            method: .syntheticDrawPath,
+            point: cgPoints[0],
+            receiver: safecracker.tapReceiverDiagnostic(at: cgPoints[0])
+        )
+        return TheSafecracker.InteractionResult(
+            success: success,
+            method: .syntheticDrawPath,
+            message: message,
+            value: nil
+        )
     }
 
     func executeDrawBezier(_ target: DrawBezierTarget) async -> TheSafecracker.InteractionResult {
@@ -451,7 +536,17 @@ final class Actions {
         }
         let duration = resolveDuration(target.duration, velocity: target.velocity, points: cgPoints)
         let success = await safecracker.drawPath(points: cgPoints, duration: duration)
-        return TheSafecracker.InteractionResult(success: success, method: .syntheticDrawPath, message: nil, value: nil)
+        let message = success ? nil : ActionCapabilityDiagnostic.gestureDispatchFailed(
+            method: .syntheticDrawPath,
+            point: cgPoints[0],
+            receiver: safecracker.tapReceiverDiagnostic(at: cgPoints[0])
+        )
+        return TheSafecracker.InteractionResult(
+            success: success,
+            method: .syntheticDrawPath,
+            message: message,
+            value: nil
+        )
     }
 
     // MARK: - Text Entry
@@ -462,19 +557,43 @@ final class Actions {
         let interKeyDelay = min(TheSafecracker.defaultInterKeyDelay, TheSafecracker.maxInterKeyDelay)
         if target.clearFirst == true {
             guard await safecracker.clearText() else {
-                return .failure(.typeText, message: "Failed to clear existing text.")
+                return .failure(
+                    .typeText,
+                    message: ActionCapabilityDiagnostic.textEntryFailed(
+                        operation: "clearFirst",
+                        stash: stash,
+                        safecracker: safecracker,
+                        suggestion: "focus an editable text field before clearing text"
+                    )
+                )
             }
         }
 
         if let deleteCount = target.deleteCount, deleteCount > 0 {
             guard await safecracker.deleteText(count: deleteCount, interKeyDelay: interKeyDelay) else {
-                return .failure(.typeText, message: "No keyboard or focused text input available for delete.")
+                return .failure(
+                    .typeText,
+                    message: ActionCapabilityDiagnostic.textEntryFailed(
+                        operation: "delete",
+                        stash: stash,
+                        safecracker: safecracker,
+                        suggestion: "focus an editable text field before deleting text"
+                    )
+                )
             }
         }
 
         if let text = target.text, !text.isEmpty {
             guard await safecracker.typeText(text, interKeyDelay: interKeyDelay) else {
-                return .failure(.typeText, message: "No keyboard or focused text input available for typing.")
+                return .failure(
+                    .typeText,
+                    message: ActionCapabilityDiagnostic.textEntryFailed(
+                        operation: "typing",
+                        stash: stash,
+                        safecracker: safecracker,
+                        suggestion: "focus an editable text field before typing"
+                    )
+                )
             }
         }
 
@@ -494,9 +613,15 @@ final class Actions {
     private func focusTextInput(_ elementTarget: ElementTarget?) async -> TheSafecracker.InteractionResult? {
         guard let elementTarget else {
             guard safecracker.hasActiveTextInput() else {
-                let message = "No active text input. Provide an elementTarget to focus a text field, "
-                    + "or ensure a text field is already focused."
-                return .failure(.typeText, message: message)
+                return .failure(
+                    .typeText,
+                    message: ActionCapabilityDiagnostic.textEntryFailed(
+                        operation: "initial focus check",
+                        stash: stash,
+                        safecracker: safecracker,
+                        suggestion: "provide elementTarget for a text field or focus an editable field before typing"
+                    )
+                )
             }
             return nil
         }
@@ -509,12 +634,27 @@ final class Actions {
 
         let point = resolved.element.activationPoint
         guard await safecracker.tap(at: point) else {
-            return .failure(.typeText, message: "Failed to tap target element to bring up keyboard")
+            return .failure(
+                .typeText,
+                message: ActionCapabilityDiagnostic.gestureDispatchFailed(
+                    method: .syntheticTap,
+                    point: point,
+                    receiver: safecracker.tapReceiverDiagnostic(at: point)
+                )
+            )
         }
         safecracker.showFingerprint(at: point)
 
         guard await waitForActiveTextInput() else {
-            return .failure(.typeText, message: "No active text input after tapping element. The element may not be a text field.")
+            return .failure(
+                .typeText,
+                message: ActionCapabilityDiagnostic.textEntryFailed(
+                    operation: "post-tap keyboard readiness",
+                    stash: stash,
+                    safecracker: safecracker,
+                    suggestion: "target an editable text field"
+                )
+            )
         }
         return nil
     }

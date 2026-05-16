@@ -1271,7 +1271,8 @@ public struct ActionResult: Codable, Sendable
 
 - `success: Bool` - Whether action succeeded
 - `method: ActionMethod` - How action was performed
-- `message: String?` - Additional context or error description
+- `message: String?` - Additional context or error description. Action capability failures use a
+  boundary/observation/recovery shape, e.g. `custom action failed: observed ...; try ...`.
 - `value: String?` - Current text field value (populated by `typeText`)
 - `interfaceDelta: InterfaceDelta?` - Compact delta describing what changed after the action
 - `animating: Bool?` - `true` if UI was still animating when result was produced; `nil` means idle
