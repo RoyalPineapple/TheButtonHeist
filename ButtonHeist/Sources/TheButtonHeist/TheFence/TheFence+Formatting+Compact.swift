@@ -74,9 +74,14 @@ extension FenceResponse {
     private func compactActionResult(_ result: ActionResult, expectation: ExpectationResult?) -> String {
         guard result.success else {
             if case .scrollSearch(let search) = result.payload {
-                return Self.compactScrollSearchNotFound(search, method: result.method, screenId: result.screenId)
+                return Self.compactScrollSearchNotFound(
+                    search,
+                    method: result.method,
+                    errorKind: Self.compactActionErrorKind(result),
+                    screenId: result.screenId
+                )
             }
-            return "error: \(result.message ?? result.method.rawValue)"
+            return Self.compactActionFailure(result)
         }
 
         var text: String
@@ -143,6 +148,30 @@ extension FenceResponse {
         return text
     }
 
+    private static func compactActionFailure(_ result: ActionResult) -> String {
+        let message = result.message ?? result.method.rawValue
+        var text = "\(result.method.rawValue): error[\(compactActionErrorKind(result).rawValue)]: \(message)"
+        if let screenId = result.screenId {
+            text = "\(screenId) | \(text)"
+        }
+        return text
+    }
+
+    private static func compactActionErrorKind(_ result: ActionResult) -> ErrorKind {
+        if let errorKind = result.errorKind {
+            return errorKind
+        }
+        if case .scrollSearch = result.payload {
+            return .elementNotFound
+        }
+        switch result.method {
+        case .elementNotFound, .elementDeallocated:
+            return .elementNotFound
+        default:
+            return .actionFailed
+        }
+    }
+
     private static func compactScrollSearchFound(
         _ search: ScrollSearchResult,
         method: ActionMethod
@@ -164,18 +193,19 @@ extension FenceResponse {
     private static func compactScrollSearchNotFound(
         _ search: ScrollSearchResult,
         method: ActionMethod,
+        errorKind: ErrorKind,
         screenId: String?
     ) -> String {
         let commandName = compactScrollSearchCommandName(for: method)
         var text: String
         if search.exhaustive {
             let itemInfo = scrollSearchItemInfo(search)
-            text = "\(commandName): not found\(itemInfo) (exhaustive)"
+            text = "\(commandName): error[\(errorKind.rawValue)]: not found\(itemInfo) (exhaustive)"
         } else if search.scrollCount > 0 {
             let itemInfo = scrollSearchItemInfo(search)
-            text = "\(commandName): not found after \(search.scrollCount) scrolls\(itemInfo)"
+            text = "\(commandName): error[\(errorKind.rawValue)]: not found after \(search.scrollCount) scrolls\(itemInfo)"
         } else {
-            text = "\(commandName): not found"
+            text = "\(commandName): error[\(errorKind.rawValue)]: not found"
         }
         if let screenId {
             text = "\(screenId) | \(text)"

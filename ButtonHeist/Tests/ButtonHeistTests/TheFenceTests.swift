@@ -506,6 +506,33 @@ final class TheFenceTests: XCTestCase {
         XCTAssertTrue(text.contains("delivery"))
     }
 
+    func testCompactFailedActionIncludesMethodAndElementNotFoundKind() {
+        let result = ActionResult(
+            success: false,
+            method: .activate,
+            message: "No element matching label \"Buy\"",
+            errorKind: .elementNotFound
+        )
+
+        let text = FenceResponse.action(result: result).compactFormatted()
+
+        XCTAssertEqual(text, "activate: error[elementNotFound]: No element matching label \"Buy\"")
+    }
+
+    func testCompactFailedActionIncludesMethodAndTimeoutKind() {
+        let result = ActionResult(
+            success: false,
+            method: .waitFor,
+            message: "Timed out after 2.0s waiting for element",
+            errorKind: .timeout,
+            screenId: "checkout"
+        )
+
+        let text = FenceResponse.action(result: result).compactFormatted()
+
+        XCTAssertEqual(text, "checkout | waitFor: error[timeout]: Timed out after 2.0s waiting for element")
+    }
+
     func testActionWithoutExpectationFormatting() {
         let result = ActionResult(success: true, method: .activate)
         let response = FenceResponse.action(result: result)
@@ -561,7 +588,7 @@ final class TheFenceTests: XCTestCase {
 
         let text = FenceResponse.action(result: result).compactFormatted()
 
-        XCTAssertEqual(text, "buttonheist_demo | element_search: not found after 3 scrolls (42 unique elements seen)")
+        XCTAssertEqual(text, "buttonheist_demo | element_search: error[elementNotFound]: not found after 3 scrolls (42 unique elements seen)")
     }
 
     // MARK: - FenceResponse: Action with Expectation (JSON)
