@@ -428,6 +428,22 @@ final class TheStash {
         resolveTarget(target, in: screen, includePendingRotor: false)
     }
 
+    /// Resolve a target only against the latest live hierarchy. This preserves
+    /// full target semantics (ambiguity and explicit ordinal) while excluding
+    /// known-only entries retained from exploration.
+    func resolveVisibleTarget(_ target: ElementTarget) -> TargetResolution {
+        let visibleIds = currentScreen.visibleIds
+        let visibleScreen = Screen(
+            elements: currentScreen.elements.filter { visibleIds.contains($0.key) },
+            hierarchy: currentScreen.hierarchy,
+            containerStableIds: currentScreen.containerStableIds,
+            heistIdByElement: currentScreen.heistIdByElement,
+            firstResponderHeistId: currentScreen.firstResponderHeistId,
+            scrollableContainerViews: currentScreen.scrollableContainerViews
+        )
+        return resolveTarget(target, in: visibleScreen)
+    }
+
     private func resolveTarget(
         _ target: ElementTarget,
         in screen: Screen,

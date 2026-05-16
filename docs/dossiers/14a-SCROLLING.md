@@ -143,6 +143,8 @@ Jumps directly to a known element's recorded scroll position. This command is fo
 
 **Input:** `ScrollToVisibleTarget` containing an `ElementTarget`. If the element is already visible, it is comfort-scrolled if needed. If it is off-screen and has a recorded content-space position, Button Heist jumps to that position and re-resolves the target.
 
+Known targets guide; visible live targets prove.
+
 Fails closed when the element is not in the current or preserved screen snapshot, is ambiguous, or has no recorded scroll position. Use `element_search` for unseen elements or stale targets that have fallen out of the known snapshot.
 
 ### element_search (hierarchy-driven search)

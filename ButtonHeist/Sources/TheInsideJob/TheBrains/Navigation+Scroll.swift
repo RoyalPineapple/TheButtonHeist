@@ -350,8 +350,10 @@ extension Navigation {
 
         stash.refresh()
 
-        // Already visible — ensure it's in the comfort zone and return
-        if let found = stash.resolveFirstMatch(elementTarget) {
+        // Already visible — ensure it's in the comfort zone and return.
+        // Known entries can guide a jump, but only the live visible hierarchy
+        // can prove scroll_to_visible success.
+        if let found = stash.resolveVisibleTarget(elementTarget).resolved {
             guard ensureOnScreenSync(found) else {
                 return .failure(
                     .scrollToVisible,
@@ -370,15 +372,18 @@ extension Navigation {
            stash.jumpToRecordedPosition(entry) != nil {
             await tripwire.yieldRealFrames(Self.postJumpRealFrames)
             refresh()
-            if let found = stash.resolveFirstMatch(elementTarget) {
+            var liveResolution = stash.resolveVisibleTarget(elementTarget)
+            if let found = liveResolution.resolved {
                 let didEnsure = ensureOnScreenSync(found)
                 await tripwire.yieldRealFrames(Self.postJumpRealFrames)
                 refresh()
-                if didEnsure, stash.resolveFirstMatch(elementTarget) != nil {
+                liveResolution = stash.resolveVisibleTarget(elementTarget)
+                if didEnsure, liveResolution.resolved != nil {
                     return TheSafecracker.InteractionResult(success: true, method: .scrollToVisible, message: nil, value: nil)
                 }
             }
-            return .failure(.scrollToVisible, message: "Element not visible after scrolling to recorded position")
+            let suffix = liveResolution.diagnostics.isEmpty ? "" : ": \(liveResolution.diagnostics)"
+            return .failure(.scrollToVisible, message: "Element not visible after scrolling to recorded position\(suffix)")
         }
 
         return .failure(.scrollToVisible,
