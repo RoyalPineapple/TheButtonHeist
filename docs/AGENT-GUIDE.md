@@ -219,6 +219,10 @@ For elements with named actions (steppers, sliders):
 ```json
 {"tool": "activate", "arguments": {"heistId": "quantity-stepper", "action": "increment"}}
 ```
+Use `count` to repeat increment/decrement in one call:
+```json
+{"tool": "activate", "arguments": {"heistId": "quantity-stepper", "action": "increment", "count": 3}}
+```
 
 ### Type text
 

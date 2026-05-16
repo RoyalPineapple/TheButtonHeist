@@ -303,11 +303,15 @@ extension TheFence.Command {
         case .activate:
             return target + [
                 .init(key: "action", type: .string),
+                .init(key: "count", type: .integer),
                 expect,
             ]
 
         case .increment, .decrement:
-            return target + [expect]
+            return target + [
+                .init(key: "count", type: .integer),
+                expect,
+            ]
 
         case .performCustomAction:
             return target + [

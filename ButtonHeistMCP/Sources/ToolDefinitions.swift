@@ -206,6 +206,12 @@ enum ToolDefinitions {
             "type": "object",
             "properties": .object(elementTargetProperties.merging([
                 "action": ["type": "string", "description": "Named action (e.g. \"increment\", \"decrement\", or a custom action name)"],
+                "count": [
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100,
+                    "description": "Repeat increment/decrement this many times. Omit for 1.",
+                ],
                 "expect": expectProperty,
             ] as [String: Value]) { _, new in new }),
             "additionalProperties": false,
