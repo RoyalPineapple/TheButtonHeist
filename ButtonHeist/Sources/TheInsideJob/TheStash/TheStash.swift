@@ -140,6 +140,12 @@ final class TheStash {
         case known
     }
 
+    enum ResolutionScope: String {
+        case known
+        case provided
+        case visible
+    }
+
     /// Three-case result from `resolveTarget` — diagnostics are produced
     /// inline during resolution, not via a separate re-scan.
     enum TargetResolution {
@@ -418,14 +424,14 @@ final class TheStash {
     /// `currentScreen.elements`, resolution fails with a near-miss suggestion.
     /// Live coordinate revalidation happens later in action execution.
     func resolveTarget(_ target: ElementTarget) -> TargetResolution {
-        resolveTarget(target, in: currentScreen, includePendingRotor: true)
+        resolveTarget(target, in: currentScreen, includePendingRotor: true, resolutionScope: .known)
     }
 
     /// Resolve a target against a supplied screen value. Used by callers that
     /// intentionally preserved a known semantic snapshot across a fresh visible
     /// parse.
     func resolveTarget(_ target: ElementTarget, in screen: Screen) -> TargetResolution {
-        resolveTarget(target, in: screen, includePendingRotor: false)
+        resolveTarget(target, in: screen, includePendingRotor: false, resolutionScope: .provided)
     }
 
     /// Resolve a target only against the latest live hierarchy. This preserves
@@ -441,13 +447,14 @@ final class TheStash {
             firstResponderHeistId: currentScreen.firstResponderHeistId,
             scrollableContainerViews: currentScreen.scrollableContainerViews
         )
-        return resolveTarget(target, in: visibleScreen)
+        return resolveTarget(target, in: visibleScreen, includePendingRotor: false, resolutionScope: .visible)
     }
 
     private func resolveTarget(
         _ target: ElementTarget,
         in screen: Screen,
-        includePendingRotor: Bool
+        includePendingRotor: Bool,
+        resolutionScope: ResolutionScope
     ) -> TargetResolution {
         switch target {
         case .heistId(let heistId):
@@ -463,7 +470,7 @@ final class TheStash {
             }
             return .resolved(ResolvedTarget(screenElement: entry))
         case .matcher(let matcher, let ordinal):
-            return resolveMatcher(matcher, ordinal: ordinal, in: screen)
+            return resolveMatcher(matcher, ordinal: ordinal, in: screen, resolutionScope: resolutionScope)
         }
     }
 
@@ -505,28 +512,51 @@ final class TheStash {
     private func resolveMatcher(
         _ matcher: ElementMatcher,
         ordinal: Int?,
-        in screen: Screen
+        in screen: Screen,
+        resolutionScope: ResolutionScope
     ) -> TargetResolution {
         if let ordinal {
             guard ordinal >= 0 else {
-                return .notFound(diagnostics: "ordinal must be non-negative, got \(ordinal)")
+                return .notFound(diagnostics: """
+                    ordinal must be non-negative, got \(ordinal)
+                    Next: remove ordinal, or use ordinal 0 after get_interface shows the exact candidate order.
+                    """)
             }
             let matches = matchScreenElements(matcher, limit: ordinal + 1, in: screen)
             guard ordinal < matches.count else {
                 let total = matches.count
-                return .notFound(diagnostics: "ordinal \(ordinal) requested but only \(total) match\(total == 1 ? "" : "es") found")
+                let nextMove: String
+                if total == 0 {
+                    nextMove = "Next: retry with an exact label, identifier, or heistId from get_interface(full: true)."
+                } else {
+                    nextMove = "Next: use ordinal 0...\(total - 1), omit ordinal to inspect ambiguity, "
+                        + "or target a listed element by exact label, identifier, or heistId."
+                }
+                return .notFound(diagnostics: """
+                    ordinal \(ordinal) requested but only \(total) match\(total == 1 ? "" : "es") found
+                    \(nextMove)
+                    """)
             }
             return .resolved(ResolvedTarget(screenElement: matches[ordinal]))
         }
         let matches = matchScreenElements(matcher, limit: 2, in: screen)
         switch matches.count {
         case 0:
-            return .notFound(diagnostics: matcherNotFoundMessage(matcher, in: screen))
+            return .notFound(diagnostics: matcherNotFoundMessage(
+                matcher,
+                in: screen,
+                resolutionScope: resolutionScope
+            ))
         case 1:
             return .resolved(ResolvedTarget(screenElement: matches[0]))
         default:
             let capped = matchScreenElements(matcher, limit: 11, in: screen)
-            return ambiguousResolution(matcher, elements: capped.map(\.element))
+            return ambiguousResolution(
+                matcher,
+                screenElements: capped,
+                visibleHeistIds: screen.visibleIds,
+                resolutionScope: resolutionScope
+            )
         }
     }
 
@@ -558,33 +588,19 @@ final class TheStash {
         Interactivity.checkInteractivity(screenElement.element, object: dispatchObject(for: screenElement))
     }
 
-    // MARK: - Traversal Order Index
-
-    /// Build a heistId→traversal-order lookup for diagnostics formatting.
-    /// Walks the live hierarchy in DFS order — this matches the order the
-    /// agent sees in `get_interface` payloads.
-    func buildTraversalOrderIndex(in screen: Screen? = nil) -> [String: Int] {
-        let screen = screen ?? currentScreen
-        var index: [String: Int] = [:]
-        var counter = 0
-        for (element, _) in screen.hierarchy.elements {
-            if let heistId = screen.heistIdByElement[element] {
-                index[heistId] = counter
-                counter += 1
-            }
-        }
-        return index
-    }
-
     // MARK: - Diagnostics Forwarding
 
-    func matcherNotFoundMessage(_ matcher: ElementMatcher, in screen: Screen? = nil) -> String {
+    func matcherNotFoundMessage(
+        _ matcher: ElementMatcher,
+        in screen: Screen? = nil,
+        resolutionScope: ResolutionScope = .known
+    ) -> String {
         let screen = screen ?? currentScreen
         return Diagnostics.matcherNotFound(
-            matcher, hierarchy: screen.hierarchy,
+            matcher,
             screenElements: selectElements(in: screen),
-            knownHeistIds: screen.knownIds,
-            traversalOrder: buildTraversalOrderIndex(in: screen)
+            visibleHeistIds: screen.visibleIds,
+            resolutionScope: resolutionScope
         )
     }
 
@@ -594,21 +610,27 @@ final class TheStash {
 
     private func ambiguousResolution(
         _ matcher: ElementMatcher,
-        elements: [AccessibilityElement]
+        screenElements: [ScreenElement],
+        visibleHeistIds: Set<String>,
+        resolutionScope: ResolutionScope
     ) -> TargetResolution {
-        let candidates = elements.prefix(10).map { element -> String in
+        let candidates = screenElements.prefix(10).map { screenElement -> String in
+            let element = screenElement.element
             var parts: [String] = []
             if let label = element.label, !label.isEmpty { parts.append("\"\(label)\"") }
             if let identifier = element.identifier, !identifier.isEmpty { parts.append("id=\(identifier)") }
             if let value = element.value, !value.isEmpty { parts.append("value=\(value)") }
+            parts.append(Diagnostics.availabilityDescription(for: screenElement, visibleHeistIds: visibleHeistIds))
             return parts.joined(separator: " ")
         }
         let query = formatMatcher(matcher)
-        let countLabel = elements.count > 10 ? "10+" : "\(elements.count)"
-        let rangeLabel = elements.count > 10 ? "0, 1, 2, ..." : "0–\(elements.count - 1)"
-        var lines = ["\(countLabel) elements match: \(query) — use ordinal \(rangeLabel) to select one"]
+        let countLabel = screenElements.count > 10 ? "10+" : "\(screenElements.count)"
+        let rangeLabel = screenElements.count > 10 ? "0, 1, 2, ..." : "0–\(screenElements.count - 1)"
+        var lines = [
+            "\(countLabel) elements match: \(query) (scope: \(resolutionScope.rawValue)) — use ordinal \(rangeLabel) to select one"
+        ]
         lines.append(contentsOf: candidates.map { "  \($0)" })
-        if elements.count > 10 {
+        if screenElements.count > 10 {
             lines.append("  ... and more")
         }
         return .ambiguous(candidates: candidates, diagnostics: lines.joined(separator: "\n"))

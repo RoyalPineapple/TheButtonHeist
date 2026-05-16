@@ -87,10 +87,10 @@ final class DiagnosticsTests: XCTestCase {
     func testCompactSummaryEmptyScreen() {
         let summary = Diagnostics.compactElementSummary(
             screenElements: [],
-            knownHeistIds: [],
-            traversalOrder: [:]
+            visibleHeistIds: []
         )
         XCTAssertTrue(summary.contains("empty"))
+        XCTAssertTrue(summary.contains("Next:"))
     }
 
     func testCompactSummaryShowsElementCount() {
@@ -105,11 +105,12 @@ final class DiagnosticsTests: XCTestCase {
 
         let summary = Diagnostics.compactElementSummary(
             screenElements: [screenElement],
-            knownHeistIds: ["hello"],
-            traversalOrder: ["hello": 0]
+            visibleHeistIds: ["hello"]
         )
         XCTAssertTrue(summary.contains("1 known element"))
         XCTAssertTrue(summary.contains("Hello"))
+        XCTAssertTrue(summary.contains("visible"))
+        XCTAssertTrue(summary.contains("Next:"))
     }
 
     // MARK: - Helpers
