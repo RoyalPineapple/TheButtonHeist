@@ -494,15 +494,25 @@ final class TheBrainsScrollTests: XCTestCase {
     /// Install a Screen whose `elements` includes an entry that's not in the
     /// live hierarchy — simulating an element retained from a previous
     /// exploration commit that has since scrolled off.
-    private func installScreenWithOffViewportEntry(
+    private func makeScreenWithOffViewportEntry(
         liveHierarchy: [(AccessibilityElement, String)],
         offViewport: [(AccessibilityElement, String, CGPoint?)]
-    ) {
-        brains.stash.currentScreen = .makeForTests(
+    ) -> Screen {
+        .makeForTests(
             elements: liveHierarchy.map { ($0.0, $0.1) },
             offViewport: offViewport.map {
                 Screen.OffViewportEntry($0.0, heistId: $0.1, contentSpaceOrigin: $0.2)
             }
+        )
+    }
+
+    private func installScreenWithOffViewportEntry(
+        liveHierarchy: [(AccessibilityElement, String)],
+        offViewport: [(AccessibilityElement, String, CGPoint?)]
+    ) {
+        brains.stash.currentScreen = makeScreenWithOffViewportEntry(
+            liveHierarchy: liveHierarchy,
+            offViewport: offViewport
         )
     }
 
@@ -516,6 +526,25 @@ final class TheBrainsScrollTests: XCTestCase {
 
         let entry = brains.navigation.knownOffscreenEntry(for: .heistId("button_item"))
         XCTAssertNotNil(entry, "Should return entry when heistId is not in live viewport")
+        XCTAssertEqual(entry?.heistId, "button_item")
+    }
+
+    func testKnownOffscreenEntryByHeistIdUsesRecordedScreenAfterVisibleRefresh() {
+        let visible = makeElement(label: "Visible")
+        let element = makeElement(label: "Item")
+        let recordedScreen = makeScreenWithOffViewportEntry(
+            liveHierarchy: [(visible, "visible_element")],
+            offViewport: [(element, "button_item", CGPoint(x: 0, y: 2000))]
+        )
+        brains.stash.currentScreen = .makeForTests(
+            elements: [(visible, "visible_element")]
+        )
+
+        let entry = brains.navigation.knownOffscreenEntry(
+            for: .heistId("button_item"),
+            in: recordedScreen
+        )
+
         XCTAssertEqual(entry?.heistId, "button_item")
     }
 
@@ -545,6 +574,25 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(entry?.heistId, "button_item")
     }
 
+    func testKnownOffscreenEntryByMatcherUsesRecordedScreenAfterVisibleRefresh() {
+        let visible = makeElement(label: "Visible")
+        let element = makeElement(label: "Item")
+        let recordedScreen = makeScreenWithOffViewportEntry(
+            liveHierarchy: [(visible, "visible_element")],
+            offViewport: [(element, "button_item", CGPoint(x: 0, y: 2000))]
+        )
+        brains.stash.currentScreen = .makeForTests(
+            elements: [(visible, "visible_element")]
+        )
+
+        let entry = brains.navigation.knownOffscreenEntry(
+            for: .matcher(ElementMatcher(label: "Item")),
+            in: recordedScreen
+        )
+
+        XCTAssertEqual(entry?.heistId, "button_item")
+    }
+
     func testKnownOffscreenEntryByMatcherReturnsNilWhenMatchIsLive() {
         let element = makeElement(label: "Item")
         installScreenWithOffViewportEntry(
@@ -556,6 +604,49 @@ final class TheBrainsScrollTests: XCTestCase {
             for: .matcher(ElementMatcher(label: "Item"))
         )
         XCTAssertNil(entry, "Should return nil when matcher hit is already in the live viewport")
+    }
+
+    func testKnownOffscreenEntryKeepsFreshVisibleGeometryAuthoritative() {
+        let visibleElement = makeElement(label: "Item")
+        let recordedElement = makeElement(label: "Item")
+        let recordedScreen = makeScreenWithOffViewportEntry(
+            liveHierarchy: [],
+            offViewport: [(recordedElement, "button_item", CGPoint(x: 0, y: 2000))]
+        )
+        brains.stash.currentScreen = .makeForTests(
+            elements: [(visibleElement, "button_item")]
+        )
+
+        let entry = brains.navigation.knownOffscreenEntry(
+            for: .matcher(ElementMatcher(label: "Item")),
+            in: recordedScreen
+        )
+
+        XCTAssertNil(
+            entry,
+            "Once the target is in the fresh visible parse, scroll_to_visible should use live geometry"
+        )
+    }
+
+    func testScrollToVisibleUnknownTargetUsesRecordedScreenDiagnostics() {
+        let visible = makeElement(label: "Visible")
+        let recordedScreen = makeScreenWithOffViewportEntry(
+            liveHierarchy: [(visible, "visible_element")],
+            offViewport: []
+        )
+        brains.stash.currentScreen = .makeForTests(
+            elements: [(visible, "visible_element")]
+        )
+
+        let message = brains.navigation.scrollToVisibleFailureMessage(
+            for: .heistId("missing_button"),
+            in: recordedScreen
+        )
+
+        XCTAssertTrue(message.contains("Element not found"))
+        XCTAssertTrue(message.contains("missing_button"))
+        XCTAssertTrue(message.contains("1 known element"))
+        XCTAssertTrue(message.contains("get_interface"))
     }
 
     // MARK: - resolveScrollTarget

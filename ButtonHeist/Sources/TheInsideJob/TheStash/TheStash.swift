@@ -418,21 +418,36 @@ final class TheStash {
     /// `currentScreen.elements`, resolution fails with a near-miss suggestion.
     /// Live coordinate revalidation happens later in action execution.
     func resolveTarget(_ target: ElementTarget) -> TargetResolution {
+        resolveTarget(target, in: currentScreen, includePendingRotor: true)
+    }
+
+    /// Resolve a target against a supplied screen value. Used by callers that
+    /// intentionally preserved a known semantic snapshot across a fresh visible
+    /// parse.
+    func resolveTarget(_ target: ElementTarget, in screen: Screen) -> TargetResolution {
+        resolveTarget(target, in: screen, includePendingRotor: false)
+    }
+
+    private func resolveTarget(
+        _ target: ElementTarget,
+        in screen: Screen,
+        includePendingRotor: Bool
+    ) -> TargetResolution {
         switch target {
         case .heistId(let heistId):
-            if let pending = activePendingRotorResult(heistId: heistId) {
+            if includePendingRotor, let pending = activePendingRotorResult(heistId: heistId) {
                 return .resolved(ResolvedTarget(screenElement: pending))
             }
-            guard let entry = screenElement(heistId: heistId, in: .known) else {
+            guard let entry = screen.findElement(heistId: heistId) else {
                 return .notFound(diagnostics: Diagnostics.heistIdNotFound(
                     heistId,
-                    knownIds: currentScreen.elements.keys,
-                    knownCount: currentScreen.elements.count
+                    knownIds: screen.elements.keys,
+                    knownCount: screen.elements.count
                 ))
             }
             return .resolved(ResolvedTarget(screenElement: entry))
         case .matcher(let matcher, let ordinal):
-            return resolveMatcher(matcher, ordinal: ordinal)
+            return resolveMatcher(matcher, ordinal: ordinal, in: screen)
         }
     }
 
@@ -471,26 +486,30 @@ final class TheStash {
         return screenElement(heistId: heistId, in: scope)
     }
 
-    private func resolveMatcher(_ matcher: ElementMatcher, ordinal: Int?) -> TargetResolution {
+    private func resolveMatcher(
+        _ matcher: ElementMatcher,
+        ordinal: Int?,
+        in screen: Screen
+    ) -> TargetResolution {
         if let ordinal {
             guard ordinal >= 0 else {
                 return .notFound(diagnostics: "ordinal must be non-negative, got \(ordinal)")
             }
-            let matches = matchScreenElements(matcher, limit: ordinal + 1)
+            let matches = matchScreenElements(matcher, limit: ordinal + 1, in: screen)
             guard ordinal < matches.count else {
                 let total = matches.count
                 return .notFound(diagnostics: "ordinal \(ordinal) requested but only \(total) match\(total == 1 ? "" : "es") found")
             }
             return .resolved(ResolvedTarget(screenElement: matches[ordinal]))
         }
-        let matches = matchScreenElements(matcher, limit: 2)
+        let matches = matchScreenElements(matcher, limit: 2, in: screen)
         switch matches.count {
         case 0:
-            return .notFound(diagnostics: matcherNotFoundMessage(matcher))
+            return .notFound(diagnostics: matcherNotFoundMessage(matcher, in: screen))
         case 1:
             return .resolved(ResolvedTarget(screenElement: matches[0]))
         default:
-            let capped = matchScreenElements(matcher, limit: 11)
+            let capped = matchScreenElements(matcher, limit: 11, in: screen)
             return ambiguousResolution(matcher, elements: capped.map(\.element))
         }
     }
@@ -528,11 +547,12 @@ final class TheStash {
     /// Build a heistId→traversal-order lookup for diagnostics formatting.
     /// Walks the live hierarchy in DFS order — this matches the order the
     /// agent sees in `get_interface` payloads.
-    func buildTraversalOrderIndex() -> [String: Int] {
+    func buildTraversalOrderIndex(in screen: Screen? = nil) -> [String: Int] {
+        let screen = screen ?? currentScreen
         var index: [String: Int] = [:]
         var counter = 0
-        for (element, _) in currentScreen.hierarchy.elements {
-            if let heistId = currentScreen.heistIdByElement[element] {
+        for (element, _) in screen.hierarchy.elements {
+            if let heistId = screen.heistIdByElement[element] {
                 index[heistId] = counter
                 counter += 1
             }
@@ -542,12 +562,13 @@ final class TheStash {
 
     // MARK: - Diagnostics Forwarding
 
-    func matcherNotFoundMessage(_ matcher: ElementMatcher) -> String {
-        Diagnostics.matcherNotFound(
-            matcher, hierarchy: currentScreen.hierarchy,
-            screenElements: selectElements(),
-            knownHeistIds: currentScreen.knownIds,
-            traversalOrder: buildTraversalOrderIndex()
+    func matcherNotFoundMessage(_ matcher: ElementMatcher, in screen: Screen? = nil) -> String {
+        let screen = screen ?? currentScreen
+        return Diagnostics.matcherNotFound(
+            matcher, hierarchy: screen.hierarchy,
+            screenElements: selectElements(in: screen),
+            knownHeistIds: screen.knownIds,
+            traversalOrder: buildTraversalOrderIndex(in: screen)
         )
     }
 
@@ -585,17 +606,18 @@ final class TheStash {
     /// any heistIds present in `currentScreen.elements` but not in the live
     /// hierarchy (post-exploration union) appear after, sorted by heistId so
     /// the snapshot order is stable across runs.
-    func selectElements() -> [ScreenElement] {
+    func selectElements(in screen: Screen? = nil) -> [ScreenElement] {
+        let screen = screen ?? currentScreen
         var seen = Set<String>()
         var ordered: [ScreenElement] = []
-        ordered.reserveCapacity(currentScreen.elements.count)
-        for (element, _) in currentScreen.hierarchy.elements {
-            guard let heistId = currentScreen.heistIdByElement[element],
-                  let entry = currentScreen.elements[heistId],
+        ordered.reserveCapacity(screen.elements.count)
+        for (element, _) in screen.hierarchy.elements {
+            guard let heistId = screen.heistIdByElement[element],
+                  let entry = screen.elements[heistId],
                   seen.insert(heistId).inserted else { continue }
             ordered.append(entry)
         }
-        let remaining = currentScreen.elements
+        let remaining = screen.elements
             .filter { !seen.contains($0.key) }
             .map(\.value)
             .sorted { $0.heistId < $1.heistId }
