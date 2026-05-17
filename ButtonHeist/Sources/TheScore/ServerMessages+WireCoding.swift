@@ -13,6 +13,7 @@ private enum ResponseEnvelopeCodingKeys: String, CodingKey {
     case type
     case payload
     case backgroundDelta
+    case changeJournal
 }
 
 // MARK: - ResponseEnvelope Codable
@@ -22,7 +23,10 @@ extension ResponseEnvelope {
         let container = try decoder.container(keyedBy: ResponseEnvelopeCodingKeys.self)
         buttonHeistVersion = try container.decode(String.self, forKey: .buttonHeistVersion)
         requestId = try container.decodeIfPresent(String.self, forKey: .requestId)
-        backgroundDelta = try container.decodeIfPresent(InterfaceDelta.self, forKey: .backgroundDelta)
+        let decodedBackgroundDelta = try container.decodeIfPresent(InterfaceDelta.self, forKey: .backgroundDelta)
+        backgroundDelta = decodedBackgroundDelta
+        changeJournal = try container.decodeIfPresent(AccessibilityChangeJournal.self, forKey: .changeJournal)
+            ?? decodedBackgroundDelta.map { AccessibilityChangeJournal(backgroundDelta: $0) }
         let type = try container.decode(WireMessageType.self, forKey: .type)
         let payloadDecoder: Decoder? = container.contains(.payload)
             ? try container.superDecoder(forKey: .payload)
@@ -35,6 +39,7 @@ extension ResponseEnvelope {
         try container.encode(buttonHeistVersion, forKey: .buttonHeistVersion)
         try container.encodeIfPresent(requestId, forKey: .requestId)
         try container.encodeIfPresent(backgroundDelta, forKey: .backgroundDelta)
+        try container.encodeIfPresent(changeJournal, forKey: .changeJournal)
         let wire = message.wireRepresentation
         try container.encode(wire.type, forKey: .type)
         if let payload = wire.payload {

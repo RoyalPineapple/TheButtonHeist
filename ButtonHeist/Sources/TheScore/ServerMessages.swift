@@ -19,19 +19,32 @@ public struct ResponseEnvelope: Codable, Sendable {
     /// concern: any response type can carry it.
     public let backgroundDelta: InterfaceDelta?
 
-    public init(requestId: String? = nil, message: ServerMessage, backgroundDelta: InterfaceDelta? = nil) {
+    /// Receipt journal describing session-level changes observed while this
+    /// response was being prepared. Current snapshots and command payloads
+    /// remain the truth; this explains how the session moved between them.
+    public let changeJournal: AccessibilityChangeJournal?
+
+    public init(
+        requestId: String? = nil,
+        message: ServerMessage,
+        backgroundDelta: InterfaceDelta? = nil,
+        changeJournal: AccessibilityChangeJournal? = nil
+    ) {
         self.init(buttonHeistVersion: TheScore.buttonHeistVersion, requestId: requestId,
-                  message: message, backgroundDelta: backgroundDelta)
+                  message: message, backgroundDelta: backgroundDelta, changeJournal: changeJournal)
     }
 
     public init(
         buttonHeistVersion: String, requestId: String? = nil,
-        message: ServerMessage, backgroundDelta: InterfaceDelta? = nil
+        message: ServerMessage,
+        backgroundDelta: InterfaceDelta? = nil,
+        changeJournal: AccessibilityChangeJournal? = nil
     ) {
         self.buttonHeistVersion = buttonHeistVersion
         self.requestId = requestId
         self.message = message
         self.backgroundDelta = backgroundDelta
+        self.changeJournal = changeJournal ?? backgroundDelta.map { AccessibilityChangeJournal(backgroundDelta: $0) }
     }
 
     /// Encode this envelope to JSON data. Returns nil on encode failure.

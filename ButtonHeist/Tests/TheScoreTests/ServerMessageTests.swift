@@ -301,6 +301,7 @@ final class ServerMessageTests: XCTestCase {
 
         XCTAssertEqual(decoded.requestId, "r-1")
         XCTAssertNil(decoded.backgroundDelta)
+        XCTAssertNil(decoded.changeJournal)
         if case .pong = decoded.message {
         } else {
             XCTFail("Expected pong, got \(decoded.message)")
@@ -311,12 +312,20 @@ final class ServerMessageTests: XCTestCase {
         let delta: InterfaceDelta = .screenChanged(.init(elementCount: 5, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])))
         let envelope = ResponseEnvelope(requestId: "r-2", message: .pong, backgroundDelta: delta)
         let data = try JSONEncoder().encode(envelope)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertNotNil(json["backgroundDelta"])
+        XCTAssertNotNil(json["changeJournal"])
+
         let decoded = try JSONDecoder().decode(ResponseEnvelope.self, from: data)
 
         XCTAssertEqual(decoded.requestId, "r-2")
         XCTAssertNotNil(decoded.backgroundDelta)
         XCTAssertEqual(decoded.backgroundDelta?.isScreenChanged, true)
         XCTAssertEqual(decoded.backgroundDelta?.elementCount, 5)
+        let change = try XCTUnwrap(decoded.changeJournal?.changes.first)
+        XCTAssertEqual(change.sequence, 1)
+        XCTAssertEqual(change.kind, .screenChanged)
+        XCTAssertEqual(change.summary, "screen changed (5 elements)")
     }
 
     func testResponseEnvelopeBackgroundDeltaBackwardCompatible() throws {
@@ -331,7 +340,68 @@ final class ServerMessageTests: XCTestCase {
 
         let decoded = try JSONDecoder().decode(ResponseEnvelope.self, from: strippedData)
         XCTAssertNil(decoded.backgroundDelta)
+        XCTAssertNil(decoded.changeJournal)
         XCTAssertEqual(decoded.requestId, "compat-1")
+    }
+
+    func testResponseEnvelopeOldBackgroundDeltaShapeBackfillsChangeJournal() throws {
+        let delta: InterfaceDelta = .elementsChanged(.init(
+            elementCount: 3,
+            edits: ElementEdits(removed: ["old"])
+        ))
+        let envelope = ResponseEnvelope(requestId: "compat-2", message: .pong, backgroundDelta: delta)
+        let data = try JSONEncoder().encode(envelope)
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        json.removeValue(forKey: "changeJournal")
+        let oldShapeData = try JSONSerialization.data(withJSONObject: json)
+
+        let decoded = try JSONDecoder().decode(ResponseEnvelope.self, from: oldShapeData)
+        XCTAssertEqual(decoded.backgroundDelta?.kindRawValue, "elementsChanged")
+        let change = try XCTUnwrap(decoded.changeJournal?.changes.first)
+        XCTAssertEqual(change.kind, .elementsChanged)
+        XCTAssertEqual(change.summary, "elements changed (3 elements; -1)")
+        XCTAssertEqual(change.samples, [AccessibilityChangeSample(heistId: "old", summary: "removed old")])
+
+        let reencoded = try JSONEncoder().encode(decoded)
+        let reencodedJson = try XCTUnwrap(JSONSerialization.jsonObject(with: reencoded) as? [String: Any])
+        XCTAssertNotNil(reencodedJson["backgroundDelta"])
+        XCTAssertNotNil(reencodedJson["changeJournal"])
+    }
+
+    func testResponseEnvelopeChangeJournalOnlyShapeRoundTrips() throws {
+        let payload = """
+        {
+          "buttonHeistVersion": "\(TheScore.buttonHeistVersion)",
+          "requestId": "journal-only",
+          "type": "pong",
+          "changeJournal": {
+            "changes": [
+              {
+                "sequence": 7,
+                "kind": "elementsChanged",
+                "summary": "elements changed (4 elements; +1)",
+                "samples": [
+                  {"heistId": "save", "summary": "added button \\"Save\\""}
+                ],
+                "omittedCount": 2
+              }
+            ]
+          }
+        }
+        """
+        let decoded = try JSONDecoder().decode(ResponseEnvelope.self, from: Data(payload.utf8))
+
+        XCTAssertNil(decoded.backgroundDelta)
+        let change = try XCTUnwrap(decoded.changeJournal?.changes.first)
+        XCTAssertEqual(change.sequence, 7)
+        XCTAssertEqual(change.kind, .elementsChanged)
+        XCTAssertEqual(change.samples, [AccessibilityChangeSample(heistId: "save", summary: "added button \"Save\"")])
+        XCTAssertEqual(change.omittedCount, 2)
+
+        let reencoded = try JSONEncoder().encode(decoded)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: reencoded) as? [String: Any])
+        XCTAssertNil(json["backgroundDelta"])
+        XCTAssertNotNil(json["changeJournal"])
     }
 
     func testScreenEncodeDecode() throws {
