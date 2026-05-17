@@ -8,14 +8,14 @@ import AccessibilitySnapshotParser
 
 // MARK: - Screen Value Type
 
-/// Immutable snapshot of one screen state. Pure value semantics.
+/// Immutable interface state with pure value semantics.
 ///
 /// `Screen` is the currency type for the resolution layer post-0.2.25. It
 /// replaces the dozen mutable fields previously held on TheStash
 /// (`heistIdIndex`, `currentHierarchy`, `reverseIndex`, `knownIds`,
 /// `currentContainers`, `firstResponderHeistId`, `lastScreenName`, ...) with
-/// a single immutable value. TheStash holds exactly one mutable field of
-/// this type — `currentScreen` — and rebinds it on every parse / merge.
+/// a single immutable value. KnownInterface is targetable semantic state;
+/// InteractionSnapshot is the latest parse used for interaction.
 ///
 /// Exploration accumulates a local `var union: Screen` in the caller; the
 /// final union is committed by writing it back into `stash.currentScreen`.
@@ -25,12 +25,12 @@ import AccessibilitySnapshotParser
 /// — so they cannot drift from the underlying tree.
 struct Screen: Equatable {
 
-    /// HeistId → element entry. `Set(elements.keys)` is the committed known
-    /// semantic set, including exploration results that are not currently live.
+    /// HeistId → element entry. This is targetable semantic state, including
+    /// exploration results that are not currently on-screen.
     let elements: [String: ScreenElement]
 
-    /// The parsed accessibility hierarchy. Used for matcher resolution,
-    /// scroll-target discovery, and wire tree construction.
+    /// The latest parsed accessibility hierarchy. Used for scroll-target
+    /// discovery, wire tree construction, and interaction state.
     let hierarchy: [AccessibilityHierarchy]
 
     /// Stable id for every container reachable from `hierarchy`. Computed
@@ -152,7 +152,56 @@ struct Screen: Equatable {
         }
     }
 
+    /// Targetable semantic state retained across exploration.
+    struct KnownInterface: Equatable {
+        let elements: [String: ScreenElement]
+
+        var heistIds: Set<String> {
+            Set(elements.keys)
+        }
+
+        func findElement(heistId: String) -> ScreenElement? {
+            elements[heistId]
+        }
+    }
+
+    /// Latest parse used for geometry, live object dispatch, scrolling, and
+    /// wire-tree construction.
+    struct InteractionSnapshot: Equatable {
+        let hierarchy: [AccessibilityHierarchy]
+        let containerStableIds: [AccessibilityContainer: String]
+        let heistIdByElement: [AccessibilityElement: String]
+        let firstResponderHeistId: String?
+        let scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
+
+        var heistIds: Set<String> {
+            Set(heistIdByElement.values)
+        }
+
+        func contains(heistId: String) -> Bool {
+            heistIdByElement.values.contains(heistId)
+        }
+
+        func heistId(for element: AccessibilityElement) -> String? {
+            heistIdByElement[element]
+        }
+    }
+
     // MARK: - Derived Properties
+
+    var knownInterface: KnownInterface {
+        KnownInterface(elements: elements)
+    }
+
+    var interactionSnapshot: InteractionSnapshot {
+        InteractionSnapshot(
+            hierarchy: hierarchy,
+            containerStableIds: containerStableIds,
+            heistIdByElement: heistIdByElement,
+            firstResponderHeistId: firstResponderHeistId,
+            scrollableContainerViews: scrollableContainerViews
+        )
+    }
 
     /// Derive the screen name from the first header element in traversal
     /// order. Not stored — recomputed on access so it cannot drift from
@@ -170,19 +219,19 @@ struct Screen: Equatable {
 
     /// The heistId set of every element in the committed semantic screen.
     var knownIds: Set<String> {
-        Set(elements.keys)
+        knownInterface.heistIds
     }
 
     /// The heistId set backed by the latest parsed live hierarchy.
     var visibleIds: Set<String> {
-        Set(heistIdByElement.values)
+        interactionSnapshot.heistIds
     }
 
     // MARK: - Lookup
 
     /// O(1) heistId lookup.
     func findElement(heistId: String) -> ScreenElement? {
-        elements[heistId]
+        knownInterface.findElement(heistId: heistId)
     }
 
     // MARK: - Merge
