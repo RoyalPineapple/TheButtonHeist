@@ -22,7 +22,7 @@ Two state machines:
 |--------|-------------|------|
 | `TheGetaway/` | TheGetaway | Message dispatch, encode/decode, send/broadcast, transport wiring, recording |
 | `TheBrains/` | TheBrains | Action execution, scroll orchestration, exploration, delta cycle, wait handlers |
-| `TheStash/` | TheStash | Element registry, target resolution, wire conversion |
+| `TheStash/` | TheStash | Current element state, target resolution, wire conversion |
 | `TheBurglar/` | TheBurglar | Accessibility tree parsing (private to TheStash) |
 | `TheSafecracker/` | TheSafecracker | Touch injection, text input, gesture synthesis (includes TheFingerprints) |
 | `TheTripwire/` | TheTripwire | 10 Hz UI pulse, settle detection, VC tracking |

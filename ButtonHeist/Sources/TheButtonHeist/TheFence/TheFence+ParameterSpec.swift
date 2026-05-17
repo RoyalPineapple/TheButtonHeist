@@ -138,7 +138,7 @@ enum FenceParameterBlocks: Sendable {
     ]
 
     /// Element filtering: label, value, traits, excludeTraits, identifier (no heistId/ordinal).
-    /// Used by get_interface when filtering visible elements.
+    /// Used by get_interface when filtering returned interface elements.
     static let elementFilter: [FenceParameterSpec] = [
         .init(key: "label", type: .string, description: "Accessibility label — the text VoiceOver reads (e.g. \"Sign In\")"),
         .init(key: "value", type: .string, description: "Accessibility value — current state or placeholder (e.g. \"50%\")"),
@@ -275,11 +275,11 @@ extension TheFence.Command {
                 .init(
                     key: "scope", type: .string,
                     description: """
-                        Interface scope. full (default): explored whole-screen semantic state, \
-                        including discoverable off-screen scroll content. visible: fresh on-screen \
-                        parse only, with no explored union/cache.
+                        Optional diagnostic scope. Omit for the app accessibility state. \
+                        Use visible only when you need a fresh on-screen parse for diagnostics \
+                        or geometry checks.
                         """,
-                    enumValues: fenceEnumValues(GetInterfaceScope.self)
+                    enumValues: [GetInterfaceScope.visible.rawValue]
                 ),
                 .init(
                     key: "detail", type: .string,
@@ -292,7 +292,7 @@ extension TheFence.Command {
                 ),
                 .init(
                     key: "elements", type: .stringArray,
-                    description: "Optional list of heistId handles to filter. Returns only matching elements. Omit for the full hierarchy."
+                    description: "Optional list of heistId handles to filter. Returns only matching elements. Omit for the current interface hierarchy."
                 ),
             ]
 

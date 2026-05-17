@@ -273,10 +273,10 @@ struct ToolSyncTests {
         #expect(ScrollSearchDirection.allCases.allSatisfy { pageDirections.contains($0.rawValue) })
     }
 
-    @Test("MCP enum schemas match wire-boundary enums")
-    func mcpEnumSchemasMatchWireBoundaryEnums() {
+    @Test("MCP enum schemas match advertised command boundaries")
+    func mcpEnumSchemasMatchAdvertisedCommandBoundaries() {
         let getInterface = ToolDefinitions.all.first { $0.name == TheFence.Command.getInterface.rawValue }
-        #expect(extractEnumValues(from: getInterface, property: "scope") == Set(GetInterfaceScope.allCases.map(\.rawValue)))
+        #expect(extractEnumValues(from: getInterface, property: "scope") == ["visible"])
         #expect(extractEnumValues(from: getInterface, property: "detail") == Set(InterfaceDetail.allCases.map(\.rawValue)))
 
         let scroll = ToolDefinitions.all.first { $0.name == TheFence.Command.scroll.rawValue }
@@ -308,8 +308,8 @@ struct ToolSyncTests {
         }
     }
 
-    @Test("get_interface scope schema is Claude-compatible")
-    func getInterfaceScopeSchemaIsClaudeCompatible() {
+    @Test("get_interface scope schema advertises diagnostic visible scope only")
+    func getInterfaceScopeSchemaAdvertisesDiagnosticVisibleScopeOnly() {
         guard let getInterface = ToolDefinitions.all.first(where: { $0.name == TheFence.Command.getInterface.rawValue }),
               let scopeSchema = extractPropertySchema(from: getInterface, property: "scope") else {
             Issue.record("get_interface.scope missing property schema")
@@ -317,7 +317,7 @@ struct ToolSyncTests {
         }
 
         #expect(extractStringField(from: scopeSchema, key: "type") == "string")
-        #expect(extractEnumValues(from: scopeSchema) == Set(GetInterfaceScope.allCases.map(\.rawValue)))
+        #expect(extractEnumValues(from: scopeSchema) == ["visible"])
     }
 
     @Test("Expect schema advertises Claude-compatible object form")
@@ -561,8 +561,8 @@ struct ToolSyncTests {
         }
     }
 
-    @Test("get_interface MCP schema does not advertise legacy full alias")
-    func getInterfaceSchemaDoesNotAdvertiseLegacyFullAlias() {
+    @Test("get_interface MCP schema does not advertise legacy full mode")
+    func getInterfaceSchemaDoesNotAdvertiseLegacyFullMode() {
         guard let getInterface = ToolDefinitions.all.first(where: { $0.name == TheFence.Command.getInterface.rawValue }) else {
             Issue.record("get_interface tool missing")
             return
@@ -571,6 +571,7 @@ struct ToolSyncTests {
         let propertyKeys = extractPropertyKeys(from: getInterface)
         #expect(propertyKeys.contains("scope"))
         #expect(!propertyKeys.contains("full"))
+        #expect(!extractEnumValues(from: getInterface, property: "scope").contains("full"))
     }
 
     private enum EnumPolicy {

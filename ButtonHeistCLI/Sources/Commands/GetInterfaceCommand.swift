@@ -5,6 +5,8 @@ import ButtonHeist
 enum CLIGetInterfaceScope: String, ExpressibleByArgument, CaseIterable {
     case full
     case visible
+
+    static let allCases: [CLIGetInterfaceScope] = [.visible]
 }
 
 struct GetInterfaceCommand: AsyncParsableCommand {
@@ -18,7 +20,7 @@ struct GetInterfaceCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
     @OptionGroup var timeoutOption: TimeoutOption
 
-    @Option(help: "Hierarchy breadth: full (default) or visible")
+    @Option(help: "Diagnostic scope. Omit for app accessibility state; use visible for an on-screen parse")
     var scope: CLIGetInterfaceScope?
 
     @Flag(help: .hidden)
@@ -32,12 +34,11 @@ struct GetInterfaceCommand: AsyncParsableCommand {
         ]
         if let scope { request["scope"] = scope.rawValue }
         if full { request["full"] = true }
-        let effectiveScope = scope ?? .full
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
             request: request,
-            statusMessage: effectiveScope == .full ? "Reading full interface..." : "Requesting visible interface..."
+            statusMessage: scope == .visible ? "Requesting on-screen interface..." : "Reading interface..."
         )
     }
 }

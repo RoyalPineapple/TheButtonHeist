@@ -482,7 +482,7 @@ Edges: `"top"`, `"bottom"`, `"left"`, `"right"`.
 
 ### explore
 
-Full screen element census. Returns the complete accessible hierarchy Button Heist can discover for the current screen, including off-screen content.
+Accessibility-state discovery. Returns the accessible hierarchy Button Heist can discover for the current screen, including content discovered through scrollable containers.
 
 No payload required.
 
@@ -490,9 +490,9 @@ No payload required.
 {"buttonHeistVersion":"<calver>","type":"explore"}
 ```
 
-Returns an `actionResult` with `method: "explore"` and a `payload` of `{"kind": "explore", "data": {...}}` containing the complete element list and summary discovery statistics.
+Returns an `actionResult` with `method: "explore"` and a `payload` of `{"kind": "explore", "data": {...}}` containing the element list and summary discovery statistics.
 
-> **Note**: `explore` is not exposed as a standalone CLI/MCP command. It is dispatched internally by `get_interface` when `scope` is `"full"` (the default). See [Element Discovery](#element-discovery) for usage guidance.
+> **Note**: `explore` is not exposed as a standalone CLI/MCP command. It is dispatched internally by the default `get_interface` read. See [Element Discovery](#element-discovery) for usage guidance.
 
 ### editAction
 
@@ -750,7 +750,7 @@ The `tree` is the canonical wire shape — every element appears exactly once at
 
 ### actionResult
 
-Response to `activate`, `one_finger_tap`, `increment`, `decrement`, `typeText`, `performCustomAction`, `handleAlert`, `setPasteboard`, `getPasteboard`, `scroll`, `scrollToVisible`, `elementSearch`, or `scrollToEdge` commands. Also returned by the full-hierarchy read selected by `get_interface` with `scope: "full"`.
+Response to `activate`, `one_finger_tap`, `increment`, `decrement`, `typeText`, `performCustomAction`, `handleAlert`, `setPasteboard`, `getPasteboard`, `scroll`, `scrollToVisible`, `elementSearch`, or `scrollToEdge` commands. Also returned by the default `get_interface` accessibility-state read.
 
 ```json
 {"buttonHeistVersion":"<calver>","type":"actionResult","payload":{
@@ -795,7 +795,7 @@ Possible methods:
 - `scrollToVisible` - Known element was scrolled into view
 - `elementSearch` - Iterative scroll search found (or failed to find) element matching predicate
 - `scrollToEdge` - Scroll view scrolled to an edge
-- `explore` - Full element census completed
+- `explore` - Accessibility-state discovery completed
 - `elementNotFound` - Target element could not be found
 - `elementDeallocated` - Element's underlying view was deallocated
 
@@ -914,29 +914,29 @@ sequenceDiagram
     participant Client
     participant Host
 
-    Note over Agent,Host: get_interface scope=visible
+    Note over Agent,Host: get_interface (default)
+    Agent->>Client: get_interface()
+    Client->>Host: request accessibility state
+    Host-->>Agent: interface (accessibility hierarchy + summary metadata)
+
+    Note over Agent,Host: get_interface diagnostic on-screen read
     Agent->>Client: get_interface(scope: visible)
     Client->>Host: requestInterface
-    Host-->>Agent: interface (visible elements)
-
-    Note over Agent,Host: get_interface scope=full (default)
-    Agent->>Client: get_interface(scope: full)
-    Client->>Host: request full interface
-    Host-->>Agent: interface (complete hierarchy + summary metadata)
+    Host-->>Agent: interface (on-screen elements)
 ```
 
 Three ways to find elements, each suited to a different situation:
 
 | Command | What it returns | When to use |
 |---------|----------------|-------------|
-| `get_interface` with `scope: "visible"` | Visible elements only | Fast reads. You know the element is visible, or you want the current on-screen state. |
-| `get_interface` with `scope: "full"` | Complete current-screen hierarchy, including discoverable off-screen content | You need to know what exists in long scrollable screens before acting. Returns the same `interface` response with all elements populated. |
+| `get_interface` | Current app accessibility state | You need to know what exists on the current screen before acting. Returns the `interface` response with discovered elements populated. |
+| `get_interface` with `scope: "visible"` | On-screen elements only | Diagnostic reads. You need to verify what is currently drawn or inspect geometry after an execution step. |
 | `scroll_to_visible` | Brings a known element into view | You have a visible target or a `heistId` still valid in the current hierarchy. Changes the scroll position. |
 | `element_search` | Scrolls until the target element is found, leaves it visible | You have not discovered the element yet and need to search scrollable content. |
 
-### Choosing between full, element_search, and scroll_to_visible
+### Choosing between get_interface, element_search, and scroll_to_visible
 
-- **`get_interface scope=full`** is a read operation. Use it when you need a census — "what elements are on this screen?" — before committing to an interaction.
+- **`get_interface`** is a read operation. Use it when you need the current screen's accessibility state before committing to an interaction.
 
 - **`scroll_to_visible`** scrolls to a known target and leaves it visible so you can interact with the element. Use it when the target is visible now or when a `heistId` is still valid in the current hierarchy.
 
@@ -945,11 +945,11 @@ Three ways to find elements, each suited to a different situation:
 ```mermaid
 flowchart TD
     A[Need to find an element?] --> B{Is it likely visible?}
-    B -->|Yes| C[get_interface scope=visible]
+    B -->|Yes| C[get_interface scope=visible<br>Diagnostic on-screen read]
     B -->|No / unsure| D{Need to interact with it?}
     D -->|Yes, already discovered| E[scroll_to_visible<br>Bring known element<br>into view]
     D -->|Yes, not yet discovered| I[element_search<br>Scroll until found]
-    D -->|No, just check existence| F[get_interface scope=full<br>Read complete hierarchy]
+    D -->|No, just check existence| F[get_interface<br>Read accessibility state]
     C --> G{Found it?}
     G -->|Yes| H[activate / scroll / interact]
     G -->|No| D
@@ -957,14 +957,14 @@ flowchart TD
 
 ### When you don't need either
 
-Most agent workflows don't need a full hierarchy read. The typical pattern is:
+Most agent workflows start from the semantic interface and use diagnostic on-screen reads sparingly. The typical pattern is:
 
-1. `get_interface` with `scope: "visible"` — see what's visible
-2. `activate` / `scroll` / `swipe` — interact with visible elements
-3. `element_search` — find a specific unseen off-screen element when needed
-4. `scroll_to_visible` — return to a known off-screen `heistId` while it is still valid in the current hierarchy
+1. `get_interface` — read the current app accessibility state
+2. `activate` / `scroll` / `swipe` — interact with returned elements
+3. `element_search` — find a specific unseen element when needed
+4. `scroll_to_visible` — return to a known `heistId` while it is still valid in the current hierarchy
 
-Use `get_interface` with `scope: "full"` when the screen has deep scrollable content and you need to make decisions based on elements that aren't currently visible (e.g., checking if a specific item exists in a long list before deciding what to do).
+Use `get_interface` with `scope: "visible"` only when you explicitly need the current on-screen parse, such as checking geometry after a scroll or gesture.
 
 ## Data Types
 

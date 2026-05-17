@@ -140,7 +140,7 @@ buttonheist get_interface --format json
 buttonheist get_interface --scope visible
 ```
 
-Flags: `--scope <scope>` (`full` default, or `visible`), `-f/--format`, `-t/--timeout` (default 10s).
+Flags: `--scope visible` for a diagnostic on-screen parse, `-f/--format`, `-t/--timeout` (default 10s).
 
 ### scroll / scroll_to_visible / scroll_to_edge
 

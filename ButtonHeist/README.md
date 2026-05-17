@@ -15,7 +15,7 @@ ButtonHeist/
 │   └── TheInsideJob/       # Server framework (iOS)
 │       ├── TheGetaway/     #   Message routing + comms
 │       ├── TheBrains/      #   Action orchestration + delta cycle
-│       ├── TheStash/       #   Element registry + resolution
+│       ├── TheStash/       #   Current element state + resolution
 │       ├── TheBurglar/     #   Accessibility tree parsing
 │       ├── TheSafecracker/ #   Touch injection + gestures
 │       ├── TheTripwire/    #   UI pulse + settle detection

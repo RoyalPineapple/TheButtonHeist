@@ -12,7 +12,7 @@ These one-sentence rules keep subsystem behavior from drifting back into paragra
 |------|----------|--------------|
 | Targeting | Resolve targets against the canonical accessibility tree with exact-or-miss semantics. | [12-UNIFIED-TARGETING.md](12-UNIFIED-TARGETING.md) |
 | Screen state | Parse into a `Screen` value, then commit by assignment. | [11-THESTASH.md](11-THESTASH.md) |
-| Exploration | Full interface reads may move the viewport internally, but must restore before returning. | [14a-SCROLLING.md](14a-SCROLLING.md) |
+| Exploration | Default interface reads may move through scrollable content internally, but must restore before returning. | [14a-SCROLLING.md](14a-SCROLLING.md) |
 | Resolved scrolling | Direct scroll commands move only the resolved element's stored scroll view, and only on an axis that can reveal it. | [14a-SCROLLING.md](14a-SCROLLING.md) |
 | Scroll search | Global scroll-container scanning belongs to `element_search`, not resolved target actions. | [14a-SCROLLING.md](14a-SCROLLING.md) |
 | Window scope | Parse every app window top down until the parser reports a modal boundary; key-window status is not accessibility scope. | [15-THETRIPWIRE.md](15-THETRIPWIRE.md), [10-THEBURGLAR.md](10-THEBURGLAR.md) |
@@ -42,7 +42,7 @@ The dossiers are numbered to be read in order. Start at the entry point a user a
 | # | Crew Member | Alias | Primary Role |
 |---|-------------|-------|-------------|
 | 10 | [TheBurglar](10-THEBURGLAR.md) | The Acquisition Specialist | Hierarchy parsing, parse/apply pipeline, modal-boundary reporting |
-| 11 | [TheStash](11-THESTASH.md) | The Score Handler | Element registry, target resolution, wire conversion, screen capture |
+| 11 | [TheStash](11-THESTASH.md) | The Score Handler | Current element state, target resolution, wire conversion, screen capture |
 | 12 | [Unified Targeting](12-UNIFIED-TARGETING.md) | *(cross-cutting)* | Element resolution pipeline: TheFence → ElementTarget → TheStash.resolveTarget → action execution |
 
 ### Inside Team — Executing the Action

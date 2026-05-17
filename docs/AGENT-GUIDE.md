@@ -99,13 +99,13 @@ forgot-link "Forgot password?" [link] {tap}
 
 Each line is one element. The first token is the **heistId** — a current-hierarchy handle for that element. It is safe to use for immediate follow-up actions on the same screen. After it: the label in quotes, the value (if any) after `=`, traits in `[]`, and available actions in `{}`.
 
-### The visibility problem: scroll views hide elements
+### Scrollable Screens
 
-`get_interface` with `scope: "visible"` returns what's visible *right now*. But iOS apps are full of long lists, forms, and collection views. If you're looking at a long settings screen, you might see 12 elements, but there are 40 more waiting below the visible area.
+`get_interface` returns the app accessibility state for the current screen. Button Heist may move through scrollable containers internally to discover semantic content, then restore the visual position before returning.
 
-This means an element you need to interact with might not show up in a visible-scoped `get_interface` at all. It's not missing — it's just off-screen. You have three strategies for dealing with this:
+When you need to interact with content that is not currently on screen, choose the tool based on what you know:
 
-**Strategy 1: Search while scrolling.** If you know what the element looks like (label, identifier, traits), `element_search` will scroll through the current screen and stop when the element appears. In MCP, this is the `scroll` tool with `mode: "search"`:
+**Search while scrolling.** If you know what the element looks like (label, identifier, traits), `element_search` will scroll through the current screen and stop when the element appears. In MCP, this is the `scroll` tool with `mode: "search"`:
 
 ```json
 {"tool": "scroll", "arguments": {"mode": "search", "label": "Delete Account", "traits": ["button"]}}
@@ -113,13 +113,13 @@ This means an element you need to interact with might not show up in a visible-s
 
 This is the right choice when you know what you're looking for but don't know where it is. The response tells you how many scrolls it took and returns the element's heistId once found.
 
-**Strategy 2: Full hierarchy.** If you need a complete inventory of everything on the screen — not just what's visible — use `get_interface` with `scope: "full"` (the default):
+**Read the current accessibility state.** If you need an inventory before acting, call `get_interface` without a scope:
 
 ```json
-{"tool": "get_interface", "arguments": {"scope": "full"}}
+{"tool": "get_interface", "arguments": {}}
 ```
 
-This returns the full accessible hierarchy for the current screen, including off-screen content that Button Heist can discover for you. The response may include summary stats:
+The response may include summary stats when scrollable content was explored:
 
 ```json
 {
@@ -132,9 +132,9 @@ This returns the full accessible hierarchy for the current screen, including off
 }
 ```
 
-Use `scope: "full"` when you need to understand the entire screen before acting — surveying a long form, counting items in a list, or planning a multi-step interaction across elements that aren't all visible at once.
+Use the default `get_interface` read when you need to understand the current screen before acting — surveying a long form, counting items in a list, or planning a multi-step interaction across elements that are not all on screen at once.
 
-**Strategy 3: Scroll manually.** When you want more control, scroll explicitly and check the delta:
+**Scroll manually.** When you want more control, scroll explicitly and check the delta:
 
 ```json
 {"tool": "scroll", "arguments": {"heistId": "settings-list", "direction": "down"}}
@@ -145,13 +145,13 @@ The delta shows you which elements appeared (`+`) and disappeared (`-`) as conte
 **When to use which:**
 - You know the unseen element's label → `element_search` / `scroll mode=search`
 - You already discovered the element and need to return to it → `scroll_to_visible` / `scroll mode=to_visible`
-- You need the full picture → `get_interface` with `scope: "full"`
+- You need the current screen's accessibility state → `get_interface`
 - You're exploring or want step-by-step control → `scroll` + read deltas
 - The element is already visible → just use its heistId directly
 
 ### Filtering
 
-You don't always need the full hierarchy. Filter by heistId list, or by matcher predicates:
+You don't always need every element. Filter by heistId list, or by matcher predicates:
 
 ```json
 {"tool": "get_interface", "arguments": {"label": "Sign In"}}
@@ -450,16 +450,16 @@ Attach expectations to actions where you have a clear hypothesis. They cost noth
 
 ### Progressive disclosure
 
-Start with `get_interface` for the current screen. If you need more, filter by traits or labels. If a specific element is not visible, use `element_search`; if you need everything, use `scope: "full"`. Use `scroll_to_visible` to return to a known `heistId` while it is still valid in the current hierarchy. Each level costs more time — escalate only when the cheaper option isn't enough.
+Start with `get_interface` for the current screen. If you need less, filter by traits or labels. If a specific element is not currently on screen, use `element_search`; use `scroll_to_visible` to return to a known `heistId` while it is still valid in the current hierarchy. Use `scope: "visible"` only when you explicitly need a diagnostic on-screen read. Each level costs more time — escalate only when the cheaper option isn't enough.
 
 ## Quick Reference
 
 | Task | Tool | Key Parameters |
 |------|------|----------------|
-| Read visible UI | `get_interface` | `scope: "visible"`, `detail`, `label`, `traits` |
-| Read all UI (scroll-discovered) | `get_interface` | `scope: "full"` |
-| Find unseen off-screen element | `scroll mode=search` / `element_search` | `label`/`identifier` |
-| Return to known off-screen element | `scroll mode=to_visible` / `scroll_to_visible` | `heistId` |
+| Read current UI accessibility state | `get_interface` | `detail`, `label`, `traits` |
+| Diagnostic on-screen read | `get_interface` | `scope: "visible"` |
+| Find unseen element not currently on screen | `scroll mode=search` / `element_search` | `label`/`identifier` |
+| Return to known element not currently on screen | `scroll mode=to_visible` / `scroll_to_visible` | `heistId` |
 | Tap/activate a control | `activate` | `heistId`, `action` |
 | Type text | `type_text` | `heistId`, `text`, `clearFirst` |
 | Scroll | `scroll` | `heistId`, `direction` |
