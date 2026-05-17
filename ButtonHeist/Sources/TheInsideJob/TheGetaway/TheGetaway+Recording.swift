@@ -353,6 +353,7 @@ extension TheGetaway {
         case .starting:
             recordingRouteState = .invalidated(stakeout: nil, reason: .sessionReleased)
         case .idle, .completed, .invalidated(nil, _):
+            // Completed routes have no pending async stakeout work; release can clear them immediately.
             recordingRouteState = .idle
         }
     }

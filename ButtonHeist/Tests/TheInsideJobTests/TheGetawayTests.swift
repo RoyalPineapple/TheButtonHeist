@@ -33,6 +33,14 @@ final class TheGetawayTests: XCTestCase {
         return (getaway, muscle, transport)
     }
 
+    // swiftlint:disable:next agent_unchecked_sendable_no_comment - Test callback storage is protected by NSLock.
+    private final class SentBox: @unchecked Sendable {
+        private var storage: [(Data, Int)] = []
+        private let lock = NSLock()
+        func append(_ data: Data, clientId: Int) { lock.withLock { storage.append((data, clientId)) } }
+        var all: [(Data, Int)] { lock.withLock { storage } }
+    }
+
     // MARK: - Ordering
 
     /// The race fixed by routing transport events through a single
@@ -247,13 +255,6 @@ final class TheGetawayTests: XCTestCase {
 
     func testAutoFinishWithOriginatorStillConnectedSendsPayloadOnlyToOriginator() async {
         let (getaway, muscle, _) = await makeGetaway()
-        // swiftlint:disable:next agent_unchecked_sendable_no_comment - Test callback storage is protected by NSLock.
-        final class SentBox: @unchecked Sendable {
-            private var storage: [(Data, Int)] = []
-            private let lock = NSLock()
-            func append(_ data: Data, clientId: Int) { lock.withLock { storage.append((data, clientId)) } }
-            var all: [(Data, Int)] { lock.withLock { storage } }
-        }
         let sent = SentBox()
         await muscle.installCallbacks(
             sendToClient: { data, clientId in sent.append(data, clientId: clientId) },
@@ -304,13 +305,6 @@ final class TheGetawayTests: XCTestCase {
 
     func testManualStopAfterAutoFinishTargetDeliveryDoesNotDeliverSecondPayload() async {
         let (getaway, muscle, _) = await makeGetaway()
-        // swiftlint:disable:next agent_unchecked_sendable_no_comment - Test callback storage is protected by NSLock.
-        final class SentBox: @unchecked Sendable {
-            private var storage: [(Data, Int)] = []
-            private let lock = NSLock()
-            func append(_ data: Data, clientId: Int) { lock.withLock { storage.append((data, clientId)) } }
-            var all: [(Data, Int)] { lock.withLock { storage } }
-        }
         let sent = SentBox()
         await muscle.installCallbacks(
             sendToClient: { data, clientId in sent.append(data, clientId: clientId) },
@@ -603,6 +597,40 @@ final class TheGetawayTests: XCTestCase {
         XCTAssertNil(getaway.recordingOriginatorClientId, "Cache pickup must clear originator")
         if case .none = getaway.completedRecording { } else {
             XCTFail("Cache must drain after stop_recording pickup, got \(getaway.completedRecording)")
+        }
+    }
+
+    func testStopRecordingDrainsAnonymousCacheForAnySessionClient() async {
+        let (getaway, _, _) = await makeGetaway()
+        let payload = RecordingPayload(
+            videoData: "AAAA",
+            width: 100, height: 200,
+            duration: 1.0, frameCount: 8, fps: 8,
+            startTime: Date(), endTime: Date(),
+            stopReason: .maxDuration
+        )
+        getaway.recordingRouteState = .completed(.init(
+            outcome: .succeeded(payload),
+            cachePolicy: .anySessionClient
+        ))
+
+        var stopResponse: Data?
+        await getaway.handleStopRecording(clientId: 42, requestId: "anonymous-cache") { data in
+            stopResponse = data
+        }
+
+        guard let stopResponse else {
+            return XCTFail("Anonymous cache pickup must receive a wire response")
+        }
+        let trimmed = stopResponse.last == 0x0A ? stopResponse.dropLast() : stopResponse
+        let envelope = try? JSONDecoder().decode(ResponseEnvelope.self, from: trimmed)
+        XCTAssertEqual(envelope?.requestId, "anonymous-cache")
+        guard case .recording(let delivered)? = envelope?.message else {
+            return XCTFail("Expected anonymous cached recording, got \(String(describing: envelope?.message))")
+        }
+        XCTAssertEqual(delivered.frameCount, 8)
+        if case .none = getaway.completedRecording { } else {
+            XCTFail("Anonymous cache must drain after stop_recording pickup, got \(getaway.completedRecording)")
         }
     }
 
