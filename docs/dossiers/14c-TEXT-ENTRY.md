@@ -7,9 +7,9 @@ Text entry bypasses the UIKit touch system entirely and speaks to `UIKeyboardImp
 
 **Invariant:** Text entry is a focus transaction: resolve one editable target, make it first responder, wait for an active `UIKeyInput` delegate, then mutate text through that input path.
 
-## The 5-Step Pipeline
+## The 3-Step Pipeline
 
-`executeTypeText` orchestrates five steps. Focus is mandatory: either the command provides an `elementTarget` to tap, or a text input must already be active. Once focus is established, any combination of clear, delete, and type can be requested.
+`executeTypeText` orchestrates three steps. Focus is mandatory: either the command provides an `elementTarget` to tap, or a text input must already be active. Once focus is established, the command types the required non-empty text. Clear and delete are explicit `edit_action` commands, not `type_text` side effects.
 
 ```mermaid
 flowchart TD
@@ -22,26 +22,15 @@ flowchart TD
     Tap --> Poll["Poll hasActiveTextInput()<br/>20 × 100ms"]
     Poll --> Ready{keyboard<br/>ready?}
     Ready -->|no| Fail1["FAIL: not a text field"]
-    Ready -->|yes| CheckClear
+    Ready -->|yes| Type
 
     CheckFocus["Step 1: check hasActiveTextInput()"]
     CheckFocus --> HasInput{active<br/>input?}
     HasInput -->|no| Fail2["FAIL: no focused field"]
-    HasInput -->|yes| CheckClear
+    HasInput -->|yes| Type
 
-    CheckClear{clearFirst?}
-    CheckClear -->|yes| Clear["Step 2: clearText()<br/>responder-chain select-all + keyboard delete"]
-    CheckClear -->|no| CheckDelete
-
-    Clear --> CheckDelete{deleteCount > 0?}
-    CheckDelete -->|yes| Delete["Step 3: deleteText()<br/>N × KeyboardBridge.deleteBackward()"]
-    CheckDelete -->|no| CheckType
-
-    Delete --> CheckType{text non-empty?}
-    CheckType -->|yes| Type["Step 4: typeText()<br/>per-character KeyboardBridge.type()"]
-    CheckType -->|no| Readback
-
-    Type --> Readback["Step 5: wait 100ms<br/>refresh elements<br/>read back field value"]
+    Type["Step 2: typeText()<br/>per-character KeyboardBridge.type()"]
+    Type --> Readback["Step 3: wait 100ms<br/>refresh elements<br/>read back field value"]
     Readback --> Result["InteractionResult<br/>value: field contents"]
 ```
 
@@ -55,17 +44,7 @@ If `elementTarget` is provided, `ensureOnScreen(for:)` scrolls the element into 
 
 **Without elementTarget:** Checks `hasActiveTextInput()` once. If false, fails immediately — the caller must either provide an element to tap or ensure a field is already focused.
 
-### Step 2: Clear existing text
-
-Only runs if `clearFirst == true`. Uses the responder chain to select all text, waits 50ms for the selection to settle, then sends one keyboard delete through the active `KeyboardBridge`.
-
-The 50ms yield exists because UIKit needs a run-loop turn to route `selectAll(_:)` to the current responder before the subsequent delete.
-
-### Step 3: Delete characters
-
-Calls `KeyboardBridge.shared()?.deleteBackward()` once per character. `KeyboardBridge` internally calls `deleteFromInput` on `UIKeyboardImpl.sharedInstance`, drains the keyboard task queue, then the caller sleeps `interKeyDelay` between each. This is the backspace key equivalent.
-
-### Step 4: Type text
+### Step 2: Type text
 
 Iterates each `Character` in the string (Swift character granularity, not UTF-16 code units). For each:
 
@@ -74,7 +53,7 @@ Iterates each `Character` in the string (Swift character granularity, not UTF-16
 
 `addInputString:` routes the character through the keyboard's internal input processing, which means it lands in the first responder via the normal `UIKeyInput.insertText(_:)` pathway with all associated responder-chain delegate callbacks.
 
-### Step 5: Readback
+### Step 3: Readback
 
 Waits 100ms, refreshes the accessibility element cache via `brains.refresh()`, then re-resolves the element and reads its `value` property. This value is returned in the `InteractionResult` so the agent knows what the field contains after typing.
 
@@ -121,7 +100,7 @@ The drain is encapsulated in `KeyboardBridge` and runs synchronously on the main
 
 ## First Responder Routing
 
-TheSafecracker does not walk the view hierarchy to find the first responder for text mutation. Standard edit operations (`selectAll`, `copy`, `paste`, `cut`, `resignFirstResponder`) route through `UIApplication.shared.sendAction(..., to: nil, ...)`, which lets UIKit dispatch to the current responder. Text mutation routes through `KeyboardBridge` only after `hasActiveTextInput()` confirms that `UIKeyboardImpl.delegate` is a `UIKeyInput`.
+TheSafecracker does not walk the view hierarchy to find the first responder for text mutation. Standard edit operations (`selectAll`, `delete`, `copy`, `paste`, `cut`, `resignFirstResponder`) route through `UIApplication.shared.sendAction(..., to: nil, ...)`, which lets UIKit dispatch to the current responder. Text mutation routes through `KeyboardBridge` only after `hasActiveTextInput()` confirms that `UIKeyboardImpl.delegate` is a `UIKeyInput`.
 
 `ensureFirstResponderOnScreen()` is a navigation concern, not a text mutation concern. It uses `tripwire.currentFirstResponder()` when edit and pasteboard commands need the human-visible focused field scrolled into view. See [14a-SCROLLING.md](14a-SCROLLING.md) for the auto-scroll entry points.
 
@@ -142,6 +121,7 @@ With `to: nil`, UIKit walks the responder chain from the first responder upward 
 | `.cut` | `cut(_:)` |
 | `.select` | `select(_:)` |
 | `.selectAll` | `selectAll(_:)` |
+| `.delete` | `delete(_:)` |
 
 `executeEditAction` calls `ensureFirstResponderOnScreen()` first so the human observer sees the target field.
 
@@ -151,10 +131,9 @@ With `to: nil`, UIKit walks the responder chain from the first responder upward 
 |----------|-------|---------|
 | `defaultInterKeyDelay` | 30ms | Default delay between each keypress |
 | `maxInterKeyDelay` | 500ms | Upper clamp applied in `executeTypeText` |
-| 50ms yield | hardcoded | `clearText` — after sending responder-chain `selectAll` |
 | 100ms poll | hardcoded | Step 1 — keyboard readiness polling interval |
 | 2s timeout | 20 × 100ms | Step 1 — max wait for keyboard to appear |
-| 100ms settle | hardcoded | Step 5 — before readback |
+| 100ms settle | hardcoded | Step 3 — before readback |
 
 The effective `interKeyDelay` is `min(defaultInterKeyDelay, maxInterKeyDelay)` = 30ms. The 30ms delay per character means typing 100 characters takes ~3 seconds.
 
@@ -168,10 +147,10 @@ The effective `interKeyDelay` is `min(defaultInterKeyDelay, maxInterKeyDelay)` =
 ## Limitations
 
 - **No autocomplete/suggestion interaction.** Characters are injected directly — autocomplete suggestions that appear in the suggestion bar are not tapped or dismissed. The text lands as-is.
-- **No secure text field detection.** Typing into secure fields (password fields) works, but the readback in Step 5 returns the masked value or nil, not the actual typed text.
+- **No secure text field detection.** Typing into secure fields (password fields) works, but the readback in Step 3 returns the masked value or nil, not the actual typed text.
 - **Single-character granularity.** Each character is a separate `addInputString:` call with a sleep between. Emoji sequences and complex Unicode clusters work (Swift `Character` handles them), but the per-character delay adds up for long strings.
 - **No IME / multi-stage input.** CJK input methods that require composition (pinyin, kana) are not supported — characters are injected as final text, bypassing the composition stage.
-- **clearText depends on responder-chain select-all.** If the focused input does not implement `selectAll(_:)`, the follow-up delete behaves like a single backspace rather than a full clear.
+- **Replacement depends on responder-chain edit actions.** Use `edit_action selectAll` and `edit_action delete` before `type_text` when replacing existing contents.
 - **Hardware keyboard drain timing.** `drainTaskQueue` may behave differently with hardware keyboards since the task queue processing path differs. In practice this hasn't been an issue because the drain is synchronous.
 
 ## Error Cases
@@ -182,6 +161,4 @@ The effective `interKeyDelay` is `min(defaultInterKeyDelay, maxInterKeyDelay)` =
 | Tap failed | "Failed to tap target element to bring up keyboard" |
 | Keyboard didn't appear in 2s | "No active text input after tapping element. The element may not be a text field." |
 | No focus, no elementTarget | "No active text input. Provide an elementTarget to focus a text field, or ensure a text field is already focused." |
-| Clear failed | "Failed to clear existing text." |
-| Delete failed | "No keyboard or focused text input available for delete." |
 | Type failed | "No keyboard or focused text input available for typing." |

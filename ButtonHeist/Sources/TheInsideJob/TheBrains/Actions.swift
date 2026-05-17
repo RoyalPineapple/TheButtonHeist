@@ -587,49 +587,22 @@ final class Actions {
     // MARK: - Text Entry
 
     func executeTypeText(_ target: TypeTextTarget) async -> TheSafecracker.InteractionResult {
+        guard !target.text.isEmpty else {
+            return .failure(.typeText, message: "type_text requires non-empty text")
+        }
         if let failure = await focusTextInput(target.elementTarget) { return failure }
 
         let interKeyDelay = min(TheSafecracker.defaultInterKeyDelay, TheSafecracker.maxInterKeyDelay)
-        if target.clearFirst == true {
-            guard await safecracker.clearText() else {
-                return .failure(
-                    .typeText,
-                    message: ActionCapabilityDiagnostic.textEntryFailed(
-                        operation: "clearFirst",
-                        stash: stash,
-                        safecracker: safecracker,
-                        suggestion: "focus an editable text field before clearing text"
-                    )
+        guard await safecracker.typeText(target.text, interKeyDelay: interKeyDelay) else {
+            return .failure(
+                .typeText,
+                message: ActionCapabilityDiagnostic.textEntryFailed(
+                    operation: "typing",
+                    stash: stash,
+                    safecracker: safecracker,
+                    suggestion: "focus an editable text field before typing"
                 )
-            }
-        }
-
-        if let deleteCount = target.deleteCount, deleteCount > 0 {
-            guard await safecracker.deleteText(count: deleteCount, interKeyDelay: interKeyDelay) else {
-                return .failure(
-                    .typeText,
-                    message: ActionCapabilityDiagnostic.textEntryFailed(
-                        operation: "delete",
-                        stash: stash,
-                        safecracker: safecracker,
-                        suggestion: "focus an editable text field before deleting text"
-                    )
-                )
-            }
-        }
-
-        if let text = target.text, !text.isEmpty {
-            guard await safecracker.typeText(text, interKeyDelay: interKeyDelay) else {
-                return .failure(
-                    .typeText,
-                    message: ActionCapabilityDiagnostic.textEntryFailed(
-                        operation: "typing",
-                        stash: stash,
-                        safecracker: safecracker,
-                        suggestion: "focus an editable text field before typing"
-                    )
-                )
-            }
+            )
         }
 
         guard await Task.cancellableSleep(for: TheSafecracker.keyboardPollInterval) else { return .failure(.typeText, message: "Cancelled") }

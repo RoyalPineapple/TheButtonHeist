@@ -175,7 +175,6 @@ TheInsideJob uses `TheSafecracker` internally for handling all touch gesture and
 
 **Text input (via UIKeyboardImpl):**
 - `typeText` - Inject text character-by-character via `addInputString:`
-- `deleteText` - Delete characters via `deleteFromInput`
 - `isKeyboardVisible` - Check if the software keyboard is showing
 
 Text input uses the same private API approach as KIF (Keep It Functional). The iOS keyboard is rendered by a remote process, so individual key views aren't accessible from within the app. UIKeyboardImpl's `addInputString:` bypasses the visual keyboard entirely, injecting text directly into the input system. This handles all characters (uppercase, symbols, `@`, `.`, etc.) without needing keyboard mode switching.
@@ -793,8 +792,8 @@ Messages sent from client to server.
 - `touchTwoFingerTap(TwoFingerTapTarget)` - Two-finger tap
 - `touchDrawPath(DrawPathTarget)` - Draw along a path of waypoints
 - `touchDrawBezier(DrawBezierTarget)` - Draw along bezier curves (sampled server-side)
-- `typeText(TypeTextTarget)` - Type text via UIKeyboardImpl.sharedInstance injection
-- `editAction(EditActionTarget)` - Perform edit action (copy, paste, cut, select, selectAll)
+- `typeText(TypeTextTarget)` - Type non-empty text via UIKeyboardImpl.sharedInstance injection
+- `editAction(EditActionTarget)` - Perform edit action (copy, paste, cut, select, selectAll, delete)
 - `setPasteboard(SetPasteboardTarget)` - Write text to general pasteboard
 - `getPasteboard` - Read text from general pasteboard
 - `scroll(ScrollTarget)` - Axis-aware page scroll (finds scroll view matching direction's axis)
@@ -933,8 +932,7 @@ public struct TypeTextTarget: Codable, Sendable
 
 #### Properties
 
-- `text: String?` - Non-empty text to type character-by-character (nil if only deleting or clearing)
-- `deleteCount: Int?` - Positive number of delete key taps before typing
+- `text: String` - Non-empty text to type character-by-character
 - `elementTarget: ActionTarget?` - Element to tap for focus and value readback
 
 ### CustomActionTarget
@@ -1514,7 +1512,7 @@ Perform an edit menu action on the current first responder.
 USAGE: buttonheist edit_action <action>
 
 ARGUMENTS:
-  <action>                Edit action: copy, paste, cut, select, selectAll
+  <action>                Edit action: copy, paste, cut, select, selectAll, delete
 
 OPTIONS:
   -q, --quiet             Suppress status messages
@@ -1525,6 +1523,7 @@ Examples:
 ```bash
 buttonheist edit_action copy
 buttonheist edit_action paste
+buttonheist edit_action delete
 buttonheist edit_action selectAll
 ```
 
@@ -1561,11 +1560,9 @@ All gesture commands accept a positional heistId, `--heist-id`, or matcher field
 Type text into a field by tapping keyboard keys. Targeted non-secure typing focuses the target and reports the final target value. Targetless typing depends on existing editable focus and is a lower-level operation for advanced flows.
 
 ```
-USAGE: buttonheist type_text [OPTIONS]
+USAGE: buttonheist type_text <text> [<target>] [OPTIONS]
 
 OPTIONS:
-  --text <text>           Non-empty text to type
-  --delete <n>            Positive number of characters to delete before typing
   <target>                Element heistId (focuses field, reads value back)
   --identifier, -id <id>  Element identifier (focuses field, reads value back)
   --label, -l <label>     Element label (focuses field, reads value back)
@@ -1579,15 +1576,14 @@ Outputs the current text field value to stdout after a targeted non-secure opera
 Examples:
 ```bash
 # Type text and get the resulting value
-buttonheist type_text --text "Hello" --identifier "nameField"
+buttonheist type_text "Hello" --identifier "nameField"
 # Output: Hello
 
-# Delete 3 characters
-buttonheist type_text --delete 3 --identifier "nameField"
-# Output: He
-
-# Delete and retype (correction)
-buttonheist type_text --delete 2 --text "llo World" --identifier "nameField"
+# Replace existing text by using explicit edit actions first
+buttonheist activate --identifier "nameField"
+buttonheist edit_action selectAll
+buttonheist edit_action delete
+buttonheist type_text "Hello World" --identifier "nameField"
 # Output: Hello World
 ```
 
@@ -1929,6 +1925,7 @@ buttonheist activate --identifier myCell --action "Delete"
 # Edit actions
 buttonheist edit_action copy
 buttonheist edit_action paste
+buttonheist edit_action delete
 buttonheist dismiss_keyboard
 
 # Capture screenshot
@@ -1945,8 +1942,11 @@ buttonheist rotate --x 200 --y 300 --angle 1.57
 buttonheist two_finger_tap --identifier zoomControl
 
 # Text entry
-buttonheist type_text --text "Hello World" --identifier nameField
-buttonheist type_text --delete 5 --text "World!" --identifier nameField
+buttonheist type_text "Hello World" --identifier nameField
+buttonheist activate --identifier nameField
+buttonheist edit_action selectAll
+buttonheist edit_action delete
+buttonheist type_text "World!" --identifier nameField
 
 # Scroll commands
 buttonheist scroll --identifier "buttonheist.longList.item-5" --direction up

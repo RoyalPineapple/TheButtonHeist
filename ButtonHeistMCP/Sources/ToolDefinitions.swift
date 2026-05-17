@@ -169,7 +169,7 @@ enum ToolDefinitions {
 
         TheFence.Command.typeText.rawValue:
             """
-            Type text and/or delete characters via keyboard injection. Optionally target an \
+            Type non-empty text via keyboard injection. Optionally target an \
             element to focus it first and read back the resulting value.
             """,
 
@@ -221,7 +221,7 @@ enum ToolDefinitions {
         TheFence.Command.editAction.rawValue:
             """
             Perform an edit or keyboard action on the current first responder. \
-            Actions: copy, paste, cut, select, selectAll, dismiss (dismiss the keyboard).
+            Actions: copy, paste, cut, select, selectAll, delete, dismiss (dismiss the keyboard).
             """,
 
         TheFence.Command.setPasteboard.rawValue:

@@ -282,7 +282,7 @@ final class BookKeeperHeistTests: XCTestCase {
             args: [
                 "command": "type_text",
                 "text": "hello world",
-                "clearFirst": true,
+                "timeout": 30,
             ],
             interfaceCache: [:]
         )
@@ -290,7 +290,7 @@ final class BookKeeperHeistTests: XCTestCase {
 
         XCTAssertNil(script.steps[0].target)
         XCTAssertEqual(script.steps[0].arguments["text"], .string("hello world"))
-        XCTAssertEqual(script.steps[0].arguments["clearFirst"], .bool(true))
+        XCTAssertEqual(script.steps[0].arguments["timeout"], .int(30))
     }
 
     @ButtonHeistActor

@@ -546,6 +546,7 @@ extension EditAction {
         case .cut:       return #selector(UIResponderStandardEditActions.cut(_:))
         case .select:    return #selector(UIResponderStandardEditActions.select(_:))
         case .selectAll: return #selector(UIResponderStandardEditActions.selectAll(_:))
+        case .delete:    return #selector(UIResponderStandardEditActions.delete(_:))
         }
     }
 }

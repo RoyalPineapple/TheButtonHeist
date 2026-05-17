@@ -714,9 +714,7 @@ extension TheFence.Command {
         // MARK: Text / keyboard
         case .typeText:
             return target + [
-                .init(key: "text", type: .string, description: "Text to type character-by-character", minLength: 1),
-                .init(key: "deleteCount", type: .integer, description: "Number of delete key taps before typing", minimum: 1),
-                .init(key: "clearFirst", type: .boolean, description: "Clear all existing text before typing (select-all + delete)"),
+                .init(key: "text", type: .string, required: true, description: "Text to type character-by-character", minLength: 1),
                 expect,
             ]
 
