@@ -654,7 +654,7 @@ final class TheHandoff {
 
     @discardableResult
     func connect(to device: DiscoveredDevice, autoSubscribe: Bool? = nil) -> UUID {
-        disconnect()
+        disconnectForReplacement()
         connectionAutoSubscribe = autoSubscribe ?? self.autoSubscribe
         let attemptID = transitionToConnecting(device: device)
 
@@ -797,6 +797,25 @@ final class TheHandoff {
         connection?.disconnect()
         connection = nil
         transitionToDisconnected()
+    }
+
+    @discardableResult
+    private func disconnectForReplacement() -> Bool {
+        let hadActiveSession = activeConnectionAttemptID != nil
+        if case .enabled(let filter, let reconnectTask) = reconnectPolicy {
+            reconnectTask?.cancel()
+            reconnectPolicy = .enabled(filter: filter, reconnectTask: nil)
+        }
+        connection?.disconnect()
+        connection = nil
+
+        if hadActiveSession {
+            transitionToDisconnected(reason: .localDisconnect)
+            onDisconnected?(.localDisconnect)
+        } else {
+            transitionToDisconnected()
+        }
+        return hadActiveSession
     }
 
     func disableAutoReconnect() {
@@ -953,6 +972,7 @@ final class TheHandoff {
         timeout: TimeInterval = 30,
         autoSubscribe: Bool? = nil
     ) async throws {
+        disconnectForReplacement()
         onStatus?("Searching for iOS devices...")
         let startedDiscovery = !hasActiveDiscoverySession
         if startedDiscovery { startDiscovery() }
@@ -963,6 +983,9 @@ final class TheHandoff {
             device = try await resolveReachableDevice(filter: filter, discoveryTimeout: discoveryTimeout)
         } catch {
             if startedDiscovery { stopDiscovery() }
+            if let connectionError = error as? ConnectionError {
+                connectionAttemptFailure = connectionError
+            }
             throw error
         }
 
