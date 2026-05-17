@@ -280,6 +280,8 @@ public struct RecordedMetadata: Codable, Sendable, Equatable {
     public let accessibilityTrace: AccessibilityTrace?
     /// Compact accessibility delta observed while recording.
     public let accessibilityDelta: AccessibilityTrace.Delta?
+    /// Why the recorder could not produce a unique semantic matcher from the trace capture.
+    public let matcherFallbackReason: String?
     /// Expectation evidence observed while recording. Playback ignores this.
     public let expectation: ExpectationResult?
 
@@ -289,6 +291,7 @@ public struct RecordedMetadata: Codable, Sendable, Equatable {
         coordinateOnly: Bool? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         accessibilityDelta: AccessibilityTrace.Delta? = nil,
+        matcherFallbackReason: String? = nil,
         expectation: ExpectationResult? = nil
     ) {
         self.heistId = heistId
@@ -296,6 +299,7 @@ public struct RecordedMetadata: Codable, Sendable, Equatable {
         self.coordinateOnly = coordinateOnly
         self.accessibilityTrace = accessibilityTrace
         self.accessibilityDelta = accessibilityDelta
+        self.matcherFallbackReason = matcherFallbackReason
         self.expectation = expectation
     }
 }

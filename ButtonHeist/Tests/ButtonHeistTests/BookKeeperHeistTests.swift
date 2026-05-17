@@ -157,6 +157,44 @@ final class BookKeeperHeistTests: XCTestCase {
         XCTAssertEqual(script.steps[0].target?.identifier, "primary.save")
         XCTAssertNil(script.steps[0].ordinal)
         XCTAssertEqual(script.steps[0].recorded?.heistId, "save")
+        XCTAssertNil(script.steps[0].recorded?.matcherFallbackReason)
+    }
+
+    @ButtonHeistActor
+    func testRecordHeistEvidenceRecordsFallbackReasonForDuplicateSemanticElements() async throws {
+        let bookKeeper = makeBookKeeper()
+        try bookKeeper.beginSession(identifier: "test")
+        try bookKeeper.startHeistRecording(app: "com.example.app")
+
+        let traceInterface = Interface(
+            timestamp: Date(timeIntervalSince1970: 0),
+            tree: [
+                .element(makeElement(heistId: "first", label: "Item", traits: [.button])),
+                .element(makeElement(heistId: "second", label: "Item", traits: [.button])),
+            ]
+        )
+
+        bookKeeper.recordHeistEvidence(
+            command: .activate,
+            args: ["command": "activate", "heistId": "second"],
+            actionResult: ActionResult(
+                success: true,
+                method: .activate,
+                accessibilityTrace: AccessibilityTrace(interface: traceInterface)
+            ),
+            interfaceCache: [:]
+        )
+
+        let script = try bookKeeper.stopHeistRecording()
+        let step = script.steps[0]
+        XCTAssertEqual(step.target?.label, "Item")
+        XCTAssertEqual(step.target?.traits, [.button])
+        XCTAssertEqual(step.ordinal, 1)
+        XCTAssertEqual(
+            step.recorded?.matcherFallbackReason,
+            "no unique semantic matcher in pre-action trace capture; using ordinal fallback"
+        )
+        XCTAssertNil(step.toRequestDictionary()["frame"])
     }
 
     @ButtonHeistActor
@@ -312,6 +350,10 @@ final class BookKeeperHeistTests: XCTestCase {
         XCTAssertEqual(script.steps[0].target?.label, "Submit")
         XCTAssertNil(script.steps[0].target?.traits)
         XCTAssertEqual(script.steps[0].recorded?.heistId, "button_submit")
+        XCTAssertEqual(
+            script.steps[0].recorded?.matcherFallbackReason,
+            "pre-action trace capture did not contain target; used interface cache fallback"
+        )
     }
 
     @ButtonHeistActor
@@ -439,7 +481,9 @@ final class BookKeeperHeistTests: XCTestCase {
         let target = makeElement(heistId: "el", label: "Save", identifier: "saveButton", traits: [.button])
         let other = makeElement(heistId: "other", label: "Cancel", traits: [.button])
 
-        let (matcher, ordinal) = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, other])
+        let result = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, other])
+        let matcher = result.matcher
+        let ordinal = result.ordinal
 
         XCTAssertEqual(matcher.identifier, "saveButton")
         XCTAssertNil(matcher.label)
@@ -453,7 +497,9 @@ final class BookKeeperHeistTests: XCTestCase {
         let target = makeElement(heistId: "el", label: "Save", traits: [.button])
         let other = makeElement(heistId: "other", label: "Cancel", traits: [.button])
 
-        let (matcher, ordinal) = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, other])
+        let result = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, other])
+        let matcher = result.matcher
+        let ordinal = result.ordinal
 
         XCTAssertEqual(matcher.label, "Save")
         XCTAssertNil(matcher.traits)
@@ -462,17 +508,18 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testMinimalMatcherAddsTraitsToDisambiguateLabel() async {
+    func testMinimalMatcherUsesLabelTraitsToDisambiguate() async {
         let bookKeeper = makeBookKeeper()
-        let target = makeElement(heistId: "el", label: "Save", traits: [.button])
-        let other = makeElement(heistId: "other", label: "Save", traits: [.staticText])
+        let target = makeElement(heistId: "el", label: "Item", traits: [.button])
+        let other = makeElement(heistId: "other", label: "Item", traits: [.staticText])
 
-        let (matcher, ordinal) = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, other])
+        let result = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, other])
+        let matcher = result.matcher
 
-        XCTAssertEqual(matcher.label, "Save")
+        XCTAssertEqual(matcher.label, "Item")
         XCTAssertEqual(matcher.traits, [.button])
-        XCTAssertNil(matcher.identifier)
-        XCTAssertNil(ordinal)
+        XCTAssertNil(result.ordinal)
+        XCTAssertNil(result.fallbackReason)
     }
 
     @ButtonHeistActor
@@ -481,7 +528,9 @@ final class BookKeeperHeistTests: XCTestCase {
         let target = makeElement(heistId: "el1", label: "Item", identifier: "item_1", traits: [.staticText])
         let duplicate = makeElement(heistId: "el2", label: "Item", traits: [.staticText])
 
-        let (matcher, ordinal) = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, duplicate])
+        let result = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, duplicate])
+        let matcher = result.matcher
+        let ordinal = result.ordinal
 
         XCTAssertEqual(matcher.identifier, "item_1")
         XCTAssertNil(matcher.label)
@@ -496,7 +545,9 @@ final class BookKeeperHeistTests: XCTestCase {
         let target = makeElement(heistId: "el1", label: "Proceed", identifier: uuidIdentifier, traits: [.button])
         let other = makeElement(heistId: "el2", label: "Cancel", traits: [.button])
 
-        let (matcher, ordinal) = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, other])
+        let result = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, other])
+        let matcher = result.matcher
+        let ordinal = result.ordinal
 
         XCTAssertNil(matcher.identifier, "Runtime UUID identifiers should be ignored for playback stability")
         XCTAssertEqual(matcher.label, "Proceed")
@@ -505,17 +556,19 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testMinimalMatcherNeverUsesValue() async {
+    func testMinimalMatcherUsesValueWhenNeeded() async {
         let bookKeeper = makeBookKeeper()
         let target = makeElement(heistId: "el1", label: "Slider", value: "50%", traits: [.adjustable])
         let duplicate = makeElement(heistId: "el2", label: "Slider", value: "75%", traits: [.adjustable])
 
-        let (matcher, ordinal) = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, duplicate])
+        let result = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, duplicate])
+        let matcher = result.matcher
+        let ordinal = result.ordinal
 
         XCTAssertEqual(matcher.label, "Slider")
-        XCTAssertNil(matcher.value)
-        XCTAssertEqual(matcher.traits, [.adjustable])
-        XCTAssertEqual(ordinal, 0, "First of two ambiguous elements should get ordinal 0")
+        XCTAssertEqual(matcher.value, "50%")
+        XCTAssertNil(matcher.traits)
+        XCTAssertNil(ordinal)
     }
 
     @ButtonHeistActor
@@ -524,7 +577,9 @@ final class BookKeeperHeistTests: XCTestCase {
         let target = makeElement(heistId: "el1", label: "Toggle", traits: [.button, .selected])
         let other = makeElement(heistId: "el2", label: "Toggle", traits: [.staticText])
 
-        let (matcher, ordinal) = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, other])
+        let result = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, other])
+        let matcher = result.matcher
+        let ordinal = result.ordinal
 
         XCTAssertEqual(matcher.label, "Toggle")
         XCTAssertEqual(matcher.traits, [.button])
@@ -539,9 +594,15 @@ final class BookKeeperHeistTests: XCTestCase {
         let third = makeElement(heistId: "el3", label: "Item", traits: [.staticText])
         let allElements = [first, second, third]
 
-        let (matcher0, ordinal0) = bookKeeper.buildMinimalMatcher(element: first, allElements: allElements)
-        let (matcher1, ordinal1) = bookKeeper.buildMinimalMatcher(element: second, allElements: allElements)
-        let (matcher2, ordinal2) = bookKeeper.buildMinimalMatcher(element: third, allElements: allElements)
+        let result0 = bookKeeper.buildMinimalMatcher(element: first, allElements: allElements)
+        let result1 = bookKeeper.buildMinimalMatcher(element: second, allElements: allElements)
+        let result2 = bookKeeper.buildMinimalMatcher(element: third, allElements: allElements)
+        let matcher0 = result0.matcher
+        let matcher1 = result1.matcher
+        let matcher2 = result2.matcher
+        let ordinal0 = result0.ordinal
+        let ordinal1 = result1.ordinal
+        let ordinal2 = result2.ordinal
 
         // All share the same matcher
         XCTAssertEqual(matcher0.label, "Item")
@@ -552,6 +613,9 @@ final class BookKeeperHeistTests: XCTestCase {
         XCTAssertEqual(ordinal0, 0)
         XCTAssertEqual(ordinal1, 1)
         XCTAssertEqual(ordinal2, 2)
+        XCTAssertNotNil(result0.fallbackReason)
+        XCTAssertNotNil(result1.fallbackReason)
+        XCTAssertNotNil(result2.fallbackReason)
     }
 
     // MARK: - Heist File I/O

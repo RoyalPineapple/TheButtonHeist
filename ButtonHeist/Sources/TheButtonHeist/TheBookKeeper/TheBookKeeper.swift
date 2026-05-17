@@ -596,6 +596,7 @@ final class TheBookKeeper {
         var recordedHeistId: String?
         var recordedFrame: RecordedFrame?
         var coordinateOnly: Bool?
+        var matcherFallbackReason: String?
 
         if let heistId, let source = matcherSource(
             heistId: heistId,
@@ -606,6 +607,7 @@ final class TheBookKeeper {
             let result = buildMinimalMatcher(element: source.element, allElements: source.elements)
             target = result.matcher
             ordinal = result.ordinal
+            matcherFallbackReason = source.fallbackReason ?? result.fallbackReason
             recordedHeistId = heistId
             recordedFrame = RecordedFrame(
                 x: source.element.frameX, y: source.element.frameY,
@@ -642,6 +644,7 @@ final class TheBookKeeper {
                 heistId: recordedHeistId,
                 frame: recordedFrame,
                 coordinateOnly: coordinateOnly,
+                matcherFallbackReason: matcherFallbackReason,
                 actionResult: actionResult,
                 expectation: expectation
             )
@@ -653,27 +656,30 @@ final class TheBookKeeper {
         trace: AccessibilityTrace?,
         fallbackCache: [String: HeistElement],
         fallbackElements: [HeistElement]
-    ) -> (element: HeistElement, elements: [HeistElement])? {
+    ) -> (element: HeistElement, elements: [HeistElement], fallbackReason: String?)? {
+        // Use the pre-action capture only; later captures can reflect the UI after the recorded action.
         if let capture = trace?.captures.first {
             let elements = capture.interface.elements
             if let element = elements.first(where: { $0.heistId == heistId }) {
-                return (element, elements)
+                return (element, elements, nil)
             }
         }
         guard let element = fallbackCache[heistId] else { return nil }
-        return (element, fallbackElements)
+        return (element, fallbackElements, "pre-action trace capture did not contain target; used interface cache fallback")
     }
 
     private func buildRecordedMetadata(
         heistId: String?,
         frame: RecordedFrame?,
         coordinateOnly: Bool?,
+        matcherFallbackReason: String?,
         actionResult: ActionResult?,
         expectation: ExpectationResult?
     ) -> RecordedMetadata? {
         let accessibilityTrace = actionResult?.accessibilityTrace
         let accessibilityDelta = actionResult?.accessibilityDelta
-        guard heistId != nil || frame != nil || coordinateOnly != nil || accessibilityTrace != nil || accessibilityDelta != nil || expectation != nil else {
+        guard heistId != nil || frame != nil || coordinateOnly != nil || accessibilityTrace != nil ||
+            accessibilityDelta != nil || matcherFallbackReason != nil || expectation != nil else {
             return nil
         }
         return RecordedMetadata(
@@ -682,6 +688,7 @@ final class TheBookKeeper {
             coordinateOnly: coordinateOnly,
             accessibilityTrace: accessibilityTrace,
             accessibilityDelta: accessibilityDelta,
+            matcherFallbackReason: matcherFallbackReason,
             expectation: expectation
         )
     }
@@ -702,55 +709,61 @@ final class TheBookKeeper {
     func buildMinimalMatcher(
         element: HeistElement,
         allElements: [HeistElement]
-    ) -> (matcher: ElementMatcher, ordinal: Int?) {
+    ) -> (matcher: ElementMatcher, ordinal: Int?, fallbackReason: String?) {
         let traits = identityTraits(element.traits)
         let stableIdentifier = element.identifier.flatMap { isStableIdentifier($0) ? $0 : nil }
 
-        if let stableIdentifier {
-            let candidate = ElementMatcher(identifier: stableIdentifier)
-            if uniquelyMatches(candidate, element: element, in: allElements) {
-                return (candidate, nil)
-            }
+        for candidate in matcherCandidates(
+            label: element.label,
+            identifier: stableIdentifier,
+            value: element.value,
+            traits: traits
+        ) where uniquelyMatches(candidate, element: element, in: allElements) {
+            return (candidate, nil, nil)
         }
 
-        if let elementLabel = element.label {
-            let candidate = ElementMatcher(label: elementLabel)
-            if uniquelyMatches(candidate, element: element, in: allElements) {
-                return (candidate, nil)
-            }
-
-            if let traits {
-                let candidate = ElementMatcher(label: elementLabel, traits: traits)
-                if uniquelyMatches(candidate, element: element, in: allElements) {
-                    return (candidate, nil)
-                }
-            }
-
-            if let stableIdentifier {
-                let candidate = ElementMatcher(label: elementLabel, identifier: stableIdentifier)
-                if uniquelyMatches(candidate, element: element, in: allElements) {
-                    return (candidate, nil)
-                }
-
-                if let traits {
-                    let candidate = ElementMatcher(
-                        label: elementLabel, identifier: stableIdentifier, traits: traits
-                    )
-                    if uniquelyMatches(candidate, element: element, in: allElements) {
-                        return (candidate, nil)
-                    }
-                }
-            }
-        }
-
-        // No unique matcher found — fall back to best-effort matcher with ordinal
         let bestMatcher = ElementMatcher(
             label: element.label,
             identifier: stableIdentifier,
+            value: element.value,
             traits: traits
-        )
+        ).nonEmpty ?? ElementMatcher(label: element.label)
         let ordinal = ordinalOf(element, matching: bestMatcher, in: allElements)
-        return (bestMatcher, ordinal)
+        return (
+            bestMatcher,
+            ordinal,
+            "no unique semantic matcher in pre-action trace capture; using ordinal fallback"
+        )
+    }
+
+    private func matcherCandidates(
+        label: String?,
+        identifier: String?,
+        value: String?,
+        traits: [HeistTrait]?
+    ) -> [ElementMatcher] {
+        var candidates: [ElementMatcher] = []
+        func append(_ matcher: ElementMatcher) {
+            if let matcher = matcher.nonEmpty, !candidates.contains(matcher) {
+                candidates.append(matcher)
+            }
+        }
+
+        append(ElementMatcher(identifier: identifier))
+        append(ElementMatcher(label: label))
+        append(ElementMatcher(label: label, traits: traits))
+        append(ElementMatcher(label: label, identifier: identifier))
+        append(ElementMatcher(label: label, identifier: identifier, traits: traits))
+        append(ElementMatcher(traits: traits))
+        append(ElementMatcher(label: label, value: value))
+        append(ElementMatcher(value: value, traits: traits))
+        append(ElementMatcher(label: label, value: value, traits: traits))
+        append(ElementMatcher(identifier: identifier, value: value))
+        append(ElementMatcher(label: label, identifier: identifier, value: value))
+        append(ElementMatcher(label: label, identifier: identifier, value: value, traits: traits))
+        append(ElementMatcher(value: value))
+
+        return candidates
     }
 
     private func uniquelyMatches(
