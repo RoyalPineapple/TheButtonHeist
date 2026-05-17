@@ -2002,7 +2002,8 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(summaries.map(\.command), ["scroll"])
         XCTAssertEqual(
             summaries[0].error,
-            "run_batch step 0: run_batch step \"scroll\" uses the MCP mode selector; use raw Fence commands scroll, scroll_to_visible, element_search, or scroll_to_edge."
+            "run_batch step 0: run_batch step \"scroll\" uses the MCP mode selector; " +
+                "use raw Fence commands scroll, scroll_to_visible, element_search, or scroll_to_edge."
         )
     }
 
