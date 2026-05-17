@@ -164,7 +164,6 @@ final class TheBrains {
         // accessibility signature below decides no-change, element-change,
         // or screen-change.
         let settleResult = await settleSession.run(start: start, baselineTripwireSignal: before.tripwireSignal)
-        let settleMs = settleResult.outcome.timeMs
         var didSettle = settleResult.outcome.didSettleCleanly
         if case .cancelled(let cancelMs) = settleResult.outcome {
             var builder = ActionResultBuilder(method: method, snapshot: before.snapshot)
@@ -211,11 +210,13 @@ final class TheBrains {
             screenChangeReason: classification.reason?.rawValue,
             transient: transientElements.map { TheStash.WireConversion.convert($0) }
         )
-        let accessibilityTrace = makeAccessibilityTrace(
-            afterTree: afterTree,
-            parentCapture: before.capture,
+        let postCapture = makeTraceCapture(
+            tree: afterTree,
+            sequence: 2,
+            parentHash: before.capture.hash,
             transition: transition
         )
+        let accessibilityTrace = makeAccessibilityTrace(afterCapture: postCapture, parentCapture: before.capture)
 
         let delta = deriveDelta(
             from: accessibilityTrace,
@@ -225,15 +226,28 @@ final class TheBrains {
 
         await stash.captureActionFrame()
 
-        var builder = ActionResultBuilder(method: method, snapshot: afterSnapshot)
-        builder.message = message
-        builder.value = value
-        builder.accessibilityDelta = delta
-        builder.accessibilityTrace = accessibilityTrace
-        builder.settled = didSettle
-        builder.settleTimeMs = settleMs
+        let receipt = CommandReceipt(
+            before: before,
+            attempt: .delivered(
+                method: method,
+                message: message,
+                value: value,
+                rotorResult: rotorResult
+            ),
+            settle: SettleReceipt(
+                outcome: settleResult.outcome,
+                elementsByKey: settleResult.elementsByKey,
+                didSettle: didSettle,
+                isScreenChange: isScreenChange,
+                postSnapshot: afterSnapshot,
+                postCapture: postCapture,
+                accessibilityTrace: accessibilityTrace,
+                accessibilityDelta: delta,
+                transientElements: transientElements
+            )
+        )
 
-        return builder.success(rotorResult: rotorResult)
+        return receipt.actionResult()
     }
 
     // MARK: - Settle Outcome Helpers

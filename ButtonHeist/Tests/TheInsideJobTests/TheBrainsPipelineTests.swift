@@ -106,6 +106,81 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(value, "")
     }
 
+    // MARK: - CommandReceipt Projection
+
+    func testCommandReceiptProjectionMatchesExistingActionResultBuilder() throws {
+        seedScreen(elements: [("Before", .header, "before_header")])
+        let before = brains.captureBeforeState()
+
+        let header = AccessibilityElement.make(
+            label: "Receipt Screen",
+            traits: .header,
+            respondsToUserInteraction: false
+        )
+        let button = AccessibilityElement.make(
+            label: "Done",
+            traits: .button,
+            respondsToUserInteraction: false
+        )
+        brains.stash.currentScreen = .makeForTests(elements: [
+            (header, "receipt_header"),
+            (button, "button_done"),
+        ])
+        let afterSnapshot = brains.stash.selectElements()
+        let postCapture = brains.makeTraceCapture(
+            tree: brains.stash.wireTree(),
+            sequence: 2,
+            parentHash: before.capture.hash
+        )
+        let accessibilityTrace = brains.makeAccessibilityTrace(
+            afterCapture: postCapture,
+            parentCapture: before.capture
+        )
+        let delta = AccessibilityTrace.Delta.noChange(.init(elementCount: afterSnapshot.count))
+
+        let receipt = CommandReceipt(
+            before: before,
+            attempt: .delivered(method: .typeText, message: "typed text", value: "hello"),
+            settle: SettleReceipt(
+                outcome: .settled(timeMs: 321),
+                elementsByKey: [:],
+                didSettle: true,
+                isScreenChange: false,
+                postSnapshot: afterSnapshot,
+                postCapture: postCapture,
+                accessibilityTrace: accessibilityTrace,
+                accessibilityDelta: delta,
+                transientElements: []
+            )
+        )
+
+        let projected = receipt.actionResult()
+
+        var expectedBuilder = ActionResultBuilder(method: .typeText, snapshot: afterSnapshot)
+        expectedBuilder.message = "typed text"
+        expectedBuilder.value = "hello"
+        expectedBuilder.accessibilityDelta = delta
+        expectedBuilder.accessibilityTrace = accessibilityTrace
+        expectedBuilder.settled = true
+        expectedBuilder.settleTimeMs = 321
+        let expected = expectedBuilder.success()
+
+        XCTAssertEqual(try canonicalJSON(projected), try canonicalJSON(expected))
+        XCTAssertEqual(projected.screenName, "Receipt Screen")
+        XCTAssertEqual(projected.screenId, "receipt_screen")
+        XCTAssertEqual(projected.settled, true)
+        XCTAssertEqual(projected.settleTimeMs, 321)
+        XCTAssertEqual(projected.accessibilityDelta, delta)
+        XCTAssertEqual(projected.accessibilityTrace, accessibilityTrace)
+        XCTAssertEqual(receipt.attempt.deliveryPhase, .delivered)
+        XCTAssertEqual(receipt.settle?.outcome, .settled(timeMs: 321))
+        XCTAssertEqual(receipt.settle?.didSettle, true)
+        XCTAssertEqual(receipt.settle?.timeMs, 321)
+        XCTAssertEqual(receipt.settle?.postCapture.hash, postCapture.hash)
+        XCTAssertEqual(receipt.settle?.accessibilityDelta, delta)
+        XCTAssertEqual(receipt.settle?.accessibilityTrace, accessibilityTrace)
+    }
+
     // MARK: - SentState
 
     func testLastSentStateStartsNil() {
@@ -345,6 +420,16 @@ final class TheBrainsPipelineTests: XCTestCase {
             return (element, entry.heistId)
         }
         brains.stash.currentScreen = .makeForTests(elements: pairs)
+    }
+
+    private func canonicalJSON<T: Encodable>(_ value: T) throws -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let data = try encoder.encode(value)
+        guard let json = String(data: data, encoding: .utf8) else {
+            throw NSError(domain: "TheBrainsPipelineTests", code: 1)
+        }
+        return json
     }
 
 }
