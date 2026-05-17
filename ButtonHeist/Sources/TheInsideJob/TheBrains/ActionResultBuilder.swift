@@ -35,6 +35,16 @@ import TheScore
         self.screenId = snapshot.screenId
     }
 
+    /// Create a builder deriving screenName/screenId from an accessibility
+    /// capture receipt.
+    init(method: ActionMethod, capture: AccessibilityTrace.Capture) {
+        self.method = method
+        self.screenName = capture.interface.elements
+            .first(where: { $0.traits.contains(.header) })
+            .flatMap(\.label)
+        self.screenId = capture.context.screenId ?? capture.interface.screenId
+    }
+
     /// Create a builder with explicit screen context (when no snapshot is available).
     init(method: ActionMethod, screenName: String?, screenId: String?) {
         self.method = method

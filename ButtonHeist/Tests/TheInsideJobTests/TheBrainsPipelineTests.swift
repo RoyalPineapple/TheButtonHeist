@@ -126,7 +126,6 @@ final class TheBrainsPipelineTests: XCTestCase {
             (header, "receipt_header"),
             (button, "button_done"),
         ])
-        let afterSnapshot = brains.stash.selectElements()
         let postCapture = brains.makeTraceCapture(
             tree: brains.stash.wireTree(),
             sequence: 2,
@@ -136,27 +135,23 @@ final class TheBrainsPipelineTests: XCTestCase {
             afterCapture: postCapture,
             parentCapture: before.capture
         )
-        let delta = AccessibilityTrace.Delta.noChange(.init(elementCount: afterSnapshot.count))
+        let traceBefore = try XCTUnwrap(accessibilityTrace.captures.dropLast().last)
+        let traceAfter = try XCTUnwrap(accessibilityTrace.captures.last)
+        let delta = AccessibilityTrace.Delta.between(traceBefore, traceAfter)
 
         let receipt = CommandReceipt(
             before: before,
             attempt: .delivered(method: .typeText, message: "typed text", value: "hello"),
             settle: SettleReceipt(
                 outcome: .settled(timeMs: 321),
-                elementsByKey: [:],
                 didSettle: true,
-                isScreenChange: false,
-                postSnapshot: afterSnapshot,
-                postCapture: postCapture,
-                accessibilityTrace: accessibilityTrace,
-                accessibilityDelta: delta,
-                transientElements: []
+                accessibilityTrace: accessibilityTrace
             )
         )
 
         let projected = receipt.actionResult()
 
-        var expectedBuilder = ActionResultBuilder(method: .typeText, snapshot: afterSnapshot)
+        var expectedBuilder = ActionResultBuilder(method: .typeText, capture: traceAfter)
         expectedBuilder.message = "typed text"
         expectedBuilder.value = "hello"
         expectedBuilder.accessibilityDelta = delta
@@ -176,9 +171,64 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(receipt.settle?.outcome, .settled(timeMs: 321))
         XCTAssertEqual(receipt.settle?.didSettle, true)
         XCTAssertEqual(receipt.settle?.timeMs, 321)
-        XCTAssertEqual(receipt.settle?.postCapture.hash, postCapture.hash)
+        XCTAssertEqual(receipt.settle?.postCapture?.hash, postCapture.hash)
         XCTAssertEqual(receipt.settle?.accessibilityDelta, delta)
         XCTAssertEqual(receipt.settle?.accessibilityTrace, accessibilityTrace)
+    }
+
+    func testCommandReceiptProjectionDerivesScreenChangeFromTraceTransition() throws {
+        seedScreen(elements: [("Before", .header, "before_header")])
+        let before = brains.captureBeforeState()
+
+        let afterInterface = Interface(
+            timestamp: Date(timeIntervalSince1970: 0),
+            tree: [
+                .element(HeistElement(
+                    heistId: "after_header",
+                    description: "After",
+                    label: "After",
+                    value: nil,
+                    identifier: nil,
+                    traits: [.header],
+                    frameX: 0,
+                    frameY: 0,
+                    frameWidth: 100,
+                    frameHeight: 44,
+                    actions: []
+                )),
+            ]
+        )
+        let afterCapture = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: afterInterface,
+            parentHash: before.capture.hash,
+            context: AccessibilityTrace.Context(screenId: "after"),
+            transition: AccessibilityTrace.Transition(screenChangeReason: "primaryHeaderChanged")
+        )
+        let accessibilityTrace = AccessibilityTrace(captures: [before.capture, afterCapture])
+        let receipt = CommandReceipt(
+            before: before,
+            attempt: .delivered(method: .activate),
+            settle: SettleReceipt(
+                outcome: .settled(timeMs: 10),
+                didSettle: true,
+                accessibilityTrace: accessibilityTrace
+            )
+        )
+
+        let result = receipt.actionResult()
+
+        guard case .screenChanged(let payload)? = result.accessibilityDelta else {
+            return XCTFail(
+                "Expected trace transition to project screenChanged, got \(String(describing: result.accessibilityDelta))"
+            )
+        }
+        XCTAssertEqual(payload.captureEdge?.before.hash, before.capture.hash)
+        XCTAssertEqual(payload.captureEdge?.after.hash, afterCapture.hash)
+        XCTAssertEqual(payload.newInterface, afterInterface)
+        XCTAssertEqual(result.accessibilityTrace, accessibilityTrace)
+        XCTAssertEqual(result.screenName, "After")
+        XCTAssertEqual(result.screenId, "after")
     }
 
     // MARK: - SentState
