@@ -10,10 +10,10 @@ public enum InterfaceDetail: String, CaseIterable, Sendable {
 
 /// Capture scope for get_interface.
 ///
-/// `full` remains accepted as a hidden compatibility spelling for the default
-/// app accessibility state. Public schemas advertise only `visible`, the
-/// diagnostic on-screen parse.
+/// Omitted scope captures the app accessibility hierarchy. The only wire value
+/// is `visible`, the diagnostic on-screen parse.
 public enum GetInterfaceScope: String, CaseIterable, Sendable {
+    /// Internal default for omitted scope; not accepted as a wire value.
     case full
     case visible
 }

@@ -2170,14 +2170,11 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testGetInterfaceLegacyFullScopeSendsExploreMessage() async {
-        let (fence, mockConn) = makeConnectedFence()
-        _ = try? await fence.execute(request: ["command": "get_interface", "scope": "full"])
-        guard let (message, _) = mockConn.sent.last,
-              case .explore = message else {
-            XCTFail("Expected explore message, got \(String(describing: mockConn.sent.last))")
-            return
-        }
+    func testGetInterfaceScopeFullIsRejected() async {
+        await assertValidationError(
+            ["command": "get_interface", "scope": "full"],
+            equals: "schema validation failed for scope: observed string \"full\"; expected omitted or visible"
+        )
     }
 
     @ButtonHeistActor
@@ -2230,52 +2227,15 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testGetInterfaceLegacyFullTrueSendsExploreMessage() async {
-        let (fence, mockConn) = makeConnectedFence()
-        _ = try? await fence.execute(request: ["command": "get_interface", "full": true])
-        guard let (message, _) = mockConn.sent.last,
-              case .explore = message else {
-            XCTFail("Expected explore message, got \(String(describing: mockConn.sent.last))")
-            return
-        }
-    }
-
-    @ButtonHeistActor
-    func testGetInterfaceLegacyFullFalseRequestsVisibleInterface() async {
-        let (fence, mockConn) = makeConnectedFence()
-        _ = try? await fence.execute(request: ["command": "get_interface", "full": false])
-        guard let (message, _) = mockConn.sent.last,
-              case .requestInterface = message else {
-            XCTFail("Expected requestInterface message, got \(String(describing: mockConn.sent.last))")
-            return
-        }
-    }
-
-    @ButtonHeistActor
-    func testGetInterfaceScopeWinsOverLegacyFullAlias() async {
-        let (visibleFence, visibleMock) = makeConnectedFence()
-        _ = try? await visibleFence.execute(request: [
-            "command": "get_interface",
-            "scope": "visible",
-            "full": true,
-        ])
-        guard let (visibleMessage, _) = visibleMock.sent.last,
-              case .requestInterface = visibleMessage else {
-            XCTFail("Expected scope=visible to send requestInterface, got \(String(describing: visibleMock.sent.last))")
-            return
-        }
-
-        let (fullFence, fullMock) = makeConnectedFence()
-        _ = try? await fullFence.execute(request: [
-            "command": "get_interface",
-            "scope": "full",
-            "full": false,
-        ])
-        guard let (fullMessage, _) = fullMock.sent.last,
-              case .explore = fullMessage else {
-            XCTFail("Expected legacy scope=full to send explore, got \(String(describing: fullMock.sent.last))")
-            return
-        }
+    func testGetInterfaceFullAliasIsRejected() async {
+        await assertValidationError(
+            ["command": "get_interface", "full": false],
+            equals: "schema validation failed for full: observed boolean false; expected removed; omit scope for the full hierarchy or use scope=visible"
+        )
+        await assertValidationError(
+            ["command": "get_interface", "full": true],
+            equals: "schema validation failed for full: observed boolean true; expected removed; omit scope for the full hierarchy or use scope=visible"
+        )
     }
 
     @ButtonHeistActor

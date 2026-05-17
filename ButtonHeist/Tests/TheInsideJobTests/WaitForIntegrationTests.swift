@@ -209,7 +209,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(message.contains("waiting for element to appear"), "Unexpected message: \(message)")
         XCTAssertTrue(message.contains("expected: label=\"WaitFor-Missing-Target\""), "Unexpected message: \(message)")
         XCTAssertTrue(message.contains("known:"), "Unexpected message: \(message)")
-        XCTAssertTrue(message.contains("Next: get_interface(scope: \"full\")"), "Unexpected message: \(message)")
+        XCTAssertTrue(message.contains("Next: get_interface()"), "Unexpected message: \(message)")
     }
 
     // MARK: - 2. Element appears after a delay
@@ -529,7 +529,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertEqual(result.method, .waitForChange)
         XCTAssertEqual(result.errorKind, .timeout)
         XCTAssertTrue(result.message?.contains("expected: element_disappeared(WaitForChange-StillPresent)") == true)
-        XCTAssertTrue(result.message?.contains("Next: get_interface(scope: \"full\")") == true)
+        XCTAssertTrue(result.message?.contains("Next: get_interface()") == true)
     }
 
     func testWaitForChangeScreenChangedTimeoutSuggestsElementsChanged() async throws {

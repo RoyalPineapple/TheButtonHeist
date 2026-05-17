@@ -505,7 +505,7 @@ final class TheStash {
                 let total = matches.count
                 let nextMove: String
                 if total == 0 {
-                    nextMove = "Next: retry with an exact label, identifier, or heistId from get_interface(scope: \"full\")."
+                    nextMove = "Next: retry with an exact label, identifier, or heistId from get_interface()."
                 } else {
                     nextMove = "Next: use ordinal 0...\(total - 1), omit ordinal to inspect ambiguity, "
                         + "or target a listed element by exact label, identifier, or heistId."

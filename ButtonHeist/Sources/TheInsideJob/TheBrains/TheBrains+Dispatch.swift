@@ -240,7 +240,7 @@ extension TheBrains {
             parts.append("last result: \(reason): \(diagnostics)")
         }
         parts.append(
-            "Next: get_interface(scope: \"full\") to inspect current elements, " +
+            "Next: get_interface() to inspect current elements, " +
                 "then retry wait_for with a heistId or exact matcher."
         )
         return parts.joined(separator: "; ")
