@@ -140,7 +140,20 @@ enum ToolDefinitions {
     }
 
     private static func description(for toolName: String) -> String {
-        return switch toolName {
+        if let interactionDescription = interactionDescription(for: toolName) {
+            return interactionDescription
+        }
+        if let sessionDescription = sessionDescription(for: toolName) {
+            return sessionDescription
+        }
+        if let heistDescription = heistDescription(for: toolName) {
+            return heistDescription
+        }
+        return "Execute the \(toolName) Button Heist tool."
+    }
+
+    private static func interactionDescription(for toolName: String) -> String? {
+        switch toolName {
         case TheFence.Command.getInterface.rawValue:
             """
             Read the app accessibility hierarchy. Call once on a new screen, then track changes via \
@@ -242,6 +255,13 @@ enum ToolDefinitions {
             policy=stop_on_error (default) or continue_on_error.
             """
 
+        default:
+            nil
+        }
+    }
+
+    private static func sessionDescription(for toolName: String) -> String? {
+        switch toolName {
         case TheFence.Command.getSessionState.rawValue:
             """
             Inspect the current Button Heist session: connection status, device/app identity, \
@@ -268,6 +288,13 @@ enum ToolDefinitions {
         case TheFence.Command.archiveSession.rawValue:
             "Close and compress the current session into a .tar.gz archive; returns the path."
 
+        default:
+            nil
+        }
+    }
+
+    private static func heistDescription(for toolName: String) -> String? {
+        switch toolName {
         case TheFence.Command.startHeist.rawValue:
             """
             Start recording a heist. Successful commands become steps in a .heist file; \
@@ -289,7 +316,7 @@ enum ToolDefinitions {
             """
 
         default:
-            "Execute the \(toolName) Button Heist tool."
+            nil
         }
     }
 }
