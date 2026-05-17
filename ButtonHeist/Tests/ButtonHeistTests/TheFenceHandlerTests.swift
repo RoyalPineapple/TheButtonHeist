@@ -724,10 +724,10 @@ final class TheFenceHandlerTests: XCTestCase {
             contains: [
                 "scroll request contract failed: missing target",
                 "requires heistId or at least one matcher field",
-                "Next: get_interface(scope: \"full\")",
+                "Next: get_interface()",
             ],
             errorCode: "request.missing_target",
-            nextCommand: "get_interface(scope: \"full\")"
+            nextCommand: "get_interface()"
         )
     }
 
@@ -745,10 +745,10 @@ final class TheFenceHandlerTests: XCTestCase {
             contains: [
                 "scroll_to_visible request contract failed: missing target",
                 "requires heistId or at least one matcher field",
-                "Next: get_interface(scope: \"full\")",
+                "Next: get_interface()",
             ],
             errorCode: "request.missing_target",
-            nextCommand: "get_interface(scope: \"full\")"
+            nextCommand: "get_interface()"
         )
     }
 
@@ -789,10 +789,10 @@ final class TheFenceHandlerTests: XCTestCase {
             contains: [
                 "scroll_to_edge request contract failed: missing target",
                 "requires heistId or at least one matcher field",
-                "Next: get_interface(scope: \"full\")",
+                "Next: get_interface()",
             ],
             errorCode: "request.missing_target",
-            nextCommand: "get_interface(scope: \"full\")"
+            nextCommand: "get_interface()"
         )
     }
 
@@ -803,10 +803,10 @@ final class TheFenceHandlerTests: XCTestCase {
             contains: [
                 "element_search request contract failed: missing target",
                 "requires heistId or at least one matcher field",
-                "Next: get_interface(scope: \"full\")",
+                "Next: get_interface()",
             ],
             errorCode: "request.missing_target",
-            nextCommand: "get_interface(scope: \"full\")"
+            nextCommand: "get_interface()"
         )
     }
 
@@ -826,10 +826,10 @@ final class TheFenceHandlerTests: XCTestCase {
             contains: [
                 "activate request contract failed: missing target",
                 "requires heistId or at least one matcher field",
-                "Next: get_interface(scope: \"full\")",
+                "Next: get_interface()",
             ],
             errorCode: "request.missing_target",
-            nextCommand: "get_interface(scope: \"full\")"
+            nextCommand: "get_interface()"
         )
     }
 
@@ -847,10 +847,10 @@ final class TheFenceHandlerTests: XCTestCase {
             contains: [
                 "increment request contract failed: missing target",
                 "requires heistId or at least one matcher field",
-                "Next: get_interface(scope: \"full\")",
+                "Next: get_interface()",
             ],
             errorCode: "request.missing_target",
-            nextCommand: "get_interface(scope: \"full\")"
+            nextCommand: "get_interface()"
         )
     }
 
@@ -861,10 +861,10 @@ final class TheFenceHandlerTests: XCTestCase {
             contains: [
                 "decrement request contract failed: missing target",
                 "requires heistId or at least one matcher field",
-                "Next: get_interface(scope: \"full\")",
+                "Next: get_interface()",
             ],
             errorCode: "request.missing_target",
-            nextCommand: "get_interface(scope: \"full\")"
+            nextCommand: "get_interface()"
         )
     }
 
@@ -875,10 +875,10 @@ final class TheFenceHandlerTests: XCTestCase {
             contains: [
                 "perform_custom_action request contract failed: missing target",
                 "requires heistId or at least one matcher field",
-                "Next: get_interface(scope: \"full\")",
+                "Next: get_interface()",
             ],
             errorCode: "request.missing_target",
-            nextCommand: "get_interface(scope: \"full\")"
+            nextCommand: "get_interface()"
         )
     }
 
@@ -912,10 +912,10 @@ final class TheFenceHandlerTests: XCTestCase {
             contains: [
                 "rotor request contract failed: missing target",
                 "requires heistId or at least one matcher field",
-                "Next: get_interface(scope: \"full\")",
+                "Next: get_interface()",
             ],
             errorCode: "request.missing_target",
-            nextCommand: "get_interface(scope: \"full\")"
+            nextCommand: "get_interface()"
         )
     }
 
@@ -1313,10 +1313,10 @@ final class TheFenceHandlerTests: XCTestCase {
             contains: [
                 "wait_for request contract failed: missing target",
                 "requires heistId or at least one matcher field",
-                "Next: get_interface(scope: \"full\")",
+                "Next: get_interface()",
             ],
             errorCode: "request.missing_target",
-            nextCommand: "get_interface(scope: \"full\")"
+            nextCommand: "get_interface()"
         )
     }
 
@@ -2147,7 +2147,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(failedIndex, 0)
         XCTAssertEqual(summaries[0].errorCode, "request.missing_target")
         XCTAssertEqual(summaries[0].phase, "request")
-        XCTAssertEqual(summaries[0].nextCommand, "get_interface(scope: \"full\")")
+        XCTAssertEqual(summaries[0].nextCommand, "get_interface()")
         XCTAssertEqual(summaries[1].error, "skipped: stop_on_error stopped batch after step 0")
     }
 
@@ -2165,7 +2165,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testGetInterfaceScopeFullSendsExploreMessage() async {
+    func testGetInterfaceLegacyFullScopeSendsExploreMessage() async {
         let (fence, mockConn) = makeConnectedFence()
         _ = try? await fence.execute(request: ["command": "get_interface", "scope": "full"])
         guard let (message, _) = mockConn.sent.last,
@@ -2268,13 +2268,13 @@ final class TheFenceHandlerTests: XCTestCase {
         ])
         guard let (fullMessage, _) = fullMock.sent.last,
               case .explore = fullMessage else {
-            XCTFail("Expected scope=full to send explore, got \(String(describing: fullMock.sent.last))")
+            XCTFail("Expected legacy scope=full to send explore, got \(String(describing: fullMock.sent.last))")
             return
         }
     }
 
     @ButtonHeistActor
-    func testGetInterfaceFullScopeAppliesMatcherFilterAfterExplore() async throws {
+    func testGetInterfaceDefaultAppliesMatcherFilterAfterExplore() async throws {
         let (fence, mockConn) = makeConnectedFence()
         let submit = testElement("submit", label: "Submit", traits: [.button])
         let cancel = testElement("cancel", label: "Cancel", traits: [.button])
@@ -2290,13 +2290,12 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let response = try await fence.execute(request: [
             "command": "get_interface",
-            "scope": "full",
             "label": "Submit",
         ])
 
         guard let (message, _) = mockConn.sent.last,
               case .explore = message else {
-            XCTFail("Expected full scope to send explore, got \(String(describing: mockConn.sent.last))")
+            XCTFail("Expected default get_interface to send explore, got \(String(describing: mockConn.sent.last))")
             return
         }
 
@@ -2312,7 +2311,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testGetInterfaceFullScopeAppliesElementsFilterAfterExplore() async throws {
+    func testGetInterfaceDefaultAppliesElementsFilterAfterExplore() async throws {
         let (fence, mockConn) = makeConnectedFence()
         let first = testElement("first", label: "First")
         let second = testElement("second", label: "Second")
@@ -2328,7 +2327,6 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let response = try await fence.execute(request: [
             "command": "get_interface",
-            "scope": "full",
             "elements": ["second"],
         ])
 
@@ -2381,12 +2379,11 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fullFence, fullMock) = makeConnectedFence()
         _ = try? await fullFence.execute(request: [
             "command": "get_interface",
-            "scope": "full",
             "detail": "full",
         ])
         guard let (fullMessage, _) = fullMock.sent.last,
               case .explore = fullMessage else {
-            XCTFail("Expected detail=full with scope=full to send explore, got \(String(describing: fullMock.sent.last))")
+            XCTFail("Expected detail=full on default get_interface to send explore, got \(String(describing: fullMock.sent.last))")
             return
         }
 
@@ -2407,7 +2404,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testGetInterfaceInvalidScopeReturnsSchemaError() async {
         await assertValidationError(
             ["command": "get_interface", "scope": "current"],
-            equals: "schema validation failed for scope: observed string \"current\"; expected enum one of full, visible"
+            equals: "schema validation failed for scope: observed string \"current\"; expected omitted or visible"
         )
     }
 

@@ -147,7 +147,7 @@ Manually trigger a debounced hierarchy broadcast to connected clients. Uses a 30
 
 TheInsideJob follows an **activation-first** strategy for all element interactions:
 
-1. **Try `accessibilityActivate()` first** -- TheBrains calls the element's native accessibility activation method via the live object reference held by TheStash's registry. This is the most reliable path because it mirrors how VoiceOver activates controls and respects custom activation behavior.
+1. **Try `accessibilityActivate()` first** -- TheBrains calls the element's native accessibility activation method via Button Heist's current element state. This is the most reliable path because it mirrors how VoiceOver activates controls and respects custom activation behavior.
 
 2. **Fall back to synthetic tap** -- If activation returns `false` or the element does not support it, TheSafecracker injects a synthetic tap at the element's activation point. This is a low-level escape hatch that cannot confirm the gesture was actually handled by the target view.
 
@@ -162,7 +162,7 @@ When a synthetic tap fallback occurs, a debug log is emitted so the behavior is 
 
 ### Touch Gesture & Text Input System (TheSafecracker)
 
-TheInsideJob uses `TheSafecracker` internally for handling all touch gesture and text input commands. TheSafecracker is an **internal** type -- only TheInsideJob creates and holds the instance. It supports single-finger gestures, multi-touch gestures via synthetic UITouch/IOHIDEvent injection, and text entry via UIKeyboardImpl. TheSafecracker never holds live UIView pointers; it receives only screen coordinates and action outcomes from TheBrains (which resolves targets via TheStash's registry).
+TheInsideJob uses `TheSafecracker` internally for handling all touch gesture and text input commands. TheSafecracker is an **internal** type -- only TheInsideJob creates and holds the instance. It supports single-finger gestures, multi-touch gestures via synthetic UITouch/IOHIDEvent injection, and text entry via UIKeyboardImpl. TheSafecracker never holds live UIView pointers; it receives only screen coordinates and action outcomes from TheBrains after targets are resolved from current element state.
 
 **Supported gestures:**
 - `one_finger_tap` - Single tap at a point (low-level escape hatch; prefer `activate` for element interactions)
@@ -592,7 +592,7 @@ cd ButtonHeistMCP && swift build -c release
 
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
-| `get_interface` | Get UI element hierarchy. `scope: "full"` is the default whole accessible state; `scope: "visible"` requests a fresh on-screen parse. | `scope`, `label`, `identifier`, `value`, `traits`, `excludeTraits` (optional filtering) |
+| `get_interface` | Get the app accessibility hierarchy. Omit `scope` for the normal semantic state; `scope: "visible"` requests a diagnostic on-screen parse. | `scope`, `label`, `identifier`, `value`, `traits`, `excludeTraits` (optional filtering) |
 | `activate` | **Primary interaction tool.** Activate a UI element (activation-first pattern). Pass `action` for named actions (increment, decrement, custom) | `heistId`, `label`, `identifier`, `value`, `traits`, `excludeTraits`, `action`, `count`, `expect` |
 | `rotor` | Move through an accessibility rotor, defaulting to next | element target, `rotor`/`rotorIndex`, `direction`, `currentHeistId`, text-range cursor offsets, `expect` |
 | `type_text` | Type text / delete characters | `text`, `deleteCount`, `clearFirst`, `heistId`, `label`, `identifier`, `value`, `traits`, `excludeTraits`, `expect` |
@@ -816,7 +816,7 @@ Messages sent from client to server.
 - `setPasteboard(SetPasteboardTarget)` - Write text to general pasteboard
 - `getPasteboard` - Read text from general pasteboard
 - `scroll(ScrollTarget)` - Axis-aware page scroll (finds scroll view matching direction's axis)
-- `scrollToVisible(ScrollToVisibleTarget)` - One-shot scroll to a known registry element
+- `scrollToVisible(ScrollToVisibleTarget)` - One-shot scroll to a known element
 - `elementSearch(ElementSearchTarget)` - Iterative scroll search for an unseen element
 - `scrollToEdge(ScrollToEdgeTarget)` - Axis-aware edge jump with lazy container iteration
 - `resignFirstResponder` - Dismiss keyboard
@@ -1042,7 +1042,7 @@ public struct ScrollToVisibleTarget: Codable, Sendable
 
 #### Properties
 
-- `elementTarget: ElementTarget?` - Known registry element to scroll into view. Use `heistId` for recorded-position jumps; matcher fields only resolve elements already present in the current snapshot. Use `ElementSearchTarget` for iterative discovery.
+- `elementTarget: ElementTarget?` - Known element to scroll into view. Use `heistId` for current-hierarchy handles; matcher fields resolve elements already present in the current accessibility state. Use `ElementSearchTarget` for iterative discovery.
 
 ### ScrollSearchDirection
 
@@ -1328,10 +1328,10 @@ public enum ActionMethod: String, Codable, Sendable
 - `waitForChange` - Wait-for-change completed
 - `waitFor` - Wait-for element completed
 - `scroll` - Scroll view scrolled by one page
-- `scrollToVisible` - Known registry element was scrolled into view
+- `scrollToVisible` - Known element was scrolled into view
 - `elementSearch` - Iterative scroll search found (or failed to find) element matching predicate
 - `scrollToEdge` - Scroll view scrolled to an edge
-- `explore` - Full element census completed (dispatched internally by `get_interface` with `scope: "full"`)
+- `explore` - Accessibility-state discovery completed (dispatched internally by default `get_interface`)
 - `elementNotFound` - Element could not be found
 - `elementDeallocated` - Element's view was deallocated
 
@@ -1630,7 +1630,7 @@ OPTIONS:
 
 ### buttonheist scroll_to_visible
 
-Scroll a known registry element into view. The target must be visible now or identified by a `heistId` still present in the current or preserved screen snapshot, such as the union produced by the latest `get_interface` with `scope: "full"`. Use `element_search` for unseen elements or stale heistIds that have fallen out of the current snapshot.
+Scroll a known element into view. The target must be currently on screen or identified by a `heistId` still present in the current accessibility state. Use `element_search` for unseen elements or stale heistIds that have fallen out of the current state.
 
 ```
 USAGE: buttonheist scroll_to_visible [OPTIONS]
@@ -1651,7 +1651,7 @@ OPTIONS:
 
 ### buttonheist element_search
 
-Search for an unseen element by paging through scrollable containers. Leaves the viewport on the found element when successful.
+Search for an unseen element by paging through scrollable containers. Leaves the screen positioned on the found element when successful.
 
 ```
 USAGE: buttonheist element_search [OPTIONS]

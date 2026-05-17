@@ -12,11 +12,11 @@ Button Heist drives iOS apps through the accessibility layer — the same interf
 
 ## Choosing Tools
 
-**Observing**: `get_interface` for element data, `get_screen` for visual context. Start with `get_interface` — `scope: "full"` is the default and explores the whole-screen semantic state, including discoverable off-screen content in scroll views. Use `scope: "visible"` for a fresh on-screen parse with no explored union/cache. Reach for `get_screen` only when layout or visual state matters.
+**Observing**: `get_interface` for element data, `get_screen` for visual context. Start with `get_interface`; by default it returns the app accessibility state for the current screen, including content Button Heist can discover in scroll views. Use `scope: "visible"` only for diagnostic on-screen reads, especially when checking geometry. Reach for `get_screen` only when layout or visual state matters.
 
 **Acting**: `activate` is your primary tool — it taps, toggles, follows links. Use `action: "increment"` or `"decrement"` for adjustable controls, with optional `count` to repeat 1...100 times. `type_text` for keyboard input. `gesture` with type "swipe" for directional gestures. `scroll` for paging through lists. Prefer `activate` over `gesture` — raw coordinates are fragile and don't record well.
 
-**Finding**: `scroll` with mode "to_visible" when you've seen an element before but it scrolled off-screen. `scroll` with mode "search" when you've never seen it — scrolls every container looking for a match. `wait_for` when you know a specific element will appear.
+**Finding**: `scroll` with mode "to_visible" when you've seen an element before but it is not currently on screen. `scroll` with mode "search" when you've never seen it — scrolls every container looking for a match. `wait_for` when you know a specific element will appear.
 
 **Waiting**: `wait_for_change` when the UI is updating asynchronously — network requests, timers, animations completing. Pass an expectation object to wait for the specific outcome: `expect={"type":"screen_changed"}` rides through loading spinners until the real navigation happens. With `expect`, the server first checks whether the current state already satisfies it, then blocks until a later settled scan does. With no expectation, returns on any tree change. This is the correct response when your action produced a transient state (spinner appeared, interactive elements disappeared) and you need the final result.
 
@@ -126,7 +126,7 @@ Each level narrows what counts as success. The more specific, the more a failure
 
 `start_heist` / `stop_heist` capture your session as a replayable .heist file. The recording is automatic: a recorded step exists only after the action succeeded and its explicit expectation was satisfied. Actions without explicit expectations keep the existing successful-action recording behavior.
 
-**Prime the interface first.** Call `get_interface` before your first action. The recorder converts heistIds to portable matchers behind the scenes, but needs cached element data to do it well.
+**Prime the interface first.** Call `get_interface` before your first action. The recorder converts heistIds to portable matchers behind the scenes, but needs current element data to do it well.
 
 **Attach expectations to every meaningful action.** Expectations are recorded with the step. A heist without expectations is a sequence of taps; a heist with expectations is a self-verifying test suite that validates on every replay.
 

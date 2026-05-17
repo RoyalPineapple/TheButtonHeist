@@ -78,7 +78,7 @@ graph TB
 TheInsideJob (singleton, @MainActor) — coordinator split across extension files:
 │   TheInsideJob.swift              — core server lifecycle, client dispatch
 │   TheBurglar/                     — hierarchy parsing, parse→apply pipeline
-│   TheStash/                       — element registry, matching, resolution, capture, wire conversion
+│   TheStash/                       — current element state, matching, resolution, capture, wire conversion
 │   TheBrains/                      — action dispatch, scroll orchestration, screen exploration
 │   TheTripwire.swift               — persistent pulse for UI settle, transitions, keyboard/focus state
 │   Extensions/AutoStart.swift      — ObjC +load auto-start bridge
@@ -103,10 +103,10 @@ TheInsideJob (singleton, @MainActor) — coordinator split across extension file
 │   ├── Owns TheStash and TheSafecracker (created in init)
 │   ├── Action execution: resolve target → perform action → build result with delta
 │   ├── Scroll orchestration: direction, edge, known-position jumps, element search
-│   └── exploreAndPrune() — scrolls all containers, discovers off-screen elements, restores positions
-├── TheStash (element registry, matching, resolution, capture, wire conversion)
+│   └── exploreAndPrune() — scrolls containers, discovers semantic content, restores positions
+├── TheStash (current element state, matching, resolution, capture, wire conversion)
 │   ├── Owns TheBurglar (created in init, private implementation detail)
-│   ├── refresh() — delegates parse→apply to TheBurglar, updates registry
+│   ├── refresh() — delegates parse→apply to TheBurglar, updates current element state
 │   ├── resolveTarget(ElementTarget) → TargetResolution
 │   ├── selectElements() → element snapshot for wire conversion
 │   ├── toWire() → [HeistElement] — conversion at serialization boundary only

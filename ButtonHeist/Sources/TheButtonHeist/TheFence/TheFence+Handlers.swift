@@ -15,7 +15,7 @@ extension TheFence {
         let scope = try getInterfaceScope(args)
         let detail = try args.schemaEnum("detail", as: InterfaceDetail.self) ?? .summary
 
-        // Full scope (default): explore the screen, return all discovered elements.
+        // Default scope: capture the app accessibility state and return all discovered elements.
         if scope == .full {
             let result = try await sendAndAwaitAction(.explore, timeout: Timeouts.exploreSeconds)
             lastActionHistory = .completed(result)
@@ -69,8 +69,20 @@ extension TheFence {
     }
 
     private func getInterfaceScope(_ args: [String: Any]) throws -> GetInterfaceScope {
-        if let scope = try args.schemaEnum("scope", as: GetInterfaceScope.self) {
-            return scope
+        if let rawScope = try args.schemaString("scope") {
+            switch rawScope {
+            case GetInterfaceScope.visible.rawValue:
+                return .visible
+            case GetInterfaceScope.full.rawValue:
+                // Hidden compatibility spelling for older callers.
+                return .full
+            default:
+                throw SchemaValidationError(
+                    field: "scope",
+                    observed: rawScope as Any,
+                    expected: "omitted or visible"
+                )
+            }
         }
         let legacyFull = try args.schemaBoolean("full") ?? true
         return legacyFull ? .full : .visible
@@ -516,9 +528,9 @@ extension TheFence {
 
     private func missingElementTargetResponse(command: String) -> FenceResponse {
         let contract = "requires heistId or at least one matcher field (label, identifier, value, traits, or excludeTraits)"
-        let next = "get_interface(scope: \"full\")"
+        let next = "get_interface()"
         let message = "\(command) request contract failed: missing target; \(contract). " +
-            "Next: \(next) to inspect known elements, then retry \(command) with a heistId or exact matcher."
+            "Next: \(next) to inspect the current app accessibility state, then retry \(command) with a heistId or exact matcher."
         return .error(
             message,
             details: FailureDetails(
@@ -786,7 +798,7 @@ extension TheFence {
         playbackPhase = .playing(startedAt: Date())
         defer { playbackPhase = .idle }
 
-        // Prime the registry before playback — get_interface defaults to full exploration
+        // Prime current element data before playback.
         _ = try await execute(request: ["command": Command.getInterface.rawValue])
 
         for (index, step) in heist.steps.enumerated() {
@@ -798,8 +810,8 @@ extension TheFence {
                 let response = try await execute(request: request)
 
                 // On elementNotFound with a matcher target, try scroll_to_visible then retry.
-                // The element may be off-screen — during recording it was found via full explore,
-                // but playback only sees the viewport.
+                // The element may not be on-screen at this instant. Try bringing
+                // it into view before retrying the recorded action.
                 if let actionResult = response.actionResult,
                    !actionResult.success,
                    actionResult.errorKind == .elementNotFound,

@@ -140,7 +140,7 @@ flowchart TD
 
 ## Dependencies
 
-- **TheStash** (owned) — element registry, target resolution, wire conversion, parse pipeline (TheBurglar is TheStash's private detail)
+- **TheStash** (owned) — current element state, target resolution, wire conversion, parse pipeline (TheBurglar is TheStash's private detail)
 - **TheSafecracker** (owned) — raw gesture synthesis (fallback tap, scroll primitives, text entry, edit actions)
 - **TheTripwire** (injected) — settle detection, check triggers, window access
 

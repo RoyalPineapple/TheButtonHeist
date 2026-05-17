@@ -34,7 +34,7 @@ graph TD
     end
 
     subgraph BrainsCrew["TheBrains' Crew"]
-        Stash["TheStash — Element registry, resolution"]
+        Stash["TheStash — Current element state, resolution"]
         Burglar["TheBurglar — Parse pipeline (private to TheStash)"]
         Safecracker["TheSafecracker — Touch & text"]
     end

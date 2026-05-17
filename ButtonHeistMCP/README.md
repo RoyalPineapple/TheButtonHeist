@@ -58,6 +58,6 @@ ButtonHeistMCP currently exposes 24 tools backed by `TheFence`:
 
 ## See Also
 
-- [API Reference](../docs/API.md) for the full tool schemas
+- [API Reference](../docs/API.md) for the complete tool schemas
 - [Project Overview](../README.md) for setup and architecture
 - [CLI Reference](../ButtonHeistCLI/) for direct terminal usage

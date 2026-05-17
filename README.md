@@ -252,7 +252,7 @@ Button Heist is a distributed system: an iOS framework inside the app, a macOS c
 |------|------|
 | **TheInsideJob** | iOS framework embedded in the app. Hosts the TCP server, Bonjour advertisement, accessibility hierarchy, and command dispatch |
 | **TheSafecracker** | Touch, gesture, text-entry, and edit-action execution through synthetic events |
-| **TheStash** | Element registry, target resolution, `heistId` assignment, and wire conversion. Live view pointers stay inside |
+| **TheStash** | Current element state, target resolution, `heistId` assignment, and wire conversion. Live view pointers stay inside |
 | **TheBurglar** | Accessibility hierarchy parsing, topology detection, and scroll-container discovery |
 | **TheBrains** | Action execution, scroll orchestration, delta generation, waits, and exploration |
 | **TheGetaway** | Message dispatch, encoding/decoding, broadcasts, transport wiring, and interaction recording |

@@ -17,7 +17,7 @@ TheSafecracker is the hands of the operation:
 7. **Scrolling** — `scrollByPage` (UIScrollView.setContentOffset), `scrollToEdge`, `scrollToMakeVisible`, `scrollBySwipe` (synthetic swipe for non-UIScrollView containers)
 8. **First responder lookup** — walks the view hierarchy to find the current first responder
 
-TheSafecracker does **not** resolve element targets, check interactivity, or read the element registry. TheStash resolves everything and hands TheSafecracker the coordinates, frames, or UIScrollViews it needs.
+TheSafecracker does **not** resolve element targets, check interactivity, or read current element state. TheStash resolves everything and hands TheSafecracker the coordinates, frames, or UIScrollViews it needs.
 
 ## Source Files
 

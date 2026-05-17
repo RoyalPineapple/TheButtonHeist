@@ -59,7 +59,7 @@ graph TD
 
 | # | Tool Name | Type | Key Parameters |
 |---|-----------|------|---------------|
-| 1 | `get_interface` | direct | `scope` (`"full"`/`"visible"`), `detail` (`"summary"`/`"full"`), `elements` (heistId filter array) |
+| 1 | `get_interface` | direct | `scope` (omit or `"visible"`), `detail` (`"summary"`/`"full"`), `elements` (heistId filter array) |
 | 2 | `activate` | direct | element target, optional `action` for increment/decrement/custom |
 | 3 | `rotor` | direct | element target, `rotor`/`rotorIndex`, `direction`, `currentHeistId`, text-range cursor offsets |
 | 4 | `type_text` | direct | `text`, `clearFirst`, `deleteCount` |
@@ -96,9 +96,9 @@ graph TD
 ## Key Tool Schemas
 
 ### `get_interface`
-- `scope`: `"full"` (default — explored whole-screen semantic state, including discoverable off-screen scroll content) or `"visible"` (fresh on-screen parse only, no explored union/cache)
+- `scope`: omit for the app accessibility state; `"visible"` requests a diagnostic on-screen parse
 - `detail`: `"summary"` (default — identity fields, traits, and actions only) or `"full"` (adds VoiceOver hint, customContent, frame, and activation point)
-- `elements`: optional `[String]` — heistIds to filter; omit for full interface tree
+- `elements`: optional `[String]` — heistIds to filter; omit for the current interface tree
 - `readOnlyHint: true`, `idempotentHint: true`
 
 ### Shared `expect` property

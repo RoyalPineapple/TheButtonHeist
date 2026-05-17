@@ -8,7 +8,11 @@ public enum InterfaceDetail: String, CaseIterable, Sendable {
     case full
 }
 
-/// Discovery scope for get_interface.
+/// Capture scope for get_interface.
+///
+/// `full` remains accepted as a hidden compatibility spelling for the default
+/// app accessibility state. Public schemas advertise only `visible`, the
+/// diagnostic on-screen parse.
 public enum GetInterfaceScope: String, CaseIterable, Sendable {
     case full
     case visible

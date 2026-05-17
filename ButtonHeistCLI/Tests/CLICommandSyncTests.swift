@@ -60,10 +60,10 @@ final class CLICommandSyncTests: XCTestCase {
         )
     }
 
-    func testGetInterfaceScopeOptionsMatchFenceScope() {
+    func testGetInterfaceAdvertisedScopeOptionsHideLegacyFullScope() {
         XCTAssertEqual(
             Set(CLIGetInterfaceScope.allCases.map(\.rawValue)),
-            Set(GetInterfaceScope.allCases.map(\.rawValue))
+            ["visible"]
         )
     }
 
@@ -71,6 +71,8 @@ final class CLICommandSyncTests: XCTestCase {
         let help = GetInterfaceCommand.helpMessage()
 
         XCTAssertTrue(help.contains("--scope"), help)
+        XCTAssertTrue(help.contains("visible"), help)
+        XCTAssertFalse(help.contains("full"), help)
         XCTAssertFalse(help.contains("--full"), help)
     }
 

@@ -152,9 +152,10 @@ enum ToolDefinitions {
     static let getInterface = Tool(
         name: TheFence.Command.getInterface.rawValue,
         description: """
-            Read the UI element hierarchy. Call once on a new screen, then track changes via \
+            Read the app accessibility hierarchy. Call once on a new screen, then track changes via \
             action deltas — re-fetch only when you need elements the delta didn't cover. \
-            Filter with matcher fields or heistId handle list; scope defaults to full.
+            Filter with matcher fields or heistId handle list. Omit scope for the normal \
+            app accessibility state; use scope=visible only for diagnostic on-screen reads.
             """,
         inputSchema: inputSchema(for: .getInterface),
         annotations: .init(readOnlyHint: true, idempotentHint: true)
