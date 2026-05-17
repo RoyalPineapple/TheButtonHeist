@@ -492,7 +492,7 @@ No payload required.
 
 Returns an `actionResult` with `method: "explore"` and a `payload` of `{"kind": "explore", "data": {...}}` containing the complete element list and summary discovery statistics.
 
-> **Note**: `explore` is not exposed as a standalone CLI/MCP command. It is dispatched internally by `get_interface` when `scope` is `"full"` (the default). The legacy `full: true` alias still selects the same behavior. See [Element Discovery](#element-discovery) for usage guidance.
+> **Note**: `explore` is not exposed as a standalone CLI/MCP command. It is dispatched internally by `get_interface` when `scope` is `"full"` (the default). See [Element Discovery](#element-discovery) for usage guidance.
 
 ### editAction
 
@@ -750,7 +750,7 @@ The `tree` is the canonical wire shape — every element appears exactly once at
 
 ### actionResult
 
-Response to `activate`, `one_finger_tap`, `increment`, `decrement`, `typeText`, `performCustomAction`, `handleAlert`, `setPasteboard`, `getPasteboard`, `scroll`, `scrollToVisible`, `elementSearch`, or `scrollToEdge` commands. Also returned by the full-hierarchy read selected by `get_interface` with `scope: "full"` or legacy `full: true`.
+Response to `activate`, `one_finger_tap`, `increment`, `decrement`, `typeText`, `performCustomAction`, `handleAlert`, `setPasteboard`, `getPasteboard`, `scroll`, `scrollToVisible`, `elementSearch`, or `scrollToEdge` commands. Also returned by the full-hierarchy read selected by `get_interface` with `scope: "full"`.
 
 ```json
 {"buttonHeistVersion":"<calver>","type":"actionResult","payload":{
@@ -936,7 +936,7 @@ Three ways to find elements, each suited to a different situation:
 
 ### Choosing between full, element_search, and scroll_to_visible
 
-- **`get_interface scope=full`** is a read operation. Use it when you need a census — "what elements are on this screen?" — before committing to an interaction. The legacy `full: true` alias selects the same scope.
+- **`get_interface scope=full`** is a read operation. Use it when you need a census — "what elements are on this screen?" — before committing to an interaction.
 
 - **`scroll_to_visible`** scrolls to a known target and leaves it visible so you can interact with the element. Use it when the target is visible now or when a `heistId` is still valid in the current hierarchy.
 

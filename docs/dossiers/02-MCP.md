@@ -96,9 +96,8 @@ graph TD
 ## Key Tool Schemas
 
 ### `get_interface`
-- `scope`: `"full"` (default — explore the whole accessible state, including off-screen scroll content, then restore positions) or `"visible"` (fresh on-screen parse only, no explored union/cache)
+- `scope`: `"full"` (default — explored whole-screen semantic state, including discoverable off-screen scroll content) or `"visible"` (fresh on-screen parse only, no explored union/cache)
 - `detail`: `"summary"` (default — identity fields, traits, and actions only) or `"full"` (adds VoiceOver hint, customContent, frame, and activation point)
-- `full`: legacy alias for `scope` (`true` -> `"full"`, `false` -> `"visible"`); explicit `scope` wins
 - `elements`: optional `[String]` — heistIds to filter; omit for full interface tree
 - `readOnlyHint: true`, `idempotentHint: true`
 

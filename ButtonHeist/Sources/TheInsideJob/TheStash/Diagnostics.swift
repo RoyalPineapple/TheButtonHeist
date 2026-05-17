@@ -202,7 +202,7 @@ extension TheStash {
         if screenElements.isEmpty {
             return """
                 \(resolutionScope) hierarchy is empty (0 elements)
-                Next: call get_interface(full: true) or wait for the target to appear, then retry with an exact label, identifier, heistId, or ordinal.
+                Next: call get_interface(scope: "full") or wait for the target to appear, then retry with an exact label, identifier, heistId, or ordinal.
                 """
         }
         let noun = screenElements.count == 1 ? "element" : "elements"
@@ -225,7 +225,7 @@ extension TheStash {
         }
         lines.append(
             "Next: target one listed element by exact label, identifier, heistId, or ordinal; "
-                + "call get_interface(full: true) if the target may be offscreen."
+                + "call get_interface(scope: \"full\") if the target may be offscreen."
         )
         return lines.joined(separator: "\n")
     }

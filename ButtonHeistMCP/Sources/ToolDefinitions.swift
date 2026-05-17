@@ -11,35 +11,123 @@ enum ToolDefinitions {
     // Agents that need the actual video file should pass the "output" parameter
     // in stop_recording to write to disk and receive only the file path.
 
-    // Shared element matcher properties — the 5 fields VoiceOver users rely on plus the
-    // accessibilityIdentifier escape hatch. Used directly by get_interface (filtering) and
-    // extended with heistId/ordinal by action tools (targeting). Same vocabulary either way.
-    static let elementMatcherProperties: [String: Value] = [
-        "label": ["type": "string", "description": "Accessibility label — the text VoiceOver reads (e.g. \"Sign In\")"],
-        "value": ["type": "string", "description": "Accessibility value — current state or placeholder (e.g. \"50%\")"],
-        "traits": [
-            "type": "array", "items": ["type": "string"],
-            "description": "Required traits (role qualifiers like button, header, selected). All must match.",
-        ],
-        "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Traits that must NOT be present"],
-        "identifier": ["type": "string", "description": "accessibilityIdentifier (escape hatch — prefer label/value/traits)"],
-    ]
+    static func inputSchema(
+        for command: TheFence.Command,
+        overriding overrides: [String: Value] = [:]
+    ) -> Value {
+        inputSchema(
+            properties: schemaProperties(from: command.parameters, overriding: overrides),
+            required: command.parameters.filter(\.required).map(\.key)
+        )
+    }
 
-    // Element targeting = matcher fields plus heistId and ordinal disambiguation.
-    static let elementTargetProperties: [String: Value] = elementMatcherProperties.merging([
-        "heistId": [
-            "type": "string",
-            "description": "Current-hierarchy heistId handle returned by get_interface or an action delta. Use matchers for durable flows.",
-        ],
-        "ordinal": [
-            "type": "integer",
-            "description": """
-                0-based index to disambiguate when multiple elements match. \
-                0 = first match, 1 = second, etc. in the returned hierarchy order. \
-                Omit to require a unique match — ambiguity errors show the valid range.
-                """,
-        ],
-    ] as [String: Value]) { _, new in new }
+    static func inputSchema(
+        for commands: [TheFence.Command],
+        required: [String] = [],
+        overriding overrides: [String: Value] = [:]
+    ) -> Value {
+        inputSchema(
+            properties: schemaProperties(from: commands.flatMap(\.parameters), overriding: overrides),
+            required: required
+        )
+    }
+
+    static func schemaProperties(
+        from specs: [FenceParameterSpec],
+        overriding overrides: [String: Value] = [:]
+    ) -> [String: Value] {
+        var properties: [String: Value] = [:]
+        for spec in specs where properties[spec.key] == nil {
+            properties[spec.key] = schemaProperty(for: spec)
+        }
+        for (key, override) in overrides {
+            properties[key] = override
+        }
+        return properties
+    }
+
+    static func inputSchema(properties: [String: Value], required: [String] = []) -> Value {
+        var schema: [String: Value] = [
+            "type": "object",
+            "properties": .object(properties),
+            "additionalProperties": false,
+        ]
+        if !required.isEmpty {
+            schema["required"] = .array(required.map { .string($0) })
+        }
+        return .object(schema)
+    }
+
+    static func schemaProperty(for spec: FenceParameterSpec) -> Value {
+        var schema: [String: Value] = ["type": .string(schemaType(for: spec.type))]
+        if let description = spec.description { schema["description"] = .string(description) }
+        if let enumValues = spec.enumValues { schema["enum"] = .array(enumValues.map { .string($0) }) }
+        if let minimum = spec.minimum { schema["minimum"] = schemaNumberValue(minimum) }
+        if let maximum = spec.maximum { schema["maximum"] = schemaNumberValue(maximum) }
+        if let minLength = spec.minLength { schema["minLength"] = .int(minLength) }
+
+        switch spec.type {
+        case .stringArray:
+            schema["type"] = "array"
+            schema["items"] = ["type": "string"]
+
+        case .object where !spec.objectProperties.isEmpty:
+            schema["properties"] = .object(schemaProperties(from: spec.objectProperties))
+            let required = spec.objectProperties.filter(\.required).map(\.key)
+            if !required.isEmpty { schema["required"] = .array(required.map { .string($0) }) }
+            schema["additionalProperties"] = .bool(spec.objectAdditionalProperties)
+
+        case .array:
+            if let itemType = spec.arrayItemType {
+                var items: [String: Value] = ["type": .string(schemaType(for: itemType))]
+                if itemType == .object {
+                    items["properties"] = .object(schemaProperties(from: spec.arrayItemProperties))
+                    let required = spec.arrayItemProperties.filter(\.required).map(\.key)
+                    if !required.isEmpty { items["required"] = .array(required.map { .string($0) }) }
+                    items["additionalProperties"] = .bool(spec.arrayItemAdditionalProperties)
+                }
+                schema["items"] = .object(items)
+            }
+
+        default:
+            break
+        }
+
+        return .object(schema)
+    }
+
+    static func schemaType(for type: FenceParameterSpec.ParamType) -> String {
+        switch type {
+        case .string:
+            return "string"
+        case .integer:
+            return "integer"
+        case .number:
+            return "number"
+        case .boolean:
+            return "boolean"
+        case .stringArray, .array:
+            return "array"
+        case .object:
+            return "object"
+        }
+    }
+
+    static func schemaNumberValue(_ value: Double) -> Value {
+        if value.rounded(.towardZero) == value {
+            return .int(Int(value))
+        }
+        return .double(value)
+    }
+
+    static func groupedCommands(under toolName: String) -> [TheFence.Command] {
+        TheFence.Command.allCases.filter {
+            if case .groupedUnder(let groupedToolName) = $0.mcpExposure {
+                return groupedToolName == toolName
+            }
+            return false
+        }
+    }
 
     static func stringEnumValues<E>(
         _ type: E.Type,
@@ -160,41 +248,7 @@ enum ToolDefinitions {
             action deltas — re-fetch only when you need elements the delta didn't cover. \
             Filter with matcher fields or heistId handle list; scope defaults to full.
             """,
-        inputSchema: .object([
-            "type": "object",
-            "properties": .object(([
-                "scope": [
-                    "type": "string",
-                    "enum": stringEnumValues(GetInterfaceScope.self),
-                    "description": """
-                        Interface scope. full (default): return the complete accessible hierarchy \
-                        for the current screen. visible: return only elements currently visible.
-                        """,
-                ],
-                "detail": [
-                    "type": "string",
-                    "enum": stringEnumValues(InterfaceDetail.self),
-                    "description": """
-                        Level of detail. summary (default): identity fields, traits, and actions only \
-                        — no hint, customContent, frames, or activation points. full: adds VoiceOver \
-                        hint, customContent, frame, and activation point.
-                        """,
-                ],
-                "full": [
-                    "type": "boolean",
-                    "description": """
-                        Legacy alias for scope. true maps to scope=full; false maps to \
-                        scope=visible. Explicit scope wins when both are supplied.
-                        """,
-                ],
-                "elements": [
-                    "type": "array",
-                    "items": ["type": "string"],
-                    "description": "Optional list of heistId handles to filter. Returns only matching elements. Omit for the full hierarchy.",
-                ],
-            ] as [String: Value]).merging(elementMatcherProperties) { _, new in new }),
-            "additionalProperties": false,
-        ]),
+        inputSchema: inputSchema(for: .getInterface),
         annotations: .init(readOnlyHint: true, idempotentHint: true)
     )
 
@@ -205,20 +259,7 @@ enum ToolDefinitions {
             controls. Pass 'action' to invoke a named action like "increment", "decrement", or \
             any entry from the element's actions array.
             """,
-        inputSchema: .object([
-            "type": "object",
-            "properties": .object(elementTargetProperties.merging([
-                "action": ["type": "string", "description": "Named action (e.g. \"increment\", \"decrement\", or a custom action name)"],
-                "count": [
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 100,
-                    "description": "Repeat increment/decrement this many times. Omit for 1.",
-                ],
-                "expect": expectProperty,
-            ] as [String: Value]) { _, new in new }),
-            "additionalProperties": false,
-        ])
+        inputSchema: inputSchema(for: .activate, overriding: ["expect": expectProperty])
     )
 
     static let rotor = Tool(
@@ -229,32 +270,7 @@ enum ToolDefinitions {
             object result to continue like a VoiceOver user. For text-range results, also pass \
             the returned start and end offsets.
             """,
-        inputSchema: .object([
-            "type": "object",
-            "properties": .object(elementTargetProperties.merging([
-                "rotor": ["type": "string", "description": "Rotor name from the element's rotors list"],
-                "rotorIndex": ["type": "integer", "description": "Zero-based rotor index when names are omitted or ambiguous"],
-                "direction": [
-                    "type": "string",
-                    "enum": stringEnumValues(RotorDirection.self),
-                    "description": "Rotor movement direction. Defaults to next.",
-                ],
-                "currentHeistId": [
-                    "type": "string",
-                    "description": "Optional current item heistId; pass the previous result to continue through a rotor",
-                ],
-                "currentTextStartOffset": [
-                    "type": "integer",
-                    "description": "Current text-range start offset for continuing through text-range rotor results",
-                ],
-                "currentTextEndOffset": [
-                    "type": "integer",
-                    "description": "Current text-range end offset for continuing through text-range rotor results",
-                ],
-                "expect": expectProperty,
-            ] as [String: Value]) { _, new in new }),
-            "additionalProperties": false,
-        ])
+        inputSchema: inputSchema(for: .rotor, overriding: ["expect": expectProperty])
     )
 
     static let typeText = Tool(
@@ -263,16 +279,7 @@ enum ToolDefinitions {
             Type text and/or delete characters via keyboard injection. Optionally target an \
             element to focus it first and read back the resulting value.
             """,
-        inputSchema: .object([
-            "type": "object",
-            "properties": .object(elementTargetProperties.merging([
-                "text": ["type": "string", "minLength": 1, "description": "Text to type character-by-character"],
-                "deleteCount": ["type": "integer", "minimum": 1, "description": "Number of delete key taps before typing"],
-                "clearFirst": ["type": "boolean", "description": "Clear all existing text before typing (select-all + delete)"],
-                "expect": expectProperty,
-            ] as [String: Value]) { _, new in new }),
-            "additionalProperties": false,
-        ])
+        inputSchema: inputSchema(for: .typeText, overriding: ["expect": expectProperty])
     )
 
     static let waitFor = Tool(
@@ -281,27 +288,13 @@ enum ToolDefinitions {
             Wait for an element matching a predicate to appear, or to disappear with absent=true. \
             Polls on UI settle events. Returns the matched element or diagnostic info on timeout.
             """,
-        inputSchema: .object([
-            "type": "object",
-            "properties": .object(elementTargetProperties.merging([
-                "absent": ["type": "boolean", "description": "Wait for element to NOT exist (default: false)"],
-                "timeout": ["type": "number", "description": "Max seconds to wait (default: 10, max: 30)"],
-                "expect": expectProperty,
-            ] as [String: Value]) { _, new in new }),
-            "additionalProperties": false,
-        ])
+        inputSchema: inputSchema(for: .waitFor, overriding: ["expect": expectProperty])
     )
 
     static let getScreen = Tool(
         name: "get_screen",
         description: "Capture a PNG screenshot from the connected device. Returns inline base64 PNG image data. Use 'output' to save to a file path instead.",
-        inputSchema: [
-            "type": "object",
-            "properties": [
-                "output": ["type": "string", "description": "File path to save PNG (omit for inline base64)"],
-            ],
-            "additionalProperties": false,
-        ],
+        inputSchema: inputSchema(for: .getScreen),
         annotations: .init(readOnlyHint: true, idempotentHint: true)
     )
 
@@ -312,30 +305,14 @@ enum ToolDefinitions {
             rides through intermediate states (spinners, loading) until the expectation is met. \
             Use after an action whose delta showed a transient state and the expectation wasn't met yet.
             """,
-        inputSchema: [
-            "type": "object",
-            "properties": [
-                "expect": expectProperty,
-                "timeout": ["type": "number", "description": "Maximum wait time in seconds (default: 10, max: 30)"],
-            ],
-            "additionalProperties": false,
-        ],
+        inputSchema: inputSchema(for: .waitForChange, overriding: ["expect": expectProperty]),
         annotations: .init(readOnlyHint: true)
     )
 
     static let startRecording = Tool(
         name: "start_recording",
         description: "Start an H.264/MP4 screen recording. Recording auto-stops on inactivity or max duration.",
-        inputSchema: [
-            "type": "object",
-            "properties": [
-                "fps": ["type": "integer", "description": "Frames per second (default: 8, range: 1-15)"],
-                "scale": ["type": "number", "description": "Resolution scale factor (default: 1.0, range: 0.25-1.0)"],
-                "max_duration": ["type": "number", "description": "Maximum recording duration in seconds (default: 60)"],
-                "inactivity_timeout": ["type": "number", "description": "Auto-stop after N seconds of no interactions (default: 5)"],
-            ],
-            "additionalProperties": false,
-        ]
+        inputSchema: inputSchema(for: .startRecording)
     )
 
     static let stopRecording = Tool(
@@ -344,13 +321,7 @@ enum ToolDefinitions {
             Stop an in-progress screen recording. Returns metadata only by default (raw video \
             is too large for MCP context); pass 'output' to save the MP4 to a file path.
             """,
-        inputSchema: [
-            "type": "object",
-            "properties": [
-                "output": ["type": "string", "description": "File path to save MP4 (metadata-only response if omitted)"],
-            ],
-            "additionalProperties": false,
-        ]
+        inputSchema: inputSchema(for: .stopRecording)
     )
 
     static let listDevices = Tool(
@@ -359,7 +330,7 @@ enum ToolDefinitions {
             List iOS devices discovered via Bonjour plus named targets from .buttonheist.json. \
             Empty when Bonjour is blocked and no config targets exist — use connect(device:token:) directly.
             """,
-        inputSchema: ["type": "object", "properties": .object([:]), "additionalProperties": false],
+        inputSchema: inputSchema(for: .listDevices),
         annotations: .init(readOnlyHint: true, idempotentHint: true)
     )
 
@@ -372,31 +343,17 @@ enum ToolDefinitions {
             mode=to_visible brings a known element into view; mode=search scrolls until a \
             matching element is found; mode=to_edge scrolls to a top/bottom/left/right edge.
             """,
-        inputSchema: .object([
-            "type": "object",
-            "properties": .object(elementTargetProperties.merging([
+        inputSchema: inputSchema(
+            for: [.scroll] + groupedCommands(under: "scroll"),
+            overriding: [
                 "mode": [
                     "type": "string",
                     "enum": stringEnumValues(ScrollMode.self),
                     "description": "Scroll mode (default: page)",
                 ],
-                "direction": [
-                    "type": "string",
-                    "enum": stringEnumValues(ScrollDirection.self),
-                    "description": """
-                        Scroll direction. next/previous are page-only directions for mode=page; \
-                        mode=search accepts only up, down, left, right and is validated server-side.
-                        """,
-                ],
-                "edge": [
-                    "type": "string",
-                    "enum": stringEnumValues(ScrollEdge.self),
-                    "description": "Edge to scroll to (required for mode to_edge)",
-                ],
                 "expect": expectProperty,
-            ] as [String: Value]) { _, new in new }),
-            "additionalProperties": false,
-        ])
+            ]
+        )
     )
 
     // MARK: - Grouped Tools
@@ -408,58 +365,20 @@ enum ToolDefinitions {
             swipes, drags, pinches, rotates, and free-form path drawing. Set 'type' to one of: \
             swipe, one_finger_tap, drag, long_press, pinch, rotate, two_finger_tap, draw_path, draw_bezier.
             """,
-        inputSchema: .object([
-            "type": "object",
-            "properties": .object(elementTargetProperties.merging([
+        inputSchema: inputSchema(
+            for: groupedCommands(under: "gesture"),
+            required: ["type"],
+            overriding: [
                 "type": [
                     "type": "string",
                     "enum": stringEnumValues(GestureType.self),
                     "description": "Gesture type",
                 ],
-                "direction": [
-                    "type": "string",
-                    "description": "Swipe direction: up, down, left, right",
-                ],
-                "start": [
-                    "type": "object",
-                    "description": "Swipe start unit point relative to element frame. (0,0)=top-left, (1,1)=bottom-right",
-                    "properties": [
-                        "x": ["type": "number", "description": "X position (0-1)"],
-                        "y": ["type": "number", "description": "Y position (0-1)"],
-                    ],
-                    "required": .array([.string("x"), .string("y")]),
-                ],
-                "end": [
-                    "type": "object",
-                    "description": "Swipe end unit point relative to element frame. (0,0)=top-left, (1,1)=bottom-right",
-                    "properties": [
-                        "x": ["type": "number", "description": "X position (0-1)"],
-                        "y": ["type": "number", "description": "Y position (0-1)"],
-                    ],
-                    "required": .array([.string("x"), .string("y")]),
-                ],
-                "x": ["type": "number", "description": "X coordinate"],
-                "y": ["type": "number", "description": "Y coordinate"],
-                "startX": ["type": "number", "description": "Start X coordinate (swipe, draw_bezier)"],
-                "startY": ["type": "number", "description": "Start Y coordinate (swipe, draw_bezier)"],
-                "endX": ["type": "number", "description": "End X coordinate (swipe, drag)"],
-                "endY": ["type": "number", "description": "End Y coordinate (swipe, drag)"],
-                "duration": ["type": "number", "description": "Duration in seconds (swipe, long_press default 0.5, draw_path, draw_bezier)"],
-                "scale": ["type": "number", "description": "Pinch scale factor (>1 zoom in, <1 zoom out)"],
-                "angle": ["type": "number", "description": "Rotation angle in radians"],
-                "centerX": ["type": "number", "description": "Center X (pinch, rotate, two_finger_tap — defaults to element center or x)"],
-                "centerY": ["type": "number", "description": "Center Y (pinch, rotate, two_finger_tap — defaults to element center or y)"],
-                "spread": ["type": "number", "description": "Finger spread distance (pinch, two_finger_tap)"],
-                "radius": ["type": "number", "description": "Rotation radius (rotate)"],
-                "velocity": ["type": "number", "description": "Drawing velocity in points/sec (draw_path, draw_bezier)"],
-                "samplesPerSegment": ["type": "integer", "description": "Bezier curve sampling resolution (draw_bezier)"],
                 "points": drawingPointArraySchema,
                 "segments": bezierSegmentArraySchema,
                 "expect": expectProperty,
-            ] as [String: Value]) { _, new in new }),
-            "required": .array([.string("type")]),
-            "additionalProperties": false,
-        ])
+            ]
+        )
     )
 
     static let editAction = Tool(
@@ -468,19 +387,17 @@ enum ToolDefinitions {
             Perform an edit or keyboard action on the current first responder. \
             Actions: copy, paste, cut, select, selectAll, dismiss (dismiss the keyboard).
             """,
-        inputSchema: [
-            "type": "object",
-            "properties": [
+        inputSchema: inputSchema(
+            for: .editAction,
+            overriding: [
                 "action": [
                     "type": "string",
                     "enum": stringEnumValues(EditAction.self, appending: ["dismiss"]),
                     "description": "Action to perform",
                 ],
                 "expect": expectProperty,
-            ],
-            "required": .array([.string("action")]),
-            "additionalProperties": false,
-        ]
+            ]
+        )
     )
 
     static let setPasteboard = Tool(
@@ -489,15 +406,7 @@ enum ToolDefinitions {
             Write text to the general pasteboard from within the app. Content written by the app \
             itself does not trigger the iOS "Allow Paste" dialog when subsequently read.
             """,
-        inputSchema: [
-            "type": "object",
-            "properties": [
-                "text": ["type": "string", "description": "Text to write to the pasteboard"],
-                "expect": expectProperty,
-            ],
-            "required": .array([.string("text")]),
-            "additionalProperties": false,
-        ]
+        inputSchema: inputSchema(for: .setPasteboard, overriding: ["expect": expectProperty])
     )
 
     static let getPasteboard = Tool(
@@ -506,13 +415,7 @@ enum ToolDefinitions {
             Read text from the general pasteboard. iOS may show "Allow Paste" if the content \
             was written by another app.
             """,
-        inputSchema: [
-            "type": "object",
-            "properties": [
-                "expect": expectProperty,
-            ],
-            "additionalProperties": false,
-        ],
+        inputSchema: inputSchema(for: .getPasteboard, overriding: ["expect": expectProperty]),
         annotations: .init(readOnlyHint: true)
     )
 
@@ -524,9 +427,9 @@ enum ToolDefinitions {
             'expect' per step to verify inline. Returns per-step results and a merged net delta. \
             policy=stop_on_error (default) or continue_on_error.
             """,
-        inputSchema: [
-            "type": "object",
-            "properties": [
+        inputSchema: inputSchema(
+            for: .runBatch,
+            overriding: [
                 "steps": [
                     "type": "array",
                     "description": "Ordered list of Button Heist requests to execute",
@@ -545,10 +448,8 @@ enum ToolDefinitions {
                     "enum": .array(["stop_on_error", "continue_on_error"].map { .string($0) }),
                     "description": "Batch policy: stop_on_error (default) or continue_on_error",
                 ],
-            ],
-            "required": .array([.string("steps")]),
-            "additionalProperties": false,
-        ]
+            ]
+        )
     )
 
     static let getSessionState = Tool(
@@ -557,11 +458,7 @@ enum ToolDefinitions {
             Inspect the current Button Heist session: connection status, device/app identity, \
             recording state, client timeouts, and a lightweight summary of the last action.
             """,
-        inputSchema: [
-            "type": "object",
-            "properties": .object([:]),
-            "additionalProperties": false,
-        ],
+        inputSchema: inputSchema(for: .getSessionState),
         annotations: .init(readOnlyHint: true, idempotentHint: true)
     )
 
@@ -573,24 +470,7 @@ enum ToolDefinitions {
             BUTTONHEIST_DEVICE/BUTTONHEIST_TOKEN env vars. Tears down any existing session first. \
             Returns session state; call get_interface explicitly to observe UI hierarchy.
             """,
-        inputSchema: [
-            "type": "object",
-            "properties": [
-                "target": [
-                    "type": "string",
-                    "description": "Named target from .buttonheist.json config file",
-                ],
-                "device": [
-                    "type": "string",
-                    "description": "Direct host:port address (e.g. 127.0.0.1:1455)",
-                ],
-                "token": [
-                    "type": "string",
-                    "description": "Auth token (overrides config file token if both provided)",
-                ],
-            ],
-            "additionalProperties": false,
-        ]
+        inputSchema: inputSchema(for: .connect)
     )
 
     static let listTargets = Tool(
@@ -599,38 +479,21 @@ enum ToolDefinitions {
             List named connection targets from .buttonheist.json (or ~/.config/buttonheist/config.json), \
             including each target's address and which one is the default.
             """,
-        inputSchema: [
-            "type": "object",
-            "properties": .object([:]),
-            "additionalProperties": false,
-        ],
+        inputSchema: inputSchema(for: .listTargets),
         annotations: .init(readOnlyHint: true, idempotentHint: true)
     )
 
     static let getSessionLog = Tool(
         name: "get_session_log",
         description: "Return the current session manifest: commands executed and artifacts produced.",
-        inputSchema: [
-            "type": "object",
-            "properties": .object([:]),
-            "additionalProperties": false,
-        ],
+        inputSchema: inputSchema(for: .getSessionLog),
         annotations: .init(readOnlyHint: true, idempotentHint: true)
     )
 
     static let archiveSession = Tool(
         name: "archive_session",
         description: "Close and compress the current session into a .tar.gz archive; returns the path.",
-        inputSchema: [
-            "type": "object",
-            "properties": [
-                "delete_source": [
-                    "type": "boolean",
-                    "description": "Delete the session directory after archiving (default: false)",
-                ],
-            ],
-            "additionalProperties": false,
-        ]
+        inputSchema: inputSchema(for: .archiveSession)
     )
 
     static let startHeist = Tool(
@@ -640,20 +503,15 @@ enum ToolDefinitions {
             use matcher fields (label, identifier, traits) for durable element targeting, not heistId. \
             Attach 'expect' to validate outcomes during playback.
             """,
-        inputSchema: [
-            "type": "object",
-            "properties": [
+        inputSchema: inputSchema(
+            for: .startHeist,
+            overriding: [
                 "app": [
                     "type": "string",
                     "description": "Bundle ID of the app being recorded (default: \(Defaults.demoAppBundleID))",
                 ],
-                "identifier": [
-                    "type": "string",
-                    "description": "Session name for the recording (default: heist). Used as directory name if a new session is created.",
-                ],
-            ],
-            "additionalProperties": false,
-        ]
+            ]
+        )
     )
 
     static let stopHeist = Tool(
@@ -662,17 +520,7 @@ enum ToolDefinitions {
             Stop recording and save the heist as a self-contained JSON playback script. \
             Returns the file path and step count. At least one step must have been recorded.
             """,
-        inputSchema: [
-            "type": "object",
-            "properties": [
-                "output": [
-                    "type": "string",
-                    "description": "File path to write the .heist file",
-                ],
-            ],
-            "required": .array(["output"]),
-            "additionalProperties": false,
-        ]
+        inputSchema: inputSchema(for: .stopHeist)
     )
 
     static let playHeist = Tool(
@@ -682,16 +530,6 @@ enum ToolDefinitions {
             failed step. On failure, returns full diagnostics: command, target, error, action \
             result, expectation result, and a complete interface snapshot at the failure point.
             """,
-        inputSchema: [
-            "type": "object",
-            "properties": [
-                "input": [
-                    "type": "string",
-                    "description": "Path to the .heist file to play back",
-                ],
-            ],
-            "required": .array(["input"]),
-            "additionalProperties": false,
-        ]
+        inputSchema: inputSchema(for: .playHeist)
     )
 }
