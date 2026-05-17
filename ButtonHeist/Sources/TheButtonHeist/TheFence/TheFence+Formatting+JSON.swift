@@ -535,6 +535,9 @@ extension FenceResponse {
             payload["contentWidth"] = contentWidth
             payload["contentHeight"] = contentHeight
         }
+        if info.isModalBoundary {
+            payload["isModalBoundary"] = true
+        }
         if detail == .full {
             payload["frameX"] = info.frameX
             payload["frameY"] = info.frameY

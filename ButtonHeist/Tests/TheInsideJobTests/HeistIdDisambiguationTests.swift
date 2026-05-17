@@ -51,7 +51,6 @@ final class HeistIdDisambiguationTests: XCTestCase {
             .element(element, traversalIndex: index)
         }
         return TheBurglar.ParseResult(
-            elements: elements,
             hierarchy: [.container(container, children: children)],
             objects: [:],
             scrollViews: [container: scrollView]

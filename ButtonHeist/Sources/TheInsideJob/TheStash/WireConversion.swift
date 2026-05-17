@@ -37,15 +37,7 @@ extension TheStash {
     }
 
     static func traitNames(_ traits: AccessibilityTraits) -> [HeistTrait] {
-        var result = traits.traitNames.map { HeistTrait(rawValue: $0) ?? .unknown($0) }
-        var remaining = traits.rawValue
-        for (trait, _) in AccessibilityTraits.knownTraits where traits.contains(trait) {
-            remaining &= ~trait.rawValue
-        }
-        if remaining != 0 {
-            result.append(.unknown("unknown(0x\(String(remaining, radix: 16)))"))
-        }
-        return result
+        traits.namesIncludingUnknownBits.map { HeistTrait(rawValue: $0) ?? .unknown($0) }
     }
 
     // MARK: - Element Conversion
@@ -126,8 +118,7 @@ extension TheStash {
             // Construction invariant: every leaf in `screen.hierarchy` also
             // appears in `screen.heistIdByElement`/`screen.elements` because
             // both maps are built from the same parse pass (TheBurglar zips
-            // `result.elements` with `resolvedHeistIds`, and the hierarchy's
-            // `sortedElements` IS that elements list). Log and fall back to
+            // `hierarchy.sortedElements` with `resolvedHeistIds`). Log and fall back to
             // an id-less wire node so we'd notice if the invariant ever broke.
             wireConversionLogger.error("Hierarchy leaf with no heistId in screen; emitting wire node without id")
             return .element(convert(element))
@@ -160,6 +151,7 @@ extension TheStash {
         return ContainerInfo(
             type: type,
             stableId: stableId,
+            isModalBoundary: container.isModalBoundary,
             frameX: Double(container.frame.origin.x.sanitizedForJSON),
             frameY: Double(container.frame.origin.y.sanitizedForJSON),
             frameWidth: Double(container.frame.size.width.sanitizedForJSON),

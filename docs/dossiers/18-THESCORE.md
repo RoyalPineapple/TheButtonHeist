@@ -151,6 +151,8 @@ classDiagram
 
     class ContainerInfo {
         +ContainerType type
+        +String? stableId
+        +Bool isModalBoundary
         +Double frameX/Y/Width/Height
     }
 

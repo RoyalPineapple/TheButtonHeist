@@ -280,6 +280,30 @@ final class WireConverterTests: XCTestCase {
         XCTAssertEqual(wire.actions, [])
     }
 
+    // MARK: - Tree Conversion
+
+    func testToWireTreePreservesParserModalBoundary() {
+        let element = makeElement(label: "Confirm", traits: [.button])
+        let container = AccessibilityContainer(
+            type: .semanticGroup(label: "Alert", value: nil, identifier: nil),
+            frame: .zero,
+            isModalBoundary: true
+        )
+        let parse = TheBurglar.ParseResult(
+            hierarchy: [.container(container, children: [.element(element, traversalIndex: 0)])],
+            objects: [:],
+            scrollViews: [:]
+        )
+        let screen = TheBurglar.buildScreen(from: parse)
+
+        let tree = WireConversion.toWireTree(from: screen)
+
+        guard case .container(let info, _) = tree.first else {
+            return XCTFail("Expected container root")
+        }
+        XCTAssertTrue(info.isModalBoundary)
+    }
+
     // MARK: - Delta: Identical Snapshots
 
     func testIdenticalSnapshotsReturnNoChange() {

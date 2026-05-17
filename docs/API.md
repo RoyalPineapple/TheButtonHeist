@@ -1167,13 +1167,15 @@ Recursive node in the canonical interface tree. Leaves carry the full `HeistElem
 public struct ContainerInfo: Codable, Equatable, Hashable, Sendable
 ```
 
-Container metadata for the canonical interface tree. Mirrors `AccessibilitySnapshotParser.AccessibilityContainer` 1:1 but lives in TheScore so CLI/MCP don't pull UIKit. The container `type` is itself an enum carrying the type-specific payload; on the wire the discriminator and payload are flattened to one level.
+Container metadata for the canonical interface tree. Mirrors parser container fields that are useful at client boundaries while keeping UIKit out of TheScore. The container `type` is itself an enum carrying the type-specific payload; on the wire the discriminator and payload are flattened to one level.
 
 #### Properties
 
 | Property | Type | Description |
 |----------|------|-------------|
 | `type` | `ContainerInfo.ContainerType` | Container type with type-specific payload |
+| `stableId` | `String?` | Stable container identity when available |
+| `isModalBoundary` | `Bool` | True when the parser identified an accessibility modal boundary; omitted from JSON when false |
 | `frameX` | `Double` | Frame X origin |
 | `frameY` | `Double` | Frame Y origin |
 | `frameWidth` | `Double` | Frame width |
