@@ -294,6 +294,28 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testUnsupportedArgumentsAreRecordedAsEvidenceOnly() async throws {
+        let bookKeeper = makeBookKeeper()
+        try bookKeeper.beginSession(identifier: "test")
+        try bookKeeper.startHeistRecording(app: "com.example.app")
+        bookKeeper.recordHeistEvidence(
+            command: .typeText,
+            args: [
+                "command": "type_text",
+                "text": "hello world",
+                "metadata": Data([0x01, 0x02]),
+            ],
+            interfaceCache: [:]
+        )
+        let script = try bookKeeper.stopHeistRecording()
+
+        XCTAssertEqual(script.steps[0].arguments["text"], .string("hello world"))
+        XCTAssertNil(script.steps[0].arguments["metadata"])
+        XCTAssertEqual(script.steps[0].recorded?.unsupportedArguments?.first?.name, "metadata")
+        XCTAssertEqual(script.steps[0].recorded?.unsupportedArguments?.first?.valueType, "Data")
+    }
+
+    @ButtonHeistActor
     func testHeistIdResolvedToMatcher() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")

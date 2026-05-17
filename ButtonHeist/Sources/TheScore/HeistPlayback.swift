@@ -242,6 +242,10 @@ public struct RecordedMetadata: Codable, Sendable, Equatable {
     public let frame: RecordedFrame?
     /// Whether the step used coordinate-only targeting (no element).
     public let coordinateOnly: Bool?
+    /// Inputs omitted from replay because they were not JSON-compatible.
+    public let unsupportedArguments: [RecordedUnsupportedInput]?
+    /// Inputs capped or clamped while recording. Diagnostic only.
+    public let caps: [RecordedInputCap]?
     /// Accessibility trace observed while recording.
     public let accessibilityTrace: AccessibilityTrace?
     /// Compact accessibility delta observed while recording.
@@ -253,6 +257,8 @@ public struct RecordedMetadata: Codable, Sendable, Equatable {
         heistId: String? = nil,
         frame: RecordedFrame? = nil,
         coordinateOnly: Bool? = nil,
+        unsupportedArguments: [RecordedUnsupportedInput]? = nil,
+        caps: [RecordedInputCap]? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         accessibilityDelta: AccessibilityTrace.Delta? = nil,
         expectation: ExpectationResult? = nil
@@ -260,6 +266,8 @@ public struct RecordedMetadata: Codable, Sendable, Equatable {
         self.heistId = heistId
         self.frame = frame
         self.coordinateOnly = coordinateOnly
+        self.unsupportedArguments = unsupportedArguments?.isEmpty == true ? nil : unsupportedArguments
+        self.caps = caps?.isEmpty == true ? nil : caps
         self.accessibilityTrace = accessibilityTrace
         self.accessibilityDelta = accessibilityDelta
         self.expectation = expectation

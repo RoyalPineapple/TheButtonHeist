@@ -46,7 +46,14 @@ Each step is a flat JSON object using the same command names and argument fields
   },
   "_recorded": {
     "heistId": "button_review_pr_high_priority",
-    "frame": {"x": 16, "y": 514, "width": 370, "height": 65}
+    "frame": {"x": 16, "y": 514, "width": 370, "height": 65},
+    "unsupportedArguments": [
+      {
+        "name": "metadata",
+        "valueType": "Data",
+        "reason": "not JSON-compatible; omitted from replay arguments"
+      }
+    ]
   }
 }
 ```
@@ -179,6 +186,13 @@ The `_recorded` key carries optional recording notes for debugging. It is preser
 | `heistId` | `String?` | The heistId that was used to target the element at recording time |
 | `frame` | `Object?` | The element's frame at recording time (`x`, `y`, `width`, `height`) |
 | `coordinateOnly` | `Bool?` | True if the step used coordinate-only targeting (no element) |
+| `unsupportedArguments` | `[Object]?` | Arguments omitted from replay because they were not JSON-compatible. Includes `name`, `valueType`, and `reason`. |
+| `caps` | `[Object]?` | Inputs clamped during recording. Includes `name`, `requested`, `applied`, optional `minimum` / `maximum`, and `reason`. |
+| `accessibilityTrace` | `Object?` | Capture trace observed while recording |
+| `accessibilityDelta` | `Object?` | Compact delta observed while recording |
+| `expectation` | `Object?` | Expectation evidence observed while recording |
+
+`_recorded.heistId`, traces, caps, unsupported arguments, and frames are evidence only. Playback ignores `_recorded` entirely; the durable replay contract is the flat step command, matcher fields, ordinal, and command arguments outside `_recorded`.
 
 ## Durable Recording
 
@@ -218,7 +232,7 @@ The `--junit <path>` flag writes a JUnit XML report to disk. Each heist step bec
 - `expect` is validated against the live action result
 - Playback stops on the first failed action (element not found, timeout, etc.)
 - The result reports `completedSteps`, `failedIndex` (if any), and `totalTimingMs`
-- Recording notes such as `_recorded` are ignored during playback
+- Recording notes such as `_recorded` are ignored during playback; a readable `heistId` in `_recorded` is never used as a target
 
 ### Failure diagnostics
 
