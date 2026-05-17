@@ -165,6 +165,17 @@ final class DeviceConnectionReceiveTests: XCTestCase {
         XCTAssertTrue(connection.isConnected)
     }
 
+    @ButtonHeistActor
+    func testSendWhileDisconnectedFailsTyped() async {
+        let connection = DeviceConnection(device: makeDummyDevice())
+
+        let outcome = connection.send(.ping, requestId: "late")
+
+        guard case .failed(.notConnected) = outcome else {
+            return XCTFail("Expected notConnected send failure, got \(outcome)")
+        }
+    }
+
     private func makeDummyDevice() -> DiscoveredDevice {
         DiscoveredDevice(
             id: "test-device",

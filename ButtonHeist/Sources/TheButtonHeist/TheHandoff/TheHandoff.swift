@@ -954,8 +954,13 @@ final class TheHandoff {
 
     // MARK: - Commands
 
-    func send(_ message: ClientMessage, requestId: String? = nil) {
-        connection?.send(message, requestId: requestId)
+    @discardableResult
+    func send(_ message: ClientMessage, requestId: String? = nil) -> DeviceSendOutcome {
+        guard case .connected = connectionPhase,
+              let connection else {
+            return .failed(.notConnected)
+        }
+        return connection.send(message, requestId: requestId)
     }
 
     // MARK: - Keepalive

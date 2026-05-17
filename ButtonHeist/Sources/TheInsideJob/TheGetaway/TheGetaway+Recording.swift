@@ -260,19 +260,19 @@ extension TheGetaway {
                 // every other client gets the lightweight `.recordingStopped`
                 // notification, per the wire-protocol contract.
                 //
-                // Clear the cache ONLY after `sendData` confirms it handed the
-                // payload to a live transport closure. If the transport was
-                // torn down between the authenticated-set read and the send,
-                // `sendData` returns false and we keep the cached payload so a
-                // subsequent `stop_recording` (or `tearDown`) can still resolve
-                // it — never drop a recording into the void.
-                let delivered = await muscle.sendData(payloadData, toClient: owner)
-                if delivered {
+                // Clear the cache ONLY after `sendData` confirms the target
+                // client still exists and the transport accepted the bytes. If
+                // the client or transport disappears between the
+                // authenticated-set read and the send, we keep the cached
+                // payload so a subsequent `stop_recording` (or `tearDown`) can
+                // still resolve it — never drop a recording into the void.
+                let deliveryOutcome = await muscle.sendData(payloadData, toClient: owner)
+                if deliveryOutcome.didEnqueue {
                     recordingRouteState = .idle
                 }
                 if let stoppedData = encodeEnvelope(.recordingStopped) {
                     for otherClient in authenticated where otherClient != owner {
-                        await muscle.sendData(stoppedData, toClient: otherClient)
+                        _ = await muscle.sendData(stoppedData, toClient: otherClient)
                     }
                 }
             } else {

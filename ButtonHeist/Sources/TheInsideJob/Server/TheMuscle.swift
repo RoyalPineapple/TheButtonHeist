@@ -145,8 +145,8 @@ actor TheMuscle {
     /// Test seam: drop the `sendToClient` transport closure to simulate
     /// the "transport torn down between authenticated-set read and send"
     /// race. Lets `TheGetaway.deliverRecordingResult` tests verify the
-    /// cache-preservation contract when `sendData(_:toClient:)` returns
-    /// false. Production code never calls this — `tearDown` does not
+    /// cache-preservation contract when `sendData(_:toClient:)` fails.
+    /// Production code never calls this — `tearDown` does not
     /// clear the closure (TheMuscle assumes one-shot wiring at init).
     func clearSendToClientForTest() {
         self.sendToClient = nil
@@ -223,7 +223,7 @@ actor TheMuscle {
 
     // MARK: - Callbacks (set by TheInsideJob)
 
-    var sendToClient: (@Sendable (_ data: Data, _ clientId: Int) async -> Void)?
+    var sendToClient: (@Sendable (_ data: Data, _ clientId: Int) async -> ServerSendOutcome)?
     var markClientAuthenticated: (@Sendable (_ clientId: Int) async -> Void)?
     var disconnectClient: (@Sendable (_ clientId: Int) async -> Void)?
     /// Invoked on `@MainActor` after a client completes authentication. The
@@ -261,7 +261,7 @@ actor TheMuscle {
     /// Bundles assignment into a single actor hop so the consumer doesn't pay
     /// five `await`s.
     func installCallbacks(
-        sendToClient: @escaping @Sendable (Data, Int) async -> Void,
+        sendToClient: @escaping @Sendable (Data, Int) async -> ServerSendOutcome,
         markClientAuthenticated: @escaping @Sendable (Int) async -> Void,
         disconnectClient: @escaping @Sendable (Int) async -> Void,
         onClientAuthenticated: @escaping @MainActor @Sendable (Int, @escaping @Sendable (Data) -> Void) -> Void,
@@ -283,7 +283,7 @@ actor TheMuscle {
 
     func sendServerHello(clientId: Int) async {
         guard let data = encodeEnvelope(.serverHello) else { return }
-        await sendToClient?(data, clientId)
+        _ = await sendToClient?(data, clientId)
     }
 
     /// Called when a ping is received from an authenticated client.
@@ -317,7 +317,7 @@ actor TheMuscle {
     /// Finding 5 called out.
     func broadcastToSubscribed(_ data: Data) async {
         for (clientId, phase) in clients where phase.isSubscribed {
-            await sendToClient?(data, clientId)
+            _ = await sendToClient?(data, clientId)
         }
     }
 
@@ -327,16 +327,18 @@ actor TheMuscle {
     /// originating `start_recording` client without broadcasting the video
     /// to every authenticated peer.
     ///
-    /// Returns `true` if a `sendToClient` transport closure was wired and the
-    /// data was handed off to it; `false` if the transport has been torn down
-    /// (closure is nil), in which case callers that need delivery confirmation
-    /// must preserve any cached state. The transport closure itself returns
-    /// `Void`; once the bytes are handed to it we treat the send as delivered.
+    /// Returns `.enqueued` only if the target client still exists and the
+    /// transport accepted the bytes. Callers that need delivery confirmation
+    /// must preserve cached state for any `.failed` outcome.
     @discardableResult
-    func sendData(_ data: Data, toClient clientId: Int) async -> Bool {
-        guard let sendToClient else { return false }
-        await sendToClient(data, clientId)
-        return true
+    func sendData(_ data: Data, toClient clientId: Int) async -> ServerSendOutcome {
+        guard clients[clientId] != nil else {
+            return .failed(.clientNotFound(clientId))
+        }
+        guard let sendToClient else {
+            return .failed(.transportUnavailable)
+        }
+        return await sendToClient(data, clientId)
     }
 
     func handleUnauthenticatedMessage(_ clientId: Int, data: Data, respond: @escaping @Sendable (Data) -> Void) async {

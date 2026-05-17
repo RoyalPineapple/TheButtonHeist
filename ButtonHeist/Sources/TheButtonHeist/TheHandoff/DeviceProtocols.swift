@@ -2,6 +2,26 @@ import Foundation
 
 // MARK: - Event Enums
 
+/// Synchronous outcome for handing a client message to the transport.
+enum DeviceSendOutcome: Equatable, Sendable {
+    case enqueued
+    case failed(DeviceSendFailure)
+}
+
+enum DeviceSendFailure: Error, LocalizedError, Equatable, Sendable {
+    case notConnected
+    case encodingFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .notConnected:
+            return "Connection is closed"
+        case .encodingFailed(let message):
+            return "Failed to encode request: \(message)"
+        }
+    }
+}
+
 /// Events emitted by a device connection during its lifecycle.
 enum ConnectionEvent {
     case transportReady
@@ -32,11 +52,13 @@ protocol DeviceConnecting: AnyObject {
     var onEvent: (@ButtonHeistActor (ConnectionEvent) -> Void)? { get set }
     func connect()
     func disconnect()
-    func send(_ message: ClientMessage, requestId: String?)
+    @discardableResult
+    func send(_ message: ClientMessage, requestId: String?) -> DeviceSendOutcome
 }
 
 extension DeviceConnecting {
-    func send(_ message: ClientMessage) {
+    @discardableResult
+    func send(_ message: ClientMessage) -> DeviceSendOutcome {
         send(message, requestId: nil)
     }
 }

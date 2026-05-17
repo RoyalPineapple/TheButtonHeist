@@ -572,8 +572,9 @@ private final class ReachabilityProbeConnection: DeviceConnecting {
         isConnected = false
     }
 
-    func send(_ message: ClientMessage, requestId: String?) {
-        guard case .status = message else { return }
+    @discardableResult
+    func send(_ message: ClientMessage, requestId: String?) -> DeviceSendOutcome {
+        guard case .status = message else { return .enqueued }
         let payload = StatusPayload(
             identity: StatusIdentity(
                 appName: "ReachableApp",
@@ -586,5 +587,6 @@ private final class ReachabilityProbeConnection: DeviceConnecting {
             session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
         )
         onEvent?(.message(.status(payload), requestId: requestId, backgroundAccessibilityDelta: nil, accessibilityTrace: nil))
+        return .enqueued
     }
 }

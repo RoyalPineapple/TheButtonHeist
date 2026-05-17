@@ -320,7 +320,8 @@ final class ServerTransport: NSObject {
     /// offered no FIFO guarantee — Swift does not order unstructured Tasks
     /// targeting the same actor — which the cross-cutting audit's
     /// Finding 5 called out as the broadcast-ordering risk.
-    nonisolated func send(_ data: Data, to clientId: Int) async {
+    @discardableResult
+    nonisolated func send(_ data: Data, to clientId: Int) async -> ServerSendOutcome {
         await server.send(data, to: clientId)
     }
 
