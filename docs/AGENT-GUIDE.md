@@ -382,7 +382,7 @@ Deltas tell you *what* changed. Expectations tell you *whether what changed matc
 
 ## Batching: Multiple Actions in One Call
 
-`run_batch` sends a sequence of commands as a single request. Each step runs serially, and you get back per-step results plus a merged net delta across all steps.
+`run_batch` sends a sequence of commands as a single request. Each step runs serially, and you get back ordered per-step results.
 
 ```json
 {
@@ -402,7 +402,7 @@ Deltas tell you *what* changed. Expectations tell you *whether what changed matc
 
 - **Fewer round trips.** Five actions in one call instead of five separate calls.
 - **Atomic sequences.** With `stop_on_error` (default), the batch halts on the first failure — you don't blindly continue a login flow if the email field didn't accept input.
-- **Net deltas.** The batch response merges all per-step deltas into a single net delta. An element added then removed within the batch nets to nothing. A property updated three times keeps the first `old` and last `new`. This gives you the *effective* change without intermediate noise.
+- **Per-step evidence.** Each step keeps its own result payload, including the step's action delta when one was emitted.
 - **Expectation summary.** The batch header shows `[expectations: 3/3]` — how many were checked and how many passed.
 
 ### Batch response
@@ -414,12 +414,9 @@ Login | batch: 5 steps in 847ms [expectations: 3/3]
   [2] activate → elementsChanged
   [3] type_text → elementsChanged ✓
   [4] activate → screenChanged ✓
-net: screen changed
-Dashboard | 8 elements
-  ...
 ```
 
-Each step shows its command, delta kind, and expectation result (`✓`/`✗`). The net delta at the bottom shows the cumulative effect.
+Each step shows its command, delta kind, and expectation result (`✓`/`✗`). Read the corresponding step result for the authoritative action receipt and full delta payload.
 
 ### Batch policies
 
@@ -442,7 +439,7 @@ Once you've seen an element in a `get_interface` response or action delta, use i
 
 ### Batch predictable sequences
 
-If you know the sequence of actions ahead of time (fill a form, navigate a flow), batch them. The round-trip savings compound, and the net delta gives you a cleaner signal than five individual deltas.
+If you know the sequence of actions ahead of time (fill a form, navigate a flow), batch them. The round-trip savings compound, and each step result still carries its own receipt and delta.
 
 ### Use expectations as guard rails
 

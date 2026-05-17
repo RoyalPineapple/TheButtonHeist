@@ -1,6 +1,6 @@
 # TheFence - The Boss
 
-> **Directory:** `ButtonHeist/Sources/TheButtonHeist/TheFence/` (`TheFence.swift`, `TheFence+CommandCatalog.swift`, `TheFence+Handlers.swift`, `TheFence+Formatting.swift`, `TheFence+Formatting+Compact.swift`, `TheFence+Formatting+JSON.swift`, `TheFence+Batch.swift`, `TheFence+ExpectationParsing.swift`, `TheFence+ParameterSpec.swift`, `Dictionary+ArgParsing.swift`, `NetDeltaAccumulator.swift`)
+> **Directory:** `ButtonHeist/Sources/TheButtonHeist/TheFence/` (`TheFence.swift`, `TheFence+CommandCatalog.swift`, `TheFence+Handlers.swift`, `TheFence+Formatting.swift`, `TheFence+Formatting+Compact.swift`, `TheFence+Formatting+JSON.swift`, `TheFence+Batch.swift`, `TheFence+ExpectationParsing.swift`, `TheFence+ParameterSpec.swift`, `Dictionary+ArgParsing.swift`)
 > **Platform:** macOS 14.0+
 > **Role:** Centralized command dispatch for CLI and MCP - the single orchestration layer
 

@@ -20,9 +20,6 @@ extension TheFence {
 
         var results: [[String: Any]] = []
         var stepSummaries: [BatchStepSummary] = []
-        var stepDeltas: [AccessibilityTrace.Delta] = []
-        var stepAccessibilityTraces: [AccessibilityTrace] = []
-        var actionOutcomeCount = 0
         var failedIndex: Int?
         var expectationsMet = 0
         var expectationsChecked = 0
@@ -43,16 +40,6 @@ extension TheFence {
                 if outcome.expectationCounted {
                     expectationsChecked += 1
                     if outcome.expectationMet == true { expectationsMet += 1 }
-                }
-
-                if let delta = outcome.delta {
-                    stepDeltas.append(delta)
-                }
-                if outcome.hasActionResult {
-                    actionOutcomeCount += 1
-                    if let accessibilityTrace = outcome.accessibilityTrace {
-                        stepAccessibilityTraces.append(accessibilityTrace)
-                    }
                 }
 
                 stepSummaries.append(makeStepSummary(
@@ -93,13 +80,6 @@ extension TheFence {
         }
 
         let totalMs = Int((CFAbsoluteTimeGetCurrent() - batchStart) * 1000)
-        let netDelta = if actionOutcomeCount > 0,
-                          stepAccessibilityTraces.count == actionOutcomeCount,
-                          Self.canDeriveNetDeltaFromCaptureReceipts(stepAccessibilityTraces) {
-            AccessibilityTrace.captureReceiptDelta(from: stepAccessibilityTraces)
-        } else {
-            NetDeltaAccumulator.merge(deltas: stepDeltas)
-        }
         return .batch(
             results: results,
             completedSteps: results.count,
@@ -107,8 +87,7 @@ extension TheFence {
             totalTimingMs: totalMs,
             expectationsChecked: expectationsChecked,
             expectationsMet: expectationsMet,
-            stepSummaries: stepSummaries,
-            netDelta: netDelta
+            stepSummaries: stepSummaries
         )
     }
 
@@ -122,10 +101,6 @@ extension TheFence {
         case .failure(let error):
             throw FenceError.invalidRequest("run_batch step \(index): \(error.message)")
         }
-    }
-
-    private static func canDeriveNetDeltaFromCaptureReceipts(_ traces: [AccessibilityTrace]) -> Bool {
-        traces.lazy.flatMap(\.captures).prefix(2).count >= 2
     }
 
     private func skippedStepSummaries(
@@ -147,10 +122,7 @@ extension TheFence {
     // MARK: - Step Outcome
 
     private struct StepOutcome {
-        let hasActionResult: Bool
         let isFailed: Bool
-        let delta: AccessibilityTrace.Delta?
-        let accessibilityTrace: AccessibilityTrace?
         /// Whether this step carried an explicit expectation that counts
         /// toward the batch's expectations-met/checked totals.
         let expectationCounted: Bool
@@ -167,28 +139,19 @@ extension TheFence {
             let met = counted ? result?.met : nil
             let failed = !actionResult.success || (result.map { !$0.met } ?? false)
             return StepOutcome(
-                hasActionResult: true,
                 isFailed: failed,
-                delta: actionResult.accessibilityDelta,
-                accessibilityTrace: actionResult.accessibilityTrace,
                 expectationCounted: counted,
                 expectationMet: met
             )
         case .error:
             return StepOutcome(
-                hasActionResult: false,
                 isFailed: true,
-                delta: nil,
-                accessibilityTrace: nil,
                 expectationCounted: false,
                 expectationMet: nil
             )
         default:
             return StepOutcome(
-                hasActionResult: false,
                 isFailed: false,
-                delta: nil,
-                accessibilityTrace: nil,
                 expectationCounted: false,
                 expectationMet: nil
             )

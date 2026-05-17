@@ -14,12 +14,6 @@ extension AccessibilityTrace {
         return Self.meaningfulCaptureDelta(.between(first, last))
     }
 
-    static func captureReceiptDelta(from traces: [AccessibilityTrace]) -> AccessibilityTrace.Delta? {
-        let captures = traces.flatMap(\.captures)
-        guard let first = captures.first, let last = captures.last else { return nil }
-        return meaningfulCaptureDelta(.between(first, last))
-    }
-
     private static func meaningfulCaptureDelta(_ delta: AccessibilityTrace.Delta) -> AccessibilityTrace.Delta? {
         switch delta {
         case .noChange(let payload) where payload.transient.isEmpty:

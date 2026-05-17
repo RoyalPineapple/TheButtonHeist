@@ -327,7 +327,7 @@ enum ToolDefinitions {
         description: """
             Execute multiple commands in one call. Each step is a JSON object with 'command' set \
             to an MCP tool name or raw Button Heist command plus that command's parameters; attach \
-            'expect' per step to verify inline. Returns per-step results and a merged net delta. \
+            'expect' per step to verify inline. Returns ordered per-step results. \
             policy=stop_on_error (default) or continue_on_error.
             """,
         inputSchema: inputSchema(for: .runBatch)

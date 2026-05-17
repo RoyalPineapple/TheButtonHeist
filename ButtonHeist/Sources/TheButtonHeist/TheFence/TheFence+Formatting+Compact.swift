@@ -38,11 +38,11 @@ extension FenceResponse {
             return "recording: \(path) (\(String(format: "%.1f", payload.duration))s, \(payload.frameCount) frames)"
         case .recordingData(let payload):
             return "recording: \(String(format: "%.1f", payload.duration))s, \(payload.frameCount) frames"
-        case .batch(_, let completedSteps, let failedIndex, let totalTimingMs, let checked, let met, let stepSummaries, let netDelta):
+        case .batch(_, let completedSteps, let failedIndex, let totalTimingMs, let checked, let met, let stepSummaries):
             return compactBatchFormatted(
                 completedSteps: completedSteps, failedIndex: failedIndex,
                 totalTimingMs: totalTimingMs, checked: checked, met: met,
-                stepSummaries: stepSummaries, netDelta: netDelta
+                stepSummaries: stepSummaries
             )
         case .sessionState(let payload):
             return Self.compactSessionState(payload)
@@ -272,8 +272,7 @@ extension FenceResponse {
 
     private func compactBatchFormatted(
         completedSteps: Int, failedIndex: Int?, totalTimingMs: Int,
-        checked: Int, met: Int, stepSummaries: [BatchStepSummary],
-        netDelta: AccessibilityTrace.Delta?
+        checked: Int, met: Int, stepSummaries: [BatchStepSummary]
     ) -> String {
         var text = "batch: \(completedSteps) steps in \(totalTimingMs)ms"
         if let failedIndex { text += " (failed at \(failedIndex))" }
@@ -302,9 +301,6 @@ extension FenceResponse {
                 line += met ? " ✓" : " ✗"
             }
             text += "\n\(line)"
-        }
-        if let netDelta {
-            text += "\n" + Self.compactDelta(netDelta, method: "net")
         }
         return text
     }

@@ -35,11 +35,11 @@ extension FenceResponse {
             return recordingJsonDict(path: path, payload: payload)
         case .recordingData(let payload):
             return recordingDataJsonDict(payload)
-        case .batch(let results, let completedSteps, let failedIndex, let totalTimingMs, let checked, let met, let stepSummaries, let netDelta):
+        case .batch(let results, let completedSteps, let failedIndex, let totalTimingMs, let checked, let met, let stepSummaries):
             return batchJsonDict(
                 results: results, completedSteps: completedSteps, failedIndex: failedIndex,
                 totalTimingMs: totalTimingMs, checked: checked, met: met,
-                stepSummaries: stepSummaries, netDelta: netDelta
+                stepSummaries: stepSummaries
             )
         case .sessionState(let payload):
             return payload
@@ -190,7 +190,7 @@ extension FenceResponse {
     private func batchJsonDict(
         results: [[String: Any]], completedSteps: Int, failedIndex: Int?,
         totalTimingMs: Int, checked: Int, met: Int,
-        stepSummaries: [BatchStepSummary], netDelta: AccessibilityTrace.Delta?
+        stepSummaries: [BatchStepSummary]
     ) -> [String: Any] {
         var dict: [String: Any] = [
             "status": failedIndex == nil ? "ok" : "partial",
@@ -210,9 +210,6 @@ extension FenceResponse {
             dict["stepSummaries"] = stepSummaries.enumerated().map { index, summary in
                 Self.stepSummaryDict(index: index, summary: summary)
             }
-        }
-        if let netDelta {
-            dict["netDelta"] = deltaDictionary(netDelta)
         }
         return dict
     }
