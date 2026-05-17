@@ -4,6 +4,12 @@ This document specifies the communication protocol between TheInsideJob (iOS) an
 
 There is no separate wire protocol version. The handshake compares the server's and the client's `buttonHeistVersion` (CalVer, defined in `ButtonHeist/Sources/TheScore/Messages.swift`) for exact equality; any mismatch closes the connection with `protocolMismatch`. Wire-format changes are tied to a release bump via `scripts/release.sh`.
 
+## Command Contract Layers
+
+Button Heist has one product command contract: `TheFence.Command`. The CLI, session JSON, batches, and MCP tools adapt to those command names, for example `type_text`, `get_screen`, and `scroll_to_visible`.
+
+This document describes the lower transport layer. Its envelope `type` values are wire message discriminators from TheScore, for example `typeText`, `requestScreen`, and `scrollToVisible`. They are stable wire names, but they are not the CLI/MCP command namespace. When the two differ, use TheFence command names at adapter boundaries and wire names only for raw transport messages.
+
 ## Transport
 
 - **Layer**: TLS over TCP (Network.framework `NWProtocolTLS`)

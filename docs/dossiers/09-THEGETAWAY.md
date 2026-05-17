@@ -33,7 +33,7 @@ graph TD
 
     Dispatch -->|"protocol/auth"| Muscle["TheMuscle"]
     Dispatch -->|"actions"| Brains["TheBrains.executeCommand"]
-    Dispatch -->|"wait_for_idle/change"| BrainsWait["TheBrains.executeWaitFor*"]
+    Dispatch -->|"wait_for_change"| BrainsWait["TheBrains.executeWaitFor*"]
     Dispatch -->|"recording"| Recording
     Broadcast -->|"refresh + delta"| Brains
     Wire --> Muscle

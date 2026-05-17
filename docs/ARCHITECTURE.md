@@ -302,6 +302,8 @@ The `Stakeout` class provides on-device screen recording as H.264/MP4:
 
 **Purpose**: Centralized command dispatch and session management. Both the CLI (`buttonheist session`) and the MCP server (`buttonheist-mcp`) are thin wrappers over TheFence.
 
+There is one product command contract: `TheFence.Command`. The CLI and MCP server are adapters over that catalog. Wire message names live one layer lower in TheScore's transport protocol, so command names such as `type_text` and wire discriminators such as `typeText` should not be treated as the same namespace.
+
 **Location**: `ButtonHeist/Sources/TheButtonHeist/TheFence.swift`
 
 **Architecture**:
@@ -369,7 +371,7 @@ flowchart TD
 ```
 ButtonHeistMCP (Swift executable, macOS 14+)
 ├── main.swift — Server setup, tool handler, response rendering
-├── ToolDefinitions.swift — 23 tool schemas
+├── ToolDefinitions.swift — 24 tool schemas
 └── Package.swift — Dependencies: ButtonHeist + swift-sdk (MCP)
 ```
 

@@ -264,8 +264,8 @@ Four common modes:
 // Wait for an element to disappear
 {"tool": "wait_for", "arguments": {"heistId": "loading-spinner", "absent": true}}
 
-// Wait for animations to settle
-{"tool": "wait_for_idle", "arguments": {"timeout": 5}}
+// Wait for any UI change, or for a specific expected change
+{"tool": "wait_for_change", "arguments": {"timeout": 5}}
 ```
 
 ## Understanding Deltas

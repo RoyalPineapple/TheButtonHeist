@@ -146,7 +146,7 @@ Some elements look tappable but don't have an accessibility activation path. Sta
 
 Rapid sequential actions can outrun the UI. If you activate a button that triggers an animation or network request, the delta is computed before the UI settles.
 
-**Fix:** Use `wait_for` to wait for the expected result, or `wait_for_idle` to let animations complete before checking state.
+**Fix:** Use `wait_for` to wait for the expected result, or `wait_for_change` to let UI changes complete before checking state.
 
 ### Matcher missed an element you expected
 
