@@ -104,7 +104,7 @@ public enum ClientMessage: Codable, Sendable {
     /// Type text character-by-character by tapping keyboard keys
     case typeText(TypeTextTarget)
 
-    /// Perform a standard edit action (copy, paste, cut, select, selectAll) on the first responder
+    /// Perform a standard edit action (copy, paste, cut, select, selectAll, delete) on the first responder
     case editAction(EditActionTarget)
 
     /// Scroll via accessibility scroll action (bubbles up to nearest scroll view)
@@ -486,30 +486,54 @@ extension RotorTarget: Codable {
     }
 }
 
-/// Target for typing text character-by-character via keyboard key taps
+/// Target for typing non-empty text character-by-character via keyboard key taps.
 public struct TypeTextTarget: Codable, Sendable {
-    /// Text to type (each character is tapped individually). Can be nil if only deleting.
-    public let text: String?
-    /// Number of times to tap the delete key before typing. Used for corrections.
-    public let deleteCount: Int?
-    /// Clear all existing text before typing. Uses UITextInput select-all + delete
-    /// for a clean replacement without needing to know the current field length.
-    public let clearFirst: Bool?
+    private enum CodingKeys: String, CodingKey {
+        case text
+        case elementTarget
+        case deleteCount
+        case clearFirst
+    }
+
+    /// Text to type (each character is tapped individually).
+    public let text: String
     /// Optional element to tap first to bring up keyboard (text field).
     /// Also used to read back the current value after typing.
     public let elementTarget: ElementTarget?
 
-    public init(text: String? = nil, deleteCount: Int? = nil, clearFirst: Bool? = nil, elementTarget: ElementTarget? = nil) {
+    public init(text: String, elementTarget: ElementTarget? = nil) {
         self.text = text
-        self.deleteCount = deleteCount
-        self.clearFirst = clearFirst
         self.elementTarget = elementTarget
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if container.contains(.deleteCount) || container.contains(.clearFirst) {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: container.codingPath,
+                debugDescription: "typeText no longer accepts deleteCount or clearFirst; use editAction for destructive edits"
+            ))
+        }
+        text = try container.decode(String.self, forKey: .text)
+        guard !text.isEmpty else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: container.codingPath + [CodingKeys.text],
+                debugDescription: "text must be non-empty"
+            ))
+        }
+        elementTarget = try container.decodeIfPresent(ElementTarget.self, forKey: .elementTarget)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(text, forKey: .text)
+        try container.encodeIfPresent(elementTarget, forKey: .elementTarget)
     }
 }
 
 /// Standard edit actions that can be dispatched via the responder chain.
 public enum EditAction: String, Codable, Sendable, CaseIterable {
-    case copy, paste, cut, select, selectAll
+    case copy, paste, cut, select, selectAll, delete
 }
 
 /// Target for writing text to the general pasteboard.

@@ -26,7 +26,7 @@ ButtonHeistMCP currently exposes 24 tools backed by `TheFence`:
 - `list_devices`
 - `gesture` (grouped: `swipe`, `one_finger_tap`, `drag`, `long_press`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`)
 - `scroll` (grouped: `mode` selects `page`, `to_visible`, `search`, or `to_edge`)
-- `edit_action` (grouped: `copy`, `paste`, `cut`, `select`, `selectAll`, `dismiss`)
+- `edit_action` (grouped: `copy`, `paste`, `cut`, `select`, `selectAll`, `delete`, `dismiss`)
 - `set_pasteboard`
 - `get_pasteboard`
 - `run_batch`

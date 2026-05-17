@@ -38,7 +38,7 @@ Without `--device`, direct commands expect exactly one reachable target. No gues
 | `session` | Start a persistent REPL / JSON session |
 | `activate` | Primary element interaction command |
 | `rotor` | Move through a VoiceOver rotor |
-| `type_text` | Type text and/or delete characters via keyboard injection |
+| `type_text` | Type non-empty text via keyboard injection |
 | `get_screen` | Capture a PNG screenshot |
 | `get_interface` | Fetch the current app accessibility state |
 | `wait_for_change` | Wait for the UI hierarchy to change |
@@ -58,7 +58,7 @@ Without `--device`, direct commands expect exactly one reachable target. No gues
 | `two_finger_tap` | Low-level two-finger tap gesture |
 | `draw_path` | Draw a touch path through waypoints |
 | `draw_bezier` | Draw a touch path along cubic Bezier segments |
-| `edit_action` | Responder-chain edit actions: copy, paste, cut, select, selectAll |
+| `edit_action` | Responder-chain edit actions: copy, paste, cut, select, selectAll, delete |
 | `dismiss_keyboard` | Resign first responder and dismiss the keyboard |
 | `set_pasteboard` | Write text to the general pasteboard |
 | `get_pasteboard` | Read text from the general pasteboard |
@@ -87,15 +87,13 @@ Named accessibility actions are routed through `activate --action`.
 
 ### type_text
 
-Type text into a focused field via keyboard injection.
+Type non-empty text into a focused field via keyboard injection.
 
 ```bash
 buttonheist type_text "Hello World" --identifier nameField
-buttonheist type_text --delete 5 --identifier nameField
-buttonheist type_text --delete 4 "orld" --identifier nameField   # Correct a typo
 ```
 
-Flags: positional text, `--delete <n>`, `--identifier`, `--index`, `-t/--timeout` (default 30s). Outputs the action result to stdout (includes the field's current value when available).
+Flags: positional text, `--identifier`, `--index`, `-t/--timeout` (default 30s). Outputs the action result to stdout (includes the field's current value when available). Use `edit_action delete`, `cut`, or `selectAll` for destructive text edits.
 
 ### get_screen
 

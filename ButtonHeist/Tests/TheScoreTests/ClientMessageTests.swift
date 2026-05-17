@@ -99,38 +99,24 @@ final class ClientMessageTests: XCTestCase {
 
         if case .typeText(let target) = decoded {
             XCTAssertEqual(target.text, "Hello")
-            XCTAssertNil(target.deleteCount)
             XCTAssertNil(target.elementTarget)
         } else {
             XCTFail("Expected typeText, got \(decoded)")
         }
     }
 
-    func testTypeTextWithDeleteOnly() throws {
-        let message = ClientMessage.typeText(TypeTextTarget(deleteCount: 5))
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+    func testTypeTextRejectsMissingTextOnDecode() throws {
+        let json = #"{"type":"typeText","payload":{}}"#
 
-        if case .typeText(let target) = decoded {
-            XCTAssertNil(target.text)
-            XCTAssertEqual(target.deleteCount, 5)
-            XCTAssertNil(target.elementTarget)
-        } else {
-            XCTFail("Expected typeText, got \(decoded)")
-        }
+        XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: Data(json.utf8)))
     }
 
-    func testTypeTextWithTextAndDelete() throws {
-        let message = ClientMessage.typeText(TypeTextTarget(text: "World", deleteCount: 3))
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+    func testTypeTextRejectsLegacyDeleteFieldsOnDecode() throws {
+        let deleteJSON = #"{"type":"typeText","payload":{"text":"World","deleteCount":3}}"#
+        let clearJSON = #"{"type":"typeText","payload":{"text":"World","clearFirst":true}}"#
 
-        if case .typeText(let target) = decoded {
-            XCTAssertEqual(target.text, "World")
-            XCTAssertEqual(target.deleteCount, 3)
-        } else {
-            XCTFail("Expected typeText, got \(decoded)")
-        }
+        XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: Data(deleteJSON.utf8)))
+        XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: Data(clearJSON.utf8)))
     }
 
     func testTypeTextWithElementTarget() throws {
