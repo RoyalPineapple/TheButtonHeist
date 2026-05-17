@@ -2,7 +2,7 @@
 # Bump the AccessibilitySnapshotBH dependency.
 #
 # Tags the current submodule commit on the AccessibilitySnapshotBH repo
-# with the next minor version, then bumps Package.swift to match.
+# with the next minor version, then bumps the exact Package.swift pin to match.
 #
 # Usage: ./scripts/bump-parser.sh [--dry-run]
 
@@ -27,9 +27,9 @@ fi
 SUBMODULE_SHA=$(git -C "$SUBMODULE_DIR" rev-parse HEAD)
 echo "Submodule commit: ${SUBMODULE_SHA:0:8}"
 
-CURRENT_PIN=$(grep 'AccessibilitySnapshotBH' "$PACKAGE_FILE" | grep -oE 'from: "[0-9]+\.[0-9]+\.[0-9]+"' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+CURRENT_PIN=$(grep 'AccessibilitySnapshotBH' "$PACKAGE_FILE" | grep -oE 'exact: "[0-9]+\.[0-9]+\.[0-9]+"' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
 if [[ -z "$CURRENT_PIN" ]]; then
-    echo "Error: could not find AccessibilitySnapshotBH version pin in $PACKAGE_FILE"
+    echo "Error: could not find exact AccessibilitySnapshotBH version pin in $PACKAGE_FILE"
     exit 1
 fi
 
@@ -55,7 +55,7 @@ if [[ "$SUBMODULE_SHA" == "$TAGGED_SHA" ]]; then
         exit 0
     fi
 
-    sed -i '' "s|from: \"$CURRENT_PIN\"|from: \"$LATEST_TAG\"|" "$PACKAGE_FILE"
+    sed -i '' "s|exact: \"$CURRENT_PIN\"|exact: \"$LATEST_TAG\"|" "$PACKAGE_FILE"
     git add "$PACKAGE_FILE"
     git commit -m "Bump AccessibilitySnapshotBH $CURRENT_PIN → $LATEST_TAG"
     echo "✓ Bumped Package.swift"
@@ -78,7 +78,7 @@ git -C "$SUBMODULE_DIR" tag "$NEW_TAG" "$SUBMODULE_SHA"
 git -C "$SUBMODULE_DIR" push origin "$NEW_TAG"
 echo "✓ Tagged $NEW_TAG on AccessibilitySnapshotBH"
 
-sed -i '' "s|from: \"$CURRENT_PIN\"|from: \"$NEW_TAG\"|" "$PACKAGE_FILE"
+sed -i '' "s|exact: \"$CURRENT_PIN\"|exact: \"$NEW_TAG\"|" "$PACKAGE_FILE"
 echo "✓ Bumped Package.swift"
 
 git add "$PACKAGE_FILE"

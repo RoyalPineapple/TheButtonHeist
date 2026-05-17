@@ -14,7 +14,10 @@ let package = Package(
         .library(name: "ButtonHeist", targets: ["ButtonHeist"])
     ],
     dependencies: [
-        .package(url: "https://github.com/RoyalPineapple/AccessibilitySnapshotBH", from: "0.8.0"),
+        // Parser semantics are part of Button Heist's release contract.
+        // Keep this exact tag aligned with submodules/AccessibilitySnapshotBH
+        // via scripts/check-parser-contract.sh and scripts/bump-parser.sh.
+        .package(url: "https://github.com/RoyalPineapple/AccessibilitySnapshotBH", exact: "0.8.0"),
         .package(url: "https://github.com/apple/swift-certificates", from: "1.0.0"),
         .package(url: "https://github.com/apple/swift-crypto", from: "3.0.0"),
     ],

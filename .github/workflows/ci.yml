@@ -63,48 +63,8 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: Verify AccessibilitySnapshotBH pin is tip of main branch
-        run: |
-          set -eo pipefail
-          SUBMODULE_SHA=$(git ls-tree HEAD submodules/AccessibilitySnapshotBH | awk '{print $3}')
-          BRANCH_TIP=$(git ls-remote https://github.com/RoyalPineapple/AccessibilitySnapshotBH refs/heads/main | awk '{print $1}')
-
-          echo "Submodule pin:  $SUBMODULE_SHA"
-          echo "Branch tip:     $BRANCH_TIP"
-
-          FAILED=0
-          if [ "$SUBMODULE_SHA" != "$BRANCH_TIP" ]; then
-            echo "::error::Submodule ($SUBMODULE_SHA) is behind main branch tip ($BRANCH_TIP). Run: git submodule update --remote submodules/AccessibilitySnapshotBH"
-            FAILED=1
-          fi
-
-          # If Package.swift uses a revision pin, verify it matches the submodule
-          PACKAGE_SHA=$(grep -oE 'revision: "[0-9a-f]+"' Package.swift | grep -oE '[0-9a-f]{40}' || true)
-          if [ -n "$PACKAGE_SHA" ]; then
-            echo "Package.swift:  $PACKAGE_SHA"
-            if [ "$PACKAGE_SHA" != "$SUBMODULE_SHA" ]; then
-              echo "::error::Package.swift revision ($PACKAGE_SHA) does not match submodule ($SUBMODULE_SHA). Update the revision pin in Package.swift."
-              FAILED=1
-            fi
-          fi
-
-          PACKAGE_TAG=$(grep 'AccessibilitySnapshotBH' Package.swift | grep -oE 'from: "[0-9]+\.[0-9]+\.[0-9]+"' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
-          if [ -n "$PACKAGE_TAG" ]; then
-            TAG_SHA=$(git ls-remote https://github.com/RoyalPineapple/AccessibilitySnapshotBH "refs/tags/$PACKAGE_TAG^{}" | awk '{print $1}')
-            if [ -z "$TAG_SHA" ]; then
-              TAG_SHA=$(git ls-remote https://github.com/RoyalPineapple/AccessibilitySnapshotBH "refs/tags/$PACKAGE_TAG" | awk '{print $1}')
-            fi
-            echo "Package.swift tag: $PACKAGE_TAG"
-            echo "Tagged commit:      $TAG_SHA"
-            if [ -z "$TAG_SHA" ]; then
-              echo "::error::Package.swift references AccessibilitySnapshotBH tag $PACKAGE_TAG, but that tag does not exist."
-              FAILED=1
-            elif [ "$TAG_SHA" != "$SUBMODULE_SHA" ]; then
-              echo "::error::Package.swift tag $PACKAGE_TAG ($TAG_SHA) does not match submodule ($SUBMODULE_SHA). Run: ./scripts/bump-parser.sh"
-              FAILED=1
-            fi
-          fi
-          exit $FAILED
+      - name: Verify AccessibilitySnapshotBH parser contract
+        run: scripts/check-parser-contract.sh
 
   spm-package:
     runs-on: macos-15

@@ -5,7 +5,7 @@
 #   1. Validate: must be on main, in sync with origin, clean worktree
 #   2. Bump version across 5 files + regenerate Xcode projects
 #   3. Build CLI + MCP (in parallel)
-#   4. Rebase onto latest origin, commit, tag, push
+#   4. Rebase onto latest origin, commit/tag or tag current source, push
 #   5. Wait for CI release workflow; upgrade Homebrew on success, rollback on failure
 #
 # Tests are skipped by default — CI already ran them on the same commit.
@@ -14,10 +14,12 @@
 # Versioning: SemVer (MAJOR.MINOR.PATCH). Default bump is patch.
 #
 # Usage: ./scripts/release.sh [--dry-run] [--full] [--major | --minor | <version>]
+#        ./scripts/release.sh --tag-current [--dry-run] [--full]
 # Example: ./scripts/release.sh              # Bump patch: 0.2.0 -> 0.2.1
 #          ./scripts/release.sh --minor      # Bump minor: 0.2.1 -> 0.3.0
 #          ./scripts/release.sh --major      # Bump major: 0.3.0 -> 1.0.0
 #          ./scripts/release.sh 0.5.0        # Explicit version
+#          ./scripts/release.sh --tag-current # Publish the already-bumped source version
 #          ./scripts/release.sh --dry-run    # Preview only
 #          ./scripts/release.sh --full       # Run local tests before committing
 
@@ -34,6 +36,7 @@ source "$SCRIPT_DIR/release-contract.sh"
 
 DRY_RUN=false
 RUN_TESTS=false
+TAG_CURRENT=false
 BUMP_TYPE=""
 
 run_tuist_test() {
@@ -47,11 +50,27 @@ run_tuist_test() {
     return "$test_status"
 }
 
+local_release_tag_exists() {
+    local version="$1"
+    git show-ref --verify --quiet "refs/tags/v$version"
+}
+
+remote_release_tag_exists() {
+    local version="$1"
+    git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null 2>&1
+}
+
+release_tag_exists() {
+    local version="$1"
+    local_release_tag_exists "$version" || remote_release_tag_exists "$version"
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dry-run)    DRY_RUN=true; shift ;;
         --full)       RUN_TESTS=true; shift ;;
         --skip-tests) shift ;;  # legacy flag, tests skip by default now
+        --tag-current) TAG_CURRENT=true; shift ;;
         --major)      BUMP_TYPE="major"; shift ;;
         --minor)      BUMP_TYPE="minor"; shift ;;
         --patch)      BUMP_TYPE="patch"; shift ;;
@@ -63,7 +82,17 @@ done
 # Read current version
 CURRENT_VERSION=$(grep -o 'buttonHeistVersion = "[^"]*"' "$BUTTONHEIST_CODE_VERSION_FILE" | cut -d'"' -f2)
 
-if [[ $# -ge 1 ]]; then
+if [[ "$TAG_CURRENT" == true ]]; then
+    if [[ -n "$BUMP_TYPE" || $# -gt 0 ]]; then
+        echo "Error: --tag-current cannot be combined with a version or bump flag."
+        exit 1
+    fi
+    NEW_VERSION="$CURRENT_VERSION"
+elif [[ $# -ge 1 ]]; then
+    if [[ $# -gt 1 ]]; then
+        echo "Error: expected at most one explicit version."
+        exit 1
+    fi
     NEW_VERSION="$1"
 elif [[ -n "$BUMP_TYPE" ]]; then
     IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
@@ -120,6 +149,37 @@ if [[ -d "$SUBMODULE_DIR" ]]; then
     fi
 fi
 
+"$SCRIPT_DIR/check-parser-contract.sh"
+echo "  Parser dependency: valid"
+
+CURRENT_VERSION_TAG_EXISTS=false
+if remote_release_tag_exists "$CURRENT_VERSION"; then
+    CURRENT_VERSION_TAG_EXISTS=true
+fi
+
+NEW_VERSION_TAG_EXISTS=false
+if release_tag_exists "$NEW_VERSION"; then
+    NEW_VERSION_TAG_EXISTS=true
+fi
+
+if [[ "$TAG_CURRENT" == false && "$CURRENT_VERSION_TAG_EXISTS" == false ]]; then
+    cat >&2 <<EOF
+Error: checked-in version $CURRENT_VERSION has no v$CURRENT_VERSION tag.
+
+The source tree is already bumped to an unreleased version. That is an
+ambiguous release state: a normal release would skip over $CURRENT_VERSION,
+while a manual tag-only release can publish a version that was not validated by
+the release script.
+
+If $CURRENT_VERSION is the intended release, run:
+  ./scripts/release.sh --tag-current
+
+Otherwise restore the checked-in version to the latest released tag before
+running a normal bump release.
+EOF
+    exit 1
+fi
+
 # CI must have passed on this commit — wait up to 20 minutes
 if [[ "$RUN_TESTS" == false ]]; then
     echo "  Waiting for CI on $(echo "$LOCAL_SHA" | cut -c1-8)..."
@@ -151,44 +211,69 @@ if [[ -n $(git status --porcelain) ]]; then
     exit 1
 fi
 
-if [[ "$CURRENT_VERSION" == "$NEW_VERSION" ]]; then
-    echo "Error: version is already $NEW_VERSION."
+if [[ "$TAG_CURRENT" == true ]]; then
+    if [[ "$NEW_VERSION_TAG_EXISTS" == true ]]; then
+        echo "Error: tag v$NEW_VERSION already exists; $NEW_VERSION is already released."
+        exit 1
+    fi
+elif [[ "$CURRENT_VERSION" == "$NEW_VERSION" ]]; then
+    if [[ "$NEW_VERSION_TAG_EXISTS" == true ]]; then
+        echo "Error: version is already $NEW_VERSION and tag v$NEW_VERSION exists."
+    else
+        echo "Error: source is already bumped to $NEW_VERSION but tag v$NEW_VERSION is missing."
+        echo "  Run './scripts/release.sh --tag-current' to publish the checked-in version intentionally."
+    fi
     exit 1
-fi
-
-# Tag must not exist
-if [[ -n $(git tag -l "v$NEW_VERSION" 2>/dev/null) ]]; then
+elif [[ "$NEW_VERSION_TAG_EXISTS" == true ]]; then
     echo "Error: tag v$NEW_VERSION already exists."
     exit 1
 fi
 
 echo "  HEAD: in sync with origin/main"
 echo "  Worktree: clean"
-echo "  Version: $CURRENT_VERSION -> $NEW_VERSION"
+if [[ "$TAG_CURRENT" == true ]]; then
+    echo "  Version: $CURRENT_VERSION (tag current source)"
+else
+    echo "  Version: $CURRENT_VERSION -> $NEW_VERSION"
+fi
 echo ""
 
 if [[ "$DRY_RUN" == true ]]; then
     echo "(dry run — stopping after validation)"
     echo ""
     echo "Would perform:"
-    echo "  1. Bump version in 5 files + regenerate Xcode projects"
+    if [[ "$TAG_CURRENT" == true ]]; then
+        echo "  1. Validate current version in source, formula, and parser contract"
+    else
+        echo "  1. Bump version in 5 files + regenerate Xcode projects"
+    fi
     echo "  2. Build CLI + MCP (parallel)"
     if [[ "$RUN_TESTS" == true ]]; then
         echo "  3. Run TheScoreTests, ButtonHeistTests, TheInsideJobTests"
     else
         echo "  3. (tests skipped — CI already ran them. Use --full to run locally)"
     fi
-    echo "  4. Rebase, commit 'Release $NEW_VERSION', tag v$NEW_VERSION, push"
+    if [[ "$TAG_CURRENT" == true ]]; then
+        echo "  4. Tag current HEAD as v$NEW_VERSION and push the tag"
+    else
+        echo "  4. Rebase, commit 'Release $NEW_VERSION', tag v$NEW_VERSION, push"
+    fi
     echo "  5. Wait for CI release workflow"
     echo "  6. On success: upgrade Homebrew. On failure: rollback tag + commit"
     exit 0
 fi
 
 # --------------------------------------------------------------------------
-# Phase 2: Bump version
+# Phase 2: Bump or validate version
 # --------------------------------------------------------------------------
 
-echo "==> Phase 2: Bumping version"
+if [[ "$TAG_CURRENT" == true ]]; then
+    echo "==> Phase 2: Validating current version"
+    "$SCRIPT_DIR/validate-release-contract.sh"
+    echo "  ✓ release contract"
+    echo ""
+else
+    echo "==> Phase 2: Bumping version"
 
 # From this point, any failure should revert uncommitted version bumps
 cleanup_version_bump() {
@@ -241,6 +326,7 @@ echo "  Regenerating Xcode projects..."
 scripts/generate-project.sh
 echo "  ✓ Xcode projects"
 echo ""
+fi
 
 # --------------------------------------------------------------------------
 # Phase 3: Build CLI + MCP (parallel)
@@ -347,40 +433,48 @@ fi
 # Phase 5: Commit, tag, push
 # --------------------------------------------------------------------------
 
-echo "==> Phase 5: Committing and tagging"
-
-# Regenerate right before commit so the pre-commit hook's tuist generate
-# produces identical output (build artifacts can shift cache state)
-scripts/generate-project.sh
-
-git add \
-    ButtonHeist/Sources/TheScore/Messages.swift \
-    "$BUTTONHEIST_RELEASE_VERSION_FILE" \
-    docs/API.md \
-    TestApp/Sources/DisclosureGroupingDemo.swift \
-    "$BUTTONHEIST_FORMULA_TEMPLATE" \
-    -- '*.pbxproj' '*.xcworkspacedata' '*.xcscheme'
-
-git commit -m "Release $NEW_VERSION"
-git tag "v$NEW_VERSION"
-
-# Rebase onto latest origin to avoid push rejection if main moved
-git fetch origin main --quiet
-if [[ "$(git rev-parse origin/main)" != "$(git rev-parse HEAD~1)" ]]; then
-    echo "  Origin moved during release — rebasing..."
-    git tag -d "v$NEW_VERSION"
-    git rebase origin/main
+if [[ "$TAG_CURRENT" == true ]]; then
+    echo "==> Phase 5: Tagging current release"
+    "$SCRIPT_DIR/validate-release-contract.sh"
     git tag "v$NEW_VERSION"
-    echo "  ✓ Rebased onto latest origin/main"
+    git push origin "v$NEW_VERSION"
+    echo "  ✓ Tagged current HEAD as v$NEW_VERSION and pushed"
+else
+    echo "==> Phase 5: Committing and tagging"
+
+    # Regenerate right before commit so the pre-commit hook's tuist generate
+    # produces identical output (build artifacts can shift cache state)
+    scripts/generate-project.sh
+
+    git add \
+        ButtonHeist/Sources/TheScore/Messages.swift \
+        "$BUTTONHEIST_RELEASE_VERSION_FILE" \
+        docs/API.md \
+        TestApp/Sources/DisclosureGroupingDemo.swift \
+        "$BUTTONHEIST_FORMULA_TEMPLATE" \
+        -- '*.pbxproj' '*.xcworkspacedata' '*.xcscheme'
+
+    git commit -m "Release $NEW_VERSION"
+    git tag "v$NEW_VERSION"
+
+    # Rebase onto latest origin to avoid push rejection if main moved
+    git fetch origin main --quiet
+    if [[ "$(git rev-parse origin/main)" != "$(git rev-parse HEAD~1)" ]]; then
+        echo "  Origin moved during release — rebasing..."
+        git tag -d "v$NEW_VERSION"
+        git rebase origin/main
+        git tag "v$NEW_VERSION"
+        echo "  ✓ Rebased onto latest origin/main"
+    fi
+
+    git push origin HEAD:main
+    git push origin "v$NEW_VERSION"
+
+    # Version bump is committed — disable the cleanup trap
+    trap - EXIT
+
+    echo "  ✓ Committed, tagged v$NEW_VERSION, pushed"
 fi
-
-git push origin HEAD:main
-git push origin "v$NEW_VERSION"
-
-# Version bump is committed — disable the cleanup trap
-trap - EXIT
-
-echo "  ✓ Committed, tagged v$NEW_VERSION, pushed"
 echo ""
 
 # --------------------------------------------------------------------------
@@ -421,14 +515,18 @@ else
         git tag -d "v$NEW_VERSION" 2>/dev/null || true
         echo "  ✓ Deleted tag v$NEW_VERSION"
 
-        # Revert the version bump commit, but only if HEAD is actually the release commit
-        RELEASE_MSG="Release $NEW_VERSION"
-        if [[ "$(git log -1 --format=%s)" == "$RELEASE_MSG" ]]; then
-            git revert --no-edit HEAD
-            git push origin HEAD:main
-            echo "  ✓ Reverted version bump on main"
+        if [[ "$TAG_CURRENT" == true ]]; then
+            echo "  ✓ Current source version was pre-existing; no release commit to revert"
         else
-            echo "  ⚠ HEAD is not the release commit — skipping revert (manual cleanup needed)"
+            # Revert the version bump commit, but only if HEAD is actually the release commit
+            RELEASE_MSG="Release $NEW_VERSION"
+            if [[ "$(git log -1 --format=%s)" == "$RELEASE_MSG" ]]; then
+                git revert --no-edit HEAD
+                git push origin HEAD:main
+                echo "  ✓ Reverted version bump on main"
+            else
+                echo "  ⚠ HEAD is not the release commit — skipping revert (manual cleanup needed)"
+            fi
         fi
 
         # Delete the failed GitHub release if one was created
@@ -437,7 +535,11 @@ else
 
         echo ""
         echo "  Release rolled back. Fix the issue and re-run:"
-        echo "    ./scripts/release.sh $NEW_VERSION"
+        if [[ "$TAG_CURRENT" == true ]]; then
+            echo "    ./scripts/release.sh --tag-current"
+        else
+            echo "    ./scripts/release.sh $NEW_VERSION"
+        fi
         exit 1
     fi
 fi

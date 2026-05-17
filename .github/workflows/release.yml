@@ -40,6 +40,8 @@ jobs:
           FILE_VERSION=$(tr -d '[:space:]' < "$BUTTONHEIST_RELEASE_VERSION_FILE")
           CODE_VERSION=$(grep -o 'buttonHeistVersion = "[^"]*"' \
             "$BUTTONHEIST_CODE_VERSION_FILE" | cut -d'"' -f2)
+          TAG_SHA=$(git rev-parse "v${TAG_VERSION}^{}")
+          HEAD_SHA=$(git rev-parse HEAD)
 
           if [[ "$TAG_VERSION" != "$FILE_VERSION" ]]; then
             echo "::error::Tag version ($TAG_VERSION) != $BUTTONHEIST_RELEASE_VERSION_FILE ($FILE_VERSION)"
@@ -47,6 +49,10 @@ jobs:
           fi
           if [[ "$TAG_VERSION" != "$CODE_VERSION" ]]; then
             echo "::error::Tag version ($TAG_VERSION) != buttonHeistVersion ($CODE_VERSION)"
+            exit 1
+          fi
+          if [[ "$TAG_SHA" != "$HEAD_SHA" ]]; then
+            echo "::error::Checked-out HEAD ($HEAD_SHA) is not tag v${TAG_VERSION} ($TAG_SHA)"
             exit 1
           fi
           scripts/validate-release-contract.sh
@@ -138,9 +144,18 @@ jobs:
         run: |
           source scripts/release-contract.sh
           VERSION="${{ steps.version.outputs.version }}"
+          PARSER_TAG=$(grep 'AccessibilitySnapshotBH' Package.swift | grep -oE 'exact: "[0-9]+\.[0-9]+\.[0-9]+"' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          PARSER_SHA=$(git ls-tree HEAD submodules/AccessibilitySnapshotBH | awk '{print $3}' | cut -c1-12)
+          RELEASE_NOTES=$(mktemp)
+          cat > "$RELEASE_NOTES" <<EOF
+          Parser contract:
+          - AccessibilitySnapshotBH: ${PARSER_TAG} (${PARSER_SHA})
+          EOF
           gh release create "v${VERSION}" \
             --title "Button Heist ${VERSION}" \
             --generate-notes \
+            --notes-file "$RELEASE_NOTES" \
+            --verify-tag \
             "dist/$(buttonheist_cli_archive_name "$VERSION")" \
             "dist/$(buttonheist_mcp_archive_name "$VERSION")" \
             "dist/$(buttonheist_demo_archive_name "$VERSION")" \
