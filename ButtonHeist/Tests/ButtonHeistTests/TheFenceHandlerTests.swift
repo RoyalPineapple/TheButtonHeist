@@ -1560,21 +1560,24 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testParseExpectationFromHeistPlaybackDictionary() async throws {
+    func testParseExpectationFromTypedPlaybackBridgeArguments() async throws {
         let (fence, _) = makeConnectedFence()
-        let step = HeistEvidence(
-            command: "activate",
-            arguments: [
-                "expect": .object([
-                    "type": .string("element_updated"),
-                    "heistId": .string("counter"),
-                    "property": .string("value"),
-                    "newValue": .string("5"),
-                ]),
-            ]
+        let operation = try TheFence.PlaybackOperation(
+            evidence: HeistEvidence(
+                command: "activate",
+                arguments: [
+                    "expect": .object([
+                        "type": .string("element_updated"),
+                        "heistId": .string("counter"),
+                        "property": .string("value"),
+                        "newValue": .string("5"),
+                    ]),
+                ]
+            ),
+            index: 0
         )
 
-        let result = try fence.parseExpectation(step.toRequestDictionary())
+        let result = try fence.parseExpectation(operation.dispatchBridgeArguments())
 
         XCTAssertEqual(
             result,
@@ -1585,12 +1588,15 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testParseExpectationRejectsLegacyHeistPlaybackExpectationString() async throws {
         let (fence, _) = makeConnectedFence()
-        let step = HeistEvidence(
-            command: "activate",
-            arguments: ["expect": .string("screen_changed")]
+        let operation = try TheFence.PlaybackOperation(
+            evidence: HeistEvidence(
+                command: "activate",
+                arguments: ["expect": .string("screen_changed")]
+            ),
+            index: 0
         )
 
-        XCTAssertThrowsError(try fence.parseExpectation(step.toRequestDictionary())) { error in
+        XCTAssertThrowsError(try fence.parseExpectation(operation.dispatchBridgeArguments())) { error in
             guard case FenceError.invalidRequest(let msg) = error else {
                 XCTFail("Expected FenceError.invalidRequest, got \(error)")
                 return
@@ -2637,6 +2643,77 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testTypedPlaybackBindsFixtureStepsToTypedCommands() async throws {
+        let playback = try TheFence.TypedHeistPlayback(
+            wire: HeistPlayback(
+                app: "com.test.mock",
+                steps: [
+                    HeistEvidence(
+                        command: "type_text",
+                        target: ElementMatcher(identifier: "email"),
+                        ordinal: 1,
+                        arguments: ["text": .string("user@example.com")],
+                        recorded: RecordedMetadata(heistId: "recorded-email")
+                    ),
+                    HeistEvidence(command: "activate", target: ElementMatcher(identifier: "submit")),
+                ]
+            )
+        )
+        let operation = playback.steps[0]
+
+        XCTAssertEqual(playback.app, "com.test.mock")
+        XCTAssertEqual(playback.totalStepCount, 2)
+        XCTAssertEqual(operation.command, .typeText)
+        XCTAssertEqual(playback.steps[1].command, .activate)
+        XCTAssertEqual(operation.target?.identifier, "email")
+        XCTAssertEqual(operation.ordinal, 1)
+
+        let arguments = operation.dispatchBridgeArguments()
+        XCTAssertEqual(arguments["command"] as? String, "type_text")
+        XCTAssertEqual(arguments["identifier"] as? String, "email")
+        XCTAssertEqual(arguments["ordinal"] as? Int, 1)
+        XCTAssertEqual(arguments["text"] as? String, "user@example.com")
+        XCTAssertNil(arguments["_recorded"])
+    }
+
+    @ButtonHeistActor
+    func testPlaybackOperationPreservesCanonicalExpectationPayload() async throws {
+        let operation = try TheFence.PlaybackOperation(
+            evidence: HeistEvidence(
+                command: "type_text",
+                target: ElementMatcher(identifier: "email"),
+                arguments: ["expect": .object(["type": .string("screen_changed")])]
+            ),
+            index: 0
+        )
+
+        let expect = operation.dispatchBridgeArguments()["expect"] as? [String: Any]
+        XCTAssertEqual(expect?["type"] as? String, "screen_changed")
+    }
+
+    @ButtonHeistActor
+    func testExecutePlaybackOperationUsesTypedCommand() async throws {
+        let operation = try TheFence.PlaybackOperation(
+            evidence: HeistEvidence(command: "activate", target: ElementMatcher(identifier: "btn1")),
+            index: 0
+        )
+
+        let (fence, mockConn) = makeConnectedFence()
+        let response = try await fence.execute(playback: operation)
+
+        guard case .action(let result, _) = response else {
+            return XCTFail("Expected action response, got \(response)")
+        }
+        XCTAssertTrue(result.success)
+
+        let activateMessages = mockConn.sent.filter { message, _ in
+            if case .activate = message { return true }
+            return false
+        }
+        XCTAssertEqual(activateMessages.count, 1)
+    }
+
+    @ButtonHeistActor
     func testPlayHeistIgnoresRecordedAccessibilityTrace() async throws {
         let heist = HeistPlayback(app: "com.test.mock", steps: [
             HeistEvidence(
@@ -2674,9 +2751,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testPlayHeistStopsOnErrorResponse() async throws {
-        // Use a step that triggers a .error FenceResponse (unknown command)
-        // after one successful step
+    func testPlayHeistRejectsInvalidCommandBeforeExecution() async throws {
         let steps = [
             HeistEvidence(command: "activate", target: ElementMatcher(identifier: "btn1")),
             HeistEvidence(command: "not_a_real_command"),
@@ -2686,33 +2761,25 @@ final class TheFenceHandlerTests: XCTestCase {
         let heistURL = try writeTemporaryHeist(heist)
         defer { try? FileManager.default.removeItem(at: heistURL) }
 
-        let (fence, _) = makeConnectedFence()
-        let response = try await fence.execute(request: [
-            "command": "play_heist", "input": heistURL.path
-        ])
+        let (fence, mockConn) = makeConnectedFence()
+        do {
+            _ = try await fence.execute(request: [
+                "command": "play_heist", "input": heistURL.path,
+            ])
+            XCTFail("Expected FenceError.invalidRequest to be thrown")
+        } catch {
+            guard case FenceError.invalidRequest(let message) = error else {
+                return XCTFail("Expected FenceError.invalidRequest, got \(error)")
+            }
+            XCTAssertTrue(message.contains("Invalid heist step 1"))
+            XCTAssertTrue(message.contains("unknown command \"not_a_real_command\""))
+        }
 
-        guard case .heistPlayback(let completedSteps, let failedIndex, _, let failure, let report) = response else {
-            return XCTFail("Expected heistPlayback response, got \(response)")
-        }
-        XCTAssertEqual(completedSteps, 1)
-        XCTAssertEqual(failedIndex, 1)
-        // Verify failure diagnostics capture the failing command
-        XCTAssertNotNil(failure)
-        if case .fenceError(let step, _, _) = failure {
-            XCTAssertEqual(step.command, "not_a_real_command")
-        } else {
-            XCTFail("Expected .fenceError, got \(String(describing: failure))")
-        }
-        // Report should contain 2 steps: 1 passed + 1 failed
-        XCTAssertNotNil(report)
-        XCTAssertEqual(report?.steps.count, 2)
-        XCTAssertEqual(report?.passedCount, 1)
-        XCTAssertEqual(report?.failedCount, 1)
-        XCTAssertEqual(report?.steps.last?.outcome.failureType, .commandError)
+        XCTAssertTrue(mockConn.sent.isEmpty)
     }
 
     @ButtonHeistActor
-    func testPlayHeistStopsOnFirstStepError() async throws {
+    func testPlayHeistRejectsInvalidFirstCommandBeforePrimingInterface() async throws {
         let steps = [
             HeistEvidence(command: "not_a_real_command"),
             HeistEvidence(command: "activate", target: ElementMatcher(identifier: "btn1")),
@@ -2721,24 +2788,21 @@ final class TheFenceHandlerTests: XCTestCase {
         let heistURL = try writeTemporaryHeist(heist)
         defer { try? FileManager.default.removeItem(at: heistURL) }
 
-        let (fence, _) = makeConnectedFence()
-        let response = try await fence.execute(request: [
-            "command": "play_heist", "input": heistURL.path
-        ])
-
-        guard case .heistPlayback(let completedSteps, let failedIndex, _, let failure, let report) = response else {
-            return XCTFail("Expected heistPlayback response, got \(response)")
+        let (fence, mockConn) = makeConnectedFence()
+        do {
+            _ = try await fence.execute(request: [
+                "command": "play_heist", "input": heistURL.path,
+            ])
+            XCTFail("Expected FenceError.invalidRequest to be thrown")
+        } catch {
+            guard case FenceError.invalidRequest(let message) = error else {
+                return XCTFail("Expected FenceError.invalidRequest, got \(error)")
+            }
+            XCTAssertTrue(message.contains("Invalid heist step 0"))
+            XCTAssertTrue(message.contains("unknown command \"not_a_real_command\""))
         }
-        XCTAssertEqual(completedSteps, 0)
-        XCTAssertEqual(failedIndex, 0)
-        XCTAssertNotNil(failure)
-        XCTAssertEqual(failure?.step.command, "not_a_real_command")
-        XCTAssertNotNil(failure?.errorMessage)
-        // Report should contain 1 failed step only (playback stopped at index 0)
-        XCTAssertNotNil(report)
-        XCTAssertEqual(report?.steps.count, 1)
-        XCTAssertEqual(report?.passedCount, 0)
-        XCTAssertEqual(report?.failedCount, 1)
+
+        XCTAssertTrue(mockConn.sent.isEmpty)
     }
 
     @ButtonHeistActor

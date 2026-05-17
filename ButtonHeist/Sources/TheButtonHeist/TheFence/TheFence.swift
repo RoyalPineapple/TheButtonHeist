@@ -1,6 +1,8 @@
 import Foundation
 import os.log
 
+import TheScore
+
 private let logger = Logger(subsystem: "com.buttonheist.thefence", category: "bookkeeper")
 
 /// Stable client-side phase for connection and request failures.
@@ -654,6 +656,21 @@ public final class TheFence {
         } catch let error as FenceError {
             return .error(error.coreMessage, details: error.failureDetails)
         }
+        return try await execute(parsed: parsed)
+    }
+
+    func execute(playback operation: PlaybackOperation) async throws -> FenceResponse {
+        let request = operation.dispatchBridgeArguments()
+        let parsed: ParsedRequest
+        do {
+            parsed = try parsePlaybackOperation(operation, bridgeArguments: request)
+        } catch let error as SchemaValidationError {
+            return .error(error.message)
+        }
+        return try await execute(parsed: parsed)
+    }
+
+    private func execute(parsed: ParsedRequest) async throws -> FenceResponse {
         if let immediate = parsed.immediateResponse { return immediate }
 
         if parsed.command == .waitForChange,
@@ -724,6 +741,10 @@ public final class TheFence {
                 immediateResponse: .error("Unknown command: \(commandString). Use 'help' for available commands.")
             )
         }
+        return try parseRequest(command: command, request: request)
+    }
+
+    private func parseRequest(command: Command, request: [String: Any]) throws -> ParsedRequest {
         if let immediate = handleImmediateCommand(command) {
             return ParsedRequest(
                 command: command,
@@ -751,6 +772,13 @@ public final class TheFence {
             expectationPayload: expectationPayload,
             immediateResponse: nil
         )
+    }
+
+    private func parsePlaybackOperation(
+        _ operation: PlaybackOperation,
+        bridgeArguments request: [String: Any]
+    ) throws -> ParsedRequest {
+        try parseRequest(command: operation.command, request: request)
     }
 
     /// Ensure the connection is up if the command needs it, then dispatch

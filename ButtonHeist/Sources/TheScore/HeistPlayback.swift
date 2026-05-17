@@ -3,8 +3,8 @@ import Foundation
 // MARK: - Heist Playback
 
 /// A recorded session that can be played back against the same (or similar) app.
-/// Each step is a command dictionary compatible with TheFence.execute(request:),
-/// with element targets expressed as ElementMatcher fields — never heistIds.
+/// This is the `.heist` persistence model. Runtime playback should bind these
+/// wire fields to typed commands before execution.
 public struct HeistPlayback: Codable, Sendable, Equatable {
     /// Format version. Increment when the step schema changes.
     public static let currentVersion = 2
@@ -136,40 +136,6 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
         }
     }
 
-    /// Convert this step to a TheFence-compatible request dictionary for execution.
-    public func toRequestDictionary() -> [String: Any] {
-        var dictionary: [String: Any] = ["command": command]
-
-        if let target {
-            if let label = target.label { dictionary["label"] = label }
-            if let matchIdentifier = target.identifier { dictionary["identifier"] = matchIdentifier }
-            if let matchValue = target.value { dictionary["value"] = matchValue }
-            if let matchTraits = target.traits { dictionary["traits"] = matchTraits.map(\.rawValue) }
-            if let matchExclude = target.excludeTraits { dictionary["excludeTraits"] = matchExclude.map(\.rawValue) }
-        }
-        if let ordinal { dictionary["ordinal"] = ordinal }
-
-        for (key, playbackValue) in arguments {
-            dictionary[key] = playbackValue.toAny()
-        }
-
-        return dictionary
-    }
-
-    /// Build a scroll_to_visible request from this step's element matcher.
-    /// Used by the playback engine to scroll off-screen elements into view before retrying.
-    public func scrollToVisibleRequest() -> [String: Any] {
-        var request: [String: Any] = ["command": ScrollMode.toVisible.canonicalCommand]
-        if let target {
-            if let label = target.label { request["label"] = label }
-            if let matchIdentifier = target.identifier { request["identifier"] = matchIdentifier }
-            if let matchValue = target.value { request["value"] = matchValue }
-            if let matchTraits = target.traits { request["traits"] = matchTraits.map(\.rawValue) }
-            if let matchExclude = target.excludeTraits { request["excludeTraits"] = matchExclude.map(\.rawValue) }
-        }
-        if let ordinal { request["ordinal"] = ordinal }
-        return request
-    }
 }
 
 // MARK: - Heist Value
