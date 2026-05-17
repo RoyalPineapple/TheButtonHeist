@@ -247,7 +247,7 @@ extension DiscoveredDevice {
                 connection?.send(.status)
             case .connected:
                 break
-            case .message(let message, _, _):
+            case .message(let message, _, _, _):
                 if case .status = message {
                     reachabilityLogger.debug("Status reachable: \(deviceName, privacy: .public)")
                     resolver.resolve(true)

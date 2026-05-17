@@ -52,7 +52,7 @@ final class SessionLockTests: XCTestCase {
 
         var receivedPayload: SessionLockedPayload?
         conn.onEvent = { event in
-            if case .message(.sessionLocked(let payload), _, _) = event {
+            if case .message(.sessionLocked(let payload), _, _, _) = event {
                 receivedPayload = payload
             }
         }

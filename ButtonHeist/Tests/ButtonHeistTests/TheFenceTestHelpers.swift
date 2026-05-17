@@ -75,3 +75,51 @@ func makeConnectedFence(configuration: TheFence.Configuration = .init()) -> (The
 
     return (fence, mockConn)
 }
+
+func makeReceiptTestElement(
+    heistId: String,
+    label: String,
+    value: String? = nil,
+    traits: [HeistTrait] = [.staticText]
+) -> HeistElement {
+    HeistElement(
+        heistId: heistId,
+        description: label,
+        label: label,
+        value: value,
+        identifier: nil,
+        traits: traits,
+        frameX: 0,
+        frameY: 0,
+        frameWidth: 100,
+        frameHeight: 44,
+        actions: []
+    )
+}
+
+func makeReceiptTestInterface(
+    _ elements: [HeistElement],
+    timestamp: Date = Date(timeIntervalSince1970: 0)
+) -> Interface {
+    Interface(timestamp: timestamp, tree: elements.map(InterfaceNode.element))
+}
+
+func makeReceiptTestTrace(
+    before beforeInterface: Interface,
+    after afterInterface: Interface,
+    beforeScreenId: String? = "screen",
+    afterScreenId: String? = "screen"
+) -> AccessibilityTrace {
+    let beforeCapture = AccessibilityTrace.Capture(
+        sequence: 1,
+        interface: beforeInterface,
+        context: AccessibilityTrace.Context(screenId: beforeScreenId)
+    )
+    let afterCapture = AccessibilityTrace.Capture(
+        sequence: 2,
+        interface: afterInterface,
+        parentHash: beforeCapture.hash,
+        context: AccessibilityTrace.Context(screenId: afterScreenId)
+    )
+    return AccessibilityTrace(captures: [beforeCapture, afterCapture])
+}

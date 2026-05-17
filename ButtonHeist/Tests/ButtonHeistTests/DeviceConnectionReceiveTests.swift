@@ -63,7 +63,7 @@ final class DeviceConnectionReceiveTests: XCTestCase {
 
         var receivedPong = false
         connection.onEvent = { event in
-            if case .message(.pong, _, _) = event {
+            if case .message(.pong, _, _, _) = event {
                 receivedPong = true
             }
         }
@@ -87,7 +87,7 @@ final class DeviceConnectionReceiveTests: XCTestCase {
 
         var receivedRecordingStopped = false
         connection.onEvent = { event in
-            if case .message(.recordingStopped, _, _) = event {
+            if case .message(.recordingStopped, _, _, _) = event {
                 receivedRecordingStopped = true
             }
         }
@@ -95,6 +95,49 @@ final class DeviceConnectionReceiveTests: XCTestCase {
         connection.handleReceive(content: envelope, isComplete: false, error: nil, connection: activeConnection)
 
         XCTAssertTrue(receivedRecordingStopped, "DeviceConnection must forward .recordingStopped so TheHandoff can clear its recording phase")
+    }
+
+    @ButtonHeistActor
+    func testHandleReceiveForwardsEnvelopeAccessibilityTrace() async throws {
+        let activeConnection = NWConnection(host: "127.0.0.1", port: 1111, using: .tcp)
+        let connection = DeviceConnection(device: makeDummyDevice())
+        connection.connectionState = .connected(.init(connection: activeConnection))
+
+        let before = makeReceiptTestInterface([
+            makeReceiptTestElement(heistId: "status", label: "Status", value: "Old"),
+        ])
+        let after = makeReceiptTestInterface([
+            makeReceiptTestElement(heistId: "status", label: "Status", value: "New"),
+        ])
+        let trace = makeReceiptTestTrace(before: before, after: after)
+        let misleadingLegacyDelta: AccessibilityTrace.Delta = .screenChanged(.init(
+            elementCount: 0,
+            newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+        ))
+        var envelope = try ResponseEnvelope(
+            requestId: "action-1",
+            message: .actionResult(ActionResult(success: true, method: .activate)),
+            backgroundAccessibilityDelta: misleadingLegacyDelta,
+            accessibilityTrace: trace
+        ).encoded()
+        envelope.append(0x0A)
+
+        var receivedTrace: AccessibilityTrace?
+        var receivedLegacyDelta: AccessibilityTrace.Delta?
+        var receivedRequestId: String?
+        connection.onEvent = { event in
+            if case .message(.actionResult, let requestId, let delta, let trace?) = event {
+                receivedRequestId = requestId
+                receivedLegacyDelta = delta
+                receivedTrace = trace
+            }
+        }
+
+        connection.handleReceive(content: envelope, isComplete: false, error: nil, connection: activeConnection)
+
+        XCTAssertEqual(receivedRequestId, "action-1")
+        XCTAssertEqual(receivedTrace, trace)
+        XCTAssertEqual(receivedLegacyDelta, misleadingLegacyDelta)
     }
 
     @ButtonHeistActor
@@ -110,7 +153,7 @@ final class DeviceConnectionReceiveTests: XCTestCase {
 
         var receivedScreen: ScreenPayload?
         connection.onEvent = { event in
-            if case .message(.screen(let payload), _, _) = event {
+            if case .message(.screen(let payload), _, _, _) = event {
                 receivedScreen = payload
             }
         }
