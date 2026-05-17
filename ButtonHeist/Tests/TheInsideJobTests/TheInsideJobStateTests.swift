@@ -398,6 +398,39 @@ final class TheInsideJobStateTests: XCTestCase {
         }
     }
 
+    // MARK: - LifecycleBoundaryTasks
+
+    func testLifecycleBoundaryTasksDrainRunsQueuedTasks() async {
+        let tasks = TheInsideJob.LifecycleBoundaryTasks()
+        var events: [String] = []
+
+        tasks.spawn {
+            events.append("first")
+        }
+
+        await tasks.drain()
+
+        XCTAssertEqual(events, ["first"])
+        XCTAssertTrue(tasks.isEmpty)
+    }
+
+    func testLifecycleBoundaryTasksDrainIncludesTasksSpawnedDuringDrain() async {
+        let tasks = TheInsideJob.LifecycleBoundaryTasks()
+        var events: [String] = []
+
+        tasks.spawn {
+            events.append("first")
+            tasks.spawn {
+                events.append("second")
+            }
+        }
+
+        await tasks.drain()
+
+        XCTAssertEqual(events, ["first", "second"])
+        XCTAssertTrue(tasks.isEmpty)
+    }
+
     /// Regression for findings PR #356 M2: `pendingLifecycleTasks` must not
     /// grow without bound across many background/foreground cycles. Each
     /// spawned Task removes itself from the set when its body completes.
