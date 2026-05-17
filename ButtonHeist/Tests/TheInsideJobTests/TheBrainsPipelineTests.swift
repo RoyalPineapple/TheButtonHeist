@@ -8,7 +8,7 @@ import UIKit
 /// Deterministic tests for the pipelines on TheBrains that operate purely against
 /// the current `Screen` snapshot: the failure branch of `actionResultWithDelta`, the
 /// `SentState` accessors, the `computeBackgroundDelta` guards, the
-/// `broadcastInterfaceIfChanged` cache-miss, and `exploreAndPrune` pruning.
+/// settled-change cache-miss, and `exploreAndPrune` pruning.
 ///
 /// Success-path `actionResultWithDelta` and `exploreScreen` container iteration
 /// require a live window and are covered by integration/benchmark runs.
@@ -267,17 +267,17 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertNil(brains.lastSentState)
     }
 
-    func testClearCacheResetsBroadcastInterfaceMemo() throws {
-        guard brains.broadcastInterfaceIfChanged() != nil else {
-            throw XCTSkip("No live hierarchy available for broadcast memo test")
+    func testClearCacheResetsSettledChangeMemo() throws {
+        guard brains.interfaceChangedSinceLastSettledCheck() else {
+            throw XCTSkip("No live hierarchy available for settled-change memo test")
         }
-        guard brains.broadcastInterfaceIfChanged() == nil else {
-            throw XCTSkip("Live hierarchy changed during broadcast memo test")
+        guard !brains.interfaceChangedSinceLastSettledCheck() else {
+            throw XCTSkip("Live hierarchy changed during settled-change memo test")
         }
 
         brains.clearCache()
 
-        XCTAssertNotNil(brains.broadcastInterfaceIfChanged())
+        XCTAssertTrue(brains.interfaceChangedSinceLastSettledCheck())
     }
 
     // MARK: - computeBackgroundDelta Guards

@@ -48,7 +48,6 @@ enum DiscoveryEvent {
 @ButtonHeistActor
 protocol DeviceConnecting: AnyObject {
     var isConnected: Bool { get }
-    var observeMode: Bool { get set }
     var onEvent: (@ButtonHeistActor (ConnectionEvent) -> Void)? { get set }
     func connect()
     func disconnect()

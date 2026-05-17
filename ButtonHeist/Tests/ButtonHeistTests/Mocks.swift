@@ -92,7 +92,6 @@ func connectMockHandoff(
 @ButtonHeistActor
 final class MockConnection: DeviceConnecting {
     var isConnected = false
-    var observeMode = false
     var onEvent: (@ButtonHeistActor (ConnectionEvent) -> Void)?
     var sent: [(ClientMessage, String?)] = []
     var connectCount = 0

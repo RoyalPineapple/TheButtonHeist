@@ -246,15 +246,18 @@ extension AccessibilityElement {
     }
 
     /// Same loop as `run(start:baselineTopVC:)`, with the full tripwire signal.
-    /// Production uses this path so visible window/navigation/key changes prompt
-    /// an immediate parse. The caller then classifies the parsed result, which
-    /// may be no-change, element-change, or screen-change.
+    /// Production uses this path so visible window/navigation/key changes reset
+    /// the settle baseline, then the loop proves the post-transition AX tree is
+    /// stable before returning. The returned outcome still records whether a
+    /// tripwire fired so callers can suppress transition transients.
     func run(start: CFAbsoluteTime, baselineTripwireSignal: TheTripwire.TripwireSignal) async -> Outcome {
         let cycleNs = UInt64(cycleIntervalMs) * 1_000_000
         let deadline = start + Double(timeoutMs) / 1000
 
         var elementsByKey: [TimelineKey: AccessibilityElement] = [:]
         var stableCycles = 0
+        var tripwireBaseline = baselineTripwireSignal
+        var observedTripwireTrigger = false
 
         // Seed the baseline fingerprint synchronously so the first
         // post-sleep parse can already count as stable cycle 1. Without
@@ -284,11 +287,20 @@ extension AccessibilityElement {
             }
 
             let nowTripwireSignal = tripwireSignalProvider()
-            if nowTripwireSignal != baselineTripwireSignal {
-                return Outcome(
-                    outcome: .tripwireTriggered(timeMs: Self.elapsedMs(since: start)),
-                    elementsByKey: elementsByKey
-                )
+            if nowTripwireSignal != tripwireBaseline {
+                observedTripwireTrigger = true
+                tripwireBaseline = nowTripwireSignal
+                stableCycles = 0
+                guard let parse = parseProvider() else {
+                    previousFingerprint = nil
+                    continue
+                }
+                let parsedElements = parse.hierarchy.sortedElements
+                for element in parsedElements {
+                    elementsByKey[element.timelineKey] = element
+                }
+                previousFingerprint = Self.fingerprint(of: parsedElements)
+                continue
             }
 
             guard let parse = parseProvider() else { continue }
@@ -302,7 +314,9 @@ extension AccessibilityElement {
                 stableCycles += 1
                 if stableCycles >= cyclesRequired {
                     return Outcome(
-                        outcome: .settled(timeMs: Self.elapsedMs(since: start)),
+                        outcome: observedTripwireTrigger
+                            ? .tripwireTriggered(timeMs: Self.elapsedMs(since: start))
+                            : .settled(timeMs: Self.elapsedMs(since: start)),
                         elementsByKey: elementsByKey
                     )
                 }

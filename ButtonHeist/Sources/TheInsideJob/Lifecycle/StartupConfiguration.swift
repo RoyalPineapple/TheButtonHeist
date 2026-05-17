@@ -53,7 +53,6 @@ enum StartupInfoPlistKey: String {
     case pollingInterval = "InsideJobPollingInterval"
     case port = "InsideJobPort"
     case scope = "InsideJobScope"
-    case restrictWatchers = "InsideJobRestrictWatchers"
     case sessionTimeout = "InsideJobSessionTimeout"
 }
 
@@ -70,7 +69,6 @@ struct StartupConfiguration: Equatable, Sendable {
     let preferredPort: ResolvedStartupValue<UInt16>
     let pollingInterval: ResolvedStartupValue<TimeInterval>
     let allowedScopes: ResolvedStartupValue<Set<ConnectionScope>>
-    let restrictWatchers: ResolvedStartupValue<Bool>
     let sessionTimeout: ResolvedStartupValue<TimeInterval>
     let warnings: [StartupConfigurationWarning]
 
@@ -115,14 +113,6 @@ struct StartupConfiguration: Equatable, Sendable {
             warnings: &warnings
         )
         let allowedScopes = resolveAllowedScopes(env: env, plist: plist, warnings: &warnings)
-        let restrictWatchers = resolveBool(
-            envKey: .insideJobRestrictWatchers,
-            plistKey: .restrictWatchers,
-            defaultValue: true,
-            env: env,
-            plist: plist,
-            warnings: &warnings
-        )
         let sessionTimeout = resolveTimeInterval(
             envKey: .insideJobSessionTimeout,
             plistKey: .sessionTimeout,
@@ -140,7 +130,6 @@ struct StartupConfiguration: Equatable, Sendable {
             preferredPort: preferredPort,
             pollingInterval: pollingInterval,
             allowedScopes: allowedScopes,
-            restrictWatchers: restrictWatchers,
             sessionTimeout: sessionTimeout,
             warnings: warnings
         )

@@ -22,7 +22,6 @@ private let autoStartTask = OSAllocatedUnfairLock<Task<Void, Never>?>(initialSta
 /// - INSIDEJOB_POLLING_INTERVAL / InsideJobPollingInterval: Polling interval in seconds
 /// - INSIDEJOB_PORT / InsideJobPort: Fixed TCP port to listen on (0 or unset = any available)
 /// - INSIDEJOB_SCOPE / InsideJobScope: Allowed connection scopes
-/// - INSIDEJOB_RESTRICT_WATCHERS / InsideJobRestrictWatchers: Require watcher auth
 /// - INSIDEJOB_SESSION_TIMEOUT / InsideJobSessionTimeout: Session release timeout
 @_cdecl("TheInsideJob_autoStartFromLoad")
 public func theInsideJobAutoStartFromLoad() {

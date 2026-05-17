@@ -256,28 +256,28 @@ final class TheGetaway {
 
         insideJobLogger.debug("Received from client \(clientId): \(String(describing: message).prefix(40))")
 
-        let isObserver = await muscle.observerClients.contains(clientId)
-
         switch message {
         // Protocol messages: handshake/auth flow is consumed by TheMuscle's
         // pre-dispatch hook (`TheMuscle.swift` ~ line 331). By the time a
         // message reaches this switch, those cases have already been handled
         // and we should not process them again. Breaking here is intentional.
         // swiftlint:disable:next agent_wire_message_arm_no_op_break
-        case .clientHello, .authenticate, .watch:
+        case .clientHello, .authenticate:
             break
         case .requestInterface:
             insideJobLogger.debug("Interface requested by client \(clientId)")
             await sendInterface(requestId: requestId, respond: respond)
-        case .subscribe:
-            await muscle.subscribe(clientId: clientId)
-        case .unsubscribe:
-            await muscle.unsubscribe(clientId: clientId)
         case .ping:
             await muscle.noteClientActivity(clientId)
             sendMessage(.pong, requestId: requestId, respond: respond)
         case .status:
             sendMessage(.status(await makeStatusPayload()), requestId: requestId, respond: respond)
+        case .subscribe, .unsubscribe, .watch:
+            sendMessage(
+                .error(ServerError(kind: .unsupported, message: "Runtime UI subscriptions are no longer supported.")),
+                requestId: requestId,
+                respond: respond
+            )
 
         // Observation
         case .requestScreen:
@@ -296,15 +296,8 @@ final class TheGetaway {
             sendMessage(.actionResult(result), requestId: requestId, respond: respond)
             brains.recordSentState()
 
-        // Recording & interactions — blocked for observers
+        // Recording & interactions
         default:
-            if isObserver {
-                var builder = ActionResultBuilder(method: .activate, screenName: brains.screenName, screenId: brains.screenId)
-                builder.message = "Watch mode is read-only"
-                sendMessage(.actionResult(builder.failure(errorKind: .unsupported)), requestId: requestId, respond: respond)
-                return
-            }
-
             switch message {
             case .startRecording(let config):
                 brains.clearPendingRotorResult()
@@ -320,12 +313,12 @@ final class TheGetaway {
                 let backgroundAccessibilityDelta = backgroundCapture?.delta
 
                 if let actionResult = staleTargetedActionFailure(for: message, backgroundCapture: backgroundCapture) {
-                    await recordAndBroadcast(command: message, actionResult: actionResult, requestId: requestId, respond: respond)
+                    await recordAndRespond(command: message, actionResult: actionResult, requestId: requestId, respond: respond)
                     return
                 }
 
                 let actionResult = await brains.executeCommand(message)
-                await recordAndBroadcast(
+                await recordAndRespond(
                     command: message,
                     actionResult: actionResult,
                     requestId: requestId,
@@ -412,21 +405,6 @@ final class TheGetaway {
         }
     }
 
-    /// Broadcast a server message to every subscribed client.
-    ///
-    /// Awaits the per-subscriber sends so two back-to-back
-    /// `broadcastToSubscribed` calls deliver in FIFO order — the
-    /// outbound-broadcast risk that the cross-cutting audit's
-    /// Finding 5 called out.
-    func broadcastToSubscribed(_ message: ServerMessage) async {
-        guard !message.isScreenshot else {
-            insideJobLogger.error("Refusing to broadcast screenshot payload; screenshots must be requested explicitly")
-            return
-        }
-        guard let data = encodeEnvelope(message) else { return }
-        await muscle.broadcastToSubscribed(data)
-    }
-
     /// Broadcast a server message to every authenticated client.
     ///
     /// Awaits the transport so two back-to-back `broadcastToAll` calls from
@@ -484,18 +462,17 @@ final class TheGetaway {
         )
 
         let isActive = await muscle.isSessionActive
-        let watchersAllowed = await muscle.watchersAllowed
         let connectionCount = await muscle.activeSessionConnectionCount
         let session = StatusSession(
             active: isActive,
-            watchersAllowed: isActive && watchersAllowed,
+            watchersAllowed: false,
             activeConnections: connectionCount
         )
 
         return StatusPayload(identity: identity, session: session)
     }
 
-    private func recordAndBroadcast(
+    private func recordAndRespond(
         command: ClientMessage,
         actionResult: ActionResult,
         requestId: String?,
@@ -515,40 +492,20 @@ final class TheGetaway {
             respond: respond
         )
         brains.recordSentState()
-
-        if await muscle.hasSubscribers {
-            let event = InteractionEvent(
-                timestamp: Date().timeIntervalSince1970,
-                command: command,
-                result: actionResult
-            )
-            await broadcastToSubscribed(.interaction(event))
-        }
     }
 
-    // MARK: - Hierarchy Broadcast
+    // MARK: - Settled Change Tracking
 
-    func broadcastIfChanged() async {
-        guard await muscle.hasSubscribers else {
-            // Still clear the invalidation flag — the hierarchy may have changed
-            // but no one is listening so skip the expensive refresh/wire work.
-            hierarchyInvalidated = false
-            return
-        }
-
-        guard let payload = brains.broadcastInterfaceIfChanged() else {
+    func noteSettledChangeIfNeeded() async {
+        guard brains.interfaceChangedSinceLastSettledCheck() else {
             hierarchyInvalidated = false
             return
         }
         hierarchyInvalidated = false
 
-        await broadcastToSubscribed(.interface(payload))
         if let stakeout {
             Task { await stakeout.noteScreenChange() }
         }
-
-        let subscriberCount = await muscle.subscribedClients.count
-        insideJobLogger.debug("Broadcast hierarchy update to \(subscriberCount) subscriber(s)")
     }
 
     func sendInterface(requestId: String? = nil, respond: @escaping (Data) -> Void) async {

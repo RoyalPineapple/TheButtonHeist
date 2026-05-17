@@ -153,7 +153,7 @@ final class SettleSessionTests: XCTestCase {
 
     // MARK: - Screen Change
 
-    func testTripwireTriggerAbortsLoopAndSettlesCleanly() async {
+    func testTripwireTriggerResetsBaselineAndSettlesCleanly() async {
         let stable = makeParseResult([makeElement(label: "A", traits: .staticText)])
         let placeholder = ObjectIdentifier(NSObject())
         // Baseline is passed in explicitly as `nil`; every call to the
@@ -175,8 +175,41 @@ final class SettleSessionTests: XCTestCase {
         } else {
             XCTFail("Expected .tripwireTriggered, got \(outcome.outcome)")
         }
+        XCTAssertEqual(outcome.elementsByKey.count, 1)
         XCTAssertTrue(outcome.outcome.didSettleCleanly,
                       ".tripwireTriggered should report didSettleCleanly == true")
+    }
+
+    func testTripwireTriggerWaitsForStablePostTransitionTree() async {
+        let before = makeElement(label: "Display", traits: .header)
+        let after = makeElement(label: "Controls Demo", traits: .header)
+        let liveObject = NSObject()
+        let livePostTransition = ObjectIdentifier(liveObject)
+        let session = makeSession(
+            script: [
+                makeParseResult([before]),
+                makeParseResult([before]),
+                makeParseResult([after]),
+                makeParseResult([after]),
+                makeParseResult([after])
+            ],
+            cyclesRequired: 2,
+            cycleIntervalMs: 1,
+            timeoutMs: 100,
+            topVCSequence: [livePostTransition, livePostTransition, livePostTransition, livePostTransition]
+        )
+
+        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent(), baselineTopVC: nil)
+        _ = liveObject // keep alive
+
+        if case .tripwireTriggered = outcome.outcome {
+            // Expected.
+        } else {
+            XCTFail("Expected .tripwireTriggered, got \(outcome.outcome)")
+        }
+        let labels = Set(outcome.elementsByKey.values.compactMap(\.label))
+        XCTAssertTrue(labels.contains("Display"))
+        XCTAssertTrue(labels.contains("Controls Demo"))
     }
 
     // MARK: - Explicit Baseline (PR #330 H1)

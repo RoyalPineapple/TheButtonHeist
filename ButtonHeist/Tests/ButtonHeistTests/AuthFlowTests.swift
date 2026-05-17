@@ -132,16 +132,21 @@ final class AuthFlowTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testObserveModeUsesWatch() async throws {
+    func testAuthRequiredOnlyUsesAuthenticate() async throws {
         let conn = DeviceConnection(device: makeDummyDevice(), token: "my-token")
         conn.simulateConnected()
-        conn.observeMode = true
+        var sentMessages: [ClientMessage] = []
+        conn.onSend = { message, _ in
+            sentMessages.append(message)
+        }
 
-        // send() will be a no-op without real connection, but we verify
-        // observeMode is correctly set and handleMessage doesn't crash
         try conn.handleMessage(encode(.authRequired))
 
-        XCTAssertTrue(conn.observeMode)
+        guard case .authenticate(let payload) = sentMessages.first else {
+            return XCTFail("Expected authRequired to send authenticate")
+        }
+        XCTAssertEqual(payload.token, "my-token")
+        XCTAssertEqual(sentMessages.count, 1)
     }
 
     @ButtonHeistActor

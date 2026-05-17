@@ -326,8 +326,8 @@ final class TheBrains {
     func clearCache() {
         stash.clearCache()
         navigation.clearCache()
-        broadcastHistory = .fresh
-        lastBroadcastHierarchyHash = 0
+        sentHistory = .fresh
+        lastSettledHierarchyHash = 0
     }
 
     // MARK: - Response State Tracking
@@ -341,32 +341,32 @@ final class TheBrains {
         let screenId: String?
     }
 
-    /// Two-phase broadcast history: `.fresh` before the first response, and
+    /// Two-phase sent-state history: `.fresh` before the first response, and
     /// `.sent` once a response has been recorded. Modelled as an enum so the
     /// "never sent" case is structurally distinct from any sent state — every
     /// caller must handle it explicitly rather than guarding against `nil`.
-    enum BroadcastHistory {
+    enum SentHistory {
         case fresh
         case sent(SentState)
     }
 
-    private(set) var broadcastHistory: BroadcastHistory = .fresh
+    private(set) var sentHistory: SentHistory = .fresh
 
-    /// Hash of the last hierarchy sent to subscribers. This is broadcast
-    /// memory, not accessibility belief, so it lives with TheBrains instead of
-    /// TheStash's committed Screen state.
-    private var lastBroadcastHierarchyHash: Int = 0
+    /// Hash of the last hierarchy observed by settled-change tracking.
+    /// This is recording inactivity memory, not accessibility belief, so it
+    /// lives with TheBrains instead of TheStash's committed Screen state.
+    private var lastSettledHierarchyHash: Int = 0
 
     /// The state of the last response sent to the driver, if any.
     var lastSentState: SentState? {
-        if case .sent(let state) = broadcastHistory { return state }
+        if case .sent(let state) = sentHistory { return state }
         return nil
     }
 
     /// Snapshot current state as "last sent" — call after every response to the driver.
     func recordSentState() {
         let state = captureSemanticState()
-        broadcastHistory = .sent(SentState(
+        sentHistory = .sent(SentState(
             treeHash: state.treeHash,
             viewportHash: stash.wireTreeHash(),
             captureHash: state.capture.hash,
@@ -378,7 +378,7 @@ final class TheBrains {
     /// Record sent state when the caller already has the current viewport hash.
     func recordSentState(viewportHash: Int) {
         let state = captureSemanticState()
-        broadcastHistory = .sent(SentState(
+        sentHistory = .sent(SentState(
             treeHash: state.treeHash,
             viewportHash: viewportHash,
             captureHash: state.capture.hash,
@@ -387,18 +387,18 @@ final class TheBrains {
         ))
     }
 
-    // MARK: - Broadcast Support
+    // MARK: - Settled Change Tracking
 
-    /// Refresh and return an Interface if the tree changed since the last broadcast.
-    func broadcastInterfaceIfChanged() -> Interface? {
-        guard refresh() != nil else { return nil }
+    /// Refresh and report whether the wire tree changed since the last settled check.
+    func interfaceChangedSinceLastSettledCheck() -> Bool {
+        guard refresh() != nil else { return false }
 
-        let (tree, currentHash) = stash.wireTreeWithHash()
+        let currentHash = stash.wireTreeHash()
 
-        guard currentHash != lastBroadcastHierarchyHash else { return nil }
-        lastBroadcastHierarchyHash = currentHash
+        guard currentHash != lastSettledHierarchyHash else { return false }
+        lastSettledHierarchyHash = currentHash
 
-        return Interface(timestamp: Date(), tree: tree)
+        return true
     }
 
     /// Build a full Interface payload from current state.
@@ -421,7 +421,7 @@ final class TheBrains {
     /// Check if the accessibility tree changed since the last response and
     /// return both the internal delta and the public accessibility trace.
     func computeBackgroundCapture() async -> BackgroundCapture? {
-        guard case .sent(let sent) = broadcastHistory,
+        guard case .sent(let sent) = sentHistory,
               sent.treeHash != 0,
               sent.viewportHash != 0 else { return nil }
         guard refresh() != nil else { return nil }
@@ -447,7 +447,7 @@ final class TheBrains {
 
     /// Whether the screen changed since the last response (for fast-redirect logic).
     var screenChangedSinceLastSent: Bool {
-        guard case .sent(let sent) = broadcastHistory else { return false }
+        guard case .sent(let sent) = sentHistory else { return false }
         return ScreenClassifier.classify(
             before: sent.beforeState.screenSnapshot,
             after: ScreenClassifier.snapshot(of: stash.currentScreen)
@@ -456,7 +456,7 @@ final class TheBrains {
 
     /// Screen ID from the last response, for diagnostic messages.
     var lastSentScreenId: String? {
-        if case .sent(let sent) = broadcastHistory { return sent.screenId }
+        if case .sent(let sent) = sentHistory { return sent.screenId }
         return nil
     }
 
@@ -504,7 +504,7 @@ final class TheBrains {
         }
 
         let baseline: BeforeState = {
-            if case .sent(let sent) = broadcastHistory, !sent.captureHash.isEmpty {
+            if case .sent(let sent) = sentHistory, !sent.captureHash.isEmpty {
                 return sent.beforeState
             }
             return initial
@@ -525,7 +525,7 @@ final class TheBrains {
 
         // Fast path: capture already changed since the last response
         let lastCaptureHash: String? = {
-            if case .sent(let sent) = broadcastHistory { return sent.captureHash }
+            if case .sent(let sent) = sentHistory { return sent.captureHash }
             return nil
         }()
         if let lastCaptureHash, initial.capture.hash != lastCaptureHash {

@@ -610,12 +610,8 @@ extension TheFence {
     // MARK: - Handler: Connect (runtime target switching)
 
     private func establishSessionOnly() async throws -> FenceResponse {
-        try await startWithoutImplicitObservation()
+        try await start()
         return .sessionState(payload: currentSessionState())
-    }
-
-    private func startWithoutImplicitObservation() async throws {
-        try await start(autoSubscribe: false)
     }
 
     func handleConnect(_ args: [String: Any]) async throws -> FenceResponse {
@@ -667,7 +663,7 @@ extension TheFence {
         config = newConfig
 
         do {
-            try await startWithoutImplicitObservation()
+            try await start()
         } catch {
             let connectionFailure = error as? FenceError
             let connectionFailureDetails = connectionFailure?.failureDetails
