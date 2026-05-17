@@ -326,11 +326,9 @@ extension Navigation {
             let proof = await scrollOnePageAndSettle(
                 .uiScrollView(scrollView), direction: uiDirection
             )
-            return TheSafecracker.InteractionResult(
-                success: proof.moved, method: .scroll,
-                message: proof.moved ? nil : "scroll failed: observed target already at edge; try the opposite direction",
-                value: nil
-            )
+            return proof.moved
+                ? .success(method: .scroll)
+                : .failure(.scroll, message: "scroll failed: observed target already at edge; try the opposite direction")
         case .failed(let diagnostic):
             return .failure(.scroll, message: diagnostic.message(for: resolved.screenElement))
         }
@@ -350,11 +348,12 @@ extension Navigation {
         case .resolved(let scrollView):
             let moved = safecracker.scrollToEdge(scrollView, edge: target.edge)
 
-            return TheSafecracker.InteractionResult(
-                success: moved, method: .scrollToEdge,
-                message: moved ? nil : "\(ScrollMode.toEdge.canonicalCommand) failed: observed target already at requested edge",
-                value: nil
-            )
+            return moved
+                ? .success(method: .scrollToEdge)
+                : .failure(
+                    .scrollToEdge,
+                    message: "\(ScrollMode.toEdge.canonicalCommand) failed: observed target already at requested edge"
+                )
         case .failed(let diagnostic):
             return .failure(.scrollToEdge, message: diagnostic.message(for: resolved.screenElement))
         }
@@ -395,10 +394,7 @@ extension Navigation {
                     message: "Element is present but could not be scrolled fully on-screen"
                 )
             }
-            return TheSafecracker.InteractionResult(
-                success: true, method: .scrollToVisible,
-                message: "Already visible", value: nil
-            )
+            return .success(method: .scrollToVisible, message: "Already visible")
         }
 
         // Known element with recorded position — one-shot jump
@@ -414,7 +410,7 @@ extension Navigation {
                 refresh()
                 liveResolution = stash.resolveVisibleTarget(elementTarget)
                 if didEnsure, liveResolution.resolved != nil {
-                    return TheSafecracker.InteractionResult(success: true, method: .scrollToVisible, message: nil, value: nil)
+                    return .success(method: .scrollToVisible)
                 }
             }
             let suffix = liveResolution.diagnostics.isEmpty ? "" : ": \(liveResolution.diagnostics)"
@@ -625,14 +621,14 @@ extension Navigation {
     }
 
     private func searchNotFoundResult(progress: ScrollSearchProgress) -> TheSafecracker.InteractionResult {
-        TheSafecracker.InteractionResult(
-            success: false, method: .elementSearch,
-            message: searchNotFoundMessage(progress: progress), value: nil,
-            scrollSearchResult: ScrollSearchResult(
+        .failure(
+            .elementSearch,
+            message: searchNotFoundMessage(progress: progress),
+            payload: .scrollSearch(ScrollSearchResult(
                 scrollCount: progress.scrollCount,
                 uniqueElementsSeen: progress.uniqueElementsSeen,
                 totalItems: nil, exhaustive: progress.exhaustive
-            )
+            ))
         )
     }
 
@@ -642,12 +638,12 @@ extension Navigation {
         uniqueElementsSeen: Int
     ) -> TheSafecracker.InteractionResult {
         let wire = TheStash.WireConversion.toWire(found.screenElement)
-        return TheSafecracker.InteractionResult(
-            success: true, method: .elementSearch, message: nil, value: nil,
-            scrollSearchResult: ScrollSearchResult(
+        return .success(
+            method: .elementSearch,
+            payload: .scrollSearch(ScrollSearchResult(
                 scrollCount: scrollCount, uniqueElementsSeen: uniqueElementsSeen,
                 totalItems: nil, exhaustive: false, foundElement: wire
-            )
+            ))
         )
     }
 
