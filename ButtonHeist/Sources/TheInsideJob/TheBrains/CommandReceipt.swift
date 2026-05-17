@@ -113,6 +113,8 @@ struct CommandAttempt {
 /// Receipt for the post-delivery settle phase and authoritative post-capture.
 struct SettleReceipt {
     let outcome: SettleOutcome
+    let events: [SettleEvent]
+    let elementsByKey: [TimelineKey: AccessibilityElement]
     let didSettle: Bool
     let accessibilityTrace: AccessibilityTrace
 

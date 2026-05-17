@@ -7,8 +7,8 @@ import XCTest
 /// Deterministic tests for `SettleSession` — the multi-cycle AX-tree
 /// settle loop. These do not stand up a UIKit hierarchy; they drive the
 /// loop's closure-based `parseProvider` / `topVCProvider` / `sleeper`
-/// seams with scripted sequences and assert the resulting `SettleOutcome`
-/// and accumulated `elementsByKey`.
+/// seams with scripted sequences and assert the resulting `SettleOutcome`,
+/// observed `SettleEvent`s, and accumulated `elementsByKey`.
 @MainActor
 final class SettleSessionTests: XCTestCase {
 
@@ -112,6 +112,26 @@ final class SettleSessionTests: XCTestCase {
             XCTFail("Expected .settled, got \(outcome.outcome)")
         }
         XCTAssertEqual(outcome.elementsByKey.count, 1)
+        XCTAssertEqual(outcome.finalScreen?.hierarchy.sortedElements.first?.label, "Hello")
+    }
+
+    func testNoChangeParsesSettleAndReturnFinalStableScreen() async {
+        let element = makeElement(label: "Unchanged", traits: .staticText)
+        let stable = makeParseResult([element])
+        let session = makeSession(
+            script: [stable, stable, stable],
+            cyclesRequired: 2
+        )
+
+        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent(), baselineTopVC: nil)
+
+        if case .settled = outcome.outcome {
+            // Expected: a no-change parse is valid stability proof.
+        } else {
+            XCTFail("Expected .settled for no-change parses, got \(outcome.outcome)")
+        }
+        XCTAssertFalse(outcome.events.containsTripwireSignalChange)
+        XCTAssertEqual(outcome.finalScreen?.hierarchy.sortedElements.map(\.label), ["Unchanged"])
     }
 
     // MARK: - Timeout
@@ -170,14 +190,15 @@ final class SettleSessionTests: XCTestCase {
 
         let outcome = await session.run(start: CFAbsoluteTimeGetCurrent(), baselineTopVC: nil)
 
-        if case .tripwireTriggered = outcome.outcome {
+        if case .settled = outcome.outcome {
             // Expected.
         } else {
-            XCTFail("Expected .tripwireTriggered, got \(outcome.outcome)")
+            XCTFail("Expected .settled after Tripwire signal, got \(outcome.outcome)")
         }
+        XCTAssertTrue(outcome.events.containsTripwireSignalChange)
         XCTAssertEqual(outcome.elementsByKey.count, 1)
         XCTAssertTrue(outcome.outcome.didSettleCleanly,
-                      ".tripwireTriggered should report didSettleCleanly == true")
+                      ".settled after Tripwire signal should report didSettleCleanly == true")
     }
 
     func testTripwireTriggerWaitsForStablePostTransitionTree() async {
@@ -202,14 +223,54 @@ final class SettleSessionTests: XCTestCase {
         let outcome = await session.run(start: CFAbsoluteTimeGetCurrent(), baselineTopVC: nil)
         _ = liveObject // keep alive
 
-        if case .tripwireTriggered = outcome.outcome {
+        if case .settled = outcome.outcome {
             // Expected.
         } else {
-            XCTFail("Expected .tripwireTriggered, got \(outcome.outcome)")
+            XCTFail("Expected .settled after Tripwire signal, got \(outcome.outcome)")
         }
+        XCTAssertTrue(outcome.events.containsTripwireSignalChange)
         let labels = Set(outcome.elementsByKey.values.compactMap(\.label))
         XCTAssertTrue(labels.contains("Display"))
         XCTAssertTrue(labels.contains("Controls Demo"))
+    }
+
+    func testLateTripwireTriggerResetsPreviouslyStableCycles() async {
+        let before = makeElement(label: "Before", traits: .header)
+        let loading = makeElement(label: "Loading", traits: .staticText)
+        let after = makeElement(label: "After", traits: .header)
+        let baselineObject = NSObject()
+        let liveObject = NSObject()
+        let baseline = ObjectIdentifier(baselineObject)
+        let livePostTransition = ObjectIdentifier(liveObject)
+        let session = makeSession(
+            script: [
+                makeParseResult([before]),
+                makeParseResult([before]),
+                makeParseResult([loading]),
+                makeParseResult([after]),
+                makeParseResult([after]),
+                makeParseResult([after])
+            ],
+            cyclesRequired: 2,
+            cycleIntervalMs: 1,
+            timeoutMs: 100,
+            topVCSequence: [baseline, livePostTransition, livePostTransition, livePostTransition, livePostTransition]
+        )
+
+        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent(), baselineTopVC: baseline)
+        _ = baselineObject // keep alive
+        _ = liveObject // keep alive
+
+        if case .settled = outcome.outcome {
+            // Expected.
+        } else {
+            XCTFail("Expected .settled after late Tripwire signal, got \(outcome.outcome)")
+        }
+        XCTAssertTrue(outcome.events.containsTripwireSignalChange)
+        let labels = Set(outcome.elementsByKey.values.compactMap(\.label))
+        XCTAssertTrue(labels.contains("Before"))
+        XCTAssertTrue(labels.contains("Loading"))
+        XCTAssertTrue(labels.contains("After"))
     }
 
     // MARK: - Explicit Baseline (PR #330 H1)
@@ -267,11 +328,12 @@ final class SettleSessionTests: XCTestCase {
         _ = baselineObject // keep alive
         _ = liveObject // keep alive
 
-        if case .tripwireTriggered = outcome.outcome {
+        if case .settled = outcome.outcome {
             // Expected.
         } else {
-            XCTFail("Differing baseline vs provider must surface .tripwireTriggered, got \(outcome.outcome)")
+            XCTFail("Differing baseline vs provider must surface a Tripwire signal event, got \(outcome.outcome)")
         }
+        XCTAssertTrue(outcome.events.containsTripwireSignalChange)
     }
 
     // MARK: - Cancellation
@@ -346,6 +408,7 @@ final class SettleSessionTests: XCTestCase {
         } else {
             XCTFail("Spinner with .updatesFrequently must not block settle. Got \(outcome.outcome)")
         }
+        XCTAssertFalse(outcome.events.containsTripwireSignalChange)
     }
 
     func testUpdatesFrequentlyMaskingAlsoIgnoresFrameChanges() async {
@@ -395,6 +458,36 @@ final class SettleSessionTests: XCTestCase {
 
         XCTAssertEqual(result.count, 1)
         XCTAssertEqual(result.first?.label, "Loading")
+    }
+
+    func testTransientSpinnerCapturedOnCleanSameScreenSettle() async {
+        let content = makeElement(label: "Content", traits: .staticText)
+        let spinner = makeElement(label: "Loading", traits: .staticText)
+        let stable = makeParseResult([content])
+        let session = makeSession(
+            script: [
+                stable,
+                makeParseResult([content, spinner]),
+                stable,
+                stable
+            ],
+            cyclesRequired: 2
+        )
+
+        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent(), baselineTopVC: nil)
+
+        if case .settled = outcome.outcome {
+            // Expected.
+        } else {
+            XCTFail("Expected clean same-screen settle, got \(outcome.outcome)")
+        }
+        XCTAssertFalse(outcome.events.containsTripwireSignalChange)
+        let transients = SettleSession.transientElements(
+            seenByKey: outcome.elementsByKey,
+            baseline: [content],
+            final: [content]
+        )
+        XCTAssertEqual(transients.map(\.label), ["Loading"])
     }
 
     func testTransientElementsOrderedByReadingOrder() {

@@ -495,7 +495,7 @@ final class WaitForIntegrationTests: XCTestCase {
         }
     }
 
-    func testWaitForChangeElementsChangedFallsThroughCurrentStateCheck() async throws {
+    func testWaitForChangeLateCallElementsChangedUsesAlreadyChangedCapture() async throws {
         let baseline = addLabel("WaitForChange-ElementsBaseline")
         defer { baseline.removeFromSuperview() }
         XCTAssertTrue(refreshAndRecordSentState())

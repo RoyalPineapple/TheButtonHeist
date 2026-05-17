@@ -5,18 +5,34 @@ import UIKit
 
 import AccessibilitySnapshotParser
 
-// MARK: - SettleOutcome
+// MARK: - Settle Event/Outcome
+
+/// Signal observed while the AX-tree settle loop was waiting.
+///
+/// These are not settle outcomes and do not classify screen changes. They are
+/// lightweight facts that tell the caller why the loop reset its baseline and
+/// re-parsed before proving the post-transition AX tree became stable.
+enum SettleEvent: Equatable {
+    case tripwireSignalChanged(
+        from: TheTripwire.TripwireSignal,
+        to: TheTripwire.TripwireSignal
+    )
+}
+
+extension Array where Element == SettleEvent {
+    var containsTripwireSignalChange: Bool {
+        contains { event in
+            if case .tripwireSignalChanged = event { return true }
+            return false
+        }
+    }
+}
 
 /// Result of running the multi-cycle AX-tree settle loop.
 enum SettleOutcome: Equatable {
 
     /// The AX tree reached `cyclesRequired` consecutive stable cycles.
     case settled(timeMs: Int)
-
-    /// Tripwire observed a cheap UIKit-side condition that should be checked.
-    /// The caller should parse again and let the parsed accessibility
-    /// signature classify the result.
-    case tripwireTriggered(timeMs: Int)
 
     /// The hard timeout elapsed while the tree was still changing.
     case timedOut(timeMs: Int)
@@ -29,19 +45,19 @@ enum SettleOutcome: Equatable {
 
     var timeMs: Int {
         switch self {
-        case .settled(let ms), .tripwireTriggered(let ms), .timedOut(let ms), .cancelled(let ms):
+        case .settled(let ms), .timedOut(let ms), .cancelled(let ms):
             return ms
         }
     }
 
     /// True when the response represents a UI state we believe in —
-    /// either the loop reached multi-cycle stability, or the settle loop
-    /// was preempted because Tripwire triggered. The caller parses immediately,
-    /// and the classifier may still return no change. `.timedOut` and
-    /// `.cancelled` return false.
+    /// the loop reached multi-cycle stability. A Tripwire signal may have
+    /// reset the baseline during the loop, but that event is tracked
+    /// separately in `SettleSession.Outcome.events`; it is not itself
+    /// stability proof.
     var didSettleCleanly: Bool {
         switch self {
-        case .settled, .tripwireTriggered: return true
+        case .settled: return true
         case .timedOut, .cancelled: return false
         }
     }
@@ -207,16 +223,28 @@ extension AccessibilityElement {
     /// is `Task.sleep(nanoseconds:)`, which throws `CancellationError`
     /// when the surrounding task is cancelled — that propagates to
     /// `SettleOutcome.cancelled`.
-    static func live(stash: TheStash, tripwire: TheTripwire) -> SettleSession {
+    static func live(
+        stash: TheStash,
+        tripwire: TheTripwire,
+        timeoutMs: Int = SettleSession.defaultTimeoutMs
+    ) -> SettleSession {
         SettleSession(
             parseProvider: { stash.parse() },
-            tripwireSignalProvider: { tripwire.tripwireSignal() }
+            tripwireSignalProvider: { tripwire.tripwireSignal() },
+            timeoutMs: timeoutMs
         )
     }
 
     /// Result of the loop, exposed so the caller can compute transients.
     struct Outcome {
         let outcome: SettleOutcome
+        /// Lightweight signals observed during the loop. These explain why
+        /// the settle baseline was reset, but the final `outcome` still owns
+        /// whether the AX tree became stable.
+        let events: [SettleEvent]
+        /// Last parsed screen observed by the settle loop. On `.settled`, this
+        /// is the AX tree whose fingerprint completed the stability proof.
+        let finalScreen: Screen?
         /// Every `(key, element)` pair observed in any cycle of the loop.
         /// Includes spinner cycles and other intermediate states.
         let elementsByKey: [TimelineKey: AccessibilityElement]
@@ -248,8 +276,9 @@ extension AccessibilityElement {
     /// Same loop as `run(start:baselineTopVC:)`, with the full tripwire signal.
     /// Production uses this path so visible window/navigation/key changes reset
     /// the settle baseline, then the loop proves the post-transition AX tree is
-    /// stable before returning. The returned outcome still records whether a
-    /// tripwire fired so callers can suppress transition transients.
+    /// stable before returning. The returned events record any Tripwire signals
+    /// observed along the way so callers can suppress transition transients
+    /// without treating the signal itself as a screen-change classification.
     func run(start: CFAbsoluteTime, baselineTripwireSignal: TheTripwire.TripwireSignal) async -> Outcome {
         let cycleNs = UInt64(cycleIntervalMs) * 1_000_000
         let deadline = start + Double(timeoutMs) / 1000
@@ -257,13 +286,15 @@ extension AccessibilityElement {
         var elementsByKey: [TimelineKey: AccessibilityElement] = [:]
         var stableCycles = 0
         var tripwireBaseline = baselineTripwireSignal
-        var observedTripwireTrigger = false
+        var events: [SettleEvent] = []
+        var lastScreen: Screen?
 
         // Seed the baseline fingerprint synchronously so the first
         // post-sleep parse can already count as stable cycle 1. Without
         // this seed, a static screen pays cyclesRequired+1 cycles.
         var previousFingerprint: Int? = {
             guard let initial = parseProvider() else { return nil }
+            lastScreen = initial
             let initialElements = initial.hierarchy.sortedElements
             for element in initialElements {
                 elementsByKey[element.timelineKey] = element
@@ -277,24 +308,32 @@ extension AccessibilityElement {
             } catch is CancellationError {
                 return Outcome(
                     outcome: .cancelled(timeMs: Self.elapsedMs(since: start)),
+                    events: events,
+                    finalScreen: lastScreen,
                     elementsByKey: elementsByKey
                 )
             } catch {
                 return Outcome(
                     outcome: .timedOut(timeMs: Self.elapsedMs(since: start)),
+                    events: events,
+                    finalScreen: lastScreen,
                     elementsByKey: elementsByKey
                 )
             }
 
             let nowTripwireSignal = tripwireSignalProvider()
             if nowTripwireSignal != tripwireBaseline {
-                observedTripwireTrigger = true
+                events.append(.tripwireSignalChanged(
+                    from: tripwireBaseline,
+                    to: nowTripwireSignal
+                ))
                 tripwireBaseline = nowTripwireSignal
                 stableCycles = 0
                 guard let parse = parseProvider() else {
                     previousFingerprint = nil
                     continue
                 }
+                lastScreen = parse
                 let parsedElements = parse.hierarchy.sortedElements
                 for element in parsedElements {
                     elementsByKey[element.timelineKey] = element
@@ -304,6 +343,7 @@ extension AccessibilityElement {
             }
 
             guard let parse = parseProvider() else { continue }
+            lastScreen = parse
             let parsedElements = parse.hierarchy.sortedElements
             for element in parsedElements {
                 elementsByKey[element.timelineKey] = element
@@ -314,9 +354,9 @@ extension AccessibilityElement {
                 stableCycles += 1
                 if stableCycles >= cyclesRequired {
                     return Outcome(
-                        outcome: observedTripwireTrigger
-                            ? .tripwireTriggered(timeMs: Self.elapsedMs(since: start))
-                            : .settled(timeMs: Self.elapsedMs(since: start)),
+                        outcome: .settled(timeMs: Self.elapsedMs(since: start)),
+                        events: events,
+                        finalScreen: parse,
                         elementsByKey: elementsByKey
                     )
                 }
@@ -328,6 +368,8 @@ extension AccessibilityElement {
 
         return Outcome(
             outcome: .timedOut(timeMs: Self.elapsedMs(since: start)),
+            events: events,
+            finalScreen: lastScreen,
             elementsByKey: elementsByKey
         )
     }
