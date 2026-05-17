@@ -155,19 +155,21 @@ extension Navigation {
         case .swipeable:
             let toLeading = Self.edgeDirection(for: leadingEdge)
             for _ in 0..<50 {
-                let (moved, before) = await scrollOnePageAndSettle(
+                let proof = await scrollOnePageAndSettle(
                     scrollTarget, direction: toLeading, animated: false
                 )
-                if moved, let parsed = stash.parse() {
+                if proof.moved, let parsed = stash.parse() {
                     // Page-only commit: rebinds the interaction snapshot so
-                    // the `stash.visibleIds == before` termination check
+                    // the visible-state termination check
                     // compares page-to-page, not page-to-in-flight-union. The
                     // union accumulator stays local until `exploreAndPrune`
                     // commits at end-of-cycle.
                     stash.currentScreen = parsed
                     union = union.merging(parsed)
                 }
-                if !moved || stash.visibleIds == before { break }
+                if proof.atEdge || proof.visibleStateUnchanged(after: stash.visibleIds) {
+                    break
+                }
             }
         }
 
@@ -178,10 +180,10 @@ extension Navigation {
         var accumulatedOrigins = initialPage.origins
 
         for _ in 0..<ScreenManifest.maxScrollsPerContainer {
-            let (moved, _) = await scrollOnePageAndSettle(
+            let proof = await scrollOnePageAndSettle(
                 scrollTarget, direction: direction, animated: false
             )
-            guard moved else { break }
+            guard proof.moved else { break }
             manifest.scrollCount += 1
             if let parsed = stash.parse() {
                 // Page-only commit: `visibleElementsInContainer` reads
