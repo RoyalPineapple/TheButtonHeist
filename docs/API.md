@@ -588,28 +588,15 @@ MCP server exposing 24 purpose-built tools backed by TheFence. `activate` is the
 cd ButtonHeistMCP && swift build -c release
 ```
 
-### Tools
+### Tool Surface
 
-| Tool | Description | Key Parameters |
-|------|-------------|----------------|
-| `get_interface` | Get the app accessibility hierarchy. Omit `scope` for the normal semantic state; `scope: "visible"` requests a diagnostic on-screen parse. | `scope`, `label`, `identifier`, `value`, `traits`, `excludeTraits` (optional filtering) |
-| `activate` | **Primary interaction tool.** Activate a UI element (activation-first pattern). Pass `action` for named actions (increment, decrement, custom) | `heistId`, `label`, `identifier`, `value`, `traits`, `excludeTraits`, `action`, `count`, `expect` |
-| `rotor` | Move through an accessibility rotor, defaulting to next | element target, `rotor`/`rotorIndex`, `direction`, `currentHeistId`, text-range cursor offsets, `expect` |
-| `type_text` | Type text / delete characters | `text`, `deleteCount`, `clearFirst`, `heistId`, `label`, `identifier`, `value`, `traits`, `excludeTraits`, `expect` |
-| `get_screen` | Capture PNG screenshot | `output` (file path, optional) |
-| `wait_for_change` | Wait for UI to change, optionally matching an expectation | `expect`, `timeout` |
-| `wait_for` | Wait for element to appear/disappear | `heistId`, `label`, `identifier`, `value`, `traits`, `excludeTraits`, `ordinal`, `absent`, `timeout` |
-| `start_recording` | Start H.264/MP4 screen recording | `fps`, `scale`, `maxDuration`, `inactivityTimeout` |
-| `stop_recording` | Stop recording (returns metadata) | `output` (file path, optional) |
-| `list_devices` | List discovered iOS devices | — |
-| `gesture` | Touch gestures (prefer `activate`). Includes swipe. | `type` (required): `swipe`, `one_finger_tap`, `drag`, `long_press`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`; `expect` |
-| `edit_action` | Perform edit or keyboard actions on first responder | `action` (required): `copy`, `paste`, `cut`, `select`, `selectAll`, `dismiss`; `expect` |
-| `scroll` | Scroll within scroll views. Mode selects behavior. | `mode`: `page` (default), `to_visible`, `search`, `to_edge`; `direction`, `edge`, element target, `expect` |
-| `set_pasteboard` | Write text to the general pasteboard | `text` (required), `expect` |
-| `get_pasteboard` | Read text from the general pasteboard | `expect` |
-| `run_batch` | Execute an ordered batch of Fence requests in one MCP call | `steps` (required), `policy` |
-| `get_session_state` | Read-only summary of the current macOS-side session state | — |
-| `connect` | Establish or switch the active session and return session state. Observation starts with `get_interface`. | `target`, `device`, `token` |
+ButtonHeistMCP exposes 24 tools. The exact schemas are projected from `TheFence.Command.parameters` in `ToolDefinitions.swift` and guarded by sync tests; this section documents the contract rather than duplicating every parameter.
+
+- Direct tools map 1:1 to raw Fence commands such as `activate`, `type_text`, `wait_for`, `get_screen`, `set_pasteboard`, `run_batch`, and session-management commands.
+- `gesture` is a top-level MCP grouping for low-level gesture commands selected by `type`.
+- `scroll` is a top-level MCP grouping for page scrolling, scroll-to-visible, search scrolling, and edge scrolling selected by `mode`.
+- `edit_action` accepts responder-chain edit actions, with the top-level MCP `dismiss` selector routing to raw Fence command `dismiss_keyboard`.
+- `run_batch` is the exception to MCP grouping: each step must be a raw Fence command dictionary, not a nested MCP grouped-tool shape.
 
 `get_session_state` reports the current connection phase and the last known failure/disconnect reason without doing observation work. It does not send `requestInterface` or `explore`.
 
@@ -657,11 +644,13 @@ Perform an edit or keyboard action on the current first responder. Requires `act
 
 #### run_batch
 
-Execute an ordered sequence of commands in a single call. Each step is a full command request (same schema as a standalone tool call). Steps run sequentially — the response from one step is not piped into the next.
+Execute an ordered sequence of raw Fence command requests in a single MCP call. Steps run sequentially — the response from one step is not piped into the next.
+
+Batch steps use the canonical `TheFence.Command` shape. Do not use grouped MCP wrapper names inside `steps`: use `swipe` instead of `gesture` with `type`, `element_search` instead of `scroll` with `mode: "search"`, and `dismiss_keyboard` instead of `edit_action` with `action: "dismiss"`.
 
 **Parameters:**
 
-- `steps` (required) — Array of command request objects (e.g., `[{"command": "activate", "identifier": "loginButton", "expect": {"type": "screen_changed"}}, ...]`)
+- `steps` (required) — Array of raw Fence command request objects (e.g., `[{"command": "activate", "identifier": "loginButton", "expect": {"type": "screen_changed"}}, {"command": "swipe", "direction": "left"}]`)
 - `policy` — `"stop_on_error"` (default) or `"continue_on_error"`
 
 With the default `stop_on_error` policy, the batch halts at the first mismet expectation or delivery failure. `failedIndex` points at the step that broke — not a downstream step that failed because the expected state change never happened.

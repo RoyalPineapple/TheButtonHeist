@@ -425,7 +425,7 @@ Each step shows its command, delta kind, and expectation result (`✓`/`✗`). R
 
 ### What can go in a batch?
 
-Any interaction command: `activate`, `type_text`, `scroll`, `scroll_to_visible`, `element_search`, `scroll_to_edge`, `swipe`, gesture commands, `edit_action`, `set_pasteboard`, `get_pasteboard`, `dismiss_keyboard`. You can also include `get_interface` and `get_screen` as steps.
+Any raw Fence command: `activate`, `type_text`, `scroll`, `scroll_to_visible`, `element_search`, `scroll_to_edge`, `swipe`, gesture commands, `edit_action`, `set_pasteboard`, `get_pasteboard`, `dismiss_keyboard`. You can also include `get_interface` and `get_screen` as steps. Inside `steps`, use the raw command names directly; do not use grouped MCP wrapper shapes such as `gesture` with `type`, `scroll` with `mode`, or `edit_action` with `action: "dismiss"`.
 
 ## Efficient Agent Patterns
 

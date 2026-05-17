@@ -85,24 +85,6 @@ struct ToolRoutingTests {
         #expect(request["action"] as? String == "copy")
     }
 
-    @Test("run_batch routes nested MCP tool shapes")
-    func runBatchRoutesNestedMCPToolShapes() throws {
-        let steps = try normalizeBatchSteps([
-            ["command": "gesture", "type": TheFence.Command.swipe.rawValue, "direction": "left"],
-            ["command": TheFence.Command.scroll.rawValue, "mode": ScrollMode.search.rawValue, "label": "Done"],
-            ["command": TheFence.Command.editAction.rawValue, "action": "dismiss"],
-        ])
-
-        #expect(steps[0]["command"] as? String == TheFence.Command.swipe.rawValue)
-        #expect(steps[0]["type"] == nil)
-        #expect(steps[0]["direction"] as? String == "left")
-        #expect(steps[1]["command"] as? String == TheFence.Command.elementSearch.rawValue)
-        #expect(steps[1]["mode"] == nil)
-        #expect(steps[1]["label"] as? String == "Done")
-        #expect(steps[2]["command"] as? String == TheFence.Command.dismissKeyboard.rawValue)
-        #expect(steps[2]["action"] == nil)
-    }
-
     @Test("run_batch still accepts raw Fence command shapes")
     func runBatchAcceptsRawFenceCommandShapes() throws {
         let steps = try normalizeBatchSteps([
@@ -118,15 +100,35 @@ struct ToolRoutingTests {
         #expect(steps[2]["command"] as? String == TheFence.Command.dismissKeyboard.rawValue)
     }
 
-    @Test("batch step normalization reports nested routing errors")
-    func batchStepNormalizationReportsNestedRoutingErrors() {
-        let result = FenceOperationCatalog.normalizeBatchStep(["command": "gesture"])
+    @Test("run_batch rejects grouped MCP tool shapes")
+    func runBatchRejectsGroupedMCPToolShapes() {
+        let cases: [(step: [String: Any], message: String)] = [
+            (
+                ["command": "gesture", "type": TheFence.Command.swipe.rawValue, "direction": "left"],
+                "run_batch step command must be a raw TheFence.Command; unknown command \"gesture\""
+            ),
+            (
+                [
+                    "command": TheFence.Command.scroll.rawValue,
+                    "mode": ScrollMode.search.rawValue,
+                    "label": "Done",
+                ],
+                "run_batch step \"scroll\" uses the MCP mode selector; use raw Fence commands scroll, scroll_to_visible, element_search, or scroll_to_edge."
+            ),
+            (
+                ["command": TheFence.Command.editAction.rawValue, "action": "dismiss"],
+                "run_batch step \"edit_action\" uses the MCP dismiss selector; use raw Fence command dismiss_keyboard."
+            ),
+        ]
 
-        guard case .failure(let error) = result else {
-            Issue.record("Expected routing failure")
-            return
+        for testCase in cases {
+            let result = FenceOperationCatalog.normalizeBatchStep(testCase.step)
+            guard case .failure(let error) = result else {
+                Issue.record("Expected routing failure")
+                continue
+            }
+            #expect(error.message == testCase.message)
         }
-        #expect(error.message == "schema validation failed for type: observed missing; expected enum one of one_finger_tap, long_press, swipe, drag, pinch, rotate, two_finger_tap, draw_path, draw_bezier")
     }
 
     @Test("top-level raw grouped commands report canonical grouped tool shape")

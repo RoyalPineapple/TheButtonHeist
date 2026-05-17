@@ -39,7 +39,7 @@ ButtonHeistMCP currently exposes 24 tools backed by `TheFence`:
 - `stop_heist`
 - `play_heist`
 
-`gesture`, `scroll`, and `edit_action` are grouped tools — their typed selector parameter routes to a TheFence command. All other tools map 1:1 to a TheFence command name. TheFence command names are the product command contract; wire message discriminators are a lower transport layer and are documented separately in the wire protocol.
+`gesture`, `scroll`, and `edit_action` are grouped tools — their typed selector parameter routes to a TheFence command. All other tools map 1:1 to a TheFence command name. TheFence command names are the product command contract; wire message discriminators are a lower transport layer and are documented separately in the wire protocol. `run_batch.steps` use raw TheFence command dictionaries and do not accept nested grouped MCP wrapper shapes.
 
 ## Runtime Behavior
 

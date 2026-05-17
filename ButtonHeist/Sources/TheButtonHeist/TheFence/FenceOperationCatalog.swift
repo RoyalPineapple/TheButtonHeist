@@ -14,8 +14,7 @@ public struct FenceOperationRoutingError: Error, LocalizedError, Sendable {
 public enum FenceOperationCatalog {
     public static func normalizeToolCall(
         name: String,
-        arguments: [String: Any],
-        allowRawFenceCommands: Bool = false
+        arguments: [String: Any]
     ) -> Result<[String: Any], FenceOperationRoutingError> {
         switch name {
         case "gesture":
@@ -28,11 +27,7 @@ public enum FenceOperationCatalog {
             return routeEditAction(arguments)
 
         default:
-            return routeCommandNamed(
-                name,
-                arguments: arguments,
-                allowRawFenceCommands: allowRawFenceCommands
-            )
+            return routeCommandNamed(name, arguments: arguments)
         }
     }
 
@@ -50,22 +45,30 @@ public enum FenceOperationCatalog {
 
         var arguments = step
         arguments.removeValue(forKey: "command")
-        return normalizeToolCall(
-            name: command,
-            arguments: arguments,
-            allowRawFenceCommands: true
-        )
+
+        guard let fenceCommand = TheFence.Command(rawValue: command) else {
+            return .failure(FenceOperationRoutingError(
+                message: "run_batch step command must be a raw TheFence.Command; unknown command \"\(command)\""
+            ))
+        }
+
+        if let error = rawBatchShapeError(for: fenceCommand, arguments: arguments) {
+            return .failure(error)
+        }
+
+        var request = arguments
+        request["command"] = fenceCommand.rawValue
+        return .success(request)
     }
 
     private static func routeCommandNamed(
         _ name: String,
-        arguments: [String: Any],
-        allowRawFenceCommands: Bool
+        arguments: [String: Any]
     ) -> Result<[String: Any], FenceOperationRoutingError> {
         guard let command = TheFence.Command(rawValue: name) else {
             return .failure(FenceOperationRoutingError(message: "Unknown tool: \(name)"))
         }
-        guard allowRawFenceCommands || command.mcpExposure == .directTool else {
+        guard command.mcpExposure == .directTool else {
             if let message = groupedToolRoutingMessage(for: command) {
                 return .failure(FenceOperationRoutingError(message: message))
             }
@@ -118,6 +121,22 @@ public enum FenceOperationCatalog {
         selectorValue: String
     ) -> String {
         "Tool \"\(rawToolName)\" is grouped under \"\(groupedToolName)\"; call \(groupedToolName) with \(selectorName)=\"\(selectorValue)\"."
+    }
+
+    private static func rawBatchShapeError(
+        for command: TheFence.Command,
+        arguments: [String: Any]
+    ) -> FenceOperationRoutingError? {
+        switch command {
+        case .scroll where arguments["mode"] != nil:
+            return .init(message: "run_batch step \"scroll\" uses the MCP mode selector; use raw Fence commands scroll, scroll_to_visible, element_search, or scroll_to_edge.")
+
+        case .editAction where arguments["action"] as? String == "dismiss":
+            return .init(message: "run_batch step \"edit_action\" uses the MCP dismiss selector; use raw Fence command dismiss_keyboard.")
+
+        default:
+            return nil
+        }
     }
 
     private static func routeGesture(_ arguments: [String: Any]) -> Result<[String: Any], FenceOperationRoutingError> {
