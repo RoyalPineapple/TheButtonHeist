@@ -1,12 +1,12 @@
 # TheStash
 
-Single-snapshot screen state, target resolution, wire conversion, and screen capture. No persistent element registry — every parse replaces `currentScreen` wholesale. Exploration accumulates per-page parses into a local union in TheBrains+Exploration and commits the union back as the known semantic snapshot.
+Single-snapshot screen state, target resolution, wire conversion, and screen capture. TheStash owns exactly one mutable accessibility belief: the committed `Screen`, which contains targetable known elements plus the latest live viewport. No persistent element registry — every parse replaces `currentScreen` wholesale. Exploration accumulates per-page parses into a local union in TheBrains+Exploration and commits the union back as the known semantic snapshot.
 
 ## Reading order
 
-1. **`Screen.swift`** — The value type. Fields: `elements: [String: ScreenElement]`, `hierarchy: [AccessibilityHierarchy]`, `containerStableIds: [AccessibilityContainer: String]`, `heistIdByElement: [AccessibilityElement: String]`, `firstResponderHeistId: String?`, `scrollableContainerViews: [ScrollableViewRef]`. Pure value semantics: `.empty` constructor, `merging(_:)` returns a new Screen (last-read-wins — no field-level preservation), `findElement(heistId:)` is O(1), `name`/`id`/`heistIds` are derived. `Equatable`.
+1. **`Screen.swift`** — The value type. Fields: `elements: [String: ScreenElement]`, `hierarchy: [AccessibilityHierarchy]`, `containerStableIds: [AccessibilityContainer: String]`, `heistIdByElement: [AccessibilityElement: String]`, `firstResponderHeistId: String?`, `scrollableContainerViews: [ScrollableViewRef]`. Pure value semantics: `.empty` constructor, `visibleOnly` filters to the latest live viewport, `orderedElements` returns deterministic matcher order, `merging(_:)` returns a new Screen (last-read-wins — no field-level preservation), `findElement(heistId:)` is O(1), `name`/`id`/`heistIds` are derived. `Equatable`.
 
-2. **`TheStash.swift`** — The `@MainActor final class`. Single mutable field: `var currentScreen: Screen` (plus `lastHierarchyHash` for broadcast tracking and `stakeout` weak back-ref).
+2. **`TheStash.swift`** — The `@MainActor final class`. Single mutable accessibility field: `var currentScreen: Screen`. Broadcast memory lives in TheBrains; recording references and pending rotor continuation are boundary state, not accessibility belief.
 
    - `ScreenElement` — one tracked element: `heistId`, `contentSpaceOrigin`, `element`, `weak var object`, `weak var scrollView`.
    - `TargetResolution` — three cases: `.resolved(ResolvedTarget)`, `.notFound(diagnostics:)`, `.ambiguous(candidates:, diagnostics:)`.
@@ -16,13 +16,13 @@ Single-snapshot screen state, target resolution, wire conversion, and screen cap
    - `.matcher` → `resolveMatcher` calls `matchScreenElements(matcher, limit:)`. With ordinal: returns element at index. Without: requires unique match — 0 hits = `.notFound`, 2+ = `.ambiguous` with up to 10 candidates listed.
 
    **Parse pipeline facades** (delegate to private `TheBurglar`):
-   - `refresh()` → `parse()` + `currentScreen = buildScreen(from:)` in one step.
-   - `parse()` → read-only, returns `ParseResult`.
-   - `buildScreen(from:)` → returns a `Screen` value, does NOT mutate `currentScreen`. Callers decide when to commit.
+   - `refresh()` → `parse()` + `currentScreen = screen` in one step.
+   - `parse()` → read-only, returns a `Screen` value and does NOT mutate `currentScreen`. Callers decide when to commit.
+   - `TheBurglar.buildScreen(from:)` → pure parse-result-to-`Screen` conversion.
 
    **Tree read helpers** — `wireTree()` and `wireTreeHash()` compute the wire tree of `currentScreen` via `WireConversion.toWireTree(from:)`. They are not facades — they read state. Element-level wire conversion (`WireConversion.toWire`, `WireConversion.traitNames`) and delta computation (`InterfaceDiff.computeDelta`) are pure transforms; callers invoke them directly.
 
-   **`selectElements()`** — returns live hierarchy elements in traversal order, then known-only elements (from the post-explore union) sorted by heistId. Deterministic across runs.
+   **`selectElements()`** — thin facade over `Screen.orderedElements`: live hierarchy elements in traversal order, then known-only elements (from the post-explore union) sorted by heistId. Deterministic across runs.
 
 3. **`IdAssignment.swift`** — Pure static namespace. `assign(_:)` generates heistIds in two phases: base ID (developer identifier if stable, else synthesized from trait+label), then suffix disambiguation (`_1`, `_2`, ... for all instances of a duplicate). `synthesizeBaseId` picks from a ranked trait list (`backButton` → `tabBarItem` → `searchField` → `textEntry` → `switchButton` → `adjustable` → `header` → `button` → `link` → `image` → `tabBar`) and slugifies the label. Value is excluded for stability. **Wire-format-stable** — agents rely on synthesis being predictable, do not change without a major version bump.
 

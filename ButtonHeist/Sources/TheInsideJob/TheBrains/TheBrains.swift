@@ -336,6 +336,7 @@ final class TheBrains {
         stash.clearCache()
         navigation.clearCache()
         broadcastHistory = .fresh
+        lastBroadcastHierarchyHash = 0
     }
 
     // MARK: - Response State Tracking
@@ -359,6 +360,11 @@ final class TheBrains {
     }
 
     private(set) var broadcastHistory: BroadcastHistory = .fresh
+
+    /// Hash of the last hierarchy sent to subscribers. This is broadcast
+    /// memory, not accessibility belief, so it lives with TheBrains instead of
+    /// TheStash's committed Screen state.
+    private var lastBroadcastHierarchyHash: Int = 0
 
     /// The state of the last response sent to the driver, if any.
     var lastSentState: SentState? {
@@ -398,8 +404,8 @@ final class TheBrains {
 
         let (tree, currentHash) = stash.wireTreeWithHash()
 
-        guard currentHash != stash.lastHierarchyHash else { return nil }
-        stash.lastHierarchyHash = currentHash
+        guard currentHash != lastBroadcastHierarchyHash else { return nil }
+        lastBroadcastHierarchyHash = currentHash
 
         return Interface(timestamp: Date(), tree: tree)
     }

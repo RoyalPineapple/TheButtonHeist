@@ -8,11 +8,14 @@ import AccessibilitySnapshotParser
 
 /// The stash — holds the goods and answers questions about them.
 ///
-/// TheStash holds the latest committed `Screen` and exposes lookup, matcher
-/// resolution, and wire-conversion facades. `currentScreen.knownInterface`
-/// is targetable semantic state; `currentScreen.interactionSnapshot` is the
-/// latest parse used for geometry, live objects, and scrolling. Callers call
-/// `parse()` to obtain a Screen value, then decide when to write it back via
+/// TheStash owns exactly one mutable accessibility belief: the latest
+/// committed `Screen`. It exposes lookup, matcher resolution, and
+/// wire-conversion facades over that value; parsing, diagnostics, capture,
+/// recording, broadcast memory, and UIKit actions are boundary transforms or
+/// owned by other crew members. `currentScreen.knownInterface` is targetable
+/// semantic state; `currentScreen.interactionSnapshot` is the latest parse
+/// used for geometry, live objects, and scrolling. Callers call `parse()` to
+/// obtain a Screen value, then decide when to write it back via
 /// `currentScreen = ...`. The exploration accumulator lives in TheBrains as
 /// a local `var union`.
 @MainActor
@@ -40,11 +43,6 @@ final class TheStash {
     var currentScreen: Screen = .empty
 
     private var pendingRotorState: PendingRotorState = .none
-
-    /// Hash of the last hierarchy sent to subscribers (for polling comparison).
-    /// Read/written by broadcast paths. Kept as a separate field — it tracks
-    /// what was *broadcast*, which is orthogonal to what's *current*.
-    var lastHierarchyHash: Int = 0
 
     /// Back-reference to the stakeout for recording frame capture.
     weak var stakeout: TheStakeout?
@@ -427,17 +425,7 @@ final class TheStash {
     /// full target semantics (ambiguity and explicit ordinal) while excluding
     /// known-only entries retained from exploration.
     func resolveVisibleTarget(_ target: ElementTarget) -> TargetResolution {
-        let snapshot = currentScreen.interactionSnapshot
-        let visibleIds = snapshot.heistIds
-        let visibleScreen = Screen(
-            elements: currentScreen.elements.filter { visibleIds.contains($0.key) },
-            hierarchy: snapshot.hierarchy,
-            containerStableIds: snapshot.containerStableIds,
-            heistIdByElement: snapshot.heistIdByElement,
-            firstResponderHeistId: snapshot.firstResponderHeistId,
-            scrollableContainerViews: snapshot.scrollableContainerViews
-        )
-        return resolveTarget(target, in: visibleScreen, includePendingRotor: false, resolutionScope: .visible)
+        resolveTarget(target, in: currentScreen.visibleOnly, includePendingRotor: false, resolutionScope: .visible)
     }
 
     private func resolveTarget(
@@ -648,22 +636,7 @@ final class TheStash {
     /// hierarchy (post-exploration union) appear after, sorted by heistId so
     /// the snapshot order is stable across runs.
     func selectElements(in screen: Screen? = nil) -> [ScreenElement] {
-        let screen = screen ?? currentScreen
-        var seen = Set<String>()
-        var ordered: [ScreenElement] = []
-        ordered.reserveCapacity(screen.elements.count)
-        for (element, _) in screen.hierarchy.elements {
-            guard let heistId = screen.heistIdByElement[element],
-                  let entry = screen.elements[heistId],
-                  seen.insert(heistId).inserted else { continue }
-            ordered.append(entry)
-        }
-        let remaining = screen.elements
-            .filter { !seen.contains($0.key) }
-            .map(\.value)
-            .sorted { $0.heistId < $1.heistId }
-        ordered.append(contentsOf: remaining)
-        return ordered
+        (screen ?? currentScreen).orderedElements
     }
 
     // MARK: - Cache Control
@@ -672,7 +645,6 @@ final class TheStash {
     func clearCache() {
         currentScreen = .empty
         clearPendingRotorResult()
-        lastHierarchyHash = 0
     }
 
     /// Clear screen-level state on screen change. Screens are values, so
