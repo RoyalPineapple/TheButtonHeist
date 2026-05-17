@@ -55,19 +55,6 @@ extension TheFence {
             command.rawValue
         }
 
-        var hasScrollableTarget: Bool {
-            target?.hasPredicates == true
-        }
-
-        func scrollToVisibleOperation() -> PlaybackOperation {
-            PlaybackOperation(
-                command: .scrollToVisible,
-                target: target,
-                ordinal: ordinal,
-                payload: PlaybackPayload(values: [:])
-            )
-        }
-
         /// Bridge typed playback data into the legacy handler argument shape.
         ///
         /// Playback never uses this for command selection: command routing is

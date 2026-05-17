@@ -2689,6 +2689,58 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testPlayHeistDoesNotImplicitlyRecoverElementNotFoundWithScrollToVisible() async throws {
+        let heist = HeistPlayback(app: "com.test.mock", steps: [
+            HeistEvidence(command: "activate", target: ElementMatcher(identifier: "offscreen")),
+        ])
+        let heistURL = try writeTemporaryHeist(heist)
+        defer { try? FileManager.default.removeItem(at: heistURL) }
+
+        let (fence, mockConn) = makeConnectedFence()
+        mockConn.autoResponse = { message in
+            switch message {
+            case .requestInterface:
+                return .interface(Interface(timestamp: Date(), tree: []))
+            case .activate:
+                return .actionResult(ActionResult(
+                    success: false,
+                    method: .elementNotFound,
+                    message: "missing",
+                    errorKind: .elementNotFound
+                ))
+            case .scrollToVisible:
+                return .actionResult(ActionResult(success: true, method: .scrollToVisible))
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "play_heist", "input": heistURL.path,
+        ])
+
+        guard case .heistPlayback(let completedSteps, let failedIndex, _, let failure, let report) = response else {
+            return XCTFail("Expected heistPlayback response, got \(response)")
+        }
+        XCTAssertEqual(completedSteps, 0)
+        XCTAssertEqual(failedIndex, 0)
+        XCTAssertNotNil(failure)
+        XCTAssertEqual(report?.steps.count, 1)
+        XCTAssertFalse(report?.allPassed ?? true)
+
+        let activateMessages = mockConn.sent.filter { message, _ in
+            if case .activate = message { return true }
+            return false
+        }
+        let scrollToVisibleMessages = mockConn.sent.filter { message, _ in
+            if case .scrollToVisible = message { return true }
+            return false
+        }
+        XCTAssertEqual(activateMessages.count, 1)
+        XCTAssertTrue(scrollToVisibleMessages.isEmpty)
+    }
+
+    @ButtonHeistActor
     func testPlayHeistIgnoresRecordedAccessibilityTrace() async throws {
         let heist = HeistPlayback(app: "com.test.mock", steps: [
             HeistEvidence(
