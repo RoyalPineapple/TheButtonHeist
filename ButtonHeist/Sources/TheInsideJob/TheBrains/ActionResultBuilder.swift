@@ -22,7 +22,6 @@ import TheScore
     let screenName: String?
     let screenId: String?
     var message: String?
-    var value: String?
     var accessibilityDelta: AccessibilityTrace.Delta?
     var accessibilityTrace: AccessibilityTrace?
     var settled: Bool?
@@ -56,18 +55,12 @@ import TheScore
         self.screenId = screenId
     }
 
-    func success(
-        scrollSearchResult: ScrollSearchResult? = nil,
-        rotorResult: RotorResult? = nil,
-        exploreResult: ExploreResult? = nil
-    ) -> ActionResult {
+    func success(payload: ResultPayload? = nil) -> ActionResult {
         ActionResult(
             success: true,
             method: method,
             message: message,
-            payload: Self.makePayload(
-                value: value, scrollSearch: scrollSearchResult, rotor: rotorResult, explore: exploreResult
-            ),
+            payload: payload,
             accessibilityDelta: compatibilityDelta,
             accessibilityTrace: accessibilityTrace,
             screenName: screenName,
@@ -77,13 +70,13 @@ import TheScore
         )
     }
 
-    func failure(errorKind: ErrorKind = .actionFailed) -> ActionResult {
+    func failure(errorKind: ErrorKind = .actionFailed, payload: ResultPayload? = nil) -> ActionResult {
         ActionResult(
             success: false,
             method: method,
             message: message,
             errorKind: errorKind,
-            payload: value.map(ResultPayload.value),
+            payload: payload,
             accessibilityDelta: compatibilityDelta,
             accessibilityTrace: accessibilityTrace,
             screenName: screenName,
@@ -91,16 +84,6 @@ import TheScore
             settled: settled,
             settleTimeMs: settleTimeMs
         )
-    }
-
-    private static func makePayload(
-        value: String?, scrollSearch: ScrollSearchResult?, rotor: RotorResult?, explore: ExploreResult?
-    ) -> ResultPayload? {
-        if let value { return .value(value) }
-        if let scrollSearch { return .scrollSearch(scrollSearch) }
-        if let rotor { return .rotor(rotor) }
-        if let explore { return .explore(explore) }
-        return nil
     }
 }
 
