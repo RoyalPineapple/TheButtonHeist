@@ -17,10 +17,9 @@ import AccessibilitySnapshotParser
 // `stash.visibleIds`, which mirrors the latest page-only parse, not the
 // in-flight union.
 //
-// KnownInterface is targetable semantic state; InteractionSnapshot is the
-// latest parse used for interaction. Exploration accumulates KnownInterface
-// entries while preserving a fresh InteractionSnapshot for scroll termination
-// and action geometry.
+// Visible pages are physical evidence; known state is semantic memory.
+// Exploration keeps page evidence visible for scroll termination and commits
+// only the final union as targetable semantic state.
 
 extension Navigation {
 
@@ -159,11 +158,9 @@ extension Navigation {
                     scrollTarget, direction: toLeading, animated: false
                 )
                 if proof.moved, let parsed = stash.parse() {
-                    // Page-only commit: rebinds the interaction snapshot so
-                    // the visible-state termination check
-                    // compares page-to-page, not page-to-in-flight-union. The
-                    // union accumulator stays local until `exploreAndPrune`
-                    // commits at end-of-cycle.
+                    // Page-only commit: visible termination compares page-to-page;
+                    // the union accumulator becomes semantic memory only at the
+                    // end of exploration.
                     stash.currentScreen = parsed
                     union = union.merging(parsed)
                 }
@@ -186,18 +183,15 @@ extension Navigation {
             guard proof.moved else { break }
             manifest.scrollCount += 1
             if let parsed = stash.parse() {
-                // Page-only commit: `visibleElementsInContainer` reads
-                // visible-scoped entries from the page just parsed — not the
-                // in-flight union — for the page-stitch loop to detect new
-                // on-screen elements. The union accumulator absorbs `parsed`
-                // into knownInterface.
+                // Page-only commit: reconciliation reads the visible page;
+                // the union accumulator absorbs it as semantic memory.
                 stash.currentScreen = parsed
                 union = union.merging(parsed)
             }
             originByElement = buildOriginIndex()
 
             let page = visibleElementsInContainer(container)
-            let result = stitchPage(
+            let result = reconcilePage(
                 accumulated: accumulated,
                 accumulatedOrigins: accumulatedOrigins,
                 page: page.elements,

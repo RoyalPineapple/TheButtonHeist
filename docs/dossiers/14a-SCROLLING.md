@@ -5,6 +5,8 @@
 
 TheBrains' `Navigation` component owns all scroll orchestration — three explicit scroll commands for agents, and an automatic pre-interaction scroll that ensures every action is visible on screen. TheSafecracker provides the scroll primitives (`scrollByPage`, `scrollToEdge`, `scrollToMakeVisible`, `scrollBySwipe`) but never decides what to scroll or when. `Actions` calls into `Navigation` for pre-action positioning (`ensureOnScreen`, `ensureFirstResponderOnScreen`) — TheStash exposes resolution and live geometry but performs no scroll orchestration.
 
+Visible pages are physical evidence; known state is semantic memory; reconciliation is the only place evidence becomes memory. Scroll and search settle on visible page changes, while exploration commits the final reconciled union as known state.
+
 Two-tier dispatch: UIScrollView for direct offset manipulation, synthetic swipe for everything else.
 
 ## Scrollable Container Discovery
@@ -26,7 +28,7 @@ A `ScrollableTarget` enum wraps a discovered scrollable container with two tiers
 .swipeable(CGRect, CGSize)             — synthetic swipe gesture (universal)
 ```
 
-`scrollOnePageAndSettle(_:direction:animated:)` dispatches through these tiers and waits for layout to settle (one `yieldFrames` + one `refresh`). UIScrollView gets direct `setContentOffset` manipulation. Everything else (e.g. SwiftUI's `PlatformContainer`) gets a synthetic swipe at the container's screen-space frame. Returns a `(moved: Bool, previousVisibleIds: Set<String>)` tuple so callers can detect stagnation against the latest parsed viewport without a second refresh.
+`scrollOnePageAndSettle(_:direction:animated:)` dispatches through these tiers and waits for layout to settle (one `yieldFrames` + one `refresh`). UIScrollView gets direct `setContentOffset` manipulation. Everything else (e.g. SwiftUI's `PlatformContainer`) gets a synthetic swipe at the container's screen-space frame. Returns `ScrollProof` so callers can detect edge/stagnation against the latest parsed visible page without treating viewport changes as known-state changes.
 
 ### Axis-Aware Resolution
 
