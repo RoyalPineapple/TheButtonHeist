@@ -728,6 +728,128 @@ final class TheHandoffStateTests: XCTestCase {
         }
     }
 
+    @ButtonHeistActor
+    func testConnectWithDiscoveryFailureReplacesExistingSession() async throws {
+        let existingDevice = DiscoveredDevice(
+            id: "existing-device",
+            name: "AccessibilityTestApp#existing",
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 6),
+            certFingerprint: "sha256:existing"
+        )
+        let firstDevice = DiscoveredDevice(
+            id: "replacement-first",
+            name: "AccessibilityTestApp#first",
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 7),
+            certFingerprint: "sha256:first"
+        )
+        let secondDevice = DiscoveredDevice(
+            id: "replacement-second",
+            name: "AccessibilityTestApp#second",
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 8),
+            certFingerprint: "sha256:second"
+        )
+
+        let handoff = TheHandoff()
+        let existingConnection = MockConnection()
+        handoff.makeConnection = { _, _, _ in existingConnection }
+
+        var disconnectReasons: [DisconnectReason] = []
+        handoff.onDisconnected = { reason in
+            disconnectReasons.append(reason)
+        }
+
+        handoff.connect(to: existingDevice)
+        assertConnected(handoff.connectionPhase, device: existingDevice)
+        XCTAssertTrue(existingConnection.isConnected)
+
+        let mockDiscovery = MockDiscovery()
+        mockDiscovery.discoveredDevices = [firstDevice, secondDevice]
+        handoff.makeDiscovery = { mockDiscovery }
+        handoff.makeConnection = { _, _, _ in
+            XCTFail("Discovery selection failed; no replacement connection should be opened")
+            return MockConnection()
+        }
+
+        let previousFactory = makeReachabilityConnection
+        makeReachabilityConnection = { _ in Self.makeReachableStatusConnection() }
+        defer { makeReachabilityConnection = previousFactory }
+
+        do {
+            try await handoff.connectWithDiscovery(filter: nil, timeout: 0.5)
+            XCTFail("Expected noMatchingDevice to be thrown")
+        } catch let error as TheHandoff.ConnectionError {
+            guard case .noMatchingDevice(let filter, let available) = error else {
+                return XCTFail("Expected noMatchingDevice, got \(error)")
+            }
+            XCTAssertEqual(filter, "(none)")
+            XCTAssertEqual(available, [firstDevice.name, secondDevice.name])
+        }
+
+        XCTAssertFalse(existingConnection.isConnected)
+        XCTAssertEqual(disconnectReasons, [.localDisconnect])
+        assertDisconnected(handoff.connectionPhase)
+        XCTAssertEqual(
+            handoff.connectionDiagnosticFailure,
+            .noMatchingDevice(filter: "(none)", available: [firstDevice.name, secondDevice.name])
+        )
+    }
+
+    @ButtonHeistActor
+    func testConnectWithDiscoverySuccessReplacesExistingSession() async throws {
+        let existingDevice = DiscoveredDevice(
+            id: "existing-device",
+            name: "AccessibilityTestApp#existing",
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 9),
+            certFingerprint: "sha256:existing"
+        )
+        let replacementDevice = DiscoveredDevice(
+            id: "replacement-device",
+            name: "AccessibilityTestApp#replacement",
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 10),
+            certFingerprint: "sha256:replacement"
+        )
+
+        let handoff = TheHandoff()
+        let existingConnection = MockConnection()
+        let replacementConnection = MockConnection()
+        handoff.makeConnection = { device, _, _ in
+            switch device.id {
+            case existingDevice.id:
+                return existingConnection
+            case replacementDevice.id:
+                return replacementConnection
+            default:
+                XCTFail("Unexpected connection device: \(device)")
+                return MockConnection()
+            }
+        }
+
+        var disconnectReasons: [DisconnectReason] = []
+        handoff.onDisconnected = { reason in
+            disconnectReasons.append(reason)
+        }
+
+        handoff.connect(to: existingDevice)
+        assertConnected(handoff.connectionPhase, device: existingDevice)
+        XCTAssertTrue(existingConnection.isConnected)
+
+        let mockDiscovery = MockDiscovery()
+        mockDiscovery.discoveredDevices = [replacementDevice]
+        handoff.makeDiscovery = { mockDiscovery }
+
+        let previousFactory = makeReachabilityConnection
+        makeReachabilityConnection = { _ in Self.makeReachableStatusConnection() }
+        defer { makeReachabilityConnection = previousFactory }
+
+        try await handoff.connectWithDiscovery(filter: nil, timeout: 0.5)
+
+        XCTAssertFalse(existingConnection.isConnected)
+        XCTAssertTrue(replacementConnection.isConnected)
+        XCTAssertEqual(disconnectReasons, [.localDisconnect])
+        assertConnected(handoff.connectionPhase, device: replacementDevice)
+        XCTAssertNil(handoff.connectionDiagnosticFailure)
+    }
+
     // MARK: - waitForConnectionResult continuation
 
     @ButtonHeistActor
@@ -1137,11 +1259,10 @@ final class TheHandoffStateTests: XCTestCase {
     }
 
     /// Regression test: when `connect(to: device)` is called while phase is
-    /// already `.disconnected`, the internal `disconnect()` it invokes is a
-    /// no-op transition (`.disconnected → .disconnected`). The subsequent
-    /// `.connecting → .connected` transition should resolve the awaiter with
-    /// success — the awaiter must not have been spuriously failed by the
-    /// no-op disconnect.
+    /// already `.disconnected`, the replacement teardown is a no-op transition
+    /// (`.disconnected → .disconnected`). The subsequent `.connecting →
+    /// .connected` transition should resolve the awaiter with success — the
+    /// awaiter must not have been spuriously failed by the no-op teardown.
     @ButtonHeistActor
     func testWaitForConnectionResultDoesNotFailOnReconnectDisconnect() async throws {
         let handoff = TheHandoff()
@@ -1152,10 +1273,9 @@ final class TheHandoffStateTests: XCTestCase {
         mock.connectEventsOverride = []
         handoff.makeConnection = { _, _, _ in mock }
 
-        // Phase starts at .disconnected. `connect()` internally calls
-        // `disconnect()` (a no-op .disconnected → .disconnected transition,
-        // which under the fix does NOT resume awaiters), then transitions
-        // to .connecting.
+        // Phase starts at .disconnected. `connect()` first runs replacement
+        // teardown (a no-op .disconnected → .disconnected transition), then
+        // transitions to .connecting.
         handoff.connect(to: device)
 
         let waitTask = Task { @ButtonHeistActor in
@@ -1168,5 +1288,31 @@ final class TheHandoffStateTests: XCTestCase {
 
         try await waitTask.value
         XCTAssertTrue(handoff.isConnected)
+    }
+
+    @ButtonHeistActor
+    private static func makeReachableStatusConnection() -> MockConnection {
+        let connection = MockConnection()
+        connection.emitTransportReadyOnConnect = true
+        connection.autoResponse = { message in
+            switch message {
+            case .status:
+                return .status(StatusPayload(
+                    identity: StatusIdentity(
+                        appName: "AccessibilityTestApp",
+                        bundleIdentifier: "com.buttonheist.testapp",
+                        appBuild: "1",
+                        deviceName: "iPhone 16 Pro",
+                        systemVersion: "26.1",
+                        buttonHeistVersion: "5.0"
+                    ),
+                    session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
+                ))
+            default:
+                XCTFail("Unexpected probe message: \(message)")
+                return .error(ServerError(kind: .general, message: "unexpected"))
+            }
+        }
+        return connection
     }
 }
