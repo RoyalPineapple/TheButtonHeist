@@ -728,6 +728,7 @@ public final class TheFence {
     }
 
     private func parseRequest(command: Command, request: [String: Any]) throws -> ParsedRequest {
+        try validateRequestKeys(command: command, request: request)
         if let immediate = handleImmediateCommand(command) {
             return ParsedRequest(
                 command: command,
@@ -754,6 +755,20 @@ public final class TheFence {
             payload: payload,
             expectationPayload: expectationPayload,
             immediateResponse: nil
+        )
+    }
+
+    private func validateRequestKeys(command: Command, request: [String: Any]) throws {
+        let metadataKeys = Set(["command", "requestId"])
+        let parameterKeys = Set(command.parameters.map(\.key))
+        let allowedKeys = metadataKeys.union(parameterKeys)
+        guard let unexpectedKey = request.keys.sorted().first(where: { !allowedKeys.contains($0) }) else {
+            return
+        }
+        throw SchemaValidationError(
+            field: unexpectedKey,
+            observed: request[unexpectedKey],
+            expected: "valid \(command.rawValue) parameter"
         )
     }
 
