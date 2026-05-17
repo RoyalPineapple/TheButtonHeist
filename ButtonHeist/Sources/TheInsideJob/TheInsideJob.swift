@@ -150,7 +150,6 @@ public final class TheInsideJob {
     private let preferredPortSource: StartupConfigurationSource
     private let allowedScopesSource: StartupConfigurationSource
     private let pollingInterval: ResolvedStartupValue<TimeInterval>?
-    private let restrictWatchers: ResolvedStartupValue<Bool>
     private let sessionReleaseTimeout: ResolvedStartupValue<TimeInterval>
     private let installationId: String
     private let sessionId = UUID()
@@ -230,7 +229,6 @@ public final class TheInsideJob {
             port: port,
             preferredPortSource: port == 0 ? .defaultValue : .api,
             pollingInterval: nil,
-            restrictWatchers: startupConfiguration.restrictWatchers,
             sessionReleaseTimeout: startupConfiguration.sessionTimeout
         )
     }
@@ -246,7 +244,6 @@ public final class TheInsideJob {
             port: startupConfiguration.preferredPort.value,
             preferredPortSource: startupConfiguration.preferredPort.source,
             pollingInterval: startupConfiguration.pollingInterval,
-            restrictWatchers: startupConfiguration.restrictWatchers,
             sessionReleaseTimeout: startupConfiguration.sessionTimeout
         )
     }
@@ -261,12 +258,10 @@ public final class TheInsideJob {
         port: UInt16,
         preferredPortSource: StartupConfigurationSource,
         pollingInterval: ResolvedStartupValue<TimeInterval>?,
-        restrictWatchers: ResolvedStartupValue<Bool>,
         sessionReleaseTimeout: ResolvedStartupValue<TimeInterval>
     ) {
         self.muscle = TheMuscle(
             explicitToken: token,
-            restrictWatchers: restrictWatchers.value,
             sessionReleaseTimeout: sessionReleaseTimeout.value
         )
         self.instanceId = instanceId
@@ -276,7 +271,6 @@ public final class TheInsideJob {
         self.preferredPortSource = preferredPortSource
         self.allowedScopesSource = allowedScopesSource
         self.pollingInterval = pollingInterval
-        self.restrictWatchers = restrictWatchers
         self.sessionReleaseTimeout = sessionReleaseTimeout
         self.installationId = Self.loadInstallationId()
         self.brains = TheBrains(tripwire: self.tripwire)
@@ -409,7 +403,7 @@ public final class TheInsideJob {
     private func handlePulseTransition(_ transition: TheTripwire.PulseTransition) {
         if case .settled = transition, getaway.hierarchyInvalidated {
             let getaway = self.getaway
-            Task { await getaway.broadcastIfChanged() }
+            Task { await getaway.noteSettledChangeIfNeeded() }
         }
     }
 
@@ -420,7 +414,7 @@ public final class TheInsideJob {
                 let settled = await self.tripwire.waitForAllClear(timeout: interval)
                 guard !Task.isCancelled, self.isPollingEnabled else { break }
                 if settled {
-                    await self.getaway.broadcastIfChanged()
+                    await self.getaway.noteSettledChangeIfNeeded()
                 }
             }
         }
@@ -485,7 +479,6 @@ public final class TheInsideJob {
             "instanceIdentifier=\(effectiveInstanceId)(\(instanceIdSource.label))",
             "allowedScopes=\(scopeNames)(\(allowedScopesSource.label))",
             "pollingInterval=\(pollingDescription)",
-            "restrictWatchers=\(restrictWatchers.value)(\(restrictWatchers.source.label))",
             "sessionTimeout=\(sessionReleaseTimeout.value)s(\(sessionReleaseTimeout.source.label))",
             "tls=enabled fingerprint=\(tlsFingerprint)",
             "bonjour=advertising service=\(bonjourServiceName)"

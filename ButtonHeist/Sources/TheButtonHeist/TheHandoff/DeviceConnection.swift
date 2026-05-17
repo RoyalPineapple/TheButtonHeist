@@ -219,8 +219,6 @@ final class DeviceConnection: DeviceConnecting {
     var autoRespondToAuthRequired = true
     var onSend: (@ButtonHeistActor (ClientMessage, String?) -> Void)?
 
-    /// When true, send .watch instead of .authenticate on authRequired
-    var observeMode: Bool = false
     /// Driver identity for session locking (set via BUTTONHEIST_DRIVER_ID)
     var driverId: String?
 
@@ -580,16 +578,11 @@ final class DeviceConnection: DeviceConnecting {
     }
 
     private func handleAuthRequired() {
-        if observeMode {
-            logger.info("Auth required, sending watch request")
-            send(.watch(WatchPayload(token: token ?? "")))
-        } else {
-            logger.info("Auth required, sending token")
-            send(.authenticate(AuthenticatePayload(
-                token: token ?? "",
-                driverId: driverId
-            )))
-        }
+        logger.info("Auth required, sending token")
+        send(.authenticate(AuthenticatePayload(
+            token: token ?? "",
+            driverId: driverId
+        )))
     }
 
     private func decodeEnvelope(from data: Data) -> ResponseEnvelope? {

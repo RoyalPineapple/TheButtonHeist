@@ -11,7 +11,7 @@ import AccessibilitySnapshotParser
 /// TheStash owns exactly one mutable accessibility belief: the latest
 /// committed `Screen`. It exposes lookup, matcher resolution, and
 /// wire-conversion facades over that value; parsing, diagnostics, capture,
-/// recording, broadcast memory, and UIKit actions are boundary transforms or
+/// recording, response memory, and UIKit actions are boundary transforms or
 /// owned by other crew members. `currentScreen.knownInterface` is targetable
 /// semantic state; `currentScreen.interactionSnapshot` is the latest parse
 /// used for geometry, live objects, and scrolling. Callers call `parse()` to
@@ -835,7 +835,7 @@ final class TheStash {
     }
 
     /// Single-walk variant: returns the tree alongside its hash so callers
-    /// that need both (e.g. broadcast-on-change) don't pay for two walks.
+    /// that need both don't pay for two walks.
     func wireTreeWithHash() -> (tree: [InterfaceNode], hash: Int) {
         let tree = wireTree()
         return (tree, tree.hashValue)

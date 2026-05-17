@@ -135,6 +135,29 @@ final class TheGetawayTests: XCTestCase {
 
     // MARK: - Stale Targeted Actions
 
+    func testLegacyRuntimeSubscriptionMessagesReturnUnsupportedError() async throws {
+        let (getaway, _, _) = await makeGetaway()
+
+        for message in [ClientMessage.subscribe, .unsubscribe, .watch(.init(token: "test-token"))] {
+            let data = try JSONEncoder().encode(RequestEnvelope(requestId: message.canonicalName, message: message))
+            var responseData: Data?
+
+            await getaway.handleClientMessage(1, data: data) { data in
+                responseData = data
+            }
+
+            let unwrapped = try XCTUnwrap(responseData)
+            let trimmed = unwrapped.last == 0x0A ? unwrapped.dropLast() : unwrapped
+            let envelope = try JSONDecoder().decode(ResponseEnvelope.self, from: trimmed)
+            XCTAssertEqual(envelope.requestId, message.canonicalName)
+            guard case .error(let serverError) = envelope.message else {
+                return XCTFail("Expected unsupported error for \(message.canonicalName), got \(envelope.message)")
+            }
+            XCTAssertEqual(serverError.kind, .unsupported)
+            XCTAssertTrue(serverError.message.contains("no longer supported"))
+        }
+    }
+
     func testStaleTargetedActionAfterScreenChangeReturnsFailureWithDeltaContext() async throws {
         let (getaway, _, _) = await makeGetaway()
         seedScreen(getaway.brains, elements: [("Home", .header, "home_header"), ("Old", .button, "button_old")])

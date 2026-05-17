@@ -481,7 +481,6 @@ public final class TheFence {
         self.config = configuration
         self.handoff.token = configuration.token ?? EnvironmentKey.buttonheistToken.value
         self.handoff.driverId = EnvironmentKey.buttonheistDriverId.value
-        self.handoff.autoSubscribe = true
         self.handoff.onAuthApproved = { [weak self] token in
             if let token {
                 self?.onStatus?("BUTTONHEIST_TOKEN=\(token)")
@@ -616,12 +615,12 @@ public final class TheFence {
     }
 
     /// Connect to a device and optionally enable auto-reconnect.
-    public func start(autoSubscribe: Bool = true) async throws {
+    public func start() async throws {
         if handoff.isConnected {
             return
         }
 
-        try await connect(autoSubscribe: autoSubscribe)
+        try await connect()
         if config.autoReconnect {
             let filter = config.deviceFilter ?? EnvironmentKey.buttonheistDevice.value
             handoff.setupAutoReconnect(filter: filter)
@@ -1046,26 +1045,25 @@ public final class TheFence {
         applyPostRecordCacheUpdate(cacheUpdate)
     }
 
-    private func connect(autoSubscribe: Bool = true) async throws {
+    private func connect() async throws {
         if let directDevice = config.directDevice {
-            try await connectDirect(to: directDevice, autoSubscribe: autoSubscribe)
+            try await connectDirect(to: directDevice)
             return
         }
         let filter = config.deviceFilter ?? EnvironmentKey.buttonheistDevice.value
         do {
             try await handoff.connectWithDiscovery(
                 filter: filter,
-                timeout: config.connectionTimeout,
-                autoSubscribe: autoSubscribe
+                timeout: config.connectionTimeout
             )
         } catch let error as TheHandoff.ConnectionError {
             throw FenceError(error)
         }
     }
 
-    private func connectDirect(to device: DiscoveredDevice, autoSubscribe: Bool) async throws {
+    private func connectDirect(to device: DiscoveredDevice) async throws {
         handoff.onStatus?("Connecting to \(device.name)...")
-        let attemptID = handoff.connect(to: device, autoSubscribe: autoSubscribe)
+        let attemptID = handoff.connect(to: device)
         do {
             try await handoff.waitForConnectionResult(timeout: config.connectionTimeout)
         } catch let error as TheHandoff.ConnectionError where error == .timeout {

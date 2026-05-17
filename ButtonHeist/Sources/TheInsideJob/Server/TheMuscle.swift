@@ -50,41 +50,28 @@ actor TheMuscle {
     private var addressAuthStates: [String: AddressAuthPhase] = [:]
 
     /// Per-client lifecycle state machine.
-    /// Each client traverses: connected → helloValidated → pendingApproval | authenticated | observer.
+    /// Each client traverses: connected → helloValidated → pendingApproval | authenticated.
     /// Disconnection removes the entry entirely.
     private enum ClientPhase {
         case connected(address: String)
         case helloValidated(address: String)
-        case pendingApproval(address: String, respond: @Sendable (Data) -> Void, isObserver: Bool, driverId: String?)
-        case authenticated(address: String, driverIdentity: String, subscribed: Bool)
-        case observer(address: String, subscribed: Bool)
+        case pendingApproval(address: String, respond: @Sendable (Data) -> Void, driverId: String?)
+        case authenticated(address: String, driverIdentity: String)
 
         var address: String {
             switch self {
             case .connected(let address), .helloValidated(let address),
-                 .pendingApproval(let address, _, _, _),
-                 .authenticated(let address, _, _), .observer(let address, _):
+                 .pendingApproval(let address, _, _),
+                 .authenticated(let address, _):
                 return address
             }
         }
 
         var isAuthenticated: Bool {
             switch self {
-            case .authenticated, .observer: return true
+            case .authenticated: return true
             default: return false
             }
-        }
-
-        var isSubscribed: Bool {
-            switch self {
-            case .authenticated(_, _, let subscribed), .observer(_, let subscribed): return subscribed
-            default: return false
-            }
-        }
-
-        var isObserver: Bool {
-            if case .observer = self { return true }
-            return false
         }
 
         var hasCompletedHello: Bool {
@@ -95,7 +82,7 @@ actor TheMuscle {
         }
 
         var driverIdentity: String? {
-            if case .authenticated(_, let identity, _) = self { return identity }
+            if case .authenticated(_, let identity) = self { return identity }
             return nil
         }
     }
@@ -139,7 +126,7 @@ actor TheMuscle {
     /// transports. Production code never calls this — there is no public
     /// entry point that bypasses the handshake.
     func installAuthenticatedClientForTest(_ clientId: Int, address: String = "127.0.0.1", driverIdentity: String = "test-driver") {
-        clients[clientId] = .authenticated(address: address, driverIdentity: driverIdentity, subscribed: false)
+        clients[clientId] = .authenticated(address: address, driverIdentity: driverIdentity)
     }
 
     /// Test seam: drop the `sendToClient` transport closure to simulate
@@ -154,7 +141,7 @@ actor TheMuscle {
 
     // MARK: - Computed Client Accessors
 
-    /// IDs of all authenticated clients (drivers + observers).
+    /// IDs of all authenticated clients.
     var authenticatedClientIDs: Set<Int> {
         Set(clients.lazy.filter { $0.value.isAuthenticated }.map(\.key))
     }
@@ -168,22 +155,6 @@ actor TheMuscle {
     var helloValidatedClients: Set<Int> {
         Set(clients.lazy.filter { $0.value.hasCompletedHello }.map(\.key))
     }
-
-    /// IDs of clients subscribed to hierarchy broadcasts.
-    var subscribedClients: Set<Int> {
-        Set(clients.lazy.filter { $0.value.isSubscribed }.map(\.key))
-    }
-
-    /// True when at least one client is subscribed.
-    var hasSubscribers: Bool { clients.values.contains(where: \.isSubscribed) }
-
-    /// IDs of clients connected in observe mode.
-    var observerClients: Set<Int> {
-        Set(clients.lazy.filter { $0.value.isObserver }.map(\.key))
-    }
-
-    /// Whether observers require token authentication (default: true; override with env: INSIDEJOB_RESTRICT_WATCHERS=0, plist: InsideJobRestrictWatchers=false)
-    private let restrictWatchers: Bool
 
     // MARK: - Session Lock State
 
@@ -245,13 +216,11 @@ actor TheMuscle {
     @MainActor
     init(
         explicitToken: String?,
-        restrictWatchers: Bool? = nil,
         sessionReleaseTimeout: TimeInterval? = nil,
         alerts: AlertPresenter? = nil
     ) {
         self.sessionToken = explicitToken ?? UUID().uuidString
         self.alerts = alerts ?? AlertPresenter()
-        self.restrictWatchers = restrictWatchers ?? true
         self.sessionReleaseTimeout = sessionReleaseTimeout ?? StartupConfiguration.defaultSessionTimeout
     }
 
@@ -291,34 +260,6 @@ actor TheMuscle {
     func noteClientActivity(_ clientId: Int) {
         guard activeSessionConnections.contains(clientId) else { return }
         resetInactivityTimer()
-    }
-
-    // MARK: - Subscription Management
-
-    /// Register a client for hierarchy update broadcasts.
-    func subscribe(clientId: Int) {
-        setSubscribed(true, for: clientId)
-        logger.info("Client \(clientId) subscribed (\(self.subscribedClients.count) subscribers)")
-    }
-
-    /// Remove a client from hierarchy update broadcasts.
-    func unsubscribe(clientId: Int) {
-        setSubscribed(false, for: clientId)
-        logger.info("Client \(clientId) unsubscribed (\(self.subscribedClients.count) subscribers)")
-    }
-
-    /// Send data to all subscribed clients.
-    ///
-    /// Awaits each per-client send so the subscribers receive the data in
-    /// the iteration order, and so two back-to-back `broadcastToSubscribed`
-    /// calls deliver in FIFO order. The previous shape spawned an
-    /// independent Task per subscriber, which Swift makes no ordering
-    /// guarantee for — the broadcast-FIFO risk that the cross-cutting audit
-    /// Finding 5 called out.
-    func broadcastToSubscribed(_ data: Data) async {
-        for (clientId, phase) in clients where phase.isSubscribed {
-            _ = await sendToClient?(data, clientId)
-        }
     }
 
     /// Send an already-encoded envelope to a single client.
@@ -368,14 +309,6 @@ actor TheMuscle {
             }
             sendMessage(.authRequired, respond: respond)
             return
-        case .watch(let payload):
-            guard clients[clientId]?.hasCompletedHello == true else {
-                logger.warning("Client \(clientId) attempted watch before hello")
-                await disconnectClient?(clientId)
-                return
-            }
-            await handleWatchRequest(clientId, payload: payload, respond: respond)
-            return
         case .authenticate(let payload):
             guard clients[clientId]?.hasCompletedHello == true else {
                 logger.warning("Client \(clientId) attempted auth before hello")
@@ -409,7 +342,7 @@ actor TheMuscle {
         if payload.token.isEmpty {
             // No token → request UI approval (Allow/Deny prompt on device)
             logger.info("Client \(clientId) requesting UI approval (no token)")
-            clients[clientId] = .pendingApproval(address: address, respond: respond, isObserver: false, driverId: payload.driverId)
+            clients[clientId] = .pendingApproval(address: address, respond: respond, driverId: payload.driverId)
             showApprovalAlert(clientId: clientId)
             return
         }
@@ -433,7 +366,7 @@ actor TheMuscle {
             return
         }
 
-        clients[clientId] = .authenticated(address: address, driverIdentity: driverIdentity, subscribed: false)
+        clients[clientId] = .authenticated(address: address, driverIdentity: driverIdentity)
         await markClientAuthenticated?(clientId)
         logger.info("Client \(clientId) authenticated with token")
         await onClientAuthenticated?(clientId, respond)
@@ -448,14 +381,14 @@ actor TheMuscle {
     }
 
     func approveClient(_ clientId: Int) async {
-        guard case .pendingApproval(let address, let respond, _, let driverId) = clients[clientId] else { return }
+        guard case .pendingApproval(let address, let respond, let driverId) = clients[clientId] else { return }
 
         let driverIdentity = effectiveDriverId(driverId: driverId, token: sessionToken)
         if !(await acquireSession(driverIdentity: driverIdentity, clientId: clientId, respond: respond)) {
             return
         }
 
-        clients[clientId] = .authenticated(address: address, driverIdentity: driverIdentity, subscribed: false)
+        clients[clientId] = .authenticated(address: address, driverIdentity: driverIdentity)
         await markClientAuthenticated?(clientId)
         logger.info("Client \(clientId) approved via UI")
         sendMessage(.authApproved(AuthApprovedPayload(token: sessionToken)), respond: respond)
@@ -463,7 +396,7 @@ actor TheMuscle {
     }
 
     func denyClient(_ clientId: Int) {
-        guard case .pendingApproval(let address, let respond, _, _) = clients[clientId] else { return }
+        guard case .pendingApproval(let address, let respond, _) = clients[clientId] else { return }
         clients[clientId] = .helloValidated(address: address)
         sendMessage(.error(ServerError(kind: .authFailure, message: "Connection denied by user")), respond: respond)
         logger.info("Client \(clientId) denied via UI")
@@ -527,66 +460,9 @@ actor TheMuscle {
         activeSessionDriverId != nil
     }
 
-    /// Whether watchers are allowed for the current session.
-    /// For now this is derived from restrictWatchers: when restrictWatchers is false,
-    /// observers are allowed once a session is active; when true, only the driver may connect.
-    var watchersAllowed: Bool {
-        isSessionActive && !restrictWatchers
-    }
-
-    /// Number of active connections participating in the session (driver + any watchers).
+    /// Number of active connections participating in the session.
     var activeSessionConnectionCount: Int {
         activeSessionConnections.count
-    }
-
-    // MARK: - Observer Auth
-
-    /// Handle a watch request from an unauthenticated client.
-    /// Observers require token authentication by default. Set INSIDEJOB_RESTRICT_WATCHERS=0
-    /// to allow unauthenticated observers. Observers never claim a session.
-    private func handleWatchRequest(_ clientId: Int, payload: WatchPayload, respond: @escaping @Sendable (Data) -> Void) async {
-        if restrictWatchers {
-            guard let phase = clients[clientId] else {
-                sendMessage(.error(ServerError(kind: .authFailure, message: "Connection rejected.")), respond: respond)
-                scheduleDelayedDisconnect(clientId)
-                return
-            }
-            let address = phase.address
-            if isLockedOut(address: address) {
-                sendMessage(.error(ServerError(kind: .authFailure, message: "Too many failed attempts. Try again later.")), respond: respond)
-                logger.warning("Observer \(clientId) locked out (address: \(address)), rejecting")
-                scheduleDelayedDisconnect(clientId)
-                return
-            }
-            guard !payload.token.isEmpty else {
-                sendMessage(.error(ServerError(kind: .authFailure, message: "Watch mode requires a token.")), respond: respond)
-                logger.warning("Observer \(clientId) sent no token with restrictWatchers=true, rejected")
-                scheduleDelayedDisconnect(clientId)
-                return
-            }
-            guard constantTimeEqual(payload.token, sessionToken) else {
-                let attempts = recordFailedAttempt(address: address)
-                if attempts >= TheMuscle.maxFailedAttempts {
-                    logger.warning("Address \(address) locked out after \(attempts) failed watch attempts")
-                }
-                sendMessage(.error(ServerError(kind: .authFailure, message: "Invalid token.")), respond: respond)
-                logger.warning("Observer \(clientId) sent invalid token, rejected (attempt \(attempts))")
-                scheduleDelayedDisconnect(clientId)
-                return
-            }
-            clearFailedAttempts(address: address)
-        }
-        await approveObserver(clientId, respond: respond)
-    }
-
-    /// Approve an observer directly (no UI needed)
-    private func approveObserver(_ clientId: Int, respond: @escaping @Sendable (Data) -> Void) async {
-        guard let phase = clients[clientId] else { return }
-        clients[clientId] = .observer(address: phase.address, subscribed: true)
-        await markClientAuthenticated?(clientId)
-        sendMessage(.authApproved(AuthApprovedPayload()), respond: respond)
-        logger.info("Observer \(clientId) approved (no session lock)")
-        await onClientAuthenticated?(clientId, respond)
     }
 
     // MARK: - Session Lock
@@ -604,19 +480,25 @@ actor TheMuscle {
     ///
     /// Session rules:
     /// - No active session → claim it
-    /// - Active session, same driver → rejoin (cancel release timer)
-    /// - Active session, different driver → busy signal
+    /// - Active session → busy signal (only one active client is allowed)
+    /// - Draining session, same driver → rejoin (cancel release timer)
     private func acquireSession(driverIdentity: String, clientId: Int, respond: @escaping @Sendable (Data) -> Void) async -> Bool {
         switch sessionPhase {
         case .idle:
             await claimSession(driverIdentity: driverIdentity, clientId: clientId)
             return true
 
-        case .active(let activeId, var connections) where driverIdentity == activeId:
-            connections.insert(clientId)
-            sessionPhase = .active(driverId: activeId, connections: connections)
-            logger.info("Client \(clientId) joined existing session")
-            return true
+        case .active(let activeId, let connections) where driverIdentity == activeId:
+            rejectClientForSessionLock(
+                clientId,
+                payload: sessionLockPayload(
+                    baseMessage: "Session is already active for this driver",
+                    ownerDriverId: exposedDriverId(from: activeId),
+                    activeConnections: connections.count
+                ),
+                respond: respond
+            )
+            return false
 
         case .draining(let activeId, let timer, _) where driverIdentity == activeId:
             timer.cancel()
@@ -658,12 +540,14 @@ actor TheMuscle {
     }
 
     private func sessionLockPayload(
+        baseMessage: String = "Session is locked by another driver",
         ownerDriverId: String?,
         activeConnections: Int,
         remainingTimeoutSeconds: TimeInterval? = nil
     ) -> SessionLockedPayload {
         SessionLockedPayload(
             message: sessionLockMessage(
+                baseMessage: baseMessage,
                 ownerDriverId: ownerDriverId,
                 activeConnections: activeConnections,
                 remainingTimeoutSeconds: remainingTimeoutSeconds
@@ -673,11 +557,12 @@ actor TheMuscle {
     }
 
     private func sessionLockMessage(
+        baseMessage: String,
         ownerDriverId: String?,
         activeConnections: Int,
         remainingTimeoutSeconds: TimeInterval? = nil
     ) -> String {
-        var details = ["Session is locked by another driver"]
+        var details = [baseMessage]
         if let ownerDriverId, !ownerDriverId.isEmpty {
             details.append("owner driver id: \(ownerDriverId)")
         }
@@ -758,20 +643,6 @@ actor TheMuscle {
             let releaseDeadline = Date().addingTimeInterval(sessionReleaseTimeout)
             let timer = makeReleaseTimer()
             sessionPhase = .draining(driverId: driverId, releaseTimer: timer, releaseDeadline: releaseDeadline)
-        }
-    }
-
-    // MARK: - Client Subscription State
-
-    /// Toggle the subscribed flag on an authenticated or observer client.
-    private func setSubscribed(_ subscribed: Bool, for clientId: Int) {
-        switch clients[clientId] {
-        case .authenticated(let address, let driverIdentity, _):
-            clients[clientId] = .authenticated(address: address, driverIdentity: driverIdentity, subscribed: subscribed)
-        case .observer(let address, _):
-            clients[clientId] = .observer(address: address, subscribed: subscribed)
-        default:
-            logger.debug("Ignoring subscribe(\(subscribed)) for client \(clientId) in phase \(String(describing: self.clients[clientId]))")
         }
     }
 

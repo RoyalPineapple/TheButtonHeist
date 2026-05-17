@@ -560,7 +560,6 @@ final class DiscoveredDeviceTests: XCTestCase {
 @ButtonHeistActor
 private final class ReachabilityProbeConnection: DeviceConnecting {
     var isConnected = false
-    var observeMode = false
     var onEvent: (@ButtonHeistActor (ConnectionEvent) -> Void)?
 
     func connect() {

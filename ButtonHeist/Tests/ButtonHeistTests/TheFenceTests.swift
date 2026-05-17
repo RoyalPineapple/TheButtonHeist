@@ -1387,7 +1387,6 @@ final class TheFenceTests: XCTestCase {
         mockConnection.serverInfo = TheFenceFixtures.testServerInfo
 
         let fence = TheFence(configuration: .init())
-        fence.handoff.autoSubscribe = false
         fence.handoff.makeConnection = { _, _, _ in mockConnection }
         fence.handoff.connect(to: TheFenceFixtures.testDevice)
 
@@ -1439,7 +1438,6 @@ final class TheFenceTests: XCTestCase {
         ]
 
         let fence = TheFence(configuration: .init())
-        fence.handoff.autoSubscribe = false
         fence.handoff.makeConnection = { _, _, _ in mockConnection }
         fence.handoff.connect(to: TheFenceFixtures.testDevice)
 
@@ -1463,7 +1461,6 @@ final class TheFenceTests: XCTestCase {
         mockConnection.serverInfo = TheFenceFixtures.testServerInfo
 
         let fence = TheFence(configuration: .init())
-        fence.handoff.autoSubscribe = false
         fence.handoff.makeConnection = { _, _, _ in mockConnection }
         fence.handoff.connect(to: TheFenceFixtures.testDevice)
         mockConnection.sent.removeAll()
@@ -1914,7 +1911,7 @@ final class TheFenceTests: XCTestCase {
         fence.handoff.makeConnection = { _, _, _ in mockConnection }
 
         do {
-            try await fence.start(autoSubscribe: false)
+            try await fence.start()
             XCTFail("Expected connection timeout")
         } catch FenceError.connectionTimeout {
             // Expected.

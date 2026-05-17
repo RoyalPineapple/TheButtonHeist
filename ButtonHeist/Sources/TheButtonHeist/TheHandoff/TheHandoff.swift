@@ -447,24 +447,20 @@ final class TheHandoff {
     var onSessionLocked: (@ButtonHeistActor (SessionLockedPayload) -> Void)?
     /// Auth rejected by server; the string is the reason.
     var onAuthFailed: (@ButtonHeistActor (String) -> Void)?
-    /// A user interaction event (tap, swipe) captured on the device.
-    var onInteraction: (@ButtonHeistActor (InteractionEvent) -> Void)?
-    /// The server pushed an interface delta between commands (the UI changed
-    /// without a direct action request). Drained by `TheFence` for session state.
+    /// Background UI-change evidence attached to explicit command responses.
+    /// Drained by `TheFence` for session state.
     var onBackgroundDelta: (@ButtonHeistActor (AccessibilityTrace.Delta) -> Void)?
-    /// The server pushed capture receipts for an interface change observed
-    /// between commands. This is the source-of-truth form; `onBackgroundDelta`
-    /// remains as a legacy compatibility projection.
+    /// Capture receipts attached to explicit command responses. This is the
+    /// source-of-truth form; `onBackgroundDelta` remains as a legacy
+    /// compatibility projection.
     var onBackgroundAccessibilityTrace: (@ButtonHeistActor (AccessibilityTrace) -> Void)?
 
     // MARK: - Configuration
 
     var token: String?
-    var observeMode: Bool = false
     /// Explicit driver ID override (e.g. from BUTTONHEIST_DRIVER_ID env var).
     /// When nil, a persistent auto-generated ID is used instead.
     var driverId: String?
-    var autoSubscribe: Bool = true
 
     // MARK: - Internal Reconnect Settings
 
@@ -484,7 +480,6 @@ final class TheHandoff {
 
     private var discovery: (any DeviceDiscovering)?
     private var connection: (any DeviceConnecting)?
-    private var connectionAutoSubscribe: Bool = true
 
     var hasActiveDiscoverySession: Bool {
         discovery != nil
@@ -657,13 +652,11 @@ final class TheHandoff {
     // MARK: - Connection
 
     @discardableResult
-    func connect(to device: DiscoveredDevice, autoSubscribe: Bool? = nil) -> UUID {
+    func connect(to device: DiscoveredDevice) -> UUID {
         disconnectForReplacement()
-        connectionAutoSubscribe = autoSubscribe ?? self.autoSubscribe
         let attemptID = transitionToConnecting(device: device)
 
         connection = makeConnection(device, token, effectiveDriverId)
-        connection?.observeMode = observeMode
 
         connection?.onEvent = { [weak self, attemptID] event in
             guard let self else { return }
@@ -721,8 +714,8 @@ final class TheHandoff {
             onRequestError?(serverError, requestId)
         // Terminal request recovery only completes request-scoped trackers; state-mutating messages are consumed while active.
         // swiftlint:disable:next agent_wire_message_arm_no_op_break
-        case .info, .recordingStarted, .recording, .authApproved, .sessionLocked, .interaction, .status,
-             .protocolMismatch, .pong, .recordingStopped, .serverHello, .authRequired:
+        case .info, .recordingStarted, .recording, .authApproved, .sessionLocked, .status,
+             .protocolMismatch, .pong, .recordingStopped, .serverHello, .authRequired, .interaction:
             break
         }
     }
@@ -740,10 +733,6 @@ final class TheHandoff {
         switch message {
         case .info(let info):
             mutateConnectedSession { $0.serverInfo = info }
-            if connectionAutoSubscribe {
-                connection?.send(.subscribe)
-                connection?.send(.requestInterface)
-            }
             onConnected?(info)
         case .interface(let payload):
             if requestId == nil {
@@ -785,8 +774,6 @@ final class TheHandoff {
         case .sessionLocked(let payload):
             transitionToFailed(.sessionLocked(payload.message))
             onSessionLocked?(payload)
-        case .interaction(let event):
-            onInteraction?(event)
         case .status(let payload):
             logger.info("Received status payload: appName=\(payload.identity.appName, privacy: .public)")
         case .protocolMismatch(let payload):
@@ -799,7 +786,7 @@ final class TheHandoff {
             mutateConnectedSession { $0.recordingPhase = .idle }
         // Handshake messages are consumed inside DeviceConnection before bubbling here; no caller-visible side effect needed at this layer.
         // swiftlint:disable:next agent_wire_message_arm_no_op_break
-        case .serverHello, .authRequired:
+        case .serverHello, .authRequired, .interaction:
             break
         }
     }
@@ -1006,8 +993,7 @@ final class TheHandoff {
     /// connection outcome.
     func connectWithDiscovery(
         filter: String?,
-        timeout: TimeInterval = 30,
-        autoSubscribe: Bool? = nil
+        timeout: TimeInterval = 30
     ) async throws {
         disconnectForReplacement()
         onStatus?("Searching for iOS devices...")
@@ -1029,7 +1015,7 @@ final class TheHandoff {
         onStatus?("Found: \(displayName(for: device))")
         onStatus?("Connecting...")
 
-        let attemptID = connect(to: device, autoSubscribe: autoSubscribe)
+        let attemptID = connect(to: device)
         do {
             try await waitForConnectionResult(timeout: timeout)
         } catch let error as ConnectionError where error == .timeout {

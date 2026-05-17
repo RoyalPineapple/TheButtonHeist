@@ -14,7 +14,6 @@ final class StartupConfigurationTests: XCTestCase {
                 "INSIDEJOB_PORT": "4242",
                 "INSIDEJOB_POLLING_INTERVAL": "2.25",
                 "INSIDEJOB_SCOPE": "network",
-                "INSIDEJOB_RESTRICT_WATCHERS": "false",
                 "INSIDEJOB_SESSION_TIMEOUT": "45"
             ],
             infoDictionary: [
@@ -24,7 +23,6 @@ final class StartupConfigurationTests: XCTestCase {
                 "InsideJobPort": 5151,
                 "InsideJobPollingInterval": 3.0,
                 "InsideJobScope": "simulator,usb",
-                "InsideJobRestrictWatchers": true,
                 "InsideJobSessionTimeout": 120.0
             ]
         )
@@ -36,7 +34,6 @@ final class StartupConfigurationTests: XCTestCase {
             preferredPort: ResolvedStartupValue(value: 4242, source: .environment),
             pollingInterval: ResolvedStartupValue(value: 2.25, source: .environment),
             allowedScopes: ResolvedStartupValue(value: [.network], source: .environment),
-            restrictWatchers: ResolvedStartupValue(value: false, source: .environment),
             sessionTimeout: ResolvedStartupValue(value: 45.0, source: .environment),
             warnings: []
         )
@@ -53,7 +50,6 @@ final class StartupConfigurationTests: XCTestCase {
                 "InsideJobPort": 5151,
                 "InsideJobPollingInterval": 3.0,
                 "InsideJobScope": ["simulator", "usb"],
-                "InsideJobRestrictWatchers": false,
                 "InsideJobSessionTimeout": 120.0
             ]
         )
@@ -65,7 +61,6 @@ final class StartupConfigurationTests: XCTestCase {
             preferredPort: ResolvedStartupValue(value: 5151, source: .infoPlist),
             pollingInterval: ResolvedStartupValue(value: 3.0, source: .infoPlist),
             allowedScopes: ResolvedStartupValue(value: [.simulator, .usb], source: .infoPlist),
-            restrictWatchers: ResolvedStartupValue(value: false, source: .infoPlist),
             sessionTimeout: ResolvedStartupValue(value: 120.0, source: .infoPlist),
             warnings: []
         )
@@ -91,7 +86,6 @@ final class StartupConfigurationTests: XCTestCase {
             preferredPort: ResolvedStartupValue(value: 0, source: .defaultValue),
             pollingInterval: ResolvedStartupValue(value: 1.0, source: .defaultValue),
             allowedScopes: ResolvedStartupValue(value: ConnectionScope.default, source: .defaultValue),
-            restrictWatchers: ResolvedStartupValue(value: true, source: .defaultValue),
             sessionTimeout: ResolvedStartupValue(value: 30.0, source: .defaultValue),
             warnings: [
                 .emptyValueIgnored(key: "INSIDEJOB_TOKEN", source: .environment),
@@ -107,13 +101,11 @@ final class StartupConfigurationTests: XCTestCase {
                 "INSIDEJOB_PORT": "99999",
                 "INSIDEJOB_POLLING_INTERVAL": "0.1",
                 "INSIDEJOB_SCOPE": "bogus",
-                "INSIDEJOB_RESTRICT_WATCHERS": "maybe",
                 "INSIDEJOB_SESSION_TIMEOUT": "0"
             ],
             infoDictionary: [
                 "InsideJobPort": 5151,
-                "InsideJobScope": "usb",
-                "InsideJobRestrictWatchers": false
+                "InsideJobScope": "usb"
             ]
         )
 
@@ -124,12 +116,10 @@ final class StartupConfigurationTests: XCTestCase {
             preferredPort: ResolvedStartupValue(value: 5151, source: .infoPlist),
             pollingInterval: ResolvedStartupValue(value: 0.5, source: .environment),
             allowedScopes: ResolvedStartupValue(value: [.usb], source: .infoPlist),
-            restrictWatchers: ResolvedStartupValue(value: false, source: .infoPlist),
             sessionTimeout: ResolvedStartupValue(value: 1.0, source: .environment),
             warnings: [
                 .invalidValueIgnored(key: "INSIDEJOB_PORT", source: .environment, value: "99999"),
-                .invalidValueIgnored(key: "INSIDEJOB_SCOPE", source: .environment, value: "bogus"),
-                .invalidValueIgnored(key: "INSIDEJOB_RESTRICT_WATCHERS", source: .environment, value: "maybe")
+                .invalidValueIgnored(key: "INSIDEJOB_SCOPE", source: .environment, value: "bogus")
             ]
         )
         XCTAssertEqual(configuration, expected)

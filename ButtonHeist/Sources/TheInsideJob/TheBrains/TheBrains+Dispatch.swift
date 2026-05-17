@@ -9,7 +9,7 @@ extension TheBrains {
 
     /// Execute a command through the full interaction pipeline:
     /// refresh → snapshot → execute → settle → delta → result.
-    /// Returns the ActionResult for TheInsideJob to send/broadcast.
+    /// Returns the ActionResult for TheInsideJob to send.
     func executeCommand(_ message: ClientMessage) async -> ActionResult {
         let pendingRotorResultToken = stash.preparePendingRotorResult(
             targetedHeistId: message.pendingRotorResultTargetHeistId
@@ -406,8 +406,9 @@ extension TheBrains {
         case .waitFor: return .waitFor
         case .waitForChange: return .waitForChange
         case .explore: return .explore
-        case .clientHello, .authenticate, .requestInterface, .subscribe, .unsubscribe,
-             .ping, .status, .requestScreen, .startRecording, .stopRecording, .watch:
+        case .clientHello, .authenticate, .requestInterface,
+             .subscribe, .unsubscribe, .ping, .status, .requestScreen,
+             .startRecording, .stopRecording, .watch:
             return .activate
         }
     }

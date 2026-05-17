@@ -229,6 +229,17 @@ final class TheMuscleTests: XCTestCase {
         XCTAssertTrue(disconnectedClients.contains(1), "Should disconnect client that sends non-auth message")
     }
 
+    func testRemovedWatchMessageDisconnectsWithoutAuthenticating() async {
+        await muscle.registerClientAddress(1, address: "127.0.0.1")
+        await performHello(clientId: 1, respond: respondSink())
+
+        let data = Data(#"{"buttonHeistVersion":"\#(buttonHeistVersion)","type":"watch","payload":{"token":"test-token"}}"#.utf8)
+        await muscle.handleUnauthenticatedMessage(1, data: data, respond: respondSink())
+
+        XCTAssertFalse(markedAuthenticated.contains(1))
+        XCTAssertTrue(disconnectedClients.contains(1))
+    }
+
     // MARK: - Session Rules Tests
 
     func testNoSessionValidTokenAcquires() async throws {
@@ -240,16 +251,25 @@ final class TheMuscleTests: XCTestCase {
         XCTAssertTrue(connections.contains(1))
     }
 
-    func testSameDriverAllowed() async throws {
+    func testSameDriverRejectedWhileActive() async throws {
         try await authenticate(clientId: 1, token: "test-token", respond: respondSink())
-        try await authenticate(clientId: 2, token: "test-token", respond: respondSink())
+
+        let (respond, responses) = collectResponses()
+        try await authenticate(clientId: 2, token: "test-token", respond: respond)
         await flushCallbacks()
 
         let connections = await muscle.activeSessionConnections
         XCTAssertTrue(connections.contains(1))
-        XCTAssertTrue(connections.contains(2))
+        XCTAssertFalse(connections.contains(2))
         let count = await muscle.authenticatedClientCount
-        XCTAssertEqual(count, 2)
+        XCTAssertEqual(count, 1)
+
+        let payload = try XCTUnwrap(
+            sessionLockedPayloads(from: responses()).first,
+            "A second active same-driver connection should be rejected"
+        )
+        XCTAssertEqual(payload.activeConnections, 1)
+        XCTAssertTrue(payload.message.contains("Session is already active for this driver"))
     }
 
     func testDifferentDriverBusy() async throws {
@@ -465,104 +485,6 @@ final class TheMuscleTests: XCTestCase {
         XCTAssertTrue(markedAuthenticated.contains(10), "Clients from other addresses should not be affected by lockout")
     }
 
-    // MARK: - Observer Brute-Force Protection Tests
-
-    private func encodeWatch(token: String) throws -> Data {
-        let payload = WatchPayload(token: token)
-        let envelope = RequestEnvelope(message: .watch(payload))
-        return try JSONEncoder().encode(envelope)
-    }
-
-    private func watchAuthenticate(
-        clientId: Int,
-        token: String,
-        address: String = "127.0.0.1",
-        respond: @escaping @Sendable (Data) -> Void
-    ) async throws {
-        await muscle.registerClientAddress(clientId, address: address)
-        await performHello(clientId: clientId, respond: respond)
-        await muscle.handleUnauthenticatedMessage(clientId, data: try encodeWatch(token: token), respond: respond)
-    }
-
-    func testObserverInvalidTokenTracksFailedAttempts() async throws {
-        let (respond, responses) = collectResponses()
-        try await watchAuthenticate(clientId: 1, token: "wrong-token", address: "10.0.0.1", respond: respond)
-        await flushCallbacks()
-
-        let serverMessages = responses().compactMap { decodeServerMessage($0) }
-        let hasAuthFailed = serverMessages.contains { msg in
-            if case .error(let serverError) = msg, serverError.kind == .authFailure { return true }
-            return false
-        }
-        XCTAssertTrue(hasAuthFailed, "Observer with wrong token should get authFailed")
-        XCTAssertFalse(markedAuthenticated.contains(1))
-    }
-
-    func testObserverLockoutAfterMaxFailedAttempts() async throws {
-        let address = "10.0.0.50"
-
-        for i in 1...5 {
-            try await watchAuthenticate(clientId: i, token: "wrong-token", address: address, respond: respondSink())
-            await muscle.handleClientDisconnected(i)
-        }
-
-        let (respond, responses) = collectResponses()
-        try await watchAuthenticate(clientId: 6, token: "wrong-token", address: address, respond: respond)
-
-        let serverMessages = responses().compactMap { decodeServerMessage($0) }
-        let hasLockout = serverMessages.contains { msg in
-            if case .error(let serverError) = msg, serverError.kind == .authFailure {
-                return serverError.message.contains("Too many")
-            }
-            return false
-        }
-        XCTAssertTrue(hasLockout, "Observer should be locked out after 5 failed watch attempts")
-    }
-
-    func testObserverLockoutSharedWithDriverAuth() async throws {
-        let address = "10.0.0.60"
-
-        // Fail 3 times via watch path
-        for i in 1...3 {
-            try await watchAuthenticate(clientId: i, token: "wrong-token", address: address, respond: respondSink())
-            await muscle.handleClientDisconnected(i)
-        }
-
-        // Fail 2 more times via driver auth path
-        for i in 4...5 {
-            try await authenticate(clientId: i, token: "wrong-token", address: address, respond: respondSink())
-            await muscle.handleClientDisconnected(i)
-        }
-
-        // 6th attempt via watch should be locked out (shared counter)
-        let (respond, responses) = collectResponses()
-        try await watchAuthenticate(clientId: 6, token: "wrong-token", address: address, respond: respond)
-
-        let serverMessages = responses().compactMap { decodeServerMessage($0) }
-        let hasLockout = serverMessages.contains { msg in
-            if case .error(let serverError) = msg, serverError.kind == .authFailure {
-                return serverError.message.contains("Too many")
-            }
-            return false
-        }
-        XCTAssertTrue(hasLockout, "Watch and driver auth should share the same brute-force counter")
-    }
-
-    func testObserverSuccessfulAuthClearsFailedAttempts() async throws {
-        let address = "10.0.0.70"
-
-        // Fail 3 times via watch
-        for i in 1...3 {
-            try await watchAuthenticate(clientId: i, token: "wrong-token", address: address, respond: respondSink())
-            await muscle.handleClientDisconnected(i)
-        }
-
-        // Succeed with correct token
-        try await watchAuthenticate(clientId: 4, token: "test-token", address: address, respond: respondSink())
-        await flushCallbacks()
-        XCTAssertTrue(markedAuthenticated.contains(4), "Observer with correct token should authenticate")
-    }
-
     func testSuccessfulAuthClearsFailedAttempts() async throws {
         let address = "192.168.1.100"
 
@@ -617,47 +539,6 @@ final class TheMuscleTests: XCTestCase {
             sentBeforeDisconnect,
             "Closed-client sends must fail before invoking the transport closure"
         )
-    }
-
-    // MARK: - Broadcast FIFO ordering
-
-    /// Cross-cutting audit Finding 5: the prior `broadcastToSubscribed`
-    /// implementation spawned an unstructured `Task { await server.send(...) }`
-    /// per subscriber, and Swift makes no FIFO guarantee for unstructured
-    /// Tasks targeting the same actor. Two back-to-back broadcasts could
-    /// land on a single subscriber in either order. The fix awaits each
-    /// per-subscriber send inline so the iteration order is preserved on
-    /// every subscriber. This test asserts that contract by issuing two
-    /// distinct payloads across three subscribers and verifying each
-    /// subscriber sees them in the issue order.
-    func testBroadcastToSubscribedDeliversInFIFOOrder() async throws {
-        // Three subscribers, each authenticated with a watch token (no
-        // session claim) and subscribed to the hierarchy stream.
-        let token = "test-token"
-        for clientId in 1...3 {
-            try await watchAuthenticate(clientId: clientId, token: token, address: "addr-\(clientId)", respond: respondSink())
-            await muscle.subscribe(clientId: clientId)
-        }
-        let preBroadcastCount = sentMessages.count
-
-        let firstPayload = Data("first".utf8)
-        let secondPayload = Data("second".utf8)
-        await muscle.broadcastToSubscribed(firstPayload)
-        await muscle.broadcastToSubscribed(secondPayload)
-
-        let recorded = sentMessages.dropFirst(preBroadcastCount)
-        // Group by clientId and verify each subscriber received both payloads
-        // and `firstPayload` precedes `secondPayload` in arrival order.
-        for clientId in 1...3 {
-            let perClient = recorded.filter { $0.clientId == clientId }.map(\.data)
-            let firstIndex = perClient.firstIndex(of: firstPayload)
-            let secondIndex = perClient.firstIndex(of: secondPayload)
-            XCTAssertNotNil(firstIndex, "Subscriber \(clientId) must receive the first broadcast")
-            XCTAssertNotNil(secondIndex, "Subscriber \(clientId) must receive the second broadcast")
-            if let firstIndex, let secondIndex {
-                XCTAssertLessThan(firstIndex, secondIndex, "Subscriber \(clientId) must observe broadcasts in FIFO order")
-            }
-        }
     }
 }
 

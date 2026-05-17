@@ -21,23 +21,17 @@ final class TheHandoffMessageTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testInfoAutoSubscribeSendsSubscriptionAndInitialInterfaceRequest() async {
+    func testInfoDoesNotSendImplicitObservationRequests() async {
         let handoff = TheHandoff()
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
         let mockConn = MockConnection()
         mockConn.serverInfo = makeServerInfo()
-        handoff.autoSubscribe = true
         handoff.makeConnection = { _, _, _ in mockConn }
 
         handoff.connect(to: device)
 
-        // After connect, the mock emits .info which triggers autoSubscribe sends
         let sentTypes = mockConn.sent.map { $0.0 }
-        XCTAssertTrue(sentTypes.contains(where: {
-            if case .subscribe = $0 { return true }
-            return false
-        }))
-        XCTAssertTrue(sentTypes.contains(where: {
+        XCTAssertFalse(sentTypes.contains(where: {
             if case .requestInterface = $0 { return true }
             return false
         }))
@@ -45,25 +39,6 @@ final class TheHandoffMessageTests: XCTestCase {
             if case .requestScreen = $0 { return true }
             return false
         }))
-    }
-
-    @ButtonHeistActor
-    func testInfoNoAutoSubscribeDoesNotSend() async {
-        let handoff = TheHandoff()
-        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
-        let mockConn = MockConnection()
-        mockConn.serverInfo = makeServerInfo()
-        handoff.autoSubscribe = false
-        handoff.makeConnection = { _, _, _ in mockConn }
-
-        handoff.connect(to: device)
-
-        // Only the authenticate message should be sent, no subscribe/requestInterface/requestScreen
-        let hasSubscribe = mockConn.sent.contains(where: {
-            if case .subscribe = $0.0 { return true }
-            return false
-        })
-        XCTAssertFalse(hasSubscribe)
     }
 
     // MARK: - .interface
@@ -177,24 +152,6 @@ final class TheHandoffMessageTests: XCTestCase {
 
         assertFailed(handoff.connectionPhase, failure: .authFailed("bad token"))
         XCTAssertEqual(receivedReason, "bad token")
-    }
-
-    // MARK: - .interaction
-
-    @ButtonHeistActor
-    func testInteractionCallsCallback() async {
-        let handoff = TheHandoff()
-        var receivedEvent: InteractionEvent?
-        handoff.onInteraction = { receivedEvent = $0 }
-
-        let event = InteractionEvent(
-            timestamp: 1.5,
-            command: .ping,
-            result: ActionResult(success: true, method: .activate)
-        )
-        handoff.handleServerMessage(.interaction(event), requestId: nil)
-
-        XCTAssertEqual(receivedEvent?.timestamp, 1.5)
     }
 
     // MARK: - .protocolMismatch
