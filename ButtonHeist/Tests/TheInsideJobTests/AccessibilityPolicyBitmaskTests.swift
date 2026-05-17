@@ -9,7 +9,7 @@ import XCTest
 /// The `*Bitmask` and `*Names` values are computed from `Set<HeistTrait>`
 /// policy at static-let initialization time. If the conversion ever drops
 /// a trait (e.g. an unknown name silently swallowed by
-        /// `AccessibilityTraits.fromNames`), the consumer's behavior becomes
+/// `AccessibilityTraits.fromNames`), the consumer's behavior becomes
 /// inconsistent with policy. These tests catch that.
 final class AccessibilityPolicyBitmaskTests: XCTestCase {
 
