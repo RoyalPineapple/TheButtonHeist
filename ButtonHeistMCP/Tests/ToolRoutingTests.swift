@@ -98,13 +98,13 @@ struct ToolRoutingTests {
         ])
 
         #expect(steps[0].command == .swipe)
-        #expect(steps[0].legacyRequestDictionary["command"] as? String == TheFence.Command.swipe.rawValue)
+        #expect(steps[0].requestDictionary["command"] as? String == TheFence.Command.swipe.rawValue)
         #expect(steps[0].arguments["direction"] as? String == "right")
         #expect(steps[1].command == .scrollToVisible)
-        #expect(steps[1].legacyRequestDictionary["command"] as? String == TheFence.Command.scrollToVisible.rawValue)
+        #expect(steps[1].requestDictionary["command"] as? String == TheFence.Command.scrollToVisible.rawValue)
         #expect(steps[1].arguments["heistId"] as? String == "element-1")
         #expect(steps[2].command == .dismissKeyboard)
-        #expect(steps[2].legacyRequestDictionary["command"] as? String == TheFence.Command.dismissKeyboard.rawValue)
+        #expect(steps[2].requestDictionary["command"] as? String == TheFence.Command.dismissKeyboard.rawValue)
     }
 
     @Test("run_batch rejects grouped MCP tool shapes")
@@ -205,20 +205,20 @@ struct ToolRoutingTests {
         ])
 
         #expect(steps[0].command == .swipe)
-        #expect(steps[0].legacyRequestDictionary["command"] as? String == TheFence.Command.swipe.rawValue)
+        #expect(steps[0].requestDictionary["command"] as? String == TheFence.Command.swipe.rawValue)
         #expect(steps[0].arguments["direction"] as? String == "up")
         #expect(steps[1].command == .scrollToVisible)
-        #expect(steps[1].legacyRequestDictionary["command"] as? String == TheFence.Command.scrollToVisible.rawValue)
+        #expect(steps[1].requestDictionary["command"] as? String == TheFence.Command.scrollToVisible.rawValue)
         #expect(steps[1].arguments["heistId"] as? String == "element-1")
         #expect(steps[2].command == .elementSearch)
-        #expect(steps[2].legacyRequestDictionary["command"] as? String == TheFence.Command.elementSearch.rawValue)
+        #expect(steps[2].requestDictionary["command"] as? String == TheFence.Command.elementSearch.rawValue)
         #expect(steps[2].arguments["label"] as? String == "Done")
         #expect(steps[3].command == .scrollToEdge)
-        #expect(steps[3].legacyRequestDictionary["command"] as? String == TheFence.Command.scrollToEdge.rawValue)
+        #expect(steps[3].requestDictionary["command"] as? String == TheFence.Command.scrollToEdge.rawValue)
         #expect(steps[3].arguments["heistId"] as? String == "scroll-view")
         #expect(steps[3].arguments["edge"] as? String == "bottom")
         #expect(steps[4].command == .dismissKeyboard)
-        #expect(steps[4].legacyRequestDictionary["command"] as? String == TheFence.Command.dismissKeyboard.rawValue)
+        #expect(steps[4].requestDictionary["command"] as? String == TheFence.Command.dismissKeyboard.rawValue)
     }
 
     @Test("all registered tools route through the catalog")
