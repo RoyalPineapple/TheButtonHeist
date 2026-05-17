@@ -76,6 +76,10 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertFalse(help.contains("--full"), help)
     }
 
+    func testGetInterfaceRejectsLegacyFullAlias() {
+        XCTAssertThrowsError(try GetInterfaceCommand.parse(["--full"]))
+    }
+
     func testExpectationArgumentParserNormalizesShorthand() throws {
         let parsed = try ExpectationArgumentParser.parse("screen_changed")
 
