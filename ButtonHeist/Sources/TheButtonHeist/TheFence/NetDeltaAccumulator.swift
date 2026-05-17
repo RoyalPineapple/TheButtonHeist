@@ -44,7 +44,8 @@ internal enum NonScreenChangeDelta {
 
 /// Merges per-step deltas into a single net delta (like git squash).
 /// If any step triggered a screen change, the net delta is screenChanged
-/// with the final interface. Otherwise, tracks net added/removed/updated.
+/// with that captured interface plus later same-screen edits in `postEdits`.
+/// Otherwise, tracks net added/removed/updated.
 internal enum NetDeltaAccumulator {
     static func merge(deltas: [AccessibilityTrace.Delta]) -> AccessibilityTrace.Delta? {
         let meaningful = deltas.filter { delta in
@@ -71,7 +72,11 @@ internal enum NetDeltaAccumulator {
     }
 
     /// Fold element-level edits that happened after `screenChange` into a
-    /// single `.screenChanged` result, applying them to the new interface.
+    /// single `.screenChanged` result without reconstructing UI state.
+    ///
+    /// `screenChange.newInterface` is the captured screen-change state.
+    /// Later same-screen edits stay in `postEdits` so callers can inspect
+    /// them without treating the accumulator as an interface replayer.
     /// `postDeltas` is the slice of the original sequence strictly after the
     /// screen-change step, narrowed to `NonScreenChangeDelta` at the
     /// boundary so the "no further screen change" invariant is enforced by
@@ -100,96 +105,21 @@ internal enum NetDeltaAccumulator {
             // mergeElementDeltas never returns a screenChanged
             return .screenChanged(screenChange)
         }
-        let finalInterface = apply(postEdits, to: screenChange.newInterface)
         let mergedTransients = mergeTransients(screenChange.transient, postTransients)
         // Batch net deltas can span multiple capture edges. Keep provenance on
         // the per-step deltas/traces instead of minting a misleading single
         // captureEdge for the squashed projection.
         return .screenChanged(AccessibilityTrace.ScreenChanged(
-            elementCount: finalInterface.elements.count,
-            newInterface: finalInterface,
+            elementCount: screenChange.elementCount,
+            newInterface: screenChange.newInterface,
             postEdits: postEdits.isEmpty ? nil : postEdits,
             transient: mergedTransients
         ))
     }
 
-    /// Apply element-level edits (`added`/`removed`/`updated`) to `interface`,
-    /// producing a best-effort `newInterface` for `.screenChanged.newInterface`.
-    ///
-    /// Tree-level edits (`treeInserted`/`treeRemoved`/`treeMoved`) are *not*
-    /// applied here — they are descriptive metadata produced by diffing two
-    /// snapshots, not instructions for reconstructing the tree. Consumers who
-    /// need the structural truth should read `postEdits` directly; the
-    /// `newInterface.tree` returned here reflects the leaf-level swaps and
-    /// adds, with novel adds appended at the root forest.
-    ///
-    /// `heistId` collisions in `interface.elements` are tolerated with
-    /// last-write-wins semantics — uniqueness is a best-effort property of the
-    /// snapshot, not an invariant (e.g. sibling `staticText` with identical
-    /// labels can synthesize the same id).
-    private static func apply(_ edits: ElementEdits, to interface: Interface) -> Interface {
-        var elementsById: [String: HeistElement] = [:]
-        for element in interface.elements {
-            elementsById[element.heistId] = element
-        }
-        for heistId in edits.removed {
-            elementsById.removeValue(forKey: heistId)
-        }
-        for element in edits.added {
-            elementsById[element.heistId] = element
-        }
-        for update in edits.updated {
-            guard var element = elementsById[update.heistId] else { continue }
-            var fullyApplied = true
-            for change in update.changes where !apply(change, to: &element) {
-                fullyApplied = false
-            }
-            if fullyApplied {
-                elementsById[update.heistId] = element
-            } else {
-                // We couldn't apply every property delta in-place (e.g. actions/customContent/rotors
-                // are lossy strings on the wire). Drop the element from `newInterface` so the
-                // snapshot stays internally consistent — callers should read the authoritative
-                // edits.updated list.
-                elementsById.removeValue(forKey: update.heistId)
-            }
-        }
-
-        // Walk the tree, swapping each leaf with its updated counterpart and
-        // dropping leaves whose heistId was removed/dropped from elementsById.
-        // Containers with no surviving children are pruned.
-        let originalHeistIds = Set(interface.elements.map(\.heistId))
-        let updatedTree = mapTree(interface.tree, elementsById: elementsById)
-
-        // Append any "added" element that wasn't already in the original tree
-        // at the root level — we don't know its tree position from the delta.
-        let novelAdds = edits.added.filter { !originalHeistIds.contains($0.heistId) }
-        let finalTree = updatedTree + novelAdds.map { InterfaceNode.element($0) }
-
-        return Interface(timestamp: interface.timestamp, tree: finalTree)
-    }
-
-    /// Walk the tree, replacing each leaf with its updated counterpart from
-    /// `elementsById` (or dropping the leaf if absent). Containers with no
-    /// surviving descendants are pruned.
-    private static func mapTree(
-        _ nodes: [InterfaceNode], elementsById: [String: HeistElement]
-    ) -> [InterfaceNode] {
-        nodes.compactMap { node in
-            switch node {
-            case .element(let element):
-                guard let updated = elementsById[element.heistId] else { return nil }
-                return .element(updated)
-            case .container(let info, let children):
-                let newChildren = mapTree(children, elementsById: elementsById)
-                return newChildren.isEmpty ? nil : .container(info, children: newChildren)
-            }
-        }
-    }
-
-    /// Apply a property change to `element`. Returns `false` when the property cannot be
-    /// reconstructed from the wire string (the caller should drop the element from
-    /// `newInterface` to avoid leaving stale fields behind).
+    /// Apply a property change to a same-batch added element. Returns `false`
+    /// when the property cannot be folded into the element from its wire string,
+    /// so the caller should preserve that property delta separately.
     private static func apply(_ change: PropertyChange, to element: inout HeistElement) -> Bool {
         switch change.property {
         case .label:

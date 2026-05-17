@@ -2346,10 +2346,20 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, mockConn) = makeConnectedFence()
         let submit = testElement("submit", label: "Submit", traits: [.button])
         let cancel = testElement("cancel", label: "Cancel", traits: [.button])
+        let group = ContainerInfo(
+            type: .semanticGroup(label: "Actions", value: nil, identifier: "actions"),
+            frameX: 0,
+            frameY: 0,
+            frameWidth: 200,
+            frameHeight: 100
+        )
         mockConn.autoResponse = { message in
             switch message {
             case .requestInterface:
-                return .interface(Interface(timestamp: Date(), tree: [.element(submit), .element(cancel)]))
+                return .interface(Interface(
+                    timestamp: Date(),
+                    tree: [.container(group, children: [.element(submit), .element(cancel)])]
+                ))
             default:
                 return .actionResult(ActionResult(success: true, method: .activate))
             }
@@ -2372,8 +2382,54 @@ final class TheFenceHandlerTests: XCTestCase {
         let interface = json["interface"] as! [String: Any]
         let tree = interface["tree"] as! [[String: Any]]
         XCTAssertEqual(tree.count, 1)
-        let element = tree[0]["element"] as! [String: Any]
+        let container = tree[0]["container"] as! [String: Any]
+        XCTAssertEqual(container["type"] as? String, "semanticGroup")
+        let children = container["children"] as! [[String: Any]]
+        XCTAssertEqual(children.count, 1)
+        let element = children[0]["element"] as! [String: Any]
         XCTAssertEqual(element["heistId"] as? String, "cancel")
+    }
+
+    @ButtonHeistActor
+    func testGetInterfaceElementsFilterPreservesContainerShape() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        let first = testElement("first", label: "First")
+        let second = testElement("second", label: "Second")
+        let group = ContainerInfo(
+            type: .semanticGroup(label: "Group", value: nil, identifier: nil),
+            frameX: 0,
+            frameY: 0,
+            frameWidth: 200,
+            frameHeight: 100
+        )
+        mockConn.autoResponse = { message in
+            switch message {
+            case .requestInterface:
+                return .interface(Interface(
+                    timestamp: Date(),
+                    tree: [.container(group, children: [.element(first), .element(second)])]
+                ))
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "get_interface",
+            "scope": "visible",
+            "elements": ["second"],
+        ])
+
+        let json = response.jsonDict()!
+        XCTAssertEqual(json["filteredFrom"] as? Int, 2)
+        let interface = json["interface"] as! [String: Any]
+        let tree = interface["tree"] as! [[String: Any]]
+        XCTAssertEqual(tree.count, 1)
+        let container = tree[0]["container"] as! [String: Any]
+        let children = container["children"] as! [[String: Any]]
+        XCTAssertEqual(children.count, 1)
+        let element = children[0]["element"] as! [String: Any]
+        XCTAssertEqual(element["heistId"] as? String, "second")
     }
 
     @ButtonHeistActor

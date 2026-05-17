@@ -128,8 +128,6 @@ final class TheHandoff {
         let device: DiscoveredDevice
         let keepaliveTask: Task<Void, Never>
         var serverInfo: ServerInfo?
-        var currentInterface: Interface?
-        var currentScreen: ScreenPayload?
         var recordingPhase: RecordingPhase
         var missedPongCount: Int
 
@@ -138,8 +136,6 @@ final class TheHandoff {
             device: DiscoveredDevice,
             keepaliveTask: Task<Void, Never>,
             serverInfo: ServerInfo? = nil,
-            currentInterface: Interface? = nil,
-            currentScreen: ScreenPayload? = nil,
             recordingPhase: RecordingPhase = .idle,
             missedPongCount: Int = 0
         ) {
@@ -147,8 +143,6 @@ final class TheHandoff {
             self.device = device
             self.keepaliveTask = keepaliveTask
             self.serverInfo = serverInfo
-            self.currentInterface = currentInterface
-            self.currentScreen = currentScreen
             self.recordingPhase = recordingPhase
             self.missedPongCount = missedPongCount
         }
@@ -379,16 +373,6 @@ final class TheHandoff {
 
     var serverInfo: ServerInfo? {
         if case .connected(let session) = connectionPhase { return session.serverInfo }
-        return nil
-    }
-
-    var currentInterface: Interface? {
-        if case .connected(let session) = connectionPhase { return session.currentInterface }
-        return nil
-    }
-
-    var currentScreen: ScreenPayload? {
-        if case .connected(let session) = connectionPhase { return session.currentScreen }
         return nil
     }
 
@@ -746,16 +730,10 @@ final class TheHandoff {
             }
             onConnected?(info)
         case .interface(let payload):
-            if requestId == nil {
-                mutateConnectedSession { $0.currentInterface = payload }
-            }
             onInterface?(payload, requestId)
         case .actionResult(let result):
             onActionResult?(result, requestId)
         case .screen(let payload):
-            if requestId == nil {
-                mutateConnectedSession { $0.currentScreen = payload }
-            }
             onScreen?(payload, requestId)
         case .recordingStarted:
             mutateConnectedSession { $0.recordingPhase = .recording }
