@@ -46,7 +46,6 @@
 		2A0BF1D55AC6BBB0990DA9E7 /* StartupConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 568E21A374CCDA49050F2C8E /* StartupConfiguration.swift */; };
 		2A360A9CAC75AEA9C9993F93 /* AuthMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BE8A7B3A58123142AC5A3C1 /* AuthMessageTests.swift */; };
 		2E0CD071F454D6FD708D52DC /* DeviceResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44278872AF4289E309CD78E2 /* DeviceResolver.swift */; };
-		2ED902E250AAA1F4EFDE3A22 /* NetDeltaAccumulator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 128F3191FFEFB94EDEC50C98 /* NetDeltaAccumulator.swift */; };
 		2F37CE222D373CEBDA82D0C0 /* SessionManifest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A93F116628B208D1D4508DF /* SessionManifest.swift */; };
 		2F380AD6AE4BB22EF36DA8B6 /* TheScore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A918FE0F8CB350A49C5A16C /* TheScore.framework */; };
 		2F94B833740659A02093F762 /* ScreenClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82F75CD8C56005B03DF567DC /* ScreenClassifier.swift */; };
@@ -164,7 +163,6 @@
 		A6405899D9E72AAB0A4AAC95 /* ActionCapabilityDiagnostic.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB73FEEE9E9722037B924026 /* ActionCapabilityDiagnostic.swift */; };
 		A65BD0AA33C822B456716447 /* AccessibilityElementDataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46B60C3CBA7FEE19B6FCFB08 /* AccessibilityElementDataTests.swift */; };
 		A66DDEF29EC93077D4392AFB /* TargetConfigTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05CB1CBE21394403A78BC900 /* TargetConfigTests.swift */; };
-		A6E4744089078056B0B81B52 /* NetDeltaAccumulatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1516619DB01066CA78C043C /* NetDeltaAccumulatorTests.swift */; };
 		A70C5582716DE8D184D2187C /* InteractivityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61EDA1A956342901286B448D /* InteractivityTests.swift */; };
 		AAEE8DC63033C8BEC937BAA5 /* AccessibilityPolicy+UIKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99E5190FDA48440D28E474F3 /* AccessibilityPolicy+UIKit.swift */; };
 		AD8FC6AC09AAE31D6D365834 /* swift-crypto__CryptoExtras.bundle in Dependencies */ = {isa = PBXBuildFile; fileRef = 6A3DED8FA6023701C7060202 /* swift-crypto__CryptoExtras.bundle */; };
@@ -377,7 +375,6 @@
 		0F6A4B7485D71E57F9ED1123 /* TheTripwire.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheTripwire.swift; sourceTree = "<group>"; };
 		10D4AA78D802F6F18119E5F4 /* Interactivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Interactivity.swift; sourceTree = "<group>"; };
 		10D79C29B3000357A40270A6 /* ScreenFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenFactory.swift; sourceTree = "<group>"; };
-		128F3191FFEFB94EDEC50C98 /* NetDeltaAccumulator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetDeltaAccumulator.swift; sourceTree = "<group>"; };
 		1308BFFECC16AF7E933839EB /* TheSafecracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheSafecracker.swift; sourceTree = "<group>"; };
 		13D30AC92A982F4FC9F47B71 /* swift-crypto_CCryptoBoringSSL.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "swift-crypto_CCryptoBoringSSL.bundle"; sourceTree = BUILT_PRODUCTS_DIR; };
 		147524407CD6DC3F6BD684FF /* Navigation+Scroll.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Navigation+Scroll.swift"; sourceTree = "<group>"; };
@@ -560,7 +557,6 @@
 		DEB3305A1CA445C4E0169E24 /* TempDirectoryFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TempDirectoryFixture.swift; sourceTree = "<group>"; };
 		DF20B785D6EE842B5BA45D6C /* PendingRequestTrackerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingRequestTrackerTests.swift; sourceTree = "<group>"; };
 		DFE165B7F4612979A10F917F /* USBDeviceDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = USBDeviceDiscovery.swift; sourceTree = "<group>"; };
-		E1516619DB01066CA78C043C /* NetDeltaAccumulatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetDeltaAccumulatorTests.swift; sourceTree = "<group>"; };
 		E20911C376F477524EC4F207 /* TheStakeoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheStakeoutTests.swift; sourceTree = "<group>"; };
 		E4E2CC1F69874C1BC9C88BBD /* HeistPlaybackReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistPlaybackReport.swift; sourceTree = "<group>"; };
 		E61AED0209793344783FFCD7 /* ScreenClassifierTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenClassifierTests.swift; sourceTree = "<group>"; };
@@ -663,7 +659,6 @@
 				3929DF06998FDCC1E23824BF /* EnvironmentConfigTests.swift */,
 				6D7445CF41642EDCE04E831F /* IdleMonitorTests.swift */,
 				5B12846943603FCF34BBBFCA /* Mocks.swift */,
-				E1516619DB01066CA78C043C /* NetDeltaAccumulatorTests.swift */,
 				6CE5A357B75EBB623990B852 /* PendingRequestTrackerIntegrationTests.swift */,
 				DF20B785D6EE842B5BA45D6C /* PendingRequestTrackerTests.swift */,
 				1809F7EF8AE66B295A3EFFA3 /* SessionLockTests.swift */,
@@ -701,7 +696,6 @@
 			children = (
 				F460BE795E61168CDF5604F4 /* Dictionary+ArgParsing.swift */,
 				9457CF49D9F2CA016C02EEA0 /* FenceOperationCatalog.swift */,
-				128F3191FFEFB94EDEC50C98 /* NetDeltaAccumulator.swift */,
 				2B92FA5985EAF1A5C7360207 /* TheFence.swift */,
 				22FE61852546E4B6F51E7605 /* TheFence+Batch.swift */,
 				FEEFEEE99B850E0AD80B6397 /* TheFence+CommandCatalog.swift */,
@@ -1508,7 +1502,6 @@
 				694DF4550DA815E67C203528 /* TheBookKeeper.swift in Sources */,
 				A0CEB065ED0E9507710D85CF /* Dictionary+ArgParsing.swift in Sources */,
 				9CB361ED5426774B8FED8E9C /* FenceOperationCatalog.swift in Sources */,
-				2ED902E250AAA1F4EFDE3A22 /* NetDeltaAccumulator.swift in Sources */,
 				BFA7A094D0F9A4F606474AC6 /* TheFence+Batch.swift in Sources */,
 				D1866FC1E2D5639B2DCA6A27 /* TheFence+CommandCatalog.swift in Sources */,
 				FF850798EAF814BB1BB24C81 /* TheFence+ExpectationParsing.swift in Sources */,
@@ -1544,7 +1537,6 @@
 				118A50FD8EB5B37B8C5FC4F3 /* TempDirectoryFixture.swift in Sources */,
 				462DDE00FBBD9214256650F2 /* IdleMonitorTests.swift in Sources */,
 				9C5A844A6040C6C5A5073D35 /* Mocks.swift in Sources */,
-				A6E4744089078056B0B81B52 /* NetDeltaAccumulatorTests.swift in Sources */,
 				6BEF5654D1A9FFD654921870 /* PendingRequestTrackerIntegrationTests.swift in Sources */,
 				942D16E2BC29E44084FDF8FE /* PendingRequestTrackerTests.swift in Sources */,
 				3EB1B7099693FEACF46E8F37 /* SessionLockTests.swift in Sources */,
