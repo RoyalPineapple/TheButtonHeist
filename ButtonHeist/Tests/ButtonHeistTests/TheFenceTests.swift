@@ -2746,6 +2746,56 @@ final class TheFenceTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testBackgroundTraceRefreshesHeistMatcherCache() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        mockConn.autoResponse = { message in
+            switch message {
+            case .activate:
+                return .actionResult(ActionResult(
+                    success: true,
+                    method: .activate,
+                    accessibilityDelta: .noChange(.init(elementCount: 1))
+                ))
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+        try await startHeistRecording(on: fence)
+
+        let target = makeReceiptTestElement(
+            heistId: "pay_button",
+            label: "Pay",
+            identifier: "checkout.pay",
+            traits: [.button]
+        )
+        fence.handoff.onBackgroundAccessibilityTrace?(AccessibilityTrace(interface: makeReceiptTestInterface([target])))
+
+        let response = try await fence.execute(request: [
+            "command": "activate",
+            "heistId": "pay_button",
+        ])
+        guard case .action(let result, _) = response else {
+            return XCTFail("Expected action response, got \(response)")
+        }
+        XCTAssertTrue(result.success)
+
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("heist")
+        defer { try? FileManager.default.removeItem(at: output) }
+        _ = try await fence.execute(request: [
+            "command": "stop_heist",
+            "output": output.path,
+        ])
+
+        let heist = try TheBookKeeper.readHeist(from: output)
+        XCTAssertEqual(heist.steps.count, 1)
+        XCTAssertEqual(heist.steps[0].recorded?.heistId, "pay_button")
+        XCTAssertEqual(heist.steps[0].target?.identifier, "checkout.pay")
+        try? await fence.bookKeeper.closeSession()
+    }
+
+    @ButtonHeistActor
     func testHeistRecordingSkipsFailedActionResult() async throws {
         let (fence, mockConn) = makeConnectedFence()
         mockConn.autoResponse = { message in

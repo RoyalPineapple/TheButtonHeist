@@ -579,6 +579,7 @@ public final class TheFence {
     private static let maxBackgroundAccessibilityTraces = 20
 
     private func enqueueBackgroundAccessibilityTrace(_ trace: AccessibilityTrace) {
+        updateInterfaceCache(from: trace)
         backgroundAccessibilityTraces.append(trace)
         if backgroundAccessibilityTraces.count > Self.maxBackgroundAccessibilityTraces {
             backgroundAccessibilityTraces.removeFirst(backgroundAccessibilityTraces.count - Self.maxBackgroundAccessibilityTraces)
@@ -918,10 +919,7 @@ public final class TheFence {
     ) -> ResponseCacheUpdate {
         // Only reachable when accessibilityDelta is .screenChanged (caller's guard).
         // Below assumes newInterface is the screenChange payload.
-        lastInterfaceCache.removeAll()
-        for element in newInterface.elements {
-            lastInterfaceCache[element.heistId] = element
-        }
+        replaceInterfaceCache(with: newInterface.elements)
         // Evidence cache is union of pre-action elements + the new screen's
         // elements so the activated element from the old screen survives long
         // enough for the recorder to resolve its heistId to a matcher.
@@ -955,6 +953,15 @@ public final class TheFence {
 
     private func applyPostRecordCacheUpdate(_ cacheUpdate: ResponseCacheUpdate) {
         guard let elements = cacheUpdate.postRecordReplacement else { return }
+        replaceInterfaceCache(with: elements)
+    }
+
+    private func updateInterfaceCache(from trace: AccessibilityTrace) {
+        guard let latestCapture = trace.captures.last else { return }
+        replaceInterfaceCache(with: latestCapture.interface.elements)
+    }
+
+    private func replaceInterfaceCache(with elements: [HeistElement]) {
         lastInterfaceCache.removeAll()
         for element in elements {
             lastInterfaceCache[element.heistId] = element

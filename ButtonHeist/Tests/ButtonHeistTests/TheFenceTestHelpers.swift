@@ -80,6 +80,7 @@ func makeReceiptTestElement(
     heistId: String,
     label: String,
     value: String? = nil,
+    identifier: String? = nil,
     traits: [HeistTrait] = [.staticText]
 ) -> HeistElement {
     HeistElement(
@@ -87,7 +88,7 @@ func makeReceiptTestElement(
         description: label,
         label: label,
         value: value,
-        identifier: nil,
+        identifier: identifier,
         traits: traits,
         frameX: 0,
         frameY: 0,
