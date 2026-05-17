@@ -150,7 +150,7 @@ enum ToolDefinitions {
     // MARK: - Individual Tools
 
     static let getInterface = Tool(
-        name: "get_interface",
+        name: TheFence.Command.getInterface.rawValue,
         description: """
             Read the UI element hierarchy. Call once on a new screen, then track changes via \
             action deltas — re-fetch only when you need elements the delta didn't cover. \
@@ -161,7 +161,7 @@ enum ToolDefinitions {
     )
 
     static let activate = Tool(
-        name: "activate",
+        name: TheFence.Command.activate.rawValue,
         description: """
             Activate a UI element (VoiceOver-style double-tap): tap buttons, follow links, toggle \
             controls. Pass 'action' to invoke a named action like "increment", "decrement", or \
@@ -171,7 +171,7 @@ enum ToolDefinitions {
     )
 
     static let rotor = Tool(
-        name: "rotor",
+        name: TheFence.Command.rotor.rawValue,
         description: """
             Move through a rotor exposed by an element. Defaults to next. Use rotors listed by \
             get_interface to pick rotor or rotorIndex; pass currentHeistId from the previous \
@@ -182,7 +182,7 @@ enum ToolDefinitions {
     )
 
     static let typeText = Tool(
-        name: "type_text",
+        name: TheFence.Command.typeText.rawValue,
         description: """
             Type text and/or delete characters via keyboard injection. Optionally target an \
             element to focus it first and read back the resulting value.
@@ -191,7 +191,7 @@ enum ToolDefinitions {
     )
 
     static let waitFor = Tool(
-        name: "wait_for",
+        name: TheFence.Command.waitFor.rawValue,
         description: """
             Wait for an element matching a predicate to appear, or to disappear with absent=true. \
             Polls on UI settle events. Returns the matched element or diagnostic info on timeout.
@@ -200,14 +200,14 @@ enum ToolDefinitions {
     )
 
     static let getScreen = Tool(
-        name: "get_screen",
+        name: TheFence.Command.getScreen.rawValue,
         description: "Capture a PNG screenshot from the connected device. Returns inline base64 PNG image data. Use 'output' to save to a file path instead.",
         inputSchema: inputSchema(for: .getScreen),
         annotations: .init(readOnlyHint: true, idempotentHint: true)
     )
 
     static let waitForChange = Tool(
-        name: "wait_for_change",
+        name: TheFence.Command.waitForChange.rawValue,
         description: """
             Wait for the UI to change. With no expect, returns on any tree change. With expect, \
             rides through intermediate states (spinners, loading) until the expectation is met. \
@@ -218,13 +218,13 @@ enum ToolDefinitions {
     )
 
     static let startRecording = Tool(
-        name: "start_recording",
+        name: TheFence.Command.startRecording.rawValue,
         description: "Start an H.264/MP4 screen recording. Recording auto-stops on inactivity or max duration.",
         inputSchema: inputSchema(for: .startRecording)
     )
 
     static let stopRecording = Tool(
-        name: "stop_recording",
+        name: TheFence.Command.stopRecording.rawValue,
         description: """
             Stop an in-progress screen recording. Returns metadata only by default (raw video \
             is too large for MCP context); pass 'output' to save the MP4 to a file path.
@@ -233,7 +233,7 @@ enum ToolDefinitions {
     )
 
     static let listDevices = Tool(
-        name: "list_devices",
+        name: TheFence.Command.listDevices.rawValue,
         description: """
             List iOS devices discovered via Bonjour plus named targets from .buttonheist.json. \
             Empty when Bonjour is blocked and no config targets exist — use connect(device:token:) directly.
@@ -245,14 +245,14 @@ enum ToolDefinitions {
     // MARK: - Scroll Tool
 
     static let scroll = Tool(
-        name: "scroll",
+        name: TheFence.Command.scroll.rawValue,
         description: """
             Scroll within scroll views. mode=page scrolls one page in 'direction'; \
             mode=to_visible brings a known element into view; mode=search scrolls until a \
             matching element is found; mode=to_edge scrolls to a top/bottom/left/right edge.
             """,
         inputSchema: inputSchema(
-            for: [.scroll] + groupedCommands(under: "scroll"),
+            for: [.scroll] + groupedCommands(under: TheFence.Command.scroll.rawValue),
             overriding: [
                 "mode": [
                     "type": "string",
@@ -286,7 +286,7 @@ enum ToolDefinitions {
     )
 
     static let editAction = Tool(
-        name: "edit_action",
+        name: TheFence.Command.editAction.rawValue,
         description: """
             Perform an edit or keyboard action on the current first responder. \
             Actions: copy, paste, cut, select, selectAll, dismiss (dismiss the keyboard).
@@ -304,7 +304,7 @@ enum ToolDefinitions {
     )
 
     static let setPasteboard = Tool(
-        name: "set_pasteboard",
+        name: TheFence.Command.setPasteboard.rawValue,
         description: """
             Write text to the general pasteboard from within the app. Content written by the app \
             itself does not trigger the iOS "Allow Paste" dialog when subsequently read.
@@ -313,7 +313,7 @@ enum ToolDefinitions {
     )
 
     static let getPasteboard = Tool(
-        name: "get_pasteboard",
+        name: TheFence.Command.getPasteboard.rawValue,
         description: """
             Read text from the general pasteboard. iOS may show "Allow Paste" if the content \
             was written by another app.
@@ -323,7 +323,7 @@ enum ToolDefinitions {
     )
 
     static let runBatch = Tool(
-        name: "run_batch",
+        name: TheFence.Command.runBatch.rawValue,
         description: """
             Execute multiple commands in one call. Each step is a JSON object with 'command' set \
             to an MCP tool name or raw Button Heist command plus that command's parameters; attach \
@@ -334,7 +334,7 @@ enum ToolDefinitions {
     )
 
     static let getSessionState = Tool(
-        name: "get_session_state",
+        name: TheFence.Command.getSessionState.rawValue,
         description: """
             Inspect the current Button Heist session: connection status, device/app identity, \
             recording state, client timeouts, and a lightweight summary of the last action.
@@ -344,7 +344,7 @@ enum ToolDefinitions {
     )
 
     static let connect = Tool(
-        name: "connect",
+        name: TheFence.Command.connect.rawValue,
         description: """
             Establish or switch the active connection to an iOS app with Button Heist enabled. \
             Three patterns: target=NAME from .buttonheist.json, device=HOST:PORT + token, or \
@@ -355,7 +355,7 @@ enum ToolDefinitions {
     )
 
     static let listTargets = Tool(
-        name: "list_targets",
+        name: TheFence.Command.listTargets.rawValue,
         description: """
             List named connection targets from .buttonheist.json (or ~/.config/buttonheist/config.json), \
             including each target's address and which one is the default.
@@ -365,20 +365,20 @@ enum ToolDefinitions {
     )
 
     static let getSessionLog = Tool(
-        name: "get_session_log",
+        name: TheFence.Command.getSessionLog.rawValue,
         description: "Return the current session manifest: commands executed and artifacts produced.",
         inputSchema: inputSchema(for: .getSessionLog),
         annotations: .init(readOnlyHint: true, idempotentHint: true)
     )
 
     static let archiveSession = Tool(
-        name: "archive_session",
+        name: TheFence.Command.archiveSession.rawValue,
         description: "Close and compress the current session into a .tar.gz archive; returns the path.",
         inputSchema: inputSchema(for: .archiveSession)
     )
 
     static let startHeist = Tool(
-        name: "start_heist",
+        name: TheFence.Command.startHeist.rawValue,
         description: """
             Start recording a heist. Successful commands become steps in a .heist file; \
             use matcher fields (label, identifier, traits) for durable element targeting, not heistId. \
@@ -396,7 +396,7 @@ enum ToolDefinitions {
     )
 
     static let stopHeist = Tool(
-        name: "stop_heist",
+        name: TheFence.Command.stopHeist.rawValue,
         description: """
             Stop recording and save the heist as a self-contained JSON playback script. \
             Returns the file path and step count. At least one step must have been recorded.
@@ -405,7 +405,7 @@ enum ToolDefinitions {
     )
 
     static let playHeist = Tool(
-        name: "play_heist",
+        name: TheFence.Command.playHeist.rawValue,
         description: """
             Play back a .heist file. Steps execute sequentially; playback stops on the first \
             failed step. On failure, returns full diagnostics: command, target, error, action \

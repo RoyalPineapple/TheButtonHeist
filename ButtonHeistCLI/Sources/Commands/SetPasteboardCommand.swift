@@ -3,7 +3,7 @@ import ButtonHeist
 
 struct SetPasteboardCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "set_pasteboard",
+        commandName: TheFence.Command.setPasteboard.rawValue,
         abstract: "Write text to the general pasteboard",
         discussion: """
             Write text to the device's general pasteboard from within the app.

@@ -3,7 +3,7 @@ import ButtonHeist
 
 struct EditActionCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "edit_action",
+        commandName: TheFence.Command.editAction.rawValue,
         abstract: "Perform an edit menu action on the current first responder",
         discussion: """
             Triggers copy, paste, cut, select, or selectAll on the element \

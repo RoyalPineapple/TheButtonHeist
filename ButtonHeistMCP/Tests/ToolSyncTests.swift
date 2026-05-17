@@ -56,14 +56,14 @@ struct ToolSyncTests {
                 let enumProperty: String
                 switch tool.name {
                 case "gesture": enumProperty = "type"
-                case "scroll": enumProperty = "mode"
-                case "edit_action": enumProperty = "action"
+                case TheFence.Command.scroll.rawValue: enumProperty = "mode"
+                case TheFence.Command.editAction.rawValue: enumProperty = "action"
                 default: enumProperty = "type"
                 }
 
                 let enumValues = extractEnumValues(from: tool, property: enumProperty)
 
-                if tool.name == "scroll" {
+                if tool.name == TheFence.Command.scroll.rawValue {
                     // Scroll modes are synthetic names (page, to_visible, search, to_edge),
                     // not raw command values. The boundary parses them into ScrollMode,
                     // so the schema enum must match ScrollMode.allCases exactly.
@@ -72,7 +72,7 @@ struct ToolSyncTests {
                         enumValues == expectedModes,
                         "Scroll tool modes \(enumValues.sorted()) don't match expected \(expectedModes.sorted())"
                     )
-                } else if tool.name == "edit_action" {
+                } else if tool.name == TheFence.Command.editAction.rawValue {
                     // edit_action has "dismiss" which maps to dismiss_keyboard,
                     // plus the standard edit actions. Just verify "dismiss" is present.
                     #expect(
@@ -131,7 +131,10 @@ struct ToolSyncTests {
     // also routes to other commands via a mode/action parameter. Their schemas
     // are supersets of any individual command's spec, so we skip per-command
     // schema checks and validate them via the grouped tool coverage test instead.
-    private static let hybridToolNames: Set<String> = ["scroll", "edit_action"]
+    private static let hybridToolNames: Set<String> = [
+        TheFence.Command.scroll.rawValue,
+        TheFence.Command.editAction.rawValue,
+    ]
 
     @Test("Direct tool schemas contain all parameter spec keys")
     func directToolSchemasContainSpecKeys() {
@@ -194,8 +197,8 @@ struct ToolSyncTests {
         // Map of group tool name → synthetic keys added by the group (not in individual command specs)
         let syntheticKeys: [String: Set<String>] = [
             "gesture": ["type"],
-            "scroll": ["mode"],
-            "edit_action": ["action"],
+            TheFence.Command.scroll.rawValue: ["mode"],
+            TheFence.Command.editAction.rawValue: ["action"],
         ]
 
         // Collect grouped commands by tool name
@@ -260,7 +263,7 @@ struct ToolSyncTests {
 
     @Test("Scroll direction schema lists all server-validated directions")
     func scrollDirectionSchemaListsAllServerValidatedDirections() {
-        guard let scroll = ToolDefinitions.all.first(where: { $0.name == "scroll" }) else {
+        guard let scroll = ToolDefinitions.all.first(where: { $0.name == TheFence.Command.scroll.rawValue }) else {
             Issue.record("No scroll tool found")
             return
         }
@@ -272,11 +275,11 @@ struct ToolSyncTests {
 
     @Test("MCP enum schemas match wire-boundary enums")
     func mcpEnumSchemasMatchWireBoundaryEnums() {
-        let getInterface = ToolDefinitions.all.first { $0.name == "get_interface" }
+        let getInterface = ToolDefinitions.all.first { $0.name == TheFence.Command.getInterface.rawValue }
         #expect(extractEnumValues(from: getInterface, property: "scope") == Set(GetInterfaceScope.allCases.map(\.rawValue)))
         #expect(extractEnumValues(from: getInterface, property: "detail") == Set(InterfaceDetail.allCases.map(\.rawValue)))
 
-        let scroll = ToolDefinitions.all.first { $0.name == "scroll" }
+        let scroll = ToolDefinitions.all.first { $0.name == TheFence.Command.scroll.rawValue }
         #expect(extractEnumValues(from: scroll, property: "mode") == Set(ScrollMode.allCases.map(\.rawValue)))
         #expect(extractEnumValues(from: scroll, property: "direction") == Set(ScrollDirection.allCases.map(\.rawValue)))
         #expect(extractEnumValues(from: scroll, property: "edge") == Set(ScrollEdge.allCases.map(\.rawValue)))
@@ -284,16 +287,30 @@ struct ToolSyncTests {
         let gesture = ToolDefinitions.all.first { $0.name == "gesture" }
         #expect(extractEnumValues(from: gesture, property: "type") == Set(GestureType.allCases.map(\.rawValue)))
 
-        let editAction = ToolDefinitions.all.first { $0.name == "edit_action" }
+        let editAction = ToolDefinitions.all.first { $0.name == TheFence.Command.editAction.rawValue }
         #expect(
             extractEnumValues(from: editAction, property: "action") ==
                 Set(EditAction.allCases.map(\.rawValue) + ["dismiss"])
         )
     }
 
+    @Test("Scroll modes dispatch through command catalog names")
+    func scrollModesDispatchThroughCommandCatalogNames() {
+        let expectedCommands: [ScrollMode: TheFence.Command] = [
+            .page: .scroll,
+            .toVisible: .scrollToVisible,
+            .search: .elementSearch,
+            .toEdge: .scrollToEdge,
+        ]
+
+        for (mode, command) in expectedCommands {
+            #expect(mode.canonicalCommand == command.rawValue)
+        }
+    }
+
     @Test("get_interface scope schema is Claude-compatible")
     func getInterfaceScopeSchemaIsClaudeCompatible() {
-        guard let getInterface = ToolDefinitions.all.first(where: { $0.name == "get_interface" }),
+        guard let getInterface = ToolDefinitions.all.first(where: { $0.name == TheFence.Command.getInterface.rawValue }),
               let scopeSchema = extractPropertySchema(from: getInterface, property: "scope") else {
             Issue.record("get_interface.scope missing property schema")
             return
@@ -382,7 +399,7 @@ struct ToolSyncTests {
 
     @Test("type_text schema rejects no-op scalar values")
     func typeTextSchemaRejectsNoOpScalarValues() {
-        guard let typeText = ToolDefinitions.all.first(where: { $0.name == "type_text" }),
+        guard let typeText = ToolDefinitions.all.first(where: { $0.name == TheFence.Command.typeText.rawValue }),
               let textSchema = extractPropertySchema(from: typeText, property: "text"),
               let deleteCountSchema = extractPropertySchema(from: typeText, property: "deleteCount") else {
             Issue.record("type_text is missing text or deleteCount schema")
@@ -408,10 +425,14 @@ struct ToolSyncTests {
         if let gesture = toolsByName["gesture"] {
             assertPropertySchemas(groupedCommands(under: "gesture").flatMap(\.parameters), match: gesture, enumPolicy: .exact)
         }
-        if let scroll = toolsByName["scroll"] {
-            assertPropertySchemas(([.scroll] + groupedCommands(under: "scroll")).flatMap(\.parameters), match: scroll, enumPolicy: .schemaMayBeSuperset)
+        if let scroll = toolsByName[TheFence.Command.scroll.rawValue] {
+            assertPropertySchemas(
+                ([.scroll] + groupedCommands(under: TheFence.Command.scroll.rawValue)).flatMap(\.parameters),
+                match: scroll,
+                enumPolicy: .schemaMayBeSuperset
+            )
         }
-        if let editAction = toolsByName["edit_action"] {
+        if let editAction = toolsByName[TheFence.Command.editAction.rawValue] {
             assertPropertySchemas(TheFence.Command.editAction.parameters, match: editAction, enumPolicy: .schemaMayBeSuperset)
         }
     }
@@ -542,7 +563,7 @@ struct ToolSyncTests {
 
     @Test("get_interface MCP schema does not advertise legacy full alias")
     func getInterfaceSchemaDoesNotAdvertiseLegacyFullAlias() {
-        guard let getInterface = ToolDefinitions.all.first(where: { $0.name == "get_interface" }) else {
+        guard let getInterface = ToolDefinitions.all.first(where: { $0.name == TheFence.Command.getInterface.rawValue }) else {
             Issue.record("get_interface tool missing")
             return
         }

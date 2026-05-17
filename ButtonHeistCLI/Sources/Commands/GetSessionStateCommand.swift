@@ -3,7 +3,7 @@ import ButtonHeist
 
 struct GetSessionStateCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "get_session_state",
+        commandName: TheFence.Command.getSessionState.rawValue,
         abstract: "Report the current connection + session state",
         discussion: """
             Returns connection status, connected device, recording state,

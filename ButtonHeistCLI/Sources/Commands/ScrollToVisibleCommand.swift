@@ -3,7 +3,7 @@ import ButtonHeist
 
 struct ScrollToVisibleCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "scroll_to_visible",
+        commandName: TheFence.Command.scrollToVisible.rawValue,
         abstract: "Scroll a known element into view",
         discussion: """
             Brings an element from the current hierarchy into view. \

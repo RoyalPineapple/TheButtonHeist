@@ -9,7 +9,7 @@ import ButtonHeist
 /// host:port is used directly.
 struct ConnectCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "connect",
+        commandName: TheFence.Command.connect.rawValue,
         abstract: "Connect to an iOS app with Button Heist enabled",
         discussion: """
             With no arguments, establishes the currently configured session. \

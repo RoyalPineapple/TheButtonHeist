@@ -4,7 +4,7 @@ import Foundation
 
 struct SessionLogCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "get_session_log",
+        commandName: TheFence.Command.getSessionLog.rawValue,
         abstract: "Show the current session manifest and stats"
     )
 

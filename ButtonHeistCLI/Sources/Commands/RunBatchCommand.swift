@@ -4,7 +4,7 @@ import Foundation
 
 struct RunBatchCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "run_batch",
+        commandName: TheFence.Command.runBatch.rawValue,
         abstract: "Execute a batch of Button Heist steps from a JSON payload",
         discussion: """
             Reads a steps array (`[{ "command": "activate", "heistId": "…" }, …]`)

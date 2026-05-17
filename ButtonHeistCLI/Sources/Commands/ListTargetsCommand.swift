@@ -3,7 +3,7 @@ import ButtonHeist
 
 struct ListTargetsCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "list_targets",
+        commandName: TheFence.Command.listTargets.rawValue,
         abstract: "List device targets defined in .buttonheist.json",
         discussion: """
             Returns every named target from the resolved .buttonheist.json

@@ -6,17 +6,17 @@ struct ToolRoutingTests {
 
     @Test("direct tools route to same command")
     func directToolRoutesToSameCommand() throws {
-        let request = try routed("start_heist", ["identifier": "demo"])
+        let request = try routed(TheFence.Command.startHeist.rawValue, ["identifier": "demo"])
 
-        #expect(request["command"] as? String == "start_heist")
+        #expect(request["command"] as? String == TheFence.Command.startHeist.rawValue)
         #expect(request["identifier"] as? String == "demo")
     }
 
     @Test("gesture type routes to command and removes type")
     func gestureTypeRoutesToCommand() throws {
-        let request = try routed("gesture", ["type": "swipe", "direction": "left"])
+        let request = try routed("gesture", ["type": TheFence.Command.swipe.rawValue, "direction": "left"])
 
-        #expect(request["command"] as? String == "swipe")
+        #expect(request["command"] as? String == TheFence.Command.swipe.rawValue)
         #expect(request["type"] == nil)
         #expect(request["direction"] as? String == "left")
     }
@@ -35,11 +35,11 @@ struct ToolRoutingTests {
     @Test("scroll modes route to concrete commands")
     func scrollModesRouteToConcreteCommands() throws {
         let cases: [(mode: String?, command: String)] = [
-            (nil, "scroll"),
-            ("page", "scroll"),
-            ("to_visible", "scroll_to_visible"),
-            ("search", "element_search"),
-            ("to_edge", "scroll_to_edge"),
+            (nil, TheFence.Command.scroll.rawValue),
+            (ScrollMode.page.rawValue, TheFence.Command.scroll.rawValue),
+            (ScrollMode.toVisible.rawValue, TheFence.Command.scrollToVisible.rawValue),
+            (ScrollMode.search.rawValue, TheFence.Command.elementSearch.rawValue),
+            (ScrollMode.toEdge.rawValue, TheFence.Command.scrollToEdge.rawValue),
         ]
 
         for routeCase in cases {
@@ -47,7 +47,7 @@ struct ToolRoutingTests {
             if let mode = routeCase.mode {
                 arguments["mode"] = mode
             }
-            let request = try routed("scroll", arguments)
+            let request = try routed(TheFence.Command.scroll.rawValue, arguments)
 
             #expect(request["command"] as? String == routeCase.command)
             #expect(request["mode"] == nil)
@@ -58,7 +58,7 @@ struct ToolRoutingTests {
     @Test("scroll rejects unknown mode")
     func scrollRejectsUnknownMode() {
         let result = ButtonHeistMCPServer.routeToolRequest(
-            name: "scroll",
+            name: TheFence.Command.scroll.rawValue,
             arguments: ["mode": "sideways"]
         )
 
@@ -71,51 +71,51 @@ struct ToolRoutingTests {
 
     @Test("edit_action dismiss routes to dismiss_keyboard")
     func editActionDismissRoutesToDismissKeyboard() throws {
-        let request = try routed("edit_action", ["action": "dismiss"])
+        let request = try routed(TheFence.Command.editAction.rawValue, ["action": "dismiss"])
 
-        #expect(request["command"] as? String == "dismiss_keyboard")
+        #expect(request["command"] as? String == TheFence.Command.dismissKeyboard.rawValue)
         #expect(request["action"] == nil)
     }
 
     @Test("edit_action keeps standard edit actions")
     func editActionKeepsStandardEditActions() throws {
-        let request = try routed("edit_action", ["action": "copy"])
+        let request = try routed(TheFence.Command.editAction.rawValue, ["action": "copy"])
 
-        #expect(request["command"] as? String == "edit_action")
+        #expect(request["command"] as? String == TheFence.Command.editAction.rawValue)
         #expect(request["action"] as? String == "copy")
     }
 
     @Test("run_batch routes nested MCP tool shapes")
     func runBatchRoutesNestedMCPToolShapes() throws {
         let steps = try normalizeBatchSteps([
-            ["command": "gesture", "type": "swipe", "direction": "left"],
-            ["command": "scroll", "mode": "search", "label": "Done"],
-            ["command": "edit_action", "action": "dismiss"],
+            ["command": "gesture", "type": TheFence.Command.swipe.rawValue, "direction": "left"],
+            ["command": TheFence.Command.scroll.rawValue, "mode": ScrollMode.search.rawValue, "label": "Done"],
+            ["command": TheFence.Command.editAction.rawValue, "action": "dismiss"],
         ])
 
-        #expect(steps[0]["command"] as? String == "swipe")
+        #expect(steps[0]["command"] as? String == TheFence.Command.swipe.rawValue)
         #expect(steps[0]["type"] == nil)
         #expect(steps[0]["direction"] as? String == "left")
-        #expect(steps[1]["command"] as? String == "element_search")
+        #expect(steps[1]["command"] as? String == TheFence.Command.elementSearch.rawValue)
         #expect(steps[1]["mode"] == nil)
         #expect(steps[1]["label"] as? String == "Done")
-        #expect(steps[2]["command"] as? String == "dismiss_keyboard")
+        #expect(steps[2]["command"] as? String == TheFence.Command.dismissKeyboard.rawValue)
         #expect(steps[2]["action"] == nil)
     }
 
     @Test("run_batch still accepts raw Fence command shapes")
     func runBatchAcceptsRawFenceCommandShapes() throws {
         let steps = try normalizeBatchSteps([
-            ["command": "swipe", "direction": "right"],
-            ["command": "scroll_to_visible", "heistId": "element-1"],
-            ["command": "dismiss_keyboard"],
+            ["command": TheFence.Command.swipe.rawValue, "direction": "right"],
+            ["command": TheFence.Command.scrollToVisible.rawValue, "heistId": "element-1"],
+            ["command": TheFence.Command.dismissKeyboard.rawValue],
         ])
 
-        #expect(steps[0]["command"] as? String == "swipe")
+        #expect(steps[0]["command"] as? String == TheFence.Command.swipe.rawValue)
         #expect(steps[0]["direction"] as? String == "right")
-        #expect(steps[1]["command"] as? String == "scroll_to_visible")
+        #expect(steps[1]["command"] as? String == TheFence.Command.scrollToVisible.rawValue)
         #expect(steps[1]["heistId"] as? String == "element-1")
-        #expect(steps[2]["command"] as? String == "dismiss_keyboard")
+        #expect(steps[2]["command"] as? String == TheFence.Command.dismissKeyboard.rawValue)
     }
 
     @Test("batch step normalization reports nested routing errors")
@@ -133,24 +133,24 @@ struct ToolRoutingTests {
     func topLevelRawGroupedCommandsReportCanonicalGroupedToolShape() {
         let cases: [(toolName: String, message: String)] = [
             (
-                "swipe",
-                "Tool \"swipe\" is grouped under \"gesture\"; call gesture with type=\"swipe\"."
+                TheFence.Command.swipe.rawValue,
+                "Tool \"\(TheFence.Command.swipe.rawValue)\" is grouped under \"gesture\"; call gesture with type=\"\(TheFence.Command.swipe.rawValue)\"."
             ),
             (
-                "scroll_to_visible",
-                "Tool \"scroll_to_visible\" is grouped under \"scroll\"; call scroll with mode=\"to_visible\"."
+                TheFence.Command.scrollToVisible.rawValue,
+                "Tool \"\(TheFence.Command.scrollToVisible.rawValue)\" is grouped under \"\(TheFence.Command.scroll.rawValue)\"; call \(TheFence.Command.scroll.rawValue) with mode=\"\(ScrollMode.toVisible.rawValue)\"."
             ),
             (
-                "element_search",
-                "Tool \"element_search\" is grouped under \"scroll\"; call scroll with mode=\"search\"."
+                TheFence.Command.elementSearch.rawValue,
+                "Tool \"\(TheFence.Command.elementSearch.rawValue)\" is grouped under \"\(TheFence.Command.scroll.rawValue)\"; call \(TheFence.Command.scroll.rawValue) with mode=\"\(ScrollMode.search.rawValue)\"."
             ),
             (
-                "scroll_to_edge",
-                "Tool \"scroll_to_edge\" is grouped under \"scroll\"; call scroll with mode=\"to_edge\"."
+                TheFence.Command.scrollToEdge.rawValue,
+                "Tool \"\(TheFence.Command.scrollToEdge.rawValue)\" is grouped under \"\(TheFence.Command.scroll.rawValue)\"; call \(TheFence.Command.scroll.rawValue) with mode=\"\(ScrollMode.toEdge.rawValue)\"."
             ),
             (
-                "dismiss_keyboard",
-                "Tool \"dismiss_keyboard\" is grouped under \"edit_action\"; call edit_action with action=\"dismiss\"."
+                TheFence.Command.dismissKeyboard.rawValue,
+                "Tool \"\(TheFence.Command.dismissKeyboard.rawValue)\" is grouped under \"\(TheFence.Command.editAction.rawValue)\"; call \(TheFence.Command.editAction.rawValue) with action=\"dismiss\"."
             ),
         ]
 
@@ -167,23 +167,23 @@ struct ToolRoutingTests {
     @Test("raw grouped commands stay accepted in batch")
     func rawGroupedCommandsStayAcceptedInBatch() throws {
         let steps = try normalizeBatchSteps([
-            ["command": "swipe", "direction": "up"],
-            ["command": "scroll_to_visible", "heistId": "element-1"],
-            ["command": "element_search", "label": "Done"],
-            ["command": "scroll_to_edge", "heistId": "scroll-view", "edge": "bottom"],
-            ["command": "dismiss_keyboard"],
+            ["command": TheFence.Command.swipe.rawValue, "direction": "up"],
+            ["command": TheFence.Command.scrollToVisible.rawValue, "heistId": "element-1"],
+            ["command": TheFence.Command.elementSearch.rawValue, "label": "Done"],
+            ["command": TheFence.Command.scrollToEdge.rawValue, "heistId": "scroll-view", "edge": "bottom"],
+            ["command": TheFence.Command.dismissKeyboard.rawValue],
         ])
 
-        #expect(steps[0]["command"] as? String == "swipe")
+        #expect(steps[0]["command"] as? String == TheFence.Command.swipe.rawValue)
         #expect(steps[0]["direction"] as? String == "up")
-        #expect(steps[1]["command"] as? String == "scroll_to_visible")
+        #expect(steps[1]["command"] as? String == TheFence.Command.scrollToVisible.rawValue)
         #expect(steps[1]["heistId"] as? String == "element-1")
-        #expect(steps[2]["command"] as? String == "element_search")
+        #expect(steps[2]["command"] as? String == TheFence.Command.elementSearch.rawValue)
         #expect(steps[2]["label"] as? String == "Done")
-        #expect(steps[3]["command"] as? String == "scroll_to_edge")
+        #expect(steps[3]["command"] as? String == TheFence.Command.scrollToEdge.rawValue)
         #expect(steps[3]["heistId"] as? String == "scroll-view")
         #expect(steps[3]["edge"] as? String == "bottom")
-        #expect(steps[4]["command"] as? String == "dismiss_keyboard")
+        #expect(steps[4]["command"] as? String == TheFence.Command.dismissKeyboard.rawValue)
     }
 
     @Test("all registered tools route through the catalog")
@@ -234,11 +234,11 @@ struct ToolRoutingTests {
     private func minimalArguments(for toolName: String) -> [String: Any] {
         switch toolName {
         case "gesture":
-            return ["type": "swipe"]
-        case "edit_action":
+            return ["type": TheFence.Command.swipe.rawValue]
+        case TheFence.Command.editAction.rawValue:
             return ["action": "copy"]
-        case "run_batch":
-            return ["steps": [["command": "get_session_state"]]]
+        case TheFence.Command.runBatch.rawValue:
+            return ["steps": [["command": TheFence.Command.getSessionState.rawValue]]]
         default:
             return [:]
         }

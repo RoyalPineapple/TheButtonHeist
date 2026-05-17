@@ -3,7 +3,7 @@ import ButtonHeist
 
 struct GetPasteboardCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "get_pasteboard",
+        commandName: TheFence.Command.getPasteboard.rawValue,
         abstract: "Read text from the general pasteboard",
         discussion: """
             Read text from the device's general pasteboard.

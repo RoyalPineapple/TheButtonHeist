@@ -9,7 +9,7 @@ enum CLIGetInterfaceScope: String, ExpressibleByArgument, CaseIterable {
 
 struct GetInterfaceCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "get_interface",
+        commandName: TheFence.Command.getInterface.rawValue,
         abstract: "Get the current UI element hierarchy from the connected device"
     )
 

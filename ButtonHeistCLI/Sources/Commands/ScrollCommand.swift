@@ -3,7 +3,7 @@ import ButtonHeist
 
 struct ScrollCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "scroll",
+        commandName: TheFence.Command.scroll.rawValue,
         abstract: "Scroll a scroll view by one page",
         discussion: """
             Scrolls the nearest scroll view ancestor of a target element by

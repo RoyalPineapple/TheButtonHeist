@@ -196,11 +196,11 @@ import AccessibilitySnapshotParser
         let element = screenElement.element
         let isInteractive = TheStash.Interactivity.isInteractive(element: element, object: screenElement.object)
         if isInteractive {
-            names.append("activate")
+            names.append(ElementAction.activate.description)
         }
         if isInteractive, element.traits.contains(.adjustable) {
-            names.append("increment")
-            names.append("decrement")
+            names.append(ElementAction.increment.description)
+            names.append(ElementAction.decrement.description)
         }
         appendUnique(element.customActions.map(\.name).filter { !$0.isEmpty }, to: &names)
         let liveNames = screenElement.object?.accessibilityCustomActions?

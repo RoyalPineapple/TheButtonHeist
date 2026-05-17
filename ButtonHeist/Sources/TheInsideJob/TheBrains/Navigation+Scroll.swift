@@ -76,10 +76,10 @@ extension Navigation {
             switch reason {
             case .noScrollView:
                 return "scroll target failed: observed \(element) with no live scrollable ancestor; "
-                    + "try element_search or target an element inside a scroll container"
+                    + "try \(ScrollMode.search.canonicalCommand) or target an element inside a scroll container"
             case .unsafeProgrammaticScroll:
                 return "scroll target failed: observed \(element) inside a scroll view that is unsafe "
-                    + "for programmatic scrolling; try element_search to use semantic search"
+                    + "for programmatic scrolling; try \(ScrollMode.search.canonicalCommand) to use semantic search"
             case .axisMismatch(let required, let available):
                 return "scroll target failed: observed \(element) inside a scroll view that supports "
                     + "\(Self.axisDescription(available)); expected \(Self.axisDescription(required)); "
@@ -319,7 +319,7 @@ extension Navigation {
             return .failure(.scroll, message: "Element target required for scroll")
         }
         guard let resolved = stash.resolveVisibleTarget(elementTarget).resolved else {
-            return liveScrollElementFailure(elementTarget, method: .scroll, commandName: "scroll")
+            return liveScrollElementFailure(elementTarget, method: .scroll, commandName: ScrollMode.page.canonicalCommand)
         }
         let axis = Self.requiredAxis(for: target.direction)
         switch resolveScrollTargetResult(
@@ -342,10 +342,10 @@ extension Navigation {
 
     func executeScrollToEdge(_ target: ScrollToEdgeTarget) async -> TheSafecracker.InteractionResult {
         guard let elementTarget = target.elementTarget else {
-            return .failure(.scrollToEdge, message: "Element target required for scroll_to_edge")
+            return .failure(.scrollToEdge, message: "Element target required for \(ScrollMode.toEdge.canonicalCommand)")
         }
         guard let resolved = stash.resolveVisibleTarget(elementTarget).resolved else {
-            return liveScrollElementFailure(elementTarget, method: .scrollToEdge, commandName: "scroll_to_edge")
+            return liveScrollElementFailure(elementTarget, method: .scrollToEdge, commandName: ScrollMode.toEdge.canonicalCommand)
         }
         let axis = Self.requiredAxis(for: target.edge)
         switch resolveScrollTargetResult(
@@ -356,7 +356,7 @@ extension Navigation {
 
             return TheSafecracker.InteractionResult(
                 success: moved, method: .scrollToEdge,
-                message: moved ? nil : "scroll_to_edge failed: observed target already at requested edge",
+                message: moved ? nil : "\(ScrollMode.toEdge.canonicalCommand) failed: observed target already at requested edge",
                 value: nil
             )
         case .failed(let diagnostic):
@@ -384,7 +384,7 @@ extension Navigation {
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
         guard let elementTarget = target.elementTarget else {
-            return .failure(.scrollToVisible, message: "Element target required for scroll_to_visible")
+            return .failure(.scrollToVisible, message: "Element target required for \(ScrollMode.toVisible.canonicalCommand)")
         }
 
         stash.refresh()
@@ -435,7 +435,7 @@ extension Navigation {
     /// Used when the element has never been seen (not in the current screen).
     func executeElementSearch(_ target: ElementSearchTarget) async -> TheSafecracker.InteractionResult {
         guard let searchTarget = target.elementTarget else {
-            return .failure(.elementSearch, message: "Element target required for element_search")
+            return .failure(.elementSearch, message: "Element target required for \(ScrollMode.search.canonicalCommand)")
         }
         let searchDirection = target.resolvedDirection
 
@@ -756,19 +756,19 @@ extension Navigation {
     private func scrollToVisibleKnownTargetFailureMessage(_ entry: Screen.ScreenElement) -> String {
         let description = Self.describeScrollTarget(entry)
         if entry.contentSpaceOrigin == nil {
-            return "scroll_to_visible failed: known target \(description) has no recorded scroll position; "
-                + "use element_search to find it by scrolling"
+            return "\(ScrollMode.toVisible.canonicalCommand) failed: known target \(description) has no recorded scroll position; "
+                + "use \(ScrollMode.search.canonicalCommand) to find it by scrolling"
         }
         guard let scrollView = entry.scrollView else {
-            return "scroll_to_visible failed: known target \(description) has no live scrollable ancestor; "
-                + "use element_search to find it by scrolling"
+            return "\(ScrollMode.toVisible.canonicalCommand) failed: known target \(description) has no live scrollable ancestor; "
+                + "use \(ScrollMode.search.canonicalCommand) to find it by scrolling"
         }
         if scrollView.bhIsUnsafeForProgrammaticScrolling {
-            return "scroll_to_visible failed: known target \(description) is inside a scroll view that is "
-                + "unsafe for programmatic scrolling; use element_search to use semantic search"
+            return "\(ScrollMode.toVisible.canonicalCommand) failed: known target \(description) is inside a scroll view that is "
+                + "unsafe for programmatic scrolling; use \(ScrollMode.search.canonicalCommand) to use semantic search"
         }
-        return "scroll_to_visible failed: known target \(description) could not be moved to its recorded position; "
-            + "use element_search to find it by scrolling"
+        return "\(ScrollMode.toVisible.canonicalCommand) failed: known target \(description) could not be moved to its recorded position; "
+            + "use \(ScrollMode.search.canonicalCommand) to find it by scrolling"
     }
 
     /// Scroll either reveals the requested target or returns a reason it cannot.
@@ -782,13 +782,13 @@ extension Navigation {
             return .failure(
                 method,
                 message: "\(commandName) failed: target is known but not currently visible; "
-                    + "use scroll_to_visible to reveal it, then retry \(commandName)."
+                    + "use \(ScrollMode.toVisible.canonicalCommand) to reveal it, then retry \(commandName)."
             )
         case .ambiguous(_, let diagnostics):
             return .failure(
                 method,
                 message: "\(commandName) failed: target is not uniquely resolved in the visible hierarchy; "
-                    + "\(diagnostics)\nNext: use scroll_to_visible with a heistId for a known off-screen "
+                    + "\(diagnostics)\nNext: use \(ScrollMode.toVisible.canonicalCommand) with a heistId for a known off-screen "
                     + "target, or retarget a visible element from get_interface(scope: \"visible\")."
             )
         case .notFound(let diagnostics):

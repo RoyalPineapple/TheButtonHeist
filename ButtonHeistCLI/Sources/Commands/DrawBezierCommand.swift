@@ -4,7 +4,7 @@ import Foundation
 
 struct DrawBezierCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "draw_bezier",
+        commandName: TheFence.Command.drawBezier.rawValue,
         abstract: "Trace cubic bezier segments sampled to a polyline",
         discussion: """
             Reads a segment array (`[{ "cp1X": …, "cp1Y": …, "cp2X": …, "cp2Y": …,
