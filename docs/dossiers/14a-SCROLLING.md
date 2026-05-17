@@ -36,7 +36,7 @@ A `ScrollableTarget` enum wraps a discovered scrollable container with two tiers
 
 For `scroll` and `scroll_to_edge`, `resolveScrollTarget` returns the element's stored `screenElement.scrollView` from the accessibility hierarchy only when it can scroll on the requested axis. If the owned scroll view cannot reveal that axis, resolution returns nil instead of falling back to an unrelated container.
 
-For `element_search`, `adaptDirection` maps the caller's direction hint to each container's natural axis: "down" means "forward" — forward in a vertical = `.down`, forward in a horizontal = `.right`. This lets the search iterate every scroll view regardless of axis.
+For `element_search`, the caller's direction names the required axis. "down" and "up" search vertical containers only; "left" and "right" search horizontal containers only. Containers that cannot satisfy the requested axis are skipped instead of being remapped to their natural axis.
 
 Doctrine: direct scroll commands move only the resolved element's stored scroll view, and only on an axis that can reveal it; global scroll-container scanning belongs to `element_search`.
 
@@ -46,7 +46,7 @@ Doctrine: direct scroll commands move only the resolved element's stored scroll 
 
 Humans watching an agent interact with a simulator need to see every action happen on screen. Without auto-scroll, an agent can tap, type into, or swipe an element that's scrolled out of the viewport — the action succeeds but the observer sees nothing happen.
 
-The check runs inside TheStash before every interaction (via `ensureOnScreen(for:)`). The agent has no knowledge of it, sends no extra parameters, and receives no indication it happened. From the agent's perspective the command just works. From the human's perspective the screen scrolls to the element and then the action occurs.
+The check runs in `Navigation.ensureOnScreen(for:)` before every targeted interaction. The operation gets an explicit positioning result; action callers must consume failures before dispatching. When positioning succeeds, the human sees the screen scroll to the element and then the action occurs. When positioning fails, the command fails before tapping, typing, or invoking accessibility actions.
 
 ### What it checks
 
@@ -64,10 +64,11 @@ It only cares whether the element's frame is geometrically within the screen rec
 
 A sequential coarse-then-fine flow:
 
-**Step 1 — Coarse jump (off-screen heistId only).** If the target is a `.heistId` that resolves into `currentScreen.elements` (e.g. unioned in during a prior exploration cycle) but is not in the latest interaction snapshot, and the stored `ScreenElement` carries both a `contentSpaceOrigin` and a live `scrollView`:
+**Step 1 — Coarse jump (known off-screen target only).** If the target resolves into the current or operation-local preserved screen snapshot but is not in the latest interaction snapshot, and the stored `ScreenElement` carries both a `contentSpaceOrigin` and a live `scrollView`:
 
 1. Calls `stash.jumpToRecordedPosition(_:)` — the stash internally computes the clamped, centered content offset via `TheStash.scrollTargetOffset(for:in:)` and sets it on the owning scroll view. Returns the previous offset so callers can revert.
-2. Waits for settle via `yieldFrames(3)`, then `stash.refresh()` (commits a fresh `currentScreen` value)
+2. Waits for settle via `yieldRealFrames(20)`, then `stash.refresh()` (commits a fresh `currentScreen` value)
+3. Requires the target to resolve visibly after the jump; if it does not, `ensureOnScreen` returns a named failure and the action does not dispatch.
 
 **Step 2 — Fine-tune (any target).** Asks the stash for live geometry via `stash.liveGeometry(for:)`, which promotes the weak NSObject ref to strong internally and returns a value-typed `(frame, activationPoint, scrollView)` snapshot:
 
@@ -84,12 +85,14 @@ flowchart TD
     HasTarget -->|yes| Coarse{"heistId off-screen<br/>+ contentSpaceOrigin<br/>+ scrollView alive?"}
 
     Coarse -->|yes| Jump["stash.jumpToRecordedPosition(_:)<br/>→ setContentOffset (centered, clamped)"]
-    Jump --> Settle1["yieldFrames(3) + refresh()"]
-    Settle1 --> Fine
+    Jump --> Settle1["yieldRealFrames(20) + refresh()"]
+    Settle1 --> LiveAfterJump{"target visible<br/>after jump?"}
+    LiveAfterJump -->|no| Fail["Return ensure_on_screen failure"]
+    LiveAfterJump -->|yes| Fine
 
     Coarse -->|no| Fine["resolveTarget(target)"]
     Fine --> Resolved{live object<br/>resolved?}
-    Resolved -->|no| Execute
+    Resolved -->|no| Fail
     Resolved -->|yes| Frame["Read object.accessibilityFrame"]
     Frame --> Valid{non-null,<br/>non-empty?}
     Valid -->|no| Execute
@@ -98,7 +101,7 @@ flowchart TD
 
     OnScreen -->|no| Walk["screenElement.scrollView"]
     Walk --> ScrollView{found UIScrollView?}
-    ScrollView -->|no| Execute
+    ScrollView -->|no| Fail
     ScrollView -->|yes| Scroll["scrollToMakeVisible()<br/>minimum contentOffset adjustment"]
     Scroll --> Settle2["yieldFrames(3)"]
     Settle2 --> Refresh["refresh()"]
@@ -116,9 +119,9 @@ Two public methods resolve their target, then delegate to a shared private imple
 | `ensureOnScreen(for: ElementTarget)` (on `Navigation`) | `stash.resolveTarget` → `currentScreen.elements` | activate, increment, decrement, customAction, tap, longPress, swipe, drag, pinch, rotate, twoFingerTap, typeText |
 | `ensureFirstResponderOnScreen()` (on `Navigation`) | `tripwire.currentFirstResponder()` responder chain walk | editAction, setPasteboard, getPasteboard, resignFirstResponder |
 
-### Best-effort guarantee
+### Failure guarantee
 
-The auto-scroll never blocks or fails the command. If anything goes wrong — element can't be resolved, no scrollable ancestor, frame is null, tripwire is nil — the interaction proceeds at the current position.
+Targeted actions consume the `ensureOnScreen` result before dispatch. If the target is known only off-screen without a usable recorded position, cannot be recovered from the operation-local snapshot, or cannot be scrolled into a usable visible position, the action fails before dispatching. Untargeted coordinate gestures still dispatch unchanged.
 
 ## Explicit Scroll Commands
 
@@ -158,7 +161,7 @@ Searches for an element by scrolling through scrollable containers discovered fr
 **Algorithm:**
 
 1. **Pre-check.** Refresh and check if element is already visible via `resolveFirstMatch`.
-2. **Scroll loop.** `findScrollTarget(excluding: exhausted)` walks the hierarchy tree and returns the first non-exhausted scrollable container. `adaptDirection` maps the caller's direction to the container's natural axis. `scrollOnePageAndSettle` scrolls it and settles (yield + refresh in one call). After each scroll, check for match. If found, `fineTuneAndResolve` runs `ensureOnScreenSync` + yield + refresh + re-resolve to get fresh coordinates. If no new elements appeared, mark the container exhausted.
+2. **Scroll loop.** `findScrollTarget(requiredAxis:excluding:)` walks the hierarchy tree and returns the first non-exhausted scrollable container that supports the requested axis. `ScrollPlan.movement(for:)` returns nil for axis mismatches instead of remapping direction. `scrollOnePageAndSettle` scrolls it and settles (yield + refresh in one call). After each scroll, check for match. If found, `fineTuneAndResolve` runs `ensureOnScreenSync` + yield + refresh + re-resolve to get fresh coordinates. If no new elements appeared, mark the container exhausted.
 
 ```mermaid
 flowchart TD
@@ -167,10 +170,10 @@ flowchart TD
     CHK -->|Yes| DONE["Return success<br/>(scrollCount: 0)"]
     CHK -->|No| LOOP["while containers remain"]
 
-    LOOP --> FIND["findScrollTarget(excluding: exhausted)<br/>(reducedHierarchy, outermost first)"]
+    LOOP --> FIND["findScrollTarget(requiredAxis, excluding: exhausted)<br/>(reducedHierarchy, outermost first)"]
     FIND --> SVOK{Found<br/>container?}
     SVOK -->|No| FAILN["Return failure:<br/>'not found after N scrolls'"]
-    SVOK -->|Yes| ADAPT["adaptDirection(searchDir, for: target)<br/>down→right for horizontal containers"]
+    SVOK -->|Yes| ADAPT["movement(for: searchDir)<br/>nil on axis mismatch"]
 
     ADAPT --> SCROLL["scrollOnePageAndSettle(target, direction)<br/>UIScrollView / swipe + yield + refresh"]
     SCROLL --> MOVED{moved?}
