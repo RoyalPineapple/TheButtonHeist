@@ -142,35 +142,6 @@ public extension AccessibilityTrace.Delta {
     }
 }
 
-public extension AccessibilityTrace {
-    /// Delta projected from the first and final capture in this trace.
-    ///
-    /// Captures are the durable source of truth; compatibility surfaces that
-    /// still expose `Delta` should derive it from these endpoints instead of
-    /// carrying independently accumulated delta state.
-    var captureEndpointDelta: AccessibilityTrace.Delta? {
-        guard let first = captures.first, let last = captures.last else { return nil }
-        return .between(first, last)
-    }
-
-    /// Delta projected from capture receipts when there is a meaningful
-    /// compatibility event to expose. Identical endpoint captures without
-    /// transient evidence return nil for legacy background-delta queues.
-    var captureReceiptDelta: AccessibilityTrace.Delta? {
-        guard let delta = captureEndpointDelta else { return nil }
-        return Self.meaningfulCaptureDelta(delta)
-    }
-
-    private static func meaningfulCaptureDelta(_ delta: AccessibilityTrace.Delta) -> AccessibilityTrace.Delta? {
-        switch delta {
-        case .noChange(let payload) where payload.transient.isEmpty:
-            return nil
-        case .noChange, .elementsChanged, .screenChanged:
-            return delta
-        }
-    }
-}
-
 private func singleElementInterface(_ element: HeistElement) -> Interface {
     Interface(timestamp: stableDiffTimestamp, tree: [.element(element)])
 }

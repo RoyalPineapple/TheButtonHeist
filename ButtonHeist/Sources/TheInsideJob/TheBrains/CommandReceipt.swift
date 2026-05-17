@@ -121,5 +121,12 @@ struct SettleReceipt {
     var accessibilityDelta: AccessibilityTrace.Delta? { accessibilityTrace.captureEndpointDelta }
 }
 
+private extension AccessibilityTrace {
+    var captureEndpointDelta: AccessibilityTrace.Delta? {
+        guard let first = captures.first, let last = captures.last else { return nil }
+        return .between(first, last)
+    }
+}
+
 #endif // DEBUG
 #endif // canImport(UIKit)

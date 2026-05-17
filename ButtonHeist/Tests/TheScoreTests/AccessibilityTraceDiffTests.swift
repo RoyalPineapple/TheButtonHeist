@@ -88,47 +88,6 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         try assertDeltaDerivesFromCaptureEdge(delta, trace: trace)
     }
 
-    func testTraceEndpointDeltaDerivesFromCaptureEndpoints() {
-        let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu"))
-        let middle = AccessibilityTrace.Capture(
-            sequence: 2,
-            interface: makeInterface(label: "Loading"),
-            parentHash: before.hash
-        )
-        let after = AccessibilityTrace.Capture(
-            sequence: 3,
-            interface: makeInterface(label: "Checkout"),
-            parentHash: middle.hash
-        )
-        let trace = AccessibilityTrace(captures: [before, middle, after])
-
-        XCTAssertEqual(
-            trace.captureEndpointDelta,
-            AccessibilityTrace.Delta.between(trace.captures[0], trace.captures[2])
-        )
-    }
-
-    func testTraceReceiptDeltaOmitsPlainNoChangeButKeepsTransientNoChange() {
-        let transient = makeElement(heistId: "spinner", label: "Loading", traits: [.staticText])
-        let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface())
-        let unchanged = AccessibilityTrace(captures: [
-            before,
-            AccessibilityTrace.Capture(sequence: 2, interface: makeInterface(), parentHash: before.hash),
-        ])
-        let transientTrace = AccessibilityTrace(captures: [
-            before,
-            AccessibilityTrace.Capture(
-                sequence: 2,
-                interface: makeInterface(),
-                parentHash: before.hash,
-                transition: AccessibilityTrace.Transition(transient: [transient])
-            ),
-        ])
-
-        XCTAssertNil(unchanged.captureReceiptDelta)
-        XCTAssertEqual(transientTrace.captureReceiptDelta?.transient, [transient])
-    }
-
     func testCaptureBackedScreenChangedDeltaCarriesSourceEdgeAndDerivesFromTransition() throws {
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu"))
         let after = AccessibilityTrace.Capture(
