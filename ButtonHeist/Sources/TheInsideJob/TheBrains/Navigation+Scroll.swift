@@ -275,10 +275,8 @@ extension Navigation {
         guard let elementTarget = target.elementTarget else {
             return .failure(.scroll, message: "Element target required for scroll")
         }
-        await ensureOnScreen(for: elementTarget)
-        let resolution = stash.resolveTarget(elementTarget)
-        guard let resolved = resolution.resolved else {
-            return .failure(.elementNotFound, message: resolution.diagnostics)
+        guard let resolved = stash.resolveVisibleTarget(elementTarget).resolved else {
+            return liveScrollElementFailure(elementTarget, method: .scroll, commandName: "scroll")
         }
         let axis = Self.requiredAxis(for: target.direction)
         switch resolveScrollTargetResult(
@@ -303,10 +301,8 @@ extension Navigation {
         guard let elementTarget = target.elementTarget else {
             return .failure(.scrollToEdge, message: "Element target required for scroll_to_edge")
         }
-        await ensureOnScreen(for: elementTarget)
-        let resolution = stash.resolveTarget(elementTarget)
-        guard let resolved = resolution.resolved else {
-            return .failure(.elementNotFound, message: resolution.diagnostics)
+        guard let resolved = stash.resolveVisibleTarget(elementTarget).resolved else {
+            return liveScrollElementFailure(elementTarget, method: .scrollToEdge, commandName: "scroll_to_edge")
         }
         let axis = Self.requiredAxis(for: target.edge)
         switch resolveScrollTargetResult(
@@ -394,10 +390,7 @@ extension Navigation {
 
     /// Iterative search: page through scroll content looking for an element.
     /// Used when the element has never been seen (not in the current screen).
-    func executeElementSearch(
-        _ target: ElementSearchTarget,
-        recordedScreen: Screen? = nil
-    ) async -> TheSafecracker.InteractionResult {
+    func executeElementSearch(_ target: ElementSearchTarget) async -> TheSafecracker.InteractionResult {
         guard let searchTarget = target.elementTarget else {
             return .failure(.elementSearch, message: "Element target required for element_search")
         }
@@ -413,41 +406,12 @@ extension Navigation {
         )
 
         // Check if already visible before searching
-        if let found = stash.resolveFirstMatch(searchTarget) {
+        if let found = stash.resolveFirstVisibleMatch(searchTarget) {
             // Element search succeeds once resolved; comfort-zone nudging is best-effort.
             _ = ensureOnScreenSync(found)
             return searchFoundResult(
                 found, scrollCount: 0,
                 uniqueElementsSeen: progress.uniqueElementsSeen
-            )
-        }
-
-        // If we have a recorded position, try the one-shot path first
-        if let entry = knownOffscreenEntry(for: searchTarget, in: recordedScreen),
-           let savedOffset = stash.jumpToRecordedPosition(entry) {
-            await tripwire.yieldRealFrames(Self.postJumpRealFrames)
-            refresh()
-            progress.recordVisibleHeistIds(stash.visibleIds)
-            refreshScrollSearchCandidates(
-                preferredAxis: requestedAxis,
-                candidates: &candidates,
-                progress: &progress
-            )
-            if let found = stash.resolveFirstMatch(searchTarget),
-               let result = await searchFineTuneAndResolve(
-                    found, searchTarget: searchTarget,
-                    scrollCount: 1, progress: &progress
-               ) {
-                return result
-            }
-            stash.restoreScrollPosition(entry, to: savedOffset)
-            await tripwire.yieldRealFrames(Self.postJumpRealFrames)
-            refresh()
-            progress.recordVisibleHeistIds(stash.visibleIds)
-            refreshScrollSearchCandidates(
-                preferredAxis: requestedAxis,
-                candidates: &candidates,
-                progress: &progress
             )
         }
 
@@ -482,7 +446,7 @@ extension Navigation {
                 candidates: &candidates,
                 progress: &progress
             )
-            if let found = stash.resolveFirstMatch(searchTarget) {
+            if let found = stash.resolveFirstVisibleMatch(searchTarget) {
                 if let result = await searchFineTuneAndResolve(
                     found, searchTarget: searchTarget,
                     scrollCount: progress.scrollCount, progress: &progress
@@ -512,7 +476,7 @@ extension Navigation {
         await tripwire.yieldRealFrames(Self.postJumpRealFrames)
         stash.refresh()
         progress.recordVisibleHeistIds(stash.visibleIds)
-        guard let fresh = stash.resolveFirstMatch(searchTarget) else { return nil }
+        guard let fresh = stash.resolveFirstVisibleMatch(searchTarget) else { return nil }
         return searchFoundResult(
             fresh, scrollCount: scrollCount,
             uniqueElementsSeen: progress.uniqueElementsSeen
@@ -763,6 +727,31 @@ extension Navigation {
         }
         return "scroll_to_visible failed: known target \(description) could not be moved to its recorded position; "
             + "use element_search to find it by scrolling"
+    }
+
+    /// Scroll either reveals the requested target or returns a reason it cannot.
+    private func liveScrollElementFailure(
+        _ target: ElementTarget,
+        method: ActionMethod,
+        commandName: String
+    ) -> TheSafecracker.InteractionResult {
+        switch stash.resolveTarget(target) {
+        case .resolved:
+            return .failure(
+                method,
+                message: "\(commandName) failed: target is known but not currently visible; "
+                    + "use scroll_to_visible to reveal it, then retry \(commandName)."
+            )
+        case .ambiguous(_, let diagnostics):
+            return .failure(
+                method,
+                message: "\(commandName) failed: target is not uniquely resolved in the visible hierarchy; "
+                    + "\(diagnostics)\nNext: use scroll_to_visible with a heistId for a known off-screen "
+                    + "target, or retarget a visible element from get_interface(scope: \"visible\")."
+            )
+        case .notFound(let diagnostics):
+            return .failure(.elementNotFound, message: diagnostics)
+        }
     }
 
     nonisolated private static func describeScrollTarget(_ screenElement: TheStash.ScreenElement) -> String {

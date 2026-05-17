@@ -104,13 +104,11 @@ extension TheBrains {
         target: ElementSearchTarget,
         command: ClientMessage
     ) async -> ActionResult {
-        let screenBeforeRefresh = stash.currentScreen
         guard refresh() != nil else {
             return treeUnavailableResult(method: Self.diagnosticMethod(for: command))
         }
-        let recordedScreen = recordedScreenIfFreshParseStillMatches(screenBeforeRefresh)
         let before = captureBeforeState()
-        let result = await navigation.executeElementSearch(target, recordedScreen: recordedScreen)
+        let result = await navigation.executeElementSearch(target)
 
         var enriched = await actionResultWithDelta(
             success: result.success,

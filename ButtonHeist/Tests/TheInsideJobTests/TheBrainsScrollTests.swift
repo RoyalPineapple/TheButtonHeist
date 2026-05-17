@@ -516,6 +516,37 @@ final class TheBrainsScrollTests: XCTestCase {
         )
     }
 
+    private func installScreenWithKnownOffscreen(
+        visible: (AccessibilityElement, String),
+        offscreen: (AccessibilityElement, String, CGPoint, UIScrollView)
+    ) {
+        let visibleEntry = Screen.ScreenElement(
+            heistId: visible.1,
+            contentSpaceOrigin: nil,
+            element: visible.0,
+            object: nil,
+            scrollView: nil
+        )
+        let offscreenEntry = Screen.ScreenElement(
+            heistId: offscreen.1,
+            contentSpaceOrigin: offscreen.2,
+            element: offscreen.0,
+            object: nil,
+            scrollView: offscreen.3
+        )
+        brains.stash.currentScreen = Screen(
+            elements: [
+                visibleEntry.heistId: visibleEntry,
+                offscreenEntry.heistId: offscreenEntry,
+            ],
+            hierarchy: [.element(visible.0, traversalIndex: 0)],
+            containerStableIds: [:],
+            heistIdByElement: [visible.0: visible.1],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
+    }
+
     func testKnownOffscreenEntryByHeistIdReturnsWhenOffScreen() {
         let other = makeElement(label: "Other")
         let element = makeElement(label: "Item")
@@ -647,6 +678,55 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(message.contains("missing_button"))
         XCTAssertTrue(message.contains("1 known element"))
         XCTAssertTrue(message.contains("get_interface"))
+    }
+
+    func testScrollReturnsReasonInsteadOfRevealingKnownOffscreenTarget() async {
+        // Contract: Scroll either reveals the requested target or returns a reason it cannot.
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        scrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let visible = makeElement(label: "Visible")
+        let offscreen = makeElement(label: "Offscreen")
+        installScreenWithKnownOffscreen(
+            visible: (visible, "visible_element"),
+            offscreen: (offscreen, "offscreen_button", CGPoint(x: 0, y: 1_200), scrollView)
+        )
+
+        let result = await brains.navigation.executeScroll(
+            ScrollTarget(elementTarget: .heistId("offscreen_button"), direction: .down)
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .scroll)
+        XCTAssertEqual(scrollView.contentOffset, .zero)
+        XCTAssertTrue(
+            result.message?.contains("known but not currently visible") == true,
+            "Expected offscreen guidance, got \(String(describing: result.message))"
+        )
+        XCTAssertTrue(result.message?.contains("scroll_to_visible") == true)
+    }
+
+    func testScrollToEdgeReturnsReasonInsteadOfRevealingKnownOffscreenTarget() async {
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        scrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let visible = makeElement(label: "Visible")
+        let offscreen = makeElement(label: "Offscreen")
+        installScreenWithKnownOffscreen(
+            visible: (visible, "visible_element"),
+            offscreen: (offscreen, "offscreen_button", CGPoint(x: 0, y: 1_200), scrollView)
+        )
+
+        let result = await brains.navigation.executeScrollToEdge(
+            ScrollToEdgeTarget(elementTarget: .heistId("offscreen_button"), edge: .bottom)
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .scrollToEdge)
+        XCTAssertEqual(scrollView.contentOffset, .zero)
+        XCTAssertTrue(
+            result.message?.contains("known but not currently visible") == true,
+            "Expected offscreen guidance, got \(String(describing: result.message))"
+        )
+        XCTAssertTrue(result.message?.contains("scroll_to_visible") == true)
     }
 
     func testScrollToVisibleVisibleAmbiguousMatcherFailsClosed() async throws {

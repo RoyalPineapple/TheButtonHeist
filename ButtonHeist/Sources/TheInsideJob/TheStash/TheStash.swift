@@ -562,6 +562,18 @@ final class TheStash {
         return resolveTarget(effectiveTarget).resolved
     }
 
+    /// Resolve a target using first-match semantics against only the live hierarchy.
+    func resolveFirstVisibleMatch(_ target: ElementTarget) -> ResolvedTarget? {
+        let effectiveTarget: ElementTarget
+        switch target {
+        case .heistId:
+            effectiveTarget = target
+        case .matcher(let matcher, _):
+            effectiveTarget = .matcher(matcher, ordinal: 0)
+        }
+        return resolveVisibleTarget(effectiveTarget).resolved
+    }
+
     /// Boolean existence check for callers that only need present-vs-missing
     /// target semantics. Ambiguous matches count as present, and explicit
     /// ordinals must resolve at the requested index instead of falling back to
