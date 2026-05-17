@@ -455,6 +455,11 @@ public final class TheFence {
         case waiting(syntheticId: String)
     }
     private var recordingWait: RecordingWait = .idle
+    /// Test-visible state for deterministic recording completion injection.
+    var isWaitingForRecordingCompletion: Bool {
+        if case .waiting = recordingWait { return true }
+        return false
+    }
 
     public init(configuration: Configuration) {
         self.config = configuration
@@ -490,8 +495,12 @@ public final class TheFence {
             self?.resolveRecordingStart(.success(true))
         }
 
+        handoff.onRecording = { [weak self] payload in
+            self?.resolveRecordingCompletion(.success(payload))
+        }
+
         handoff.onRecordingError = { [weak self] message in
-            self?.resolveRecordingStart(.failure(FenceError.actionFailed("Recording failed: \(message)")))
+            self?.resolveRecordingError(message)
         }
 
         handoff.onRequestError = { [weak self] serverError, requestId in
@@ -1281,6 +1290,20 @@ public final class TheFence {
         recordingStartTracker.resolve(requestId: syntheticId, result: result)
     }
 
+    private func resolveRecordingCompletion(_ result: Result<RecordingPayload, Error>) {
+        guard case .waiting(let syntheticId) = recordingWait else { return }
+        recordingTracker.resolve(requestId: syntheticId, result: result)
+    }
+
+    private func resolveRecordingError(_ message: String) {
+        let error = FenceError.actionFailed("Recording failed: \(message)")
+        if case .waiting = recordingWait {
+            resolveRecordingCompletion(.failure(error))
+        } else {
+            resolveRecordingStart(.failure(error))
+        }
+    }
+
     /// Run a recording from start to completion as a single async unit.
     ///
     /// Sends `start_recording`, waits for the server acknowledgement, then
@@ -1339,21 +1362,8 @@ public final class TheFence {
         }
         let syntheticId = "recording"
         recordingWait = .waiting(syntheticId: syntheticId)
-        // Recording errors normally resolve the start acknowledgement. Once stop_recording is waiting,
-        // temporarily route them to the completion waiter, then restore the start handler.
-        let previousOnRecording = handoff.onRecording
-        let previousOnRecordingError = handoff.onRecordingError
         defer {
             recordingWait = .idle
-            handoff.onRecording = previousOnRecording
-            handoff.onRecordingError = previousOnRecordingError
-        }
-
-        handoff.onRecording = { [weak self] payload in
-            self?.recordingTracker.resolve(requestId: syntheticId, result: .success(payload))
-        }
-        handoff.onRecordingError = { [weak self] message in
-            self?.recordingTracker.resolve(requestId: syntheticId, result: .failure(FenceError.actionFailed("Recording failed: \(message)")))
         }
         return try await recordingTracker.wait(requestId: syntheticId, timeout: timeout, afterRegister: afterRegister)
     }

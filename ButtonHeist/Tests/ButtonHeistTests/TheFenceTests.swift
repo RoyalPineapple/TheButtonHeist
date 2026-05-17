@@ -1502,23 +1502,26 @@ final class TheFenceTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testWaitForRecordingRestoresCallbacks() async throws {
+    func testWaitForRecordingKeepsStableCallbacksAndExternalObserverActive() async throws {
         let fence = TheFence(configuration: .init())
-        var restoredRecordingErrorCallbackInvoked = false
-        fence.handoff.onRecordingError = { _ in
-            restoredRecordingErrorCallbackInvoked = true
+        let expectedPayload = RecordingPayload(
+            videoData: "dGVzdA==", width: 390, height: 844,
+            duration: 2.0, frameCount: 16, fps: 8,
+            startTime: Date(), endTime: Date(), stopReason: .manual
+        )
+        var observerPayload: RecordingPayload?
+        let stableCallback = fence.handoff.onRecording
+        fence.handoff.onRecording = { payload in
+            observerPayload = payload
+            stableCallback?(payload)
         }
-        XCTAssertNil(fence.handoff.onRecording)
 
-        do {
-            _ = try await fence.waitForRecording(timeout: 0.05)
-        } catch {
-            // Expected timeout
+        let result = try await fence.waitForRecording(timeout: 1.0) {
+            fence.handoff.onRecording?(expectedPayload)
         }
 
-        XCTAssertNil(fence.handoff.onRecording, "onRecording should be restored to nil after waitForRecording")
-        fence.handoff.onRecordingError?("after-timeout")
-        XCTAssertTrue(restoredRecordingErrorCallbackInvoked, "onRecordingError should be restored after waitForRecording")
+        XCTAssertEqual(result.videoData, expectedPayload.videoData)
+        XCTAssertEqual(observerPayload?.videoData, expectedPayload.videoData)
     }
 
     @ButtonHeistActor
@@ -1611,7 +1614,7 @@ final class TheFenceTests: XCTestCase {
         mockConn.autoResponse = { message in
             if case .startRecording = message {
                 Task { @ButtonHeistActor in
-                    for _ in 0..<200 where fence.handoff.onRecording == nil {
+                    for _ in 0..<200 where !fence.isWaitingForRecordingCompletion {
                         await Task.yield()
                     }
                     fence.handoff.onRecording?(expectedPayload)
@@ -1654,7 +1657,7 @@ final class TheFenceTests: XCTestCase {
         // deterministic signal that the task has progressed past start
         // acknowledgement and into the recording wait.
         for _ in 0..<200 {
-            if fence.handoff.onRecording != nil { break }
+            if fence.isWaitingForRecordingCompletion { break }
             await Task.yield()
         }
 
@@ -1758,7 +1761,7 @@ final class TheFenceTests: XCTestCase {
         mockConn.autoResponse = { message in
             if case .startRecording = message {
                 Task { @ButtonHeistActor in
-                    for _ in 0..<200 where fence.handoff.onRecording == nil {
+                    for _ in 0..<200 where !fence.isWaitingForRecordingCompletion {
                         await Task.yield()
                     }
                     fence.handoff.onRecordingError?("disk full")

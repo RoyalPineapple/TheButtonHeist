@@ -166,9 +166,9 @@ final class TheGetawayTests: XCTestCase {
 
     /// Regression: when a recording auto-finishes (max duration, file-size
     /// cap, inactivity) there is no `stop_recording` waiter on the server.
-    /// With no originator known (or originator already gone), the payload
-    /// is cached in `completedRecording` for the next `stop_recording`
-    /// pickup, and `.recordingStopped` is broadcast as the notification.
+    /// With no originator known, the payload is cached in `completedRecording`
+    /// for the next `stop_recording` pickup, and `.recordingStopped` is
+    /// broadcast as the notification.
     /// The previous shape broadcast `.recording(payload)` to every
     /// authenticated client, which was a privacy-leak surface.
     func testAutoFinishWithoutPendingStopBroadcastsRecording() async {
@@ -177,6 +177,8 @@ final class TheGetawayTests: XCTestCase {
         if case .none = getaway.completedRecording {} else {
             XCTFail("Expected .none completedRecording before deliver, got \(getaway.completedRecording)")
         }
+        let stubStakeout = TheStakeout(captureFrame: { @MainActor in nil })
+        getaway.recordingRouteState = .recording(stakeout: stubStakeout, ownerClientId: nil)
 
         let payload = RecordingPayload(
             videoData: "AAAA",
@@ -208,10 +210,12 @@ final class TheGetawayTests: XCTestCase {
         let (getaway, _, _) = await makeGetaway()
 
         var receivedData: Data?
-        getaway.pendingRecordingResponse = (
+        let stubStakeout = TheStakeout(captureFrame: { @MainActor in nil })
+        getaway.recordingRouteState = .stopping(stakeout: stubStakeout, waiter: .init(
             requestId: "stop-1",
+            ownerClientId: 7,
             respond: { data in receivedData = data }
-        )
+        ))
 
         let payload = RecordingPayload(
             videoData: "AAAA",
@@ -239,6 +243,114 @@ final class TheGetawayTests: XCTestCase {
             }
             XCTAssertEqual(echo.frameCount, 8)
         }
+    }
+
+    func testAutoFinishWithOriginatorStillConnectedSendsPayloadOnlyToOriginator() async {
+        let (getaway, muscle, _) = await makeGetaway()
+        final class SentBox: @unchecked Sendable {
+            private var storage: [(Data, Int)] = []
+            private let lock = NSLock()
+            func append(_ data: Data, clientId: Int) { lock.withLock { storage.append((data, clientId)) } }
+            var all: [(Data, Int)] { lock.withLock { storage } }
+        }
+        let sent = SentBox()
+        await muscle.installCallbacks(
+            sendToClient: { data, clientId in sent.append(data, clientId: clientId) },
+            markClientAuthenticated: { _ in },
+            disconnectClient: { _ in },
+            onClientAuthenticated: { _, _ in },
+            onSessionActiveChanged: { _ in }
+        )
+        await muscle.installAuthenticatedClientForTest(7)
+        await muscle.installAuthenticatedClientForTest(8)
+        let stubStakeout = TheStakeout(captureFrame: { @MainActor in nil })
+        getaway.recordingRouteState = .recording(stakeout: stubStakeout, ownerClientId: 7)
+
+        let payload = RecordingPayload(
+            videoData: "AAAA",
+            width: 100, height: 200,
+            duration: 1.0, frameCount: 8, fps: 8,
+            startTime: Date(), endTime: Date(),
+            stopReason: .maxDuration
+        )
+
+        await getaway.deliverRecordingResult(.success(payload))
+
+        let messagesByClient = sent.all.reduce(into: [Int: [ServerMessage]]()) { result, entry in
+            let trimmed = entry.0.last == 0x0A ? entry.0.dropLast() : entry.0
+            if let envelope = try? JSONDecoder().decode(ResponseEnvelope.self, from: trimmed) {
+                result[entry.1, default: []].append(envelope.message)
+            }
+        }
+        XCTAssertTrue(messagesByClient[7]?.contains { message in
+            if case .recording(let delivered) = message {
+                return delivered.frameCount == 8
+            }
+            return false
+        } == true)
+        XCTAssertTrue(messagesByClient[8]?.contains { message in
+            if case .recordingStopped = message { return true }
+            return false
+        } == true)
+        XCTAssertFalse(messagesByClient[8]?.contains { message in
+            if case .recording = message { return true }
+            return false
+        } == true, "Non-originator must not receive the recording payload")
+        if case .none = getaway.completedRecording {} else {
+            XCTFail("Successful targeted delivery must clear the completion cache, got \(getaway.completedRecording)")
+        }
+    }
+
+    func testManualStopAfterAutoFinishTargetDeliveryDoesNotDeliverSecondPayload() async {
+        let (getaway, muscle, _) = await makeGetaway()
+        final class SentBox: @unchecked Sendable {
+            private var storage: [(Data, Int)] = []
+            private let lock = NSLock()
+            func append(_ data: Data, clientId: Int) { lock.withLock { storage.append((data, clientId)) } }
+            var all: [(Data, Int)] { lock.withLock { storage } }
+        }
+        let sent = SentBox()
+        await muscle.installCallbacks(
+            sendToClient: { data, clientId in sent.append(data, clientId: clientId) },
+            markClientAuthenticated: { _ in },
+            disconnectClient: { _ in },
+            onClientAuthenticated: { _, _ in },
+            onSessionActiveChanged: { _ in }
+        )
+        await muscle.installAuthenticatedClientForTest(7)
+        let stubStakeout = TheStakeout(captureFrame: { @MainActor in nil })
+        getaway.recordingRouteState = .recording(stakeout: stubStakeout, ownerClientId: 7)
+        let payload = RecordingPayload(
+            videoData: "AAAA",
+            width: 100, height: 200,
+            duration: 1.0, frameCount: 8, fps: 8,
+            startTime: Date(), endTime: Date(),
+            stopReason: .maxDuration
+        )
+
+        await getaway.deliverRecordingResult(.success(payload))
+        var stopResponse: Data?
+        await getaway.handleStopRecording(clientId: 7, requestId: "late-stop") { data in
+            stopResponse = data
+        }
+        await getaway.deliverRecordingResult(.success(payload))
+
+        let recordingDeliveries = sent.all.filter { entry in
+            let trimmed = entry.0.last == 0x0A ? entry.0.dropLast() : entry.0
+            guard let envelope = try? JSONDecoder().decode(ResponseEnvelope.self, from: trimmed) else { return false }
+            if case .recording = envelope.message { return true }
+            return false
+        }
+        XCTAssertEqual(recordingDeliveries.count, 1, "Auto-finish and manual stop race must not produce two recording payloads")
+        guard let stopResponse else {
+            return XCTFail("Late stop must receive an error response")
+        }
+        let trimmedStop = stopResponse.last == 0x0A ? stopResponse.dropLast() : stopResponse
+        let stopEnvelope = try? JSONDecoder().decode(ResponseEnvelope.self, from: trimmedStop)
+        guard case .error(let serverError)? = stopEnvelope?.message else {
+            return XCTFail("Late stop must receive a no-recording error, got \(String(describing: stopEnvelope?.message))")
+        }
+        XCTAssertTrue(serverError.message.contains("No recording in progress"))
     }
 
     // MARK: - start_recording TOCTOU
@@ -331,7 +443,6 @@ final class TheGetawayTests: XCTestCase {
     /// disconnects, the cache is dropped.
     func testDisconnectInvalidatesCachedCompletedRecordingForOriginator() async {
         let (getaway, _, _) = await makeGetaway()
-        getaway.recordingOriginatorClientId = 7
         let payload = RecordingPayload(
             videoData: "AAAA",
             width: 100, height: 200,
@@ -339,7 +450,10 @@ final class TheGetawayTests: XCTestCase {
             startTime: Date(), endTime: Date(),
             stopReason: .maxDuration
         )
-        getaway.completedRecording = .succeeded(payload)
+        getaway.recordingRouteState = .completed(.init(
+            outcome: .succeeded(payload),
+            cachePolicy: .originatorOnly(7)
+        ))
 
         getaway.invalidateRecordingForDisconnect(clientId: 7)
 
@@ -354,7 +468,6 @@ final class TheGetawayTests: XCTestCase {
     /// cached payload that belongs to a still-connected originator.
     func testDisconnectByNonOriginatorPreservesCache() async {
         let (getaway, _, _) = await makeGetaway()
-        getaway.recordingOriginatorClientId = 7
         let payload = RecordingPayload(
             videoData: "AAAA",
             width: 100, height: 200,
@@ -362,7 +475,10 @@ final class TheGetawayTests: XCTestCase {
             startTime: Date(), endTime: Date(),
             stopReason: .maxDuration
         )
-        getaway.completedRecording = .succeeded(payload)
+        getaway.recordingRouteState = .completed(.init(
+            outcome: .succeeded(payload),
+            cachePolicy: .originatorOnly(7)
+        ))
 
         getaway.invalidateRecordingForDisconnect(clientId: 99)
 
@@ -378,12 +494,13 @@ final class TheGetawayTests: XCTestCase {
     /// blocked by the "Recording stop already in progress" guard.
     func testDisconnectClearsPendingRecordingResponseForOriginator() async {
         let (getaway, _, _) = await makeGetaway()
-        getaway.recordingOriginatorClientId = 3
         var deliveriesAfterDisconnect = 0
-        getaway.pendingRecordingResponse = (
+        let stubStakeout = TheStakeout(captureFrame: { @MainActor in nil })
+        getaway.recordingRouteState = .stopping(stakeout: stubStakeout, waiter: .init(
             requestId: "stop-1",
+            ownerClientId: 3,
             respond: { _ in deliveriesAfterDisconnect += 1 }
-        )
+        ))
 
         getaway.invalidateRecordingForDisconnect(clientId: 3)
 
@@ -397,7 +514,6 @@ final class TheGetawayTests: XCTestCase {
     /// previous driver started.
     func testSessionReleaseInvalidatesCachedRecording() async {
         let (getaway, _, _) = await makeGetaway()
-        getaway.recordingOriginatorClientId = 7
         let payload = RecordingPayload(
             videoData: "AAAA",
             width: 100, height: 200,
@@ -405,11 +521,10 @@ final class TheGetawayTests: XCTestCase {
             startTime: Date(), endTime: Date(),
             stopReason: .maxDuration
         )
-        getaway.completedRecording = .succeeded(payload)
-        getaway.pendingRecordingResponse = (
-            requestId: "stop-1",
-            respond: { _ in }
-        )
+        getaway.recordingRouteState = .completed(.init(
+            outcome: .succeeded(payload),
+            cachePolicy: .originatorOnly(7)
+        ))
 
         getaway.invalidateRecordingForSessionRelease()
 
@@ -421,18 +536,14 @@ final class TheGetawayTests: XCTestCase {
     }
 
     /// PR #348 M3: when the originator disconnected before the on-complete
-    /// fires, the payload must not be delivered to an unrelated client. We
-    /// drop the targeted-delivery branch and fall through to "cache for
-    /// next stop_recording + broadcast .recordingStopped". This test
-    /// confirms the auto-finish path with originator-gone (originator set
-    /// to a client that is not in the authenticated set) still caches the
-    /// payload instead of trying to send to a dead client ID.
-    func testAutoFinishWithGoneOriginatorFallsBackToCache() async {
+    /// fires, the payload must not be delivered to an unrelated client or
+    /// cached for a future client. The completion can still arrive from the
+    /// stakeout, but the invalidated route discards the payload.
+    func testOriginatorDisconnectMidRecordingDoesNotCachePayloadForNewClient() async {
         let (getaway, _, _) = await makeGetaway()
-        // Originator set, but no client is authenticated on TheMuscle —
-        // simulating the "originator disconnected between start and the
-        // stakeout's on-complete firing" race.
-        getaway.recordingOriginatorClientId = 99
+        let stubStakeout = TheStakeout(captureFrame: { @MainActor in nil })
+        getaway.recordingRouteState = .recording(stakeout: stubStakeout, ownerClientId: 99)
+        getaway.invalidateRecordingForDisconnect(clientId: 99)
         let payload = RecordingPayload(
             videoData: "AAAA",
             width: 100, height: 200,
@@ -445,24 +556,34 @@ final class TheGetawayTests: XCTestCase {
 
         XCTAssertNil(getaway.recordingOriginatorClientId, "Originator must clear after delivery resolves")
         XCTAssertNil(getaway.pendingRecordingResponse)
-        guard case .succeeded(let cached) = getaway.completedRecording else {
-            XCTFail("Auto-finish with gone originator must cache the payload, got \(getaway.completedRecording)")
-            return
+        if case .none = getaway.completedRecording {
+            // expected
+        } else {
+            XCTFail("Completion from an invalidated originator must not be cached, got \(getaway.completedRecording)")
         }
-        XCTAssertEqual(cached.frameCount, 8)
+
+        var newClientStopResponse: Data?
+        await getaway.handleStopRecording(clientId: 42, requestId: "new-client-stop") { data in
+            newClientStopResponse = data
+        }
+        guard let newClientStopResponse else {
+            return XCTFail("New client stop must receive an error response")
+        }
+        let trimmed = newClientStopResponse.last == 0x0A ? newClientStopResponse.dropLast() : newClientStopResponse
+        let envelope = try? JSONDecoder().decode(ResponseEnvelope.self, from: trimmed)
+        guard case .error(let serverError)? = envelope?.message else {
+            return XCTFail("New client stop must not receive a recording payload, got \(String(describing: envelope?.message))")
+        }
+        XCTAssertTrue(serverError.message.contains("No recording in progress"))
     }
 
-    /// PR #314 H3 / PR #348 M3: a `stop_recording` from client B after
-    /// client A's start_recording must own the in-flight payload routing.
-    /// We can't drive the live stakeout in a unit test, but we can verify
-    /// `handleStopRecording` rebinds the originator to the requesting
-    /// client when called with a clientId.
+    /// PR #314 H3 / PR #348 M3: an originator-owned cached completion is
+    /// drained by its owner and then removed from the route state.
     func testStopRecordingDrainsCacheForRequestingClient() async {
         let (getaway, _, _) = await makeGetaway()
         // Pre-cached completion from client A — picked up immediately, so
         // the cache-hit branch in `handleStopRecording` clears originator
         // and drains the payload before ever reaching the rebind path.
-        getaway.recordingOriginatorClientId = 7
         let payload = RecordingPayload(
             videoData: "AAAA",
             width: 100, height: 200,
@@ -470,9 +591,12 @@ final class TheGetawayTests: XCTestCase {
             startTime: Date(), endTime: Date(),
             stopReason: .maxDuration
         )
-        getaway.completedRecording = .succeeded(payload)
+        getaway.recordingRouteState = .completed(.init(
+            outcome: .succeeded(payload),
+            cachePolicy: .originatorOnly(7)
+        ))
 
-        await getaway.handleStopRecording(clientId: 42, requestId: "stop-from-b") { _ in }
+        await getaway.handleStopRecording(clientId: 7, requestId: "stop-from-a") { _ in }
 
         XCTAssertNil(getaway.recordingOriginatorClientId, "Cache pickup must clear originator")
         if case .none = getaway.completedRecording { } else {
@@ -484,8 +608,8 @@ final class TheGetawayTests: XCTestCase {
     ///
     /// Drives the parked-waiter path: no cached completion, but
     /// `recordingPhase` is `.recording(stakeout:)` so `handleStopRecording`
-    /// skips the cache-hit early return, rebinds the originator to the
-    /// requesting client, and parks `pendingRecordingResponse`. The stubbed
+    /// skips the cache-hit early return, records the requesting client as the
+    /// waiter owner, and parks `pendingRecordingResponse`. The stubbed
     /// stakeout is in `.idle` so `isRecording` returns false and
     /// `stopRecording` is never invoked — the waiter stays parked and we
     /// can inspect the rebind side effect synchronously.
@@ -496,11 +620,9 @@ final class TheGetawayTests: XCTestCase {
         // `stopRecording` is a no-op on the idle phase. That lets us park
         // a waiter without driving a real recording-complete callback.
         let stubStakeout = TheStakeout(captureFrame: { @MainActor in nil })
-        getaway.recordingPhase = .recording(stakeout: stubStakeout)
-        getaway.recordingOriginatorClientId = 7
+        getaway.recordingRouteState = .recording(stakeout: stubStakeout, ownerClientId: 7)
         // No cache — force the function past the .succeeded/.failed early
         // returns and into the rebind + park branch.
-        getaway.completedRecording = .none
 
         await getaway.handleStopRecording(clientId: 42, requestId: "stop-from-b") { _ in }
 
@@ -532,7 +654,8 @@ final class TheGetawayTests: XCTestCase {
         await Task.yield()
         await muscle.installAuthenticatedClientForTest(7)
         await muscle.clearSendToClientForTest()
-        getaway.recordingOriginatorClientId = 7
+        let stubStakeout = TheStakeout(captureFrame: { @MainActor in nil })
+        getaway.recordingRouteState = .recording(stakeout: stubStakeout, ownerClientId: 7)
 
         let payload = RecordingPayload(
             videoData: "AAAA",

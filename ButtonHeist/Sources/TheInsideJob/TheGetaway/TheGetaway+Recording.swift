@@ -8,6 +8,90 @@ extension TheGetaway {
 
     // MARK: - Recording Lifecycle
 
+    struct RecordingWaiter {
+        let requestId: String?
+        let ownerClientId: Int?
+        let respond: (Data) -> Void
+    }
+
+    enum RecordingCachePolicy {
+        case anySessionClient
+        case originatorOnly(Int)
+
+        func allows(clientId: Int?) -> Bool {
+            switch self {
+            case .anySessionClient:
+                return true
+            case .originatorOnly(let owner):
+                return clientId == owner
+            }
+        }
+    }
+
+    struct CompletedRecordingRoute {
+        let outcome: RecordingOutcome
+        let cachePolicy: RecordingCachePolicy
+    }
+
+    enum RecordingInvalidationReason {
+        case originatorDisconnected
+        case sessionReleased
+
+        var message: String {
+            switch self {
+            case .originatorDisconnected:
+                return "Recording owner disconnected"
+            case .sessionReleased:
+                return "Recording session released"
+            }
+        }
+    }
+
+    enum RecordingRouteState {
+        case idle
+        case starting(ownerClientId: Int?)
+        case recording(stakeout: TheStakeout, ownerClientId: Int?)
+        case stopping(stakeout: TheStakeout, waiter: RecordingWaiter)
+        case completed(CompletedRecordingRoute)
+        case invalidated(stakeout: TheStakeout?, reason: RecordingInvalidationReason)
+
+        var activeStakeout: TheStakeout? {
+            switch self {
+            case .recording(let stakeout, _), .stopping(let stakeout, _), .invalidated(let stakeout?, _):
+                return stakeout
+            case .idle, .starting, .completed, .invalidated(nil, _):
+                return nil
+            }
+        }
+
+        var phase: RecordingPhase {
+            switch self {
+            case .idle, .completed, .invalidated(nil, _):
+                return .idle
+            case .starting:
+                return .starting
+            case .recording(let stakeout, _), .stopping(let stakeout, _), .invalidated(let stakeout?, _):
+                return .recording(stakeout: stakeout)
+            }
+        }
+
+        var ownerClientId: Int? {
+            switch self {
+            case .starting(let owner), .recording(_, let owner):
+                return owner
+            case .stopping(_, let waiter):
+                return waiter.ownerClientId
+            case .completed(let completion):
+                if case .originatorOnly(let owner) = completion.cachePolicy {
+                    return owner
+                }
+                return nil
+            case .idle, .invalidated:
+                return nil
+            }
+        }
+    }
+
     enum RecordingPhase {
         case idle
         /// Transient sentinel between accepting a `start_recording` request
@@ -37,26 +121,20 @@ extension TheGetaway {
     }
 
     func handleStartRecording(_ config: RecordingConfig, clientId: Int? = nil, requestId: String? = nil, respond: @escaping (Data) -> Void) async {
-        switch recordingPhase {
-        case .recording:
+        switch recordingRouteState {
+        case .recording, .stopping, .invalidated:
             sendMessage(.error(ServerError(kind: .recording, message: "Recording already in progress")), requestId: requestId, respond: respond)
             return
         case .starting:
             sendMessage(.error(ServerError(kind: .recording, message: "Recording start already in progress")), requestId: requestId, respond: respond)
             return
-        case .idle:
+        case .idle, .completed:
             break
         }
 
         // Claim the phase synchronously before the first await so a second
         // start_recording landing on the actor sees `.starting` and is rejected.
-        recordingPhase = .starting
-        completedRecording = .none
-        // Record the originator so an auto-finish payload can be routed back
-        // to this client (instead of broadcast) and so a mid-recording
-        // disconnect can invalidate the cache without leaking to a future
-        // client.
-        recordingOriginatorClientId = clientId
+        recordingRouteState = .starting(ownerClientId: clientId)
 
         // Wrap the entire startup pipeline in do-catch so the .starting claim is
         // always rolled back on any thrown error — including any future throwing
@@ -91,13 +169,21 @@ extension TheGetaway {
             let screenInfo = TheStakeout.ScreenInfo(bounds: screen.bounds, scale: screen.scale)
 
             try await recorder.startRecording(config: config, screen: screenInfo)
-            recordingPhase = .recording(stakeout: recorder)
+            guard case .starting(let owner) = recordingRouteState, owner == clientId else {
+                let reason = recordingInvalidationReason ?? .sessionReleased
+                recordingRouteState = .invalidated(stakeout: recorder, reason: reason)
+                if await recorder.isRecording {
+                    await recorder.stopRecording(reason: .manual)
+                }
+                sendMessage(.error(ServerError(kind: .recording, message: reason.message)), requestId: requestId, respond: respond)
+                return
+            }
+            recordingRouteState = .recording(stakeout: recorder, ownerClientId: clientId)
             brains.stakeout = recorder
             sendMessage(.recordingStarted, requestId: requestId, respond: respond)
         } catch {
             // Roll back the claim so the next start_recording can proceed.
-            recordingPhase = .idle
-            recordingOriginatorClientId = nil
+            recordingRouteState = .idle
             sendMessage(.error(ServerError(kind: .recording, message: error.localizedDescription)), requestId: requestId, respond: respond)
         }
     }
@@ -114,21 +200,26 @@ extension TheGetaway {
     ///   privacy-leak shape of broadcasting the video to every authenticated
     ///   client while still resolving the originator's parked
     ///   `waitForRecording`.
-    /// - Otherwise (originator gone, no waiter), broadcast `.recordingStopped`
-    ///   only and cache the payload in `completedRecording` for a later
-    ///   `stop_recording` pickup. The cache is invalidated on session release
-    ///   so it can't leak across drivers.
+    /// - Otherwise, broadcast `.recordingStopped` only and cache according to
+    ///   the route state's policy. Anonymous completions remain available to
+    ///   the active session; originator-owned completions are originator-only
+    ///   and disconnect/session invalidation clears them before a different
+    ///   client can pick up the payload.
     func deliverRecordingResult(_ result: Result<RecordingPayload, Error>) async {
-        recordingPhase = .idle
+        let state = recordingRouteState
+        switch state {
+        case .recording, .stopping, .invalidated:
+            break
+        case .idle, .starting, .completed:
+            return
+        }
         brains.stakeout = nil
-        let originator = recordingOriginatorClientId
+        let owner = state.ownerClientId
 
         // Pending stop waiter wins — that's the request the originator (or
         // another driver-session client) is parked on right now.
-        if let pending = pendingRecordingResponse {
-            pendingRecordingResponse = nil
-            recordingOriginatorClientId = nil
-            completedRecording = .none
+        if case .stopping(_, let pending) = state {
+            recordingRouteState = .idle
             switch result {
             case .success(let payload):
                 sendMessage(.recording(payload), requestId: pending.requestId, respond: pending.respond)
@@ -139,15 +230,30 @@ extension TheGetaway {
             return
         }
 
+        if case .invalidated = state {
+            recordingRouteState = .idle
+            switch result {
+            case .success:
+                await broadcastToAll(.recordingStopped)
+            case .failure(let error):
+                await broadcastToAll(.error(ServerError(kind: .recording, message: error.localizedDescription)))
+            }
+            return
+        }
+
         // Auto-finish path. Cache the outcome first so a later `stop_recording`
         // can still pick it up if the targeted delivery below cannot find an
         // active client.
-        completedRecording = RecordingOutcome(result: result)
+        let cachePolicy: RecordingCachePolicy = owner.map(RecordingCachePolicy.originatorOnly) ?? .anySessionClient
+        recordingRouteState = .completed(CompletedRecordingRoute(
+            outcome: RecordingOutcome(result: result),
+            cachePolicy: cachePolicy
+        ))
 
         switch result {
         case .success(let payload):
             let authenticated = await muscle.authenticatedClientIDs
-            if let originator, authenticated.contains(originator),
+            if let owner, authenticated.contains(owner),
                let payloadData = encodeEnvelope(.recording(payload)) {
                 // Targeted delivery to the start_recording originator. They
                 // are parked on `waitForRecording` and need the payload — but
@@ -160,70 +266,55 @@ extension TheGetaway {
                 // `sendData` returns false and we keep the cached payload so a
                 // subsequent `stop_recording` (or `tearDown`) can still resolve
                 // it — never drop a recording into the void.
-                let delivered = await muscle.sendData(payloadData, toClient: originator)
+                let delivered = await muscle.sendData(payloadData, toClient: owner)
                 if delivered {
-                    completedRecording = .none
-                    recordingOriginatorClientId = nil
+                    recordingRouteState = .idle
                 }
                 if let stoppedData = encodeEnvelope(.recordingStopped) {
-                    for otherClient in authenticated where otherClient != originator {
+                    for otherClient in authenticated where otherClient != owner {
                         await muscle.sendData(stoppedData, toClient: otherClient)
                     }
                 }
             } else {
                 // Originator is gone (or never recorded). Notify everyone the
-                // recording finished; the payload sits in `completedRecording`
-                // for the next `stop_recording` pickup. Clear the originator
-                // since no live client is parked on its delivery.
-                recordingOriginatorClientId = nil
+                // recording finished. Anonymous recordings remain cacheable
+                // for a later `stop_recording`; originator-owned recordings
+                // remain originator-only and will be dropped if that owner
+                // disconnects.
                 await broadcastToAll(.recordingStopped)
             }
         case .failure(let error):
-            recordingOriginatorClientId = nil
             await broadcastToAll(.error(ServerError(kind: .recording, message: error.localizedDescription)))
         }
     }
 
     func handleStopRecording(clientId: Int? = nil, requestId: String? = nil, respond: @escaping (Data) -> Void) async {
-        switch completedRecording {
-        case .succeeded(let payload):
-            completedRecording = .none
-            recordingOriginatorClientId = nil
-            sendMessage(.recording(payload), requestId: requestId, respond: respond)
+        switch recordingRouteState {
+        case .completed(let completion):
+            guard completion.cachePolicy.allows(clientId: clientId) else {
+                sendMessage(.error(ServerError(kind: .recording, message: "No recording in progress")), requestId: requestId, respond: respond)
+                return
+            }
+            recordingRouteState = .idle
+            switch completion.outcome {
+            case .succeeded(let payload):
+                sendMessage(.recording(payload), requestId: requestId, respond: respond)
+            case .failed(let error):
+                sendMessage(.error(ServerError(kind: .recording, message: error.localizedDescription)), requestId: requestId, respond: respond)
+            case .none:
+                sendMessage(.error(ServerError(kind: .recording, message: "No recording in progress")), requestId: requestId, respond: respond)
+            }
             return
-        case .failed(let error):
-            completedRecording = .none
-            recordingOriginatorClientId = nil
-            sendMessage(.error(ServerError(kind: .recording, message: error.localizedDescription)), requestId: requestId, respond: respond)
-            return
-        case .none:
-            break
-        }
-
-        guard let stakeout else {
-            sendMessage(.error(ServerError(kind: .recording, message: "No recording in progress")), requestId: requestId, respond: respond)
-            return
-        }
-
-        guard pendingRecordingResponse == nil else {
+        case .recording(let stakeout, _):
+            let waiter = RecordingWaiter(requestId: requestId, ownerClientId: clientId, respond: respond)
+            recordingRouteState = .stopping(stakeout: stakeout, waiter: waiter)
+            if await stakeout.isRecording {
+                await stakeout.stopRecording(reason: .manual)
+            }
+        case .stopping:
             sendMessage(.error(ServerError(kind: .recording, message: "Recording stop already in progress")), requestId: requestId, respond: respond)
-            return
-        }
-
-        // Rebind the originator to whoever issued this `stop_recording`. If
-        // client A started the recording and disconnected, the originator was
-        // already cleared on disconnect; this lets client B's stop request
-        // own the in-flight payload routing.
-        if let clientId {
-            // All authenticated clients in an active session are trusted peers
-            // (the cooperative co-driver model from #314); rebinding the
-            // originator on stop_recording here matches that contract, not the
-            // stricter "originator-only" identity model.
-            recordingOriginatorClientId = clientId
-        }
-        pendingRecordingResponse = (requestId: requestId, respond: respond)
-        if await stakeout.isRecording {
-            await stakeout.stopRecording(reason: .manual)
+        case .idle, .starting, .invalidated:
+            sendMessage(.error(ServerError(kind: .recording, message: "No recording in progress")), requestId: requestId, respond: respond)
         }
     }
 
@@ -231,27 +322,39 @@ extension TheGetaway {
 
     /// Invalidate recording state when a client disconnects.
     ///
-    /// If the disconnecting client is the originator of an in-flight or
-    /// just-completed recording, clear any cached payload (so a future client
-    /// can't pick it up) and tear down any pending `stop_recording` waiter
-    /// (so the next legitimate stop isn't blocked by "Recording stop already
-    /// in progress"). Recordings in flight keep running on the stakeout —
-    /// the on-complete handler will see the cleared originator and fall back
-    /// to the cache-and-broadcast path.
+    /// If the disconnecting client owns an in-flight or just-completed route,
+    /// clear the cache or mark the active stakeout invalidated. The stakeout
+    /// may still finish asynchronously, but its completion is discarded rather
+    /// than cached for another client.
     func invalidateRecordingForDisconnect(clientId: Int) {
-        guard clientId == recordingOriginatorClientId else { return }
-        recordingOriginatorClientId = nil
-        pendingRecordingResponse = nil
-        completedRecording = .none
+        switch recordingRouteState {
+        case .starting(let owner?) where owner == clientId:
+            recordingRouteState = .invalidated(stakeout: nil, reason: .originatorDisconnected)
+        case .recording(let stakeout, let owner?) where owner == clientId:
+            recordingRouteState = .invalidated(stakeout: stakeout, reason: .originatorDisconnected)
+        case .stopping(let stakeout, let waiter) where waiter.ownerClientId == clientId:
+            recordingRouteState = .invalidated(stakeout: stakeout, reason: .originatorDisconnected)
+        case .completed(let completion):
+            if case .originatorOnly(let owner) = completion.cachePolicy, owner == clientId {
+                recordingRouteState = .idle
+            }
+        case .idle, .starting, .recording, .stopping, .invalidated:
+            break
+        }
     }
 
     /// Invalidate recording state when the driver session releases (timeout
     /// or all-clients-disconnected drain). A future driver claiming the
     /// session must not see a recording the previous driver started.
     func invalidateRecordingForSessionRelease() {
-        recordingOriginatorClientId = nil
-        pendingRecordingResponse = nil
-        completedRecording = .none
+        switch recordingRouteState {
+        case .recording(let stakeout, _), .stopping(let stakeout, _), .invalidated(let stakeout?, _):
+            recordingRouteState = .invalidated(stakeout: stakeout, reason: .sessionReleased)
+        case .starting:
+            recordingRouteState = .invalidated(stakeout: nil, reason: .sessionReleased)
+        case .idle, .completed, .invalidated(nil, _):
+            recordingRouteState = .idle
+        }
     }
 }
 
