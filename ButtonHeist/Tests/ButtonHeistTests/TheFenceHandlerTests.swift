@@ -84,6 +84,36 @@ final class TheFenceHandlerTests: XCTestCase {
         }
     }
 
+    @ButtonHeistActor
+    private func assertContractError(
+        _ request: [String: Any],
+        contains expectedSubstrings: [String],
+        errorCode: String,
+        nextCommand: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        let (fence, _) = makeConnectedFence()
+        do {
+            let response = try await fence.execute(request: request)
+            guard case .error(let message, let details) = response else {
+                return XCTFail("Expected .error response, got: \(response)", file: file, line: line)
+            }
+            for substring in expectedSubstrings {
+                XCTAssertTrue(
+                    message.contains(substring),
+                    "Expected error containing '\(substring)', got: \(message)",
+                    file: file, line: line
+                )
+            }
+            XCTAssertEqual(details?.errorCode, errorCode, file: file, line: line)
+            XCTAssertEqual(details?.phase, .request, file: file, line: line)
+            XCTAssertEqual(details?.hint, nextCommand, file: file, line: line)
+        } catch {
+            XCTFail("Unexpected throw: \(error)", file: file, line: line)
+        }
+    }
+
     /// Assert that executing a request passes validation (returns a non-error response).
     @ButtonHeistActor
     private func assertPassesValidation(
@@ -688,9 +718,15 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testScrollMissingElement() async {
-        await assertValidationError(
+        await assertContractError(
             ["command": "scroll", "direction": "down"],
-            contains: "Must specify element"
+            contains: [
+                "scroll request contract failed: missing target",
+                "requires heistId or at least one matcher field",
+                "Next: get_interface(scope: \"full\")",
+            ],
+            errorCode: "request.missing_target",
+            nextCommand: "get_interface(scope: \"full\")"
         )
     }
 
@@ -703,9 +739,15 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testScrollToVisibleMissingElement() async {
-        await assertValidationError(
+        await assertContractError(
             ["command": "scroll_to_visible"],
-            contains: "Must specify heistId or at least one match field"
+            contains: [
+                "scroll_to_visible request contract failed: missing target",
+                "requires heistId or at least one matcher field",
+                "Next: get_interface(scope: \"full\")",
+            ],
+            errorCode: "request.missing_target",
+            nextCommand: "get_interface(scope: \"full\")"
         )
     }
 
@@ -1215,9 +1257,15 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testWaitForMissingMatchFields() async {
-        await assertValidationError(
+        await assertContractError(
             ["command": "wait_for"],
-            contains: "Must specify heistId or at least one match field"
+            contains: [
+                "wait_for request contract failed: missing target",
+                "requires heistId or at least one matcher field",
+                "Next: get_interface(scope: \"full\")",
+            ],
+            errorCode: "request.missing_target",
+            nextCommand: "get_interface(scope: \"full\")"
         )
     }
 
@@ -1965,6 +2013,31 @@ final class TheFenceHandlerTests: XCTestCase {
             expectedError
         )
         XCTAssertEqual(summaries[2].error, "skipped: stop_on_error stopped batch after step 1")
+    }
+
+    @ButtonHeistActor
+    func testBatchPreservesContractErrorPhaseAndNextCommand() async throws {
+        let (fence, _) = makeConnectedFence()
+
+        let response = try await fence.execute(request: [
+            "command": "run_batch",
+            "policy": "stop_on_error",
+            "steps": [
+                ["command": "wait_for"],
+                ["command": "activate", "identifier": "skipped"],
+            ] as [[String: Any]],
+        ])
+
+        guard case .batch(let results, _, let failedIndex, _, _, _, let summaries, _) = response else {
+            XCTFail("Expected batch response, got \(response)")
+            return
+        }
+        XCTAssertEqual(results.count, 1)
+        XCTAssertEqual(failedIndex, 0)
+        XCTAssertEqual(summaries[0].errorCode, "request.missing_target")
+        XCTAssertEqual(summaries[0].phase, "request")
+        XCTAssertEqual(summaries[0].nextCommand, "get_interface(scope: \"full\")")
+        XCTAssertEqual(summaries[1].error, "skipped: stop_on_error stopped batch after step 0")
     }
 
     // MARK: - get_interface scope

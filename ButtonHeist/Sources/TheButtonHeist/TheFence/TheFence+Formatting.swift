@@ -27,6 +27,33 @@ public struct BatchStepSummary: Sendable {
     public let expectationMet: Bool?
     public let elementCount: Int?
     public let error: String?
+    public let errorCode: String?
+    public let phase: String?
+    public let nextCommand: String?
+
+    public init(
+        command: String,
+        deltaKind: String?,
+        screenName: String?,
+        screenId: String?,
+        expectationMet: Bool?,
+        elementCount: Int?,
+        error: String?,
+        errorCode: String? = nil,
+        phase: String? = nil,
+        nextCommand: String? = nil
+    ) {
+        self.command = command
+        self.deltaKind = deltaKind
+        self.screenName = screenName
+        self.screenId = screenId
+        self.expectationMet = expectationMet
+        self.elementCount = elementCount
+        self.error = error
+        self.errorCode = errorCode
+        self.phase = phase
+        self.nextCommand = nextCommand
+    }
 }
 
 /// Typed response from TheFence command execution.

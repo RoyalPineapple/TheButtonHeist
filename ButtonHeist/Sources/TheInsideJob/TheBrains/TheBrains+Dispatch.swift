@@ -186,6 +186,7 @@ extension TheBrains {
         let message = waitForTimeoutMessage(
             absent: target.resolvedAbsent,
             elapsed: elapsed,
+            target: elementTarget,
             resolution: resolution
         )
         return .failure(.waitFor, message: message, failureKind: .timeout)
@@ -221,14 +222,43 @@ extension TheBrains {
     private func waitForTimeoutMessage(
         absent: Bool,
         elapsed: String,
+        target: ElementTarget,
         resolution: TheStash.TargetResolution
     ) -> String {
+        let expected = absent ? "element to disappear" : "element to appear"
         let reason = absent ? "element still present" : "element not found"
         let diagnostics = resolution.diagnostics
-        guard !diagnostics.isEmpty else {
-            return "timed out after \(elapsed)s (\(reason))"
+        var parts = [
+            "timed out after \(elapsed)s waiting for \(expected)",
+            "expected: \(waitForTargetDescription(target))",
+            "known: \(stash.currentScreen.elements.count) elements",
+        ]
+        if let screenId = stash.lastScreenId {
+            parts.append("screen: \(screenId)")
         }
-        return "timed out after \(elapsed)s (\(reason): \(diagnostics))"
+        if diagnostics.isEmpty {
+            parts.append("last result: \(reason)")
+        } else {
+            parts.append("last result: \(reason): \(diagnostics)")
+        }
+        parts.append(
+            "Next: get_interface(scope: \"full\") to inspect current elements, " +
+                "then retry wait_for with a heistId or exact matcher."
+        )
+        return parts.joined(separator: "; ")
+    }
+
+    private func waitForTargetDescription(_ target: ElementTarget) -> String {
+        switch target {
+        case .heistId(let heistId):
+            return "heistId=\"\(heistId)\""
+        case .matcher(let matcher, let ordinal):
+            var description = stash.formatMatcher(matcher)
+            if let ordinal {
+                description += " ordinal=\(ordinal)"
+            }
+            return description.isEmpty ? "<empty matcher>" : description
+        }
     }
 
     static func waitForErrorKind(for failureKind: TheSafecracker.FailureKind?) -> ErrorKind {

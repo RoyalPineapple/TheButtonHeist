@@ -61,10 +61,14 @@ extension TheFence {
                     "status": "error",
                     "message": error.localizedDescription,
                 ]
+                let failureDetails = (error as? FenceError)?.failureDetails
                 results.append(errorDict)
                 stepSummaries.append(BatchStepSummary(
                     command: originalCommandName, deltaKind: nil, screenName: nil, screenId: nil,
-                    expectationMet: nil, elementCount: nil, error: error.localizedDescription
+                    expectationMet: nil, elementCount: nil, error: error.localizedDescription,
+                    errorCode: failureDetails?.errorCode,
+                    phase: failureDetails?.phase.rawValue,
+                    nextCommand: Self.batchNextCommand(from: failureDetails)
                 ))
                 if policy == .stopOnError {
                     failedIndex = index
@@ -176,10 +180,13 @@ extension TheFence {
                 command: command, deltaKind: nil, screenName: nil, screenId: nil,
                 expectationMet: nil, elementCount: iface.elements.count, error: nil
             )
-        case .error(let message, _):
+        case .error(let message, let details):
             return BatchStepSummary(
                 command: command, deltaKind: nil, screenName: nil, screenId: nil,
-                expectationMet: nil, elementCount: nil, error: message
+                expectationMet: nil, elementCount: nil, error: message,
+                errorCode: details?.errorCode,
+                phase: details?.phase.rawValue,
+                nextCommand: Self.batchNextCommand(from: details)
             )
         default:
             return BatchStepSummary(
@@ -187,6 +194,11 @@ extension TheFence {
                 expectationMet: nil, elementCount: nil, error: nil
             )
         }
+    }
+
+    private static func batchNextCommand(from details: FailureDetails?) -> String? {
+        guard details?.errorCode == "request.missing_target" else { return nil }
+        return details?.hint
     }
 
     // MARK: - Session State

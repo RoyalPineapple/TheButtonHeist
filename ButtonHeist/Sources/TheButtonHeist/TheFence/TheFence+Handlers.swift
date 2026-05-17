@@ -286,14 +286,14 @@ extension TheFence {
         case .scroll:
             let direction = try args.requiredSchemaEnum("direction", as: ScrollDirection.self) { $0.lowercased() }
             guard let target = try elementTarget(args) else {
-                return .error("Must specify element (heistId or matcher) for scroll")
+                return missingElementTargetResponse(command: "scroll")
             }
             return try await sendAction(
                 .scroll(ScrollTarget(elementTarget: target, direction: direction))
             )
         case .scrollToVisible:
             guard let target = try elementTarget(args) else {
-                return .error("Must specify heistId or at least one match field for scroll_to_visible")
+                return missingElementTargetResponse(command: "scroll_to_visible")
             }
             let scrollToVisibleTarget = ScrollToVisibleTarget(elementTarget: target)
             let result = try await sendAndAwaitAction(.scrollToVisible(scrollToVisibleTarget), timeout: Timeouts.actionSeconds)
@@ -502,7 +502,7 @@ extension TheFence {
 
     func handleWaitFor(_ args: [String: Any]) async throws -> FenceResponse {
         guard let target = try elementTarget(args) else {
-            return .error("Must specify heistId or at least one match field (label, identifier, value, traits, or excludeTraits) for wait_for")
+            return missingElementTargetResponse(command: "wait_for")
         }
         let waitForTarget = WaitForTarget(
             elementTarget: target,
@@ -512,6 +512,22 @@ extension TheFence {
         let result = try await sendAndAwaitAction(.waitFor(waitForTarget), timeout: waitForTarget.resolvedTimeout + 5)
         lastActionHistory = .completed(result)
         return .action(result: result)
+    }
+
+    private func missingElementTargetResponse(command: String) -> FenceResponse {
+        let contract = "requires heistId or at least one matcher field (label, identifier, value, traits, or excludeTraits)"
+        let next = "get_interface(scope: \"full\")"
+        let message = "\(command) request contract failed: missing target; \(contract). " +
+            "Next: \(next) to inspect known elements, then retry \(command) with a heistId or exact matcher."
+        return .error(
+            message,
+            details: FailureDetails(
+                errorCode: "request.missing_target",
+                phase: .request,
+                retryable: false,
+                hint: next
+            )
+        )
     }
 
     // MARK: - Handler: Wait For Change
