@@ -162,6 +162,20 @@ public extension AccessibilityTrace {
         }
     }
 
+    enum ReceiptKind: String, Codable, Sendable, Equatable {
+        case capture
+    }
+
+    struct ReceiptSample: Codable, Sendable, Equatable {
+        public let heistId: String?
+        public let summary: String
+
+        public init(heistId: String? = nil, summary: String) {
+            self.heistId = heistId
+            self.summary = summary
+        }
+    }
+
     /// Compatibility view over an accessibility capture.
     struct Receipt: Codable, Sendable, Equatable {
         public let capture: Capture
@@ -175,31 +189,17 @@ public extension AccessibilityTrace {
         public var parentHash: String? { capture.parentHash }
         public var summary: String { capture.summary }
         public var interface: Interface { capture.interface }
-        public var kind: Kind { .capture }
+        public var kind: ReceiptKind { .capture }
 
-        public var samples: [Sample] {
+        public var samples: [ReceiptSample] {
             Array(interface.elements.prefix(5)).map {
-                Sample(heistId: nonEmpty($0.heistId), summary: truncate(elementSummary($0), to: 80))
+                ReceiptSample(heistId: nonEmpty($0.heistId), summary: truncate(elementSummary($0), to: 80))
             }
         }
 
         public var omittedCount: Int? {
             let omitted = interface.elements.count - samples.count
             return omitted > 0 ? omitted : nil
-        }
-
-        public enum Kind: String, Codable, Sendable, Equatable {
-            case capture
-        }
-
-        public struct Sample: Codable, Sendable, Equatable {
-            public let heistId: String?
-            public let summary: String
-
-            public init(heistId: String? = nil, summary: String) {
-                self.heistId = heistId
-                self.summary = summary
-            }
         }
     }
 }

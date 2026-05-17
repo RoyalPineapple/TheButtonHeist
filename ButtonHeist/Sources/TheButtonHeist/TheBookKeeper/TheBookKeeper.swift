@@ -597,14 +597,19 @@ final class TheBookKeeper {
         var recordedFrame: RecordedFrame?
         var coordinateOnly: Bool?
 
-        if let heistId, let element = interfaceCache[heistId] {
-            let result = buildMinimalMatcher(element: element, allElements: cache)
+        if let heistId, let source = matcherSource(
+            heistId: heistId,
+            trace: actionResult?.accessibilityTrace,
+            fallbackCache: interfaceCache,
+            fallbackElements: cache
+        ) {
+            let result = buildMinimalMatcher(element: source.element, allElements: source.elements)
             target = result.matcher
             ordinal = result.ordinal
             recordedHeistId = heistId
             recordedFrame = RecordedFrame(
-                x: element.frameX, y: element.frameY,
-                width: element.frameWidth, height: element.frameHeight
+                x: source.element.frameX, y: source.element.frameY,
+                width: source.element.frameWidth, height: source.element.frameHeight
             )
         } else if hasMatcherFields {
             target = ElementMatcher(
@@ -643,6 +648,24 @@ final class TheBookKeeper {
         )
     }
 
+    private func matcherSource(
+        heistId: String,
+        trace: AccessibilityTrace?,
+        fallbackCache: [String: HeistElement],
+        fallbackElements: [HeistElement]
+    ) -> (element: HeistElement, elements: [HeistElement])? {
+        if let trace {
+            for capture in trace.captures {
+                let elements = capture.interface.elements
+                if let element = elements.first(where: { $0.heistId == heistId }) {
+                    return (element, elements)
+                }
+            }
+        }
+        guard let element = fallbackCache[heistId] else { return nil }
+        return (element, fallbackElements)
+    }
+
     private func buildRecordedMetadata(
         heistId: String?,
         frame: RecordedFrame?,
@@ -651,7 +674,8 @@ final class TheBookKeeper {
         expectation: ExpectationResult?
     ) -> RecordedMetadata? {
         let accessibilityTrace = actionResult?.accessibilityTrace
-        guard heistId != nil || frame != nil || coordinateOnly != nil || accessibilityTrace != nil || expectation != nil else {
+        let accessibilityDelta = actionResult?.accessibilityDelta
+        guard heistId != nil || frame != nil || coordinateOnly != nil || accessibilityTrace != nil || accessibilityDelta != nil || expectation != nil else {
             return nil
         }
         return RecordedMetadata(
@@ -659,6 +683,7 @@ final class TheBookKeeper {
             frame: frame,
             coordinateOnly: coordinateOnly,
             accessibilityTrace: accessibilityTrace,
+            accessibilityDelta: accessibilityDelta,
             expectation: expectation
         )
     }

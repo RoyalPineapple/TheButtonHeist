@@ -94,8 +94,50 @@ final class BookKeeperHeistTests: XCTestCase {
         let change = try XCTUnwrap(script.steps[0].recorded?.accessibilityTrace?.receipts.first)
         XCTAssertEqual(change.kind, .capture)
         XCTAssertEqual(change.interface.elements.first?.label, "Go")
+        XCTAssertEqual(script.steps[0].recorded?.accessibilityDelta?.kindRawValue, "noChange")
+        XCTAssertEqual(script.steps[0].recorded?.accessibilityDelta?.elementCount, 1)
         XCTAssertNil(script.steps[0].toRequestDictionary()["_recorded"])
         XCTAssertFalse(bookKeeper.isRecordingHeist)
+    }
+
+    @ButtonHeistActor
+    func testRecordHeistEvidenceDerivesMatcherFromTraceCapture() async throws {
+        let bookKeeper = makeBookKeeper()
+        try bookKeeper.beginSession(identifier: "test")
+        try bookKeeper.startHeistRecording(app: "com.example.app")
+
+        let fallbackCache = [
+            "save": makeElement(heistId: "save", label: "Save", traits: [.button]),
+            "duplicate": makeElement(heistId: "duplicate", label: "Save", traits: [.button]),
+        ]
+        let traceInterface = Interface(
+            timestamp: Date(timeIntervalSince1970: 0),
+            tree: [
+                .element(makeElement(
+                    heistId: "save",
+                    label: "Save",
+                    identifier: "primary.save",
+                    traits: [.button]
+                )),
+                .element(makeElement(heistId: "cancel", label: "Cancel", traits: [.button])),
+            ]
+        )
+
+        bookKeeper.recordHeistEvidence(
+            command: .activate,
+            args: ["command": "activate", "heistId": "save"],
+            actionResult: ActionResult(
+                success: true,
+                method: .activate,
+                accessibilityTrace: AccessibilityTrace(interface: traceInterface)
+            ),
+            interfaceCache: fallbackCache
+        )
+
+        let script = try bookKeeper.stopHeistRecording()
+        XCTAssertEqual(script.steps[0].target?.identifier, "primary.save")
+        XCTAssertNil(script.steps[0].ordinal)
+        XCTAssertEqual(script.steps[0].recorded?.heistId, "save")
     }
 
     @ButtonHeistActor

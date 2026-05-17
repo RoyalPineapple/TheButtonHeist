@@ -112,6 +112,13 @@ final class HeistPlaybackTests: XCTestCase {
                     timestamp: Date(timeIntervalSince1970: 0),
                     tree: [.element(makeElement(heistId: "continue", label: "Continue"))]
                 )),
+                accessibilityDelta: .screenChanged(.init(
+                    elementCount: 1,
+                    newInterface: Interface(
+                        timestamp: Date(timeIntervalSince1970: 0),
+                        tree: [.element(makeElement(heistId: "continue", label: "Continue"))]
+                    )
+                )),
                 expectation: ExpectationResult(
                     met: true,
                     expectation: .screenChanged,
@@ -126,6 +133,8 @@ final class HeistPlaybackTests: XCTestCase {
         let change = try XCTUnwrap(decoded.recorded?.accessibilityTrace?.receipts.first)
         XCTAssertEqual(change.kind, .capture)
         XCTAssertEqual(change.interface.elements.first?.label, "Continue")
+        XCTAssertEqual(decoded.recorded?.accessibilityDelta?.kindRawValue, "screenChanged")
+        XCTAssertEqual(decoded.recorded?.accessibilityDelta?.elementCount, 1)
         XCTAssertEqual(decoded.recorded?.expectation?.met, true)
         XCTAssertNil(decoded.toRequestDictionary()["_recorded"])
     }

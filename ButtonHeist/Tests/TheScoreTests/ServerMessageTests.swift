@@ -309,7 +309,8 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testResponseEnvelopeWithBackgroundDelta() throws {
-        let delta: AccessibilityTrace.Delta = .screenChanged(.init(elementCount: 5, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])))
+        let interface = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+        let delta: AccessibilityTrace.Delta = .screenChanged(.init(elementCount: 5, newInterface: interface))
         let envelope = ResponseEnvelope(requestId: "r-2", message: .pong, backgroundAccessibilityDelta: delta)
         let data = try JSONEncoder().encode(envelope)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])

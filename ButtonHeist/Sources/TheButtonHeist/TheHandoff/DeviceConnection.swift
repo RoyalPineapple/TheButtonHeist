@@ -477,7 +477,8 @@ final class DeviceConnection: DeviceConnecting {
                 logger.error("Failed to decode: \(str.prefix(200))")
             }
             let detail = String(data: data.prefix(200), encoding: .utf8) ?? "<binary data>"
-            onEvent?(.message(.error(ServerError(kind: .general, message: "Failed to decode server message: \(detail)")), requestId: nil, backgroundAccessibilityDelta: nil))
+            let error = ServerError(kind: .general, message: "Failed to decode server message: \(detail)")
+            onEvent?(.message(.error(error), requestId: nil, backgroundAccessibilityDelta: nil))
             return
         }
 

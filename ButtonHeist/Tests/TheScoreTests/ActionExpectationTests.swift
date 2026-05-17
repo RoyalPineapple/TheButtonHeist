@@ -56,7 +56,8 @@ final class ActionExpectationTests: XCTestCase {
     // MARK: - Validation: screenChanged
 
     func testScreenChangedMetWhenDeltaIsScreenChanged() {
-        let delta: AccessibilityTrace.Delta = .screenChanged(.init(elementCount: 5, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])))
+        let interface = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+        let delta: AccessibilityTrace.Delta = .screenChanged(.init(elementCount: 5, newInterface: interface))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.screenChanged.validate(against: action)
         XCTAssertTrue(result.met)
@@ -95,7 +96,8 @@ final class ActionExpectationTests: XCTestCase {
     }
 
     func testElementsChangedMetWhenScreenChanged() {
-        let delta: AccessibilityTrace.Delta = .screenChanged(.init(elementCount: 5, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])))
+        let interface = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+        let delta: AccessibilityTrace.Delta = .screenChanged(.init(elementCount: 5, newInterface: interface))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.elementsChanged.validate(against: action)
         XCTAssertTrue(result.met)

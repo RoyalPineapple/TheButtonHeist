@@ -869,17 +869,16 @@ public final class TheFence {
     private func recordHeistEvidence(
         command: Command,
         request: [String: Any],
-        dispatchedResponse: FenceResponse,
+        dispatchedResponse _: FenceResponse,
         validatedResponse: FenceResponse,
         cacheUpdate: ResponseCacheUpdate
     ) {
         guard case .idle = playbackPhase else { return }
         guard let finalReceipt = validatedResponse.heistRecordingReceipt, finalReceipt.shouldRecord else { return }
-        let recordedResult = dispatchedResponse.heistRecordingReceipt?.actionResult ?? finalReceipt.actionResult
         bookKeeper.recordHeistEvidence(
             command: command,
             args: request,
-            actionResult: recordedResult,
+            actionResult: finalReceipt.actionResult,
             expectation: finalReceipt.expectation,
             interfaceCache: cacheUpdate.evidenceCache ?? [:]
         )

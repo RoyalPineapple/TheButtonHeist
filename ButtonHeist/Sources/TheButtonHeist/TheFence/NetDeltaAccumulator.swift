@@ -11,8 +11,8 @@ import TheScore
 /// exhaust the cases without a `preconditionFailure` for the impossible
 /// branch.
 internal enum NonScreenChangeDelta {
-    case noChange(AccessibilityTrace.Delta.NoChange)
-    case elementsChanged(AccessibilityTrace.Delta.ElementsChanged)
+    case noChange(AccessibilityTrace.NoChange)
+    case elementsChanged(AccessibilityTrace.ElementsChanged)
 
     /// Narrow an `AccessibilityTrace.Delta` to `NonScreenChangeDelta`, dropping
     /// `.screenChanged` (the caller has already proven the slice contains
@@ -77,7 +77,7 @@ internal enum NetDeltaAccumulator {
     /// boundary so the "no further screen change" invariant is enforced by
     /// the type system rather than a runtime precondition.
     private static func mergeAfterScreenChange(
-        screenChange: AccessibilityTrace.Delta.ScreenChanged, postDeltas: [NonScreenChangeDelta]
+        screenChange: AccessibilityTrace.ScreenChanged, postDeltas: [NonScreenChangeDelta]
     ) -> AccessibilityTrace.Delta {
         let filteredPostDeltas: [NonScreenChangeDelta] = postDeltas.filter(\.isMeaningful)
         if filteredPostDeltas.isEmpty {
@@ -102,7 +102,7 @@ internal enum NetDeltaAccumulator {
         }
         let finalInterface = apply(postEdits, to: screenChange.newInterface)
         let mergedTransients = mergeTransients(screenChange.transient, postTransients)
-        return .screenChanged(AccessibilityTrace.Delta.ScreenChanged(
+        return .screenChanged(AccessibilityTrace.ScreenChanged(
             elementCount: finalInterface.elements.count,
             newInterface: finalInterface,
             postEdits: postEdits.isEmpty ? nil : postEdits,
@@ -346,9 +346,9 @@ internal enum NetDeltaAccumulator {
 
         let lastCount = deltas.last?.elementCount ?? 0
         if mergedEdits.isEmpty {
-            return .noChange(AccessibilityTrace.Delta.NoChange(elementCount: lastCount, transient: transient))
+            return .noChange(AccessibilityTrace.NoChange(elementCount: lastCount, transient: transient))
         }
-        return .elementsChanged(AccessibilityTrace.Delta.ElementsChanged(
+        return .elementsChanged(AccessibilityTrace.ElementsChanged(
             elementCount: lastCount,
             edits: mergedEdits,
             transient: transient

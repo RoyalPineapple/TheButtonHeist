@@ -39,7 +39,7 @@ public enum ActionExpectation: Sendable, Equatable {
     case elementsChanged
     /// Expected a property change on an element. All fields are optional filters —
     /// provide what you know, omit what you don't. Met when any entry in
-    /// `accessibilityDelta.edits.updated` matches all provided fields.
+    /// `accessibilityDelta.elementEdits?.updated` matches all provided fields.
     case elementUpdated(
         heistId: String? = nil, property: ElementProperty? = nil,
         oldValue: String? = nil, newValue: String? = nil

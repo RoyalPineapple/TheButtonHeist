@@ -60,7 +60,7 @@ extension TheStash {
         // so return the full new interface.
         if isScreenChange {
             let fullInterface = Interface(timestamp: Date(), tree: afterTree)
-            return .screenChanged(AccessibilityTrace.Delta.ScreenChanged(
+            return .screenChanged(AccessibilityTrace.ScreenChanged(
                 elementCount: after.count, newInterface: fullInterface
             ))
         }
@@ -83,19 +83,19 @@ extension TheStash {
                             afterTree: afterTree
                         )
                         if treeEdits.isEmpty {
-                            return .noChange(AccessibilityTrace.Delta.NoChange(elementCount: after.count))
+                            return .noChange(AccessibilityTrace.NoChange(elementCount: after.count))
                         }
-                        return .elementsChanged(AccessibilityTrace.Delta.ElementsChanged(
+                        return .elementsChanged(AccessibilityTrace.ElementsChanged(
                             elementCount: after.count, edits: treeEdits
                         ))
                     } else {
-                        return .screenChanged(AccessibilityTrace.Delta.ScreenChanged(
+                        return .screenChanged(AccessibilityTrace.ScreenChanged(
                             elementCount: after.count,
                             newInterface: Interface(timestamp: Date(), tree: afterTree)
                         ))
                     }
                 }
-                return .noChange(AccessibilityTrace.Delta.NoChange(elementCount: after.count))
+                return .noChange(AccessibilityTrace.NoChange(elementCount: after.count))
             }
         }
 
@@ -142,14 +142,14 @@ extension TheStash {
         let afterElements = after.interface.elements
 
         if isScreenChange {
-            return .screenChanged(AccessibilityTrace.Delta.ScreenChanged(
+            return .screenChanged(AccessibilityTrace.ScreenChanged(
                 elementCount: afterElements.count,
                 newInterface: after.interface
             ))
         }
 
         if before.hash == after.hash {
-            return .noChange(AccessibilityTrace.Delta.NoChange(elementCount: afterElements.count))
+            return .noChange(AccessibilityTrace.NoChange(elementCount: afterElements.count))
         }
 
         let elementEdits = computeElementEdits(beforeEls: beforeElements, afterEls: afterElements)
@@ -174,9 +174,9 @@ extension TheStash {
 
     private static func makeDelta(edits: ElementEdits, elementCount: Int) -> AccessibilityTrace.Delta {
         if edits.isEmpty {
-            return .noChange(AccessibilityTrace.Delta.NoChange(elementCount: elementCount))
+            return .noChange(AccessibilityTrace.NoChange(elementCount: elementCount))
         }
-        return .elementsChanged(AccessibilityTrace.Delta.ElementsChanged(
+        return .elementsChanged(AccessibilityTrace.ElementsChanged(
             elementCount: elementCount, edits: edits
         ))
     }

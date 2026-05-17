@@ -300,18 +300,18 @@ final class TheBrains {
         let transientWire = transient.map { TheStash.WireConversion.convert($0) }
         switch delta {
         case .noChange(let payload):
-            return .noChange(AccessibilityTrace.Delta.NoChange(
+            return .noChange(AccessibilityTrace.NoChange(
                 elementCount: payload.elementCount,
                 transient: transientWire
             ))
         case .elementsChanged(let payload):
-            return .elementsChanged(AccessibilityTrace.Delta.ElementsChanged(
+            return .elementsChanged(AccessibilityTrace.ElementsChanged(
                 elementCount: payload.elementCount,
                 edits: payload.edits,
                 transient: transientWire
             ))
         case .screenChanged(let payload):
-            return .screenChanged(AccessibilityTrace.Delta.ScreenChanged(
+            return .screenChanged(AccessibilityTrace.ScreenChanged(
                 elementCount: payload.elementCount,
                 newInterface: payload.newInterface,
                 postEdits: payload.postEdits,

@@ -1828,7 +1828,8 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testBatchCountsMetExpectations() async throws {
         let (fence, mockConn) = makeConnectedFence()
-        let delta: AccessibilityTrace.Delta = .screenChanged(.init(elementCount: 10, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])))
+        let interface = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+        let delta: AccessibilityTrace.Delta = .screenChanged(.init(elementCount: 10, newInterface: interface))
         mockConn.autoResponse = { _ in
             .actionResult(ActionResult(success: true, method: .activate, accessibilityDelta: delta))
         }

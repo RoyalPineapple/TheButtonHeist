@@ -26,7 +26,7 @@ Shared wire protocol. Every type that crosses the TCP boundary lives here. No UI
 
 6. **`ConnectionScope.swift`** — Three-case enum: `.simulator`, `.usb`, `.network`. Default is `[.simulator, .usb]` — network is opt-in.
 
-7. **`HeistPlayback.swift`** — Recording/replay format. `HeistEvidence` uses a two-pass Codable: first pass reads known fields via typed `CodingKeys`, second pass reads all remaining keys via `DynamicCodingKey` into the `arguments` dictionary. The wire format is intentionally flat so `toRequestDictionary()` can construct a valid TheFence request without translation. `_recorded` may carry accessibility traces and expectation receipts for diagnostics; playback ignores them.
+7. **`HeistPlayback.swift`** — Recording/replay format. `HeistEvidence` uses a two-pass Codable: first pass reads known fields via typed `CodingKeys`, second pass reads all remaining keys via `DynamicCodingKey` into the `arguments` dictionary. The wire format is intentionally flat so `toRequestDictionary()` can construct a valid TheFence request without translation. `_recorded` may carry accessibility traces, deltas, and expectation receipts for diagnostics; playback ignores them. Recording uses those trace captures when available to derive the smallest stable matcher for the recorded element.
 
 ## How a message round-trips
 

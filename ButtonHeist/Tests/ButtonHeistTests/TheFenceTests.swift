@@ -1896,7 +1896,8 @@ final class TheFenceTests: XCTestCase {
     func testDrainBackgroundDeltaClearsAfterRead() async {
         let fence = TheFence(configuration: .init())
         // Simulate a background delta arriving via the handoff callback
-        let delta: AccessibilityTrace.Delta = .screenChanged(.init(elementCount: 7, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])))
+        let interface = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+        let delta: AccessibilityTrace.Delta = .screenChanged(.init(elementCount: 7, newInterface: interface))
         fence.handoff.onBackgroundDelta?(delta)
 
         let first = fence.drainBackgroundDelta()
@@ -2304,7 +2305,8 @@ final class TheFenceTests: XCTestCase {
         let fence = TheFence(configuration: .init())
 
         // Background delta present but no expectation on the action
-        let delta: AccessibilityTrace.Delta = .screenChanged(.init(elementCount: 3, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])))
+        let interface = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+        let delta: AccessibilityTrace.Delta = .screenChanged(.init(elementCount: 3, newInterface: interface))
         fence.handoff.onBackgroundDelta?(delta)
 
         // Action without expect — should NOT short-circuit against the
@@ -2422,6 +2424,97 @@ final class TheFenceTests: XCTestCase {
         XCTAssertEqual(heist.steps.count, 1)
         XCTAssertEqual(heist.steps[0].command, "activate")
         XCTAssertEqual(heist.steps[0].recorded?.accessibilityTrace?.receipts.first?.kind, .capture)
+        XCTAssertEqual(heist.steps[0].recorded?.accessibilityDelta?.kindRawValue, "screenChanged")
+        XCTAssertEqual(heist.steps[0].recorded?.expectation?.met, true)
+        try? await fence.bookKeeper.closeSession()
+    }
+
+    @ButtonHeistActor
+    func testHeistRecordingUsesVerifiedWaitResultAsTraceEvidence() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        mockConn.autoResponse = { message in
+            switch message {
+            case .activate:
+                return .actionResult(ActionResult(
+                    success: true,
+                    method: .activate,
+                    accessibilityDelta: .noChange(.init(elementCount: 1)),
+                    accessibilityTrace: AccessibilityTrace(interface: Interface(
+                        timestamp: Date(timeIntervalSince1970: 0),
+                        tree: [.element(HeistElement(
+                            heistId: "loading",
+                            description: "Loading",
+                            label: "Loading",
+                            value: nil,
+                            identifier: nil,
+                            traits: [.staticText],
+                            frameX: 0,
+                            frameY: 0,
+                            frameWidth: 100,
+                            frameHeight: 44,
+                            actions: []
+                        ))]
+                    ))
+                ))
+            case .waitForChange:
+                let doneInterface = Interface(
+                    timestamp: Date(timeIntervalSince1970: 1),
+                    tree: [.element(HeistElement(
+                        heistId: "done",
+                        description: "Done",
+                        label: "Done",
+                        value: nil,
+                        identifier: nil,
+                        traits: [.button],
+                        frameX: 0,
+                        frameY: 0,
+                        frameWidth: 100,
+                        frameHeight: 44,
+                        actions: []
+                    ))]
+                )
+                return .actionResult(ActionResult(
+                    success: true,
+                    method: .waitForChange,
+                    accessibilityDelta: .screenChanged(.init(
+                        elementCount: 1,
+                        newInterface: doneInterface
+                    )),
+                    accessibilityTrace: AccessibilityTrace(interface: doneInterface)
+                ))
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+        try await startHeistRecording(on: fence)
+
+        let response = try await fence.execute(request: [
+            "command": "activate",
+            "label": "Continue",
+            "expect": ["type": "screen_changed"],
+        ])
+
+        if case .action(let result, let expectation) = response {
+            XCTAssertEqual(result.method, .waitForChange)
+            XCTAssertEqual(expectation?.met, true)
+        } else {
+            XCTFail("Expected action response, got \(response)")
+        }
+
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("heist")
+        defer { try? FileManager.default.removeItem(at: output) }
+        _ = try await fence.execute(request: [
+            "command": "stop_heist",
+            "output": output.path,
+        ])
+
+        let heist = try TheBookKeeper.readHeist(from: output)
+        XCTAssertEqual(heist.steps.count, 1)
+        XCTAssertEqual(heist.steps[0].command, "activate")
+        XCTAssertEqual(heist.steps[0].recorded?.accessibilityTrace?.captures.first?.interface.elements.first?.label, "Done")
+        XCTAssertEqual(heist.steps[0].recorded?.accessibilityDelta?.kindRawValue, "screenChanged")
         XCTAssertEqual(heist.steps[0].recorded?.expectation?.met, true)
         try? await fence.bookKeeper.closeSession()
     }
