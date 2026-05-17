@@ -1146,7 +1146,7 @@ final class TheBrainsScrollTests: XCTestCase {
         frame: CGRect = CGRect(x: 0, y: 0, width: 320, height: 400)
     ) -> AccessibilityContainer {
         AccessibilityContainer(
-            type: .scrollable(contentSize: contentSize),
+            type: .scrollable(contentSize: AccessibilitySize(contentSize)),
             frame: frame
         )
     }

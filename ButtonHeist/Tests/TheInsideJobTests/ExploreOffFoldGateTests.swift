@@ -108,7 +108,7 @@ final class ExploreOffFoldGateTests: XCTestCase {
     func testDescendantsOutsideTargetContainerAreIgnored() {
         let target = makeScrollable(contentSize: CGSize(width: 320, height: 2000))
         let unrelated = AccessibilityContainer(
-            type: .scrollable(contentSize: CGSize(width: 320, height: 5000)),
+            type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 5000)),
             frame: CGRect(x: 0, y: 600, width: 320, height: 200)
         )
         let hierarchy: [AccessibilityHierarchy] = [
@@ -131,7 +131,7 @@ final class ExploreOffFoldGateTests: XCTestCase {
 
     private func makeScrollable(contentSize: CGSize) -> AccessibilityContainer {
         AccessibilityContainer(
-            type: .scrollable(contentSize: contentSize),
+            type: .scrollable(contentSize: AccessibilitySize(contentSize)),
             frame: containerFrame
         )
     }

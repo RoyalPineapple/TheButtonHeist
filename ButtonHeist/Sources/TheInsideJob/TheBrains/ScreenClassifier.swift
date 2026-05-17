@@ -214,9 +214,9 @@ import TheScore
     private static func structuralRole(of element: AccessibilityElement) -> String? {
         if isBackButton(element) { return "backButton" }
         if element.traits.contains(.header) { return "header" }
-        if element.traits.contains(UIAccessibilityTraits.fromNames(["tabBarItem"])) { return "tabBarItem" }
+        if element.traits.contains(.tabBarItem) { return "tabBarItem" }
         if element.traits.contains(.searchField) { return "searchField" }
-        if element.traits.contains(UIAccessibilityTraits.fromNames(["textEntry"])) { return "textEntry" }
+        if element.traits.contains(.textEntry) { return "textEntry" }
         if element.traits.contains(.button) { return "button" }
         if element.traits.contains(.link) { return "link" }
         if element.traits.contains(.adjustable) { return "adjustable" }
@@ -224,7 +224,7 @@ import TheScore
     }
 
     private static func isBackButton(_ element: AccessibilityElement) -> Bool {
-        element.traits.contains(UIAccessibilityTraits.fromNames(["backButton"]))
+        element.traits.contains(.backButton)
     }
 
     private static func isWindowMarker(_ container: AccessibilityContainer) -> Bool {

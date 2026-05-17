@@ -19,7 +19,7 @@ extension AccessibilityElement {
         let label: String?
         let identifier: String?
         let value: String?
-        let traits: UIAccessibilityTraits
+        let traits: AccessibilityTraits
         let fallbackFrame: CGRect?
     }
 
@@ -45,7 +45,7 @@ extension AccessibilityElement {
 
 /// Matching operates on the canonical accessibility tree — AccessibilityElement
 /// and AccessibilityHierarchy — not on wire types. Trait name strings from
-/// ElementMatcher are resolved to UIAccessibilityTraits bitmasks so comparisons
+/// ElementMatcher are resolved to parser trait bitmasks so comparisons
 /// happen at the source data level.
 
 extension AccessibilityHierarchy {
@@ -116,7 +116,7 @@ extension Array where Element == AccessibilityHierarchy {
 extension AccessibilityElement {
 
     /// Known trait name strings — references the parser's authoritative set directly.
-    private static let knownTraitNames = UIAccessibilityTraits.knownTraitNames
+    private static let knownTraitNames = AccessibilityTraits.knownTraitNames
 
     /// Does this element satisfy all property predicates in the matcher?
     /// String fields (label, identifier, value) use case-insensitive comparison; whether
@@ -141,13 +141,13 @@ extension AccessibilityElement {
             // and .contains(.none) is always true, so validate every name resolved.
             let requiredNames = requiredTraits.map(\.rawValue)
             for name in requiredNames where !Self.knownTraitNames.contains(name) { return false }
-            let mask = UIAccessibilityTraits.fromNames(requiredNames)
+            let mask = AccessibilityTraits.fromNames(requiredNames)
             if !traits.contains(mask) { return false }
         }
         if let excludedTraits = matcher.excludeTraits, !excludedTraits.isEmpty {
             let excludedNames = excludedTraits.map(\.rawValue)
             for name in excludedNames where !Self.knownTraitNames.contains(name) { return false }
-            let mask = UIAccessibilityTraits.fromNames(excludedNames)
+            let mask = AccessibilityTraits.fromNames(excludedNames)
             if !traits.isDisjoint(with: mask) { return false }
         }
         return true

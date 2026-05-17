@@ -54,7 +54,7 @@ enum ActivateFailureDiagnostic {
 
         let frame = element.shape.frame
         lines.append("- frame: \(formatRect(frame))")
-        lines.append("- activationPoint: \(formatPoint(element.activationPoint))")
+        lines.append("- activationPoint: \(formatPoint(element.activationPoint.cgPoint))")
 
         if !screenBounds.contains(frame) {
             lines.append("- onScreen: false (screen: \(formatSize(screenBounds.size)))")

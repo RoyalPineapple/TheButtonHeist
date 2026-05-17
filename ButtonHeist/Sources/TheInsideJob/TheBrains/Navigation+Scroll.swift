@@ -72,7 +72,7 @@ extension Navigation {
 
     static func scrollableAxis(of container: AccessibilityContainer) -> ScrollAxis {
         guard case .scrollable(let contentSize) = container.type else { return [] }
-        return scrollableAxis(contentSize: contentSize, frame: container.frame)
+        return scrollableAxis(contentSize: contentSize.cgSize, frame: container.frame.cgRect)
     }
 
     private static func scrollableAxis(contentSize: CGSize, frame: CGRect) -> ScrollAxis {
@@ -571,8 +571,9 @@ extension Navigation {
     /// to a window so that frames reflect the current screen position.
     func scrollableTarget(
         for container: AccessibilityContainer,
-        contentSize: CGSize
+        contentSize: AccessibilitySize
     ) -> ScrollableTarget? {
+        let cgContentSize = contentSize.cgSize
         if let view = stash.scrollableContainerViews[container], view.window != nil {
             if let scrollView = view as? UIScrollView, scrollView.bhIsUnsafeForProgrammaticScrolling {
                 return nil
@@ -581,9 +582,9 @@ extension Navigation {
                 return .uiScrollView(scrollView)
             }
             let screenFrame = safeSwipeFrame(from: view.convert(view.bounds, to: nil))
-            return .swipeable(frame: screenFrame, contentSize: contentSize)
+            return .swipeable(frame: screenFrame, contentSize: cgContentSize)
         }
-        return .swipeable(frame: safeSwipeFrame(from: container.frame), contentSize: contentSize)
+        return .swipeable(frame: safeSwipeFrame(from: container.frame.cgRect), contentSize: cgContentSize)
     }
 
     private func searchNotFoundResult(progress: ScrollSearchProgress) -> TheSafecracker.InteractionResult {

@@ -177,7 +177,7 @@ final class TheBurglar {
     ) {
         guard case .container(let container, let children) = node else { return }
 
-        let frame = container.frame
+        let frame = container.frame.cgRect
         let contentFrame: CGRect
         if let scrollView = parentScrollView, !frame.isNull, !frame.isEmpty {
             let origin = scrollView.convert(frame.origin, from: nil)
@@ -432,7 +432,7 @@ final class TheBurglar {
         return lhs.value == rhs.value
     }
 
-    private static func stableTraitNames(_ traits: UIAccessibilityTraits) -> Set<String> {
+    private static func stableTraitNames(_ traits: AccessibilityTraits) -> Set<String> {
         Set(traits.traitNames).subtracting(AccessibilityPolicy.transientTraitNames)
     }
 
@@ -449,7 +449,7 @@ final class TheBurglar {
     ) -> [AccessibilityContainer: String] {
         var result: [AccessibilityContainer: String] = [:]
         for container in hierarchy.containers {
-            let contentFrame = identityContext.contentFrames[container] ?? container.frame
+            let contentFrame = identityContext.contentFrames[container] ?? container.frame.cgRect
             let isNested = identityContext.nestedInScrollView.contains(container)
             let stableId = stableId(
                 for: container,

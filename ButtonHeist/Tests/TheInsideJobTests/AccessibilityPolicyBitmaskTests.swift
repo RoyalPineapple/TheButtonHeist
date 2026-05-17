@@ -4,12 +4,12 @@ import XCTest
 @testable import TheInsideJob
 @testable import TheScore
 
-/// Tests for the UIKit-bitmask derivations of `AccessibilityPolicy`.
+/// Tests for the parser-bitmask derivations of `AccessibilityPolicy`.
 ///
 /// The `*Bitmask` and `*Names` values are computed from `Set<HeistTrait>`
 /// policy at static-let initialization time. If the conversion ever drops
 /// a trait (e.g. an unknown name silently swallowed by
-/// `UIAccessibilityTraits.fromNames`), the consumer's behavior becomes
+/// `AccessibilityTraits.fromNames`), the consumer's behavior becomes
 /// inconsistent with policy. These tests catch that.
 final class AccessibilityPolicyBitmaskTests: XCTestCase {
 
@@ -61,7 +61,7 @@ final class AccessibilityPolicyBitmaskTests: XCTestCase {
         // recognises — otherwise `fromNames` returns `.none` and the
         // synthesiser silently skips that trait.
         for pair in AccessibilityPolicy.synthesisPriorityWithMasks {
-            XCTAssertNotEqual(pair.mask, UIAccessibilityTraits.none,
+            XCTAssertNotEqual(pair.mask, AccessibilityTraits(),
                               "Synthesis priority entry \(pair.name) resolves to no bits — parser does not know this trait")
         }
     }
@@ -69,7 +69,7 @@ final class AccessibilityPolicyBitmaskTests: XCTestCase {
     // MARK: - Known-trait gate
 
     func testAllTransientTraitNamesAreKnownToParser() {
-        let known = UIAccessibilityTraits.knownTraitNames
+        let known = AccessibilityTraits.knownTraitNames
         for name in AccessibilityPolicy.transientTraitNames {
             XCTAssertTrue(known.contains(name),
                           "transientTrait \(name) is not in the parser's knownTraitNames")
@@ -77,7 +77,7 @@ final class AccessibilityPolicyBitmaskTests: XCTestCase {
     }
 
     func testAllInteractiveTraitNamesAreKnownToParser() {
-        let known = UIAccessibilityTraits.knownTraitNames
+        let known = AccessibilityTraits.knownTraitNames
         for trait in AccessibilityPolicy.interactiveTraits {
             XCTAssertTrue(known.contains(trait.rawValue),
                           "interactiveTrait \(trait.rawValue) is not in the parser's knownTraitNames")

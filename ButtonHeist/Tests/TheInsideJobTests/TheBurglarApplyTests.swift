@@ -226,7 +226,7 @@ final class TheBurglarApplyTests: XCTestCase {
         scrollView.contentSize = CGSize(width: 320, height: 2000)
 
         let scrollableContainer = AccessibilityContainer(
-            type: .scrollable(contentSize: scrollView.contentSize),
+            type: .scrollable(contentSize: AccessibilitySize(scrollView.contentSize)),
             frame: scrollView.frame
         )
         let childFrame = CGRect(x: 10, y: 150, width: 50, height: 30)

@@ -14,7 +14,7 @@ let package = Package(
         .library(name: "ButtonHeist", targets: ["ButtonHeist"])
     ],
     dependencies: [
-        .package(url: "https://github.com/RoyalPineapple/AccessibilitySnapshotBH", from: "0.7.2"),
+        .package(url: "https://github.com/RoyalPineapple/AccessibilitySnapshotBH", from: "0.8.0"),
         .package(url: "https://github.com/apple/swift-certificates", from: "1.0.0"),
         .package(url: "https://github.com/apple/swift-crypto", from: "3.0.0"),
     ],

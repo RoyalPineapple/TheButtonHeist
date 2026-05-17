@@ -38,7 +38,7 @@ final class AccessibilityHierarchyFilterTests: XCTestCase {
     ) -> AccessibilityHierarchy {
         .container(
             AccessibilityContainer(
-                type: .scrollable(contentSize: CGSize(width: 320, height: 1000)),
+                type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 1000)),
                 frame: .zero
             ),
             children: children

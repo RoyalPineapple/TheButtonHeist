@@ -33,9 +33,13 @@ extension TheStash {
 
     /// Trait-to-name conversion delegated to AccessibilitySnapshotParser.
     static func traitNames(_ traits: UIAccessibilityTraits) -> [HeistTrait] {
+        traitNames(AccessibilityTraits(traits))
+    }
+
+    static func traitNames(_ traits: AccessibilityTraits) -> [HeistTrait] {
         var result = traits.traitNames.map { HeistTrait(rawValue: $0) ?? .unknown($0) }
         var remaining = traits.rawValue
-        for (trait, _) in UIAccessibilityTraits.knownTraits where traits.contains(trait) {
+        for (trait, _) in AccessibilityTraits.knownTraits where traits.contains(trait) {
             remaining &= ~trait.rawValue
         }
         if remaining != 0 {
