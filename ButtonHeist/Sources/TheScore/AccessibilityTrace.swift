@@ -71,6 +71,9 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
         captures.first { $0.hash == hash }
     }
 
+    /// Lookup by a capture ref emitted from this normalized trace. Capture
+    /// refs created before `AccessibilityTrace(captures:)` renumbers a chain
+    /// may have stale sequences; use `capture(hash:)` for those.
     public func capture(ref: CaptureRef) -> Capture? {
         captures.first { $0.sequence == ref.sequence && $0.hash == ref.hash }
     }

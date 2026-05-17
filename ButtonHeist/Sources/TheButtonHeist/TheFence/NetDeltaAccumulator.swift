@@ -102,6 +102,9 @@ internal enum NetDeltaAccumulator {
         }
         let finalInterface = apply(postEdits, to: screenChange.newInterface)
         let mergedTransients = mergeTransients(screenChange.transient, postTransients)
+        // Batch net deltas can span multiple capture edges. Keep provenance on
+        // the per-step deltas/traces instead of minting a misleading single
+        // captureEdge for the squashed projection.
         return .screenChanged(AccessibilityTrace.ScreenChanged(
             elementCount: finalInterface.elements.count,
             newInterface: finalInterface,
@@ -346,8 +349,14 @@ internal enum NetDeltaAccumulator {
 
         let lastCount = deltas.last?.elementCount ?? 0
         if mergedEdits.isEmpty {
+            // Batch net deltas can span multiple capture edges. Keep
+            // provenance on the per-step deltas/traces instead of minting a
+            // misleading single captureEdge for the squashed projection.
             return .noChange(AccessibilityTrace.NoChange(elementCount: lastCount, transient: transient))
         }
+        // Batch net deltas can span multiple capture edges. Keep provenance on
+        // the per-step deltas/traces instead of minting a misleading single
+        // captureEdge for the squashed projection.
         return .elementsChanged(AccessibilityTrace.ElementsChanged(
             elementCount: lastCount,
             edits: mergedEdits,

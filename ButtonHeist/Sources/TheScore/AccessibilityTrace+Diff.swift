@@ -38,7 +38,10 @@ public extension AccessibilityTrace.Delta {
     /// Compare two full accessibility captures and emit the compact delta.
     ///
     /// This is the pure capture-first diff path. Higher layers decide whether
-    /// a transition is a screen change; the diff then carries exactly the
+    /// a transition is a screen change by passing `isScreenChange` or by
+    /// writing `after.transition.screenChangeReason`. When the transition
+    /// reason is present it is authoritative, so `isScreenChange: false` can
+    /// still produce `.screenChanged`. The diff then carries exactly the
     /// evidence needed for expectations, replay diagnostics, and future repair.
     static func between(
         _ before: AccessibilityTrace.Capture,
