@@ -5,11 +5,11 @@ import Foundation
 struct RunBatchCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "run_batch",
-        abstract: "Execute a batch of TheFence steps from a JSON payload",
+        abstract: "Execute a batch of Button Heist steps from a JSON payload",
         discussion: """
             Reads a steps array (`[{ "command": "activate", "heistId": "…" }, …]`)
             either inline via --steps or from a JSON file. Each step is a full
-            TheFence request dictionary as produced by get_interface / session
+            Button Heist request dictionary as produced by get_interface / session
             JSON mode.
 
             Policy controls batch behavior on step failure: stop_on_error

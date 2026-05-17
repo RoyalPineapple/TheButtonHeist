@@ -5,7 +5,7 @@ import ButtonHeist
 struct ListCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "list_devices",
-        abstract: "List available iOS devices running TheInsideJob"
+        abstract: "List available iOS apps with Button Heist enabled"
     )
 
     @Option(name: .shortAndLong, help: "Discovery timeout in seconds")

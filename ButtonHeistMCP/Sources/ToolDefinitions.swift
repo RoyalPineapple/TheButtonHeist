@@ -27,12 +27,15 @@ enum ToolDefinitions {
 
     // Element targeting = matcher fields plus heistId and ordinal disambiguation.
     static let elementTargetProperties: [String: Value] = elementMatcherProperties.merging([
-        "heistId": ["type": "string", "description": "Stable heistId from get_interface (preferred for known elements)"],
+        "heistId": [
+            "type": "string",
+            "description": "Current-hierarchy heistId handle returned by get_interface or an action delta. Use matchers for durable flows.",
+        ],
         "ordinal": [
             "type": "integer",
             "description": """
                 0-based index to disambiguate when multiple elements match. \
-                0 = first match, 1 = second, etc. (tree traversal order). \
+                0 = first match, 1 = second, etc. in the returned hierarchy order. \
                 Omit to require a unique match — ambiguity errors show the valid range.
                 """,
         ],
@@ -155,7 +158,7 @@ enum ToolDefinitions {
         description: """
             Read the UI element hierarchy. Call once on a new screen, then track changes via \
             action deltas — re-fetch only when you need elements the delta didn't cover. \
-            Filter with matcher fields or heistId list; scope defaults to full.
+            Filter with matcher fields or heistId handle list; scope defaults to full.
             """,
         inputSchema: .object([
             "type": "object",
@@ -164,8 +167,8 @@ enum ToolDefinitions {
                     "type": "string",
                     "enum": stringEnumValues(GetInterfaceScope.self),
                     "description": """
-                        Interface scope. full (default): explore and return the whole accessible state. \
-                        visible: do a fresh on-screen parse only, with no explored union/cache.
+                        Interface scope. full (default): return the complete accessible hierarchy \
+                        for the current screen. visible: return only elements currently visible.
                         """,
                 ],
                 "detail": [
@@ -187,7 +190,7 @@ enum ToolDefinitions {
                 "elements": [
                     "type": "array",
                     "items": ["type": "string"],
-                    "description": "Optional list of heistIds to filter. Returns only matching elements. Omit for full tree.",
+                    "description": "Optional list of heistId handles to filter. Returns only matching elements. Omit for the full hierarchy.",
                 ],
             ] as [String: Value]).merging(elementMatcherProperties) { _, new in new }),
             "additionalProperties": false,
@@ -366,8 +369,8 @@ enum ToolDefinitions {
         name: "scroll",
         description: """
             Scroll within scroll views. mode=page scrolls one page in 'direction'; \
-            mode=to_visible jumps to an element seen previously; mode=search scrolls all \
-            containers to find an unseen element; mode=to_edge scrolls to a top/bottom/left/right edge.
+            mode=to_visible brings a known element into view; mode=search scrolls until a \
+            matching element is found; mode=to_edge scrolls to a top/bottom/left/right edge.
             """,
         inputSchema: .object([
             "type": "object",
@@ -517,7 +520,7 @@ enum ToolDefinitions {
         name: "run_batch",
         description: """
             Execute multiple commands in one call. Each step is a JSON object with 'command' set \
-            to an MCP tool name or raw Fence command plus that command's parameters; attach \
+            to an MCP tool name or raw Button Heist command plus that command's parameters; attach \
             'expect' per step to verify inline. Returns per-step results and a merged net delta. \
             policy=stop_on_error (default) or continue_on_error.
             """,
@@ -530,7 +533,7 @@ enum ToolDefinitions {
                     "items": [
                         "type": "object",
                         "properties": [
-                            "command": ["type": "string", "description": "Any fence command (activate, dismiss_keyboard, perform_custom_action, etc.)"],
+                            "command": ["type": "string", "description": "Any Button Heist command (activate, dismiss_keyboard, perform_custom_action, etc.)"],
                             "expect": expectProperty,
                         ],
                         "required": .array([.string("command")]),
@@ -565,7 +568,7 @@ enum ToolDefinitions {
     static let connect = Tool(
         name: "connect",
         description: """
-            Establish or switch the active connection to an iOS device running TheInsideJob. \
+            Establish or switch the active connection to an iOS app with Button Heist enabled. \
             Three patterns: target=NAME from .buttonheist.json, device=HOST:PORT + token, or \
             BUTTONHEIST_DEVICE/BUTTONHEIST_TOKEN env vars. Tears down any existing session first. \
             Returns session state; call get_interface explicitly to observe UI hierarchy.
@@ -634,8 +637,8 @@ enum ToolDefinitions {
         name: "start_heist",
         description: """
             Start recording a heist. Successful commands become steps in a .heist file; \
-            read-only and meta-commands are filtered out. Target elements by matcher fields \
-            (label, value, traits) — never by heistId — and attach 'expect' for replay validation.
+            use matcher fields (label, identifier, traits) for durable element targeting, not heistId. \
+            Attach 'expect' to validate outcomes during playback.
             """,
         inputSchema: [
             "type": "object",

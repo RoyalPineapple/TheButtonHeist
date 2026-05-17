@@ -214,6 +214,33 @@ final class FenceResponseTests: XCTestCase {
         XCTAssertTrue(output.contains("↕1 moved"))
     }
 
+    func testCompactDeltaSummarizesStructuralChangesWithoutTreeInternals() {
+        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(treeInserted: [
+                TreeInsertion(
+                    location: TreeLocation(parentId: nil, index: 1),
+                    node: .element(makeElement(heistId: "new_row", label: "New Row"))
+                ),
+            ], treeRemoved: [
+                TreeRemoval(
+                    ref: TreeNodeRef(id: "old_row", kind: .element),
+                    location: TreeLocation(parentId: "parent_row", index: 2)
+                ),
+            ], treeMoved: [
+                TreeMove(
+                    ref: TreeNodeRef(id: "moved_row", kind: .element),
+                    from: TreeLocation(parentId: nil, index: 0),
+                    to: TreeLocation(parentId: "parent_row", index: 3)
+                ),
+            ])))
+        let result = ActionResult(success: true, method: .syntheticTap, interfaceDelta: delta)
+        let output = FenceResponse.action(result: result).compactFormatted()
+
+        XCTAssertTrue(output.contains("hierarchy changed (+1, -1, moved 1)"))
+        XCTAssertFalse(output.contains("root["))
+        XCTAssertFalse(output.contains("parent_row["))
+        XCTAssertFalse(output.contains("moved_row:"))
+    }
+
     func testDeltaScreenChangedFormatting() {
         let delta: InterfaceDelta = .screenChanged(.init(elementCount: 12, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])))
         let result = ActionResult(success: true, method: .syntheticTap, interfaceDelta: delta)

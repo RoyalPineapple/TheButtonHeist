@@ -4,12 +4,11 @@ import ButtonHeist
 struct ScrollToVisibleCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "scroll_to_visible",
-        abstract: "Scroll a known element into view (one-shot)",
+        abstract: "Scroll a known element into view",
         discussion: """
-            Jumps directly to a known element's position in its scroll view. \
-            The element must already be in the registry (seen in a previous \
-            get_interface or action delta). If the element has never been seen, \
-            use element_search instead.
+            Brings an element from the current hierarchy into view. \
+            The element must have been returned by get_interface or an action delta. \
+            If the element has not been seen yet, use element_search instead.
 
             Examples:
               buttonheist scroll_to_visible btn_last

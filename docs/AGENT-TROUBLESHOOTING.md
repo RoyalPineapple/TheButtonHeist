@@ -12,9 +12,9 @@ The most common cause. You carried a heistId across a screen transition — a na
 
 ### The element is off-screen
 
-`get_interface` with `scope: "visible"` only returns what's currently visible. If the element is below the fold in a scroll view, it doesn't exist in the accessibility tree yet.
+`get_interface` with `scope: "visible"` only returns what's currently visible. If the element is below the fold in a long screen, it may not appear in that response.
 
-**Fix:** Use `element_search` with a matcher to find unseen off-screen content. If a `heistId` is still present in the current or preserved screen snapshot, such as the latest `get_interface` with `scope: "full"` union, use `scroll_to_visible` to return to that known position. See the "visibility problem" section in the Agent Guide.
+**Fix:** Use `element_search` with a matcher to find unseen off-screen content. If a `heistId` is still valid in the current hierarchy, use `scroll_to_visible` to bring that known element back into view. See the "visibility problem" section in the Agent Guide.
 
 ### You predicted a heistId
 
@@ -80,7 +80,7 @@ Or use a `.buttonheist.json` config file with named targets.
 
 ### The app isn't running
 
-The iOS app with TheInsideJob embedded must be running in the simulator or on a device before you can connect.
+The iOS app with Button Heist enabled must be running in the simulator or on a device before you can connect.
 
 **Fix:** Build and launch the app first. Check with `xcrun simctl list devices booted` that the simulator is up.
 
@@ -124,7 +124,7 @@ No text field is focused. Either the keyboard dismissed between actions, or no t
 
 The element you targeted for scroll isn't inside a scroll view. Static content and fixed headers can't be scrolled.
 
-**Fix:** Target a different element that's actually inside the scrollable area, or use `get_interface` with `scope: "full"` to see the hierarchy and identify the scrollable container.
+**Fix:** Target a different element that's actually inside the scrollable area, or use `get_interface` with `scope: "full"` to see more of the hierarchy and choose a better target.
 
 ### "Already at edge"
 
@@ -216,7 +216,7 @@ Sessions expire after 60 seconds of inactivity by default. If you go too long be
 
 A single command took longer than the action timeout (15s for most actions, 30s for `type_text` and screenshots). The connection itself is still up — only the keepalive task (6 missed pongs ≈ 30s of silence) tears down a connection. After this error you can retry on the same session.
 
-**Fix:** Usually the app is busy on its main thread, finishing a long UI transition, or sending a large response (e.g. a big screenshot or interface tree). Retry the command. If it keeps timing out, check whether the app is actually wedged: `xcrun simctl list devices booted` to confirm the simulator is up, then look at the app process. If the connection has truly been lost you'll see a different error (`notConnected`) on the next command, and TheFence will reconnect automatically when `autoReconnect` is enabled (the MCP server default).
+**Fix:** Usually the app is busy on its main thread, finishing a long UI transition, or sending a large response (e.g. a big screenshot or interface tree). Retry the command. If it keeps timing out, check whether the app is actually wedged: `xcrun simctl list devices booted` to confirm the simulator is up, then look at the app process. If the connection has truly been lost you'll see a different error (`notConnected`) on the next command, and Button Heist will reconnect automatically when `autoReconnect` is enabled (the MCP server default).
 
 ## General debugging strategy
 

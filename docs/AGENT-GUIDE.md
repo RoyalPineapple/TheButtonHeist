@@ -80,13 +80,13 @@ If a default target is set, the first command that needs a connection will auto-
 
 ## Reading the Screen
 
-### Default: what's visible
+### Default: complete screen hierarchy
 
 ```json
 {"tool": "get_interface"}
 ```
 
-Returns every element currently on screen. The response looks like:
+Returns the accessible elements Button Heist knows about for the current screen. The response looks like:
 
 ```
 14 elements
@@ -97,15 +97,15 @@ login-button "Sign In" [button] {tap}
 forgot-link "Forgot password?" [link] {tap}
 ```
 
-Each line is one element. The first token is the **heistId** — a stable identifier for that element on the current screen. It won't change between refreshes or actions as long as the screen stays the same. After it: the label in quotes, the value (if any) after `=`, traits in `[]`, and available actions in `{}`.
+Each line is one element. The first token is the **heistId** — a current-hierarchy handle for that element. It is safe to use for immediate follow-up actions on the same screen. After it: the label in quotes, the value (if any) after `=`, traits in `[]`, and available actions in `{}`.
 
 ### The visibility problem: scroll views hide elements
 
-`get_interface` with `scope: "visible"` returns what's visible *right now*. But iOS apps are full of scroll views — lists, forms, collection views, nested scroll containers — and elements below the fold don't exist in the accessibility tree until they're scrolled into view. If you're looking at a long settings screen, you might see 12 elements, but there are 40 more waiting below the visible area.
+`get_interface` with `scope: "visible"` returns what's visible *right now*. But iOS apps are full of long lists, forms, and collection views. If you're looking at a long settings screen, you might see 12 elements, but there are 40 more waiting below the visible area.
 
-This means an element you need to interact with might not show up in a visible-scoped `get_interface` at all. It's not missing — it's just off-screen, and the system hasn't rendered it yet. You have three strategies for dealing with this:
+This means an element you need to interact with might not show up in a visible-scoped `get_interface` at all. It's not missing — it's just off-screen. You have three strategies for dealing with this:
 
-**Strategy 1: Search while scrolling.** If you know what the element looks like (label, identifier, traits), `element_search` will scroll through containers on screen, checking after each scroll, and stops when the element appears. In MCP, this is the `scroll` tool with `mode: "search"`:
+**Strategy 1: Search while scrolling.** If you know what the element looks like (label, identifier, traits), `element_search` will scroll through the current screen and stop when the element appears. In MCP, this is the `scroll` tool with `mode: "search"`:
 
 ```json
 {"tool": "scroll", "arguments": {"mode": "search", "label": "Delete Account", "traits": ["button"]}}
@@ -113,13 +113,13 @@ This means an element you need to interact with might not show up in a visible-s
 
 This is the right choice when you know what you're looking for but don't know where it is. The response tells you how many scrolls it took and returns the element's heistId once found.
 
-**Strategy 2: Full census.** If you need a complete inventory of everything on the screen — not just what's visible — use `get_interface` with `scope: "full"` (the default):
+**Strategy 2: Full hierarchy.** If you need a complete inventory of everything on the screen — not just what's visible — use `get_interface` with `scope: "full"` (the default):
 
 ```json
 {"tool": "get_interface", "arguments": {"scope": "full"}}
 ```
 
-This explores every scrollable container on screen: scrolling page by page to discover all off-screen content, then restoring the original scroll positions. You get back every element the screen contains, including ones that were never visible. The response includes stats on what the exploration found:
+This returns the full accessible hierarchy for the current screen, including off-screen content that Button Heist can discover for you. The response may include summary stats:
 
 ```json
 {
@@ -151,7 +151,7 @@ The delta shows you which elements appeared (`+`) and disappeared (`-`) as conte
 
 ### Filtering
 
-You don't always need the full tree. Filter by heistId list, or by matcher predicates:
+You don't always need the full hierarchy. Filter by heistId list, or by matcher predicates:
 
 ```json
 {"tool": "get_interface", "arguments": {"label": "Sign In"}}
@@ -173,13 +173,13 @@ Every interaction command accepts the same targeting options. There are two stra
 
 ### HeistIds: use what you were handed
 
-A heistId is valid **only because you saw it in a response**. When `get_interface` or an action delta hands you `login-button`, you can use it to target that element — on that screen, right now:
+A heistId is a current-hierarchy handle. It is valid **only because you saw it in a response**. When `get_interface` or an action delta hands you `login-button`, you can use it to target that element — on that screen, right now:
 
 ```json
 {"tool": "activate", "arguments": {"heistId": "login-button"}}
 ```
 
-HeistIds are stable for the duration of the current screen. You can use them across multiple actions, refreshes, and `get_interface` calls without them changing — they're deterministic and consistent while the screen is alive. But when the screen changes — a navigation push, a modal, a tab switch — every heistId from the previous screen is invalid. Never cache them across screen transitions. Never predict what a heistId will be. Never construct one yourself. If you haven't seen it in a response from the current screen, it doesn't exist.
+HeistIds are stable enough for current-screen follow-up actions. But when the screen changes — a navigation push, a modal, a tab switch — every heistId from the previous screen is invalid. Never cache them across screen transitions. Never predict what a heistId will be. Never construct one yourself. If you haven't seen it in a response from the current screen, it doesn't exist.
 
 This means: after a `screen_changed` delta, your heistId inventory is whatever was in that delta's `newInterface`. Everything you knew from before is gone.
 
@@ -203,7 +203,7 @@ Matchers are the right tool when:
 
 On the current screen, with elements you've already seen: **heistId**. Zero ambiguity, no matching logic, no risk of hitting the wrong "Submit" button if there are two.
 
-Across screen transitions, for elements you haven't observed, or in `wait_for`/`element_search` where the element may not exist yet: **matcher**.
+Across screen transitions, durable recordings, elements you haven't observed, or in `wait_for`/`element_search` where the element may not exist yet: **matcher**.
 
 ## Acting on Elements
 
@@ -450,7 +450,7 @@ Attach expectations to actions where you have a clear hypothesis. They cost noth
 
 ### Progressive disclosure
 
-Start with `get_interface` for the current screen. If you need more, filter by traits or labels. If a specific element is not visible, use `element_search`; if you need everything, use `scope: "full"`. Use `scroll_to_visible` to return to a known `heistId` while it is still present in the current or preserved screen snapshot. Each level costs more time — escalate only when the cheaper option isn't enough.
+Start with `get_interface` for the current screen. If you need more, filter by traits or labels. If a specific element is not visible, use `element_search`; if you need everything, use `scope: "full"`. Use `scroll_to_visible` to return to a known `heistId` while it is still valid in the current hierarchy. Each level costs more time — escalate only when the cheaper option isn't enough.
 
 ## Quick Reference
 
