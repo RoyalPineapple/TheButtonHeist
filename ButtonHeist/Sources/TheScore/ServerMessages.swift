@@ -578,6 +578,9 @@ public struct RecordingPayload: Codable, Sendable {
     public let stopReason: StopReason
     /// Ordered log of interactions recorded during this session, or nil if none occurred.
     public let interactionLog: [InteractionEvent]?
+    /// Recording-time evidence about config clamping and omitted inputs.
+    /// This is diagnostic only; it is never replay authority.
+    public let evidence: RecordingPayloadEvidence?
 
     // MARK: - Init
 
@@ -591,7 +594,8 @@ public struct RecordingPayload: Codable, Sendable {
         startTime: Date,
         endTime: Date,
         stopReason: StopReason,
-        interactionLog: [InteractionEvent]? = nil
+        interactionLog: [InteractionEvent]? = nil,
+        evidence: RecordingPayloadEvidence? = nil
     ) {
         self.videoData = videoData
         self.width = width
@@ -603,6 +607,112 @@ public struct RecordingPayload: Codable, Sendable {
         self.endTime = endTime
         self.stopReason = stopReason
         self.interactionLog = interactionLog
+        self.evidence = evidence
+    }
+}
+
+/// Diagnostic evidence attached to a completed screen recording.
+///
+/// These fields describe what happened while collecting evidence: requested
+/// recording options, applied options after clamping, hard limits, and inputs
+/// that were intentionally omitted because they are not serializable. They do
+/// not affect playback.
+public struct RecordingPayloadEvidence: Codable, Sendable, Equatable {
+    public let requestedConfig: RecordingConfigurationEvidence?
+    public let appliedConfig: RecordingConfigurationEvidence?
+    public let caps: [RecordedInputCap]?
+    public let unsupportedInputs: [RecordedUnsupportedInput]?
+    public let interactionLogLimit: Int?
+    public let droppedInteractionCount: Int?
+    public let fileSizeLimitBytes: Int?
+
+    public init(
+        requestedConfig: RecordingConfigurationEvidence? = nil,
+        appliedConfig: RecordingConfigurationEvidence? = nil,
+        caps: [RecordedInputCap]? = nil,
+        unsupportedInputs: [RecordedUnsupportedInput]? = nil,
+        interactionLogLimit: Int? = nil,
+        droppedInteractionCount: Int? = nil,
+        fileSizeLimitBytes: Int? = nil
+    ) {
+        self.requestedConfig = requestedConfig
+        self.appliedConfig = appliedConfig
+        self.caps = caps?.isEmpty == true ? nil : caps
+        self.unsupportedInputs = unsupportedInputs?.isEmpty == true ? nil : unsupportedInputs
+        self.interactionLogLimit = interactionLogLimit
+        self.droppedInteractionCount = droppedInteractionCount
+        self.fileSizeLimitBytes = fileSizeLimitBytes
+    }
+}
+
+/// Non-validating snapshot of recording configuration values.
+///
+/// Unlike `RecordingConfig`, this type is evidence: it can preserve requested
+/// values that were later clamped by the recorder.
+public struct RecordingConfigurationEvidence: Codable, Sendable, Equatable {
+    public let fps: Int?
+    public let scale: Double?
+    public let inactivityTimeout: Double?
+    public let maxDuration: Double?
+
+    public init(
+        fps: Int? = nil,
+        scale: Double? = nil,
+        inactivityTimeout: Double? = nil,
+        maxDuration: Double? = nil
+    ) {
+        self.fps = fps
+        self.scale = scale
+        self.inactivityTimeout = inactivityTimeout
+        self.maxDuration = maxDuration
+    }
+
+    public init(_ config: RecordingConfig) {
+        self.init(
+            fps: config.fps,
+            scale: config.scale,
+            inactivityTimeout: config.inactivityTimeout,
+            maxDuration: config.maxDuration
+        )
+    }
+}
+
+/// Evidence that an input value was clamped before execution or recording.
+public struct RecordedInputCap: Codable, Sendable, Equatable {
+    public let name: String
+    public let requested: HeistValue?
+    public let applied: HeistValue
+    public let minimum: HeistValue?
+    public let maximum: HeistValue?
+    public let reason: String
+
+    public init(
+        name: String,
+        requested: HeistValue? = nil,
+        applied: HeistValue,
+        minimum: HeistValue? = nil,
+        maximum: HeistValue? = nil,
+        reason: String
+    ) {
+        self.name = name
+        self.requested = requested
+        self.applied = applied
+        self.minimum = minimum
+        self.maximum = maximum
+        self.reason = reason
+    }
+}
+
+/// Evidence that an input was omitted from the replay contract.
+public struct RecordedUnsupportedInput: Codable, Sendable, Equatable {
+    public let name: String
+    public let valueType: String
+    public let reason: String
+
+    public init(name: String, valueType: String, reason: String) {
+        self.name = name
+        self.valueType = valueType
+        self.reason = reason
     }
 }
 

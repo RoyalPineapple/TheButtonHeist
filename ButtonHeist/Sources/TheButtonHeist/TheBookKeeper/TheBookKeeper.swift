@@ -596,6 +596,7 @@ final class TheBookKeeper {
         var recordedHeistId: String?
         var recordedFrame: RecordedFrame?
         var coordinateOnly: Bool?
+        var unsupportedArguments: [RecordedUnsupportedInput] = []
 
         if let heistId, let source = matcherSource(
             heistId: heistId,
@@ -630,6 +631,12 @@ final class TheBookKeeper {
         for (key, argValue) in args where !Self.stripKeys.contains(key) {
             if let playbackValue = HeistValue.from(argValue) {
                 arguments[key] = playbackValue
+            } else {
+                unsupportedArguments.append(RecordedUnsupportedInput(
+                    name: key,
+                    valueType: Self.typeDescription(of: argValue),
+                    reason: "not JSON-compatible; omitted from replay arguments"
+                ))
             }
         }
 
@@ -642,6 +649,7 @@ final class TheBookKeeper {
                 heistId: recordedHeistId,
                 frame: recordedFrame,
                 coordinateOnly: coordinateOnly,
+                unsupportedArguments: unsupportedArguments,
                 actionResult: actionResult,
                 expectation: expectation
             )
@@ -672,18 +680,21 @@ final class TheBookKeeper {
         heistId: String?,
         frame: RecordedFrame?,
         coordinateOnly: Bool?,
+        unsupportedArguments: [RecordedUnsupportedInput],
         actionResult: ActionResult?,
         expectation: ExpectationResult?
     ) -> RecordedMetadata? {
         let accessibilityTrace = actionResult?.accessibilityTrace
         let accessibilityDelta = actionResult?.accessibilityDelta
-        guard heistId != nil || frame != nil || coordinateOnly != nil || accessibilityTrace != nil || accessibilityDelta != nil || expectation != nil else {
+        let unsupportedArguments = unsupportedArguments.isEmpty ? nil : unsupportedArguments
+        guard heistId != nil || frame != nil || coordinateOnly != nil || unsupportedArguments != nil || accessibilityTrace != nil || accessibilityDelta != nil || expectation != nil else {
             return nil
         }
         return RecordedMetadata(
             heistId: heistId,
             frame: frame,
             coordinateOnly: coordinateOnly,
+            unsupportedArguments: unsupportedArguments,
             accessibilityTrace: accessibilityTrace,
             accessibilityDelta: accessibilityDelta,
             expectation: expectation
@@ -692,6 +703,10 @@ final class TheBookKeeper {
 
     private func hasCoordinateArgs(_ args: [String: Any]) -> Bool {
         args["x"] != nil || args["startX"] != nil || args["centerX"] != nil || args["points"] != nil
+    }
+
+    private static func typeDescription(of value: Any) -> String {
+        String(describing: Swift.type(of: value))
     }
 
     // MARK: - Heist File I/O

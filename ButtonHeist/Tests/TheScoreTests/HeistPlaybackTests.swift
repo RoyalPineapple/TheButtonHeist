@@ -210,7 +210,23 @@ final class HeistPlaybackTests: XCTestCase {
         let metadata = RecordedMetadata(
             heistId: "button_submit",
             frame: RecordedFrame(x: 10, y: 20, width: 100, height: 44),
-            coordinateOnly: false
+            coordinateOnly: false,
+            unsupportedArguments: [
+                RecordedUnsupportedInput(
+                    name: "metadata",
+                    valueType: "Data",
+                    reason: "not JSON-compatible; omitted from replay arguments"
+                ),
+            ],
+            caps: [
+                RecordedInputCap(
+                    name: "timeout",
+                    requested: .double(60.5),
+                    applied: .double(30.5),
+                    maximum: .double(30.5),
+                    reason: "timeout capped during recording"
+                ),
+            ]
         )
         let data = try JSONEncoder().encode(metadata)
         let decoded = try JSONDecoder().decode(RecordedMetadata.self, from: data)
@@ -219,6 +235,10 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertEqual(decoded.frame?.x, 10)
         XCTAssertEqual(decoded.frame?.height, 44)
         XCTAssertEqual(decoded.coordinateOnly, false)
+        XCTAssertEqual(decoded.unsupportedArguments?.first?.name, "metadata")
+        XCTAssertEqual(decoded.unsupportedArguments?.first?.valueType, "Data")
+        XCTAssertEqual(decoded.caps?.first?.name, "timeout")
+        XCTAssertEqual(decoded.caps?.first?.applied, .double(30.5))
     }
 
     func testRecordedMetadataCoordinateOnly() throws {

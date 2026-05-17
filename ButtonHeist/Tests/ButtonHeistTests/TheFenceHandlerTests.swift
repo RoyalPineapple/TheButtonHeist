@@ -2689,6 +2689,40 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testPlaybackDoesNotUseRecordedHeistIdAsAuthority() async throws {
+        let operation = try TheFence.PlaybackOperation(
+            evidence: HeistEvidence(
+                command: "activate",
+                target: ElementMatcher(identifier: "btn1"),
+                recorded: RecordedMetadata(heistId: "stale_debug_id")
+            ),
+            index: 0
+        )
+
+        let arguments = operation.dispatchBridgeArguments()
+        XCTAssertEqual(arguments["identifier"] as? String, "btn1")
+        XCTAssertNil(arguments["heistId"])
+
+        let (fence, mockConn) = makeConnectedFence()
+        let response = try await fence.execute(playback: operation)
+
+        guard case .action(let result, _) = response else {
+            return XCTFail("Expected action response, got \(response)")
+        }
+        XCTAssertTrue(result.success)
+
+        let activateMessages = mockConn.sent.compactMap { message, _ -> ClientMessage? in
+            if case .activate = message { return message }
+            return nil
+        }
+        XCTAssertEqual(activateMessages.count, 1)
+        guard case .activate(.matcher(let matcher, _)) = activateMessages.first else {
+            return XCTFail("Expected playback to dispatch matcher target, got \(String(describing: activateMessages.first))")
+        }
+        XCTAssertEqual(matcher.identifier, "btn1")
+    }
+
+    @ButtonHeistActor
     func testPlayHeistIgnoresRecordedAccessibilityTrace() async throws {
         let heist = HeistPlayback(app: "com.test.mock", steps: [
             HeistEvidence(
