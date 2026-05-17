@@ -457,6 +457,17 @@ public final class TheFence {
     private let recordingStartTracker = PendingRequestTracker<Bool>()
     private let recordingTracker = PendingRequestTracker<RecordingPayload>()
 
+    /// Fence-owned recording phase. Handoff forwards server recording
+    /// messages, but request decisions live here.
+    enum RecordingPhase: Equatable {
+        case idle
+        case recording
+    }
+    private var recordingPhase: RecordingPhase = .idle
+    var isRecording: Bool {
+        recordingPhase == .recording
+    }
+
     /// State of the in-flight `start_recording` acknowledgement wait, if any.
     enum RecordingStartWait {
         case idle
@@ -506,16 +517,8 @@ public final class TheFence {
             self.screenTracker.resolve(requestId: requestId, result: .success(payload))
         }
 
-        handoff.onRecordingStarted = { [weak self] in
-            self?.resolveRecordingStart(.success(true))
-        }
-
-        handoff.onRecording = { [weak self] payload in
-            self?.resolveRecordingCompletion(.success(payload))
-        }
-
-        handoff.onRecordingError = { [weak self] message in
-            self?.resolveRecordingError(message)
+        handoff.onRecordingEvent = { [weak self] event in
+            self?.handleRecordingEvent(event)
         }
 
         handoff.onRequestError = { [weak self] serverError, requestId in
@@ -546,9 +549,26 @@ public final class TheFence {
         lastInterfaceCache.removeAll()
         lastActionHistory = .unrun
         lastLatencyMs = 0
+        recordingPhase = .idle
         recordingStartWait = .idle
         recordingWait = .idle
         cancelAllPendingRequests(error: error)
+    }
+
+    private func handleRecordingEvent(_ event: RecordingEvent) {
+        switch event {
+        case .started:
+            recordingPhase = .recording
+            resolveRecordingStart(.success(true))
+        case .stopped:
+            recordingPhase = .idle
+        case .completed(let payload):
+            recordingPhase = .idle
+            resolveRecordingCompletion(.success(payload))
+        case .failed(let message):
+            recordingPhase = .idle
+            resolveRecordingError(message)
+        }
     }
 
     /// Bounded FIFO of background accessibility receipts received from the server.
@@ -1363,7 +1383,7 @@ public final class TheFence {
 
     func startRecordingAndWait(config: RecordingConfig, timeout: TimeInterval = Timeouts.actionSeconds) async throws {
         guard handoff.isConnected else { throw FenceError.notConnected }
-        guard !handoff.isRecording else {
+        guard !isRecording else {
             throw FenceError.invalidRequest("Recording already in progress — use stop_recording first")
         }
         guard case .idle = recordingStartWait else {
@@ -1424,7 +1444,7 @@ public final class TheFence {
         timeout: TimeInterval
     ) async throws -> RecordingPayload {
         guard handoff.isConnected else { throw FenceError.notConnected }
-        guard !handoff.isRecording else {
+        guard !isRecording else {
             throw FenceError.invalidRequest("Recording already in progress — use stop_recording first")
         }
 

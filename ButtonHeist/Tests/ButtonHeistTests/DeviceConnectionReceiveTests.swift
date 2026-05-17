@@ -73,9 +73,9 @@ final class DeviceConnectionReceiveTests: XCTestCase {
         XCTAssertTrue(receivedPong, "DeviceConnection must forward .pong messages to TheHandoff so the keepalive counter resets")
     }
 
-    /// Regression: `.recordingStopped` must reach TheHandoff so it can clear
-    /// its recording phase. Dropping it left the client believing a recording
-    /// was still in progress after the server had already torn it down.
+    /// Regression: `.recordingStopped` must reach TheHandoff so TheFence can
+    /// clear its recording phase. Dropping it left the client believing a
+    /// recording was still in progress after the server had already torn it down.
     @ButtonHeistActor
     func testHandleReceiveForwardsRecordingStoppedToOnEvent() async throws {
         let activeConnection = NWConnection(host: "127.0.0.1", port: 1111, using: .tcp)
@@ -94,7 +94,7 @@ final class DeviceConnectionReceiveTests: XCTestCase {
 
         connection.handleReceive(content: envelope, isComplete: false, error: nil, connection: activeConnection)
 
-        XCTAssertTrue(receivedRecordingStopped, "DeviceConnection must forward .recordingStopped so TheHandoff can clear its recording phase")
+        XCTAssertTrue(receivedRecordingStopped, "DeviceConnection must forward .recordingStopped so TheFence can clear its recording phase")
     }
 
     @ButtonHeistActor

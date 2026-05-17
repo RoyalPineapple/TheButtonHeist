@@ -246,47 +246,56 @@ final class TheHandoffMessageTests: XCTestCase {
     @ButtonHeistActor
     func testRecordingStoppedWhileDisconnectedIsNoOp() async {
         let handoff = TheHandoff()
+        var receivedEvent: RecordingEvent?
+        handoff.onRecordingEvent = { receivedEvent = $0 }
+
         handoff.handleServerMessage(.recordingStopped, requestId: nil)
+
         assertDisconnected(handoff.connectionPhase)
-        XCTAssertEqual(handoff.recordingPhase, .idle)
+        XCTAssertNil(receivedEvent)
     }
 
     @ButtonHeistActor
-    func testRecordingStoppedTransitionsRecordingToIdle() async {
+    func testRecordingStoppedForwardsStoppedEvent() async {
         let handoff = TheHandoff()
         connectMockHandoff(handoff)
-        handoff.handleServerMessage(.recordingStarted, requestId: nil)
+        var receivedEvent: RecordingEvent?
+        handoff.onRecordingEvent = { receivedEvent = $0 }
 
         handoff.handleServerMessage(.recordingStopped, requestId: nil)
 
-        XCTAssertEqual(handoff.recordingPhase, .idle)
+        guard case .stopped? = receivedEvent else {
+            return XCTFail("Expected stopped recording event, got \(String(describing: receivedEvent))")
+        }
     }
 
     // MARK: - .recording
 
     @ButtonHeistActor
-    func testRecordingStartedTransitions() async {
+    func testRecordingStartedForwardsStartedEvent() async {
         let handoff = TheHandoff()
         connectMockHandoff(handoff)
-        var startedCalled = false
-        handoff.onRecordingStarted = { startedCalled = true }
+        var receivedEvent: RecordingEvent?
+        handoff.onRecordingEvent = { receivedEvent = $0 }
 
         handoff.handleServerMessage(.recordingStarted, requestId: nil)
 
-        XCTAssertEqual(handoff.recordingPhase, .recording)
-        XCTAssertTrue(startedCalled)
+        guard case .started? = receivedEvent else {
+            return XCTFail("Expected started recording event, got \(String(describing: receivedEvent))")
+        }
     }
 
     @ButtonHeistActor
-    func testRecordingPayloadTransitionsToIdle() async {
+    func testRecordingPayloadForwardsCompletedEvent() async {
         let handoff = TheHandoff()
         connectMockHandoff(handoff)
-        // Start recording first
-        handoff.handleServerMessage(.recordingStarted, requestId: nil)
-        XCTAssertEqual(handoff.recordingPhase, .recording)
 
         var receivedPayload: RecordingPayload?
-        handoff.onRecording = { receivedPayload = $0 }
+        handoff.onRecordingEvent = { event in
+            if case .completed(let payload) = event {
+                receivedPayload = payload
+            }
+        }
 
         let payload = RecordingPayload(
             videoData: "base64video", width: 390, height: 844,
@@ -296,25 +305,26 @@ final class TheHandoffMessageTests: XCTestCase {
         )
         handoff.handleServerMessage(.recording(payload), requestId: nil)
 
-        XCTAssertEqual(handoff.recordingPhase, .idle)
         XCTAssertNotNil(receivedPayload)
     }
 
     @ButtonHeistActor
-    func testRecordingErrorTransitionsToIdle() async {
+    func testRecordingErrorForwardsFailedEvent() async {
         let handoff = TheHandoff()
         connectMockHandoff(handoff)
-        handoff.handleServerMessage(.recordingStarted, requestId: nil)
 
         var receivedError: String?
-        handoff.onRecordingError = { receivedError = $0 }
+        handoff.onRecordingEvent = { event in
+            if case .failed(let message) = event {
+                receivedError = message
+            }
+        }
 
         handoff.handleServerMessage(
             .error(ServerError(kind: .recording, message: "capture failed")),
             requestId: nil
         )
 
-        XCTAssertEqual(handoff.recordingPhase, .idle)
         XCTAssertEqual(receivedError, "capture failed")
     }
 

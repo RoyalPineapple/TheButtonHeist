@@ -223,7 +223,7 @@ extension TheFence {
             payload["connectionType"] = device.connectionType.rawValue
             if let shortId = device.shortId { payload["shortId"] = shortId }
         }
-        payload["isRecording"] = handoff.isRecording
+        payload["isRecording"] = isRecording
         payload["actionTimeoutSeconds"] = Timeouts.actionSeconds
         payload["longActionTimeoutSeconds"] = Timeouts.longActionSeconds
         if let failure = handoff.connectionDiagnosticFailure {

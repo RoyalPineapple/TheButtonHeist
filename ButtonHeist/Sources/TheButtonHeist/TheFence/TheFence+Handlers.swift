@@ -348,7 +348,7 @@ extension TheFence {
 
     func handleStartRecording(_ config: RecordingConfig) async throws -> FenceResponse {
         guard handoff.isConnected else { throw FenceError.notConnected }
-        guard !handoff.isRecording else {
+        guard !isRecording else {
             return .error("Recording already in progress — use stop_recording first")
         }
         if let fps = config.fps, fps < 1 || fps > 15 {
@@ -452,7 +452,7 @@ extension TheFence {
     }
 
     func handleStopRecording(_ request: ArtifactRequest) async throws -> FenceResponse {
-        guard handoff.isRecording else {
+        guard isRecording else {
             return .error("No recording in progress — use start_recording first")
         }
         let recording: RecordingPayload = try await stopRecordingAndWait(timeout: Timeouts.longActionSeconds)
