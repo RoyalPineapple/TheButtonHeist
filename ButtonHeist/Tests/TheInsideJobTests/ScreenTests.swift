@@ -95,6 +95,52 @@ final class ScreenTests: XCTestCase {
         XCTAssertEqual(merged.interactionSnapshot.heistId(for: second), "button_second")
     }
 
+    func testVisibleOnlyFiltersKnownEntriesOutsideLatestParse() {
+        let visible = makeElement(label: "Visible", traits: .button)
+        let knownOnly = makeElement(label: "Known", traits: .button)
+        let screen = Screen.makeForTests(
+            elements: [(visible, "button_visible")],
+            offViewport: [
+                Screen.OffViewportEntry(
+                    knownOnly,
+                    heistId: "button_known",
+                    contentSpaceOrigin: CGPoint(x: 0, y: 2_000)
+                )
+            ],
+            firstResponderHeistId: "button_visible"
+        )
+
+        let visibleOnly = screen.visibleOnly
+
+        XCTAssertEqual(visibleOnly.knownIds, ["button_visible"])
+        XCTAssertEqual(visibleOnly.visibleIds, ["button_visible"])
+        XCTAssertEqual(visibleOnly.hierarchy, screen.hierarchy)
+        XCTAssertEqual(visibleOnly.firstResponderHeistId, "button_visible")
+        XCTAssertNil(visibleOnly.findElement(heistId: "button_known"))
+    }
+
+    func testOrderedElementsReturnsLiveOrderThenKnownOnlySortedByHeistId() {
+        let firstLive = makeElement(label: "First", traits: .button)
+        let secondLive = makeElement(label: "Second", traits: .button)
+        let aKnown = makeElement(label: "A Known", traits: .button)
+        let zKnown = makeElement(label: "Z Known", traits: .button)
+        let screen = Screen.makeForTests(
+            elements: [
+                (secondLive, "button_second"),
+                (firstLive, "button_first"),
+            ],
+            offViewport: [
+                Screen.OffViewportEntry(zKnown, heistId: "z_known"),
+                Screen.OffViewportEntry(aKnown, heistId: "a_known"),
+            ]
+        )
+
+        XCTAssertEqual(
+            screen.orderedElements.map(\.heistId),
+            ["button_second", "button_first", "a_known", "z_known"]
+        )
+    }
+
     // MARK: - findElement
 
     func testFindElementReturnsNilForUnknownId() {

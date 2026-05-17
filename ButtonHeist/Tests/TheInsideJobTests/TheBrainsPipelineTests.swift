@@ -192,6 +192,19 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertNil(brains.lastSentState)
     }
 
+    func testClearCacheResetsBroadcastInterfaceMemo() throws {
+        guard brains.broadcastInterfaceIfChanged() != nil else {
+            throw XCTSkip("No live hierarchy available for broadcast memo test")
+        }
+        guard brains.broadcastInterfaceIfChanged() == nil else {
+            throw XCTSkip("Live hierarchy changed during broadcast memo test")
+        }
+
+        brains.clearCache()
+
+        XCTAssertNotNil(brains.broadcastInterfaceIfChanged())
+    }
+
     // MARK: - computeBackgroundDelta Guards
 
     func testComputeBackgroundDeltaReturnsNilWithoutPriorSend() async {

@@ -14,8 +14,10 @@ import AccessibilitySnapshotParser
 /// replaces the dozen mutable fields previously held on TheStash
 /// (`heistIdIndex`, `currentHierarchy`, `reverseIndex`, `knownIds`,
 /// `currentContainers`, `firstResponderHeistId`, `lastScreenName`, ...) with
-/// a single immutable value. KnownInterface is targetable semantic state;
-/// InteractionSnapshot is the latest parse used for interaction.
+/// a single immutable value. The one-state invariant is: a `Screen` carries
+/// both targetable known elements and the latest live viewport. KnownInterface
+/// is targetable semantic state; InteractionSnapshot is the latest parse used
+/// for interaction.
 ///
 /// Exploration accumulates a local `var union: Screen` in the caller; the
 /// final union is committed by writing it back into `stash.currentScreen`.
@@ -232,6 +234,41 @@ struct Screen: Equatable {
     /// O(1) heistId lookup.
     func findElement(heistId: String) -> ScreenElement? {
         knownInterface.findElement(heistId: heistId)
+    }
+
+    /// A pure view of this screen restricted to ids present in the latest live
+    /// hierarchy. This keeps the same InteractionSnapshot and drops known-only
+    /// semantic entries retained from exploration.
+    var visibleOnly: Screen {
+        let visibleIds = interactionSnapshot.heistIds
+        return Screen(
+            elements: elements.filter { visibleIds.contains($0.key) },
+            hierarchy: hierarchy,
+            containerStableIds: containerStableIds,
+            heistIdByElement: heistIdByElement,
+            firstResponderHeistId: firstResponderHeistId,
+            scrollableContainerViews: scrollableContainerViews
+        )
+    }
+
+    /// Elements in deterministic matcher/diagnostic order: live hierarchy
+    /// order first, followed by known-only entries sorted by heistId.
+    var orderedElements: [ScreenElement] {
+        var seen = Set<String>()
+        var ordered: [ScreenElement] = []
+        ordered.reserveCapacity(elements.count)
+        for (element, _) in hierarchy.elements {
+            guard let heistId = heistIdByElement[element],
+                  let entry = elements[heistId],
+                  seen.insert(heistId).inserted else { continue }
+            ordered.append(entry)
+        }
+        let remaining = elements
+            .filter { !seen.contains($0.key) }
+            .map(\.value)
+            .sorted { $0.heistId < $1.heistId }
+        ordered.append(contentsOf: remaining)
+        return ordered
     }
 
     // MARK: - Merge
