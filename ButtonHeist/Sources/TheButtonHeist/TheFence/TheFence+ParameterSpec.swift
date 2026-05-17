@@ -1,4 +1,5 @@
 import Foundation
+import TheScore
 
 // MARK: - Parameter Specification
 
@@ -26,14 +27,52 @@ public struct FenceParameterSpec: Sendable, Equatable {
     public let key: String
     public let type: ParamType
     public let required: Bool
+    public let description: String?
+    public let enumValues: [String]?
+    public let minimum: Double?
+    public let maximum: Double?
+    public let minLength: Int?
+    public let objectProperties: [FenceParameterSpec]
+    public let objectAdditionalProperties: Bool
+    public let arrayItemType: ParamType?
+    public let arrayItemProperties: [FenceParameterSpec]
+    public let arrayItemAdditionalProperties: Bool
 
     // MARK: - Init
 
-    public init(key: String, type: ParamType, required: Bool = false) {
+    public init(
+        key: String,
+        type: ParamType,
+        required: Bool = false,
+        description: String? = nil,
+        enumValues: [String]? = nil,
+        minimum: Double? = nil,
+        maximum: Double? = nil,
+        minLength: Int? = nil,
+        objectProperties: [FenceParameterSpec] = [],
+        objectAdditionalProperties: Bool = false,
+        arrayItemType: ParamType? = nil,
+        arrayItemProperties: [FenceParameterSpec] = [],
+        arrayItemAdditionalProperties: Bool = false
+    ) {
         self.key = key
         self.type = type
         self.required = required
+        self.description = description
+        self.enumValues = enumValues
+        self.minimum = minimum
+        self.maximum = maximum
+        self.minLength = minLength
+        self.objectProperties = objectProperties
+        self.objectAdditionalProperties = objectAdditionalProperties
+        self.arrayItemType = arrayItemType
+        self.arrayItemProperties = arrayItemProperties
+        self.arrayItemAdditionalProperties = arrayItemAdditionalProperties
     }
+}
+
+private func fenceEnumValues<E>(_ type: E.Type) -> [String] where E: CaseIterable & RawRepresentable, E.RawValue == String {
+    type.allCases.map(\.rawValue)
 }
 
 // MARK: - MCP Exposure
@@ -76,27 +115,51 @@ enum FenceParameterBlocks: Sendable {
     /// Element targeting: heistId, label, value, traits, excludeTraits, identifier, ordinal.
     /// Used by action/gesture/scroll commands that call `elementTarget(args)`.
     static let elementTarget: [FenceParameterSpec] = [
-        .init(key: "heistId", type: .string),
-        .init(key: "label", type: .string),
-        .init(key: "value", type: .string),
-        .init(key: "traits", type: .stringArray),
-        .init(key: "excludeTraits", type: .stringArray),
-        .init(key: "identifier", type: .string),
-        .init(key: "ordinal", type: .integer),
+        .init(
+            key: "heistId", type: .string,
+            description: "Current-hierarchy heistId handle returned by get_interface or an action delta. Use matchers for durable flows."
+        ),
+        .init(key: "label", type: .string, description: "Accessibility label — the text VoiceOver reads (e.g. \"Sign In\")"),
+        .init(key: "value", type: .string, description: "Accessibility value — current state or placeholder (e.g. \"50%\")"),
+        .init(
+            key: "traits", type: .stringArray,
+            description: "Required traits (role qualifiers like button, header, selected). All must match."
+        ),
+        .init(key: "excludeTraits", type: .stringArray, description: "Traits that must NOT be present"),
+        .init(key: "identifier", type: .string, description: "accessibilityIdentifier (escape hatch — prefer label/value/traits)"),
+        .init(
+            key: "ordinal", type: .integer,
+            description: """
+                0-based index to disambiguate when multiple elements match. \
+                0 = first match, 1 = second, etc. in the returned hierarchy order. \
+                Omit to require a unique match — ambiguity errors show the valid range.
+                """
+        ),
     ]
 
     /// Element filtering: label, value, traits, excludeTraits, identifier (no heistId/ordinal).
     /// Used by get_interface when filtering visible elements.
     static let elementFilter: [FenceParameterSpec] = [
-        .init(key: "label", type: .string),
-        .init(key: "value", type: .string),
-        .init(key: "traits", type: .stringArray),
-        .init(key: "excludeTraits", type: .stringArray),
-        .init(key: "identifier", type: .string),
+        .init(key: "label", type: .string, description: "Accessibility label — the text VoiceOver reads (e.g. \"Sign In\")"),
+        .init(key: "value", type: .string, description: "Accessibility value — current state or placeholder (e.g. \"50%\")"),
+        .init(
+            key: "traits", type: .stringArray,
+            description: "Required traits (role qualifiers like button, header, selected). All must match."
+        ),
+        .init(key: "excludeTraits", type: .stringArray, description: "Traits that must NOT be present"),
+        .init(key: "identifier", type: .string, description: "accessibilityIdentifier (escape hatch — prefer label/value/traits)"),
     ]
 
     /// Inline expectation for action commands.
-    static let expect: FenceParameterSpec = .init(key: "expect", type: .object)
+    static let expect: FenceParameterSpec = .init(
+        key: "expect", type: .object,
+        description: "Inline verification for this action."
+    )
+
+    static let unitPoint: [FenceParameterSpec] = [
+        .init(key: "x", type: .number, required: true, description: "X position (0-1)"),
+        .init(key: "y", type: .number, required: true, description: "Y position (0-1)"),
+    ]
 }
 
 // MARK: - Per-Command Specs
@@ -166,121 +229,182 @@ extension TheFence.Command {
         // MARK: Interface / observation
         case .getInterface:
             return filter + [
-                .init(key: "scope", type: .string),
-                .init(key: "full", type: .boolean),
-                .init(key: "detail", type: .string),
-                .init(key: "elements", type: .stringArray),
+                .init(
+                    key: "scope", type: .string,
+                    description: """
+                        Interface scope. full (default): explored whole-screen semantic state, \
+                        including discoverable off-screen scroll content. visible: fresh on-screen \
+                        parse only, with no explored union/cache.
+                        """,
+                    enumValues: fenceEnumValues(GetInterfaceScope.self)
+                ),
+                .init(
+                    key: "detail", type: .string,
+                    description: """
+                        Level of detail. summary (default): identity fields, traits, and actions only \
+                        — no hint, customContent, frames, or activation points. full: adds VoiceOver \
+                        hint, customContent, frame, and activation point.
+                        """,
+                    enumValues: fenceEnumValues(InterfaceDetail.self)
+                ),
+                .init(
+                    key: "elements", type: .stringArray,
+                    description: "Optional list of heistId handles to filter. Returns only matching elements. Omit for the full hierarchy."
+                ),
             ]
 
         case .getScreen:
             return [
-                .init(key: "output", type: .string),
+                .init(key: "output", type: .string, description: "File path to save PNG (omit for inline base64)"),
             ]
 
         case .waitForChange:
             return [
                 expect,
-                .init(key: "timeout", type: .number),
+                .init(
+                    key: "timeout", type: .number,
+                    description: "Maximum wait time in seconds (default: 10, max: 30)",
+                    maximum: 30
+                ),
             ]
 
         // MARK: Gestures
         case .oneFingerTap:
             return target + [
-                .init(key: "x", type: .number),
-                .init(key: "y", type: .number),
+                .init(key: "x", type: .number, description: "X coordinate"),
+                .init(key: "y", type: .number, description: "Y coordinate"),
                 expect,
             ]
 
         case .longPress:
             return target + [
-                .init(key: "x", type: .number),
-                .init(key: "y", type: .number),
-                .init(key: "duration", type: .number),
+                .init(key: "x", type: .number, description: "X coordinate"),
+                .init(key: "y", type: .number, description: "Y coordinate"),
+                .init(key: "duration", type: .number, description: "Duration in seconds (default 0.5)"),
                 expect,
             ]
 
         case .swipe:
             return target + [
-                .init(key: "direction", type: .string),
-                .init(key: "start", type: .object),
-                .init(key: "end", type: .object),
-                .init(key: "startX", type: .number),
-                .init(key: "startY", type: .number),
-                .init(key: "endX", type: .number),
-                .init(key: "endY", type: .number),
-                .init(key: "duration", type: .number),
+                .init(
+                    key: "direction", type: .string,
+                    description: "Swipe direction: up, down, left, right",
+                    enumValues: fenceEnumValues(SwipeDirection.self)
+                ),
+                .init(
+                    key: "start", type: .object,
+                    description: "Swipe start unit point relative to element frame. (0,0)=top-left, (1,1)=bottom-right",
+                    objectProperties: FenceParameterBlocks.unitPoint
+                ),
+                .init(
+                    key: "end", type: .object,
+                    description: "Swipe end unit point relative to element frame. (0,0)=top-left, (1,1)=bottom-right",
+                    objectProperties: FenceParameterBlocks.unitPoint
+                ),
+                .init(key: "startX", type: .number, description: "Start X coordinate (swipe, draw_bezier)"),
+                .init(key: "startY", type: .number, description: "Start Y coordinate (swipe, draw_bezier)"),
+                .init(key: "endX", type: .number, description: "End X coordinate (swipe, drag)"),
+                .init(key: "endY", type: .number, description: "End Y coordinate (swipe, drag)"),
+                .init(key: "duration", type: .number, description: "Duration in seconds (swipe, long_press default 0.5, draw_path, draw_bezier)"),
                 expect,
             ]
 
         case .drag:
             return target + [
-                .init(key: "endX", type: .number, required: true),
-                .init(key: "endY", type: .number, required: true),
-                .init(key: "startX", type: .number),
-                .init(key: "startY", type: .number),
-                .init(key: "x", type: .number),
-                .init(key: "y", type: .number),
-                .init(key: "duration", type: .number),
+                .init(key: "endX", type: .number, required: true, description: "End X coordinate (swipe, drag)"),
+                .init(key: "endY", type: .number, required: true, description: "End Y coordinate (swipe, drag)"),
+                .init(key: "startX", type: .number, description: "Start X coordinate (swipe, draw_bezier)"),
+                .init(key: "startY", type: .number, description: "Start Y coordinate (swipe, draw_bezier)"),
+                .init(key: "x", type: .number, description: "X coordinate"),
+                .init(key: "y", type: .number, description: "Y coordinate"),
+                .init(key: "duration", type: .number, description: "Duration in seconds"),
                 expect,
             ]
 
         case .pinch:
             return target + [
-                .init(key: "scale", type: .number, required: true),
-                .init(key: "centerX", type: .number),
-                .init(key: "centerY", type: .number),
-                .init(key: "x", type: .number),
-                .init(key: "y", type: .number),
-                .init(key: "spread", type: .number),
-                .init(key: "duration", type: .number),
+                .init(key: "scale", type: .number, required: true, description: "Pinch scale factor (>1 zoom in, <1 zoom out)"),
+                .init(key: "centerX", type: .number, description: "Center X (pinch, rotate, two_finger_tap — defaults to element center or x)"),
+                .init(key: "centerY", type: .number, description: "Center Y (pinch, rotate, two_finger_tap — defaults to element center or y)"),
+                .init(key: "x", type: .number, description: "X coordinate"),
+                .init(key: "y", type: .number, description: "Y coordinate"),
+                .init(key: "spread", type: .number, description: "Finger spread distance (pinch, two_finger_tap)"),
+                .init(key: "duration", type: .number, description: "Duration in seconds"),
                 expect,
             ]
 
         case .rotate:
             return target + [
-                .init(key: "angle", type: .number, required: true),
-                .init(key: "centerX", type: .number),
-                .init(key: "centerY", type: .number),
-                .init(key: "x", type: .number),
-                .init(key: "y", type: .number),
-                .init(key: "radius", type: .number),
-                .init(key: "duration", type: .number),
+                .init(key: "angle", type: .number, required: true, description: "Rotation angle in radians"),
+                .init(key: "centerX", type: .number, description: "Center X (pinch, rotate, two_finger_tap — defaults to element center or x)"),
+                .init(key: "centerY", type: .number, description: "Center Y (pinch, rotate, two_finger_tap — defaults to element center or y)"),
+                .init(key: "x", type: .number, description: "X coordinate"),
+                .init(key: "y", type: .number, description: "Y coordinate"),
+                .init(key: "radius", type: .number, description: "Rotation radius (rotate)"),
+                .init(key: "duration", type: .number, description: "Duration in seconds"),
                 expect,
             ]
 
         case .twoFingerTap:
             return target + [
-                .init(key: "centerX", type: .number),
-                .init(key: "centerY", type: .number),
-                .init(key: "x", type: .number),
-                .init(key: "y", type: .number),
-                .init(key: "spread", type: .number),
+                .init(key: "centerX", type: .number, description: "Center X (pinch, rotate, two_finger_tap — defaults to element center or x)"),
+                .init(key: "centerY", type: .number, description: "Center Y (pinch, rotate, two_finger_tap — defaults to element center or y)"),
+                .init(key: "x", type: .number, description: "X coordinate"),
+                .init(key: "y", type: .number, description: "Y coordinate"),
+                .init(key: "spread", type: .number, description: "Finger spread distance (pinch, two_finger_tap)"),
                 expect,
             ]
 
         case .drawPath:
             return [
-                .init(key: "points", type: .array, required: true),
-                .init(key: "duration", type: .number),
-                .init(key: "velocity", type: .number),
+                .init(
+                    key: "points", type: .array, required: true,
+                    description: "Array of {x, y} waypoints (draw_path)",
+                    arrayItemType: .object,
+                    arrayItemProperties: [
+                        .init(key: "x", type: .number, required: true, description: "X coordinate"),
+                        .init(key: "y", type: .number, required: true, description: "Y coordinate"),
+                    ]
+                ),
+                .init(key: "duration", type: .number, description: "Duration in seconds (swipe, long_press default 0.5, draw_path, draw_bezier)"),
+                .init(key: "velocity", type: .number, description: "Drawing velocity in points/sec (draw_path, draw_bezier)"),
                 expect,
             ]
 
         case .drawBezier:
             return [
-                .init(key: "startX", type: .number, required: true),
-                .init(key: "startY", type: .number, required: true),
-                .init(key: "segments", type: .array, required: true),
-                .init(key: "samplesPerSegment", type: .integer),
-                .init(key: "duration", type: .number),
-                .init(key: "velocity", type: .number),
+                .init(key: "startX", type: .number, required: true, description: "Start X coordinate (swipe, draw_bezier)"),
+                .init(key: "startY", type: .number, required: true, description: "Start Y coordinate (swipe, draw_bezier)"),
+                .init(
+                    key: "segments", type: .array, required: true,
+                    description: "Array of bezier segments: {cp1X, cp1Y, cp2X, cp2Y, endX, endY} (draw_bezier)",
+                    arrayItemType: .object,
+                    arrayItemProperties: [
+                        .init(key: "cp1X", type: .number, required: true, description: "First control point X coordinate"),
+                        .init(key: "cp1Y", type: .number, required: true, description: "First control point Y coordinate"),
+                        .init(key: "cp2X", type: .number, required: true, description: "Second control point X coordinate"),
+                        .init(key: "cp2Y", type: .number, required: true, description: "Second control point Y coordinate"),
+                        .init(key: "endX", type: .number, required: true, description: "Segment end X coordinate"),
+                        .init(key: "endY", type: .number, required: true, description: "Segment end Y coordinate"),
+                    ]
+                ),
+                .init(key: "samplesPerSegment", type: .integer, description: "Bezier curve sampling resolution (draw_bezier)"),
+                .init(key: "duration", type: .number, description: "Duration in seconds (swipe, long_press default 0.5, draw_path, draw_bezier)"),
+                .init(key: "velocity", type: .number, description: "Drawing velocity in points/sec (draw_path, draw_bezier)"),
                 expect,
             ]
 
         // MARK: Scroll
         case .scroll:
             return target + [
-                .init(key: "direction", type: .string, required: true),
+                .init(
+                    key: "direction", type: .string, required: true,
+                    description: """
+                        Scroll direction. next/previous are page-only directions for mode=page; \
+                        mode=search accepts only up, down, left, right and is validated server-side.
+                        """,
+                    enumValues: fenceEnumValues(ScrollDirection.self)
+                ),
                 expect,
             ]
 
@@ -289,66 +413,103 @@ extension TheFence.Command {
 
         case .elementSearch:
             return target + [
-                .init(key: "direction", type: .string),
+                .init(
+                    key: "direction", type: .string,
+                    description: "Scroll search direction: down, up, left, right",
+                    enumValues: fenceEnumValues(ScrollSearchDirection.self)
+                ),
                 expect,
             ]
 
         case .scrollToEdge:
             return target + [
-                .init(key: "edge", type: .string, required: true),
+                .init(
+                    key: "edge", type: .string, required: true,
+                    description: "Edge to scroll to (required for mode to_edge)",
+                    enumValues: fenceEnumValues(ScrollEdge.self)
+                ),
                 expect,
             ]
 
         // MARK: Accessibility actions
         case .activate:
             return target + [
-                .init(key: "action", type: .string),
-                .init(key: "count", type: .integer),
+                .init(key: "action", type: .string, description: "Named action (e.g. \"increment\", \"decrement\", or a custom action name)"),
+                .init(
+                    key: "count", type: .integer,
+                    description: "Repeat increment/decrement this many times. Omit for 1.",
+                    minimum: 1,
+                    maximum: 100
+                ),
                 expect,
             ]
 
         case .increment, .decrement:
             return target + [
-                .init(key: "count", type: .integer),
+                .init(
+                    key: "count", type: .integer,
+                    description: "Repeat increment/decrement this many times. Omit for 1.",
+                    minimum: 1,
+                    maximum: 100
+                ),
                 expect,
             ]
 
         case .performCustomAction:
             return target + [
-                .init(key: "action", type: .string, required: true),
+                .init(key: "action", type: .string, required: true, description: "Custom accessibility action name"),
                 expect,
             ]
 
         case .rotor:
             return target + [
-                .init(key: "rotor", type: .string),
-                .init(key: "rotorIndex", type: .integer),
-                .init(key: "direction", type: .string),
-                .init(key: "currentHeistId", type: .string),
-                .init(key: "currentTextStartOffset", type: .integer),
-                .init(key: "currentTextEndOffset", type: .integer),
+                .init(key: "rotor", type: .string, description: "Rotor name from the element's rotors list"),
+                .init(key: "rotorIndex", type: .integer, description: "Zero-based rotor index when names are omitted or ambiguous", minimum: 0),
+                .init(
+                    key: "direction", type: .string,
+                    description: "Rotor movement direction. Defaults to next.",
+                    enumValues: fenceEnumValues(RotorDirection.self)
+                ),
+                .init(
+                    key: "currentHeistId", type: .string,
+                    description: "Optional current item heistId; pass the previous result to continue through a rotor"
+                ),
+                .init(
+                    key: "currentTextStartOffset", type: .integer,
+                    description: "Current text-range start offset for continuing through text-range rotor results",
+                    minimum: 0
+                ),
+                .init(
+                    key: "currentTextEndOffset", type: .integer,
+                    description: "Current text-range end offset for continuing through text-range rotor results",
+                    minimum: 0
+                ),
                 expect,
             ]
 
         // MARK: Text / keyboard
         case .typeText:
             return target + [
-                .init(key: "text", type: .string),
-                .init(key: "deleteCount", type: .integer),
-                .init(key: "clearFirst", type: .boolean),
+                .init(key: "text", type: .string, description: "Text to type character-by-character", minLength: 1),
+                .init(key: "deleteCount", type: .integer, description: "Number of delete key taps before typing", minimum: 1),
+                .init(key: "clearFirst", type: .boolean, description: "Clear all existing text before typing (select-all + delete)"),
                 expect,
             ]
 
         case .editAction:
             return [
-                .init(key: "action", type: .string, required: true),
+                .init(
+                    key: "action", type: .string, required: true,
+                    description: "Action to perform",
+                    enumValues: fenceEnumValues(EditAction.self)
+                ),
                 expect,
             ]
 
         // MARK: Pasteboard
         case .setPasteboard:
             return [
-                .init(key: "text", type: .string, required: true),
+                .init(key: "text", type: .string, required: true, description: "Text to write to the pasteboard"),
                 expect,
             ]
 
@@ -358,60 +519,83 @@ extension TheFence.Command {
         // MARK: Wait
         case .waitFor:
             return target + [
-                .init(key: "absent", type: .boolean),
-                .init(key: "timeout", type: .number),
+                .init(key: "absent", type: .boolean, description: "Wait for element to NOT exist (default: false)"),
+                .init(
+                    key: "timeout", type: .number,
+                    description: "Max seconds to wait (default: 10, max: 30)",
+                    maximum: 30
+                ),
                 expect,
             ]
 
         // MARK: Recording
         case .startRecording:
             return [
-                .init(key: "fps", type: .integer),
-                .init(key: "scale", type: .number),
-                .init(key: "max_duration", type: .number),
-                .init(key: "inactivity_timeout", type: .number),
+                .init(key: "fps", type: .integer, description: "Frames per second (default: 8, range: 1-15)", minimum: 1, maximum: 15),
+                .init(key: "scale", type: .number, description: "Resolution scale factor (default: 1.0, range: 0.25-1.0)", minimum: 0.25, maximum: 1.0),
+                .init(key: "max_duration", type: .number, description: "Maximum recording duration in seconds (default: 60)"),
+                .init(key: "inactivity_timeout", type: .number, description: "Auto-stop after N seconds of no interactions (default: 5)"),
             ]
 
         case .stopRecording:
             return [
-                .init(key: "output", type: .string),
+                .init(key: "output", type: .string, description: "File path to save MP4 (metadata-only response if omitted)"),
             ]
 
         // MARK: Batch
         case .runBatch:
             return [
-                .init(key: "steps", type: .array, required: true),
-                .init(key: "policy", type: .string),
+                .init(
+                    key: "steps", type: .array, required: true,
+                    description: "Ordered list of Button Heist requests to execute",
+                    arrayItemType: .object,
+                    arrayItemProperties: [
+                        .init(
+                            key: "command", type: .string, required: true,
+                            description: "Any Button Heist command (activate, dismiss_keyboard, perform_custom_action, etc.)"
+                        ),
+                        expect,
+                    ],
+                    arrayItemAdditionalProperties: true
+                ),
+                .init(
+                    key: "policy", type: .string,
+                    description: "Batch policy: stop_on_error (default) or continue_on_error",
+                    enumValues: fenceEnumValues(TheFence.BatchPolicy.self)
+                ),
             ]
 
         // MARK: Connection
         case .connect:
             return [
-                .init(key: "target", type: .string),
-                .init(key: "device", type: .string),
-                .init(key: "token", type: .string),
+                .init(key: "target", type: .string, description: "Named target from .buttonheist.json config file"),
+                .init(key: "device", type: .string, description: "Direct host:port address (e.g. 127.0.0.1:1455)"),
+                .init(key: "token", type: .string, description: "Auth token (overrides config file token if both provided)"),
             ]
 
         // MARK: Session management
         case .archiveSession:
             return [
-                .init(key: "delete_source", type: .boolean),
+                .init(key: "delete_source", type: .boolean, description: "Delete the session directory after archiving (default: false)"),
             ]
 
         case .startHeist:
             return [
-                .init(key: "app", type: .string),
-                .init(key: "identifier", type: .string),
+                .init(key: "app", type: .string, description: "Bundle ID of the app being recorded"),
+                .init(
+                    key: "identifier", type: .string,
+                    description: "Session name for the recording (default: heist). Used as directory name if a new session is created."
+                ),
             ]
 
         case .stopHeist:
             return [
-                .init(key: "output", type: .string, required: true),
+                .init(key: "output", type: .string, required: true, description: "File path to write the .heist file"),
             ]
 
         case .playHeist:
             return [
-                .init(key: "input", type: .string, required: true),
+                .init(key: "input", type: .string, required: true, description: "Path to the .heist file to play back"),
             ]
         }
     }

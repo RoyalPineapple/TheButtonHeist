@@ -21,7 +21,7 @@ struct GetInterfaceCommand: AsyncParsableCommand {
     @Option(help: "Hierarchy breadth: full (default) or visible")
     var scope: CLIGetInterfaceScope?
 
-    @Flag(help: "Legacy alias for --scope full")
+    @Flag(help: .hidden)
     var full: Bool = false
 
     @ButtonHeistActor

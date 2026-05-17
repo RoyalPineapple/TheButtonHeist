@@ -67,6 +67,13 @@ final class CLICommandSyncTests: XCTestCase {
         )
     }
 
+    func testGetInterfaceHelpAdvertisesScopeAndHidesLegacyFullAlias() {
+        let help = GetInterfaceCommand.helpMessage()
+
+        XCTAssertTrue(help.contains("--scope"), help)
+        XCTAssertFalse(help.contains("--full"), help)
+    }
+
     func testExpectationArgumentParserNormalizesShorthand() throws {
         let parsed = try ExpectationArgumentParser.parse("screen_changed")
 

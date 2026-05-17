@@ -132,7 +132,7 @@ This returns the full accessible hierarchy for the current screen, including off
 }
 ```
 
-Use `scope: "full"` when you need to understand the entire screen before acting — surveying a long form, counting items in a list, or planning a multi-step interaction across elements that aren't all visible at once. `full: true` remains a legacy alias.
+Use `scope: "full"` when you need to understand the entire screen before acting — surveying a long form, counting items in a list, or planning a multi-step interaction across elements that aren't all visible at once.
 
 **Strategy 3: Scroll manually.** When you want more control, scroll explicitly and check the delta:
 

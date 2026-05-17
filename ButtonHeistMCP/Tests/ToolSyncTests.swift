@@ -301,12 +301,6 @@ struct ToolSyncTests {
 
         #expect(extractStringField(from: scopeSchema, key: "type") == "string")
         #expect(extractEnumValues(from: scopeSchema) == Set(GetInterfaceScope.allCases.map(\.rawValue)))
-
-        let violations = unsupportedCompositionKeywordPaths(in: .object(scopeSchema))
-        #expect(
-            violations.isEmpty,
-            "get_interface.scope schema uses unsupported composition keywords at: \(violations.joined(separator: ", "))"
-        )
     }
 
     @Test("Expect schema advertises Claude-compatible object form")
@@ -375,37 +369,44 @@ struct ToolSyncTests {
 
     // MARK: - Exhaustiveness
 
-    @Test("Tool input schemas avoid Claude-incompatible composition keywords")
-    func toolInputSchemasAvoidUnsupportedCompositionKeywords() {
-        for tool in ToolDefinitions.all {
-            let violations = unsupportedCompositionKeywordPaths(in: tool.inputSchema)
-            #expect(
-                violations.isEmpty,
-                "\(tool.name) input schema uses unsupported composition keywords at: \(violations.joined(separator: ", "))"
-            )
+    @Test("MCP property schemas match enriched FenceParameterSpec metadata")
+    func mcpPropertySchemasMatchFenceParameterSpecMetadata() {
+        let toolsByName = Dictionary(uniqueKeysWithValues: ToolDefinitions.all.map { ($0.name, $0) })
+
+        for command in TheFence.Command.allCases where command.mcpExposure == .directTool {
+            guard !Self.hybridToolNames.contains(command.rawValue) else { continue }
+            guard let tool = toolsByName[command.rawValue] else { continue }
+            assertPropertySchemas(command.parameters, match: tool, enumPolicy: .exact)
+        }
+
+        if let gesture = toolsByName["gesture"] {
+            assertPropertySchemas(groupedCommands(under: "gesture").flatMap(\.parameters), match: gesture, enumPolicy: .exact)
+        }
+        if let scroll = toolsByName["scroll"] {
+            assertPropertySchemas(([.scroll] + groupedCommands(under: "scroll")).flatMap(\.parameters), match: scroll, enumPolicy: .schemaMayBeSuperset)
+        }
+        if let editAction = toolsByName["edit_action"] {
+            assertPropertySchemas(TheFence.Command.editAction.parameters, match: editAction, enumPolicy: .schemaMayBeSuperset)
         }
     }
 
-    @Test("Tool input schemas avoid JSON Schema type unions")
-    func toolInputSchemasAvoidTypeUnions() {
-        for tool in ToolDefinitions.all {
-            let violations = typeUnionPaths(in: tool.inputSchema)
-            #expect(
-                violations.isEmpty,
-                "\(tool.name) input schema uses array-valued type unions at: \(violations.joined(separator: ", "))"
-            )
-        }
+    @Test("Tool input schemas satisfy canonical schema lint in memory")
+    func toolInputSchemasSatisfyCanonicalSchemaLintInMemory() {
+        let violations = ToolSchemaLint.violations(in: ToolDefinitions.all)
+        #expect(
+            violations.isEmpty,
+            "Tool input schema lint violations:\n\(violations.joined(separator: "\n"))"
+        )
     }
 
-    @Test("Array schemas declare item schemas")
-    func arraySchemasDeclareItems() {
-        for tool in ToolDefinitions.all {
-            let violations = arrayWithoutItemsPaths(in: tool.inputSchema)
-            #expect(
-                violations.isEmpty,
-                "\(tool.name) input schema has array fields without items at: \(violations.joined(separator: ", "))"
-            )
-        }
+    @Test("Serialized ListTools JSON satisfies canonical schema lint")
+    func serializedListToolsJSONSatisfiesCanonicalSchemaLint() throws {
+        let data = try JSONEncoder().encode(ListTools.Result(tools: ToolDefinitions.all))
+        let violations = try ToolSchemaLint.violationsInSerializedListToolsJSON(data)
+        #expect(
+            violations.isEmpty,
+            "Serialized ListTools schema lint violations:\n\(violations.joined(separator: "\n"))"
+        )
     }
 
     @Test("ToolDefinitions.all has no duplicate tool names")
@@ -513,6 +514,155 @@ struct ToolSyncTests {
         }
     }
 
+    @Test("get_interface MCP schema does not advertise legacy full alias")
+    func getInterfaceSchemaDoesNotAdvertiseLegacyFullAlias() {
+        guard let getInterface = ToolDefinitions.all.first(where: { $0.name == "get_interface" }) else {
+            Issue.record("get_interface tool missing")
+            return
+        }
+
+        let propertyKeys = extractPropertyKeys(from: getInterface)
+        #expect(propertyKeys.contains("scope"))
+        #expect(!propertyKeys.contains("full"))
+    }
+
+    private enum EnumPolicy {
+        case exact
+        case schemaMayBeSuperset
+    }
+
+    private func groupedCommands(under toolName: String) -> [TheFence.Command] {
+        TheFence.Command.allCases.filter {
+            if case .groupedUnder(let groupedToolName) = $0.mcpExposure {
+                return groupedToolName == toolName
+            }
+            return false
+        }
+    }
+
+    private func assertPropertySchemas(
+        _ specs: [FenceParameterSpec],
+        match tool: Tool,
+        enumPolicy: EnumPolicy
+    ) {
+        guard case .object(let rootSchema) = tool.inputSchema,
+              let properties = extractObjectField(from: rootSchema, key: "properties") else {
+            Issue.record("\(tool.name) missing root properties")
+            return
+        }
+
+        for spec in specs {
+            guard let propertySchema = properties[spec.key],
+                  case .object(let schema) = propertySchema else {
+                Issue.record("\(tool.name).\(spec.key) missing property schema")
+                continue
+            }
+            assertPropertySchema(schema, matches: spec, context: "\(tool.name).\(spec.key)", enumPolicy: enumPolicy)
+        }
+    }
+
+    private func assertPropertySchema(
+        _ schema: [String: Value],
+        matches spec: FenceParameterSpec,
+        context: String,
+        enumPolicy: EnumPolicy
+    ) {
+        #expect(
+            extractStringField(from: schema, key: "type") == ToolDefinitions.schemaType(for: spec.type),
+            "\(context) type should match FenceParameterSpec"
+        )
+
+        if let expectedEnumValues = spec.enumValues {
+            let expected = Set(expectedEnumValues)
+            let actual = extractEnumValues(from: schema)
+            switch enumPolicy {
+            case .exact:
+                #expect(actual == expected, "\(context) enum should match FenceParameterSpec")
+            case .schemaMayBeSuperset:
+                #expect(actual.isSuperset(of: expected), "\(context) enum should include FenceParameterSpec values")
+            }
+        }
+
+        if let minimum = spec.minimum {
+            #expect(extractNumberField(from: schema, key: "minimum") == minimum, "\(context) minimum should match FenceParameterSpec")
+        }
+        if let maximum = spec.maximum {
+            #expect(extractNumberField(from: schema, key: "maximum") == maximum, "\(context) maximum should match FenceParameterSpec")
+        }
+        if let minLength = spec.minLength {
+            #expect(extractIntField(from: schema, key: "minLength") == minLength, "\(context) minLength should match FenceParameterSpec")
+        }
+
+        if spec.type == .stringArray {
+            guard let items = extractObjectField(from: schema, key: "items") else {
+                Issue.record("\(context) missing array item schema")
+                return
+            }
+            #expect(extractStringField(from: items, key: "type") == "string", "\(context) should be an array of strings")
+        }
+
+        if !spec.objectProperties.isEmpty {
+            assertObjectShape(
+                schema,
+                properties: spec.objectProperties,
+                additionalProperties: spec.objectAdditionalProperties,
+                context: context,
+                enumPolicy: enumPolicy
+            )
+        }
+
+        if let arrayItemType = spec.arrayItemType {
+            guard let items = extractObjectField(from: schema, key: "items") else {
+                Issue.record("\(context) missing array item schema")
+                return
+            }
+            #expect(
+                extractStringField(from: items, key: "type") == ToolDefinitions.schemaType(for: arrayItemType),
+                "\(context) array item type should match FenceParameterSpec"
+            )
+            if arrayItemType == .object {
+                assertObjectShape(
+                    items,
+                    properties: spec.arrayItemProperties,
+                    additionalProperties: spec.arrayItemAdditionalProperties,
+                    context: "\(context).items",
+                    enumPolicy: enumPolicy
+                )
+            }
+        }
+    }
+
+    private func assertObjectShape(
+        _ schema: [String: Value],
+        properties expectedProperties: [FenceParameterSpec],
+        additionalProperties expectedAdditionalProperties: Bool,
+        context: String,
+        enumPolicy: EnumPolicy
+    ) {
+        guard let properties = extractObjectField(from: schema, key: "properties") else {
+            Issue.record("\(context) missing object properties")
+            return
+        }
+        let expectedKeys = Set(expectedProperties.map(\.key))
+        #expect(Set(properties.keys) == expectedKeys, "\(context) object properties should match FenceParameterSpec")
+        #expect(extractRequiredKeys(from: schema) == Set(expectedProperties.filter(\.required).map(\.key)))
+        #expect(extractBoolField(from: schema, key: "additionalProperties") == expectedAdditionalProperties)
+
+        for nestedSpec in expectedProperties {
+            guard let nestedValue = properties[nestedSpec.key],
+                  case .object(let nestedSchema) = nestedValue else {
+                Issue.record("\(context).\(nestedSpec.key) missing nested property schema")
+                continue
+            }
+            assertPropertySchema(
+                nestedSchema,
+                matches: nestedSpec,
+                context: "\(context).\(nestedSpec.key)",
+                enumPolicy: enumPolicy
+            )
+        }
+    }
+
     /// Extract property key names from a Tool's inputSchema.
     private func extractPropertyKeys(from tool: Tool) -> Set<String> {
         guard case .object(let schema) = tool.inputSchema,
@@ -607,71 +757,6 @@ struct ToolSyncTests {
         return object
     }
 
-    private func arrayWithoutItemsPaths(in value: Value, path: String = "$") -> [String] {
-        switch value {
-        case .object(let object):
-            let directViolations: [String]
-            if let typeValue = object["type"], case .string("array") = typeValue, object["items"] == nil {
-                directViolations = [path]
-            } else {
-                directViolations = []
-            }
-            let nestedViolations = object.flatMap { key, nestedValue in
-                arrayWithoutItemsPaths(in: nestedValue, path: "\(path).\(key)")
-            }
-            return directViolations + nestedViolations
-        case .array(let values):
-            return values.enumerated().flatMap { index, nestedValue in
-                arrayWithoutItemsPaths(in: nestedValue, path: "\(path)[\(index)]")
-            }
-        default:
-            return []
-        }
-    }
-
-    private func typeUnionPaths(in value: Value, path: String = "$") -> [String] {
-        switch value {
-        case .object(let object):
-            let directViolations: [String]
-            if let typeValue = object["type"], case .array = typeValue {
-                directViolations = ["\(path).type"]
-            } else {
-                directViolations = []
-            }
-            let nestedViolations = object.flatMap { key, nestedValue in
-                typeUnionPaths(in: nestedValue, path: "\(path).\(key)")
-            }
-            return directViolations + nestedViolations
-        case .array(let values):
-            return values.enumerated().flatMap { index, nestedValue in
-                typeUnionPaths(in: nestedValue, path: "\(path)[\(index)]")
-            }
-        default:
-            return []
-        }
-    }
-
-    private func unsupportedCompositionKeywordPaths(in value: Value, path: String = "$") -> [String] {
-        let unsupportedKeys: Set<String> = ["oneOf", "allOf", "anyOf"]
-
-        switch value {
-        case .object(let object):
-            let directViolations = object.keys
-                .filter { unsupportedKeys.contains($0) }
-                .map { "\(path).\($0)" }
-            let nestedViolations = object.flatMap { key, nestedValue in
-                unsupportedCompositionKeywordPaths(in: nestedValue, path: "\(path).\(key)")
-            }
-            return directViolations + nestedViolations
-        case .array(let values):
-            return values.enumerated().flatMap { index, nestedValue in
-                unsupportedCompositionKeywordPaths(in: nestedValue, path: "\(path)[\(index)]")
-            }
-        default:
-            return []
-        }
-    }
-
     private func extractStringField(from schema: [String: Value], key: String) -> String? {
         guard let value = schema[key],
               case .string(let string) = value else {
@@ -680,11 +765,141 @@ struct ToolSyncTests {
         return string
     }
 
+    private func extractBoolField(from schema: [String: Value], key: String) -> Bool? {
+        guard let value = schema[key],
+              case .bool(let bool) = value else {
+            return nil
+        }
+        return bool
+    }
+
     private func extractIntField(from schema: [String: Value], key: String) -> Int? {
         guard let value = schema[key],
               case .int(let int) = value else {
             return nil
         }
         return int
+    }
+
+    private func extractNumberField(from schema: [String: Value], key: String) -> Double? {
+        guard let value = schema[key] else { return nil }
+        switch value {
+        case .int(let int):
+            return Double(int)
+        case .double(let double):
+            return double
+        default:
+            return nil
+        }
+    }
+}
+
+private enum ToolSchemaLint {
+    private static let unsupportedCompositionKeys: Set<String> = ["oneOf", "allOf", "anyOf"]
+
+    static func violations(in tools: [Tool]) -> [String] {
+        tools.flatMap { tool in
+            lintRootSchema(tool.inputSchema, path: "\(tool.name).inputSchema")
+        }
+    }
+
+    static func violationsInSerializedListToolsJSON(_ data: Data) throws -> [String] {
+        let listToolsJSON = try JSONDecoder().decode(Value.self, from: data)
+        guard case .object(let root) = listToolsJSON,
+              let toolsValue = root["tools"],
+              case .array(let tools) = toolsValue else {
+            return ["$.tools missing from serialized ListTools JSON"]
+        }
+
+        return tools.enumerated().flatMap { index, toolValue in
+            guard case .object(let toolObject) = toolValue else {
+                return ["$.tools[\(index)] is not an object"]
+            }
+            let name = toolObject["name"]?.stringValue ?? "$.tools[\(index)]"
+            guard let inputSchema = toolObject["inputSchema"] else {
+                return ["\(name).inputSchema missing from serialized ListTools JSON"]
+            }
+            return lintRootSchema(inputSchema, path: "\(name).inputSchema")
+        }
+    }
+
+    private static func lintRootSchema(_ schema: Value, path: String) -> [String] {
+        guard case .object(let object) = schema else {
+            return ["\(path) root schema is not an object"]
+        }
+
+        var violations: [String] = []
+        if object["additionalProperties"] != .bool(false) {
+            violations.append("\(path) root schema must set additionalProperties: false")
+        }
+        violations += lint(schema, path: path)
+        return violations
+    }
+
+    private static func lint(_ value: Value, path: String) -> [String] {
+        switch value {
+        case .object(let object):
+            var violations: [String] = []
+
+            for key in object.keys where unsupportedCompositionKeys.contains(key) {
+                violations.append("\(path).\(key) uses unsupported JSON Schema composition")
+            }
+
+            if let typeValue = object["type"] {
+                if case .array = typeValue {
+                    violations.append("\(path).type is an array-valued JSON Schema type")
+                }
+                if typeValue == .string("array"), object["items"] == nil {
+                    violations.append("\(path) is an array schema without items")
+                }
+            }
+
+            if let requiredValue = object["required"] {
+                guard case .array(let requiredItems) = requiredValue else {
+                    violations.append("\(path).required is not an array")
+                    return violations + lintNestedValues(in: object, path: path)
+                }
+
+                var requiredKeys: [String] = []
+                for (index, item) in requiredItems.enumerated() {
+                    guard case .string(let key) = item else {
+                        violations.append("\(path).required[\(index)] is not a string")
+                        continue
+                    }
+                    requiredKeys.append(key)
+                }
+
+                let uniqueRequiredKeys = Set(requiredKeys)
+                if uniqueRequiredKeys.count != requiredKeys.count {
+                    violations.append("\(path).required contains duplicate keys")
+                }
+
+                guard let propertiesValue = object["properties"],
+                      case .object(let properties) = propertiesValue else {
+                    violations.append("\(path).required is present without object properties")
+                    return violations + lintNestedValues(in: object, path: path)
+                }
+
+                for key in uniqueRequiredKeys where properties[key] == nil {
+                    violations.append("\(path).required contains key '\(key)' not present in properties")
+                }
+            }
+
+            return violations + lintNestedValues(in: object, path: path)
+
+        case .array(let values):
+            return values.enumerated().flatMap { index, nestedValue in
+                lint(nestedValue, path: "\(path)[\(index)]")
+            }
+
+        default:
+            return []
+        }
+    }
+
+    private static func lintNestedValues(in object: [String: Value], path: String) -> [String] {
+        object.flatMap { key, nestedValue in
+            lint(nestedValue, path: "\(path).\(key)")
+        }
     }
 }

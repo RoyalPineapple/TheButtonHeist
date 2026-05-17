@@ -137,9 +137,10 @@ Fetch the current accessibility hierarchy.
 ```bash
 buttonheist get_interface
 buttonheist get_interface --format json
+buttonheist get_interface --scope visible
 ```
 
-Flags: `-f/--format`, `-t/--timeout` (default 10s).
+Flags: `--scope <scope>` (`full` default, or `visible`), `-f/--format`, `-t/--timeout` (default 10s).
 
 ### scroll / scroll_to_visible / scroll_to_edge
 

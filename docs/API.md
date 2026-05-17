@@ -592,7 +592,7 @@ cd ButtonHeistMCP && swift build -c release
 
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
-| `get_interface` | Get UI element hierarchy. `scope: "full"` is the default whole accessible state; `scope: "visible"` requests a fresh on-screen parse. | `scope`, `full` (legacy alias), `label`, `identifier`, `value`, `traits`, `excludeTraits` (optional filtering) |
+| `get_interface` | Get UI element hierarchy. `scope: "full"` is the default whole accessible state; `scope: "visible"` requests a fresh on-screen parse. | `scope`, `label`, `identifier`, `value`, `traits`, `excludeTraits` (optional filtering) |
 | `activate` | **Primary interaction tool.** Activate a UI element (activation-first pattern). Pass `action` for named actions (increment, decrement, custom) | `heistId`, `label`, `identifier`, `value`, `traits`, `excludeTraits`, `action`, `count`, `expect` |
 | `rotor` | Move through an accessibility rotor, defaulting to next | element target, `rotor`/`rotorIndex`, `direction`, `currentHeistId`, text-range cursor offsets, `expect` |
 | `type_text` | Type text / delete characters | `text`, `deleteCount`, `clearFirst`, `heistId`, `label`, `identifier`, `value`, `traits`, `excludeTraits`, `expect` |
@@ -1329,7 +1329,7 @@ public enum ActionMethod: String, Codable, Sendable
 - `scrollToVisible` - Known registry element was scrolled into view
 - `elementSearch` - Iterative scroll search found (or failed to find) element matching predicate
 - `scrollToEdge` - Scroll view scrolled to an edge
-- `explore` - Full element census completed (dispatched internally by `get_interface` with `scope: "full"`, or legacy `full: true`)
+- `explore` - Full element census completed (dispatched internally by `get_interface` with `scope: "full"`)
 - `elementNotFound` - Element could not be found
 - `elementDeallocated` - Element's view was deallocated
 

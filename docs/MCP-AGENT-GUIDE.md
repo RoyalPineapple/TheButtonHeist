@@ -4,7 +4,7 @@ Button Heist drives iOS apps through the accessibility layer — the same interf
 
 ## Core Loop
 
-1. **See** — `get_interface` returns every visible element with a heistId, label, value, traits, and actions.
+1. **See** — `get_interface` returns the current interface elements with a heistId, label, value, traits, and actions.
 2. **Act** — `activate`, `type_text`, `scroll`, `gesture` — target by heistId or matcher. Always attach `expect` when you know what should change.
 3. **Read the response** — every response tells you two things: what your action did (`interfaceDelta`) and what changed while you were thinking (`[background: ...]`). If either answers your question, skip `get_interface`.
 4. **Wait if needed** — when the delta shows a transient state (spinner, loading overlay) and your expectation wasn't met, call `wait_for_change` with the same expectation. The server checks the current state first, then watches settled changes until the expectation is true. If the change already happened in the background, `wait_for_change` returns instantly.
@@ -12,7 +12,7 @@ Button Heist drives iOS apps through the accessibility layer — the same interf
 
 ## Choosing Tools
 
-**Observing**: `get_interface` for element data, `get_screen` for visual context. Start with `get_interface` — it explores the full screen by default, including off-screen content in scroll views. Reach for `get_screen` only when layout or visual state matters.
+**Observing**: `get_interface` for element data, `get_screen` for visual context. Start with `get_interface` — `scope: "full"` is the default and explores the whole-screen semantic state, including discoverable off-screen content in scroll views. Use `scope: "visible"` for a fresh on-screen parse with no explored union/cache. Reach for `get_screen` only when layout or visual state matters.
 
 **Acting**: `activate` is your primary tool — it taps, toggles, follows links. Use `action: "increment"` or `"decrement"` for adjustable controls, with optional `count` to repeat 1...100 times. `type_text` for keyboard input. `gesture` with type "swipe" for directional gestures. `scroll` for paging through lists. Prefer `activate` over `gesture` — raw coordinates are fragile and don't record well.
 
