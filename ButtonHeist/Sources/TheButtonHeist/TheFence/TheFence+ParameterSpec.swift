@@ -121,7 +121,8 @@ public struct MCPToolSelector: Sendable, Equatable {
     }
 
     public func selectorValue(for command: TheFence.Command) -> String? {
-        commandByValue.first { $0.value == command }?.key
+        let values = commandByValue.compactMap { $0.value == command ? $0.key : nil }
+        return values.count == 1 ? values[0] : nil
     }
 
     public func consumesValue(_ value: String?) -> Bool {
@@ -162,6 +163,9 @@ public struct MCPToolContract: Sendable, Equatable {
 
     public var requiredParameterKeys: [String] {
         if let selector {
+            // Selector tools flatten several command shapes into one Claude-compatible
+            // schema. Requiring command-specific keys here would overconstrain other
+            // selector values without JSON Schema composition.
             return selector.parameter.required ? [selector.parameter.key] : []
         }
         return parameters.filter(\.required).map(\.key)

@@ -531,6 +531,16 @@ struct ToolSyncTests {
         }
     }
 
+    @Test("Every MCP tool has an explicit adapter description")
+    func everyMCPToolHasExplicitAdapterDescription() {
+        for tool in ToolDefinitions.all {
+            #expect(
+                tool.description != "Execute the \(tool.name) Button Heist tool.",
+                "\(tool.name) is using the generic description fallback"
+            )
+        }
+    }
+
     // MARK: - Documentation Drift
 
     @Test("Documented MCP tool counts match ToolDefinitions")
