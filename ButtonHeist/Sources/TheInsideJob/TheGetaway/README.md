@@ -14,7 +14,7 @@ The getaway driver — runs all comms between the wire and the crew.
 
 `handleClientMessage(_:data:respond:)` is the two-level switch:
 
-1. **Protocol level** — clientHello/authenticate (pre-auth, handled via onUnauthenticatedData), requestInterface, ping, status. Legacy subscribe/unsubscribe/watch messages return `unsupported`.
+1. **Protocol level** — clientHello/authenticate (pre-auth, owned by TheMuscle), requestInterface, ping, status. Legacy subscribe/unsubscribe/watch messages return `unsupported`.
 2. **Observation level** — requestScreen, waitForIdle (`brains.executeWaitForIdle`), waitForChange (`brains.executeWaitForChange`)
 3. **Action level** — recording start/stop, or `brains.executeCommand(message)` for all action commands
 

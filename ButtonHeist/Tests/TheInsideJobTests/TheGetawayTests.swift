@@ -133,6 +133,37 @@ final class TheGetawayTests: XCTestCase {
         )
     }
 
+    func testUnauthenticatedStatusIsRejectedByMuscle() async throws {
+        let (getaway, _, transport) = await makeGetaway()
+        _ = getaway
+
+        let statusData = try JSONEncoder().encode(RequestEnvelope(requestId: "pre-auth-status", message: .status))
+        let responses = SentBox()
+        let callbacks = transport.makeCallbacks()
+
+        // Detached intentionally simulates SimpleSocketServer's off-main-actor callback dispatch.
+        // swiftlint:disable:next agent_no_task_detached
+        await Task.detached {
+            callbacks.onClientConnected?(1, "192.168.1.1")
+            callbacks.onUnauthenticatedData?(1, statusData) { data in
+                responses.append(data, clientId: 1)
+            }
+        }.value
+
+        try await waitFor {
+            !responses.all.isEmpty
+        }
+
+        let response = try XCTUnwrap(responses.all.first?.0)
+        let envelope = try JSONDecoder().decode(ResponseEnvelope.self, from: response)
+        XCTAssertEqual(envelope.requestId, "pre-auth-status")
+        guard case .error(let error) = envelope.message else {
+            return XCTFail("Expected auth failure, got \(envelope.message)")
+        }
+        XCTAssertEqual(error.kind, .authFailure)
+        XCTAssertEqual(error.message, "Authentication required before status.")
+    }
+
     // MARK: - Stale Targeted Actions
 
     func testLegacyRuntimeSubscriptionMessagesReturnUnsupportedError() async throws {

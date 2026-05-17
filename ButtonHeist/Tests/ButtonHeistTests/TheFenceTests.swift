@@ -2052,27 +2052,8 @@ final class TheFenceTests: XCTestCase {
         let previousFactory = makeReachabilityConnection
         makeReachabilityConnection = { device in
             let connection = MockConnection()
-            connection.emitTransportReadyOnConnect = true
             if device.id == reachableDevice.id {
-                connection.autoResponse = { message in
-                    switch message {
-                    case .status:
-                        return .status(StatusPayload(
-                            identity: StatusIdentity(
-                                appName: "ReachableApp",
-                                bundleIdentifier: "com.test.reachable",
-                                appBuild: "1",
-                                deviceName: "Simulator",
-                                systemVersion: "18.5",
-                                buttonHeistVersion: "5.0"
-                            ),
-                            session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
-                        ))
-                    default:
-                        XCTFail("Unexpected probe message: \(message)")
-                        return .error(ServerError(kind: .general, message: "unexpected"))
-                    }
-                }
+                connection.emitTransportReadyOnConnect = true
             }
             return connection
         }

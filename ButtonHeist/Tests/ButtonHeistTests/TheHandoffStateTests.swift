@@ -494,27 +494,8 @@ final class TheHandoffStateTests: XCTestCase {
         let previousFactory = makeReachabilityConnection
         makeReachabilityConnection = { device in
             let connection = MockConnection()
-            connection.emitTransportReadyOnConnect = true
             if device.id == reachableDevice.id {
-                connection.autoResponse = { message in
-                    switch message {
-                    case .status:
-                        return .status(StatusPayload(
-                            identity: StatusIdentity(
-                                appName: "AccessibilityTestApp",
-                                bundleIdentifier: "com.buttonheist.testapp",
-                                appBuild: "1",
-                                deviceName: "iPhone 16 Pro",
-                                systemVersion: "26.1",
-                                buttonHeistVersion: "5.0"
-                            ),
-                            session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
-                        ))
-                    default:
-                        XCTFail("Unexpected probe message: \(message)")
-                        return .error(ServerError(kind: .general, message: "unexpected"))
-                    }
-                }
+                connection.emitTransportReadyOnConnect = true
             }
             return connection
         }
@@ -561,30 +542,10 @@ final class TheHandoffStateTests: XCTestCase {
             if device.id == delayedDevice.id {
                 if probeAttempts == 0 {
                     connection.connectEventsOverride = [
-                        .transportReady,
                         .disconnected(.serverClosed),
                     ]
                 } else {
                     connection.emitTransportReadyOnConnect = true
-                    connection.autoResponse = { message in
-                        switch message {
-                        case .status:
-                            return .status(StatusPayload(
-                                identity: StatusIdentity(
-                                    appName: "AccessibilityTestApp",
-                                    bundleIdentifier: "com.buttonheist.testapp",
-                                    appBuild: "1",
-                                    deviceName: "iPhone 16 Pro",
-                                    systemVersion: "26.1",
-                                    buttonHeistVersion: "5.0"
-                                ),
-                                session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
-                            ))
-                        default:
-                            XCTFail("Unexpected probe message: \(message)")
-                            return .error(ServerError(kind: .general, message: "unexpected"))
-                        }
-                    }
                 }
                 probeAttempts += 1
             }
@@ -703,7 +664,7 @@ final class TheHandoffStateTests: XCTestCase {
         }
 
         let previousFactory = makeReachabilityConnection
-        makeReachabilityConnection = { _ in Self.makeReachableStatusConnection() }
+        makeReachabilityConnection = { _ in Self.makeReachableTransportConnection() }
         defer { makeReachabilityConnection = previousFactory }
 
         do {
@@ -770,7 +731,7 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.makeDiscovery = { mockDiscovery }
 
         let previousFactory = makeReachabilityConnection
-        makeReachabilityConnection = { _ in Self.makeReachableStatusConnection() }
+        makeReachabilityConnection = { _ in Self.makeReachableTransportConnection() }
         defer { makeReachabilityConnection = previousFactory }
 
         try await handoff.connectWithDiscovery(filter: nil, timeout: 0.5)
@@ -979,8 +940,8 @@ final class TheHandoffStateTests: XCTestCase {
             try await waitTask.value
             XCTFail("Expected auth failure")
         } catch let error as TheHandoff.ConnectionError {
-            guard case .authFailed(let reason) = error else {
-                return XCTFail("Expected .authFailed, got \(error)")
+            guard case .disconnected(.authFailed(let reason)) = error else {
+                return XCTFail("Expected auth-failed disconnect, got \(error)")
             }
             XCTAssertEqual(reason, "bad token")
         } catch {
@@ -1236,28 +1197,9 @@ final class TheHandoffStateTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    private static func makeReachableStatusConnection() -> MockConnection {
+    private static func makeReachableTransportConnection() -> MockConnection {
         let connection = MockConnection()
         connection.emitTransportReadyOnConnect = true
-        connection.autoResponse = { message in
-            switch message {
-            case .status:
-                return .status(StatusPayload(
-                    identity: StatusIdentity(
-                        appName: "AccessibilityTestApp",
-                        bundleIdentifier: "com.buttonheist.testapp",
-                        appBuild: "1",
-                        deviceName: "iPhone 16 Pro",
-                        systemVersion: "26.1",
-                        buttonHeistVersion: "5.0"
-                    ),
-                    session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
-                ))
-            default:
-                XCTFail("Unexpected probe message: \(message)")
-                return .error(ServerError(kind: .general, message: "unexpected"))
-            }
-        }
         return connection
     }
 }

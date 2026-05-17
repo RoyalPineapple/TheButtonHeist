@@ -18,16 +18,15 @@ final class TheHandoff {
     ///
     /// Also used as the associated value in `ConnectionPhase.failed`, which
     /// is why this enum is `Equatable`. Not every case can appear in
-    /// `.failed`: the phase-producing cases are `connectionFailed`,
-    /// `disconnected`, `authFailed`, and `sessionLocked`; the resolver/timeout cases
+    /// `.failed`: the phase-producing cases are `connectionFailed` and
+    /// `disconnected`; auth and session-lock failures are disconnect causes.
+    /// The resolver/timeout cases
     /// (`timeout`, `noDeviceFound`, `noMatchingDevice`) are thrown directly
     /// from `DeviceResolver`/`waitForConnectionResult` and never become a
     /// phase value.
     enum ConnectionError: Error, LocalizedError, Equatable {
         case connectionFailed(String)
         case disconnected(DisconnectReason)
-        case authFailed(String)
-        case sessionLocked(String)
         case timeout
         case noDeviceFound
         case noMatchingDevice(filter: String, available: [String])
@@ -35,9 +34,9 @@ final class TheHandoff {
         var errorDescription: String? {
             switch self {
             case .connectionFailed(let message): return message
+            case .disconnected(.authFailed(let reason)): return "Authentication failed: \(reason)"
+            case .disconnected(.sessionLocked(let message)): return "Session locked: \(message)"
             case .disconnected(let reason): return reason.connectionFailureMessage
-            case .authFailed(let reason): return "Authentication failed: \(reason)"
-            case .sessionLocked(let message): return "Session locked: \(message)"
             case .timeout: return "Connection timed out"
             case .noDeviceFound: return "No device found"
             case .noMatchingDevice(let filter, let available):
@@ -51,10 +50,6 @@ final class TheHandoff {
                 return "connection.failed"
             case .disconnected(let reason):
                 return reason.failureCode
-            case .authFailed:
-                return "auth.failed"
-            case .sessionLocked:
-                return "session.locked"
             case .timeout:
                 return "setup.timeout"
             case .noDeviceFound:
@@ -70,10 +65,6 @@ final class TheHandoff {
                 return .transport
             case .disconnected(let reason):
                 return reason.phase
-            case .authFailed:
-                return .authentication
-            case .sessionLocked:
-                return .session
             case .timeout:
                 return .setup
             case .noDeviceFound, .noMatchingDevice:
@@ -83,11 +74,11 @@ final class TheHandoff {
 
         var retryable: Bool {
             switch self {
-            case .connectionFailed, .sessionLocked, .timeout, .noDeviceFound:
+            case .connectionFailed, .timeout, .noDeviceFound:
                 return true
             case .disconnected(let reason):
                 return reason.retryable
-            case .authFailed, .noMatchingDevice:
+            case .noMatchingDevice:
                 return false
             }
         }
@@ -98,11 +89,6 @@ final class TheHandoff {
                 return "Check that the app is running and reachable, then retry."
             case .disconnected(let reason):
                 return reason.hint
-            case .authFailed:
-                return "Retry without a token to request a fresh session."
-            case .sessionLocked:
-                return "Wait for the current driver to disconnect or for the session to time out. " +
-                    "If this is your own stale session, retry with the same BUTTONHEIST_DRIVER_ID or restart the app."
             case .timeout:
                 return "Check that the app is running with Button Heist enabled; use 'buttonheist list' to see available devices."
             case .noDeviceFound:
@@ -405,10 +391,6 @@ final class TheHandoff {
     var onRequestError: (@ButtonHeistActor (ServerError, String) -> Void)?
     /// Auth approved. The parameter is the approved token, or nil when reusing a persistent session.
     var onAuthApproved: (@ButtonHeistActor (String?) -> Void)?
-    /// Another agent currently owns the session. Payload carries details for the operator to resolve.
-    var onSessionLocked: (@ButtonHeistActor (SessionLockedPayload) -> Void)?
-    /// Auth rejected by server; the string is the reason.
-    var onAuthFailed: (@ButtonHeistActor (String) -> Void)?
     /// Background UI-change evidence attached to explicit command responses.
     var onBackgroundAccessibilityTrace: (@ButtonHeistActor (AccessibilityTrace) -> Void)?
 
@@ -701,8 +683,7 @@ final class TheHandoff {
             case .recording:
                 emitRecordingEvent(.failed(serverError.message))
             case .authFailure:
-                transitionToFailed(.authFailed(serverError.message))
-                onAuthFailed?(serverError.message)
+                transitionToFailed(.disconnected(.authFailed(serverError.message)))
             default:
                 if let requestId {
                     onRequestError?(serverError, requestId)
@@ -715,8 +696,7 @@ final class TheHandoff {
             token = payload.token
             onAuthApproved?(payload.token)
         case .sessionLocked(let payload):
-            transitionToFailed(.sessionLocked(payload.message))
-            onSessionLocked?(payload)
+            transitionToFailed(.disconnected(.sessionLocked(payload.message)))
         case .status(let payload):
             logger.info("Received status payload: appName=\(payload.identity.appName, privacy: .public)")
         case .protocolMismatch(let payload):

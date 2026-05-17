@@ -52,7 +52,7 @@ public enum ClientMessage: Codable, Sendable {
     /// Ping for keepalive
     case ping
 
-    /// Lightweight status probe (identity + availability, no session claim)
+    /// Lightweight status command (identity + availability) for authenticated clients.
     case status
 
     // MARK: - Action Commands
