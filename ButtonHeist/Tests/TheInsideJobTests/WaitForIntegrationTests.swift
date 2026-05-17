@@ -546,7 +546,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertEqual(result.method, .waitForChange)
         XCTAssertEqual(result.errorKind, .timeout)
         XCTAssertTrue(message.contains("expected: screen_changed"), "Unexpected message: \(message)")
-        XCTAssertTrue(message.contains("expect={type: \"elements_changed\"}"), "Unexpected message: \(message)")
+        XCTAssertTrue(message.contains("expect: {\"type\": \"elements_changed\"}"), "Unexpected message: \(message)")
     }
 
     func testWaitForChangeElementsChangedTimeoutDoesNotSuggestElementsChanged() async throws {
@@ -563,7 +563,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertEqual(result.method, .waitForChange)
         XCTAssertEqual(result.errorKind, .timeout)
         XCTAssertTrue(message.contains("expected: elements_changed"), "Unexpected message: \(message)")
-        XCTAssertFalse(message.contains("expect={type: \"elements_changed\"}"), "Unexpected message: \(message)")
+        XCTAssertFalse(message.contains("expect: {\"type\": \"elements_changed\"}"), "Unexpected message: \(message)")
     }
 
     func testWaitForChangeElementUpdatedWithOldValueRequiresObservedUpdate() async throws {

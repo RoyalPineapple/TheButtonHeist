@@ -197,7 +197,7 @@ extension TheFence {
     }
 
     private static func batchNextCommand(from details: FailureDetails?) -> String? {
-        guard details?.errorCode == "request.missing_target" else { return nil }
+        guard details?.errorCode == FenceRequestErrorCode.missingTarget else { return nil }
         return details?.hint
     }
 

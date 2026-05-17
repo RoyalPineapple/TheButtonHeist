@@ -301,7 +301,7 @@ extension TheFence {
             return .action(result: result)
         case .elementSearch:
             guard let target = try elementTarget(args) else {
-                return .error("Must specify heistId or at least one match field (identifier, label, value, traits, or excludeTraits) for element_search")
+                return missingElementTargetResponse(command: "element_search")
             }
             let direction = try args.schemaEnum("direction", as: ScrollSearchDirection.self) { $0.lowercased() }
             let searchTarget = ElementSearchTarget(
@@ -314,7 +314,7 @@ extension TheFence {
         case .scrollToEdge:
             let edge = try args.requiredSchemaEnum("edge", as: ScrollEdge.self) { $0.lowercased() }
             guard let target = try elementTarget(args) else {
-                return .error("Must specify element (heistId or matcher) for scroll_to_edge")
+                return missingElementTargetResponse(command: "scroll_to_edge")
             }
             return try await sendAction(.scrollToEdge(ScrollToEdgeTarget(elementTarget: target, edge: edge)))
         default:
@@ -330,7 +330,7 @@ extension TheFence {
         }
 
         guard let target = try elementTarget(args) else {
-            return .error("Must specify element (heistId or matcher)")
+            return missingElementTargetResponse(command: command.rawValue)
         }
 
         // Resolve the action name: activate uses "action" param, standalone commands use the command itself
@@ -419,7 +419,7 @@ extension TheFence {
 
     private func handleRotor(_ args: [String: Any]) async throws -> FenceResponse {
         guard let target = try elementTarget(args) else {
-            return .error("Must specify element (heistId or matcher) for rotor")
+            return missingElementTargetResponse(command: "rotor")
         }
         let direction = try args.schemaEnum("direction", as: RotorDirection.self) { $0.lowercased() } ?? .next
         if let rotorIndex = try args.schemaInteger("rotorIndex"), rotorIndex < 0 {
@@ -522,7 +522,7 @@ extension TheFence {
         return .error(
             message,
             details: FailureDetails(
-                errorCode: "request.missing_target",
+                errorCode: FenceRequestErrorCode.missingTarget,
                 phase: .request,
                 retryable: false,
                 hint: next

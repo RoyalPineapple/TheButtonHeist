@@ -108,6 +108,7 @@ final class TheFenceHandlerTests: XCTestCase {
             }
             XCTAssertEqual(details?.errorCode, errorCode, file: file, line: line)
             XCTAssertEqual(details?.phase, .request, file: file, line: line)
+            XCTAssertEqual(details?.retryable, false, file: file, line: line)
             XCTAssertEqual(details?.hint, nextCommand, file: file, line: line)
         } catch {
             XCTFail("Unexpected throw: \(error)", file: file, line: line)
@@ -783,9 +784,29 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testScrollToEdgeMissingElement() async {
-        await assertValidationError(
+        await assertContractError(
             ["command": "scroll_to_edge", "edge": "bottom"],
-            contains: "Must specify element"
+            contains: [
+                "scroll_to_edge request contract failed: missing target",
+                "requires heistId or at least one matcher field",
+                "Next: get_interface(scope: \"full\")",
+            ],
+            errorCode: "request.missing_target",
+            nextCommand: "get_interface(scope: \"full\")"
+        )
+    }
+
+    @ButtonHeistActor
+    func testElementSearchMissingElement() async {
+        await assertContractError(
+            ["command": "element_search"],
+            contains: [
+                "element_search request contract failed: missing target",
+                "requires heistId or at least one matcher field",
+                "Next: get_interface(scope: \"full\")",
+            ],
+            errorCode: "request.missing_target",
+            nextCommand: "get_interface(scope: \"full\")"
         )
     }
 
@@ -800,9 +821,15 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testActivateMissingElement() async {
-        await assertValidationError(
+        await assertContractError(
             ["command": "activate"],
-            contains: "Must specify element"
+            contains: [
+                "activate request contract failed: missing target",
+                "requires heistId or at least one matcher field",
+                "Next: get_interface(scope: \"full\")",
+            ],
+            errorCode: "request.missing_target",
+            nextCommand: "get_interface(scope: \"full\")"
         )
     }
 
@@ -815,25 +842,43 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testIncrementMissingElement() async {
-        await assertValidationError(
+        await assertContractError(
             ["command": "increment"],
-            contains: "Must specify element"
+            contains: [
+                "increment request contract failed: missing target",
+                "requires heistId or at least one matcher field",
+                "Next: get_interface(scope: \"full\")",
+            ],
+            errorCode: "request.missing_target",
+            nextCommand: "get_interface(scope: \"full\")"
         )
     }
 
     @ButtonHeistActor
     func testDecrementMissingElement() async {
-        await assertValidationError(
+        await assertContractError(
             ["command": "decrement"],
-            contains: "Must specify element"
+            contains: [
+                "decrement request contract failed: missing target",
+                "requires heistId or at least one matcher field",
+                "Next: get_interface(scope: \"full\")",
+            ],
+            errorCode: "request.missing_target",
+            nextCommand: "get_interface(scope: \"full\")"
         )
     }
 
     @ButtonHeistActor
     func testPerformCustomActionMissingElement() async {
-        await assertValidationError(
+        await assertContractError(
             ["command": "perform_custom_action", "action": "doSomething"],
-            contains: "Must specify element"
+            contains: [
+                "perform_custom_action request contract failed: missing target",
+                "requires heistId or at least one matcher field",
+                "Next: get_interface(scope: \"full\")",
+            ],
+            errorCode: "request.missing_target",
+            nextCommand: "get_interface(scope: \"full\")"
         )
     }
 
@@ -862,9 +907,15 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testRotorMissingElement() async {
-        await assertValidationError(
+        await assertContractError(
             ["command": "rotor", "rotor": "Errors"],
-            contains: "Must specify element"
+            contains: [
+                "rotor request contract failed: missing target",
+                "requires heistId or at least one matcher field",
+                "Next: get_interface(scope: \"full\")",
+            ],
+            errorCode: "request.missing_target",
+            nextCommand: "get_interface(scope: \"full\")"
         )
     }
 

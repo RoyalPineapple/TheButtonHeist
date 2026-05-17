@@ -56,6 +56,10 @@ public struct BatchStepSummary: Sendable {
     }
 }
 
+enum FenceRequestErrorCode {
+    static let missingTarget = "request.missing_target"
+}
+
 /// Typed response from TheFence command execution.
 ///
 /// Cases marked `…Data` carry the raw payload in memory (base64-encoded) and are

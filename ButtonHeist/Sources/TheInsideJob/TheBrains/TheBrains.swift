@@ -576,7 +576,7 @@ final class TheBrains {
         }
         if expectation == .screenChanged {
             parts.append(
-                "Next: retry wait_for_change with expect={type: \"elements_changed\"} " +
+                "Next: retry wait_for_change with expect: {\"type\": \"elements_changed\"} " +
                     "if element-level updates are acceptable, or call get_interface(scope: \"full\") " +
                     "to inspect the current screen."
             )
