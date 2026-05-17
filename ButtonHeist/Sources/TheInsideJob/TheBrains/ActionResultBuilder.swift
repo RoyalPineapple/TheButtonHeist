@@ -11,7 +11,7 @@ import TheScore
 /// Usage:
 ///     var builder = ActionResultBuilder(method: .activate, snapshot: afterSnapshot)
 ///     builder.message = "Tapped Sign In"
-///     builder.accessibilityDelta = delta
+///     builder.accessibilityTrace = trace
 ///     return builder.success()
 ///
 /// `@MainActor` justification: builder reads from MainActor-bound state during
@@ -27,6 +27,10 @@ import TheScore
     var accessibilityTrace: AccessibilityTrace?
     var settled: Bool?
     var settleTimeMs: Int?
+
+    private var compatibilityDelta: AccessibilityTrace.Delta? {
+        accessibilityTrace?.captureEndpointDelta ?? accessibilityDelta
+    }
 
     /// Create a builder deriving screenName/screenId from a ScreenElement snapshot.
     init(method: ActionMethod, snapshot: [TheStash.ScreenElement]) {
@@ -64,7 +68,7 @@ import TheScore
             payload: Self.makePayload(
                 value: value, scrollSearch: scrollSearchResult, rotor: rotorResult, explore: exploreResult
             ),
-            accessibilityDelta: accessibilityDelta,
+            accessibilityDelta: compatibilityDelta,
             accessibilityTrace: accessibilityTrace,
             screenName: screenName,
             screenId: screenId,
@@ -80,7 +84,7 @@ import TheScore
             message: message,
             errorKind: errorKind,
             payload: value.map(ResultPayload.value),
-            accessibilityDelta: accessibilityDelta,
+            accessibilityDelta: compatibilityDelta,
             accessibilityTrace: accessibilityTrace,
             screenName: screenName,
             screenId: screenId,

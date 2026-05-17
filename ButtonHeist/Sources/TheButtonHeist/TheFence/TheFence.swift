@@ -903,7 +903,7 @@ public final class TheFence {
             )
         }
         guard let actionResult = response.actionResult,
-              case .screenChanged(let payload)? = actionResult.accessibilityDelta else {
+              case .screenChanged(let payload)? = actionResult.effectiveAccessibilityDelta else {
             return ResponseCacheUpdate(
                 evidenceCache: lastInterfaceCache.isEmpty ? nil : lastInterfaceCache,
                 postRecordReplacement: nil
@@ -917,7 +917,7 @@ public final class TheFence {
         newInterface: Interface,
         preActionCache: [String: HeistElement]
     ) -> ResponseCacheUpdate {
-        // Only reachable when accessibilityDelta is .screenChanged (caller's guard).
+        // Only reachable when the trace-derived effective delta is .screenChanged (caller's guard).
         // Below assumes newInterface is the screenChange payload.
         replaceInterfaceCache(with: newInterface.elements)
         // Evidence cache is union of pre-action elements + the new screen's
@@ -990,7 +990,7 @@ public final class TheFence {
                         expectation: ExpectationResult(
                             met: actionResult.success,
                             expectation: expectation,
-                            actual: actionResult.message ?? actionResult.accessibilityDelta?.kindRawValue
+                            actual: actionResult.message ?? actionResult.effectiveAccessibilityDelta?.kindRawValue
                         )
                     )
                 }
@@ -1040,7 +1040,7 @@ public final class TheFence {
                 ExpectationResult(
                     met: waitResult.success,
                     expectation: expectation,
-                    actual: waitResult.message ?? waitResult.accessibilityDelta?.kindRawValue
+                    actual: waitResult.message ?? waitResult.effectiveAccessibilityDelta?.kindRawValue
                 )
             } else {
                 expectation.validate(against: waitResult)

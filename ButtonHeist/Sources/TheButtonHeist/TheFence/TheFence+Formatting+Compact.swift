@@ -38,11 +38,15 @@ extension FenceResponse {
             return "recording: \(path) (\(String(format: "%.1f", payload.duration))s, \(payload.frameCount) frames)"
         case .recordingData(let payload):
             return "recording: \(String(format: "%.1f", payload.duration))s, \(payload.frameCount) frames"
-        case .batch(_, let completedSteps, let failedIndex, let totalTimingMs, let checked, let met, let stepSummaries):
+        case .batch(
+            _, let completedSteps, let failedIndex, let totalTimingMs,
+            let checked, let met, let stepSummaries, let accessibilityTrace
+        ):
             return compactBatchFormatted(
                 completedSteps: completedSteps, failedIndex: failedIndex,
                 totalTimingMs: totalTimingMs, checked: checked, met: met,
-                stepSummaries: stepSummaries
+                stepSummaries: stepSummaries,
+                netDelta: accessibilityTrace?.meaningfulCaptureEndpointDelta
             )
         case .sessionState(let payload):
             return Self.compactSessionState(payload)
@@ -126,7 +130,7 @@ extension FenceResponse {
         case .rotor(let search):
             text = Self.compactRotor(search)
         case .value, .explore, .none:
-            if let delta = result.accessibilityDelta {
+            if let delta = result.effectiveAccessibilityDelta {
                 text = Self.compactDelta(delta, method: result.method.rawValue)
             } else {
                 text = "\(result.method.rawValue): ok"
@@ -272,11 +276,13 @@ extension FenceResponse {
 
     private func compactBatchFormatted(
         completedSteps: Int, failedIndex: Int?, totalTimingMs: Int,
-        checked: Int, met: Int, stepSummaries: [BatchStepSummary]
+        checked: Int, met: Int, stepSummaries: [BatchStepSummary],
+        netDelta: AccessibilityTrace.Delta?
     ) -> String {
         var text = "batch: \(completedSteps) steps in \(totalTimingMs)ms"
         if let failedIndex { text += " (failed at \(failedIndex))" }
         if checked > 0 { text += " [expectations: \(met)/\(checked)]" }
+        if let netDelta { text += " [net: \(netDelta.kindRawValue)]" }
         if let lastScreenId = stepSummaries.last(where: { $0.screenId != nil })?.screenId {
             text = "\(lastScreenId) | \(text)"
         }

@@ -35,11 +35,15 @@ extension FenceResponse {
             return recordingJsonDict(path: path, payload: payload)
         case .recordingData(let payload):
             return recordingDataJsonDict(payload)
-        case .batch(let results, let completedSteps, let failedIndex, let totalTimingMs, let checked, let met, let stepSummaries):
+        case .batch(
+            let results, let completedSteps, let failedIndex, let totalTimingMs,
+            let checked, let met, let stepSummaries, let accessibilityTrace
+        ):
             return batchJsonDict(
                 results: results, completedSteps: completedSteps, failedIndex: failedIndex,
                 totalTimingMs: totalTimingMs, checked: checked, met: met,
-                stepSummaries: stepSummaries
+                stepSummaries: stepSummaries,
+                accessibilityTrace: accessibilityTrace
             )
         case .sessionState(let payload):
             return payload
@@ -190,7 +194,8 @@ extension FenceResponse {
     private func batchJsonDict(
         results: [[String: Any]], completedSteps: Int, failedIndex: Int?,
         totalTimingMs: Int, checked: Int, met: Int,
-        stepSummaries: [BatchStepSummary]
+        stepSummaries: [BatchStepSummary],
+        accessibilityTrace: AccessibilityTrace?
     ) -> [String: Any] {
         var dict: [String: Any] = [
             "status": failedIndex == nil ? "ok" : "partial",
@@ -210,6 +215,9 @@ extension FenceResponse {
             dict["stepSummaries"] = stepSummaries.enumerated().map { index, summary in
                 Self.stepSummaryDict(index: index, summary: summary)
             }
+        }
+        if let netDelta = accessibilityTrace?.meaningfulCaptureEndpointDelta {
+            dict["netDelta"] = deltaDictionary(netDelta)
         }
         return dict
     }
@@ -270,7 +278,7 @@ extension FenceResponse {
             payload["rotor"] = rotor
         }
         if result.animating == true { payload["animating"] = true }
-        if let delta = result.accessibilityDelta {
+        if let delta = result.effectiveAccessibilityDelta {
             payload["delta"] = deltaDictionary(delta)
         }
 

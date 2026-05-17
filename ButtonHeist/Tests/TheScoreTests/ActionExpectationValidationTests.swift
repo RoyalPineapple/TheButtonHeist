@@ -63,6 +63,67 @@ final class ActionExpectationValidationTests: XCTestCase {
         XCTAssertEqual(outcome.actual, "noChange")
     }
 
+    func testScreenChangedPrefersTraceProjectionOverLegacyDeltaField() {
+        let before = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+        let after = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [
+            .element(HeistElement(
+                heistId: "settings_header",
+                description: "Settings",
+                label: "Settings",
+                value: nil,
+                identifier: nil,
+                traits: [.header],
+                frameX: 0,
+                frameY: 0,
+                frameWidth: 100,
+                frameHeight: 44,
+                actions: []
+            )),
+        ])
+        let first = AccessibilityTrace.Capture(
+            sequence: 1,
+            interface: before,
+            context: AccessibilityTrace.Context(screenId: "home")
+        )
+        let last = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: after,
+            parentHash: first.hash,
+            context: AccessibilityTrace.Context(screenId: "settings")
+        )
+        let result = ActionResult(
+            success: true,
+            method: .activate,
+            accessibilityDelta: .noChange(.init(elementCount: 0)),
+            accessibilityTrace: AccessibilityTrace(captures: [first, last])
+        )
+
+        let outcome = ActionExpectation.screenChanged.validate(against: result)
+
+        XCTAssertTrue(outcome.met)
+        XCTAssertEqual(outcome.actual, "screenChanged")
+    }
+
+    func testScreenChangedFallsBackToLegacyDeltaWhenTraceHasNoEndpointEdge() {
+        let result = ActionResult(
+            success: true,
+            method: .activate,
+            accessibilityDelta: .screenChanged(.init(
+                elementCount: 0,
+                newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+            )),
+            accessibilityTrace: AccessibilityTrace(interface: Interface(
+                timestamp: Date(timeIntervalSince1970: 0),
+                tree: []
+            ))
+        )
+
+        let outcome = ActionExpectation.screenChanged.validate(against: result)
+
+        XCTAssertTrue(outcome.met)
+        XCTAssertEqual(outcome.actual, "screenChanged")
+    }
+
     // MARK: - elementsChanged (superset rule)
 
     func testElementsChangedMetByElementsChanged() {

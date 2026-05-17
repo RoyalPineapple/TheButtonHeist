@@ -328,6 +328,16 @@ public struct ActionResult: Codable, Sendable {
         self.settled = settled
         self.settleTimeMs = settleTimeMs
     }
+
+    /// Compact delta projection for this result.
+    ///
+    /// `accessibilityTrace` is authoritative when present; `accessibilityDelta`
+    /// remains a compatibility field for legacy delta-only payloads and older
+    /// tests. Callers that make behavior decisions should use this projection
+    /// instead of reading `accessibilityDelta` directly.
+    public var effectiveAccessibilityDelta: AccessibilityTrace.Delta? {
+        accessibilityTrace?.captureEndpointDelta ?? accessibilityDelta
+    }
 }
 
 /// Diagnostics from a scroll_to_visible search operation.

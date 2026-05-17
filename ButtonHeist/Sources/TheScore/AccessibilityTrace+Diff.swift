@@ -33,6 +33,70 @@ private struct ElementPairingSignature: Hashable {
 
 private let stableDiffTimestamp = Date(timeIntervalSince1970: 0)
 
+public extension AccessibilityTrace {
+    /// Raw compact projection between this trace's first and final capture.
+    ///
+    /// This is the canonical delta projection for an action receipt: the
+    /// captures remain the durable source, while the delta is just the compact
+    /// view callers use for expectations and formatting. Unlike background
+    /// projections, a no-change action is still meaningful and is returned.
+    var captureEndpointDelta: AccessibilityTrace.Delta? {
+        guard captures.count >= 2,
+              let first = captures.first,
+              let last = captures.last
+        else { return nil }
+        return .between(first, last)
+    }
+
+    /// Background/summary projection between this trace's endpoints.
+    ///
+    /// Silent no-change edges are omitted because they do not carry useful
+    /// background evidence. Transient-bearing no-change edges are preserved.
+    var meaningfulCaptureEndpointDelta: AccessibilityTrace.Delta? {
+        guard let delta = captureEndpointDelta else { return nil }
+        return Self.meaningfulCaptureEndpointDelta(delta)
+    }
+
+    /// Build one source trace from per-step action traces.
+    ///
+    /// Adjacent duplicate captures are collapsed so a batch `[A→B, B→C]`
+    /// becomes `[A, B, C]`. Parent links are normalized by
+    /// `AccessibilityTrace(captures:)`; capture hashes still describe the
+    /// captured interface/context content.
+    static func captureEndpointTrace(from traces: [AccessibilityTrace]) -> AccessibilityTrace? {
+        var captures: [AccessibilityTrace.Capture] = []
+        for trace in traces {
+            for capture in trace.captures {
+                guard captures.last?.hash != capture.hash else { continue }
+                captures.append(capture)
+            }
+        }
+        guard captures.count >= 2 else { return nil }
+        return AccessibilityTrace(captures: captures)
+    }
+
+    /// Raw compact projection across a set of per-step traces.
+    static func captureEndpointDelta(from traces: [AccessibilityTrace]) -> AccessibilityTrace.Delta? {
+        captureEndpointTrace(from: traces)?.captureEndpointDelta
+    }
+
+    /// Background/summary projection across a set of per-step traces.
+    static func meaningfulCaptureEndpointDelta(from traces: [AccessibilityTrace]) -> AccessibilityTrace.Delta? {
+        captureEndpointTrace(from: traces)?.meaningfulCaptureEndpointDelta
+    }
+
+    private static func meaningfulCaptureEndpointDelta(
+        _ delta: AccessibilityTrace.Delta
+    ) -> AccessibilityTrace.Delta? {
+        switch delta {
+        case .noChange(let payload) where payload.transient.isEmpty:
+            return nil
+        case .noChange, .elementsChanged, .screenChanged:
+            return delta
+        }
+    }
+}
+
 public extension AccessibilityTrace.Delta {
 
     /// Compare two full accessibility captures and emit the compact delta.

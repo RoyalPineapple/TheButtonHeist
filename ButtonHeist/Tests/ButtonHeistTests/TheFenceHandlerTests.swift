@@ -1809,7 +1809,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(_, _, _, _, let checked, let met, _) = response else {
+        guard case .batch(_, _, _, _, let checked, let met, _, _) = response else {
             XCTFail("Expected batch response, got \(response)")
             return
         }
@@ -1835,7 +1835,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(_, _, _, _, let checked, let met, _) = response else {
+        guard case .batch(_, _, _, _, let checked, let met, _, _) = response else {
             XCTFail("Expected batch response, got \(response)")
             return
         }
@@ -1887,7 +1887,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(let results, let completedSteps, let failedIndex, _, _, _, let summaries) = response else {
+        guard case .batch(let results, let completedSteps, let failedIndex, _, _, _, let summaries, _) = response else {
             return XCTFail("Expected batch response, got \(response)")
         }
         XCTAssertEqual(completedSteps, 2)
@@ -1902,6 +1902,73 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let json = try XCTUnwrap(response.jsonDict())
         XCTAssertNil(json["netDelta"], "Batch JSON must not advertise a wrapper-synthesized cumulative delta")
+    }
+
+    @ButtonHeistActor
+    func testBatchNetDeltaDerivesFromCaptureTraceEndpoints() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        let counter0 = makeReceiptTestInterface([
+            makeReceiptTestElement(heistId: "counter", label: "Counter", value: "0"),
+        ])
+        let counter1 = makeReceiptTestInterface([
+            makeReceiptTestElement(heistId: "counter", label: "Counter", value: "1"),
+        ])
+        let counter2 = makeReceiptTestInterface([
+            makeReceiptTestElement(heistId: "counter", label: "Counter", value: "2"),
+        ])
+        var responses = [
+            ActionResult(
+                success: true,
+                method: .activate,
+                message: "first",
+                accessibilityDelta: .screenChanged(.init(
+                    elementCount: 0,
+                    newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+                )),
+                accessibilityTrace: makeReceiptTestTrace(before: counter0, after: counter1)
+            ),
+            ActionResult(
+                success: true,
+                method: .activate,
+                message: "second",
+                accessibilityDelta: .noChange(.init(elementCount: 0)),
+                accessibilityTrace: makeReceiptTestTrace(before: counter1, after: counter2)
+            ),
+        ]
+        mockConn.autoResponse = { message in
+            switch message {
+            case .activate:
+                return .actionResult(responses.removeFirst())
+            case .requestInterface:
+                return .interface(Interface(timestamp: Date(timeIntervalSince1970: 0), tree: []))
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "run_batch",
+            "steps": [
+                ["command": "activate", "identifier": "first"],
+                ["command": "activate", "identifier": "second"],
+            ] as [[String: Any]],
+        ])
+
+        guard case .batch(_, _, _, _, _, _, let summaries, let accessibilityTrace) = response else {
+            return XCTFail("Expected batch response, got \(response)")
+        }
+        XCTAssertEqual(summaries.map(\.deltaKind), ["elementsChanged", "elementsChanged"])
+        XCTAssertEqual(accessibilityTrace?.captures.count, 3)
+
+        let json = try XCTUnwrap(response.jsonDict())
+        let netDelta = try XCTUnwrap(json["netDelta"] as? [String: Any])
+        XCTAssertEqual(netDelta["kind"] as? String, "elementsChanged")
+        let edits = try XCTUnwrap(netDelta["edits"] as? [String: Any])
+        let updated = try XCTUnwrap(edits["updated"] as? [[String: Any]])
+        XCTAssertEqual(updated.first?["heistId"] as? String, "counter")
+        let changes = try XCTUnwrap(updated.first?["changes"] as? [[String: Any]])
+        XCTAssertEqual(changes.first?["old"] as? String, "0")
+        XCTAssertEqual(changes.first?["new"] as? String, "2")
     }
 
     @ButtonHeistActor
@@ -1921,7 +1988,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(let results, _, let failedIndex, _, _, _, _) = response else {
+        guard case .batch(let results, _, let failedIndex, _, _, _, _, _) = response else {
             XCTFail("Expected batch response, got \(response)")
             return
         }
@@ -1955,7 +2022,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(let results, _, let failedIndex, _, _, _, let summaries) = response else {
+        guard case .batch(let results, _, let failedIndex, _, _, _, let summaries, _) = response else {
             XCTFail("Expected batch response, got \(response)")
             return
         }
@@ -1993,7 +2060,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(let results, _, let failedIndex, _, _, _, let summaries) = response else {
+        guard case .batch(let results, _, let failedIndex, _, _, _, let summaries, _) = response else {
             XCTFail("Expected batch response, got \(response)")
             return
         }
@@ -2022,7 +2089,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(let results, _, let failedIndex, _, let checked, let met, let summaries) = response else {
+        guard case .batch(let results, _, let failedIndex, _, let checked, let met, let summaries, _) = response else {
             XCTFail("Expected batch response, got \(response)")
             return
         }
@@ -2047,7 +2114,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(let results, _, let failedIndex, _, _, _, let summaries) = response else {
+        guard case .batch(let results, _, let failedIndex, _, _, _, let summaries, _) = response else {
             XCTFail("Expected batch response, got \(response)")
             return
         }
@@ -2073,7 +2140,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 ] as [[String: Any]],
             ])
 
-            guard case .batch(let results, _, let failedIndex, _, _, _, let summaries) = response else {
+            guard case .batch(let results, _, let failedIndex, _, _, _, let summaries, _) = response else {
                 XCTFail("Expected batch response for \(command.rawValue), got \(response)")
                 continue
             }
@@ -2105,7 +2172,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(let results, _, let failedIndex, _, _, _, let summaries) = response else {
+        guard case .batch(let results, _, let failedIndex, _, _, _, let summaries, _) = response else {
             XCTFail("Expected batch response, got \(response)")
             return
         }
@@ -2131,7 +2198,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(let results, _, let failedIndex, _, _, _, let summaries) = response else {
+        guard case .batch(let results, _, let failedIndex, _, _, _, let summaries, _) = response else {
             XCTFail("Expected batch response, got \(response)")
             return
         }
@@ -2159,7 +2226,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(let results, _, let failedIndex, _, _, _, let summaries) = response else {
+        guard case .batch(let results, _, let failedIndex, _, _, _, let summaries, _) = response else {
             XCTFail("Expected batch response, got \(response)")
             return
         }
@@ -2459,7 +2526,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(_, _, _, _, let checked, let met, _) = response else {
+        guard case .batch(_, _, _, _, let checked, let met, _, _) = response else {
             XCTFail("Expected batch response, got \(response)")
             return
         }

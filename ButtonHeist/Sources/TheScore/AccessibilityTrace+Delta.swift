@@ -64,9 +64,8 @@ public extension AccessibilityTrace {
         /// instructions. When tree structure matters, `postEdits` is
         /// authoritative.
         public let newInterface: Interface
-        /// Element edits that happened *after* the screen change, folded in
-        /// by `NetDeltaAccumulator.mergeAfterScreenChange`. nil for
-        /// per-action deltas; populated only for batch merges.
+        /// Element edits that happened *after* the screen change in legacy
+        /// batch projections. nil for capture-derived action deltas.
         public let postEdits: ElementEdits?
         /// Compatibility projection of `Capture.transition.transient` for
         /// older clients that read only `accessibilityDelta`.
@@ -106,8 +105,7 @@ public extension AccessibilityTrace {
         case elementsChanged(ElementsChanged)
 
         /// View controller identity changed — a brand new interface tree.
-        /// May carry post-edit element changes folded in by
-        /// `NetDeltaAccumulator.mergeAfterScreenChange` for batch merges.
+        /// May carry post-edit element changes from legacy batch projections.
         case screenChanged(ScreenChanged)
 
         // MARK: - Cross-Case Accessors
@@ -159,8 +157,7 @@ public extension AccessibilityTrace {
 
         /// Element edits carried by this delta, regardless of case. For
         /// `.elementsChanged` returns the case's edits; for `.screenChanged`
-        /// returns the optional `postEdits` (folded in by
-        /// `NetDeltaAccumulator.mergeAfterScreenChange` for batch merges);
+        /// returns the optional `postEdits` from legacy batch projections;
         /// nil for `.noChange`.
         public var elementEdits: ElementEdits? {
             switch self {
