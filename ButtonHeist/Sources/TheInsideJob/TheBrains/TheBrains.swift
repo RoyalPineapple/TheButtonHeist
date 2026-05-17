@@ -194,7 +194,6 @@ final class TheBrains {
         }
 
         _ = await navigation.exploreAndPrune()
-        let afterSnapshot = stash.selectElements()
         let afterTree = stash.wireTree()
         let transientElements = Self.shouldSuppressTransient(
             settleOutcome: settleResult.outcome,
@@ -218,12 +217,6 @@ final class TheBrains {
         )
         let accessibilityTrace = makeAccessibilityTrace(afterCapture: postCapture, parentCapture: before.capture)
 
-        let delta = deriveDelta(
-            from: accessibilityTrace,
-            before: before,
-            isScreenChange: isScreenChange
-        )
-
         await stash.captureActionFrame()
 
         let receipt = CommandReceipt(
@@ -236,14 +229,8 @@ final class TheBrains {
             ),
             settle: SettleReceipt(
                 outcome: settleResult.outcome,
-                elementsByKey: settleResult.elementsByKey,
                 didSettle: didSettle,
-                isScreenChange: isScreenChange,
-                postSnapshot: afterSnapshot,
-                postCapture: postCapture,
-                accessibilityTrace: accessibilityTrace,
-                accessibilityDelta: delta,
-                transientElements: transientElements
+                accessibilityTrace: accessibilityTrace
             )
         )
 
