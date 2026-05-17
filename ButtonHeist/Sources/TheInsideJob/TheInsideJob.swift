@@ -118,15 +118,36 @@ public final class TheInsideJob {
         case engaged(baseline: Bool)
     }
 
-    /// Mutable holder for a `Task` handle that the Task's own body needs to
-    /// reference (for self-removal from `pendingLifecycleTasks`). The
-    /// create-then-assign dance is unavoidable: the closure captures the
-    /// holder, but the Task that owns the closure must exist before its
-    /// handle can be stored. Inherits @MainActor isolation from the
-    /// enclosing type so reads/writes serialize naturally.
-    /// The Task body cannot start until the main actor yields, which is after
-    /// `holder.task = created` — so the transient `nil` window is never
-    /// observable from within the closure.
+    /// Tracks @objc lifecycle bridge Tasks that must finish before start/resume reads `serverPhase`.
+    @MainActor
+    final class LifecycleBoundaryTasks {
+        private var tasks: Set<Task<Void, Never>> = []
+
+        var isEmpty: Bool { tasks.isEmpty }
+
+        func spawn(_ body: @escaping @MainActor () async -> Void) {
+            let holder = TaskHolder()
+            let task = Task { @MainActor [weak self, holder] in
+                await body()
+                guard let task = holder.task else { return }
+                self?.tasks.remove(task)
+            }
+            holder.task = task
+            tasks.insert(task)
+        }
+
+        func drain() async {
+            while !tasks.isEmpty {
+                let snapshot = tasks
+                tasks.removeAll()
+                for task in snapshot {
+                    await task.value
+                }
+            }
+        }
+    }
+
+    @MainActor
     final class TaskHolder {
         var task: Task<Void, Never>?
     }
@@ -155,13 +176,9 @@ public final class TheInsideJob {
     private let sessionId = UUID()
     private let allowedScopes: Set<ConnectionScope>
     private var pendingTransportStopTask: Task<Void, Never>?
-    /// Tracks Tasks that wrap `await stop()` / `await suspend()` for callers
-    /// that must stay synchronous (notably the @objc UIApplication lifecycle
-    /// observers). Cancelled and drained inside `start()` / `resume()` so a
-    /// fresh start cannot interleave with a still-running shutdown.
-    private var pendingLifecycleTasks: Set<Task<Void, Never>> = []
+    private let lifecycleBoundaryTasks = LifecycleBoundaryTasks()
     /// The Task spawned from `appWillEnterForeground` to bridge `@objc` ->
-    /// `async resume()`. Kept out of `pendingLifecycleTasks` so `resume()`'s
+    /// `async resume()`. Kept out of `lifecycleBoundaryTasks` so `resume()`'s
     /// own drain cannot deadlock by awaiting its own handle. Tests observe
     /// it to wait on a foreground resume cycle synchronously.
     var pendingForegroundResumeTask: Task<Void, Never>?
@@ -203,10 +220,9 @@ public final class TheInsideJob {
 
     var stakeout: TheStakeout? { getaway.stakeout }
 
-    /// Test hook: `pendingLifecycleTasks` is private state but tests assert
-    /// it drains after completed Tasks self-remove. Exposed as a Bool so
-    /// the underlying Set stays encapsulated.
-    var pendingLifecycleTasksIsEmpty: Bool { pendingLifecycleTasks.isEmpty }
+    /// Test hook: exposes whether lifecycle bridge Tasks have self-removed
+    /// without exposing the underlying tracker.
+    var pendingLifecycleTasksIsEmpty: Bool { lifecycleBoundaryTasks.isEmpty }
 
     private static let defaultPollingTimeout: TimeInterval = 2.0
 
@@ -538,7 +554,7 @@ public final class TheInsideJob {
     }
 
     @objc private func appWillEnterForeground() {
-        // resume() drains pendingLifecycleTasks itself before checking phase,
+        // resume() drains lifecycleBoundaryTasks itself before checking phase,
         // so the foreground bridge Task is NOT enrolled in that tracker —
         // enrolling it would force resume()'s drain to await its own handle
         // and deadlock. Tracked entries are reserved for shutdown wrappers
@@ -559,7 +575,7 @@ public final class TheInsideJob {
     }
 
     /// Spawn a Task that wraps an async lifecycle transition. The handle is
-    /// retained in `pendingLifecycleTasks` so callers that resume the server
+    /// retained in `lifecycleBoundaryTasks` so callers that resume the server
     /// (`start()` / `resume()`) can await prior shutdowns before they begin.
     ///
     /// Each Task removes itself from the set on completion so handles do not
@@ -568,34 +584,14 @@ public final class TheInsideJob {
     /// so `awaitPendingLifecycleTasks()` callers either see the live handle
     /// (and await it) or see it already gone (because it finished).
     func spawnLifecycleTask(_ body: @escaping @MainActor () async -> Void) {
-        // The handle removes itself from the set after `body()` returns so
-        // the set does not grow without bound across many lifecycle cycles.
-        // We rely on the same `@MainActor` isolation for the outer
-        // assignment to `holder.task` and the closure's read of it — both
-        // run on the main actor, so the box is single-threaded by
-        // construction even though it bridges the create/run-then-self-
-        // remove sequence.
-        let holder = TaskHolder()
-        let created = Task { @MainActor [weak self] in
-            await body()
-            guard let self, let handle = holder.task else { return }
-            self.pendingLifecycleTasks.remove(handle)
-        }
-        holder.task = created
-        pendingLifecycleTasks.insert(created)
+        lifecycleBoundaryTasks.spawn(body)
     }
 
     /// Wait for any in-flight lifecycle tasks (suspend/stop wrappers spawned
     /// from @objc handlers) to finish before mutating server phase. Loops so
     /// observer-spawned Tasks that arrive during the drain are also awaited.
     private func awaitPendingLifecycleTasks() async {
-        while !pendingLifecycleTasks.isEmpty {
-            let tasks = pendingLifecycleTasks
-            pendingLifecycleTasks.removeAll()
-            for task in tasks {
-                await task.value
-            }
-        }
+        await lifecycleBoundaryTasks.drain()
     }
 
     // MARK: - Suspend / Resume
