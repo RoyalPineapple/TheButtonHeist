@@ -20,7 +20,7 @@ Two state machines:
 
 | Folder | Crew member | Role |
 |--------|-------------|------|
-| `TheGetaway/` | TheGetaway | Message dispatch, encode/decode, send/broadcast, transport wiring, recording |
+| `TheGetaway/` | TheGetaway | Message dispatch, encode/decode, transport wiring, response state, recording |
 | `TheBrains/` | TheBrains | Action execution, scroll orchestration, exploration, delta cycle, wait handlers |
 | `TheStash/` | TheStash | Current element state, target resolution, wire conversion |
 | `TheBurglar/` | TheBurglar | Accessibility tree parsing (private to TheStash) |
@@ -36,7 +36,7 @@ Root files: `TheInsideJob.swift` (singleton), `AutoStart.swift` (ObjC bridge), `
 
 ```
 TheInsideJob (the job — singleton, lifecycle, crew assembly)
-├── TheGetaway (comms — dispatch, encode, broadcast, transport wiring)
+├── TheGetaway (comms — dispatch, encode, transport wiring, response state)
 ├── TheTripwire (pulse — settle detection, injected into others)
 ├── TheMuscle (auth — session locking, closure-wired to transport via TheGetaway)
 └── TheBrains (actions — execution, scroll, explore, delta, wait handlers)

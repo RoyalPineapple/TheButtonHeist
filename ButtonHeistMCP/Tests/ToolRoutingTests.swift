@@ -89,8 +89,8 @@ struct ToolRoutingTests {
         #expect(request["action"] as? String == "copy")
     }
 
-    @Test("run_batch still accepts raw Fence command shapes")
-    func runBatchAcceptsRawFenceCommandShapes() throws {
+    @Test("run_batch still accepts canonical Fence command shapes")
+    func runBatchAcceptsCanonicalFenceCommandShapes() throws {
         let steps = try normalizeBatchSteps([
             ["command": TheFence.Command.swipe.rawValue, "direction": "right"],
             ["command": TheFence.Command.scrollToVisible.rawValue, "heistId": "element-1"],
@@ -112,7 +112,7 @@ struct ToolRoutingTests {
         let cases: [(step: [String: Any], message: String)] = [
             (
                 ["command": "gesture", "type": TheFence.Command.swipe.rawValue, "direction": "left"],
-                "run_batch step command must be a raw TheFence.Command; unknown command \"gesture\""
+                "run_batch step command must be a canonical TheFence.Command; unknown command \"gesture\""
             ),
             (
                 [
@@ -120,11 +120,11 @@ struct ToolRoutingTests {
                     "mode": ScrollMode.search.rawValue,
                     "label": "Done",
                 ],
-                "run_batch step \"scroll\" uses the MCP mode selector; use raw Fence commands scroll, scroll_to_visible, element_search, or scroll_to_edge."
+                "run_batch step \"scroll\" uses the MCP mode selector; use canonical Fence commands scroll, scroll_to_visible, element_search, or scroll_to_edge."
             ),
             (
                 ["command": TheFence.Command.editAction.rawValue, "action": "dismiss"],
-                "run_batch step \"edit_action\" uses the MCP dismiss selector; use raw Fence command dismiss_keyboard."
+                "run_batch step \"edit_action\" uses the MCP dismiss selector; use canonical Fence command dismiss_keyboard."
             ),
         ]
 

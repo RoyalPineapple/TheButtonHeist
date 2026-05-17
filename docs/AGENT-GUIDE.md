@@ -80,7 +80,7 @@ If a default target is set, the first command that needs a connection will auto-
 
 ## Reading the Screen
 
-### Default: complete screen hierarchy
+### Default: app accessibility state
 
 ```json
 {"tool": "get_interface"}
@@ -382,7 +382,7 @@ Deltas tell you *what* changed. Expectations tell you *whether what changed matc
 
 ## Batching: Multiple Actions in One Call
 
-`run_batch` sends a sequence of batch-executable raw Fence commands as a single request. Each step runs serially, and you get back ordered per-step results. Session-only commands (`help`, `status`, `quit`, `exit`) and nested `run_batch` are rejected inside batches.
+`run_batch` sends a sequence of batch-executable canonical command requests as a single request. Each step runs serially, and you get back ordered per-step results. Session-only commands (`help`, `status`, `quit`, `exit`) and nested `run_batch` are rejected inside batches.
 
 ```json
 {
@@ -425,7 +425,7 @@ Each step shows its command, delta kind, and expectation result (`✓`/`✗`). R
 
 ### What can go in a batch?
 
-Any raw Fence command: `activate`, `type_text`, `scroll`, `scroll_to_visible`, `element_search`, `scroll_to_edge`, `swipe`, gesture commands, `edit_action`, `set_pasteboard`, `get_pasteboard`, `dismiss_keyboard`. You can also include `get_interface` and `get_screen` as steps. Inside `steps`, use the raw command names directly; do not use grouped MCP wrapper shapes such as `gesture` with `type`, `scroll` with `mode`, or `edit_action` with `action: "dismiss"`.
+Any batch-executable canonical command: `activate`, `type_text`, `scroll`, `scroll_to_visible`, `element_search`, `scroll_to_edge`, `swipe`, gesture commands, `edit_action`, `set_pasteboard`, `get_pasteboard`, `dismiss_keyboard`. You can also include `get_interface` and `get_screen` as steps. Inside `steps`, use the command names directly; do not use grouped MCP wrapper shapes such as `gesture` with `type`, `scroll` with `mode`, or `edit_action` with `action: "dismiss"`.
 
 ## Efficient Agent Patterns
 

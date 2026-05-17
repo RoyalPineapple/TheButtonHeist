@@ -80,7 +80,6 @@ sequenceDiagram
             Server-->>Client: sessionLocked → disconnect
         end
 
-        Client->>Server: subscribe (enable auto-updates)
         Client->>Server: requestInterface
         opt explicit screen capture
             Client->>Server: requestScreen
@@ -90,17 +89,7 @@ sequenceDiagram
 
         Client->>Server: activate / touchTap / touchDrag ...
         Server-->>Client: actionResult
-    else Watch (observer) connection
-        Client->>Server: clientHello
-        Server-->>Client: authRequired
-        Client->>Server: watch(token:"")
-        Note over Server: Token-checked (default)<br>or auto-approved if INSIDEJOB_RESTRICT_WATCHERS=0
-        Server-->>Client: info
-        Note over Client: Auto-subscribed to broadcasts
     end
-
-    Server-->>Client: interface (auto-pushed on change)
-    Server-->>Client: interaction (broadcast after driver actions)
 
     Client->>Server: ping
     Server-->>Client: pong
@@ -126,7 +115,7 @@ All messages are wrapped in envelope types for request-response correlation. Exa
 {"buttonHeistVersion":"<calver>","requestId":"abc-123","type":"actionResult","payload":{"success":true,"method":"syntheticTap"}}
 ```
 
-When `requestId` is present, the server echoes it in the corresponding response so the client can match request-response pairs. Push broadcasts such as interface updates and interaction events have `requestId: null`. Screenshots are never broadcast; `screen` is only returned for explicit `requestScreen` requests.
+When `requestId` is present, the server echoes it in the corresponding response so the client can match request-response pairs. Screenshots are explicit `requestScreen` responses.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -163,7 +152,7 @@ The optional `driverId` field provides a unique driver identity for session lock
 
 ### requestInterface
 
-Request current UI element interface. Returns only elements currently visible on screen.
+Request the current app accessibility state for the active screen. Public clients normally use `get_interface`; `scope: "visible"` is a client-side diagnostic option, not a separate wire message.
 
 ```json
 {"buttonHeistVersion":"<calver>","type":"requestInterface"}
@@ -171,7 +160,7 @@ Request current UI element interface. Returns only elements currently visible on
 
 ### subscribe
 
-Subscribe to automatic interface and interaction updates. Screenshots are never broadcast; request them explicitly with `requestScreen`.
+Legacy runtime subscription message. Runtime UI subscriptions are no longer supported; authenticated clients receive an `unsupported` error.
 
 ```json
 {"buttonHeistVersion":"<calver>","type":"subscribe"}
@@ -179,7 +168,7 @@ Subscribe to automatic interface and interaction updates. Screenshots are never 
 
 ### unsubscribe
 
-Unsubscribe from automatic updates.
+Legacy runtime subscription message. Runtime UI subscriptions are no longer supported; authenticated clients receive an `unsupported` error.
 
 ```json
 {"buttonHeistVersion":"<calver>","type":"unsubscribe"}
@@ -590,17 +579,15 @@ Lightweight status probe. Unlike normal driver commands, this message may be sen
 
 ### watch
 
-Connect as a read-only observer. Sent instead of `authenticate` after receiving `authRequired`. Observers receive interface and interaction broadcasts but cannot send commands or claim a session.
+Legacy watch message. Watch connections are no longer supported.
 
 ```json
 {"buttonHeistVersion":"<calver>","type":"watch","payload":{"token":""}}
 ```
 
-By default, watch connections require a valid token (same as drivers). Set `INSIDEJOB_RESTRICT_WATCHERS=0` to allow unauthenticated observers.
-
 | Field | Type | Description |
 |-------|------|-------------|
-| `token` | `String` | Auth token (required by default; empty string allowed when `INSIDEJOB_RESTRICT_WATCHERS=0`) |
+| `token` | `String` | Legacy field retained for decoding compatibility |
 
 ## Server → Client Messages
 
@@ -886,7 +873,7 @@ Recording-pipeline failures use the same `error` wire type with `kind: "recordin
 
 ### interaction
 
-Broadcast to all subscribed clients (including observers) after a driver performs an action. Contains the command, result, and interface delta.
+Interaction event used in recordings. Runtime interaction subscriptions are no longer a public surface.
 
 ```json
 {"buttonHeistVersion":"<calver>","type":"interaction","payload":{"timestamp":1709472045.123,"command":{"type":"activate","payload":{"identifier":"loginButton"}},"result":{"success":true,"method":"syntheticTap","accessibilityDelta":{"kind":"elementsChanged","elementCount":12,"edits":{"updated":[{"heistId":"button·loginButton","changes":[{"property":"value","old":null,"new":"Loading..."}]}]}}}}}
@@ -1485,9 +1472,6 @@ A single recorded interaction event captured during a Stakeout recording.
 # Server sends info after successful auth
 {"buttonHeistVersion":"<calver>","requestId":null,"type":"info","payload":{"appName":"TestApp","bundleIdentifier":"com.buttonheist.testapp","deviceName":"iPhone","systemVersion":"26.2.1","screenWidth":393.0,"screenHeight":852.0,"instanceId":"A1B2C3D4-E5F6-7890-ABCD-EF1234567890","instanceIdentifier":"my-instance","listeningPort":52341,"simulatorUDID":"DEADBEEF-1234-5678-9ABC-DEF012345678","vendorIdentifier":null,"tlsActive":true}}
 
-# Client subscribes to updates
-{"buttonHeistVersion":"<calver>","type":"subscribe"}
-
 # Client requests interface
 {"buttonHeistVersion":"<calver>","type":"requestInterface"}
 
@@ -1597,14 +1581,14 @@ A single recorded interaction event captured during a Stakeout recording.
 | Field | Type | Description |
 |-------|------|-------------|
 | `active` | `Bool` | Whether a driver session is active |
-| `watchersAllowed` | `Bool` | Whether observer connections are allowed for the active session |
+| `watchersAllowed` | `Bool` | Always `false`; legacy watch connections are not supported |
 | `activeConnections` | `Int` | Number of connections in the current session |
 
 ### WatchPayload
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `token` | `String` | Auth token required by default. Empty string is accepted only when `INSIDEJOB_RESTRICT_WATCHERS=0` is set on the server. |
+| `token` | `String` | Legacy field retained for decoding compatibility |
 
 ## Implementation Notes
 
@@ -1615,12 +1599,10 @@ Token-based authentication is required for driver connections:
 1. Server sends `serverHello` immediately on TCP connect
 2. Client must respond with `clientHello` carrying its own `buttonHeistVersion` (must equal the server's exactly)
 3. Server sends `authRequired`
-4. Client must respond with `authenticate` (for drivers) or `watch` (for observers). The one exception is `status`, which is allowed after the hello handshake but before auth for reachability probes and returns `ServerMessage.status` without claiming a session.
+4. Client must respond with `authenticate`. The one exception is `status`, which is allowed after the hello handshake but before auth for reachability probes and returns `ServerMessage.status` without claiming a session.
 5. For drivers: on success and session acquired, server sends `info` and the session proceeds normally
 6. On auth failure, server sends `error` with `kind: "authFailure"` and disconnects after a brief delay
 7. On session conflict, server sends `sessionLocked` and disconnects
-8. For observers: token required by default (same as drivers). Set `INSIDEJOB_RESTRICT_WATCHERS=0` to allow unauthenticated observers.
-
 The token is configured via `INSIDEJOB_TOKEN` env var or `InsideJobToken` Info.plist key. If not set, a random UUID is auto-generated each launch (ephemeral — not persisted). The token is logged to the console at startup. Clients set the token via the `BUTTONHEIST_TOKEN` environment variable.
 
 ### Session Locking
@@ -1732,13 +1714,12 @@ If the TCP connection is lost, clients should:
 2. Optionally attempt reconnection
 3. Re-request interface after reconnecting
 
-### Hierarchy Change Detection
+### Settled Change Detection
 
-Button Heist uses hash-based change detection during polling:
-1. Parse hierarchy at configurable interval (default: 1.0s)
-2. Compute hash of the flat elements array
-3. Only broadcast if hash differs from last broadcast
-4. Screen captures are automatically captured and broadcast alongside interface changes
+Button Heist uses Tripwire polling to decide when the app is stable, then
+compares the latest accessibility capture against the last state sent to the
+driver. Captures and their derived deltas travel on command responses and
+explicit reads; hierarchy subscriptions are not a public wire surface.
 
 ## Current Wire Format
 

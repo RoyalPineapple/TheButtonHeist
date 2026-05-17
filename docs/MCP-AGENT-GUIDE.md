@@ -6,7 +6,7 @@ Button Heist drives iOS apps through the accessibility layer — the same interf
 
 1. **See** — `get_interface` returns the current interface elements with a heistId, label, value, traits, and actions.
 2. **Act** — `activate`, `type_text`, `scroll`, `gesture` — target by heistId or matcher. Always attach `expect` when you know what should change.
-3. **Read the response** — every response tells you two things: what your action did (`accessibilityDelta`) and what changed while you were thinking (`[background: ...]`). If either answers your question, skip `get_interface`.
+3. **Read the response** — action responses carry the action's `accessibilityDelta`; any `[background: ...]` block uses the same capture/delta contract to report a change that happened before the action ran. If either answers your question, skip `get_interface`.
 4. **Wait if needed** — when the delta shows a transient state (spinner, loading overlay) and your expectation wasn't met, call `wait_for_change` with the same expectation. The server checks the current state first, then watches settled changes until the expectation is true. If the change already happened in the background, `wait_for_change` returns instantly.
 5. **Repeat** — only re-fetch when you need elements you haven't seen.
 
@@ -92,9 +92,9 @@ xcrun simctl shutdown "$SIM_UDID"
 xcrun simctl delete "$SIM_UDID"
 ```
 
-## The Server Is Always Watching
+## Background Changes
 
-Every response includes what changed since your last call. You never poll. Three things can happen between your tool calls:
+Button Heist records the capture it last sent to the driver. If the settled accessibility state changes before your next action, the next response includes a `[background: ...]` block derived from the same capture/delta model as action results. Three things can happen between your tool calls:
 
 **Nothing changed** — no `[background]` line, your heistIds are still valid, proceed.
 

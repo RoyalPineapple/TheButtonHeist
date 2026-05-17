@@ -15,9 +15,9 @@ import AccessibilitySnapshotParser
 /// (`heistIdIndex`, `currentHierarchy`, `reverseIndex`, `knownIds`,
 /// `currentContainers`, `firstResponderHeistId`, `lastScreenName`, ...) with
 /// a single immutable value. The one-state invariant is: a `Screen` carries
-/// both targetable known elements and the latest live viewport. KnownInterface
-/// is targetable semantic state; InteractionSnapshot is the latest parse used
-/// for interaction.
+/// both targetable known elements and the latest visible capture.
+/// KnownInterface is targetable semantic state; InteractionSnapshot is the
+/// latest parse used for interaction.
 ///
 /// Exploration accumulates a local `var union: Screen` in the caller; the
 /// final union is committed by writing it back into `stash.currentScreen`.

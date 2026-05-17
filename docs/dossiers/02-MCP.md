@@ -68,7 +68,7 @@ ButtonHeistMCP exposes 24 tools. The authoritative list and parameter schemas li
 
 `edit_action` routes `"dismiss"` to the `dismiss_keyboard` TheFence command; all other actions go to the `edit_action` command.
 
-`run_batch` intentionally does not accept these grouped MCP wrapper shapes inside `steps`. Batch steps use raw `TheFence.Command` dictionaries, so agents must send commands such as `swipe`, `element_search`, and `dismiss_keyboard` directly.
+`run_batch` intentionally does not accept these grouped MCP wrapper shapes inside `steps`. Batch steps use batch-executable canonical `TheFence.Command` request objects, so agents send commands such as `swipe`, `element_search`, and `dismiss_keyboard` directly.
 
 ### `get_interface`
 - `scope`: omit for the app accessibility state; `"visible"` requests a diagnostic on-screen parse
@@ -109,7 +109,7 @@ flowchart TD
 2. `gesture` extracts `type` and uses that as the underlying Fence command
 3. `scroll` extracts `mode` and maps to the corresponding Fence command (page → scroll, to_visible → scroll_to_visible, search → element_search, to_edge → scroll_to_edge)
 4. `edit_action` intercepts `"dismiss"` and routes to `dismiss_keyboard`; other actions pass through
-5. `run_batch` normalizes only batch-executable raw `TheFence.Command` step dictionaries; it does not recurse through the grouped MCP routing rules above, accept session-only commands (`help`, `status`, `quit`, `exit`), or allow nested `run_batch`
+5. `run_batch` normalizes only batch-executable canonical `TheFence.Command` step objects; it does not recurse through the grouped MCP routing rules above, accept session-only commands (`help`, `status`, `quit`, `exit`), or allow nested `run_batch`
 6. All requests end at `fence.execute(request:)`
 
 ## Response Behavior

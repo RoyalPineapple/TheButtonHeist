@@ -65,7 +65,7 @@ struct ToolSyncTests {
 
                 if tool.name == TheFence.Command.scroll.rawValue {
                     // Scroll modes are synthetic names (page, to_visible, search, to_edge),
-                    // not raw command values. The boundary parses them into ScrollMode,
+                    // not command enum values. The boundary parses them into ScrollMode,
                     // so the schema enum must match ScrollMode.allCases exactly.
                     let expectedModes = Set(ScrollMode.allCases.map(\.rawValue))
                     #expect(
@@ -337,8 +337,8 @@ struct ToolSyncTests {
         }
     }
 
-    @Test("run_batch step command schema advertises raw Fence commands only")
-    func runBatchStepCommandSchemaAdvertisesRawFenceCommandsOnly() {
+    @Test("run_batch step command schema advertises canonical Fence commands only")
+    func runBatchStepCommandSchemaAdvertisesCanonicalFenceCommandsOnly() {
         guard let runBatch = ToolDefinitions.all.first(where: { $0.name == "run_batch" }),
               let stepsSchema = extractPropertySchema(from: runBatch, property: "steps"),
               let stepItemsSchema = extractObjectField(from: stepsSchema, key: "items"),

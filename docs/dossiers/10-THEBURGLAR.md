@@ -43,7 +43,7 @@ The exploration accumulator lives on `Navigation` (TheBrains' navigation compone
 
 ## The exploration discipline
 
-Pre-0.2.25 the registry retained elements across parses via `merge()` / orphan attachment. 0.2.25 removes that machinery; the "full tree" (union of every element observed during a scroll-walk) is now a **local variable in `Navigation+Explore.exploreAndPrune`**:
+Pre-0.2.25 the registry retained elements across parses via `merge()` / orphan attachment. 0.2.25 removes that machinery; the explored semantic union is now a **local variable in `Navigation+Explore.exploreAndPrune`**:
 
 ```swift
 var union = stash.currentScreen
@@ -59,7 +59,7 @@ for container in scrollableContainers {
 stash.currentScreen = union                                        // final union committed
 ```
 
-Mid-cycle writes to `currentScreen` are intentional: scroll-page termination heuristics (`stash.visibleIds == before`) read the latest page-only viewport. The union only becomes the known semantic "full tree" at the end of the walk.
+Mid-cycle writes to `currentScreen` are intentional: scroll-page termination heuristics (`stash.visibleIds == before`) read the latest page-only interaction snapshot. The union only becomes the known semantic screen at the end of the walk.
 
 ## Dependencies
 

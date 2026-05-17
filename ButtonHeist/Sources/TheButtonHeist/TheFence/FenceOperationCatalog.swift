@@ -70,7 +70,7 @@ public enum FenceOperationCatalog {
 
         guard let command = TheFence.Command(rawValue: commandName) else {
             return .failure(FenceOperationRoutingError(
-                message: "run_batch step command must be a raw TheFence.Command; unknown command \"\(commandName)\""
+                message: "run_batch step command must be a canonical TheFence.Command; unknown command \"\(commandName)\""
             ))
         }
 
@@ -148,7 +148,7 @@ public enum FenceOperationCatalog {
         if !commandParameterKeys.contains(selectorKey) {
             return .init(
                 message: "run_batch step \"\(command.rawValue)\" uses the MCP \(selectorKey) selector; " +
-                    "use raw Fence commands \(rawCommandList(contract.commands))."
+                    "use canonical Fence commands \(rawCommandList(contract.commands))."
             )
         }
 
@@ -160,7 +160,7 @@ public enum FenceOperationCatalog {
         }
         return .init(
             message: "run_batch step \"\(command.rawValue)\" uses the MCP \(selectorValue) selector; " +
-                "use raw Fence command \(selectedCommand.rawValue)."
+                "use canonical Fence command \(selectedCommand.rawValue)."
         )
     }
 

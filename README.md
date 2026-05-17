@@ -160,7 +160,7 @@ After every command, Button Heist diffs the accessibility hierarchy and returns 
 
 The agent does not need to re-read the screen to understand the result. Value updates include the element, property, old value, and new value. When nothing changes, the delta says `"noChange"`.
 
-Every response can also include a **background delta**: changes that happened while the agent was thinking, such as loaded content, a dialog appearing, or an animation settling.
+When the screen changes while the agent is thinking, the next response uses the same capture/delta contract to report that background change before any stale action runs.
 
 ### 2. Expectations: assertions on the contract
 
@@ -255,7 +255,7 @@ Button Heist is a distributed system: an iOS framework inside the app, a macOS c
 | **TheStash** | Current element state, target resolution, `heistId` assignment, and wire conversion. Live view pointers stay inside |
 | **TheBurglar** | Accessibility hierarchy parsing, topology detection, and scroll-container discovery |
 | **TheBrains** | Action execution, scroll orchestration, delta generation, waits, and exploration |
-| **TheGetaway** | Message dispatch, encoding/decoding, broadcasts, transport wiring, and interaction recording |
+| **TheGetaway** | Message dispatch, encoding/decoding, transport wiring, response state, and interaction recording |
 | **TheMuscle** | Token validation, approval UI, and session locking |
 | **TheStakeout** | H.264 screen recording with frame timing and inactivity detection |
 | **TheFingerprints** | Touch indicators for live interaction and recorded output |

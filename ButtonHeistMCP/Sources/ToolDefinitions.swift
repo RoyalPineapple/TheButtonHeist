@@ -239,8 +239,8 @@ enum ToolDefinitions {
         TheFence.Command.runBatch.rawValue:
             """
             Execute multiple commands in one call. Each step is a JSON object with 'command' set \
-            to a raw TheFence.Command name plus that command's parameters; grouped MCP tool names \
-            and selector shapes are not accepted inside batches. Attach 'expect' per step to verify \
+            to a canonical TheFence.Command name plus that command's parameters; grouped MCP tool \
+            names and selector shapes are not accepted inside batches. Attach 'expect' per step to verify \
             inline. Returns ordered per-step results. \
             policy=stop_on_error (default) or continue_on_error.
             """,

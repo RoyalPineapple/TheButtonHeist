@@ -64,7 +64,7 @@ It only cares whether the element's frame is geometrically within the screen rec
 
 A sequential coarse-then-fine flow:
 
-**Step 1 — Coarse jump (off-screen heistId only).** If the target is a `.heistId` that resolves into `currentScreen.elements` (e.g. unioned in during a prior exploration cycle) but is not in the live viewport, and the stored `ScreenElement` carries both a `contentSpaceOrigin` and a live `scrollView`:
+**Step 1 — Coarse jump (off-screen heistId only).** If the target is a `.heistId` that resolves into `currentScreen.elements` (e.g. unioned in during a prior exploration cycle) but is not in the latest interaction snapshot, and the stored `ScreenElement` carries both a `contentSpaceOrigin` and a live `scrollView`:
 
 1. Calls `stash.jumpToRecordedPosition(_:)` — the stash internally computes the clamped, centered content offset via `TheStash.scrollTargetOffset(for:in:)` and sets it on the owning scroll view. Returns the previous offset so callers can revert.
 2. Waits for settle via `yieldFrames(3)`, then `stash.refresh()` (commits a fresh `currentScreen` value)
