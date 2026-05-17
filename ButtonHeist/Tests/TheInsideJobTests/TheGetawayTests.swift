@@ -257,7 +257,10 @@ final class TheGetawayTests: XCTestCase {
         let (getaway, muscle, _) = await makeGetaway()
         let sent = SentBox()
         await muscle.installCallbacks(
-            sendToClient: { data, clientId in sent.append(data, clientId: clientId) },
+            sendToClient: { data, clientId in
+                sent.append(data, clientId: clientId)
+                return .enqueued
+            },
             markClientAuthenticated: { _ in },
             disconnectClient: { _ in },
             onClientAuthenticated: { _, _ in },
@@ -307,7 +310,10 @@ final class TheGetawayTests: XCTestCase {
         let (getaway, muscle, _) = await makeGetaway()
         let sent = SentBox()
         await muscle.installCallbacks(
-            sendToClient: { data, clientId in sent.append(data, clientId: clientId) },
+            sendToClient: { data, clientId in
+                sent.append(data, clientId: clientId)
+                return .enqueued
+            },
             markClientAuthenticated: { _ in },
             disconnectClient: { _ in },
             onClientAuthenticated: { _, _ in },
@@ -670,14 +676,14 @@ final class TheGetawayTests: XCTestCase {
 
     /// Fix for cache-clear-before-send: when the transport is torn down
     /// (`sendToClient` is nil on TheMuscle), the targeted send to the
-    /// originator silently no-ops. The cache must be preserved in that
-    /// case so a subsequent `stop_recording` (or tearDown) can still
-    /// resolve the payload — never drop a recording into the void.
+    /// originator fails. The cache must be preserved in that case so a
+    /// subsequent `stop_recording` (or tearDown) can still resolve the
+    /// payload — never drop a recording into the void.
     func testAutoFinishWithTornDownTransportPreservesCache() async {
         let (getaway, muscle, _) = await makeGetaway()
         // Mark client 7 as authenticated so the targeted-delivery branch
-        // is entered, then drop `sendToClient` so the send returns false
-        // and the cache must survive.
+        // is entered, then drop `sendToClient` so the send fails and the
+        // cache must survive.
         //
         // `wireTransport` installs callbacks via a Task; await a yield to
         // let that install complete before we tear it back down.
@@ -707,6 +713,36 @@ final class TheGetawayTests: XCTestCase {
             7,
             "Originator must be preserved alongside the cache when delivery did not happen"
         )
+    }
+
+    func testAutoFinishWithMissingTargetClientPreservesCache() async {
+        let (getaway, muscle, _) = await makeGetaway()
+        await muscle.installCallbacks(
+            sendToClient: { _, clientId in .failed(.clientNotFound(clientId)) },
+            markClientAuthenticated: { _ in },
+            disconnectClient: { _ in },
+            onClientAuthenticated: { _, _ in },
+            onSessionActiveChanged: { _ in }
+        )
+        await muscle.installAuthenticatedClientForTest(7)
+        let stubStakeout = TheStakeout(captureFrame: { @MainActor in nil })
+        getaway.recordingRouteState = .recording(stakeout: stubStakeout, ownerClientId: 7)
+
+        let payload = RecordingPayload(
+            videoData: "AAAA",
+            width: 100, height: 200,
+            duration: 1.0, frameCount: 8, fps: 8,
+            startTime: Date(), endTime: Date(),
+            stopReason: .maxDuration
+        )
+
+        await getaway.deliverRecordingResult(.success(payload))
+
+        guard case .succeeded(let cached) = getaway.completedRecording else {
+            return XCTFail("Cache must be preserved when targeted delivery fails, got \(getaway.completedRecording)")
+        }
+        XCTAssertEqual(cached.frameCount, 8)
+        XCTAssertEqual(getaway.recordingOriginatorClientId, 7)
     }
 
     // MARK: - Helpers

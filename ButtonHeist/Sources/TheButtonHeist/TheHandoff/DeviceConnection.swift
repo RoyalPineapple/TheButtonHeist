@@ -315,9 +315,12 @@ final class DeviceConnection: DeviceConnecting {
         tlsFailureTracker = nil
     }
 
-    func send(_ message: ClientMessage, requestId: String? = nil) {
+    @discardableResult
+    func send(_ message: ClientMessage, requestId: String? = nil) -> DeviceSendOutcome {
+        guard case .connected(let active) = connectionState else {
+            return .failed(.notConnected)
+        }
         onSend?(message, requestId)
-        guard case .connected(let active) = connectionState else { return }
         let envelope = RequestEnvelope(requestId: requestId, message: message)
         let data: Data
         do {
@@ -326,7 +329,7 @@ final class DeviceConnection: DeviceConnecting {
             data = encoded
         } catch {
             logger.error("Failed to encode message: \(error)")
-            return
+            return .failed(.encodingFailed(error.localizedDescription))
         }
 
         active.connection.send(content: data, completion: .contentProcessed { error in
@@ -334,6 +337,7 @@ final class DeviceConnection: DeviceConnecting {
                 logger.error("Send error: \(error)")
             }
         })
+        return .enqueued
     }
 
     // MARK: - Private

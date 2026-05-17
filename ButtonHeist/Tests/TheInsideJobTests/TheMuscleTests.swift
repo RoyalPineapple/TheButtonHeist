@@ -70,8 +70,9 @@ final class TheMuscleTests: XCTestCase {
     /// `@MainActor` isolation.
     private func installCallbacks(observeSessionChanges: Bool) async {
         let sink = self.sink!
-        let sendToClient: @Sendable (Data, Int) async -> Void = { data, clientId in
+        let sendToClient: @Sendable (Data, Int) async -> ServerSendOutcome = { data, clientId in
             sink.appendSent((data, clientId))
+            return .enqueued
         }
         let markAuth: @Sendable (Int) async -> Void = { clientId in
             sink.appendAuthenticated(clientId)
@@ -597,6 +598,25 @@ final class TheMuscleTests: XCTestCase {
             return false
         }
         XCTAssertTrue(hasLockout, "Should lock out again after counter reset and 5 more failures")
+    }
+
+    func testSendDataAfterClientDisconnectFailsWithoutCallingTransport() async throws {
+        try await authenticate(clientId: 1, token: "test-token", respond: respondSink())
+        await flushCallbacks()
+        let sentBeforeDisconnect = sentMessages.count
+
+        await muscle.handleClientDisconnected(1)
+
+        let outcome = await muscle.sendData(Data("late-response".utf8), toClient: 1)
+
+        guard case .failed(.clientNotFound(1)) = outcome else {
+            return XCTFail("Expected clientNotFound failure, got \(outcome)")
+        }
+        XCTAssertEqual(
+            sentMessages.count,
+            sentBeforeDisconnect,
+            "Closed-client sends must fail before invoking the transport closure"
+        )
     }
 
     // MARK: - Broadcast FIFO ordering

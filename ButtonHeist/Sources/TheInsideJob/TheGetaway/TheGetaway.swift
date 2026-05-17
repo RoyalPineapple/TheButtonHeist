@@ -129,7 +129,7 @@ final class TheGetaway {
         // fire-and-forget `Task { await server.foo(...) }` shape relied on
         // Swift's unstructured-Task scheduling, which makes no FIFO
         // guarantee — the cross-cutting audit's Finding 5.
-        let sendToClient: @Sendable (Data, Int) async -> Void = { data, clientId in
+        let sendToClient: @Sendable (Data, Int) async -> ServerSendOutcome = { data, clientId in
             await server.send(data, to: clientId)
         }
         let markAuth: @Sendable (Int) async -> Void = { clientId in

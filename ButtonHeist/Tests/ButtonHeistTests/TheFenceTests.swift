@@ -1274,6 +1274,28 @@ final class TheFenceTests: XCTestCase {
         }
     }
 
+    @ButtonHeistActor
+    func testClosedSendFailsPendingActionWithoutWaitingForTimeout() async {
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mockConnection = MockConnection()
+        mockConnection.connectEventsOverride = [.connected]
+        mockConnection.sendOutcome = .failed(.notConnected)
+        let fence = TheFence(configuration: .init())
+        fence.handoff.makeConnection = { _, _, _ in mockConnection }
+        fence.handoff.connect(to: device)
+
+        do {
+            _ = try await fence.sendAndAwaitAction(.activate(.heistId("closed")), timeout: 0.2)
+            XCTFail("Expected closed send to fail")
+        } catch FenceError.notConnected {
+            XCTAssertTrue(mockConnection.sent.isEmpty, "Closed sends must not be recorded as enqueued")
+        } catch FenceError.actionTimeout {
+            XCTFail("Closed sends must fail the pending tracker immediately instead of timing out")
+        } catch {
+            XCTFail("Expected notConnected, got \(error)")
+        }
+    }
+
     func testNoMatchingDeviceError() {
         let error = FenceError.noMatchingDevice(filter: "MyApp", available: ["OtherApp"])
         XCTAssertTrue(error.errorDescription?.contains("MyApp") ?? false)

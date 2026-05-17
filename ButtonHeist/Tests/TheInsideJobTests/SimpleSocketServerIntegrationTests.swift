@@ -53,6 +53,14 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
         XCTAssertEqual(server.listeningPort, 0)
     }
 
+    func testSendToMissingClientFailsTyped() async throws {
+        let outcome = await server.send(Data("late-response".utf8), to: 404)
+
+        guard case .failed(.clientNotFound(404)) = outcome else {
+            return XCTFail("Expected clientNotFound failure, got \(outcome)")
+        }
+    }
+
     func testCanRestartAfterStop() async throws {
         let firstPort = try await server.startAsync(port: 0, bindToLoopback: true)
         XCTAssertGreaterThan(firstPort, 0)

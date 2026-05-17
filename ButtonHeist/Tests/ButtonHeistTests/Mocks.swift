@@ -98,6 +98,7 @@ final class MockConnection: DeviceConnecting {
     var connectCount = 0
     var emitTransportReadyOnConnect = false
     var connectEventsOverride: [ConnectionEvent]?
+    var sendOutcome: DeviceSendOutcome = .enqueued
 
     var serverInfo: ServerInfo?
 
@@ -123,7 +124,9 @@ final class MockConnection: DeviceConnecting {
         isConnected = false
     }
 
-    func send(_ message: ClientMessage, requestId: String?) {
+    @discardableResult
+    func send(_ message: ClientMessage, requestId: String?) -> DeviceSendOutcome {
+        guard sendOutcome == .enqueued else { return sendOutcome }
         sent.append((message, requestId))
         if let handler = autoResponse {
             let response = handler(message)
@@ -131,6 +134,7 @@ final class MockConnection: DeviceConnecting {
                 self.onEvent?(.message(response, requestId: requestId, backgroundAccessibilityDelta: nil, accessibilityTrace: nil))
             }
         }
+        return .enqueued
     }
 
     var autoResponse: ((ClientMessage) -> ServerMessage)?

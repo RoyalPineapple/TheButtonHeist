@@ -9,6 +9,37 @@ import TheScore
 /// Actor-isolated — all mutable state is protected by Swift concurrency.
 private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "server")
 
+/// Synchronous outcome for handing bytes to a client socket.
+enum ServerSendOutcome: Equatable, Sendable {
+    case enqueued
+    case failed(ServerSendFailure)
+
+    var didEnqueue: Bool {
+        if case .enqueued = self { return true }
+        return false
+    }
+}
+
+enum ServerSendFailure: Error, LocalizedError, Equatable, Sendable {
+    case clientNotFound(Int)
+    case transportUnavailable
+    case payloadTooLarge(byteCount: Int, maxBytes: Int)
+    case sendBufferFull(pendingBytes: Int, byteCount: Int, maxBytes: Int)
+
+    var errorDescription: String? {
+        switch self {
+        case .clientNotFound(let clientId):
+            return "Client \(clientId) is no longer connected"
+        case .transportUnavailable:
+            return "Server transport is not available"
+        case .payloadTooLarge(let byteCount, let maxBytes):
+            return "Payload is too large to send (\(byteCount) bytes, max \(maxBytes))"
+        case .sendBufferFull(let pendingBytes, let byteCount, let maxBytes):
+            return "Send buffer is full (\(pendingBytes) bytes pending, \(byteCount) bytes requested, max \(maxBytes))"
+        }
+    }
+}
+
 actor SimpleSocketServer {
     typealias DataHandler = @Sendable (Int, Data, @escaping @Sendable (Data) -> Void) -> Void
 
@@ -209,8 +240,11 @@ actor SimpleSocketServer {
     /// Enforces a per-client high-water mark on pending bytes. When a client's
     /// NWConnection send buffer exceeds `maxPendingBytesPerClient`, new sends
     /// are dropped to prevent unbounded memory growth from slow or stalled readers.
-    func send(_ data: Data, to clientId: Int) {
-        guard var state = clients[clientId] else { return }
+    @discardableResult
+    func send(_ data: Data, to clientId: Int) -> ServerSendOutcome {
+        guard var state = clients[clientId] else {
+            return .failed(.clientNotFound(clientId))
+        }
 
         var dataToSend = data
         if !dataToSend.hasSuffix(Data([0x0A])) {
@@ -221,11 +255,15 @@ actor SimpleSocketServer {
         if byteCount > Self.maxPendingBytesPerClient {
             logger.warning("Client \(clientId) send payload exceeds cap (\(byteCount) bytes), failing the originating request")
             sendOversizedResponseError(clientId: clientId, originalData: data, byteCount: byteCount, state: state)
-            return
+            return .failed(.payloadTooLarge(byteCount: byteCount, maxBytes: Self.maxPendingBytesPerClient))
         }
         if state.pendingBytes + byteCount > Self.maxPendingBytesPerClient {
             logger.warning("Client \(clientId) send buffer full (\(state.pendingBytes) bytes pending), dropping \(byteCount) bytes")
-            return
+            return .failed(.sendBufferFull(
+                pendingBytes: state.pendingBytes,
+                byteCount: byteCount,
+                maxBytes: Self.maxPendingBytesPerClient
+            ))
         }
 
         state.pendingBytes += byteCount
@@ -240,6 +278,7 @@ actor SimpleSocketServer {
                 await server.completedSend(clientId: clientId, byteCount: byteCount)
             }
         })
+        return .enqueued
     }
 
     /// Try to fail the originating request explicitly when a response exceeds the send cap.

@@ -353,6 +353,15 @@ extension FenceError {
         case .noMatchingDevice(let filter, let available): self = .noMatchingDevice(filter: filter, available: available)
         }
     }
+
+    init(_ sendFailure: DeviceSendFailure) {
+        switch sendFailure {
+        case .notConnected:
+            self = .notConnected
+        case .encodingFailed(let message):
+            self = .actionFailed("Failed to send request: \(message)")
+        }
+    }
 }
 
 /// Named timeout constants for TheFence operations.
@@ -1204,7 +1213,10 @@ public final class TheFence {
         let requestId = UUID().uuidString
         do {
             return try await tracker.wait(requestId: requestId, timeout: timeout) {
-                self.handoff.send(message, requestId: requestId)
+                let outcome = self.handoff.send(message, requestId: requestId)
+                if case .failed(let failure) = outcome {
+                    tracker.resolve(requestId: requestId, result: .failure(FenceError(failure)))
+                }
             }
         } catch let error as CancellationError {
             throw error
@@ -1320,7 +1332,10 @@ public final class TheFence {
     func stopRecordingAndWait(timeout: TimeInterval = 120.0) async throws -> RecordingPayload {
         guard handoff.isConnected else { throw FenceError.notConnected }
         return try await waitForRecording(timeout: timeout) {
-            self.handoff.send(.stopRecording, requestId: UUID().uuidString)
+            let outcome = self.handoff.send(.stopRecording, requestId: UUID().uuidString)
+            if case .failed(let failure) = outcome {
+                self.resolveRecordingCompletion(.failure(FenceError(failure)))
+            }
         }
     }
 
@@ -1340,8 +1355,13 @@ public final class TheFence {
         var didSendStart = false
         do {
             _ = try await recordingStartTracker.wait(requestId: syntheticId, timeout: timeout) {
-                didSendStart = true
-                self.handoff.send(.startRecording(config), requestId: UUID().uuidString)
+                let outcome = self.handoff.send(.startRecording(config), requestId: UUID().uuidString)
+                switch outcome {
+                case .enqueued:
+                    didSendStart = true
+                case .failed(let failure):
+                    self.recordingStartTracker.resolve(requestId: syntheticId, result: .failure(FenceError(failure)))
+                }
             }
         } catch {
             if didSendStart {

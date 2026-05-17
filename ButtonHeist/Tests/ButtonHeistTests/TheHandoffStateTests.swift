@@ -1187,6 +1187,23 @@ final class TheHandoffStateTests: XCTestCase {
         }
     }
 
+    @ButtonHeistActor
+    func testSendAfterLocalDisconnectFailsTyped() async {
+        let handoff = TheHandoff()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mock = MockConnection()
+        handoff.makeConnection = { _, _, _ in mock }
+        handoff.connect(to: device)
+        handoff.disconnect()
+
+        let outcome = handoff.send(.ping, requestId: "late")
+
+        guard case .failed(.notConnected) = outcome else {
+            return XCTFail("Expected notConnected send failure, got \(outcome)")
+        }
+        XCTAssertTrue(mock.sent.isEmpty, "Local disconnect must close the send path")
+    }
+
     /// Regression test: an early synchronous cancel — before any `Task.yield()`
     /// — must propagate `CancellationError`. Without the early-cancel guard
     /// inside the continuation body, the cancellation handler hops to the
