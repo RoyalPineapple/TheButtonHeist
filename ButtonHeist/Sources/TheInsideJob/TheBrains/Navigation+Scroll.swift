@@ -16,7 +16,46 @@ import AccessibilitySnapshotParser
 
 extension Navigation {
 
-    typealias ScrollCandidate = (target: ScrollableTarget, container: AccessibilityContainer)
+    /// One selected semantic scroll container plus the physical target used to move it.
+    @MainActor struct ScrollPlan { // swiftlint:disable:this agent_main_actor_value_type
+        let target: ScrollableTarget
+        let container: AccessibilityContainer
+        let axis: ScrollAxis
+
+        init(target: ScrollableTarget, container: AccessibilityContainer) {
+            self.target = target
+            self.container = container
+            self.axis = Navigation.scrollableAxis(of: container)
+        }
+
+        func supports(_ requiredAxis: ScrollAxis) -> Bool {
+            axis.contains(requiredAxis)
+        }
+
+        func movement(for direction: ScrollSearchDirection) -> UIAccessibilityScrollDirection {
+            if !axis.isEmpty {
+                return Navigation.adaptDirection(direction, axis: axis)
+            }
+            return Navigation.adaptDirection(direction, for: target)
+        }
+    }
+
+    struct ScrollProof: Equatable {
+        let moved: Bool
+        let previousVisibleIds: Set<String>
+
+        var atEdge: Bool {
+            !moved
+        }
+
+        func visibleStateUnchanged(after visibleIds: Set<String>) -> Bool {
+            visibleIds == previousVisibleIds
+        }
+
+        func knownStateGrew(after visibleIds: Set<String>) -> Bool {
+            !visibleIds.subtracting(previousVisibleIds).isEmpty
+        }
+    }
 
     enum ScrollTargetResolution {
         case resolved(UIScrollView)
@@ -109,14 +148,16 @@ extension Navigation {
         _ target: ScrollableTarget,
         direction: UIAccessibilityScrollDirection,
         animated: Bool = true
-    ) async -> (moved: Bool, previousVisibleIds: Set<String>) {
+    ) async -> ScrollProof {
         let before = stash.visibleIds
         let beforeAnchor = visibleAnchorSignature()
 
         switch target {
         case .uiScrollView(let sv):
             let moved = safecracker.scrollByPage(sv, direction: direction, animated: animated)
-            guard moved else { return (false, before) }
+            guard moved else {
+                return ScrollProof(moved: false, previousVisibleIds: before)
+            }
             if animated {
                 let screenFrame = sv.convert(sv.bounds, to: nil)
                 await safecracker.animateScrollFingerprint(
@@ -126,7 +167,7 @@ extension Navigation {
                 await tripwire.yieldFrames(Self.postScrollLayoutFrames)
             }
             refresh()
-            return (true, before)
+            return ScrollProof(moved: true, previousVisibleIds: before)
         case .swipeable(let frame, let contentSize):
             let targetKey = swipeTargetKey(frame: frame, contentSize: contentSize)
             let isDirectionChange = lastSwipeDirectionByTarget[targetKey].map { $0 != direction } ?? false
@@ -135,14 +176,16 @@ extension Navigation {
                 direction: direction,
                 duration: Self.swipeGestureDuration
             )
-            guard dispatched else { return (false, before) }
+            guard dispatched else {
+                return ScrollProof(moved: false, previousVisibleIds: before)
+            }
             let moved = await settleSwipeMotion(
                 previousVisibleIds: before,
                 previousAnchor: beforeAnchor,
                 requireDirectionChangeSettle: isDirectionChange
             )
             lastSwipeDirectionByTarget[targetKey] = direction
-            return (moved, before)
+            return ScrollProof(moved: moved, previousVisibleIds: before)
         }
     }
 
@@ -284,12 +327,12 @@ extension Navigation {
         ) {
         case .resolved(let scrollView):
             let uiDirection = Self.uiScrollDirection(for: target.direction)
-            let (success, _) = await scrollOnePageAndSettle(
+            let proof = await scrollOnePageAndSettle(
                 .uiScrollView(scrollView), direction: uiDirection
             )
             return TheSafecracker.InteractionResult(
-                success: success, method: .scroll,
-                message: success ? nil : "scroll failed: observed target already at edge; try the opposite direction",
+                success: proof.moved, method: .scroll,
+                message: proof.moved ? nil : "scroll failed: observed target already at edge; try the opposite direction",
                 value: nil
             )
         case .failed(let diagnostic):
@@ -423,24 +466,20 @@ extension Navigation {
                 progress: &progress
             )
 
-            guard let (scrollTarget, container) = candidates.first(where: {
+            guard let plan = candidates.first(where: {
                 !progress.exhaustedContainers.contains($0.container)
             }) else { break }
 
-            let direction = Self.adaptDirection(
-                searchDirection, for: scrollTarget, container: container
-            )
-            progress.markContainerSearched(container)
-            let (moved, before) = await scrollOnePageAndSettle(
-                scrollTarget, direction: direction
-            )
+            let direction = plan.movement(for: searchDirection)
+            progress.markContainerSearched(plan.container)
+            let proof = await scrollOnePageAndSettle(plan.target, direction: direction)
 
-            if !moved {
-                progress.markContainerExhausted(container)
+            if !proof.moved {
+                progress.markContainerExhausted(plan.container)
                 continue
             }
 
-            progress.markScrolledPage(in: container, visibleHeistIds: stash.visibleIds)
+            progress.markScrolledPage(in: plan.container, visibleHeistIds: stash.visibleIds)
             refreshScrollSearchCandidates(
                 preferredAxis: requestedAxis,
                 candidates: &candidates,
@@ -459,7 +498,9 @@ extension Navigation {
                 )
             }
 
-            if stash.visibleIds == before { progress.markContainerExhausted(container) }
+            if proof.visibleStateUnchanged(after: stash.visibleIds) {
+                progress.markContainerExhausted(plan.container)
+            }
         }
 
         return searchNotFoundResult(progress: progress)
@@ -486,7 +527,7 @@ extension Navigation {
     func findScrollTarget(
         preferredAxis axis: ScrollAxis?,
         excluding exhausted: Set<AccessibilityContainer> = []
-    ) -> ScrollCandidate? {
+    ) -> ScrollPlan? {
         scrollCandidates(
             selecting: axis.map(ScrollAxisSelection.preferred) ?? .any,
             excluding: exhausted
@@ -496,13 +537,13 @@ extension Navigation {
 
     func scrollSearchCandidates(
         preferredAxis axis: ScrollAxis?
-    ) -> [ScrollCandidate] {
+    ) -> [ScrollPlan] {
         scrollCandidates(selecting: axis.map(ScrollAxisSelection.preferred) ?? .any)
     }
 
     private func refreshScrollSearchCandidates(
         preferredAxis axis: ScrollAxis?,
-        candidates: inout [ScrollCandidate],
+        candidates: inout [ScrollPlan],
         progress: inout ScrollSearchProgress
     ) {
         candidates = orderScrollCandidates(
@@ -513,9 +554,9 @@ extension Navigation {
     }
 
     private func mergeScrollSearchCandidates(
-        _ existing: [ScrollCandidate],
-        with discovered: [ScrollCandidate]
-    ) -> [ScrollCandidate] {
+        _ existing: [ScrollPlan],
+        with discovered: [ScrollPlan]
+    ) -> [ScrollPlan] {
         discovered.reduce(into: existing) { merged, candidate in
             if let index = merged.firstIndex(where: { $0.container == candidate.container }) {
                 merged[index] = candidate
@@ -528,8 +569,8 @@ extension Navigation {
     private func scrollCandidates(
         selecting axisSelection: ScrollAxisSelection,
         excluding exhausted: Set<AccessibilityContainer> = []
-    ) -> [ScrollCandidate] {
-        let candidates = stash.currentHierarchy.scrollableContainers.compactMap { container -> ScrollCandidate? in
+    ) -> [ScrollPlan] {
+        let candidates = stash.currentHierarchy.scrollableContainers.compactMap { container -> ScrollPlan? in
             guard !exhausted.contains(container),
                   case .scrollable(let contentSize) = container.type else { return nil }
 
@@ -547,22 +588,22 @@ extension Navigation {
             guard let target = self.scrollableTarget(for: container, contentSize: contentSize) else {
                 return nil
             }
-            return (target, container)
+            return ScrollPlan(target: target, container: container)
         }
         return orderScrollCandidates(candidates, selecting: axisSelection)
     }
 
     private func orderScrollCandidates(
-        _ candidates: [ScrollCandidate],
+        _ candidates: [ScrollPlan],
         selecting axisSelection: ScrollAxisSelection
-    ) -> [ScrollCandidate] {
+    ) -> [ScrollPlan] {
         guard case .preferred(let preferredAxis) = axisSelection else { return candidates }
 
         let preferred = candidates.filter {
-            Self.scrollableAxis(of: $0.container).contains(preferredAxis)
+            $0.supports(preferredAxis)
         }
         let fallback = candidates.filter {
-            !Self.scrollableAxis(of: $0.container).contains(preferredAxis)
+            !$0.supports(preferredAxis)
         }
         return preferred + fallback
     }

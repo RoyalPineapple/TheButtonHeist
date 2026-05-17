@@ -340,6 +340,20 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(candidates.map(\.container), [verticalOne, verticalTwo, horizontal])
     }
 
+    func testScrollPlanMovementUsesContainerAxisBeforeTargetAxis() {
+        let horizontalContainer = makeScrollableContainer(
+            contentSize: CGSize(width: 1_200, height: 200),
+            frame: CGRect(x: 0, y: 0, width: 320, height: 200)
+        )
+        let verticalTarget = Navigation.ScrollableTarget.swipeable(
+            frame: CGRect(x: 0, y: 0, width: 320, height: 200),
+            contentSize: CGSize(width: 320, height: 1_200)
+        )
+        let plan = Navigation.ScrollPlan(target: verticalTarget, container: horizontalContainer)
+
+        XCTAssertEqual(plan.movement(for: .down), .right)
+    }
+
     func testFindScrollTargetUsesKnownSiblingAfterFirstContainerExhausted() {
         let first = makeScrollableContainer(
             contentSize: CGSize(width: 320, height: 2000),
@@ -429,6 +443,26 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(progress.containersSearched, 0)
         XCTAssertFalse(progress.didHitScrollCap)
         XCTAssertFalse(progress.exhaustive)
+    }
+
+    // MARK: - Scroll Proof
+
+    func testScrollProofReportsEdgeAndKnownStateGrowth() {
+        let edgeProof = Navigation.ScrollProof(
+            moved: false,
+            previousVisibleIds: ["visible"]
+        )
+        XCTAssertTrue(edgeProof.atEdge)
+        XCTAssertTrue(edgeProof.visibleStateUnchanged(after: ["visible"]))
+        XCTAssertFalse(edgeProof.knownStateGrew(after: ["visible"]))
+
+        let movedProof = Navigation.ScrollProof(
+            moved: true,
+            previousVisibleIds: ["visible"]
+        )
+        XCTAssertFalse(movedProof.atEdge)
+        XCTAssertFalse(movedProof.visibleStateUnchanged(after: ["visible", "new"]))
+        XCTAssertTrue(movedProof.knownStateGrew(after: ["visible", "new"]))
     }
 
     // MARK: - ScrollableTarget Properties
