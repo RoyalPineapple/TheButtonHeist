@@ -1372,6 +1372,21 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testWaitForChangeTimeoutWithoutExpectSendsTypedPayload() async {
+        let (fence, mockConn) = makeConnectedFence()
+        _ = try? await fence.execute(request: [
+            "command": "wait_for_change",
+            "timeout": 3.0,
+        ])
+        guard let (message, _) = mockConn.sent.last,
+              case .waitForChange(let target) = message else {
+            return XCTFail("Expected waitForChange message")
+        }
+        XCTAssertNil(target.expect)
+        XCTAssertEqual(target.timeout, 3.0)
+    }
+
+    @ButtonHeistActor
     func testWaitForChangeSendsCorrectMessage() async {
         let (fence, mockConn) = makeConnectedFence()
         _ = try? await fence.execute(request: [
@@ -1453,6 +1468,24 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         XCTAssertNil(target.expect)
         XCTAssertNil(target.timeout)
+    }
+
+    @ButtonHeistActor
+    func testInvalidExpectationRejectedAtRequestEdge() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+
+        let response = try await fence.execute(request: [
+            "command": "activate",
+            "identifier": "myElement",
+            "expect": "screen_changed",
+        ])
+
+        guard case .error(let message, let details) = response else {
+            return XCTFail("Expected .error response, got \(response)")
+        }
+        XCTAssertEqual(message, "Invalid expectation type: expected object with a \"type\" discriminator")
+        XCTAssertEqual(details?.errorCode, "request.invalid")
+        XCTAssertTrue(mockConn.sent.isEmpty)
     }
 
     // MARK: - Expectation Parsing

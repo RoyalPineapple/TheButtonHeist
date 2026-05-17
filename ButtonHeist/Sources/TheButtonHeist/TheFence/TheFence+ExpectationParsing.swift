@@ -4,6 +4,15 @@ import TheScore
 
 extension TheFence {
 
+    struct ExpectationPayload {
+        let expectation: ActionExpectation?
+        let timeout: Double?
+
+        var postActionValidationTimeout: Double? {
+            expectation == nil ? nil : timeout
+        }
+    }
+
     // MARK: - Expectation Parsing
 
     /// Parse the `"expect"` field off a CLI/MCP request dictionary into a typed
@@ -14,6 +23,13 @@ extension TheFence {
     func parseExpectation(_ dictionary: [String: Any]) throws -> ActionExpectation? {
         guard let expect = dictionary["expect"] else { return nil }
         return try FenceExpectationParser.decode(expect)
+    }
+
+    func parseExpectationPayload(_ dictionary: [String: Any]) throws -> ExpectationPayload {
+        ExpectationPayload(
+            expectation: try parseExpectation(dictionary),
+            timeout: try dictionary.schemaNumber("timeout")
+        )
     }
 }
 

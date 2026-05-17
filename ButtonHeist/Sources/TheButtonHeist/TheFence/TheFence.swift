@@ -649,12 +649,16 @@ public final class TheFence {
             parsed = try parseRequest(request)
         } catch let error as SchemaValidationError {
             return .error(error.message)
+        } catch let error as MissingElementTarget {
+            return missingElementTargetResponse(command: error.command)
+        } catch let error as FenceError {
+            return .error(error.coreMessage, details: error.failureDetails)
         }
         if let immediate = parsed.immediateResponse { return immediate }
 
         if parsed.command == .waitForChange,
            let backgroundResponse = responseIfBackgroundExpectationMet(
-            parsed.expectation, requestId: parsed.requestId
+            parsed.expectationPayload.expectation, requestId: parsed.requestId
            ) {
             return backgroundResponse
         }
@@ -668,8 +672,8 @@ public final class TheFence {
         let validatedResponse = try await validateActionResponse(
             dispatched.response,
             command: parsed.command,
-            expectation: parsed.expectation,
-            expectationTimeout: parsed.expectationTimeout,
+            expectation: parsed.expectationPayload.expectation,
+            expectationTimeout: parsed.expectationPayload.postActionValidationTimeout,
             preActionCache: postDispatch.preActionCache,
             postDispatchBackgroundStartIndex: preDispatchBackgroundCount
         )
@@ -689,9 +693,8 @@ public final class TheFence {
         let command: Command
         let requestId: String
         let originalRequest: [String: Any]
-        let dispatchArgs: [String: Any]
-        let expectation: ActionExpectation?
-        let expectationTimeout: Double?
+        let payload: RequestPayload
+        let expectationPayload: ExpectationPayload
         /// Non-nil when the command short-circuits before dispatch (help/quit/exit).
         let immediateResponse: FenceResponse?
     }
@@ -716,9 +719,8 @@ public final class TheFence {
                 command: .help,
                 requestId: "",
                 originalRequest: request,
-                dispatchArgs: request,
-                expectation: nil,
-                expectationTimeout: nil,
+                payload: .none,
+                expectationPayload: ExpectationPayload(expectation: nil, timeout: nil),
                 immediateResponse: .error("Unknown command: \(commandString). Use 'help' for available commands.")
             )
         }
@@ -727,27 +729,26 @@ public final class TheFence {
                 command: command,
                 requestId: "",
                 originalRequest: request,
-                dispatchArgs: request,
-                expectation: nil,
-                expectationTimeout: nil,
+                payload: .none,
+                expectationPayload: ExpectationPayload(expectation: nil, timeout: nil),
                 immediateResponse: immediate
             )
         }
         let requestId = (request["requestId"] as? String) ?? UUID().uuidString
         logCommand(requestId: requestId, command: command, request: request)
-        let expectation = try parseExpectation(request)
-        let expectationTimeout = expectation == nil ? nil : try request.schemaNumber("timeout")
-
-        var dispatchArgs = request
-        dispatchArgs["_requestId"] = requestId
+        let expectationPayload = try parseExpectationPayload(request)
+        let payload: RequestPayload = if command == .waitForChange {
+            .waitForChange(expectationPayload)
+        } else {
+            try decodeRequestPayload(command: command, request: request, requestId: requestId)
+        }
 
         return ParsedRequest(
             command: command,
             requestId: requestId,
             originalRequest: request,
-            dispatchArgs: dispatchArgs,
-            expectation: expectation,
-            expectationTimeout: expectationTimeout,
+            payload: payload,
+            expectationPayload: expectationPayload,
             immediateResponse: nil
         )
     }
@@ -757,8 +758,7 @@ public final class TheFence {
     private func dispatchCommand(_ parsed: ParsedRequest) async throws -> DispatchResult {
         try await ensureConnectedIfNeeded(for: parsed.command)
         return try await dispatchWithErrorLogging(
-            command: parsed.command,
-            args: parsed.dispatchArgs,
+            parsed,
             requestId: parsed.requestId
         )
     }
@@ -844,13 +844,12 @@ public final class TheFence {
     }
 
     private func dispatchWithErrorLogging(
-        command: Command,
-        args: [String: Any],
+        _ parsed: ParsedRequest,
         requestId: String
     ) async throws -> DispatchResult {
         let start = CFAbsoluteTimeGetCurrent()
         do {
-            let response = try await dispatch(command: command, args: args)
+            let response = try await dispatch(parsed)
             return DispatchResult(response: response, durationMs: elapsedMilliseconds(since: start))
         } catch let error as SchemaValidationError {
             return DispatchResult(
@@ -1129,56 +1128,81 @@ public final class TheFence {
 
     // MARK: - Command Dispatch (thin router)
 
-    private func dispatch(command: Command, args: [String: Any]) async throws -> FenceResponse {
-        switch command {
-        case .status:
+    private func dispatch(_ parsed: ParsedRequest) async throws -> FenceResponse {
+        switch (parsed.command, parsed.payload) {
+        case (.status, _):
             return .status(
                 connected: handoff.isConnected,
                 deviceName: handoff.connectedDevice.map { handoff.displayName(for: $0) }
             )
-        case .listDevices:
+        case (.listDevices, _):
             return try await handleListDevices()
-        case .getInterface:
-            return try await handleGetInterface(args)
-        case .getScreen:
-            return try await handleGetScreen(args)
-        case .waitForChange:
-            return try await handleWaitForChange(args)
-        case .oneFingerTap, .longPress, .swipe, .drag, .pinch, .rotate, .twoFingerTap,
-             .drawPath, .drawBezier:
-            return try await handleGesture(command: command, args: args)
-        case .scroll, .scrollToVisible, .elementSearch, .scrollToEdge:
-            return try await handleScrollAction(command: command, args: args)
-        case .waitFor:
-            return try await handleWaitFor(args)
-        case .activate, .increment, .decrement, .performCustomAction, .rotor:
-            return try await handleAccessibilityAction(command: command, args: args)
-        case .typeText:
-            return try await handleTypeText(args)
-        case .editAction:
-            return try await handleEditAction(args)
-        case .setPasteboard:
-            return try await handleSetPasteboard(args)
-        case .getPasteboard:
+        case (.getInterface, .getInterface(let request)):
+            return try await handleGetInterface(request)
+        case (.getScreen, .artifact(let request)):
+            return try await handleGetScreen(request)
+        case (.waitForChange, .waitForChange(let payload)):
+            return try await handleWaitForChange(payload)
+        case (.oneFingerTap, .gesture(let payload)),
+             (.longPress, .gesture(let payload)),
+             (.swipe, .gesture(let payload)),
+             (.drag, .gesture(let payload)),
+             (.pinch, .gesture(let payload)),
+             (.rotate, .gesture(let payload)),
+             (.twoFingerTap, .gesture(let payload)),
+             (.drawPath, .gesture(let payload)),
+             (.drawBezier, .gesture(let payload)):
+            return try await handleGesture(payload)
+        case (.scroll, .scroll(let payload)),
+             (.scrollToVisible, .scroll(let payload)),
+             (.elementSearch, .scroll(let payload)),
+             (.scrollToEdge, .scroll(let payload)):
+            return try await handleScrollAction(payload)
+        case (.waitFor, .waitFor(let target)):
+            return try await handleWaitFor(target)
+        case (.activate, .accessibility(let payload)),
+             (.increment, .accessibility(let payload)),
+             (.decrement, .accessibility(let payload)),
+             (.performCustomAction, .accessibility(let payload)):
+            return try await handleAccessibilityAction(payload)
+        case (.rotor, .rotor(let target)):
+            return try await handleRotor(target)
+        case (.typeText, .typeText(let target)):
+            return try await handleTypeText(target)
+        case (.editAction, .editAction(let target)):
+            return try await handleEditAction(target)
+        case (.setPasteboard, .setPasteboard(let target)):
+            return try await handleSetPasteboard(target)
+        case (.getPasteboard, _):
             return try await handleGetPasteboard()
-        case .dismissKeyboard:
+        case (.dismissKeyboard, _):
             return try await sendAction(.resignFirstResponder)
-        case .startRecording, .stopRecording:
-            return command == .startRecording
-                ? try await handleStartRecording(args)
-                : try await handleStopRecording(args)
-        case .runBatch:
-            return try await handleRunBatch(args)
-        case .getSessionState:
+        case (.startRecording, .startRecording(let config)):
+            return try await handleStartRecording(config)
+        case (.stopRecording, .artifact(let request)):
+            return try await handleStopRecording(request)
+        case (.runBatch, .runBatch(let request)):
+            return try await handleRunBatch(request)
+        case (.getSessionState, _):
             return .sessionState(payload: currentSessionState())
-        case .connect:
-            return try await handleConnect(args)
-        case .listTargets:
+        case (.connect, .connect(let request)):
+            return try await handleConnect(request)
+        case (.listTargets, _):
             return handleListTargets()
-        case .getSessionLog, .archiveSession, .startHeist, .stopHeist, .playHeist:
-            return try await handleBookKeeperCommand(command: command, args: args)
-        case .help, .quit, .exit:
-            return .error("Unexpected command in dispatch: \(command.rawValue)")
+        case (.getSessionLog, _):
+            return handleGetSessionLog()
+        case (.archiveSession, .archiveSession(let request)):
+            return try await handleArchiveSession(request)
+        case (.startHeist, .startHeist(let request)):
+            return try handleStartHeist(request)
+        case (.stopHeist, .stopHeist(let request)):
+            return try handleStopHeist(request)
+        case (.playHeist, .playHeist(let request)):
+            return try await handlePlayHeist(request)
+        case (.help, _), (.quit, _), (.exit, _):
+            return .error("Unexpected command in dispatch: \(parsed.command.rawValue)")
+        default:
+            return .error("Internal payload mismatch for command: \(parsed.command.rawValue)")
         }
     }
 
