@@ -220,24 +220,36 @@ final class TheMuscleTests: XCTestCase {
         XCTAssertEqual(authenticatedCount, 0)
     }
 
-    func testNonAuthMessageDisconnects() async throws {
+    func testNonAuthMessageReturnsAuthFailure() async throws {
         // Send a ping message before authenticating
         let pingData = try JSONEncoder().encode(RequestEnvelope(message: .ping))
-        await muscle.handleUnauthenticatedMessage(1, data: pingData, respond: respondSink())
+        let (respond, responses) = collectResponses()
+        await muscle.handleUnauthenticatedMessage(1, data: pingData, respond: respond)
         await flushCallbacks()
 
-        XCTAssertTrue(disconnectedClients.contains(1), "Should disconnect client that sends non-auth message")
+        let serverMessages = responses().compactMap { decodeServerMessage($0) }
+        let authFailure = serverMessages.compactMap { message -> ServerError? in
+            guard case .error(let error) = message, error.kind == .authFailure else { return nil }
+            return error
+        }.first
+        XCTAssertEqual(authFailure?.message, "Authentication required before ping.")
     }
 
-    func testRemovedWatchMessageDisconnectsWithoutAuthenticating() async {
+    func testRemovedWatchMessageReturnsAuthFailureWithoutAuthenticating() async {
         await muscle.registerClientAddress(1, address: "127.0.0.1")
         await performHello(clientId: 1, respond: respondSink())
 
         let data = Data(#"{"buttonHeistVersion":"\#(buttonHeistVersion)","type":"watch","payload":{"token":"test-token"}}"#.utf8)
-        await muscle.handleUnauthenticatedMessage(1, data: data, respond: respondSink())
+        let (respond, responses) = collectResponses()
+        await muscle.handleUnauthenticatedMessage(1, data: data, respond: respond)
 
+        let serverMessages = responses().compactMap { decodeServerMessage($0) }
+        let authFailure = serverMessages.compactMap { message -> ServerError? in
+            guard case .error(let error) = message, error.kind == .authFailure else { return nil }
+            return error
+        }.first
+        XCTAssertEqual(authFailure?.message, "Authentication required before watch.")
         XCTAssertFalse(markedAuthenticated.contains(1))
-        XCTAssertTrue(disconnectedClients.contains(1))
     }
 
     // MARK: - Session Rules Tests

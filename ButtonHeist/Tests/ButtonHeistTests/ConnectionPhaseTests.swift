@@ -16,8 +16,8 @@ final class ConnectionPhaseTests: XCTestCase {
             TheHandoff.ConnectionError.connectionFailed("other")
         )
         XCTAssertNotEqual(
-            TheHandoff.ConnectionError.authFailed("bad token"),
-            TheHandoff.ConnectionError.sessionLocked("bad token")
+            TheHandoff.ConnectionError.disconnected(.authFailed("bad token")),
+            TheHandoff.ConnectionError.disconnected(.sessionLocked("bad token"))
         )
         XCTAssertEqual(
             TheHandoff.ConnectionError.disconnected(.missingFingerprint),
@@ -30,8 +30,8 @@ final class ConnectionPhaseTests: XCTestCase {
             (.connectionFailed("refused"), "connection.failed", .transport, true),
             (.disconnected(.missingFingerprint), "tls.missing_fingerprint", .tls, false),
             (.disconnected(.serverClosed), "transport.server_closed", .transport, true),
-            (.authFailed("bad token"), "auth.failed", .authentication, false),
-            (.sessionLocked("busy"), "session.locked", .session, true),
+            (.disconnected(.authFailed("bad token")), "auth.failed", .authentication, false),
+            (.disconnected(.sessionLocked("busy")), "session.locked", .session, true),
             (.timeout, "setup.timeout", .setup, true),
             (.noDeviceFound, "discovery.no_device_found", .discovery, true),
             (.noMatchingDevice(filter: "Demo", available: ["Other"]), "discovery.no_matching_device", .discovery, false),

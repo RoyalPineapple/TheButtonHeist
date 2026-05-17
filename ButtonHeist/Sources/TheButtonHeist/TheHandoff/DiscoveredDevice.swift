@@ -202,8 +202,9 @@ extension Array where Element == DiscoveredDevice {
     }
 
     /// Probe all devices in parallel and return only those that are reachable.
-    /// Uses the Inside Job status RPC as a lightweight liveness check; devices
-    /// that fail to respond with a valid status payload are treated as stale.
+    /// Uses a passive transport/TLS-ready probe as a lightweight liveness check.
+    /// Reachability never enters the post-handshake session lifecycle or asks
+    /// the server for pre-auth identity.
     func reachable(timeout: TimeInterval = 1.5) async -> [DiscoveredDevice] {
         await withTaskGroup(of: (Int, DiscoveredDevice?).self) { group in
             for (index, device) in self.enumerated() {
@@ -236,22 +237,18 @@ extension DiscoveredDevice {
         let resolver = ReachabilityResolver()
 
         // Wire the connection's onEvent callback to resolve the probe:
-        // `.message(.status)` resolves true; `.disconnected` resolves false.
+        // `.transportReady` resolves true; `.disconnected` resolves false.
         // The resolver is one-shot so a subsequent `.disconnected` after a
-        // successful `.status` is a no-op. `[weak connection]` breaks the
-        // closure→connection→closure cycle so the probe connection deallocates
-        // promptly after `isReachable` returns.
-        connection.onEvent = { [weak connection] event in
+        // successful transport-ready signal is a no-op.
+        connection.onEvent = { event in
             switch event {
             case .transportReady:
-                connection?.send(.status)
+                reachabilityLogger.debug("Transport reachable: \(deviceName, privacy: .public)")
+                resolver.resolve(true)
             case .connected:
                 break
-            case .message(let message, _, _):
-                if case .status = message {
-                    reachabilityLogger.debug("Status reachable: \(deviceName, privacy: .public)")
-                    resolver.resolve(true)
-                }
+            case .message:
+                break
             case .disconnected:
                 resolver.resolve(false)
             }
@@ -269,7 +266,7 @@ extension DiscoveredDevice {
         let reachable = await resolver.value
         connection.disconnect()
         if !reachable {
-            reachabilityLogger.debug("Status probe miss: \(deviceName, privacy: .public)")
+            reachabilityLogger.debug("Transport probe miss: \(deviceName, privacy: .public)")
         }
         return reachable
     }
@@ -277,7 +274,7 @@ extension DiscoveredDevice {
 
 /// One-shot bool resolver backing `DiscoveredDevice.isReachable`. Holds a
 /// continuation that is resumed exactly once by whichever signal arrives
-/// first: a successful status message, a disconnect, or the timeout.
+/// first: a successful transport-ready signal, a disconnect, or the timeout.
 @ButtonHeistActor
 private final class ReachabilityResolver {
     /// Explicit three-state lifecycle replacing the prior

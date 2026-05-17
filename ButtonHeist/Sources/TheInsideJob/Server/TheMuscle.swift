@@ -304,24 +304,50 @@ actor TheMuscle {
 
         switch envelope.message {
         case .clientHello:
-            if let phase = clients[clientId] {
-                clients[clientId] = .helloValidated(address: phase.address)
+            guard let phase = clients[clientId] else {
+                rejectUnauthenticatedMessage(
+                    clientId,
+                    message: "Connection is not registered; reconnect before starting the auth handshake.",
+                    requestId: envelope.requestId,
+                    respond: respond
+                )
+                return
             }
+            clients[clientId] = .helloValidated(address: phase.address)
             sendMessage(.authRequired, respond: respond)
             return
         case .authenticate(let payload):
             guard clients[clientId]?.hasCompletedHello == true else {
-                logger.warning("Client \(clientId) attempted auth before hello")
-                await disconnectClient?(clientId)
+                rejectUnauthenticatedMessage(
+                    clientId,
+                    message: "Authentication requires client_hello first.",
+                    requestId: envelope.requestId,
+                    respond: respond
+                )
                 return
             }
             await processAuthentication(clientId, payload: payload, respond: respond)
             return
         default:
-            logger.warning("Client \(clientId) sent invalid pre-auth message, disconnecting")
-            await disconnectClient?(clientId)
+            rejectUnauthenticatedMessage(
+                clientId,
+                message: "Authentication required before \(envelope.message.canonicalName).",
+                requestId: envelope.requestId,
+                respond: respond
+            )
             return
         }
+    }
+
+    private func rejectUnauthenticatedMessage(
+        _ clientId: Int,
+        message: String,
+        requestId: String?,
+        respond: @escaping @Sendable (Data) -> Void
+    ) {
+        sendMessage(.error(ServerError(kind: .authFailure, message: message)), requestId: requestId, respond: respond)
+        logger.warning("Client \(clientId) rejected before auth: \(message, privacy: .public)")
+        scheduleDelayedDisconnect(clientId)
     }
 
     private func processAuthentication(_ clientId: Int, payload: AuthenticatePayload, respond: @escaping @Sendable (Data) -> Void) async {
@@ -742,9 +768,9 @@ actor TheMuscle {
         }
     }
 
-    func encodeEnvelope(_ message: ServerMessage) -> Data? {
+    func encodeEnvelope(_ message: ServerMessage, requestId: String? = nil) -> Data? {
         do {
-            return try ResponseEnvelope(message: message).encoded()
+            return try ResponseEnvelope(requestId: requestId, message: message).encoded()
         } catch {
             logger.error("Failed to encode message: \(error)")
             return nil
@@ -760,10 +786,13 @@ actor TheMuscle {
         }
     }
 
-    private func sendMessage(_ message: ServerMessage, respond: @escaping @Sendable (Data) -> Void) {
-        if let data = encodeEnvelope(message) {
+    private func sendMessage(_ message: ServerMessage, requestId: String? = nil, respond: @escaping @Sendable (Data) -> Void) {
+        if let data = encodeEnvelope(message, requestId: requestId) {
             respond(data)
-        } else if let errorData = encodeEnvelope(.error(ServerError(kind: .general, message: "Encoding failed"))) {
+        } else if let errorData = encodeEnvelope(
+            .error(ServerError(kind: .general, message: "Encoding failed")),
+            requestId: requestId
+        ) {
             respond(errorData)
         }
     }

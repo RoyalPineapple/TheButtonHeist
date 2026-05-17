@@ -482,7 +482,7 @@ final class DiscoveredDeviceTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testReachableSendsStatusAfterTransportReady() async {
+    func testReachableCompletesOnTransportReadyWithoutStatusProbe() async {
         let device = DiscoveredDevice(
             id: "test",
             name: "ReachableApp#abc123",
@@ -491,25 +491,6 @@ final class DiscoveredDeviceTests: XCTestCase {
         )
         let mockConnection = MockConnection()
         mockConnection.emitTransportReadyOnConnect = true
-        mockConnection.autoResponse = { message in
-            switch message {
-            case .status:
-                return .status(StatusPayload(
-                    identity: StatusIdentity(
-                        appName: "ReachableApp",
-                        bundleIdentifier: "com.test.reachable",
-                        appBuild: "1",
-                        deviceName: "Simulator",
-                        systemVersion: "18.5",
-                        buttonHeistVersion: "5.0"
-                    ),
-                    session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
-                ))
-            default:
-                XCTFail("Unexpected probe message: \(message)")
-                return .error(ServerError(kind: .general, message: "unexpected"))
-            }
-        }
 
         let previousFactory = makeReachabilityConnection
         makeReachabilityConnection = { _ in mockConnection }
@@ -518,12 +499,7 @@ final class DiscoveredDeviceTests: XCTestCase {
         let reachable = await [device].reachable(timeout: 0.2)
 
         XCTAssertEqual(reachable, [device])
-        XCTAssertEqual(mockConnection.sent.count, 1)
-        if case .status = mockConnection.sent.first?.0 {
-            // Expected
-        } else {
-            XCTFail("Reachability should send exactly one status probe")
-        }
+        XCTAssertTrue(mockConnection.sent.isEmpty, "Reachability must not enter the pre-auth message lifecycle")
     }
 
     @ButtonHeistActor
@@ -573,19 +549,7 @@ private final class ReachabilityProbeConnection: DeviceConnecting {
 
     @discardableResult
     func send(_ message: ClientMessage, requestId: String?) -> DeviceSendOutcome {
-        guard case .status = message else { return .enqueued }
-        let payload = StatusPayload(
-            identity: StatusIdentity(
-                appName: "ReachableApp",
-                bundleIdentifier: "com.test.reachable",
-                appBuild: "1",
-                deviceName: "Simulator",
-                systemVersion: "18.5",
-                buttonHeistVersion: "5.0"
-            ),
-            session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
-        )
-        onEvent?(.message(.status(payload), requestId: requestId, accessibilityTrace: nil))
+        XCTFail("Reachability should not send \(message.canonicalName)")
         return .enqueued
     }
 }

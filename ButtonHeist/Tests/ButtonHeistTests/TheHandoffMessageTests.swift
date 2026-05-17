@@ -126,8 +126,6 @@ final class TheHandoffMessageTests: XCTestCase {
     @ButtonHeistActor
     func testSessionLockedTransitionsToFailed() async throws {
         let handoff = TheHandoff()
-        var receivedPayload: SessionLockedPayload?
-        handoff.onSessionLocked = { receivedPayload = $0 }
 
         let payload = SessionLockedPayload(
             message: "Session busy; owner driver id: driver-a; active connections: 2; remaining timeout: 10s.",
@@ -135,8 +133,7 @@ final class TheHandoffMessageTests: XCTestCase {
         )
         handoff.handleServerMessage(.sessionLocked(payload), requestId: nil)
 
-        assertFailed(handoff.connectionPhase, failure: .sessionLocked(payload.message))
-        XCTAssertEqual(receivedPayload?.activeConnections, 2)
+        assertFailed(handoff.connectionPhase, failure: .disconnected(.sessionLocked(payload.message)))
     }
 
     // MARK: - .error(authFailure)
@@ -144,16 +141,13 @@ final class TheHandoffMessageTests: XCTestCase {
     @ButtonHeistActor
     func testAuthFailedTransitionsToFailed() async {
         let handoff = TheHandoff()
-        var receivedReason: String?
-        handoff.onAuthFailed = { receivedReason = $0 }
 
         handoff.handleServerMessage(
             .error(ServerError(kind: .authFailure, message: "bad token")),
             requestId: nil
         )
 
-        assertFailed(handoff.connectionPhase, failure: .authFailed("bad token"))
-        XCTAssertEqual(receivedReason, "bad token")
+        assertFailed(handoff.connectionPhase, failure: .disconnected(.authFailed("bad token")))
     }
 
     // MARK: - .protocolMismatch

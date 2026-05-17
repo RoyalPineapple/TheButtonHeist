@@ -347,9 +347,9 @@ extension FenceError {
     init(_ connectionError: TheHandoff.ConnectionError) {
         switch connectionError {
         case .connectionFailed(let message): self = .connectionFailed(message)
+        case .disconnected(.authFailed(let reason)): self = .authFailed(reason)
+        case .disconnected(.sessionLocked(let message)): self = .sessionLocked(message)
         case .disconnected(let reason): self = .connectionFailure(ConnectionFailure(disconnectReason: reason))
-        case .authFailed(let reason): self = .authFailed(reason)
-        case .sessionLocked(let message): self = .sessionLocked(message)
         case .timeout: self = .connectionTimeout
         case .noDeviceFound: self = .noDeviceFound
         case .noMatchingDevice(let filter, let available): self = .noMatchingDevice(filter: filter, available: available)

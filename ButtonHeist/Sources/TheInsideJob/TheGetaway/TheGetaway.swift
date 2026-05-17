@@ -211,13 +211,7 @@ final class TheGetaway {
             await handleClientMessage(clientId, data: data, respond: respond)
 
         case .unauthenticatedData(let clientId, let data, let respond):
-            if let envelope = decodeRequest(data),
-               case .status = envelope.message,
-               await muscle.helloValidatedClients.contains(clientId) {
-                await handleClientMessage(clientId, data: data, respond: respond)
-            } else {
-                await muscle.handleUnauthenticatedMessage(clientId, data: data, respond: respond)
-            }
+            await muscle.handleUnauthenticatedMessage(clientId, data: data, respond: respond)
 
         case .rateLimited(_, let respond):
             let message = "Rate limited: max \(SimpleSocketServer.maxMessagesPerSecond) messages per second"
