@@ -472,23 +472,15 @@ extension FenceResponse {
                 lines.append("  ~ \(update.heistId): \(change.property.rawValue) \"\(change.old ?? "nil")\" → \"\(change.new ?? "nil")\"")
             }
         }
-        for entry in edits.treeInserted {
-            lines.append("  + tree \(compactTreeLocation(entry.location))")
-        }
-        for entry in edits.treeRemoved {
-            lines.append("  - tree \(entry.ref.id) at \(compactTreeLocation(entry.location))")
-        }
-        for entry in edits.treeMoved {
-            lines.append("  ↕ \(entry.ref.id): \(compactTreeLocation(entry.from)) → \(compactTreeLocation(entry.to))")
+        let structuralCount = edits.treeInserted.count + edits.treeRemoved.count + edits.treeMoved.count
+        if structuralCount > 0 {
+            var parts: [String] = []
+            if !edits.treeInserted.isEmpty { parts.append("+\(edits.treeInserted.count)") }
+            if !edits.treeRemoved.isEmpty { parts.append("-\(edits.treeRemoved.count)") }
+            if !edits.treeMoved.isEmpty { parts.append("moved \(edits.treeMoved.count)") }
+            lines.append("  hierarchy changed (\(parts.joined(separator: ", ")))")
         }
         return lines
-    }
-
-    private static func compactTreeLocation(_ location: TreeLocation) -> String {
-        if let parentId = location.parentId {
-            return "\(parentId)[\(location.index)]"
-        }
-        return "root[\(location.index)]"
     }
 
 }

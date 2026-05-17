@@ -194,7 +194,7 @@ nonisolated extension ReplSession {
           wait label="Loading" absent=true  Wait for element to disappear
 
         Gestures:
-          tap <heistId>               Tap element by heistId
+          tap <heistId>               Tap element by current handle
           tap 100 200                 Tap at coordinates
           press <id>                  Long press (duration=N for seconds)
           swipe up <id>               Swipe direction on element
@@ -207,7 +207,7 @@ nonisolated extension ReplSession {
 
         Scrolling:
           scroll down <id>            Scroll direction on element
-          scroll_to_visible <id>      Jump to known element position
+          scroll_to_visible <id>      Bring known element into view
           element_search -l "text"    Search scroll content for element
           scroll_to_edge top <id>     Scroll to edge
 
@@ -231,7 +231,7 @@ nonisolated extension ReplSession {
           record                      Start recording
           stop_recording              Stop and retrieve recording
 
-        Bare words are looked up as heistId (from get_interface).
+        Bare words are looked up as current element handles (from get_interface).
         Key=value pairs work for any parameter: tap identifier=btn x=100 y=200
         JSON input still works: {"command":"activate","heistId":"button_save"}
         """

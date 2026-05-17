@@ -400,7 +400,7 @@ Stop an active recording. The server finalizes the video and sends a `recording`
 
 ### scroll
 
-Scroll the resolved element's stored scroll view by approximately one page in the given direction. The scroll view must support the requested axis; Button Heist does not fall back to unrelated global containers for resolved target actions. Use `elementSearch` when the goal is to scan scrollable content for an unseen target.
+Scroll near the resolved element by approximately one page in the given direction. Use `elementSearch` when the goal is to scan the screen for an unseen target.
 
 **By identifier:**
 ```json
@@ -416,9 +416,9 @@ Directions: `"up"`, `"down"`, `"left"`, `"right"`, `"next"`, `"previous"`.
 
 ### scrollToVisible
 
-Scroll a known registry element into view. This is a one-shot recorded-position jump for elements that are visible now or whose `heistId` is still present in the current or preserved screen snapshot, such as the union produced by the latest `get_interface` with `scope: "full"`. For iterative discovery of an unseen or stale element, use `element_search`.
+Scroll a known element into view. Use this for elements returned by the current hierarchy or a recent action delta. For iterative discovery of an unseen or stale element, use `element_search`.
 
-**Target fields:** `heistId`, or flat matcher fields `label`, `identifier`, `value`, `traits`, `excludeTraits`. Use `heistId` for recorded-position jumps. Matcher fields are decoded at the payload root and only resolve elements already present in the current snapshot; there is no nested `match` object.
+**Target fields:** `heistId`, or flat matcher fields `label`, `identifier`, `value`, `traits`, `excludeTraits`. Use `heistId` for known current-hierarchy elements. Matcher fields are decoded at the payload root and only resolve elements already present in the current hierarchy; there is no nested `match` object.
 
 **By heistId:**
 ```json
@@ -442,7 +442,7 @@ Scroll a known registry element into view. This is a one-shot recorded-position 
 
 ### elementSearch
 
-Search for an element by scrolling through scroll views. Uses an `ElementTarget` predicate — all specified matcher fields must match (AND semantics). Returns a `ScrollSearchResult` with diagnostics. Walks the accessibility hierarchy tree (outermost first), scrolling each container until the target appears or all containers are exhausted.
+Search for an element by scrolling the current screen. Uses an `ElementTarget` predicate — all specified matcher fields must match (AND semantics). Returns a `ScrollSearchResult` with diagnostics.
 
 **Target fields:** `heistId`, or flat matcher fields `label`, `identifier`, `value`, `traits`, `excludeTraits`.
 
@@ -465,7 +465,7 @@ Search for an element by scrolling through scroll views. Uses an `ElementTarget`
 
 ### scrollToEdge
 
-Scroll the resolved element's stored scroll view to an edge (top, bottom, left, right). The scroll view must support the requested axis; unrelated containers are not considered.
+Scroll near the resolved element to an edge (top, bottom, left, right). The target must be in scrollable content that supports the requested axis.
 
 **By identifier:**
 ```json
@@ -476,7 +476,7 @@ Edges: `"top"`, `"bottom"`, `"left"`, `"right"`.
 
 ### explore
 
-Full screen element census. Scrolls every scrollable container to its limits and back, discovering all elements including off-screen content. Scroll positions are saved and restored — no visual change occurs.
+Full screen element census. Returns the complete accessible hierarchy Button Heist can discover for the current screen, including off-screen content.
 
 No payload required.
 
@@ -484,7 +484,7 @@ No payload required.
 {"buttonHeistVersion":"<calver>","type":"explore"}
 ```
 
-Returns an `actionResult` with `method: "explore"` and a `payload` of `{"kind": "explore", "data": {...}}` containing the complete element list, scroll count, containers explored, and exploration time.
+Returns an `actionResult` with `method: "explore"` and a `payload` of `{"kind": "explore", "data": {...}}` containing the complete element list and summary discovery statistics.
 
 > **Note**: `explore` is not exposed as a standalone CLI/MCP command. It is dispatched internally by `get_interface` when `scope` is `"full"` (the default). The legacy `full: true` alias still selects the same behavior. See [Element Discovery](#element-discovery) for usage guidance.
 
@@ -559,7 +559,7 @@ Wait for an element matching a predicate to appear (or disappear). Uses settle-e
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `heistId` | `String?` | Stable element identifier assigned by `get_interface` |
+| `heistId` | `String?` | Current-hierarchy element handle returned by `get_interface` or an action delta |
 | `label` / `identifier` / `value` / `traits` / `excludeTraits` | matcher fields | Predicate describing the element to wait for, decoded flat at the payload root |
 | `absent` | `Bool?` | When `true`, wait for element to NOT exist (default: `false`) |
 | `timeout` | `Double?` | Max wait time in seconds (default: 10, max: 30) |
@@ -786,10 +786,10 @@ Possible methods:
 - `waitForChange` - Wait-for-change completed (expectation met or timeout)
 - `waitFor` - Wait-for element completed
 - `scroll` - Scroll view scrolled by one page
-- `scrollToVisible` - Known registry element was scrolled into view
+- `scrollToVisible` - Known element was scrolled into view
 - `elementSearch` - Iterative scroll search found (or failed to find) element matching predicate
 - `scrollToEdge` - Scroll view scrolled to an edge
-- `explore` - Full element census completed (all scrollable content discovered, scroll positions restored)
+- `explore` - Full element census completed
 - `elementNotFound` - Target element could not be found
 - `elementDeallocated` - Element's underlying view was deallocated
 
@@ -907,57 +907,43 @@ sequenceDiagram
     participant Agent
     participant TheFence
     participant TheInsideJob
-    participant TheBrains
 
-    Note over Agent,TheBrains: get_interface scope=visible
+    Note over Agent,TheInsideJob: get_interface scope=visible
     Agent->>TheFence: get_interface(scope: visible)
     TheFence->>TheInsideJob: requestInterface
-    TheInsideJob->>TheBrains: snapshotElements()
-    TheBrains-->>Agent: interface (visible elements)
+    TheInsideJob-->>Agent: interface (visible elements)
 
-    Note over Agent,TheBrains: get_interface scope=full (default explore)
+    Note over Agent,TheInsideJob: get_interface scope=full (default)
     Agent->>TheFence: get_interface(scope: full)
-    TheFence->>TheInsideJob: explore
-    TheInsideJob->>TheBrains: exploreScreen()
-
-    loop each scrollable container
-        TheBrains->>TheBrains: save scroll position
-        loop scroll forward until stagnation
-            TheBrains->>TheBrains: scrollByPage
-            TheBrains->>TheStash: refresh() (via TheBurglar.parse + apply)
-            TheBrains->>TheBrains: record new elements
-        end
-        TheBrains->>TheBrains: restore scroll position
-    end
-
-    TheBrains-->>Agent: interface (all elements + explore metadata)
+    TheFence->>TheInsideJob: request full interface
+    TheInsideJob-->>Agent: interface (complete hierarchy + summary metadata)
 ```
 
 Three ways to find elements, each suited to a different situation:
 
 | Command | What it returns | When to use |
 |---------|----------------|-------------|
-| `get_interface` with `scope: "visible"` | Visible elements only | Fast reads. You know the element is on screen, or you want the current viewport. |
-| `get_interface` with `scope: "full"` | Every element on screen, including off-screen content | You need to know what exists in scroll views without navigating. Returns the same `interface` response with all elements populated. |
-| `scroll_to_visible` | Jumps to a known registry element, leaves viewport on it | You have a visible target or a `heistId` still present in the current or preserved screen snapshot. Changes the scroll position. |
-| `element_search` | Scrolls until the target element is found, leaves viewport on it | You have not discovered the element yet and need to search scrollable content. |
+| `get_interface` with `scope: "visible"` | Visible elements only | Fast reads. You know the element is visible, or you want the current on-screen state. |
+| `get_interface` with `scope: "full"` | Complete current-screen hierarchy, including discoverable off-screen content | You need to know what exists in long scrollable screens before acting. Returns the same `interface` response with all elements populated. |
+| `scroll_to_visible` | Brings a known element into view | You have a visible target or a `heistId` still valid in the current hierarchy. Changes the scroll position. |
+| `element_search` | Scrolls until the target element is found, leaves it visible | You have not discovered the element yet and need to search scrollable content. |
 
 ### Choosing between full, element_search, and scroll_to_visible
 
-- **`get_interface scope=full`** is a read operation. It explores, then restores scroll positions. The user sees no change. Use it when you need a census — "what elements are on this screen?" — without committing to navigate anywhere. The legacy `full: true` alias selects the same scope.
+- **`get_interface scope=full`** is a read operation. Use it when you need a census — "what elements are on this screen?" — before committing to an interaction. The legacy `full: true` alias selects the same scope.
 
-- **`scroll_to_visible`** is a recorded-position navigation action. It scrolls to a known target and leaves the viewport there so you can interact with the element. Use it when the target is visible now or when a `heistId` is still present in the current/preserved screen snapshot, especially after `get_interface` with `scope: "full"`.
+- **`scroll_to_visible`** scrolls to a known target and leaves it visible so you can interact with the element. Use it when the target is visible now or when a `heistId` is still valid in the current hierarchy.
 
-- **`element_search`** is an iterative navigation action. It pages through scrollable containers and stops when the target is found. Use it when the element has not been seen yet.
+- **`element_search`** scrolls while looking for a matcher and stops when the target is found. Use it when the element has not been seen yet.
 
 ```mermaid
 flowchart TD
     A[Need to find an element?] --> B{Is it likely visible?}
     B -->|Yes| C[get_interface scope=visible]
     B -->|No / unsure| D{Need to interact with it?}
-    D -->|Yes, already discovered| E[scroll_to_visible<br>Jumps to known element,<br>leaves viewport there]
-    D -->|Yes, not yet discovered| I[element_search<br>Pages until found,<br>leaves viewport there]
-    D -->|No, just check existence| F[get_interface scope=full<br>Census then restore<br>scroll positions]
+    D -->|Yes, already discovered| E[scroll_to_visible<br>Bring known element<br>into view]
+    D -->|Yes, not yet discovered| I[element_search<br>Scroll until found]
+    D -->|No, just check existence| F[get_interface scope=full<br>Read complete hierarchy]
     C --> G{Found it?}
     G -->|Yes| H[activate / scroll / interact]
     G -->|No| D
@@ -965,12 +951,12 @@ flowchart TD
 
 ### When you don't need either
 
-Most agent workflows don't need full exploration. The typical pattern is:
+Most agent workflows don't need a full hierarchy read. The typical pattern is:
 
 1. `get_interface` with `scope: "visible"` — see what's visible
 2. `activate` / `scroll` / `swipe` — interact with visible elements
 3. `element_search` — find a specific unseen off-screen element when needed
-4. `scroll_to_visible` — return to a known off-screen `heistId` while it is still present in the current or preserved screen snapshot
+4. `scroll_to_visible` — return to a known off-screen `heistId` while it is still valid in the current hierarchy
 
 Use `get_interface` with `scope: "full"` when the screen has deep scrollable content and you need to make decisions based on elements that aren't currently visible (e.g., checking if a specific item exists in a long list before deciding what to do).
 
@@ -1008,7 +994,7 @@ not duplicated on `ServerInfo`.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `heistId` | `String` | Stable deterministic identifier (derived from developer identifier or synthesized from traits+label; value excluded for stability). Preferred for element targeting. |
+| `heistId` | `String` | Current-hierarchy element handle returned by Button Heist. Use it for immediate follow-up actions; use matcher fields for durable flows and recordings. |
 | `label` | `String?` | Label |
 | `value` | `String?` | Current value (for controls) |
 | `identifier` | `String?` | Identifier |
@@ -1062,11 +1048,11 @@ Container types:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `heistId` | `String?` | Stable element identifier assigned by `get_interface` |
+| `heistId` | `String?` | Current-hierarchy element handle returned by `get_interface` or an action delta |
 | `label` / `identifier` / `value` / `traits` / `excludeTraits` | matcher fields | Predicate matcher fields for accessibility-based resolution, decoded flat at the target root |
 | `ordinal` | `Int?` | 0-based index to select among multiple matcher results. Without ordinal, multiple matches return an ambiguity error. |
 
-Two resolution strategies. Resolution priority: `heistId` > matcher fields. At least one identity field should be provided.
+Two resolution strategies. Resolution priority: `heistId` > matcher fields. Use handles for the current hierarchy; use matcher fields for durable flows. At least one identity field should be provided.
 
 ### TouchTapTarget
 
@@ -1205,8 +1191,8 @@ At least `text` or `deleteCount` must be provided. If `elementTarget` is provide
 
 Enum values: `"up"`, `"down"`, `"left"`, `"right"`, `"next"`, `"previous"`.
 
-- `up` — Scroll up to reveal content above the current viewport
-- `down` — Scroll down to reveal content below the current viewport
+- `up` — Scroll up to reveal content above the visible area
+- `down` — Scroll down to reveal content below the visible area
 - `left` — Scroll left to reveal content to the left
 - `right` — Scroll right to reveal content to the right
 - `next` — Scroll to next page (equivalent to down for vertical content)
@@ -1216,7 +1202,7 @@ Enum values: `"up"`, `"down"`, `"left"`, `"right"`, `"next"`, `"previous"`.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `elementTarget` | `ActionTarget?` | Element whose stored scroll view should move on the requested axis |
+| `elementTarget` | `ActionTarget?` | Element that anchors the scroll action |
 | `direction` | `ScrollDirection` | Scroll direction |
 
 ### ScrollEdge
@@ -1227,7 +1213,7 @@ Enum values: `"top"`, `"bottom"`, `"left"`, `"right"`.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `elementTarget` | `ActionTarget?` | Element whose stored scroll view should move to the requested edge |
+| `elementTarget` | `ActionTarget?` | Element that anchors the edge scroll action |
 | `edge` | `ScrollEdge` | Which edge to scroll to |
 
 ### ElementMatcher
@@ -1246,8 +1232,8 @@ Predicate for matching elements in the accessibility tree. All specified fields 
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `heistId` | `String?` | Known stable heistId to scroll into view |
-| `label` / `identifier` / `value` / `traits` / `excludeTraits` | matcher fields | Flat matcher fields for elements already present in the current snapshot |
+| `heistId` | `String?` | Known current-hierarchy handle to scroll into view |
+| `label` / `identifier` / `value` / `traits` / `excludeTraits` | matcher fields | Flat matcher fields for elements already present in the current hierarchy |
 
 ### ScrollSearchDirection
 
@@ -1280,7 +1266,7 @@ Diagnostic output from `elementSearch`, included on every `actionResult` for tha
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `heistId` | `String?` | Assigned element id from the current screen, decoded flat at the payload root |
+| `heistId` | `String?` | Current-hierarchy element handle, decoded flat at the payload root |
 | `label` / `identifier` / `value` / `traits` / `excludeTraits` | matcher fields | Predicate fields for accessibility-based resolution, decoded flat at the payload root |
 | `ordinal` | `Int?` | 0-based index to select among multiple matcher results |
 | `absent` | `Bool?` | When `true`, wait for element to NOT exist (default: `false`) |

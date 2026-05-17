@@ -4,11 +4,11 @@ import ButtonHeist
 struct ElementSearchCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "element_search",
-        abstract: "Search for an element by scrolling through scroll containers",
+        abstract: "Search for an element by scrolling",
         discussion: """
-            Pages through all scrollable containers on screen searching for an element \
-            that matches the specified criteria. Use when the element has never been seen \
-            (not in the registry). All match fields are AND'd together.
+            Scrolls the current screen while looking for an element that matches \
+            the specified criteria. Use when the element has not been seen yet. \
+            All match fields are AND'd together.
 
             Examples:
               buttonheist element_search -l "Color Picker"

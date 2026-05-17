@@ -18,7 +18,7 @@ struct GetInterfaceCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
     @OptionGroup var timeoutOption: TimeoutOption
 
-    @Option(help: "Interface scope: full (default) or visible")
+    @Option(help: "Hierarchy breadth: full (default) or visible")
     var scope: CLIGetInterfaceScope?
 
     @Flag(help: "Legacy alias for --scope full")
@@ -37,7 +37,7 @@ struct GetInterfaceCommand: AsyncParsableCommand {
             connection: connection,
             format: output.format,
             request: request,
-            statusMessage: effectiveScope == .full ? "Exploring screen..." : "Requesting interface..."
+            statusMessage: effectiveScope == .full ? "Reading full interface..." : "Requesting visible interface..."
         )
     }
 }

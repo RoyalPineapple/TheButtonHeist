@@ -4,7 +4,7 @@
 **Encoding**: JSON (UTF-8)
 **Version**: 2
 
-A `.heist` file is a recorded session that can be played back deterministically. It captures actions with matcher-based element targeting and auto-generated expectations, removing the agent from the loop.
+A `.heist` file stores durable interaction steps, expected outcomes, and optional recording notes. Playback runs those steps deterministically, ignoring recording notes and removing the agent from the loop.
 
 ## Structure
 
@@ -22,13 +22,13 @@ A `.heist` file is a recorded session that can be played back deterministically.
 | `version` | `Int` | Format version. Currently `2`. |
 | `recorded` | `String` | ISO 8601 timestamp of when the recording was made. |
 | `app` | `String` | Bundle identifier of the app that was running. |
-| `steps` | `[HeistEvidence]` | Ordered list of recorded actions. |
+| `steps` | `[HeistEvidence]` | Ordered list of durable interaction steps. |
 
 Version 2 is intentionally not backward-compatible with the prototype v1 expectation shapes. Re-record old prototypes rather than carrying migration logic in playback.
 
 ## Evidence (Steps)
 
-Each step is a flat JSON object compatible with `TheFence.execute(request:)` — meaning a `.heist` file's steps can feed directly into the existing command dispatch.
+Each step is a flat JSON object using the same command names and argument fields as live Button Heist requests.
 
 ### Element-targeting step
 
@@ -78,13 +78,13 @@ Each step is a flat JSON object compatible with `TheFence.execute(request:)` —
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `command` | `String` | Yes | TheFence command name (`activate`, `type_text`, `swipe`, etc.) |
+| `command` | `String` | Yes | Button Heist command name (`activate`, `type_text`, `swipe`, etc.) |
 | `label` | `String` | No | Element matcher: case-insensitive equality (typography-folded) on accessibility label |
 | `identifier` | `String` | No | Element matcher: case-insensitive equality (typography-folded) on accessibility identifier |
 | `traits` | `[String]` | No | Element matcher: all listed traits must be present |
 | `excludeTraits` | `[String]` | No | Element matcher: none of these traits may be present |
 | `expect` | `Object` | No | Expected outcome — validated on playback |
-| `_recorded` | `Object` | No | Recording-time metadata (ignored during playback) |
+| `_recorded` | `Object` | No | Optional recording notes (ignored during playback) |
 | *(other keys)* | varies | No | Command-specific arguments (`text`, `direction`, `duration`, etc.) |
 
 **Note**: `value` is intentionally absent from targeting fields. Value is mutable state (slider position, toggle state, text content) — using it in matchers breaks playback when the element's state differs. State validation belongs in expectations, not matchers.
@@ -93,13 +93,13 @@ Each step is a flat JSON object compatible with `TheFence.execute(request:)` —
 
 When recording a heist, **always target elements by stable matcher fields** (label, identifier, traits, and ordinal when needed) — never by heistId. HeistIds are ephemeral screen-local identifiers that are meaningless on replay. Matcher fields describe the element's real accessibility identity, which is portable across sessions and devices.
 
-**Workflow**: Call `get_interface` to inspect an element's full accessibility properties by heistId, then use those properties (label, traits) to target it in the action call. `get_interface` calls are filtered out of the recording — they exist only to help you build good matchers.
+**Workflow**: Call `get_interface` to inspect an element's accessibility properties by heistId, then use those properties (label, traits) to target it in the action call. Inspection calls help you build good matchers; durable heist steps should be the interactions and waits you want to replay.
 
 **Example**: You see `button_sign_in` in the interface. Instead of `activate(heistId: "button_sign_in")`, call `get_interface(elements: ["button_sign_in"])` to confirm it has label "Sign In" and traits ["button"], then call `activate(label: "Sign In", traits: ["button"])`.
 
 ### Async operations
 
-`wait_for` and `wait_for_change` are recorded as playback steps. They act as timing gates — without them, playback fires the next action before async UI transitions complete. Waiting for a visible element to disappear (`absent: true`) is generally more reliable than waiting for an unknown element to appear — you already know what's on screen.
+`wait_for` and `wait_for_change` are durable playback steps. They act as timing gates so the next action waits for async UI transitions to complete. Waiting for a visible element to disappear (`absent: true`) is generally more reliable than waiting for an unknown element to appear — you already know what's on screen.
 
 Examples:
 - `wait_for(label: "Loading", absent: true)` — waits for an element to disappear (loading indicator gone)
@@ -124,7 +124,7 @@ Matching is exact (case-insensitive, typography-folded); the recorder builds the
 
 ## Expectations
 
-The `expect` field uses the same format as `run_batch` expectations. On playback, `TheFence.execute()` validates each step's `expect` against the live `ActionResult`.
+The `expect` field uses the same format as `run_batch` expectations. On playback, Button Heist validates each step's `expect` against the live action result.
 
 Expectations use a `type` discriminator that matches the wire Codable shape for `ActionExpectation`, so JSON from a wire log can be pasted straight into a heist file.
 
@@ -154,7 +154,7 @@ Checks that an element matching the `matcher` predicate appeared in the delta's 
 {"type": "element_disappeared", "matcher": {"label": "Old Item", "traits": ["button"]}}
 ```
 
-Checks that an element matching the `matcher` predicate was in the delta's removed list. Requires a pre-action element cache to resolve removed heistIds.
+Checks that an element matching the `matcher` predicate disappeared from the UI.
 
 ### Compound expectations
 
@@ -172,7 +172,7 @@ All sub-expectations must be met. Used when an action produces multiple observab
 
 ## Recorded Metadata
 
-The `_recorded` key carries debugging context from recording time. It is preserved in the file but **ignored during playback**.
+The `_recorded` key carries optional recording notes for debugging. It is preserved in the file but **ignored during playback**.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -182,21 +182,7 @@ The `_recorded` key carries debugging context from recording time. It is preserv
 
 ## Durable Recording
 
-Evidence is written incrementally to `heist.jsonl` in the session directory after each action succeeds and its explicit expectation is satisfied (append-only JSONL, same pattern as `session.jsonl`). Actions without explicit expectations are recorded on successful delivery. If the session crashes or disconnects before `stop_heist`, the evidence captured up to that point is preserved on disk and recoverable.
-
-`stop_heist` reads the evidence back from `heist.jsonl`, wraps it in the `HeistPlayback` envelope, and writes the final `.heist` file to the specified output path.
-
-## Session Directory Layout
-
-```
-$XDG_DATA_HOME/buttonheist/sessions/
-└── script-2026-04-03-180059/
-    ├── session.jsonl.gz          # compressed session log
-    ├── manifest.json             # session manifest
-    ├── heist.jsonl               # durable evidence (JSONL, one entry per line)
-    ├── screenshots/
-    └── recordings/
-```
+Button Heist preserves successful interaction steps as the heist is recorded, then writes the final `.heist` file when you call `stop_heist`. If a session ends before `stop_heist`, the session archive may still contain enough information to recover the completed steps.
 
 ## Commands
 
@@ -228,11 +214,11 @@ The `--junit <path>` flag writes a JUnit XML report to disk. Each heist step bec
 
 ## Playback Semantics
 
-- Each evidence step is executed via `TheFence.execute()` — the same path live agent commands take
-- `expect` is validated by the existing `ActionExpectation.validate(against:)` machinery
+- Each step is executed through the same public command surface live agent commands use
+- `expect` is validated against the live action result
 - Playback stops on the first failed action (element not found, timeout, etc.)
 - The result reports `completedSteps`, `failedIndex` (if any), and `totalTimingMs`
-- `get_interface` calls are filtered during recording and not injected during playback — the script contains only actions
+- Recording notes such as `_recorded` are ignored during playback
 
 ### Failure diagnostics
 
