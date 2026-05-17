@@ -163,24 +163,28 @@ flowchart TD
 
 ## Instance State Inventory
 
-Post-0.2.25, TheStash has effectively two pieces of mutable state. Everything else lives inside `Screen`.
+Post-0.3.5, TheStash has one mutable accessibility belief. Everything else
+lives inside `Screen` or belongs to another owner.
 
 | Store | Lifetime | Purpose |
 |-------|----------|---------|
 | `currentScreen` | Parse-or-explore-cycle | The latest committed screen value — holds elements, hierarchy, container ids, and live-view refs. |
-| `lastHierarchyHash` | Broadcast tracker | Hash of the last tree sent to subscribers (Pulse polling dedup memo). Separate field because it tracks *broadcast*, which is orthogonal to *current*. |
-| `stakeout` (weak) | Application lifetime | Back-reference for recording frame capture. |
+| `stakeout` (weak) | Application lifetime | Boundary back-reference for recording frame capture; not accessibility belief. |
+
+Broadcast de-duplication memory (`lastBroadcastHierarchyHash`) lives in
+`TheBrains`, because it describes outbound delivery, not the committed
+accessibility state.
 
 Computed accessors proxy through `currentScreen`:
 
 | Accessor | Source |
 |----------|--------|
-| `currentHierarchy` | `currentScreen.hierarchy` |
+| `currentHierarchy` | `currentScreen.interactionSnapshot.hierarchy` |
 | `knownIds` | `currentScreen.knownIds` (all known semantic entries; after an exploration union this includes off-viewport entries) |
 | `visibleIds` | `currentScreen.visibleIds` (strictly backed by the latest parsed live hierarchy) |
-| `firstResponderHeistId` | `currentScreen.firstResponderHeistId` |
-| `lastScreenName`, `lastScreenId` | derived from `currentScreen.hierarchy` |
-| `scrollableContainerViews` | unwraps the weak-view wrappers from `currentScreen.scrollableContainerViews` |
+| `firstResponderHeistId` | `currentScreen.interactionSnapshot.firstResponderHeistId` |
+| `lastScreenName`, `lastScreenId` | derived from `currentScreen.interactionSnapshot.hierarchy` |
+| `scrollableContainerViews` | unwraps the weak-view wrappers from `currentScreen.interactionSnapshot.scrollableContainerViews` |
 
 No store writes to another store. No circular dependencies.
 
@@ -191,7 +195,7 @@ No store writes to another store. No circular dependencies.
 | `TheStash.swift` | Core: `currentScreen` field, resolution, element actions, point/frame resolution, element selection, parse facades |
 | `TheStash+Matching.swift` | Element matching against ElementMatcher predicates over `selectElements()` |
 | `TheStash+Capture.swift` | Screen capture (clean + recording overlay) |
-| `TheStash/Screen.swift` | `Screen` struct + `ScreenElement` + `ScrollableViewRef` + `merging(_:)` |
+| `TheStash/Screen.swift` | `Screen` struct + `ScreenElement` + `ScrollableViewRef` + pure helpers (`visibleOnly`, `orderedElements`, `merging(_:)`) |
 | `TheStash/WireConversion.swift` | Caseless enum with static methods: traitNames, convert, toWire (element + array), toWireTree (Screen → InterfaceNode tree). Pure transform; no delta logic. |
 | `TheStash/InterfaceDiff.swift` | Caseless enum with static methods: `computeDelta` and its element/tree edit helpers (functional-move pairing, tree-order sort). Consumes the wire forms produced by `WireConversion`. |
 | `TheStash/IdAssignment.swift` | Caseless enum with static methods: deterministic heistId synthesis from traits/labels (wire-format-stable) |
