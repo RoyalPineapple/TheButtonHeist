@@ -2,9 +2,11 @@ import ArgumentParser
 import ButtonHeist
 import Foundation
 
-struct StartHeistCommand: AsyncParsableCommand {
+struct StartHeistCommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.startHeist
+
     static let configuration = CommandConfiguration(
-        commandName: TheFence.Command.startHeist.rawValue,
+        commandName: Self.cliCommandName,
         abstract: "Start recording a heist playback (.heist file)"
     )
 
@@ -17,10 +19,7 @@ struct StartHeistCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     func run() async throws {
-        let request: [String: Any] = [
-            "command": TheFence.Command.startHeist.rawValue,
-            "app": app,
-        ]
+        let request = Self.fenceRequest(["app": app])
         try await CLIRunner.run(
             connection: connection,
             format: output.format,

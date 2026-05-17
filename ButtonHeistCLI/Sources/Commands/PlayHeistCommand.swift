@@ -3,9 +3,11 @@ import ButtonHeist
 import Foundation
 import TheScore
 
-struct PlayHeistCommand: AsyncParsableCommand {
+struct PlayHeistCommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.playHeist
+
     static let configuration = CommandConfiguration(
-        commandName: TheFence.Command.playHeist.rawValue,
+        commandName: Self.cliCommandName,
         abstract: "Play back a recorded .heist file"
     )
 
@@ -21,10 +23,7 @@ struct PlayHeistCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     func run() async throws {
-        let request: [String: Any] = [
-            "command": TheFence.Command.playHeist.rawValue,
-            "input": input,
-        ]
+        let request = Self.fenceRequest(["input": input])
 
         if let junitPath = junit {
             let (fence, response) = try await CLIRunner.execute(

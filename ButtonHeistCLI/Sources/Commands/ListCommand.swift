@@ -2,9 +2,11 @@ import ArgumentParser
 import Foundation
 import ButtonHeist
 
-struct ListCommand: AsyncParsableCommand {
+struct ListCommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.listDevices
+
     static let configuration = CommandConfiguration(
-        commandName: TheFence.Command.listDevices.rawValue,
+        commandName: Self.cliCommandName,
         abstract: "List available iOS apps with Button Heist enabled"
     )
 
@@ -22,9 +24,7 @@ struct ListCommand: AsyncParsableCommand {
         defer { fence.stop() }
 
         logStatus("Discovering devices...")
-        let request: [String: Any] = [
-            "command": TheFence.Command.listDevices.rawValue,
-        ]
+        let request = Self.fenceRequest()
         let response = try await fence.execute(request: request)
         CLIRunner.outputResponse(response, format: output.format ?? .auto)
     }

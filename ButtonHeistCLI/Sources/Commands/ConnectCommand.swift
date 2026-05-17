@@ -7,9 +7,11 @@ import ButtonHeist
 /// the rest of the CLI uses: `--device` flag → `BUTTONHEIST_DEVICE` env var →
 /// `.buttonheist.json` config file. With an explicit positional `device`, that
 /// host:port is used directly.
-struct ConnectCommand: AsyncParsableCommand {
+struct ConnectCommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.connect
+
     static let configuration = CommandConfiguration(
-        commandName: TheFence.Command.connect.rawValue,
+        commandName: Self.cliCommandName,
         abstract: "Connect to an iOS app with Button Heist enabled",
         discussion: """
             With no arguments, establishes the currently configured session. \
@@ -69,7 +71,7 @@ struct ConnectCommand: AsyncParsableCommand {
         }
         defer { fence.stop() }
 
-        let response = try await fence.execute(request: ["command": TheFence.Command.connect.rawValue])
+        let response = try await fence.execute(request: Self.fenceRequest())
         CLIRunner.outputResponse(response, format: output.format ?? .auto)
         if response.isFailure {
             throw ExitCode.failure

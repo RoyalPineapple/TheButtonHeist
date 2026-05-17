@@ -1,9 +1,11 @@
 import ArgumentParser
 import ButtonHeist
 
-struct SetPasteboardCommand: AsyncParsableCommand {
+struct SetPasteboardCommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.setPasteboard
+
     static let configuration = CommandConfiguration(
-        commandName: TheFence.Command.setPasteboard.rawValue,
+        commandName: Self.cliCommandName,
         abstract: "Write text to the general pasteboard",
         discussion: """
             Write text to the device's general pasteboard from within the app.
@@ -23,10 +25,7 @@ struct SetPasteboardCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        let request: [String: Any] = [
-            "command": TheFence.Command.setPasteboard.rawValue,
-            "text": text,
-        ]
+        let request = Self.fenceRequest(["text": text])
         try await CLIRunner.run(
             connection: connection,
             format: output.format,

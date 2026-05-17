@@ -1,9 +1,11 @@
 import ArgumentParser
 import ButtonHeist
 
-struct TypeCommand: AsyncParsableCommand {
+struct TypeCommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.typeText
+
     static let configuration = CommandConfiguration(
-        commandName: TheFence.Command.typeText.rawValue,
+        commandName: Self.cliCommandName,
         abstract: "Type text into a field by tapping keyboard keys",
         discussion: """
             Type text character-by-character and/or delete characters.
@@ -39,10 +41,7 @@ struct TypeCommand: AsyncParsableCommand {
             throw ValidationError("Must specify text to type, --delete, or both")
         }
 
-        var request: [String: Any] = [
-            "command": TheFence.Command.typeText.rawValue,
-            "timeout": timeout,
-        ]
+        var request = Self.fenceRequest(["timeout": timeout])
         if let text { request["text"] = text }
         if let delete { request["deleteCount"] = delete }
         try element.applyTo(&request)

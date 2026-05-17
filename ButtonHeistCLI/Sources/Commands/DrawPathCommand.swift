@@ -2,9 +2,11 @@ import ArgumentParser
 import ButtonHeist
 import Foundation
 
-struct DrawPathCommand: AsyncParsableCommand {
+struct DrawPathCommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.drawPath
+
     static let configuration = CommandConfiguration(
-        commandName: TheFence.Command.drawPath.rawValue,
+        commandName: Self.cliCommandName,
         abstract: "Trace a polyline gesture through JSON-specified waypoints",
         discussion: """
             Reads a waypoint array (`[{ "x": …, "y": … }, …]`) either inline
@@ -36,10 +38,7 @@ struct DrawPathCommand: AsyncParsableCommand {
     @ButtonHeistActor
     mutating func run() async throws {
         let array = try loadJSONArray(inline: points, fromFile: pointsFromFile, optionName: "points")
-        var request: [String: Any] = [
-            "command": TheFence.Command.drawPath.rawValue,
-            "points": array,
-        ]
+        var request = Self.fenceRequest(["points": array])
         if let duration { request["duration"] = duration }
         if let velocity { request["velocity"] = velocity }
         try await CLIRunner.run(

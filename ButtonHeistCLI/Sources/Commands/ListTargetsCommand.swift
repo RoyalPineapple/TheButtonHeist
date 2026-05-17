@@ -1,9 +1,11 @@
 import ArgumentParser
 import ButtonHeist
 
-struct ListTargetsCommand: AsyncParsableCommand {
+struct ListTargetsCommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.listTargets
+
     static let configuration = CommandConfiguration(
-        commandName: TheFence.Command.listTargets.rawValue,
+        commandName: Self.cliCommandName,
         abstract: "List device targets defined in .buttonheist.json",
         discussion: """
             Returns every named target from the resolved .buttonheist.json
@@ -21,9 +23,7 @@ struct ListTargetsCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        let request: [String: Any] = [
-            "command": TheFence.Command.listTargets.rawValue,
-        ]
+        let request = Self.fenceRequest()
         try await CLIRunner.run(
             connection: connection,
             format: output.format,

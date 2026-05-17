@@ -2,9 +2,11 @@ import ArgumentParser
 import ButtonHeist
 import Foundation
 
-struct RunBatchCommand: AsyncParsableCommand {
+struct RunBatchCommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.runBatch
+
     static let configuration = CommandConfiguration(
-        commandName: TheFence.Command.runBatch.rawValue,
+        commandName: Self.cliCommandName,
         abstract: "Execute a batch of Button Heist steps from a JSON payload",
         discussion: """
             Reads a steps array (`[{ "command": "activate", "heistId": "…" }, …]`)
@@ -38,10 +40,7 @@ struct RunBatchCommand: AsyncParsableCommand {
     @ButtonHeistActor
     mutating func run() async throws {
         let array = try loadJSONArray(inline: steps, fromFile: stepsFromFile, optionName: "steps")
-        var request: [String: Any] = [
-            "command": TheFence.Command.runBatch.rawValue,
-            "steps": array,
-        ]
+        var request = Self.fenceRequest(["steps": array])
         if let policy { request["policy"] = policy }
         try await CLIRunner.run(
             connection: connection,

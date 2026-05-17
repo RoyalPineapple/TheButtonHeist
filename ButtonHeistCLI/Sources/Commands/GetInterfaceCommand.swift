@@ -9,9 +9,11 @@ enum CLIGetInterfaceScope: String, ExpressibleByArgument, CaseIterable {
     static let allCases: [CLIGetInterfaceScope] = [.visible]
 }
 
-struct GetInterfaceCommand: AsyncParsableCommand {
+struct GetInterfaceCommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.getInterface
+
     static let configuration = CommandConfiguration(
-        commandName: TheFence.Command.getInterface.rawValue,
+        commandName: Self.cliCommandName,
         abstract: "Get the current UI element hierarchy from the connected device"
     )
 
@@ -28,10 +30,7 @@ struct GetInterfaceCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        var request: [String: Any] = [
-            "command": TheFence.Command.getInterface.rawValue,
-            "timeout": timeoutOption.timeout,
-        ]
+        var request = Self.fenceRequest(["timeout": timeoutOption.timeout])
         if let scope { request["scope"] = scope.rawValue }
         if full { request["full"] = true }
         try await CLIRunner.run(

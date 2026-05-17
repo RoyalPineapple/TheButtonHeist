@@ -1,9 +1,11 @@
 import ArgumentParser
 import ButtonHeist
 
-struct ScrollToEdgeCommand: AsyncParsableCommand {
+struct ScrollToEdgeCommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.scrollToEdge
+
     static let configuration = CommandConfiguration(
-        commandName: TheFence.Command.scrollToEdge.rawValue,
+        commandName: Self.cliCommandName,
         abstract: "Scroll to the edge of a scroll view",
         discussion: """
             Finds the nearest scroll view ancestor of the target element and
@@ -33,11 +35,10 @@ struct ScrollToEdgeCommand: AsyncParsableCommand {
             throw ValidationError("Invalid edge '\(edge)'. Valid: \(ScrollEdge.allCases.map(\.rawValue).joined(separator: ", "))")
         }
 
-        var request: [String: Any] = [
-            "command": TheFence.Command.scrollToEdge.rawValue,
+        var request = Self.fenceRequest([
             "edge": edge.lowercased(),
             "timeout": timeoutOption.timeout,
-        ]
+        ])
         try element.applyTo(&request)
 
         try await CLIRunner.run(

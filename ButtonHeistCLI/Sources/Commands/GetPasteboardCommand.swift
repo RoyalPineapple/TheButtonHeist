@@ -1,9 +1,11 @@
 import ArgumentParser
 import ButtonHeist
 
-struct GetPasteboardCommand: AsyncParsableCommand {
+struct GetPasteboardCommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.getPasteboard
+
     static let configuration = CommandConfiguration(
-        commandName: TheFence.Command.getPasteboard.rawValue,
+        commandName: Self.cliCommandName,
         abstract: "Read text from the general pasteboard",
         discussion: """
             Read text from the device's general pasteboard.
@@ -20,9 +22,7 @@ struct GetPasteboardCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        let request: [String: Any] = [
-            "command": TheFence.Command.getPasteboard.rawValue,
-        ]
+        let request = Self.fenceRequest()
         try await CLIRunner.run(
             connection: connection,
             format: output.format,

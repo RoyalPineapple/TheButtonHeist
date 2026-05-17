@@ -1,9 +1,11 @@
 import ArgumentParser
 import ButtonHeist
 
-struct ScrollToVisibleCommand: AsyncParsableCommand {
+struct ScrollToVisibleCommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.scrollToVisible
+
     static let configuration = CommandConfiguration(
-        commandName: TheFence.Command.scrollToVisible.rawValue,
+        commandName: Self.cliCommandName,
         abstract: "Scroll a known element into view",
         discussion: """
             Brings an element from the current hierarchy into view. \
@@ -27,10 +29,7 @@ struct ScrollToVisibleCommand: AsyncParsableCommand {
     mutating func run() async throws {
         _ = try element.requireTarget()
 
-        var request: [String: Any] = [
-            "command": TheFence.Command.scrollToVisible.rawValue,
-            "timeout": timeout,
-        ]
+        var request = Self.fenceRequest(["timeout": timeout])
         try element.applyTo(&request)
 
         try await CLIRunner.run(
