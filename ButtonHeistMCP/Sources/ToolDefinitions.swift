@@ -27,7 +27,7 @@ enum ToolDefinitions {
 
     // Element targeting = matcher fields plus heistId and ordinal disambiguation.
     static let elementTargetProperties: [String: Value] = elementMatcherProperties.merging([
-        "heistId": ["type": "string", "description": "Element handle returned by get_interface or an action delta. Use matchers for durable flows."],
+        "heistId": ["type": "string", "description": "Current-hierarchy heistId handle returned by get_interface or an action delta. Use matchers for durable flows."],
         "ordinal": [
             "type": "integer",
             "description": """
@@ -155,7 +155,7 @@ enum ToolDefinitions {
         description: """
             Read the UI element hierarchy. Call once on a new screen, then track changes via \
             action deltas — re-fetch only when you need elements the delta didn't cover. \
-            Filter with matcher fields or handle list; scope defaults to full.
+            Filter with matcher fields or heistId handle list; scope defaults to full.
             """,
         inputSchema: .object([
             "type": "object",
@@ -187,7 +187,7 @@ enum ToolDefinitions {
                 "elements": [
                     "type": "array",
                     "items": ["type": "string"],
-                    "description": "Optional list of element handles to filter. Returns only matching elements. Omit for the full hierarchy.",
+                    "description": "Optional list of heistId handles to filter. Returns only matching elements. Omit for the full hierarchy.",
                 ],
             ] as [String: Value]).merging(elementMatcherProperties) { _, new in new }),
             "additionalProperties": false,
@@ -517,7 +517,7 @@ enum ToolDefinitions {
         name: "run_batch",
         description: """
             Execute multiple commands in one call. Each step is a JSON object with 'command' set \
-            to an MCP tool name or raw Fence command plus that command's parameters; attach \
+            to an MCP tool name or raw Button Heist command plus that command's parameters; attach \
             'expect' per step to verify inline. Returns per-step results and a merged net delta. \
             policy=stop_on_error (default) or continue_on_error.
             """,
@@ -530,7 +530,7 @@ enum ToolDefinitions {
                     "items": [
                         "type": "object",
                         "properties": [
-                            "command": ["type": "string", "description": "Any fence command (activate, dismiss_keyboard, perform_custom_action, etc.)"],
+                            "command": ["type": "string", "description": "Any Button Heist command (activate, dismiss_keyboard, perform_custom_action, etc.)"],
                             "expect": expectProperty,
                         ],
                         "required": .array([.string("command")]),
@@ -565,7 +565,7 @@ enum ToolDefinitions {
     static let connect = Tool(
         name: "connect",
         description: """
-            Establish or switch the active connection to an iOS device running TheInsideJob. \
+            Establish or switch the active connection to an iOS app with Button Heist enabled. \
             Three patterns: target=NAME from .buttonheist.json, device=HOST:PORT + token, or \
             BUTTONHEIST_DEVICE/BUTTONHEIST_TOKEN env vars. Tears down any existing session first. \
             Returns session state; call get_interface explicitly to observe UI hierarchy.

@@ -80,7 +80,7 @@ Or use a `.buttonheist.json` config file with named targets.
 
 ### The app isn't running
 
-The iOS app with TheInsideJob embedded must be running in the simulator or on a device before you can connect.
+The iOS app with Button Heist enabled must be running in the simulator or on a device before you can connect.
 
 **Fix:** Build and launch the app first. Check with `xcrun simctl list devices booted` that the simulator is up.
 
@@ -216,7 +216,7 @@ Sessions expire after 60 seconds of inactivity by default. If you go too long be
 
 A single command took longer than the action timeout (15s for most actions, 30s for `type_text` and screenshots). The connection itself is still up — only the keepalive task (6 missed pongs ≈ 30s of silence) tears down a connection. After this error you can retry on the same session.
 
-**Fix:** Usually the app is busy on its main thread, finishing a long UI transition, or sending a large response (e.g. a big screenshot or interface tree). Retry the command. If it keeps timing out, check whether the app is actually wedged: `xcrun simctl list devices booted` to confirm the simulator is up, then look at the app process. If the connection has truly been lost you'll see a different error (`notConnected`) on the next command, and TheFence will reconnect automatically when `autoReconnect` is enabled (the MCP server default).
+**Fix:** Usually the app is busy on its main thread, finishing a long UI transition, or sending a large response (e.g. a big screenshot or interface tree). Retry the command. If it keeps timing out, check whether the app is actually wedged: `xcrun simctl list devices booted` to confirm the simulator is up, then look at the app process. If the connection has truly been lost you'll see a different error (`notConnected`) on the next command, and Button Heist will reconnect automatically when `autoReconnect` is enabled (the MCP server default).
 
 ## General debugging strategy
 

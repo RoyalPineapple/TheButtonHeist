@@ -1,7 +1,7 @@
 import ArgumentParser
 import ButtonHeist
 
-/// Connect (or reconnect) to an iOS device running TheInsideJob.
+/// Connect (or reconnect) to an iOS app with Button Heist enabled.
 ///
 /// With no positional argument, resolves the target via the same precedence
 /// the rest of the CLI uses: `--device` flag → `BUTTONHEIST_DEVICE` env var →
@@ -10,7 +10,7 @@ import ButtonHeist
 struct ConnectCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "connect",
-        abstract: "Connect to an iOS device running TheInsideJob",
+        abstract: "Connect to an iOS app with Button Heist enabled",
         discussion: """
             With no arguments, establishes the currently configured session. \
             Resolution order: --device flag, BUTTONHEIST_DEVICE env var, then \

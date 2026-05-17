@@ -1,6 +1,6 @@
 # Button Heist Wire Protocol Specification
 
-This document specifies the communication protocol between TheInsideJob (iOS) and clients (ButtonHeist framework, CLI, Python scripts).
+This document specifies the communication protocol between the Button Heist iOS host and clients (ButtonHeist framework, CLI, Python scripts).
 
 There is no separate wire protocol version. The handshake compares the server's and the client's `buttonHeistVersion` (CalVer, defined in `ButtonHeist/Sources/TheScore/Messages.swift`) for exact equality; any mismatch closes the connection with `protocolMismatch`. Wire-format changes are tied to a release bump via `scripts/release.sh`.
 
@@ -17,7 +17,7 @@ There is no separate wire protocol version. The handshake compares the server's 
 ## Discovery Methods
 
 ### WiFi (Bonjour)
-TheInsideJob advertises itself using Bonjour:
+The Button Heist iOS host advertises itself using Bonjour:
 - **Domain**: `local.`
 - **Type**: `_buttonheist._tcp`
 - **Name**: `{AppName}#{instanceId}` (instanceId from `INSIDEJOB_ID` env var, or first 8 chars of a per-launch UUID)
@@ -195,7 +195,7 @@ Activate an element (equivalent to VoiceOver double-tap). Uses the TouchInjector
 
 ### touchTap
 
-Tap at coordinates or on an element using synthetic touch injection via TheSafecracker.
+Tap at coordinates or on an element using Button Heist's synthetic touch engine.
 
 **At coordinates:**
 ```json
@@ -744,7 +744,7 @@ The `tree` is the canonical wire shape — every element appears exactly once at
 
 ### actionResult
 
-Response to `activate`, `one_finger_tap`, `increment`, `decrement`, `typeText`, `performCustomAction`, `handleAlert`, `setPasteboard`, `getPasteboard`, `scroll`, `scrollToVisible`, `elementSearch`, or `scrollToEdge` commands. Also returned internally by `explore` (dispatched via `get_interface` with `scope: "full"` or legacy `full: true`).
+Response to `activate`, `one_finger_tap`, `increment`, `decrement`, `typeText`, `performCustomAction`, `handleAlert`, `setPasteboard`, `getPasteboard`, `scroll`, `scrollToVisible`, `elementSearch`, or `scrollToEdge` commands. Also returned by the full-hierarchy read selected by `get_interface` with `scope: "full"` or legacy `full: true`.
 
 ```json
 {"buttonHeistVersion":"<calver>","type":"actionResult","payload":{
@@ -764,14 +764,14 @@ For `typeText`, the response includes the current text field value:
 ```
 
 Possible methods:
-- `syntheticTap` - Tap synthesized via TheSafecracker
-- `syntheticLongPress` - Long press synthesized via TheSafecracker
-- `syntheticSwipe` - Swipe synthesized via TheSafecracker
-- `syntheticDrag` - Drag synthesized via TheSafecracker
-- `syntheticPinch` - Pinch gesture synthesized via TheSafecracker
-- `syntheticRotate` - Rotation gesture synthesized via TheSafecracker
-- `syntheticTwoFingerTap` - Two-finger tap synthesized via TheSafecracker
-- `syntheticDrawPath` - Path drawing synthesized via TheSafecracker
+- `syntheticTap` - Tap synthesized by Button Heist
+- `syntheticLongPress` - Long press synthesized by Button Heist
+- `syntheticSwipe` - Swipe synthesized by Button Heist
+- `syntheticDrag` - Drag synthesized by Button Heist
+- `syntheticPinch` - Pinch gesture synthesized by Button Heist
+- `syntheticRotate` - Rotation gesture synthesized by Button Heist
+- `syntheticTwoFingerTap` - Two-finger tap synthesized by Button Heist
+- `syntheticDrawPath` - Path drawing synthesized by Button Heist
 - `activate` - Element's `activate()` was used
 - `increment` - Element's `increment()` was called
 - `decrement` - Element's `decrement()` was called
@@ -905,18 +905,18 @@ Server-broadcast error. The payload is a `ServerError { kind, message }` so call
 ```mermaid
 sequenceDiagram
     participant Agent
-    participant TheFence
-    participant TheInsideJob
+    participant Client
+    participant Host
 
-    Note over Agent,TheInsideJob: get_interface scope=visible
-    Agent->>TheFence: get_interface(scope: visible)
-    TheFence->>TheInsideJob: requestInterface
-    TheInsideJob-->>Agent: interface (visible elements)
+    Note over Agent,Host: get_interface scope=visible
+    Agent->>Client: get_interface(scope: visible)
+    Client->>Host: requestInterface
+    Host-->>Agent: interface (visible elements)
 
-    Note over Agent,TheInsideJob: get_interface scope=full (default)
-    Agent->>TheFence: get_interface(scope: full)
-    TheFence->>TheInsideJob: request full interface
-    TheInsideJob-->>Agent: interface (complete hierarchy + summary metadata)
+    Note over Agent,Host: get_interface scope=full (default)
+    Agent->>Client: get_interface(scope: full)
+    Client->>Host: request full interface
+    Host-->>Agent: interface (complete hierarchy + summary metadata)
 ```
 
 Three ways to find elements, each suited to a different situation:
@@ -1617,7 +1617,7 @@ The token is configured via `INSIDEJOB_TOKEN` env var or `InsideJobToken` Info.p
 
 ### Session Locking
 
-Session locking prevents multiple drivers from interfering with each other. Only one driver can control a TheInsideJob host at a time.
+Session locking prevents multiple drivers from interfering with each other. Only one driver can control a Button Heist host at a time.
 
 **Why sessions?** A single "driver" isn't a single TCP connection. Each CLI command (`buttonheist activate`, `buttonheist get_screen`, etc.) creates a fresh connection, authenticates, executes, and disconnects. Only `session` maintains a persistent connection. The session concept spans multiple sequential connections from the same driver.
 
@@ -1668,7 +1668,7 @@ The session inactivity timeout (time after last connection disconnects before th
 
 ### UI Approval Flow
 
-When the token is auto-generated (not explicitly set), TheInsideJob supports an interactive approval flow that allows the iOS user to approve or deny connections from the device:
+When the token is auto-generated (not explicitly set), Button Heist supports an interactive approval flow that allows the iOS user to approve or deny connections from the device:
 
 1. Server starts with auto-generated token
 2. Client connects and sends `authenticate` with an empty token (`""`)
@@ -1701,7 +1701,7 @@ This flow is **only active** when the token is auto-generated. If `INSIDEJOB_TOK
 - **Max connections**: 5 concurrent TCP connections
 - **Rate limiting**: 30 messages/second per client (token bucket). Applied to both authenticated and unauthenticated clients.
 - **Buffer limit**: 10 MB per-client receive buffer. Clients exceeding this are disconnected.
-- **Loopback binding**: The `bindToLoopback` parameter on `ServerTransport.start()` controls whether the server binds to `::1` (loopback only) or `::` (all interfaces). The caller (TheInsideJob) decides based on the runtime environment.
+- **Loopback binding**: The `bindToLoopback` parameter on `ServerTransport.start()` controls whether the server binds to `::1` (loopback only) or `::` (all interfaces). The host decides based on the runtime environment.
 
 ### Port Configuration
 
@@ -1726,7 +1726,7 @@ If the TCP connection is lost, clients should:
 
 ### Hierarchy Change Detection
 
-TheInsideJob uses hash-based change detection during polling:
+Button Heist uses hash-based change detection during polling:
 1. Parse hierarchy at configurable interval (default: 1.0s)
 2. Compute hash of the flat elements array
 3. Only broadcast if hash differs from last broadcast

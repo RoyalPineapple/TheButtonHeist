@@ -97,7 +97,7 @@ login-button "Sign In" [button] {tap}
 forgot-link "Forgot password?" [link] {tap}
 ```
 
-Each line is one element. The first token is the **heistId** — a handle for that element in the current hierarchy. It is safe to use for immediate follow-up actions on the same screen. After it: the label in quotes, the value (if any) after `=`, traits in `[]`, and available actions in `{}`.
+Each line is one element. The first token is the **heistId** — a current-hierarchy handle for that element. It is safe to use for immediate follow-up actions on the same screen. After it: the label in quotes, the value (if any) after `=`, traits in `[]`, and available actions in `{}`.
 
 ### The visibility problem: scroll views hide elements
 
