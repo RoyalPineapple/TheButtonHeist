@@ -10,13 +10,35 @@ public struct FenceOperationRoutingError: Error, LocalizedError, Sendable {
     public var errorDescription: String? { message }
 }
 
+/// A command plus its already-normalized arguments.
+///
+/// External string command names are parsed into `TheFence.Command` at the
+/// routing edge. The dictionary form is only reconstructed when crossing into
+/// legacy APIs that still accept raw request dictionaries.
+public struct NormalizedOperation {
+    public let command: TheFence.Command
+    public let arguments: [String: Any]
+
+    public init(command: TheFence.Command, arguments: [String: Any]) {
+        var sanitizedArguments = arguments
+        sanitizedArguments.removeValue(forKey: "command")
+        self.command = command
+        self.arguments = sanitizedArguments
+    }
+
+    public var legacyRequestDictionary: [String: Any] {
+        var request = arguments
+        request["command"] = command.rawValue
+        return request
+    }
+}
+
 /// Shared routing table for MCP tool calls and batch steps.
 public enum FenceOperationCatalog {
     public static func normalizeToolCall(
         name: String,
-        arguments: [String: Any],
-        allowRawFenceCommands: Bool = false
-    ) -> Result<[String: Any], FenceOperationRoutingError> {
+        arguments: [String: Any]
+    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
         switch name {
         case "gesture":
             return routeGesture(arguments)
@@ -28,20 +50,16 @@ public enum FenceOperationCatalog {
             return routeEditAction(arguments)
 
         default:
-            return routeCommandNamed(
-                name,
-                arguments: arguments,
-                allowRawFenceCommands: allowRawFenceCommands
-            )
+            return routeCommandNamed(name, arguments: arguments)
         }
     }
 
     public static func normalizeBatchStep(
         _ step: [String: Any]
-    ) -> Result<[String: Any], FenceOperationRoutingError> {
-        let command: String
+    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
+        let commandName: String
         do {
-            command = try step.requiredSchemaString("command")
+            commandName = try step.requiredSchemaString("command")
         } catch let error as SchemaValidationError {
             return .failure(FenceOperationRoutingError(message: error.message))
         } catch {
@@ -50,31 +68,41 @@ public enum FenceOperationCatalog {
 
         var arguments = step
         arguments.removeValue(forKey: "command")
-        return normalizeToolCall(
-            name: command,
-            arguments: arguments,
-            allowRawFenceCommands: true
-        )
+
+        guard let command = TheFence.Command(rawValue: commandName) else {
+            return .failure(FenceOperationRoutingError(
+                message: "run_batch step command must be a raw TheFence.Command; unknown command \"\(commandName)\""
+            ))
+        }
+
+        guard command.isBatchExecutable else {
+            return .failure(FenceOperationRoutingError(
+                message: "run_batch step command \"\(command.rawValue)\" is not batch-executable"
+            ))
+        }
+
+        if let error = rawBatchShapeError(for: command, arguments: arguments) {
+            return .failure(error)
+        }
+
+        return .success(NormalizedOperation(command: command, arguments: arguments))
     }
 
     private static func routeCommandNamed(
         _ name: String,
-        arguments: [String: Any],
-        allowRawFenceCommands: Bool
-    ) -> Result<[String: Any], FenceOperationRoutingError> {
+        arguments: [String: Any]
+    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
         guard let command = TheFence.Command(rawValue: name) else {
             return .failure(FenceOperationRoutingError(message: "Unknown tool: \(name)"))
         }
-        guard allowRawFenceCommands || command.mcpExposure == .directTool else {
+        guard command.mcpExposure == .directTool else {
             if let message = groupedToolRoutingMessage(for: command) {
                 return .failure(FenceOperationRoutingError(message: message))
             }
             return .failure(FenceOperationRoutingError(message: "Unknown tool: \(name)"))
         }
 
-        var request = arguments
-        request["command"] = command.rawValue
-        return .success(request)
+        return .success(NormalizedOperation(command: command, arguments: arguments))
     }
 
     private static func groupedToolRoutingMessage(for command: TheFence.Command) -> String? {
@@ -120,50 +148,69 @@ public enum FenceOperationCatalog {
         "Tool \"\(rawToolName)\" is grouped under \"\(groupedToolName)\"; call \(groupedToolName) with \(selectorName)=\"\(selectorValue)\"."
     }
 
-    private static func routeGesture(_ arguments: [String: Any]) -> Result<[String: Any], FenceOperationRoutingError> {
-        var request = arguments
+    private static func rawBatchShapeError(
+        for command: TheFence.Command,
+        arguments: [String: Any]
+    ) -> FenceOperationRoutingError? {
+        switch command {
+        case .scroll where arguments["mode"] != nil:
+            return .init(
+                message: "run_batch step \"scroll\" uses the MCP mode selector; " +
+                    "use raw Fence commands scroll, scroll_to_visible, element_search, or scroll_to_edge."
+            )
+
+        case .editAction where arguments["action"] as? String == "dismiss":
+            return .init(message: "run_batch step \"edit_action\" uses the MCP dismiss selector; use raw Fence command dismiss_keyboard.")
+
+        default:
+            return nil
+        }
+    }
+
+    private static func routeGesture(_ arguments: [String: Any]) -> Result<NormalizedOperation, FenceOperationRoutingError> {
+        var operationArguments = arguments
         let gestureType: GestureType
         do {
-            gestureType = try request.requiredSchemaEnum("type", as: GestureType.self)
+            gestureType = try operationArguments.requiredSchemaEnum("type", as: GestureType.self)
         } catch let error as SchemaValidationError {
             return .failure(FenceOperationRoutingError(message: error.message))
         } catch {
             return .failure(FenceOperationRoutingError(message: error.localizedDescription))
         }
-        request.removeValue(forKey: "type")
+        operationArguments.removeValue(forKey: "type")
         guard let command = TheFence.Command(rawValue: gestureType.rawValue) else {
             return .failure(FenceOperationRoutingError(message: "Unknown gesture command: \(gestureType.rawValue)"))
         }
-        request["command"] = command.rawValue
-        return .success(request)
+        return .success(NormalizedOperation(command: command, arguments: operationArguments))
     }
 
-    private static func routeScroll(_ arguments: [String: Any]) -> Result<[String: Any], FenceOperationRoutingError> {
-        var request = arguments
+    private static func routeScroll(_ arguments: [String: Any]) -> Result<NormalizedOperation, FenceOperationRoutingError> {
+        var operationArguments = arguments
         let scrollMode: ScrollMode
         do {
-            scrollMode = try request.schemaEnum("mode", as: ScrollMode.self) ?? .page
+            scrollMode = try operationArguments.schemaEnum("mode", as: ScrollMode.self) ?? .page
         } catch let error as SchemaValidationError {
             return .failure(FenceOperationRoutingError(message: error.message))
         } catch {
             return .failure(FenceOperationRoutingError(message: error.localizedDescription))
         }
-        request.removeValue(forKey: "mode")
+        operationArguments.removeValue(forKey: "mode")
         guard let command = TheFence.Command(rawValue: scrollMode.canonicalCommand) else {
             return .failure(FenceOperationRoutingError(message: "Unknown scroll command: \(scrollMode.canonicalCommand)"))
         }
-        request["command"] = command.rawValue
-        return .success(request)
+        return .success(NormalizedOperation(command: command, arguments: operationArguments))
     }
 
-    private static func routeEditAction(_ arguments: [String: Any]) -> Result<[String: Any], FenceOperationRoutingError> {
-        var request = arguments
-        if let action = request["action"] as? String, action == "dismiss" {
-            request.removeValue(forKey: "action")
-            request["command"] = TheFence.Command.dismissKeyboard.rawValue
+    private static func routeEditAction(_ arguments: [String: Any]) -> Result<NormalizedOperation, FenceOperationRoutingError> {
+        var operationArguments = arguments
+        if let action = operationArguments["action"] as? String, action == "dismiss" {
+            operationArguments.removeValue(forKey: "action")
+            return .success(NormalizedOperation(
+                command: .dismissKeyboard,
+                arguments: operationArguments
+            ))
         } else {
-            request["command"] = TheFence.Command.editAction.rawValue
+            return .success(NormalizedOperation(command: .editAction, arguments: operationArguments))
         }
-        return .success(request)
     }
 }

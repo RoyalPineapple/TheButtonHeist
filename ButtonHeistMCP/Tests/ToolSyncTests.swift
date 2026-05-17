@@ -337,6 +337,28 @@ struct ToolSyncTests {
         }
     }
 
+    @Test("run_batch step command schema advertises raw Fence commands only")
+    func runBatchStepCommandSchemaAdvertisesRawFenceCommandsOnly() {
+        guard let runBatch = ToolDefinitions.all.first(where: { $0.name == "run_batch" }),
+              let stepsSchema = extractPropertySchema(from: runBatch, property: "steps"),
+              let stepItemsSchema = extractObjectField(from: stepsSchema, key: "items"),
+              let stepProperties = extractObjectField(from: stepItemsSchema, key: "properties"),
+              let commandSchemaValue = stepProperties["command"],
+              case .object(let commandSchema) = commandSchemaValue else {
+            Issue.record("run_batch.steps.items.command schema missing")
+            return
+        }
+
+        let commandValues = extractEnumValues(from: commandSchema)
+        #expect(commandValues == Set(TheFence.Command.batchExecutableCases.map(\.rawValue)))
+        #expect(!commandValues.contains(TheFence.Command.help.rawValue))
+        #expect(!commandValues.contains(TheFence.Command.status.rawValue))
+        #expect(!commandValues.contains(TheFence.Command.quit.rawValue))
+        #expect(!commandValues.contains(TheFence.Command.exit.rawValue))
+        #expect(!commandValues.contains(TheFence.Command.runBatch.rawValue))
+        #expect(!commandValues.contains("gesture"))
+    }
+
     @Test("Expect schemas are projected from FenceParameterSpec")
     func expectSchemasAreProjectedFromFenceParameterSpec() {
         guard let expectSpec = TheFence.Command.activate.parameters.first(where: { $0.key == "expect" }) else {
@@ -499,10 +521,12 @@ struct ToolSyncTests {
             }
         )
         let actualTools = Set(ToolDefinitions.all.map(\.name))
+        let docsOnly = documentedTools.subtracting(actualTools).sorted()
+        let missing = actualTools.subtracting(documentedTools).sorted()
 
         #expect(
             documentedTools == actualTools,
-            "MCP README tool list differs: docs-only \(documentedTools.subtracting(actualTools).sorted()), missing \(actualTools.subtracting(documentedTools).sorted())"
+            "MCP README tool list differs: docs-only \(docsOnly), missing \(missing)"
         )
     }
 

@@ -55,36 +55,11 @@ graph TD
     Idle --> TheFence
 ```
 
-## Full Tool List (24 tools)
+## Tool Surface
 
-| # | Tool Name | Type | Key Parameters |
-|---|-----------|------|---------------|
-| 1 | `get_interface` | direct | `scope` (omit or `"visible"`), `detail` (`"summary"`/`"full"`), `elements` (heistId filter array) |
-| 2 | `activate` | direct | element target, optional `action` for increment/decrement/custom |
-| 3 | `rotor` | direct | element target, `rotor`/`rotorIndex`, `direction`, `currentHeistId`, text-range cursor offsets |
-| 4 | `type_text` | direct | `text`, `clearFirst`, `deleteCount` |
-| 5 | `get_screen` | direct | `output` (file path, optional) |
-| 6 | `wait_for_change` | direct | `expect`, `timeout` |
-| 7 | `wait_for` | direct | element match fields, `absent`, `timeout` |
-| 8 | `start_recording` | direct | `fps`, `scale`, `inactivity_timeout`, `max_duration` |
-| 9 | `stop_recording` | direct | `output` (file path) |
-| 10 | `list_devices` | direct | (no params) |
-| 11 | `gesture` | grouped | `type` enum -> underlying command (swipe, one_finger_tap, drag, long_press, pinch, rotate, two_finger_tap, draw_path, draw_bezier) |
-| 12 | `edit_action` | hybrid | `action`: copy/paste/cut/select/selectAll, or `"dismiss"` -> routes to dismiss_keyboard |
-| 13 | `set_pasteboard` | direct | `text` |
-| 14 | `get_pasteboard` | direct | (no params) |
-| 15 | `scroll` | hybrid | `mode`: page (default), to_visible, search, to_edge; `direction`, `edge` |
-| 16 | `run_batch` | direct | `steps` array, `policy` |
-| 17 | `get_session_state` | direct | (no params) |
-| 18 | `connect` | direct | `target`, `device`, `token` |
-| 19 | `list_targets` | direct | (no params) |
-| 20 | `get_session_log` | direct | (no params) |
-| 21 | `archive_session` | direct | `delete_source` |
-| 22 | `start_heist` | direct | `name` |
-| 23 | `stop_heist` | direct | (no params) |
-| 24 | `play_heist` | direct | `name` |
+ButtonHeistMCP exposes 24 tools. The authoritative list and parameter schemas live in `ToolDefinitions.swift`, projected from `FenceParameterSpec`; `ButtonHeistMCP/README.md` carries the human-facing tool list checked by drift tests.
 
-### Grouped and hybrid tools
+### Grouped and Hybrid Tools
 
 `gesture` groups 9 gesture commands under a `type` discriminator:
 `swipe`, `one_finger_tap`, `drag`, `long_press`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`
@@ -93,7 +68,7 @@ graph TD
 
 `edit_action` routes `"dismiss"` to the `dismiss_keyboard` TheFence command; all other actions go to the `edit_action` command.
 
-## Key Tool Schemas
+`run_batch` intentionally does not accept these grouped MCP wrapper shapes inside `steps`. Batch steps use raw `TheFence.Command` dictionaries, so agents must send commands such as `swipe`, `element_search`, and `dismiss_keyboard` directly.
 
 ### `get_interface`
 - `scope`: omit for the app accessibility state; `"visible"` requests a diagnostic on-screen parse
@@ -101,7 +76,8 @@ graph TD
 - `elements`: optional `[String]` — heistIds to filter; omit for the current interface tree
 - `readOnlyHint: true`, `idempotentHint: true`
 
-### Shared `expect` property
+### Shared `expect` Property
+
 Used on all action tools. MCP and TheFence accept the object form only so every caller uses one schema shape.
 - Object with a `type` discriminator that matches `ActionExpectation`'s Codable shape:
   - `{"type": "screen_changed"}` / `{"type": "elements_changed"}`
@@ -133,7 +109,8 @@ flowchart TD
 2. `gesture` extracts `type` and uses that as the underlying Fence command
 3. `scroll` extracts `mode` and maps to the corresponding Fence command (page → scroll, to_visible → scroll_to_visible, search → element_search, to_edge → scroll_to_edge)
 4. `edit_action` intercepts `"dismiss"` and routes to `dismiss_keyboard`; other actions pass through
-5. All requests end at `fence.execute(request:)`
+5. `run_batch` normalizes only batch-executable raw `TheFence.Command` step dictionaries; it does not recurse through the grouped MCP routing rules above, accept session-only commands (`help`, `status`, `quit`, `exit`), or allow nested `run_batch`
+6. All requests end at `fence.execute(request:)`
 
 ## Response Behavior
 
