@@ -426,7 +426,10 @@ final class TheBrainsPipelineTests: XCTestCase {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         let data = try encoder.encode(value)
-        return String(decoding: data, as: UTF8.self)
+        guard let json = String(data: data, encoding: .utf8) else {
+            throw NSError(domain: "TheBrainsPipelineTests", code: 1)
+        }
+        return json
     }
 
 }
