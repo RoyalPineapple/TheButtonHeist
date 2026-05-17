@@ -80,6 +80,19 @@ actor TheStakeout {
         let scale: CGFloat
     }
 
+    private struct RecordingSetup {
+        let requestedConfig: RecordingConfigurationEvidence
+        let appliedConfig: RecordingConfigurationEvidence
+        let caps: [RecordedInputCap]
+        let fps: Int
+        let maxDuration: TimeInterval
+        let inactivityTimeout: TimeInterval
+        let effectiveScale: CGFloat
+        let screenBounds: CGRect
+        let evenWidth: Int
+        let evenHeight: Int
+    }
+
     enum TheStakeoutError: Error, LocalizedError {
         case alreadyRecording
         case writerSetupFailed(String)
@@ -192,28 +205,11 @@ actor TheStakeout {
         return applied
     }
 
-    // MARK: - Init
-
-    init(captureFrame: @escaping @MainActor @Sendable () async -> UIImage?) {
-        self.captureFrame = captureFrame
-    }
-
-    func setOnRecordingComplete(_ handler: (@MainActor @Sendable (Result<RecordingPayload, Error>) -> Void)?) {
-        self.onRecordingComplete = handler
-    }
-
-    // MARK: - Recording Lifecycle
-
-    func startRecording(config: RecordingConfig, screen: ScreenInfo) throws {
-        guard case .idle = stakeoutPhase else {
-            throw TheStakeoutError.alreadyRecording
-        }
-
+    private static func makeRecordingSetup(config: RecordingConfig, screen: ScreenInfo) -> RecordingSetup {
         let requestedConfig = RecordingConfigurationEvidence(config)
         var caps: [RecordedInputCap] = []
 
-        // Apply config with clamping.
-        let fps = Self.clampInt(
+        let fps = clampInt(
             name: "fps",
             requested: config.fps,
             defaultValue: 8,
@@ -242,13 +238,11 @@ actor TheStakeout {
                 reason: "recording max duration must be at least 1 second"
             ))
         }
-        // Determine output dimensions from screen.
-        // Default: 1x point resolution (native pixels / screen scale).
-        // If caller provides scale, use that fraction of native resolution.
+
         let nativeWidth = screen.bounds.width * screen.scale
         let nativeHeight = screen.bounds.height * screen.scale
         let effectiveScale: CGFloat = if let requestedScale = config.scale {
-            CGFloat(Self.clampDouble(
+            CGFloat(clampDouble(
                 name: "scale",
                 requested: requestedScale,
                 defaultValue: Double(1.0 / screen.scale),
@@ -262,8 +256,6 @@ actor TheStakeout {
         }
         let width = Int(nativeWidth * effectiveScale)
         let height = Int(nativeHeight * effectiveScale)
-        // H.264 requires even pixel dimensions — the codec operates on 16x16 macroblocks,
-        // and AVAssetWriter will reject odd-dimensioned buffers. Round up to the next even number.
         let evenWidth = width % 2 == 0 ? width : width + 1
         let evenHeight = height % 2 == 0 ? height : height + 1
         if evenWidth != width {
@@ -282,13 +274,45 @@ actor TheStakeout {
                 reason: "H.264 output dimensions must be even"
             ))
         }
-        let screenBounds = CGRect(x: 0, y: 0, width: evenWidth, height: evenHeight)
+
         let appliedConfig = RecordingConfigurationEvidence(
             fps: fps,
             scale: Double(effectiveScale),
             inactivityTimeout: inactivityTimeout,
             maxDuration: maxDuration
         )
+        return RecordingSetup(
+            requestedConfig: requestedConfig,
+            appliedConfig: appliedConfig,
+            caps: caps,
+            fps: fps,
+            maxDuration: maxDuration,
+            inactivityTimeout: inactivityTimeout,
+            effectiveScale: effectiveScale,
+            screenBounds: CGRect(x: 0, y: 0, width: evenWidth, height: evenHeight),
+            evenWidth: evenWidth,
+            evenHeight: evenHeight
+        )
+    }
+
+    // MARK: - Init
+
+    init(captureFrame: @escaping @MainActor @Sendable () async -> UIImage?) {
+        self.captureFrame = captureFrame
+    }
+
+    func setOnRecordingComplete(_ handler: (@MainActor @Sendable (Result<RecordingPayload, Error>) -> Void)?) {
+        self.onRecordingComplete = handler
+    }
+
+    // MARK: - Recording Lifecycle
+
+    func startRecording(config: RecordingConfig, screen: ScreenInfo) throws {
+        guard case .idle = stakeoutPhase else {
+            throw TheStakeoutError.alreadyRecording
+        }
+
+        let setup = Self.makeRecordingSetup(config: config, screen: screen)
 
         // Set up temp file
         let tempDir = NSTemporaryDirectory()
@@ -300,11 +324,11 @@ actor TheStakeout {
 
         let videoSettings: [String: Any] = [
             AVVideoCodecKey: AVVideoCodecType.h264,
-            AVVideoWidthKey: evenWidth,
-            AVVideoHeightKey: evenHeight,
+            AVVideoWidthKey: setup.evenWidth,
+            AVVideoHeightKey: setup.evenHeight,
             AVVideoCompressionPropertiesKey: [
-                AVVideoAverageBitRateKey: evenWidth * evenHeight * 2, // ~2 bits/pixel
-                AVVideoMaxKeyFrameIntervalKey: fps * 2, // Keyframe every 2 seconds
+                AVVideoAverageBitRateKey: setup.evenWidth * setup.evenHeight * 2, // ~2 bits/pixel
+                AVVideoMaxKeyFrameIntervalKey: setup.fps * 2, // Keyframe every 2 seconds
                 AVVideoProfileLevelKey: AVVideoProfileLevelH264BaselineAutoLevel,
             ]
         ]
@@ -314,8 +338,8 @@ actor TheStakeout {
 
         let sourcePixelBufferAttributes: [String: Any] = [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
-            kCVPixelBufferWidthKey as String: evenWidth,
-            kCVPixelBufferHeightKey as String: evenHeight,
+            kCVPixelBufferWidthKey as String: setup.evenWidth,
+            kCVPixelBufferHeightKey as String: setup.evenHeight,
         ]
         let adaptor = AVAssetWriterInputPixelBufferAdaptor(
             assetWriterInput: input,
@@ -335,14 +359,14 @@ actor TheStakeout {
             videoInput: input,
             pixelBufferAdaptor: adaptor,
             outputURL: url,
-            screenBounds: screenBounds,
-            fps: fps,
-            maxDuration: timing.maxDuration,
-            inactivityTimeout: timing.inactivityTimeout,
+            screenBounds: setup.screenBounds,
+            fps: setup.fps,
+            maxDuration: setup.maxDuration,
+            inactivityTimeout: setup.inactivityTimeout,
             startTime: now,
-            requestedConfig: requestedConfig,
-            appliedConfig: appliedConfig,
-            caps: caps,
+            requestedConfig: setup.requestedConfig,
+            appliedConfig: setup.appliedConfig,
+            caps: setup.caps,
             captureTimer: Task { },
             inactivityCheckTask: Task { },
             frameCount: 0,
@@ -355,7 +379,9 @@ actor TheStakeout {
 
         stakeoutPhase = .recording(session)
 
-        logger.info("Recording started: \(evenWidth)x\(evenHeight) @ \(fps)fps, effectiveScale=\(effectiveScale)")
+        logger.info(
+            "Recording started: \(setup.evenWidth)x\(setup.evenHeight) @ \(setup.fps)fps, effectiveScale=\(setup.effectiveScale)"
+        )
 
         // Start frame capture timer and inactivity monitor — these mutate the session
         // via stakeoutPhase, so they must be started after the state transition.
