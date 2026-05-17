@@ -2008,6 +2008,34 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testBatchRejectsSessionOnlyCommandsBeforeExecution() async throws {
+        for command in [TheFence.Command.help, .status, .quit, .exit] {
+            let (fence, _) = makeConnectedFence()
+
+            let response = try await fence.execute(request: [
+                "command": "run_batch",
+                "steps": [
+                    ["command": command.rawValue],
+                ] as [[String: Any]],
+            ])
+
+            guard case .batch(let results, _, let failedIndex, _, _, _, let summaries) = response else {
+                XCTFail("Expected batch response for \(command.rawValue), got \(response)")
+                continue
+            }
+
+            XCTAssertEqual(results.count, 1)
+            XCTAssertEqual(failedIndex, 0)
+            XCTAssertEqual(summaries.map(\.command), [command.rawValue])
+            XCTAssertEqual(
+                summaries[0].error,
+                "run_batch step 0: run_batch step command \"\(command.rawValue)\" " +
+                    "is not batch-executable"
+            )
+        }
+    }
+
+    @ButtonHeistActor
     func testBatchStillAcceptsRawFenceCommandShapes() async throws {
         let (fence, mockConn) = makeConnectedFence()
         mockConn.autoResponse = { _ in

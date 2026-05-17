@@ -382,7 +382,7 @@ Deltas tell you *what* changed. Expectations tell you *whether what changed matc
 
 ## Batching: Multiple Actions in One Call
 
-`run_batch` sends a sequence of commands as a single request. Each step runs serially, and you get back ordered per-step results.
+`run_batch` sends a sequence of batch-executable raw Fence commands as a single request. Each step runs serially, and you get back ordered per-step results. Session-only commands (`help`, `status`, `quit`, `exit`) are rejected inside batches.
 
 ```json
 {

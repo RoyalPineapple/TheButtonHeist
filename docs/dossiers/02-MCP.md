@@ -109,7 +109,7 @@ flowchart TD
 2. `gesture` extracts `type` and uses that as the underlying Fence command
 3. `scroll` extracts `mode` and maps to the corresponding Fence command (page → scroll, to_visible → scroll_to_visible, search → element_search, to_edge → scroll_to_edge)
 4. `edit_action` intercepts `"dismiss"` and routes to `dismiss_keyboard`; other actions pass through
-5. `run_batch` normalizes only raw `TheFence.Command` step dictionaries; it does not recurse through the grouped MCP routing rules above
+5. `run_batch` normalizes only batch-executable raw `TheFence.Command` step dictionaries; it does not recurse through the grouped MCP routing rules above or accept session-only commands (`help`, `status`, `quit`, `exit`)
 6. All requests end at `fence.execute(request:)`
 
 ## Response Behavior

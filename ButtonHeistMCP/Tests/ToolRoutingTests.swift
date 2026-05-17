@@ -29,7 +29,11 @@ struct ToolRoutingTests {
             Issue.record("Expected routing failure")
             return
         }
-        #expect(error.message == "schema validation failed for type: observed missing; expected enum one of one_finger_tap, long_press, swipe, drag, pinch, rotate, two_finger_tap, draw_path, draw_bezier")
+        #expect(
+            error.message == "schema validation failed for type: observed missing; " +
+                "expected enum one of one_finger_tap, long_press, swipe, drag, " +
+                "pinch, rotate, two_finger_tap, draw_path, draw_bezier"
+        )
     }
 
     @Test("scroll modes route to concrete commands")
@@ -93,11 +97,14 @@ struct ToolRoutingTests {
             ["command": TheFence.Command.dismissKeyboard.rawValue],
         ])
 
-        #expect(steps[0]["command"] as? String == TheFence.Command.swipe.rawValue)
-        #expect(steps[0]["direction"] as? String == "right")
-        #expect(steps[1]["command"] as? String == TheFence.Command.scrollToVisible.rawValue)
-        #expect(steps[1]["heistId"] as? String == "element-1")
-        #expect(steps[2]["command"] as? String == TheFence.Command.dismissKeyboard.rawValue)
+        #expect(steps[0].command == .swipe)
+        #expect(steps[0].legacyRequestDictionary["command"] as? String == TheFence.Command.swipe.rawValue)
+        #expect(steps[0].arguments["direction"] as? String == "right")
+        #expect(steps[1].command == .scrollToVisible)
+        #expect(steps[1].legacyRequestDictionary["command"] as? String == TheFence.Command.scrollToVisible.rawValue)
+        #expect(steps[1].arguments["heistId"] as? String == "element-1")
+        #expect(steps[2].command == .dismissKeyboard)
+        #expect(steps[2].legacyRequestDictionary["command"] as? String == TheFence.Command.dismissKeyboard.rawValue)
     }
 
     @Test("run_batch rejects grouped MCP tool shapes")
@@ -131,28 +138,49 @@ struct ToolRoutingTests {
         }
     }
 
+    @Test("run_batch rejects session-only commands")
+    func runBatchRejectsSessionOnlyCommands() {
+        for command in [TheFence.Command.help, .status, .quit, .exit] {
+            let result = FenceOperationCatalog.normalizeBatchStep(["command": command.rawValue])
+            guard case .failure(let error) = result else {
+                Issue.record("Expected routing failure for \(command.rawValue)")
+                continue
+            }
+            #expect(error.message == "run_batch step command \"\(command.rawValue)\" is not batch-executable")
+        }
+    }
+
     @Test("top-level raw grouped commands report canonical grouped tool shape")
     func topLevelRawGroupedCommandsReportCanonicalGroupedToolShape() {
         let cases: [(toolName: String, message: String)] = [
             (
                 TheFence.Command.swipe.rawValue,
-                "Tool \"\(TheFence.Command.swipe.rawValue)\" is grouped under \"gesture\"; call gesture with type=\"\(TheFence.Command.swipe.rawValue)\"."
+                "Tool \"\(TheFence.Command.swipe.rawValue)\" is grouped under \"gesture\"; " +
+                    "call gesture with type=\"\(TheFence.Command.swipe.rawValue)\"."
             ),
             (
                 TheFence.Command.scrollToVisible.rawValue,
-                "Tool \"\(TheFence.Command.scrollToVisible.rawValue)\" is grouped under \"\(TheFence.Command.scroll.rawValue)\"; call \(TheFence.Command.scroll.rawValue) with mode=\"\(ScrollMode.toVisible.rawValue)\"."
+                "Tool \"\(TheFence.Command.scrollToVisible.rawValue)\" is grouped under " +
+                    "\"\(TheFence.Command.scroll.rawValue)\"; call \(TheFence.Command.scroll.rawValue) " +
+                    "with mode=\"\(ScrollMode.toVisible.rawValue)\"."
             ),
             (
                 TheFence.Command.elementSearch.rawValue,
-                "Tool \"\(TheFence.Command.elementSearch.rawValue)\" is grouped under \"\(TheFence.Command.scroll.rawValue)\"; call \(TheFence.Command.scroll.rawValue) with mode=\"\(ScrollMode.search.rawValue)\"."
+                "Tool \"\(TheFence.Command.elementSearch.rawValue)\" is grouped under " +
+                    "\"\(TheFence.Command.scroll.rawValue)\"; call \(TheFence.Command.scroll.rawValue) " +
+                    "with mode=\"\(ScrollMode.search.rawValue)\"."
             ),
             (
                 TheFence.Command.scrollToEdge.rawValue,
-                "Tool \"\(TheFence.Command.scrollToEdge.rawValue)\" is grouped under \"\(TheFence.Command.scroll.rawValue)\"; call \(TheFence.Command.scroll.rawValue) with mode=\"\(ScrollMode.toEdge.rawValue)\"."
+                "Tool \"\(TheFence.Command.scrollToEdge.rawValue)\" is grouped under " +
+                    "\"\(TheFence.Command.scroll.rawValue)\"; call \(TheFence.Command.scroll.rawValue) " +
+                    "with mode=\"\(ScrollMode.toEdge.rawValue)\"."
             ),
             (
                 TheFence.Command.dismissKeyboard.rawValue,
-                "Tool \"\(TheFence.Command.dismissKeyboard.rawValue)\" is grouped under \"\(TheFence.Command.editAction.rawValue)\"; call \(TheFence.Command.editAction.rawValue) with action=\"dismiss\"."
+                "Tool \"\(TheFence.Command.dismissKeyboard.rawValue)\" is grouped under " +
+                    "\"\(TheFence.Command.editAction.rawValue)\"; " +
+                    "call \(TheFence.Command.editAction.rawValue) with action=\"dismiss\"."
             ),
         ]
 
@@ -176,16 +204,21 @@ struct ToolRoutingTests {
             ["command": TheFence.Command.dismissKeyboard.rawValue],
         ])
 
-        #expect(steps[0]["command"] as? String == TheFence.Command.swipe.rawValue)
-        #expect(steps[0]["direction"] as? String == "up")
-        #expect(steps[1]["command"] as? String == TheFence.Command.scrollToVisible.rawValue)
-        #expect(steps[1]["heistId"] as? String == "element-1")
-        #expect(steps[2]["command"] as? String == TheFence.Command.elementSearch.rawValue)
-        #expect(steps[2]["label"] as? String == "Done")
-        #expect(steps[3]["command"] as? String == TheFence.Command.scrollToEdge.rawValue)
-        #expect(steps[3]["heistId"] as? String == "scroll-view")
-        #expect(steps[3]["edge"] as? String == "bottom")
-        #expect(steps[4]["command"] as? String == TheFence.Command.dismissKeyboard.rawValue)
+        #expect(steps[0].command == .swipe)
+        #expect(steps[0].legacyRequestDictionary["command"] as? String == TheFence.Command.swipe.rawValue)
+        #expect(steps[0].arguments["direction"] as? String == "up")
+        #expect(steps[1].command == .scrollToVisible)
+        #expect(steps[1].legacyRequestDictionary["command"] as? String == TheFence.Command.scrollToVisible.rawValue)
+        #expect(steps[1].arguments["heistId"] as? String == "element-1")
+        #expect(steps[2].command == .elementSearch)
+        #expect(steps[2].legacyRequestDictionary["command"] as? String == TheFence.Command.elementSearch.rawValue)
+        #expect(steps[2].arguments["label"] as? String == "Done")
+        #expect(steps[3].command == .scrollToEdge)
+        #expect(steps[3].legacyRequestDictionary["command"] as? String == TheFence.Command.scrollToEdge.rawValue)
+        #expect(steps[3].arguments["heistId"] as? String == "scroll-view")
+        #expect(steps[3].arguments["edge"] as? String == "bottom")
+        #expect(steps[4].command == .dismissKeyboard)
+        #expect(steps[4].legacyRequestDictionary["command"] as? String == TheFence.Command.dismissKeyboard.rawValue)
     }
 
     @Test("all registered tools route through the catalog")
@@ -220,14 +253,14 @@ struct ToolRoutingTests {
         }
     }
 
-    private func normalizeBatchSteps(_ steps: [[String: Any]]) throws -> [[String: Any]] {
+    private func normalizeBatchSteps(_ steps: [[String: Any]]) throws -> [NormalizedOperation] {
         try steps.map(normalizedBatchStep)
     }
 
-    private func normalizedBatchStep(_ step: [String: Any]) throws -> [String: Any] {
+    private func normalizedBatchStep(_ step: [String: Any]) throws -> NormalizedOperation {
         switch FenceOperationCatalog.normalizeBatchStep(step) {
-        case .success(let request):
-            return request
+        case .success(let operation):
+            return operation
         case .failure(let error):
             throw error
         }

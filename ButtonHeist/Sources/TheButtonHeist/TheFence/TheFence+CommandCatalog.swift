@@ -49,3 +49,22 @@ extension TheFence {
         case playHeist = "play_heist"
     }
 }
+
+public extension TheFence.Command {
+    /// Commands that can execute as a run_batch step.
+    ///
+    /// Shell/session-control conveniences are accepted at external edges but
+    /// should not appear in batch schemas or typed batch execution.
+    var isBatchExecutable: Bool {
+        switch self {
+        case .help, .status, .quit, .exit:
+            return false
+        default:
+            return true
+        }
+    }
+
+    static var batchExecutableCases: [Self] {
+        allCases.filter(\.isBatchExecutable)
+    }
+}

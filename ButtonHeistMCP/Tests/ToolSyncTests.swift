@@ -350,7 +350,11 @@ struct ToolSyncTests {
         }
 
         let commandValues = extractEnumValues(from: commandSchema)
-        #expect(commandValues == Set(TheFence.Command.allCases.map(\.rawValue)))
+        #expect(commandValues == Set(TheFence.Command.batchExecutableCases.map(\.rawValue)))
+        #expect(!commandValues.contains(TheFence.Command.help.rawValue))
+        #expect(!commandValues.contains(TheFence.Command.status.rawValue))
+        #expect(!commandValues.contains(TheFence.Command.quit.rawValue))
+        #expect(!commandValues.contains(TheFence.Command.exit.rawValue))
         #expect(!commandValues.contains("gesture"))
     }
 
@@ -516,10 +520,12 @@ struct ToolSyncTests {
             }
         )
         let actualTools = Set(ToolDefinitions.all.map(\.name))
+        let docsOnly = documentedTools.subtracting(actualTools).sorted()
+        let missing = actualTools.subtracting(documentedTools).sorted()
 
         #expect(
             documentedTools == actualTools,
-            "MCP README tool list differs: docs-only \(documentedTools.subtracting(actualTools).sorted()), missing \(actualTools.subtracting(documentedTools).sorted())"
+            "MCP README tool list differs: docs-only \(docsOnly), missing \(missing)"
         )
     }
 

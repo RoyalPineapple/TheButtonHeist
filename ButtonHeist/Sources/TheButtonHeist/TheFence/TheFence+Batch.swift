@@ -27,10 +27,14 @@ extension TheFence {
 
         for (index, step) in steps.enumerated() {
             let originalCommandName = step["command"] as? String ?? "?"
+            var normalizedCommand: Command?
             do {
-                let normalizedStep = try Self.normalizedBatchStep(step, index: index)
-                let commandName = normalizedStep["command"] as? String ?? "?"
-                let response = try await execute(request: normalizedStep)
+                let operation = try Self.normalizedBatchStep(step, index: index)
+                let command = operation.command
+                normalizedCommand = command
+                // Legacy executor boundary: batch normalization carries a typed
+                // command until execute(request:) requires the raw dictionary.
+                let response = try await execute(request: operation.legacyRequestDictionary)
                 results.append(response.jsonDict() ?? ["status": "ok"])
 
                 let outcome = stepOutcome(response: response)
@@ -43,7 +47,7 @@ extension TheFence {
                 }
 
                 stepSummaries.append(makeStepSummary(
-                    command: commandName, response: response,
+                    command: command, response: response,
                     expectationMet: outcome.expectationCounted ? outcome.expectationMet : nil
                 ))
 
@@ -59,7 +63,10 @@ extension TheFence {
                 let failureDetails = (error as? FenceError)?.failureDetails
                 results.append(errorDict)
                 stepSummaries.append(BatchStepSummary(
-                    command: originalCommandName, deltaKind: nil, screenName: nil, screenId: nil,
+                    command: normalizedCommand?.rawValue ?? originalCommandName,
+                    deltaKind: nil,
+                    screenName: nil,
+                    screenId: nil,
                     expectationMet: nil, elementCount: nil, error: error.localizedDescription,
                     errorCode: failureDetails?.errorCode,
                     phase: failureDetails?.phase.rawValue,
@@ -94,10 +101,10 @@ extension TheFence {
     private static func normalizedBatchStep(
         _ step: [String: Any],
         index: Int
-    ) throws -> [String: Any] {
+    ) throws -> NormalizedOperation {
         switch FenceOperationCatalog.normalizeBatchStep(step) {
-        case .success(let normalizedStep):
-            return normalizedStep
+        case .success(let operation):
+            return operation
         case .failure(let error):
             throw FenceError.invalidRequest("run_batch step \(index): \(error.message)")
         }
@@ -107,8 +114,14 @@ extension TheFence {
         steps: [[String: Any]], afterFailedIndex failedIndex: Int
     ) -> [BatchStepSummary] {
         steps.dropFirst(failedIndex + 1).map { step in
-            BatchStepSummary(
-                command: step["command"] as? String ?? "?",
+            let command = switch FenceOperationCatalog.normalizeBatchStep(step) {
+            case .success(let operation):
+                operation.command.rawValue
+            case .failure:
+                step["command"] as? String ?? "?"
+            }
+            return BatchStepSummary(
+                command: command,
                 deltaKind: nil,
                 screenName: nil,
                 screenId: nil,
@@ -161,12 +174,13 @@ extension TheFence {
     // MARK: - Step Summary
 
     private func makeStepSummary(
-        command: String, response: FenceResponse, expectationMet: Bool?
+        command: Command, response: FenceResponse, expectationMet: Bool?
     ) -> BatchStepSummary {
+        let commandName = command.rawValue
         switch response {
         case .action(let result, _):
             return BatchStepSummary(
-                command: command,
+                command: commandName,
                 deltaKind: result.accessibilityDelta?.kindRawValue,
                 screenName: result.screenName,
                 screenId: result.screenId,
@@ -176,12 +190,12 @@ extension TheFence {
             )
         case .interface(let iface, _, _, _):
             return BatchStepSummary(
-                command: command, deltaKind: nil, screenName: nil, screenId: nil,
+                command: commandName, deltaKind: nil, screenName: nil, screenId: nil,
                 expectationMet: nil, elementCount: iface.elements.count, error: nil
             )
         case .error(let message, let details):
             return BatchStepSummary(
-                command: command, deltaKind: nil, screenName: nil, screenId: nil,
+                command: commandName, deltaKind: nil, screenName: nil, screenId: nil,
                 expectationMet: nil, elementCount: nil, error: message,
                 errorCode: details?.errorCode,
                 phase: details?.phase.rawValue,
@@ -189,7 +203,7 @@ extension TheFence {
             )
         default:
             return BatchStepSummary(
-                command: command, deltaKind: nil, screenName: nil, screenId: nil,
+                command: commandName, deltaKind: nil, screenName: nil, screenId: nil,
                 expectationMet: nil, elementCount: nil, error: nil
             )
         }

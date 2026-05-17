@@ -646,7 +646,7 @@ Perform an edit or keyboard action on the current first responder. Requires `act
 
 Execute an ordered sequence of raw Fence command requests in a single MCP call. Steps run sequentially — the response from one step is not piped into the next.
 
-Batch steps use the canonical `TheFence.Command` shape. Do not use grouped MCP wrapper names inside `steps`: use `swipe` instead of `gesture` with `type`, `element_search` instead of `scroll` with `mode: "search"`, and `dismiss_keyboard` instead of `edit_action` with `action: "dismiss"`.
+Batch steps use the batch-executable `TheFence.Command` shape. Do not use grouped MCP wrapper names inside `steps`: use `swipe` instead of `gesture` with `type`, `element_search` instead of `scroll` with `mode: "search"`, and `dismiss_keyboard` instead of `edit_action` with `action: "dismiss"`. Session-only commands (`help`, `status`, `quit`, `exit`) are rejected inside batches.
 
 **Parameters:**
 

@@ -82,6 +82,7 @@ struct ButtonHeistMCPServer {
         arguments: [String: Any]
     ) -> Result<[String: Any], FenceOperationRoutingError> {
         FenceOperationCatalog.normalizeToolCall(name: name, arguments: arguments)
+            .map(\.legacyRequestDictionary)
     }
 
     private static func decodeArguments(_ arguments: [String: Value]?) -> [String: Any] {

@@ -595,8 +595,9 @@ extension TheFence.Command {
                     arrayItemProperties: [
                         .init(
                             key: "command", type: .string, required: true,
-                            description: "Raw TheFence.Command name (e.g. activate, swipe, element_search, dismiss_keyboard). Grouped MCP tool names and selector shapes are not accepted inside batches.",
-                            enumValues: Self.allCases.map(\.rawValue)
+                            description: "Raw TheFence.Command name (e.g. activate, swipe, element_search, dismiss_keyboard). " +
+                                "Grouped MCP tool names and selector shapes are not accepted inside batches.",
+                            enumValues: Self.batchExecutableCases.map(\.rawValue)
                         ),
                         expect,
                     ],
