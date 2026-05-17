@@ -459,6 +459,47 @@ struct ToolSyncTests {
         }
     }
 
+    @Test("MCP tool schemas are rendered from canonical tool contracts")
+    func mcpToolSchemasAreRenderedFromCanonicalToolContracts() {
+        let toolsByName = Dictionary(uniqueKeysWithValues: ToolDefinitions.all.map { ($0.name, $0) })
+        let contracts = TheFence.Command.mcpToolContracts
+
+        #expect(Set(toolsByName.keys) == Set(contracts.map(\.name)))
+
+        for contract in contracts {
+            guard let tool = toolsByName[contract.name] else {
+                Issue.record("Missing rendered MCP tool for contract \(contract.name)")
+                continue
+            }
+            #expect(
+                tool.inputSchema == ToolDefinitions.inputSchema(for: contract),
+                "\(contract.name) input schema should be rendered from MCPToolContract"
+            )
+        }
+    }
+
+    @Test("Grouped MCP selectors are owned by command contracts")
+    func groupedMCPSelectorsAreOwnedByCommandContracts() {
+        assertSelectorContract(
+            toolName: "gesture",
+            key: "type",
+            requiredKeys: ["type"],
+            enumValues: GestureType.allCases.map(\.rawValue)
+        )
+        assertSelectorContract(
+            toolName: TheFence.Command.scroll.rawValue,
+            key: "mode",
+            requiredKeys: [],
+            enumValues: ScrollMode.allCases.map(\.rawValue)
+        )
+        assertSelectorContract(
+            toolName: TheFence.Command.editAction.rawValue,
+            key: "action",
+            requiredKeys: ["action"],
+            enumValues: EditAction.allCases.map(\.rawValue) + ["dismiss"]
+        )
+    }
+
     @Test("Tool input schemas satisfy canonical schema lint in memory")
     func toolInputSchemasSatisfyCanonicalSchemaLintInMemory() {
         let violations = ToolSchemaLint.violations(in: ToolDefinitions.all)
@@ -733,6 +774,28 @@ struct ToolSyncTests {
                 enumPolicy: enumPolicy
             )
         }
+    }
+
+    private func assertSelectorContract(
+        toolName: String,
+        key: String,
+        requiredKeys: Set<String>,
+        enumValues: [String]
+    ) {
+        guard let contract = TheFence.Command.mcpToolContract(named: toolName),
+              let selector = contract.selector else {
+            Issue.record("\(toolName) missing selector contract")
+            return
+        }
+        guard let tool = ToolDefinitions.all.first(where: { $0.name == toolName }) else {
+            Issue.record("\(toolName) missing rendered MCP tool")
+            return
+        }
+
+        #expect(selector.parameter.key == key)
+        #expect(Set(contract.requiredParameterKeys) == requiredKeys)
+        #expect(selector.parameter.enumValues == enumValues)
+        #expect(extractEnumValues(from: tool, property: key) == Set(enumValues))
     }
 
     /// Extract property key names from a Tool's inputSchema.

@@ -89,6 +89,99 @@ public enum MCPExposure: Sendable, Equatable {
     case notExposed
 }
 
+/// Selector metadata for an MCP tool that routes to more than one Fence command.
+///
+/// This is part of the command contract because it defines the external tool
+/// parameter that selects the canonical Fence command. The MCP adapter renders
+/// it; runtime routing also consumes it.
+public struct MCPToolSelector: Sendable, Equatable {
+    public let parameter: FenceParameterSpec
+    public let defaultValue: String?
+    public let commandByValue: [String: TheFence.Command]
+    public let consumedValues: Set<String>
+
+    public init(
+        parameter: FenceParameterSpec,
+        defaultValue: String? = nil,
+        commandByValue: [String: TheFence.Command],
+        consumedValues: Set<String>? = nil
+    ) {
+        self.parameter = parameter
+        self.defaultValue = defaultValue
+        self.commandByValue = commandByValue
+        self.consumedValues = consumedValues ?? Set(commandByValue.keys)
+    }
+
+    public func command(for value: String?) -> TheFence.Command? {
+        guard let value else {
+            guard let defaultValue else { return nil }
+            return commandByValue[defaultValue]
+        }
+        return commandByValue[value]
+    }
+
+    public func selectorValue(for command: TheFence.Command) -> String? {
+        commandByValue.first { $0.value == command }?.key
+    }
+
+    public func consumesValue(_ value: String?) -> Bool {
+        guard let value else { return false }
+        return consumedValues.contains(value)
+    }
+}
+
+/// Canonical MCP-facing tool contract derived from the Fence command catalog.
+///
+/// Descriptions and annotations remain adapter-owned, but schema parameters are
+/// rendered from this contract instead of hand-maintained in the MCP target.
+public struct MCPToolContract: Sendable, Equatable {
+    public let name: String
+    public let commands: [TheFence.Command]
+    public let selector: MCPToolSelector?
+
+    public init(
+        name: String,
+        commands: [TheFence.Command],
+        selector: MCPToolSelector? = nil
+    ) {
+        self.name = name
+        self.commands = commands
+        self.selector = selector
+    }
+
+    public var parameters: [FenceParameterSpec] {
+        var merged: [FenceParameterSpec] = []
+        for spec in commands.flatMap(\.parameters) {
+            append(spec, to: &merged, replacingExisting: false)
+        }
+        if let selector {
+            append(selector.parameter, to: &merged, replacingExisting: true)
+        }
+        return merged
+    }
+
+    public var requiredParameterKeys: [String] {
+        if let selector {
+            return selector.parameter.required ? [selector.parameter.key] : []
+        }
+        return parameters.filter(\.required).map(\.key)
+    }
+
+    private func append(
+        _ spec: FenceParameterSpec,
+        to specs: inout [FenceParameterSpec],
+        replacingExisting: Bool
+    ) {
+        guard let existingIndex = specs.firstIndex(where: { $0.key == spec.key }) else {
+            specs.append(spec)
+            return
+        }
+        if replacingExisting {
+            specs[existingIndex] = spec
+        }
+    }
+}
+
 // MARK: - CLI Exposure
 
 /// How a command is surfaced by the top-level `buttonheist` CLI.
@@ -248,6 +341,90 @@ extension TheFence.Command {
         // Everything else is a direct 1:1 tool
         default:
             return .directTool
+        }
+    }
+
+    public static var mcpToolContracts: [MCPToolContract] {
+        var toolNames: [String] = []
+        var commandsByToolName: [String: [Self]] = [:]
+
+        func append(_ command: Self, to toolName: String) {
+            if commandsByToolName[toolName] == nil {
+                toolNames.append(toolName)
+                commandsByToolName[toolName] = []
+            }
+            commandsByToolName[toolName]?.append(command)
+        }
+
+        for command in allCases {
+            switch command.mcpExposure {
+            case .directTool:
+                append(command, to: command.rawValue)
+            case .groupedUnder(let toolName):
+                append(command, to: toolName)
+            case .notExposed:
+                break
+            }
+        }
+
+        return toolNames.compactMap { toolName in
+            guard let commands = commandsByToolName[toolName] else { return nil }
+            return MCPToolContract(
+                name: toolName,
+                commands: commands,
+                selector: mcpSelector(for: toolName)
+            )
+        }
+    }
+
+    public static func mcpToolContract(named name: String) -> MCPToolContract? {
+        mcpToolContracts.first { $0.name == name }
+    }
+
+    private static func mcpSelector(for toolName: String) -> MCPToolSelector? {
+        switch toolName {
+        case "gesture":
+            return MCPToolSelector(
+                parameter: .init(
+                    key: "type", type: .string, required: true,
+                    description: "Gesture type",
+                    enumValues: fenceEnumValues(GestureType.self)
+                ),
+                commandByValue: Dictionary(uniqueKeysWithValues: GestureType.allCases.compactMap { gestureType in
+                    Self(rawValue: gestureType.rawValue).map { (gestureType.rawValue, $0) }
+                })
+            )
+
+        case Self.scroll.rawValue:
+            return MCPToolSelector(
+                parameter: .init(
+                    key: "mode", type: .string,
+                    description: "Scroll mode (default: page)",
+                    enumValues: fenceEnumValues(ScrollMode.self)
+                ),
+                defaultValue: ScrollMode.page.rawValue,
+                commandByValue: Dictionary(uniqueKeysWithValues: ScrollMode.allCases.compactMap { mode in
+                    Self(rawValue: mode.canonicalCommand).map { (mode.rawValue, $0) }
+                })
+            )
+
+        case Self.editAction.rawValue:
+            let dismissValue = "dismiss"
+            return MCPToolSelector(
+                parameter: .init(
+                    key: "action", type: .string, required: true,
+                    description: "Action to perform",
+                    enumValues: fenceEnumValues(EditAction.self) + [dismissValue]
+                ),
+                commandByValue: Dictionary(uniqueKeysWithValues:
+                    EditAction.allCases.map { ($0.rawValue, Self.editAction) } +
+                        [(dismissValue, Self.dismissKeyboard)]
+                ),
+                consumedValues: [dismissValue]
+            )
+
+        default:
+            return nil
         }
     }
 
@@ -626,7 +803,7 @@ extension TheFence.Command {
 
         case .startHeist:
             return [
-                .init(key: "app", type: .string, description: "Bundle ID of the app being recorded"),
+                .init(key: "app", type: .string, description: "Bundle ID of the app being recorded (default: \(Defaults.demoAppBundleID))"),
                 .init(
                     key: "identifier", type: .string,
                     description: "Session name for the recording (default: heist). Used as directory name if a new session is created."
