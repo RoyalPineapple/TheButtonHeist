@@ -31,22 +31,10 @@ final class TheGetaway {
 
     // MARK: - State
 
-    // `RecordingPhase`, `RecordingOutcome`, and their handlers live in
+    // `RecordingRouteState`, `RecordingPhase`, `RecordingOutcome`, and their handlers live in
     // TheGetaway+Recording.swift.
-    var recordingPhase: RecordingPhase = .idle
+    var recordingRouteState: RecordingRouteState = .idle
     var hierarchyInvalidated = false
-    var completedRecording: RecordingOutcome = .none
-    var pendingRecordingResponse: (requestId: String?, respond: (Data) -> Void)?
-
-    /// Client ID of the connection that issued the in-flight `start_recording`.
-    /// Set in `handleStartRecording` and threaded through the lifecycle so
-    /// (a) auto-finish payloads can be delivered to the originator instead of
-    /// broadcast to every authenticated client, and (b) any cached completion
-    /// can be invalidated when that connection drops or the session releases.
-    /// Nil between recordings. Cleared in `tearDown`, on originator disconnect,
-    /// on session-active-change-to-false, and when `completedRecording` is
-    /// drained by a `stop_recording` pickup or successful direct delivery.
-    var recordingOriginatorClientId: Int?
 
     /// Current transport — set by `wireTransport`, cleared on teardown.
     private(set) weak var transport: ServerTransport?
@@ -63,8 +51,40 @@ final class TheGetaway {
     private let pendingRecordingTasks = TaskTracker()
 
     var stakeout: TheStakeout? {
-        if case .recording(let stakeout) = recordingPhase { return stakeout }
-        return nil
+        recordingRouteState.activeStakeout
+    }
+
+    var recordingPhase: RecordingPhase {
+        get { recordingRouteState.phase }
+        set {
+            switch newValue {
+            case .idle:
+                recordingRouteState = .idle
+            case .starting:
+                recordingRouteState = .starting(ownerClientId: nil)
+            case .recording(let stakeout):
+                recordingRouteState = .recording(stakeout: stakeout, ownerClientId: nil)
+            }
+        }
+    }
+
+    var completedRecording: RecordingOutcome {
+        guard case .completed(let completion) = recordingRouteState else { return .none }
+        return completion.outcome
+    }
+
+    var pendingRecordingResponse: RecordingWaiter? {
+        guard case .stopping(_, let waiter) = recordingRouteState else { return nil }
+        return waiter
+    }
+
+    var recordingOriginatorClientId: Int? {
+        recordingRouteState.ownerClientId
+    }
+
+    var recordingInvalidationReason: RecordingInvalidationReason? {
+        guard case .invalidated(_, let reason) = recordingRouteState else { return nil }
+        return reason
     }
 
     // MARK: - Init
@@ -214,9 +234,7 @@ final class TheGetaway {
         pendingRecordingTasks.cancelAll()
         transport = nil
         hierarchyInvalidated = false
-        completedRecording = .none
-        pendingRecordingResponse = nil
-        recordingOriginatorClientId = nil
+        recordingRouteState = .idle
     }
 
     /// Insert a Task into `pendingRecordingTasks` and prune already-completed
