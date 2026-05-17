@@ -29,10 +29,9 @@ jobs:
       - name: Run SwiftLint
         run: swiftlint lint --strict
 
-  wire-format-bump:
-    # Fails fast when wire-format files (ServerMessages/ClientMessages/
-    # Messages/Elements) are touched without bumping buttonHeistVersion.
-    # See scripts/check-wire-format-bump.sh.
+  release-contract:
+    # Release/install validation belongs in CI. Version bumps belong in the
+    # release script, not in every implementation PR that touches shared types.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -42,16 +41,9 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
 
       - name: Validate release/install contract
         run: scripts/validate-release-contract.sh
-
-      - name: Verify wire-format change is paired with version bump
-        run: |
-          set -eo pipefail
-          git fetch origin "${{ github.event.pull_request.base.ref }}" --depth=1
-          scripts/check-wire-format-bump.sh "origin/${{ github.event.pull_request.base.ref }}"
 
   submodule-pin:
     runs-on: macos-15
