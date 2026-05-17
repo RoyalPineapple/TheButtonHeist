@@ -140,156 +140,155 @@ enum ToolDefinitions {
     }
 
     private static func description(for toolName: String) -> String {
-        return switch toolName {
-        case TheFence.Command.getInterface.rawValue:
+        descriptionsByToolName[toolName] ?? "Execute the \(toolName) Button Heist tool."
+    }
+
+    private static let descriptionsByToolName: [String: String] = [
+        TheFence.Command.getInterface.rawValue:
             """
             Read the app accessibility hierarchy. Call once on a new screen, then track changes via \
             action deltas — re-fetch only when you need elements the delta didn't cover. \
             Filter with matcher fields or heistId handle list. Omit scope for the normal \
             app accessibility state; use scope=visible only for diagnostic on-screen reads.
-            """
+            """,
 
-        case TheFence.Command.activate.rawValue:
+        TheFence.Command.activate.rawValue:
             """
             Activate a UI element (VoiceOver-style double-tap): tap buttons, follow links, toggle \
             controls. Pass 'action' to invoke a named action like "increment", "decrement", or \
             any entry from the element's actions array.
-            """
+            """,
 
-        case TheFence.Command.rotor.rawValue:
+        TheFence.Command.rotor.rawValue:
             """
             Move through a rotor exposed by an element. Defaults to next. Use rotors listed by \
             get_interface to pick rotor or rotorIndex; pass currentHeistId from the previous \
             object result to continue like a VoiceOver user. For text-range results, also pass \
             the returned start and end offsets.
-            """
+            """,
 
-        case TheFence.Command.typeText.rawValue:
+        TheFence.Command.typeText.rawValue:
             """
             Type text and/or delete characters via keyboard injection. Optionally target an \
             element to focus it first and read back the resulting value.
-            """
+            """,
 
-        case TheFence.Command.waitFor.rawValue:
+        TheFence.Command.waitFor.rawValue:
             """
             Wait for an element matching a predicate to appear, or to disappear with absent=true. \
             Polls on UI settle events. Returns the matched element or diagnostic info on timeout.
-            """
+            """,
 
-        case TheFence.Command.getScreen.rawValue:
-            "Capture a PNG screenshot from the connected device. Returns inline base64 PNG image data. Use 'output' to save to a file path instead."
+        TheFence.Command.getScreen.rawValue:
+            "Capture a PNG screenshot from the connected device. Returns inline base64 PNG image data. Use 'output' to save to a file path instead.",
 
-        case TheFence.Command.waitForChange.rawValue:
+        TheFence.Command.waitForChange.rawValue:
             """
             Wait for the UI to change. With no expect, returns on any tree change. With expect, \
             rides through intermediate states (spinners, loading) until the expectation is met. \
             Use after an action whose delta showed a transient state and the expectation wasn't met yet.
-            """
+            """,
 
-        case TheFence.Command.startRecording.rawValue:
-            "Start an H.264/MP4 screen recording. Recording auto-stops on inactivity or max duration."
+        TheFence.Command.startRecording.rawValue:
+            "Start an H.264/MP4 screen recording. Recording auto-stops on inactivity or max duration.",
 
-        case TheFence.Command.stopRecording.rawValue:
+        TheFence.Command.stopRecording.rawValue:
             """
             Stop an in-progress screen recording. Returns metadata only by default (raw video \
             is too large for MCP context); pass 'output' to save the MP4 to a file path.
-            """
+            """,
 
-        case TheFence.Command.listDevices.rawValue:
+        TheFence.Command.listDevices.rawValue:
             """
             List iOS devices discovered via Bonjour plus named targets from .buttonheist.json. \
             Empty when Bonjour is blocked and no config targets exist — use connect(device:token:) directly.
-            """
+            """,
 
-        case TheFence.Command.scroll.rawValue:
+        TheFence.Command.scroll.rawValue:
             """
             Scroll within scroll views. mode=page scrolls one page in 'direction'; \
             mode=to_visible brings a known element into view; mode=search scrolls until a \
             matching element is found; mode=to_edge scrolls to a top/bottom/left/right edge.
-            """
+            """,
 
-        case "gesture":
+        "gesture":
             """
             Perform a touch gesture. Prefer 'activate' for element interactions — gestures are for \
             swipes, drags, pinches, rotates, and free-form path drawing. Set 'type' to one of: \
             swipe, one_finger_tap, drag, long_press, pinch, rotate, two_finger_tap, draw_path, draw_bezier.
-            """
+            """,
 
-        case TheFence.Command.editAction.rawValue:
+        TheFence.Command.editAction.rawValue:
             """
             Perform an edit or keyboard action on the current first responder. \
             Actions: copy, paste, cut, select, selectAll, dismiss (dismiss the keyboard).
-            """
+            """,
 
-        case TheFence.Command.setPasteboard.rawValue:
+        TheFence.Command.setPasteboard.rawValue:
             """
             Write text to the general pasteboard from within the app. Content written by the app \
             itself does not trigger the iOS "Allow Paste" dialog when subsequently read.
-            """
+            """,
 
-        case TheFence.Command.getPasteboard.rawValue:
+        TheFence.Command.getPasteboard.rawValue:
             """
             Read text from the general pasteboard. iOS may show "Allow Paste" if the content \
             was written by another app.
-            """
+            """,
 
-        case TheFence.Command.runBatch.rawValue:
+        TheFence.Command.runBatch.rawValue:
             """
             Execute multiple commands in one call. Each step is a JSON object with 'command' set \
             to a raw TheFence.Command name plus that command's parameters; grouped MCP tool names \
             and selector shapes are not accepted inside batches. Attach 'expect' per step to verify \
             inline. Returns ordered per-step results. \
             policy=stop_on_error (default) or continue_on_error.
-            """
+            """,
 
-        case TheFence.Command.getSessionState.rawValue:
+        TheFence.Command.getSessionState.rawValue:
             """
             Inspect the current Button Heist session: connection status, device/app identity, \
             recording state, client timeouts, and a lightweight summary of the last action.
-            """
+            """,
 
-        case TheFence.Command.connect.rawValue:
+        TheFence.Command.connect.rawValue:
             """
             Establish or switch the active connection to an iOS app with Button Heist enabled. \
             Three patterns: target=NAME from .buttonheist.json, device=HOST:PORT + token, or \
             BUTTONHEIST_DEVICE/BUTTONHEIST_TOKEN env vars. Tears down any existing session first. \
             Returns session state; call get_interface explicitly to observe UI hierarchy.
-            """
+            """,
 
-        case TheFence.Command.listTargets.rawValue:
+        TheFence.Command.listTargets.rawValue:
             """
             List named connection targets from .buttonheist.json (or ~/.config/buttonheist/config.json), \
             including each target's address and which one is the default.
-            """
+            """,
 
-        case TheFence.Command.getSessionLog.rawValue:
-            "Return the current session manifest: commands executed and artifacts produced."
+        TheFence.Command.getSessionLog.rawValue:
+            "Return the current session manifest: commands executed and artifacts produced.",
 
-        case TheFence.Command.archiveSession.rawValue:
-            "Close and compress the current session into a .tar.gz archive; returns the path."
+        TheFence.Command.archiveSession.rawValue:
+            "Close and compress the current session into a .tar.gz archive; returns the path.",
 
-        case TheFence.Command.startHeist.rawValue:
+        TheFence.Command.startHeist.rawValue:
             """
             Start recording a heist. Successful commands become steps in a .heist file; \
             use matcher fields (label, identifier, traits) for durable element targeting, not heistId. \
             Attach 'expect' to validate outcomes during playback.
-            """
+            """,
 
-        case TheFence.Command.stopHeist.rawValue:
+        TheFence.Command.stopHeist.rawValue:
             """
             Stop recording and save the heist as a self-contained JSON playback script. \
             Returns the file path and step count. At least one step must have been recorded.
-            """
+            """,
 
-        case TheFence.Command.playHeist.rawValue:
+        TheFence.Command.playHeist.rawValue:
             """
             Play back a .heist file. Steps execute sequentially; playback stops on the first \
             failed step. On failure, returns full diagnostics: command, target, error, action \
             result, expectation result, and a complete interface snapshot at the failure point.
-            """
-
-        default:
-            "Execute the \(toolName) Button Heist tool."
-        }
-    }
+            """,
+    ]
 }
