@@ -449,8 +449,8 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .waitForChange)
         XCTAssertEqual(result.message, "expectation already met by current state (0.0s)")
-        guard case .noChange = result.interfaceDelta else {
-            return XCTFail("Expected noChange delta, got \(String(describing: result.interfaceDelta))")
+        guard case .noChange = result.accessibilityDelta else {
+            return XCTFail("Expected noChange delta, got \(String(describing: result.accessibilityDelta))")
         }
     }
 
@@ -463,8 +463,8 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .waitForChange)
         XCTAssertEqual(result.message, "expectation already met by current state (0.0s)")
-        guard case .noChange = result.interfaceDelta else {
-            return XCTFail("Expected noChange delta, got \(String(describing: result.interfaceDelta))")
+        guard case .noChange = result.accessibilityDelta else {
+            return XCTFail("Expected noChange delta, got \(String(describing: result.accessibilityDelta))")
         }
     }
 
@@ -490,8 +490,8 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .waitForChange)
         XCTAssertTrue(result.message?.contains("expectation met after") == true)
-        guard case .elementsChanged = result.interfaceDelta else {
-            return XCTFail("Expected elementsChanged delta, got \(String(describing: result.interfaceDelta))")
+        guard case .elementsChanged = result.accessibilityDelta else {
+            return XCTFail("Expected elementsChanged delta, got \(String(describing: result.accessibilityDelta))")
         }
     }
 
@@ -511,8 +511,8 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .waitForChange)
         XCTAssertTrue(result.message?.contains("expectation met after") == true)
-        guard case .elementsChanged = result.interfaceDelta else {
-            return XCTFail("Expected elementsChanged delta, got \(String(describing: result.interfaceDelta))")
+        guard case .elementsChanged = result.accessibilityDelta else {
+            return XCTFail("Expected elementsChanged delta, got \(String(describing: result.accessibilityDelta))")
         }
     }
 

@@ -81,7 +81,7 @@ final class TheSafecracker {
     // MARK: - Interaction Result
 
     /// Outcome of a high-level interaction (action, gesture, text entry).
-    /// TheInsideJob wraps this with InterfaceDelta to produce the wire ActionResult.
+    /// TheInsideJob wraps this with AccessibilityTrace.Delta to produce the wire ActionResult.
     struct InteractionResult {
         let success: Bool
         let method: ActionMethod

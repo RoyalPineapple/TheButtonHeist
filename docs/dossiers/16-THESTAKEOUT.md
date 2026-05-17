@@ -90,7 +90,7 @@ During an active recording, `TheInsideJob.performInteraction()` now captures eac
 Each `InteractionEvent` contains:
 - `timestamp: Double` (seconds since recording start, from `recordingElapsed`)
 - `command: ClientMessage` (the command that triggered the interaction)
-- `result: ActionResult` (the result returned to the client, which itself carries an `interfaceDelta` inside)
+- `result: ActionResult` (the result returned to the client, which itself carries an `accessibilityDelta` inside)
 
 On recording completion, the log is included in `RecordingPayload.interactionLog` (nil if empty).
 
@@ -148,6 +148,6 @@ let videoData = try? Data(contentsOf: url)
 - The error detail from the failed read is lost though
 
 **Interaction log payload size is bounded** (FIXED)
-- Each `InteractionEvent` uses a compact `InterfaceDelta?` instead of full before/after `Interface` snapshots
+- Each `InteractionEvent` uses a compact `AccessibilityTrace.Delta?` instead of full before/after `Interface` snapshots
 - The interaction log is capped at 500 events
 - The 7MB file size cap applies to video data; the compact delta format keeps the JSON-encoded interaction log small

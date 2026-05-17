@@ -893,14 +893,14 @@ final class TheHandoffStateTests: XCTestCase {
         mock.onEvent?(.message(
             .error(ServerError(kind: .general, message: "connection failed")),
             requestId: nil,
-            backgroundDelta: nil
+            backgroundAccessibilityDelta: nil
         ))
         assertFailed(handoff.connectionPhase, failure: .connectionFailed("connection failed"))
 
         mock.onEvent?(.message(
             .error(ServerError(kind: .general, message: "request failed")),
             requestId: "request-1",
-            backgroundDelta: nil
+            backgroundAccessibilityDelta: nil
         ))
 
         XCTAssertEqual(receivedError?.message, "request failed")
@@ -926,13 +926,13 @@ final class TheHandoffStateTests: XCTestCase {
         mock.onEvent?(.message(
             .error(ServerError(kind: .general, message: "connection failed")),
             requestId: nil,
-            backgroundDelta: nil
+            backgroundAccessibilityDelta: nil
         ))
 
         mock.onEvent?(.message(
             .info(TheFenceFixtures.testServerInfo),
             requestId: "request-1",
-            backgroundDelta: nil
+            backgroundAccessibilityDelta: nil
         ))
 
         XCTAssertNil(connectedInfo)

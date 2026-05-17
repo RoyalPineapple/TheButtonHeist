@@ -4,20 +4,20 @@ import TheScore
 
 // MARK: - Non-Screen-Change Delta
 
-/// A subset of `InterfaceDelta` that structurally excludes `.screenChanged`.
+/// A subset of `AccessibilityTrace.Delta` that structurally excludes `.screenChanged`.
 /// Built at the boundary where the caller has already pinned to the last
 /// screen-change step, so any subsequent slice is guaranteed not to contain
 /// another. Carrying that proof in the type lets every downstream consumer
 /// exhaust the cases without a `preconditionFailure` for the impossible
 /// branch.
 internal enum NonScreenChangeDelta {
-    case noChange(InterfaceDelta.NoChange)
-    case elementsChanged(InterfaceDelta.ElementsChanged)
+    case noChange(AccessibilityTrace.NoChange)
+    case elementsChanged(AccessibilityTrace.ElementsChanged)
 
-    /// Narrow an `InterfaceDelta` to `NonScreenChangeDelta`, dropping
+    /// Narrow an `AccessibilityTrace.Delta` to `NonScreenChangeDelta`, dropping
     /// `.screenChanged` (the caller has already proven the slice contains
     /// none).
-    init?(_ delta: InterfaceDelta) {
+    init?(_ delta: AccessibilityTrace.Delta) {
         switch delta {
         case .noChange(let payload): self = .noChange(payload)
         case .elementsChanged(let payload): self = .elementsChanged(payload)
@@ -32,7 +32,7 @@ internal enum NonScreenChangeDelta {
         }
     }
 
-    var asInterfaceDelta: InterfaceDelta {
+    var asAccessibilityDelta: AccessibilityTrace.Delta {
         switch self {
         case .noChange(let payload): return .noChange(payload)
         case .elementsChanged(let payload): return .elementsChanged(payload)
@@ -46,7 +46,7 @@ internal enum NonScreenChangeDelta {
 /// If any step triggered a screen change, the net delta is screenChanged
 /// with the final interface. Otherwise, tracks net added/removed/updated.
 internal enum NetDeltaAccumulator {
-    static func merge(deltas: [InterfaceDelta]) -> InterfaceDelta? {
+    static func merge(deltas: [AccessibilityTrace.Delta]) -> AccessibilityTrace.Delta? {
         let meaningful = deltas.filter { delta in
             switch delta {
             case .noChange(let payload): return !payload.transient.isEmpty
@@ -77,14 +77,14 @@ internal enum NetDeltaAccumulator {
     /// boundary so the "no further screen change" invariant is enforced by
     /// the type system rather than a runtime precondition.
     private static func mergeAfterScreenChange(
-        screenChange: InterfaceDelta.ScreenChanged, postDeltas: [NonScreenChangeDelta]
-    ) -> InterfaceDelta {
+        screenChange: AccessibilityTrace.ScreenChanged, postDeltas: [NonScreenChangeDelta]
+    ) -> AccessibilityTrace.Delta {
         let filteredPostDeltas: [NonScreenChangeDelta] = postDeltas.filter(\.isMeaningful)
         if filteredPostDeltas.isEmpty {
             return .screenChanged(screenChange)
         }
         // Merge the post-screen element changes into one
-        guard let postMerged = mergeElementDeltas(filteredPostDeltas.map(\.asInterfaceDelta)) else {
+        guard let postMerged = mergeElementDeltas(filteredPostDeltas.map(\.asAccessibilityDelta)) else {
             return .screenChanged(screenChange)
         }
         let postEdits: ElementEdits
@@ -102,7 +102,7 @@ internal enum NetDeltaAccumulator {
         }
         let finalInterface = apply(postEdits, to: screenChange.newInterface)
         let mergedTransients = mergeTransients(screenChange.transient, postTransients)
-        return .screenChanged(InterfaceDelta.ScreenChanged(
+        return .screenChanged(AccessibilityTrace.ScreenChanged(
             elementCount: finalInterface.elements.count,
             newInterface: finalInterface,
             postEdits: postEdits.isEmpty ? nil : postEdits,
@@ -242,7 +242,7 @@ internal enum NetDeltaAccumulator {
         return (parts[0], parts[1])
     }
 
-    private static func mergeElementDeltas(_ deltas: [InterfaceDelta]) -> InterfaceDelta? {
+    private static func mergeElementDeltas(_ deltas: [AccessibilityTrace.Delta]) -> AccessibilityTrace.Delta? {
         guard !deltas.isEmpty else { return nil }
 
         var netAdded: [String: HeistElement] = [:]  // heistId → element
@@ -346,9 +346,9 @@ internal enum NetDeltaAccumulator {
 
         let lastCount = deltas.last?.elementCount ?? 0
         if mergedEdits.isEmpty {
-            return .noChange(InterfaceDelta.NoChange(elementCount: lastCount, transient: transient))
+            return .noChange(AccessibilityTrace.NoChange(elementCount: lastCount, transient: transient))
         }
-        return .elementsChanged(InterfaceDelta.ElementsChanged(
+        return .elementsChanged(AccessibilityTrace.ElementsChanged(
             elementCount: lastCount,
             edits: mergedEdits,
             transient: transient

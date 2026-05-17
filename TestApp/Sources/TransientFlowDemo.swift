@@ -7,7 +7,7 @@ import SwiftUI
 ///   screen ~3.5s later.
 ///
 /// A caller using auto-settle should see one response with `settled: true`
-/// and an `interfaceDelta` whose `transient` array carries the loading,
+/// and an `accessibilityDelta` whose `transient` array carries the loading,
 /// success, and confirmation elements — even though the visible state at
 /// response time is identical to the pre-action state.
 struct TransientFlowDemo: View {

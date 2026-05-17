@@ -103,6 +103,42 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertNil(decoded.recorded?.coordinateOnly)
     }
 
+    func testStepWithRecordedAccessibilityTrace() throws {
+        let step = HeistEvidence(
+            command: "activate",
+            target: ElementMatcher(label: "Continue", traits: [.button]),
+            recorded: RecordedMetadata(
+                accessibilityTrace: AccessibilityTrace(interface: Interface(
+                    timestamp: Date(timeIntervalSince1970: 0),
+                    tree: [.element(makeElement(heistId: "continue", label: "Continue"))]
+                )),
+                accessibilityDelta: .screenChanged(.init(
+                    elementCount: 1,
+                    newInterface: Interface(
+                        timestamp: Date(timeIntervalSince1970: 0),
+                        tree: [.element(makeElement(heistId: "continue", label: "Continue"))]
+                    )
+                )),
+                expectation: ExpectationResult(
+                    met: true,
+                    expectation: .screenChanged,
+                    actual: "screenChanged"
+                )
+            )
+        )
+
+        let data = try JSONEncoder().encode(step)
+        let decoded = try JSONDecoder().decode(HeistEvidence.self, from: data)
+
+        let change = try XCTUnwrap(decoded.recorded?.accessibilityTrace?.receipts.first)
+        XCTAssertEqual(change.kind, .capture)
+        XCTAssertEqual(change.interface.elements.first?.label, "Continue")
+        XCTAssertEqual(decoded.recorded?.accessibilityDelta?.kindRawValue, "screenChanged")
+        XCTAssertEqual(decoded.recorded?.accessibilityDelta?.elementCount, 1)
+        XCTAssertEqual(decoded.recorded?.expectation?.met, true)
+        XCTAssertNil(decoded.toRequestDictionary()["_recorded"])
+    }
+
     // MARK: - Heist Step toRequestDictionary
 
     func testToRequestDictionary() {
@@ -369,6 +405,22 @@ final class HeistPlaybackTests: XCTestCase {
         default:
             XCTFail("\(context) has unknown expectation type \(type)", file: file, line: line)
         }
+    }
+
+    private func makeElement(heistId: String, label: String) -> HeistElement {
+        HeistElement(
+            heistId: heistId,
+            description: label,
+            label: label,
+            value: nil,
+            identifier: nil,
+            traits: [.button],
+            frameX: 0,
+            frameY: 0,
+            frameWidth: 100,
+            frameHeight: 44,
+            actions: [.activate]
+        )
     }
 
     private func repositoryRoot(startingAt fileURL: URL) throws -> URL {

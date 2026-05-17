@@ -11,7 +11,7 @@ import TheScore
 /// Usage:
 ///     var builder = ActionResultBuilder(method: .activate, snapshot: afterSnapshot)
 ///     builder.message = "Tapped Sign In"
-///     builder.interfaceDelta = delta
+///     builder.accessibilityDelta = delta
 ///     return builder.success()
 ///
 /// `@MainActor` justification: builder reads from MainActor-bound state during
@@ -23,7 +23,8 @@ import TheScore
     let screenId: String?
     var message: String?
     var value: String?
-    var interfaceDelta: InterfaceDelta?
+    var accessibilityDelta: AccessibilityTrace.Delta?
+    var accessibilityTrace: AccessibilityTrace?
     var settled: Bool?
     var settleTimeMs: Int?
 
@@ -53,7 +54,8 @@ import TheScore
             payload: Self.makePayload(
                 value: value, scrollSearch: scrollSearchResult, rotor: rotorResult, explore: exploreResult
             ),
-            interfaceDelta: interfaceDelta,
+            accessibilityDelta: accessibilityDelta,
+            accessibilityTrace: accessibilityTrace,
             screenName: screenName,
             screenId: screenId,
             settled: settled,
@@ -68,7 +70,8 @@ import TheScore
             message: message,
             errorKind: errorKind,
             payload: value.map(ResultPayload.value),
-            interfaceDelta: interfaceDelta,
+            accessibilityDelta: accessibilityDelta,
+            accessibilityTrace: accessibilityTrace,
             screenName: screenName,
             screenId: screenId,
             settled: settled,

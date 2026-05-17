@@ -326,11 +326,18 @@ private extension TheFence.Command {
 }
 
 private extension FenceResponse {
-    var succeededForHeistRecording: Bool {
-        if case .error = self { return false }
-        if let actionResult, !actionResult.success { return false }
-        if case .action(_, let expectation) = self, expectation?.met == false { return false }
-        return true
+    struct HeistRecordingReceipt {
+        let actionResult: ActionResult
+        let expectation: ExpectationResult?
+
+        var shouldRecord: Bool {
+            actionResult.success && expectation?.met != false
+        }
+    }
+
+    var heistRecordingReceipt: HeistRecordingReceipt? {
+        guard case .action(let result, let expectation) = self else { return nil }
+        return HeistRecordingReceipt(actionResult: result, expectation: expectation)
     }
 }
 
@@ -516,7 +523,7 @@ public final class TheFence {
         }
 
         handoff.onDisconnected = { [weak self] reason in
-            self?.backgroundDeltas.removeAll()
+            self?.backgroundAccessibilityDeltas.removeAll()
             self?.cancelAllPendingRequests(
                 error: FenceError.connectionFailure(ConnectionFailure(disconnectReason: reason))
             )
@@ -528,26 +535,26 @@ public final class TheFence {
     /// Expectation checks peek through this queue and acknowledge only the
     /// delta that actually matches. This prevents a mismatched expectation from
     /// destroying the only evidence of a background change.
-    private var backgroundDeltas: [InterfaceDelta] = []
+    private var backgroundAccessibilityDeltas: [AccessibilityTrace.Delta] = []
     private static let maxBackgroundDeltas = 20
 
-    private func enqueueBackgroundDelta(_ delta: InterfaceDelta) {
-        backgroundDeltas.append(delta)
-        if backgroundDeltas.count > Self.maxBackgroundDeltas {
-            backgroundDeltas.removeFirst(backgroundDeltas.count - Self.maxBackgroundDeltas)
+    private func enqueueBackgroundDelta(_ delta: AccessibilityTrace.Delta) {
+        backgroundAccessibilityDeltas.append(delta)
+        if backgroundAccessibilityDeltas.count > Self.maxBackgroundDeltas {
+            backgroundAccessibilityDeltas.removeFirst(backgroundAccessibilityDeltas.count - Self.maxBackgroundDeltas)
         }
     }
 
     /// Return and clear the oldest queued background delta, if any.
-    public func drainBackgroundDelta() -> InterfaceDelta? {
-        guard !backgroundDeltas.isEmpty else { return nil }
-        return backgroundDeltas.removeFirst()
+    public func drainBackgroundDelta() -> AccessibilityTrace.Delta? {
+        guard !backgroundAccessibilityDeltas.isEmpty else { return nil }
+        return backgroundAccessibilityDeltas.removeFirst()
     }
 
     /// Return and clear all queued background deltas in arrival order.
-    public func drainBackgroundDeltas() -> [InterfaceDelta] {
-        let deltas = backgroundDeltas
-        backgroundDeltas.removeAll()
+    public func drainBackgroundDeltas() -> [AccessibilityTrace.Delta] {
+        let deltas = backgroundAccessibilityDeltas
+        backgroundAccessibilityDeltas.removeAll()
         return deltas
     }
 
@@ -566,7 +573,7 @@ public final class TheFence {
 
     /// Disconnect and cancel all pending requests.
     public func stop() {
-        backgroundDeltas.removeAll()
+        backgroundAccessibilityDeltas.removeAll()
         cancelAllPendingRequests()
         handoff.disconnect()
         handoff.stopDiscovery()
@@ -594,7 +601,7 @@ public final class TheFence {
             return backgroundResponse
         }
 
-        let preDispatchBackgroundCount = backgroundDeltas.count
+        let preDispatchBackgroundCount = backgroundAccessibilityDeltas.count
         let dispatched = try await dispatchCommand(parsed)
         lastLatencyMs = dispatched.durationMs
         logResponse(requestId: parsed.requestId, response: dispatched.response, durationMs: dispatched.durationMs)
@@ -611,7 +618,8 @@ public final class TheFence {
         recordHeistEvidence(
             command: parsed.command,
             request: parsed.originalRequest,
-            response: validatedResponse,
+            dispatchedResponse: dispatched.response,
+            validatedResponse: validatedResponse,
             cacheUpdate: postDispatch.cacheUpdate
         )
         return validatedResponse
@@ -745,16 +753,16 @@ public final class TheFence {
         startingAt startIndex: Int = 0
     ) -> FenceResponse? {
         guard let expectation else { return nil }
-        let boundedStartIndex = min(max(startIndex, 0), backgroundDeltas.count)
+        let boundedStartIndex = min(max(startIndex, 0), backgroundAccessibilityDeltas.count)
 
         var matched: (index: Int, result: ActionResult, validation: ExpectationResult)?
-        for index in backgroundDeltas.indices.dropFirst(boundedStartIndex) {
-            let backgroundDelta = backgroundDeltas[index]
+        for index in backgroundAccessibilityDeltas.indices.dropFirst(boundedStartIndex) {
+            let backgroundAccessibilityDelta = backgroundAccessibilityDeltas[index]
             let syntheticResult = ActionResult(
                 success: true,
                 method: .waitForChange,
                 message: "expectation already met by background change",
-                interfaceDelta: backgroundDelta
+                accessibilityDelta: backgroundAccessibilityDelta
             )
             let validation = expectation.validate(against: syntheticResult)
             if validation.met {
@@ -764,7 +772,7 @@ public final class TheFence {
         }
 
         guard let matched else { return nil }
-        backgroundDeltas.remove(at: matched.index)
+        backgroundAccessibilityDeltas.remove(at: matched.index)
         let response = FenceResponse.action(result: matched.result, expectation: matched.validation)
         logResponse(requestId: requestId, response: response, durationMs: 0)
         return response
@@ -825,7 +833,7 @@ public final class TheFence {
             )
         }
         guard let actionResult = response.actionResult,
-              case .screenChanged(let payload)? = actionResult.interfaceDelta else {
+              case .screenChanged(let payload)? = actionResult.accessibilityDelta else {
             return ResponseCacheUpdate(
                 evidenceCache: lastInterfaceCache.isEmpty ? nil : lastInterfaceCache,
                 postRecordReplacement: nil
@@ -839,7 +847,7 @@ public final class TheFence {
         newInterface: Interface,
         preActionCache: [String: HeistElement]
     ) -> ResponseCacheUpdate {
-        // Only reachable when interfaceDelta is .screenChanged (caller's guard).
+        // Only reachable when accessibilityDelta is .screenChanged (caller's guard).
         // Below assumes newInterface is the screenChange payload.
         lastInterfaceCache.removeAll()
         for element in newInterface.elements {
@@ -861,14 +869,17 @@ public final class TheFence {
     private func recordHeistEvidence(
         command: Command,
         request: [String: Any],
-        response: FenceResponse,
+        dispatchedResponse _: FenceResponse,
+        validatedResponse: FenceResponse,
         cacheUpdate: ResponseCacheUpdate
     ) {
         guard case .idle = playbackPhase else { return }
+        guard let finalReceipt = validatedResponse.heistRecordingReceipt, finalReceipt.shouldRecord else { return }
         bookKeeper.recordHeistEvidence(
             command: command,
             args: request,
-            succeeded: response.succeededForHeistRecording,
+            actionResult: finalReceipt.actionResult,
+            expectation: finalReceipt.expectation,
             interfaceCache: cacheUpdate.evidenceCache ?? [:]
         )
     }
@@ -903,7 +914,7 @@ public final class TheFence {
                         expectation: ExpectationResult(
                             met: actionResult.success,
                             expectation: expectation,
-                            actual: actionResult.message ?? actionResult.interfaceDelta?.kindRawValue
+                            actual: actionResult.message ?? actionResult.accessibilityDelta?.kindRawValue
                         )
                     )
                 }
@@ -953,7 +964,7 @@ public final class TheFence {
                 ExpectationResult(
                     met: waitResult.success,
                     expectation: expectation,
-                    actual: waitResult.message ?? waitResult.interfaceDelta?.kindRawValue
+                    actual: waitResult.message ?? waitResult.accessibilityDelta?.kindRawValue
                 )
             } else {
                 expectation.validate(against: waitResult)

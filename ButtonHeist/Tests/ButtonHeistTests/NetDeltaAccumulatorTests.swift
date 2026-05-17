@@ -6,7 +6,7 @@ final class NetDeltaAccumulatorTests: XCTestCase {
 
     func testAddUpdateRemoveNetsToNoDelta() {
         let element = makeElement(heistId: "item", label: "Item", value: nil)
-        let deltas: [InterfaceDelta] = [
+        let deltas: [AccessibilityTrace.Delta] = [
             .elementsChanged(.init(elementCount: 1, edits: ElementEdits(added: [element]))),
             .elementsChanged(.init(elementCount: 1, edits: ElementEdits(updated: [
                 ElementUpdate(
@@ -22,7 +22,7 @@ final class NetDeltaAccumulatorTests: XCTestCase {
 
     func testUpdatesToNetAddedElementFoldIntoAddedElement() throws {
         let element = makeElement(heistId: "item", label: "Old", value: nil)
-        let deltas: [InterfaceDelta] = [
+        let deltas: [AccessibilityTrace.Delta] = [
             .elementsChanged(.init(elementCount: 1, edits: ElementEdits(added: [element]))),
             .elementsChanged(.init(elementCount: 1, edits: ElementEdits(updated: [
                 ElementUpdate(heistId: "item", changes: [
@@ -44,7 +44,7 @@ final class NetDeltaAccumulatorTests: XCTestCase {
 
     func testPartiallyAppliedUpdatesToNetAddedElementOnlyRecordUnappliedChanges() throws {
         let element = makeElement(heistId: "item", label: "Old", value: nil, actions: [.activate])
-        let deltas: [InterfaceDelta] = [
+        let deltas: [AccessibilityTrace.Delta] = [
             .elementsChanged(.init(elementCount: 1, edits: ElementEdits(added: [element]))),
             .elementsChanged(.init(elementCount: 1, edits: ElementEdits(updated: [
                 ElementUpdate(heistId: "item", changes: [
@@ -65,7 +65,7 @@ final class NetDeltaAccumulatorTests: XCTestCase {
 
     func testTransientNoChangeDeltaIsPreserved() throws {
         let spinner = makeElement(heistId: "spinner", label: "Loading", value: nil)
-        let delta: InterfaceDelta = .noChange(.init(elementCount: 3, transient: [spinner]))
+        let delta: AccessibilityTrace.Delta = .noChange(.init(elementCount: 3, transient: [spinner]))
 
         let merged = try XCTUnwrap(NetDeltaAccumulator.merge(deltas: [delta]))
 
@@ -79,7 +79,7 @@ final class NetDeltaAccumulatorTests: XCTestCase {
     func testTransientsSurviveElementMerge() throws {
         let spinner = makeElement(heistId: "spinner", label: "Loading", value: nil)
         let done = makeElement(heistId: "done", label: "Done", value: nil)
-        let deltas: [InterfaceDelta] = [
+        let deltas: [AccessibilityTrace.Delta] = [
             .noChange(.init(elementCount: 1, transient: [spinner])),
             .elementsChanged(.init(elementCount: 2, edits: ElementEdits(added: [done]))),
         ]

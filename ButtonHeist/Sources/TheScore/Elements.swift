@@ -166,7 +166,7 @@ extension HeistTrait: Codable {
 /// with `HeistElement` payloads at the leaves. There is no parallel flat
 /// element array on the wire; `elements` is a depth-first flatten for source
 /// compatibility with the few callers that want a flat list.
-public struct Interface: Codable, Sendable {
+public struct Interface: Codable, Equatable, Sendable {
     public let timestamp: Date
     public let tree: [InterfaceNode]
 

@@ -190,7 +190,7 @@ extension FenceResponse {
     private func batchJsonDict(
         results: [[String: Any]], completedSteps: Int, failedIndex: Int?,
         totalTimingMs: Int, checked: Int, met: Int,
-        stepSummaries: [BatchStepSummary], netDelta: InterfaceDelta?
+        stepSummaries: [BatchStepSummary], netDelta: AccessibilityTrace.Delta?
     ) -> [String: Any] {
         var dict: [String: Any] = [
             "status": failedIndex == nil ? "ok" : "partial",
@@ -273,7 +273,7 @@ extension FenceResponse {
             payload["rotor"] = rotor
         }
         if result.animating == true { payload["animating"] = true }
-        if let delta = result.interfaceDelta {
+        if let delta = result.accessibilityDelta {
             payload["delta"] = deltaDictionary(delta)
         }
 
@@ -546,7 +546,7 @@ extension FenceResponse {
 
     /// Delta dictionaries are always summary-level — geometry changes are filtered out.
     /// Callers who need full geometry should use `get_interface --detail full`.
-    private func deltaDictionary(_ delta: InterfaceDelta) -> [String: Any] {
+    private func deltaDictionary(_ delta: AccessibilityTrace.Delta) -> [String: Any] {
         var payload: [String: Any] = [
             "kind": delta.kindRawValue,
             "elementCount": delta.elementCount,

@@ -1396,7 +1396,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 success: true,
                 method: .waitForChange,
                 message: "expectation already met by current state (0.0s)",
-                interfaceDelta: .noChange(.init(elementCount: 1))
+                accessibilityDelta: .noChange(.init(elementCount: 1))
             ))
         }
 
@@ -1424,7 +1424,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 method: .waitForChange,
                 message: "timed out after 0.2s — expectation not met",
                 errorKind: .timeout,
-                interfaceDelta: .noChange(.init(elementCount: 1))
+                accessibilityDelta: .noChange(.init(elementCount: 1))
             ))
         }
 
@@ -1802,9 +1802,9 @@ final class TheFenceHandlerTests: XCTestCase {
     func testBatchCountsOnlyExplicitExpectations() async throws {
         let (fence, mockConn) = makeConnectedFence()
         // Mock returns a successful action result with an elementsChanged delta (updates only)
-        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
+        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
         mockConn.autoResponse = { _ in
-            .actionResult(ActionResult(success: true, method: .activate, interfaceDelta: delta))
+            .actionResult(ActionResult(success: true, method: .activate, accessibilityDelta: delta))
         }
 
         // Step 1 has expect → should count. Step 2 has no expect → should NOT count.
@@ -1828,9 +1828,10 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testBatchCountsMetExpectations() async throws {
         let (fence, mockConn) = makeConnectedFence()
-        let delta: InterfaceDelta = .screenChanged(.init(elementCount: 10, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])))
+        let interface = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+        let delta: AccessibilityTrace.Delta = .screenChanged(.init(elementCount: 10, newInterface: interface))
         mockConn.autoResponse = { _ in
-            .actionResult(ActionResult(success: true, method: .activate, interfaceDelta: delta))
+            .actionResult(ActionResult(success: true, method: .activate, accessibilityDelta: delta))
         }
 
         let response = try await fence.execute(request: [
@@ -1878,7 +1879,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testBatchStopsOnFailedActionResult() async throws {
         let (fence, mockConn) = makeConnectedFence()
-        let delta: InterfaceDelta = .screenChanged(.init(
+        let delta: AccessibilityTrace.Delta = .screenChanged(.init(
             elementCount: 2,
             newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
         ))
@@ -1888,7 +1889,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 method: .activate,
                 message: "Action skipped because target became stale after a screen change; retry against the current interface.",
                 errorKind: .actionFailed,
-                interfaceDelta: delta
+                accessibilityDelta: delta
             ))
         }
 
@@ -1954,9 +1955,9 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testBatchExpectationFailureSummarizesSkippedSteps() async throws {
         let (fence, mockConn) = makeConnectedFence()
-        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
+        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
         mockConn.autoResponse = { _ in
-            .actionResult(ActionResult(success: true, method: .activate, interfaceDelta: delta))
+            .actionResult(ActionResult(success: true, method: .activate, accessibilityDelta: delta))
         }
 
         let response = try await fence.execute(request: [
@@ -2522,6 +2523,43 @@ final class TheFenceHandlerTests: XCTestCase {
             return false
         }
         XCTAssertEqual(activateMessages.count, 3)
+    }
+
+    @ButtonHeistActor
+    func testPlayHeistIgnoresRecordedAccessibilityTrace() async throws {
+        let heist = HeistPlayback(app: "com.test.mock", steps: [
+            HeistEvidence(
+                command: "activate",
+                target: ElementMatcher(identifier: "btn1"),
+                recorded: RecordedMetadata(
+                    accessibilityTrace: AccessibilityTrace(interface: Interface(
+                        timestamp: Date(timeIntervalSince1970: 0),
+                        tree: []
+                    ))
+                )
+            ),
+        ])
+        let heistURL = try writeTemporaryHeist(heist)
+        defer { try? FileManager.default.removeItem(at: heistURL) }
+
+        let (fence, mockConn) = makeConnectedFence()
+        let response = try await fence.execute(request: [
+            "command": "play_heist", "input": heistURL.path,
+        ])
+
+        guard case .heistPlayback(let completedSteps, let failedIndex, _, let failure, let report) = response else {
+            return XCTFail("Expected heistPlayback response, got \(response)")
+        }
+        XCTAssertEqual(completedSteps, 1)
+        XCTAssertNil(failedIndex)
+        XCTAssertNil(failure)
+        XCTAssertTrue(report?.allPassed ?? false)
+
+        let activateMessages = mockConn.sent.filter { message, _ in
+            if case .activate = message { return true }
+            return false
+        }
+        XCTAssertEqual(activateMessages.count, 1)
     }
 
     @ButtonHeistActor

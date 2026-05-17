@@ -146,7 +146,7 @@ After every command, Button Heist diffs the accessibility hierarchy and returns 
 {
   "success": true,
   "method": "activate",
-  "interfaceDelta": {
+  "accessibilityDelta": {
     "kind": "elementsChanged",
     "elementCount": 14,
     "removed": ["button_login", "textfield_password", "textfield_email"],

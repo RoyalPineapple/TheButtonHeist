@@ -66,7 +66,24 @@ final class BookKeeperHeistTests: XCTestCase {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
-        bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Go", "traits": ["button"]], interfaceCache: [:])
+        bookKeeper.recordHeistEvidence(
+            command: .activate,
+            args: ["command": "activate", "label": "Go", "traits": ["button"]],
+            actionResult: ActionResult(
+                success: true,
+                method: .activate,
+                accessibilityDelta: .noChange(.init(elementCount: 1)),
+                accessibilityTrace: AccessibilityTrace(interface: Interface(
+                    timestamp: Date(timeIntervalSince1970: 0),
+                    tree: [.element(makeElement(heistId: "go", label: "Go", traits: [.button]))]
+                )),
+                screenName: "Home",
+                screenId: "home",
+                settled: true,
+                settleTimeMs: 12
+            ),
+            interfaceCache: [:]
+        )
         let script = try bookKeeper.stopHeistRecording()
 
         XCTAssertEqual(script.version, HeistPlayback.currentVersion)
@@ -74,7 +91,122 @@ final class BookKeeperHeistTests: XCTestCase {
         XCTAssertEqual(script.steps.count, 1)
         XCTAssertEqual(script.steps[0].command, "activate")
         XCTAssertEqual(script.steps[0].target?.label, "Go")
+        let change = try XCTUnwrap(script.steps[0].recorded?.accessibilityTrace?.receipts.first)
+        XCTAssertEqual(change.kind, .capture)
+        XCTAssertEqual(change.interface.elements.first?.label, "Go")
+        XCTAssertEqual(script.steps[0].recorded?.accessibilityDelta?.kindRawValue, "noChange")
+        XCTAssertEqual(script.steps[0].recorded?.accessibilityDelta?.elementCount, 1)
+        XCTAssertNil(script.steps[0].toRequestDictionary()["_recorded"])
         XCTAssertFalse(bookKeeper.isRecordingHeist)
+    }
+
+    @ButtonHeistActor
+    func testRecordHeistEvidenceDerivesMatcherFromTraceCapture() async throws {
+        let bookKeeper = makeBookKeeper()
+        try bookKeeper.beginSession(identifier: "test")
+        try bookKeeper.startHeistRecording(app: "com.example.app")
+
+        let fallbackCache = [
+            "save": makeElement(heistId: "save", label: "Save", traits: [.button]),
+            "duplicate": makeElement(heistId: "duplicate", label: "Save", traits: [.button]),
+        ]
+        let preActionInterface = Interface(
+            timestamp: Date(timeIntervalSince1970: 0),
+            tree: [
+                .element(makeElement(
+                    heistId: "save",
+                    label: "Save",
+                    identifier: "primary.save",
+                    traits: [.button]
+                )),
+                .element(makeElement(heistId: "cancel", label: "Cancel", traits: [.button])),
+            ]
+        )
+        let postActionInterface = Interface(
+            timestamp: Date(timeIntervalSince1970: 1),
+            tree: [
+                .element(makeElement(
+                    heistId: "save",
+                    label: "Save",
+                    identifier: "post-action.save",
+                    traits: [.button]
+                )),
+            ]
+        )
+        let preActionCapture = AccessibilityTrace.Capture(sequence: 1, interface: preActionInterface)
+
+        bookKeeper.recordHeistEvidence(
+            command: .activate,
+            args: ["command": "activate", "heistId": "save"],
+            actionResult: ActionResult(
+                success: true,
+                method: .activate,
+                accessibilityTrace: AccessibilityTrace(captures: [
+                    preActionCapture,
+                    AccessibilityTrace.Capture(
+                        sequence: 2,
+                        interface: postActionInterface,
+                        parentHash: preActionCapture.hash
+                    ),
+                ])
+            ),
+            interfaceCache: fallbackCache
+        )
+
+        let script = try bookKeeper.stopHeistRecording()
+        XCTAssertEqual(script.steps[0].target?.identifier, "primary.save")
+        XCTAssertNil(script.steps[0].ordinal)
+        XCTAssertEqual(script.steps[0].recorded?.heistId, "save")
+    }
+
+    @ButtonHeistActor
+    func testRecordHeistEvidenceDoesNotDeriveMatcherFromPostActionOnlyTrace() async throws {
+        let bookKeeper = makeBookKeeper()
+        try bookKeeper.beginSession(identifier: "test")
+        try bookKeeper.startHeistRecording(app: "com.example.app")
+
+        let fallbackCache = [
+            "save": makeElement(heistId: "save", label: "Save", identifier: "fallback.save", traits: [.button]),
+            "duplicate": makeElement(heistId: "duplicate", label: "Save", traits: [.button]),
+        ]
+        let preActionInterface = Interface(
+            timestamp: Date(timeIntervalSince1970: 0),
+            tree: [.element(makeElement(heistId: "cancel", label: "Cancel", traits: [.button]))]
+        )
+        let postActionInterface = Interface(
+            timestamp: Date(timeIntervalSince1970: 1),
+            tree: [
+                .element(makeElement(
+                    heistId: "save",
+                    label: "Save",
+                    identifier: "post-action.save",
+                    traits: [.button]
+                )),
+            ]
+        )
+        let preActionCapture = AccessibilityTrace.Capture(sequence: 1, interface: preActionInterface)
+
+        bookKeeper.recordHeistEvidence(
+            command: .activate,
+            args: ["command": "activate", "heistId": "save"],
+            actionResult: ActionResult(
+                success: true,
+                method: .activate,
+                accessibilityTrace: AccessibilityTrace(captures: [
+                    preActionCapture,
+                    AccessibilityTrace.Capture(
+                        sequence: 2,
+                        interface: postActionInterface,
+                        parentHash: preActionCapture.hash
+                    ),
+                ])
+            ),
+            interfaceCache: fallbackCache
+        )
+
+        let script = try bookKeeper.stopHeistRecording()
+        XCTAssertEqual(script.steps[0].target?.identifier, "fallback.save")
+        XCTAssertNil(script.steps[0].ordinal)
     }
 
     @ButtonHeistActor
@@ -178,7 +310,7 @@ final class BookKeeperHeistTests: XCTestCase {
         let script = try bookKeeper.stopHeistRecording()
 
         XCTAssertEqual(script.steps[0].target?.label, "Submit")
-        XCTAssertEqual(script.steps[0].target?.traits, [.button])
+        XCTAssertNil(script.steps[0].target?.traits)
         XCTAssertEqual(script.steps[0].recorded?.heistId, "button_submit")
     }
 
@@ -235,7 +367,12 @@ final class BookKeeperHeistTests: XCTestCase {
         bookKeeper.recordHeistEvidence(
             command: .activate,
             args: ["command": "activate", "label": "Missing"],
-            succeeded: false,
+            actionResult: ActionResult(
+                success: false,
+                method: .activate,
+                message: "missing",
+                errorKind: .elementNotFound
+            ),
             interfaceCache: [:]
         )
         bookKeeper.recordHeistEvidence(
@@ -258,7 +395,12 @@ final class BookKeeperHeistTests: XCTestCase {
         bookKeeper.recordHeistEvidence(
             command: .activate,
             args: ["command": "activate", "label": "Missing"],
-            succeeded: false,
+            actionResult: ActionResult(
+                success: false,
+                method: .activate,
+                message: "missing",
+                errorKind: .elementNotFound
+            ),
             interfaceCache: [:]
         )
 
@@ -306,10 +448,24 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testMinimalMatcherFallsToLabelTraits() async {
+    func testMinimalMatcherUsesLabelWhenUnique() async {
         let bookKeeper = makeBookKeeper()
         let target = makeElement(heistId: "el", label: "Save", traits: [.button])
         let other = makeElement(heistId: "other", label: "Cancel", traits: [.button])
+
+        let (matcher, ordinal) = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, other])
+
+        XCTAssertEqual(matcher.label, "Save")
+        XCTAssertNil(matcher.traits)
+        XCTAssertNil(matcher.identifier)
+        XCTAssertNil(ordinal)
+    }
+
+    @ButtonHeistActor
+    func testMinimalMatcherAddsTraitsToDisambiguateLabel() async {
+        let bookKeeper = makeBookKeeper()
+        let target = makeElement(heistId: "el", label: "Save", traits: [.button])
+        let other = makeElement(heistId: "other", label: "Save", traits: [.staticText])
 
         let (matcher, ordinal) = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, other])
 
@@ -344,7 +500,7 @@ final class BookKeeperHeistTests: XCTestCase {
 
         XCTAssertNil(matcher.identifier, "Runtime UUID identifiers should be ignored for playback stability")
         XCTAssertEqual(matcher.label, "Proceed")
-        XCTAssertEqual(matcher.traits, [.button])
+        XCTAssertNil(matcher.traits)
         XCTAssertNil(ordinal)
     }
 
@@ -366,7 +522,7 @@ final class BookKeeperHeistTests: XCTestCase {
     func testMinimalMatcherFiltersStateTraits() async {
         let bookKeeper = makeBookKeeper()
         let target = makeElement(heistId: "el1", label: "Toggle", traits: [.button, .selected])
-        let other = makeElement(heistId: "el2", label: "Cancel", traits: [.button])
+        let other = makeElement(heistId: "el2", label: "Toggle", traits: [.staticText])
 
         let (matcher, ordinal) = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, other])
 

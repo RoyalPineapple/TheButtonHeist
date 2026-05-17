@@ -13,25 +13,37 @@ public struct ResponseEnvelope: Codable, Sendable {
     public let requestId: String?
     public let message: ServerMessage
 
-    /// Changes that occurred between the previous response and this one — while
-    /// the agent was thinking. nil means nothing changed in the background.
+    /// Derived compact view of the captures observed between the previous
+    /// response and this one. nil means nothing changed in the background.
     /// Lives on the envelope (not the message) because it's a session-level
     /// concern: any response type can carry it.
-    public let backgroundDelta: InterfaceDelta?
+    public let backgroundAccessibilityDelta: AccessibilityTrace.Delta?
 
-    public init(requestId: String? = nil, message: ServerMessage, backgroundDelta: InterfaceDelta? = nil) {
+    /// Source-of-truth accessibility captures observed while this response was
+    /// being prepared. Deltas and summaries are derived from this trace.
+    public let accessibilityTrace: AccessibilityTrace?
+
+    public init(
+        requestId: String? = nil,
+        message: ServerMessage,
+        backgroundAccessibilityDelta: AccessibilityTrace.Delta? = nil,
+        accessibilityTrace: AccessibilityTrace? = nil
+    ) {
         self.init(buttonHeistVersion: TheScore.buttonHeistVersion, requestId: requestId,
-                  message: message, backgroundDelta: backgroundDelta)
+                  message: message, backgroundAccessibilityDelta: backgroundAccessibilityDelta, accessibilityTrace: accessibilityTrace)
     }
 
     public init(
         buttonHeistVersion: String, requestId: String? = nil,
-        message: ServerMessage, backgroundDelta: InterfaceDelta? = nil
+        message: ServerMessage,
+        backgroundAccessibilityDelta: AccessibilityTrace.Delta? = nil,
+        accessibilityTrace: AccessibilityTrace? = nil
     ) {
         self.buttonHeistVersion = buttonHeistVersion
         self.requestId = requestId
         self.message = message
-        self.backgroundDelta = backgroundDelta
+        self.backgroundAccessibilityDelta = backgroundAccessibilityDelta
+        self.accessibilityTrace = accessibilityTrace
     }
 
     /// Encode this envelope to JSON data. Returns nil on encode failure.
@@ -275,8 +287,10 @@ public struct ActionResult: Codable, Sendable {
     public var errorKind: ErrorKind?
     /// Command-specific payload. At most one variant per result.
     public var payload: ResultPayload?
-    /// Compact delta describing what changed in the hierarchy after the action
-    public var interfaceDelta: InterfaceDelta?
+    /// Derived compact view describing what changed in the hierarchy after the action
+    public var accessibilityDelta: AccessibilityTrace.Delta?
+    /// Source-of-truth accessibility capture receipt for this action.
+    public var accessibilityTrace: AccessibilityTrace?
     /// Whether the UI was still animating when this result was produced.
     /// nil means idle (no animations detected).
     public var animating: Bool?
@@ -289,7 +303,7 @@ public struct ActionResult: Codable, Sendable {
     /// preempted the settle loop and the new screen has been observed via
     /// the existing repopulation pipeline. False *only* when the hard
     /// settle timeout elapsed while the tree was still changing — the
-    /// snapshot in `interfaceDelta` may not be a final state. nil for
+    /// snapshot in `accessibilityDelta` may not be a final state. nil for
     /// older clients / pre-auto-settle responses.
     public var settled: Bool?
     /// Wall-clock milliseconds from action start to settle decision
@@ -302,7 +316,8 @@ public struct ActionResult: Codable, Sendable {
         message: String? = nil,
         errorKind: ErrorKind? = nil,
         payload: ResultPayload? = nil,
-        interfaceDelta: InterfaceDelta? = nil,
+        accessibilityDelta: AccessibilityTrace.Delta? = nil,
+        accessibilityTrace: AccessibilityTrace? = nil,
         animating: Bool? = nil,
         screenName: String? = nil,
         screenId: String? = nil,
@@ -314,7 +329,8 @@ public struct ActionResult: Codable, Sendable {
         self.message = message
         self.errorKind = errorKind
         self.payload = payload
-        self.interfaceDelta = interfaceDelta
+        self.accessibilityDelta = accessibilityDelta
+        self.accessibilityTrace = accessibilityTrace
         self.animating = animating
         self.screenName = screenName
         self.screenId = screenId
@@ -600,7 +616,7 @@ public struct RecordingPayload: Codable, Sendable {
 }
 
 /// A single recorded interaction event captured during a TheStakeout recording.
-/// Uses `InterfaceDelta` instead of full before/after `Interface` snapshots to minimize payload size.
+/// Uses `AccessibilityTrace.Delta` instead of full before/after `Interface` snapshots to minimize payload size.
 public struct InteractionEvent: Codable, Sendable {
     /// Time offset from recording start, in seconds.
     public let timestamp: Double

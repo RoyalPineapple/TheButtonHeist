@@ -89,6 +89,7 @@ final class TheBrains {
         let hierarchy: [AccessibilityHierarchy]
         let tree: [InterfaceNode]
         let treeHash: Int
+        let capture: AccessibilityTrace.Capture
         let tripwireSignal: TheTripwire.TripwireSignal
         let screenSnapshot: ScreenClassifier.Snapshot
         let screenId: String?
@@ -98,13 +99,16 @@ final class TheBrains {
     /// Caller must have called `refresh()` already this frame.
     func captureBeforeState() -> BeforeState {
         let (tree, treeHash) = stash.wireTreeWithHash()
+        let tripwireSignal = tripwire.tripwireSignal()
+        let capture = makeTraceCapture(tree: tree, sequence: 0, tripwireSignal: tripwireSignal)
         return BeforeState(
             snapshot: stash.selectElements(),
             elements: stash.currentHierarchy.sortedElements,
             hierarchy: stash.currentHierarchy,
             tree: tree,
             treeHash: treeHash,
-            tripwireSignal: tripwire.tripwireSignal(),
+            capture: capture,
+            tripwireSignal: tripwireSignal,
             screenSnapshot: ScreenClassifier.snapshot(of: stash.currentScreen),
             screenId: stash.lastScreenId
         )
@@ -117,13 +121,16 @@ final class TheBrains {
     func captureSemanticState() -> BeforeState {
         let snapshot = stash.selectElements()
         let tree = TheStash.WireConversion.toWire(snapshot).map(InterfaceNode.element)
+        let tripwireSignal = tripwire.tripwireSignal()
+        let capture = makeTraceCapture(tree: tree, sequence: 0, tripwireSignal: tripwireSignal)
         return BeforeState(
             snapshot: snapshot,
             elements: snapshot.map(\.element),
             hierarchy: stash.currentHierarchy,
             tree: tree,
             treeHash: tree.hashValue,
-            tripwireSignal: tripwire.tripwireSignal(),
+            capture: capture,
+            tripwireSignal: tripwireSignal,
             screenSnapshot: ScreenClassifier.snapshot(of: stash.currentScreen),
             screenId: stash.lastScreenId
         )
@@ -189,12 +196,12 @@ final class TheBrains {
 
         _ = await navigation.exploreAndPrune()
         let afterSnapshot = stash.selectElements()
+        let afterTree = stash.wireTree()
+        let accessibilityTrace = makeAccessibilityTrace(afterTree: afterTree, parentCapture: before.capture)
 
-        let baseDelta = TheStash.InterfaceDiff.computeDelta(
-            before: before.snapshot, after: afterSnapshot,
-            beforeTree: before.tree,
-            beforeTreeHash: before.treeHash,
-            afterTree: stash.wireTree(),
+        let baseDelta = deriveDelta(
+            from: accessibilityTrace,
+            before: before,
             isScreenChange: isScreenChange
         )
         let transientElements = Self.shouldSuppressTransient(
@@ -216,7 +223,8 @@ final class TheBrains {
         var builder = ActionResultBuilder(method: method, snapshot: afterSnapshot)
         builder.message = message
         builder.value = value
-        builder.interfaceDelta = delta
+        builder.accessibilityDelta = delta
+        builder.accessibilityTrace = accessibilityTrace
         builder.settled = didSettle
         builder.settleTimeMs = settleMs
 
@@ -286,24 +294,24 @@ final class TheBrains {
 
     /// Return a copy of `delta` with `transient` populated.
     private func enriching(
-        _ delta: InterfaceDelta,
+        _ delta: AccessibilityTrace.Delta,
         transient: [AccessibilityElement]
-    ) -> InterfaceDelta {
+    ) -> AccessibilityTrace.Delta {
         let transientWire = transient.map { TheStash.WireConversion.convert($0) }
         switch delta {
         case .noChange(let payload):
-            return .noChange(InterfaceDelta.NoChange(
+            return .noChange(AccessibilityTrace.NoChange(
                 elementCount: payload.elementCount,
                 transient: transientWire
             ))
         case .elementsChanged(let payload):
-            return .elementsChanged(InterfaceDelta.ElementsChanged(
+            return .elementsChanged(AccessibilityTrace.ElementsChanged(
                 elementCount: payload.elementCount,
                 edits: payload.edits,
                 transient: transientWire
             ))
         case .screenChanged(let payload):
-            return .screenChanged(InterfaceDelta.ScreenChanged(
+            return .screenChanged(AccessibilityTrace.ScreenChanged(
                 elementCount: payload.elementCount,
                 newInterface: payload.newInterface,
                 postEdits: payload.postEdits,
@@ -336,6 +344,7 @@ final class TheBrains {
     struct SentState {
         let treeHash: Int
         let viewportHash: Int
+        let captureHash: String
         let beforeState: BeforeState
         let screenId: String?
     }
@@ -363,6 +372,7 @@ final class TheBrains {
         broadcastHistory = .sent(SentState(
             treeHash: state.treeHash,
             viewportHash: stash.wireTreeHash(),
+            captureHash: state.capture.hash,
             beforeState: state,
             screenId: state.screenId
         ))
@@ -374,6 +384,7 @@ final class TheBrains {
         broadcastHistory = .sent(SentState(
             treeHash: state.treeHash,
             viewportHash: viewportHash,
+            captureHash: state.capture.hash,
             beforeState: state,
             screenId: state.screenId
         ))
@@ -400,21 +411,40 @@ final class TheBrains {
 
     // MARK: - Background Delta
 
+    struct BackgroundCapture {
+        let delta: AccessibilityTrace.Delta
+        let accessibilityTrace: AccessibilityTrace
+    }
+
     /// Check if the accessibility tree changed since the last response.
-    func computeBackgroundDelta() async -> InterfaceDelta? {
+    func computeBackgroundDelta() async -> AccessibilityTrace.Delta? {
+        await computeBackgroundCapture()?.delta
+    }
+
+    /// Check if the accessibility tree changed since the last response and
+    /// return both the internal delta and the public accessibility trace.
+    func computeBackgroundCapture() async -> BackgroundCapture? {
         guard case .sent(let sent) = broadcastHistory,
               sent.treeHash != 0,
               sent.viewportHash != 0 else { return nil }
         guard refresh() != nil else { return nil }
-        guard stash.wireTreeHash() != sent.viewportHash else { return nil }
+        let currentViewportHash = stash.wireTreeHash()
+        let currentContext = makeCaptureContext()
+        guard currentViewportHash != sent.viewportHash
+            || currentContext != sent.beforeState.capture.context
+        else { return nil }
 
         _ = await navigation.exploreAndPrune()
         let current = captureSemanticState()
-        guard current.treeHash != sent.treeHash else { return nil }
+        guard current.capture.hash != sent.captureHash else { return nil }
 
-        return computeDelta(
-            before: sent.beforeState,
-            after: current
+        let accessibilityTrace = makeAccessibilityTrace(
+            afterCapture: current.capture,
+            parentCapture: sent.beforeState.capture
+        )
+        return BackgroundCapture(
+            delta: deriveDelta(from: accessibilityTrace, before: sent.beforeState, after: current),
+            accessibilityTrace: accessibilityTrace
         )
     }
 
@@ -477,7 +507,7 @@ final class TheBrains {
         }
 
         let baseline: BeforeState = {
-            if case .sent(let sent) = broadcastHistory, sent.treeHash != 0 {
+            if case .sent(let sent) = broadcastHistory, !sent.captureHash.isEmpty {
                 return sent.beforeState
             }
             return initial
@@ -492,19 +522,21 @@ final class TheBrains {
            validateCurrentState(expectation, snapshot: initial.snapshot).met {
             var builder = ActionResultBuilder(method: .waitForChange, snapshot: initial.snapshot)
             builder.message = "expectation already met by current state (0.0s)"
-            builder.interfaceDelta = .noChange(.init(elementCount: initial.snapshot.count))
+            builder.accessibilityDelta = .noChange(.init(elementCount: initial.snapshot.count))
             return builder.success()
         }
 
-        // Fast path: tree already changed since the last response
-        let lastHash: Int = {
-            if case .sent(let sent) = broadcastHistory { return sent.treeHash }
-            return 0
+        // Fast path: capture already changed since the last response
+        let lastCaptureHash: String? = {
+            if case .sent(let sent) = broadcastHistory { return sent.captureHash }
+            return nil
         }()
-        if lastHash != 0, initial.treeHash != lastHash {
-            let delta = computeDelta(before: baseline, after: initial)
+        if let lastCaptureHash, initial.capture.hash != lastCaptureHash {
+            let accessibilityTrace = makeAccessibilityTrace(afterCapture: initial.capture, parentCapture: baseline.capture)
+            let delta = deriveDelta(from: accessibilityTrace, before: baseline, after: initial)
             if let result = evaluateWaitForChange(
-                delta: delta, afterSnapshot: initial.snapshot, expectation: predicate.expectation,
+                delta: delta, accessibilityTrace: accessibilityTrace,
+                afterSnapshot: initial.snapshot, expectation: predicate.expectation,
                 preWaitElements: preWaitElements,
                 start: start, round: 0, message: "already changed (0.0s)"
             ) {
@@ -513,7 +545,7 @@ final class TheBrains {
         }
 
         // Slow path: poll until a change lands or we time out
-        var beforeWireHash = initial.treeHash
+        var beforeCaptureHash = initial.capture.hash
         var round = 0
 
         while CFAbsoluteTimeGetCurrent() < predicate.deadline {
@@ -524,20 +556,22 @@ final class TheBrains {
             guard let current = await refreshSemanticSnapshot() else { continue }
             round += 1
 
-            if current.treeHash == beforeWireHash { continue }
+            if current.capture.hash == beforeCaptureHash { continue }
 
-            let delta = computeDelta(before: baseline, after: current)
+            let accessibilityTrace = makeAccessibilityTrace(afterCapture: current.capture, parentCapture: baseline.capture)
+            let delta = deriveDelta(from: accessibilityTrace, before: baseline, after: current)
             let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
 
             if let result = evaluateWaitForChange(
-                delta: delta, afterSnapshot: current.snapshot, expectation: predicate.expectation,
+                delta: delta, accessibilityTrace: accessibilityTrace,
+                afterSnapshot: current.snapshot, expectation: predicate.expectation,
                 preWaitElements: preWaitElements,
                 start: start, round: round, message: "changed after \(elapsed)s (\(round) rounds)"
             ) {
                 return result
             }
 
-            beforeWireHash = current.treeHash
+            beforeCaptureHash = current.capture.hash
             insideJobLogger.debug("wait_for_change round \(round): \(delta.kindRawValue), expectation not yet met")
         }
 
@@ -545,8 +579,13 @@ final class TheBrains {
         let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
         let current = await refreshSemanticSnapshot()
         let afterSnapshot = current?.snapshot ?? []
-        let delta = current.map { computeDelta(before: baseline, after: $0) }
-            ?? InterfaceDelta.noChange(.init(elementCount: 0))
+        let timeoutAccessibilityTrace = current.map {
+            makeAccessibilityTrace(afterCapture: $0.capture, parentCapture: baseline.capture)
+        }
+        let delta = current.flatMap { current -> AccessibilityTrace.Delta? in
+            guard let timeoutAccessibilityTrace else { return nil }
+            return deriveDelta(from: timeoutAccessibilityTrace, before: baseline, after: current)
+        } ?? AccessibilityTrace.Delta.noChange(.init(elementCount: 0))
         var builder = ActionResultBuilder(method: .waitForChange, snapshot: afterSnapshot)
         builder.message = waitForChangeTimeoutMessage(
             elapsed: elapsed,
@@ -554,14 +593,15 @@ final class TheBrains {
             delta: delta,
             elementCount: afterSnapshot.count
         )
-        builder.interfaceDelta = delta
+        builder.accessibilityDelta = delta
+        builder.accessibilityTrace = timeoutAccessibilityTrace
         return builder.failure(errorKind: .timeout)
     }
 
     private func waitForChangeTimeoutMessage(
         elapsed: String,
         expectation: ActionExpectation?,
-        delta: InterfaceDelta,
+        delta: AccessibilityTrace.Delta,
         elementCount: Int
     ) -> String {
         let expected = expectation?.summaryDescription ?? "any settled UI change"
@@ -604,7 +644,8 @@ final class TheBrains {
     }
 
     private func evaluateWaitForChange(
-        delta: InterfaceDelta,
+        delta: AccessibilityTrace.Delta,
+        accessibilityTrace: AccessibilityTrace?,
         afterSnapshot: [Screen.ScreenElement],
         expectation: ActionExpectation?,
         preWaitElements: [String: HeistElement],
@@ -613,7 +654,8 @@ final class TheBrains {
         message: String
     ) -> ActionResult? {
         var builder = ActionResultBuilder(method: .waitForChange, snapshot: afterSnapshot)
-        builder.interfaceDelta = delta
+        builder.accessibilityDelta = delta
+        builder.accessibilityTrace = accessibilityTrace
 
         guard let expectation else {
             builder.message = message
@@ -747,42 +789,97 @@ final class TheBrains {
 
     // MARK: - Private Helpers
 
+    func makeTraceCapture(
+        tree: [InterfaceNode],
+        sequence: Int = 1,
+        parentHash: String? = nil,
+        tripwireSignal: TheTripwire.TripwireSignal? = nil
+    ) -> AccessibilityTrace.Capture {
+        AccessibilityTrace.Capture(
+            sequence: sequence,
+            interface: Interface(timestamp: Date(), tree: tree),
+            parentHash: parentHash,
+            context: makeCaptureContext(tripwireSignal: tripwireSignal)
+        )
+    }
+
+    func makeCaptureContext(tripwireSignal: TheTripwire.TripwireSignal? = nil) -> AccessibilityTrace.Context {
+        let signal = tripwireSignal ?? tripwire.tripwireSignal()
+        let windows = signal.windowStack.windows.enumerated().map { index, window in
+            AccessibilityTrace.WindowContext(
+                index: index,
+                level: Double(window.level),
+                isKeyWindow: window.isKeyWindow
+            )
+        }
+        return AccessibilityTrace.Context(
+            focusedElementId: stash.firstResponderHeistId,
+            keyboardVisible: safecracker.isKeyboardVisible(),
+            screenId: stash.lastScreenId,
+            windowStack: windows
+        )
+    }
+
+    func makeAccessibilityTrace(afterTree: [InterfaceNode], parentCapture: AccessibilityTrace.Capture? = nil) -> AccessibilityTrace {
+        let capture = makeTraceCapture(
+            tree: afterTree,
+            sequence: parentCapture == nil ? 1 : 2,
+            parentHash: parentCapture?.hash
+        )
+        if let parentCapture {
+            return AccessibilityTrace(captures: [parentCapture, capture])
+        }
+        return AccessibilityTrace(capture: capture)
+    }
+
+    func makeAccessibilityTrace(afterCapture: AccessibilityTrace.Capture, parentCapture: AccessibilityTrace.Capture? = nil) -> AccessibilityTrace {
+        let capture = AccessibilityTrace.Capture(
+            sequence: parentCapture == nil ? 1 : 2,
+            interface: afterCapture.interface,
+            parentHash: parentCapture?.hash,
+            context: afterCapture.context,
+            hash: afterCapture.hash
+        )
+        if let parentCapture {
+            return AccessibilityTrace(captures: [parentCapture, capture])
+        }
+        return AccessibilityTrace(capture: capture)
+    }
+
     private func refreshSemanticSnapshot() async -> BeforeState? {
         guard refresh() != nil else { return nil }
         _ = await navigation.exploreAndPrune()
         return captureSemanticState()
     }
 
-    private func computeDelta(
+    func deriveDelta(
+        from accessibilityTrace: AccessibilityTrace,
         before: BeforeState,
         after: BeforeState
-    ) -> InterfaceDelta {
+    ) -> AccessibilityTrace.Delta {
         let isScreenChange = ScreenClassifier.classify(
             before: before.screenSnapshot,
             after: after.screenSnapshot
         ).isScreenChange
-        return TheStash.InterfaceDiff.computeDelta(
-            before: before.snapshot, after: after.snapshot,
-            beforeTree: before.tree,
-            beforeTreeHash: before.treeHash,
-            afterTree: after.tree,
+        return deriveDelta(
+            from: accessibilityTrace,
+            before: before,
             isScreenChange: isScreenChange
         )
     }
 
-    private func computeDelta(
+    func deriveDelta(
+        from accessibilityTrace: AccessibilityTrace,
         before: BeforeState,
-        afterSnapshot: [Screen.ScreenElement]
-    ) -> InterfaceDelta {
-        let isScreenChange = ScreenClassifier.classify(
-            before: before.screenSnapshot,
-            after: ScreenClassifier.snapshot(of: stash.currentScreen)
-        ).isScreenChange
+        isScreenChange: Bool
+    ) -> AccessibilityTrace.Delta {
+        let beforeCapture = accessibilityTrace.captures.dropLast().last ?? before.capture
+        guard let afterCapture = accessibilityTrace.captures.last else {
+            return .noChange(.init(elementCount: before.capture.interface.elements.count))
+        }
         return TheStash.InterfaceDiff.computeDelta(
-            before: before.snapshot, after: afterSnapshot,
-            beforeTree: before.tree,
-            beforeTreeHash: before.treeHash,
-            afterTree: stash.wireTree(),
+            before: beforeCapture,
+            after: afterCapture,
             isScreenChange: isScreenChange
         )
     }

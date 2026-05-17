@@ -316,21 +316,30 @@ final class TheGetaway {
                 if let stakeout {
                     await stakeout.noteActivity()
                 }
-                let backgroundDelta = await brains.computeBackgroundDelta()
+                let backgroundCapture = await brains.computeBackgroundCapture()
+                let backgroundAccessibilityDelta = backgroundCapture?.delta
 
-                if let actionResult = staleTargetedActionFailure(for: message, backgroundDelta: backgroundDelta) {
+                if let actionResult = staleTargetedActionFailure(for: message, backgroundCapture: backgroundCapture) {
                     await recordAndBroadcast(command: message, actionResult: actionResult, requestId: requestId, respond: respond)
                     return
                 }
 
                 let actionResult = await brains.executeCommand(message)
-                await recordAndBroadcast(command: message, actionResult: actionResult, requestId: requestId, backgroundDelta: backgroundDelta, respond: respond)
+                await recordAndBroadcast(
+                    command: message,
+                    actionResult: actionResult,
+                    requestId: requestId,
+                    backgroundAccessibilityDelta: backgroundAccessibilityDelta,
+                    accessibilityTrace: backgroundCapture?.accessibilityTrace,
+                    respond: respond
+                )
             }
         }
     }
 
-    func staleTargetedActionFailure(for message: ClientMessage, backgroundDelta: InterfaceDelta?) -> ActionResult? {
-        guard let backgroundDelta, backgroundDelta.isScreenChanged,
+    func staleTargetedActionFailure(for message: ClientMessage, backgroundCapture: TheBrains.BackgroundCapture?) -> ActionResult? {
+        guard let backgroundCapture,
+              backgroundCapture.delta.isScreenChanged,
               brains.screenChangedSinceLastSent,
               message.isStaleSensitiveTargetedAction else {
             return nil
@@ -346,15 +355,26 @@ final class TheGetaway {
         builder.message = "Action skipped because target became stale after a screen change; "
             + "retry against the current interface. Screen changed while you were thinking "
             + "(\(lastScreen) -> \(currentScreen))."
-        builder.interfaceDelta = backgroundDelta
+        builder.accessibilityDelta = backgroundCapture.delta
+        builder.accessibilityTrace = backgroundCapture.accessibilityTrace
         return builder.failure(errorKind: .actionFailed)
     }
 
     // MARK: - Encode / Decode
 
-    func encodeEnvelope(_ message: ServerMessage, requestId: String? = nil, backgroundDelta: InterfaceDelta? = nil) -> Data? {
+    func encodeEnvelope(
+        _ message: ServerMessage,
+        requestId: String? = nil,
+        backgroundAccessibilityDelta: AccessibilityTrace.Delta? = nil,
+        accessibilityTrace: AccessibilityTrace? = nil
+    ) -> Data? {
         do {
-            return try ResponseEnvelope(requestId: requestId, message: message, backgroundDelta: backgroundDelta).encoded()
+            return try ResponseEnvelope(
+                requestId: requestId,
+                message: message,
+                backgroundAccessibilityDelta: backgroundAccessibilityDelta,
+                accessibilityTrace: accessibilityTrace
+            ).encoded()
         } catch {
             insideJobLogger.error("Failed to encode message: \(error)")
             return nil
@@ -372,8 +392,19 @@ final class TheGetaway {
 
     // MARK: - Send / Broadcast
 
-    func sendMessage(_ message: ServerMessage, requestId: String? = nil, backgroundDelta: InterfaceDelta? = nil, respond: @escaping (Data) -> Void) {
-        if let data = encodeEnvelope(message, requestId: requestId, backgroundDelta: backgroundDelta) {
+    func sendMessage(
+        _ message: ServerMessage,
+        requestId: String? = nil,
+        backgroundAccessibilityDelta: AccessibilityTrace.Delta? = nil,
+        accessibilityTrace: AccessibilityTrace? = nil,
+        respond: @escaping (Data) -> Void
+    ) {
+        if let data = encodeEnvelope(
+            message,
+            requestId: requestId,
+            backgroundAccessibilityDelta: backgroundAccessibilityDelta,
+            accessibilityTrace: accessibilityTrace
+        ) {
             insideJobLogger.debug("Sending \(data.count) bytes")
             respond(data)
         } else if let errorData = encodeEnvelope(.error(ServerError(kind: .general, message: "Encoding failed")), requestId: requestId) {
@@ -468,14 +499,21 @@ final class TheGetaway {
         command: ClientMessage,
         actionResult: ActionResult,
         requestId: String?,
-        backgroundDelta: InterfaceDelta? = nil,
+        backgroundAccessibilityDelta: AccessibilityTrace.Delta? = nil,
+        accessibilityTrace: AccessibilityTrace? = nil,
         respond: @escaping (Data) -> Void
     ) async {
         if let stakeout {
             await stakeout.recordInteractionIfRecording(command: command, result: actionResult)
         }
 
-        sendMessage(.actionResult(actionResult), requestId: requestId, backgroundDelta: backgroundDelta, respond: respond)
+        sendMessage(
+            .actionResult(actionResult),
+            requestId: requestId,
+            backgroundAccessibilityDelta: backgroundAccessibilityDelta,
+            accessibilityTrace: accessibilityTrace,
+            respond: respond
+        )
         brains.recordSentState()
 
         if await muscle.hasSubscribers {

@@ -143,7 +143,7 @@ final class TheGetawayTests: XCTestCase {
 
         let result = getaway.staleTargetedActionFailure(
             for: .touchTap(.init(elementTarget: .heistId("button_old"))),
-            backgroundDelta: screenChangedDelta()
+            backgroundCapture: screenChangedBackgroundCapture()
         )
 
         let unwrapped = try XCTUnwrap(result)
@@ -151,7 +151,7 @@ final class TheGetawayTests: XCTestCase {
         XCTAssertEqual(unwrapped.method, .syntheticTap)
         XCTAssertEqual(unwrapped.errorKind, .actionFailed)
         XCTAssertEqual(unwrapped.screenId, "settings")
-        XCTAssertTrue(unwrapped.interfaceDelta?.isScreenChanged == true)
+        XCTAssertTrue(unwrapped.accessibilityDelta?.isScreenChanged == true)
         XCTAssertTrue(unwrapped.message?.contains("target became stale after a screen change") == true)
         XCTAssertTrue(unwrapped.message?.contains("retry against the current interface") == true)
     }
@@ -164,7 +164,7 @@ final class TheGetawayTests: XCTestCase {
 
         let result = getaway.staleTargetedActionFailure(
             for: .waitFor(.init(elementTarget: .heistId("button_old"), timeout: 0.1)),
-            backgroundDelta: screenChangedDelta()
+            backgroundCapture: screenChangedBackgroundCapture()
         )
 
         XCTAssertNil(result, "waitFor is wait-only; stale action failure semantics are only for targeted actions")
@@ -746,11 +746,19 @@ final class TheGetawayTests: XCTestCase {
         brains.stash.currentScreen = .makeForTests(elements: pairs)
     }
 
-    private func screenChangedDelta() -> InterfaceDelta {
+    private func screenChangedDelta() -> AccessibilityTrace.Delta {
         .screenChanged(.init(
             elementCount: 1,
             newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
         ))
+    }
+
+    private func screenChangedBackgroundCapture() -> TheBrains.BackgroundCapture {
+        let interface = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+        return TheBrains.BackgroundCapture(
+            delta: screenChangedDelta(),
+            accessibilityTrace: AccessibilityTrace(interface: interface)
+        )
     }
 }
 #endif // canImport(UIKit)

@@ -39,7 +39,7 @@ private struct ElementPairingSignature: Hashable {
 
 extension TheStash {
 
-    /// Diff two element snapshots and emit a compact `InterfaceDelta`. Pure
+    /// Diff two element snapshots and emit a compact `AccessibilityTrace.Delta`. Pure
     /// transform — no stored state. Lifts internal `ScreenElement` arrays to
     /// wire form via `WireConversion.toWire`, then compares element-level and
     /// tree-level changes side-by-side.
@@ -55,12 +55,12 @@ extension TheStash {
         beforeTreeHash: Int? = nil,
         afterTree: [InterfaceNode],
         isScreenChange: Bool
-    ) -> InterfaceDelta {
+    ) -> AccessibilityTrace.Delta {
         // Screen changed: parsed screen signature says this is a new screen,
         // so return the full new interface.
         if isScreenChange {
             let fullInterface = Interface(timestamp: Date(), tree: afterTree)
-            return .screenChanged(InterfaceDelta.ScreenChanged(
+            return .screenChanged(AccessibilityTrace.ScreenChanged(
                 elementCount: after.count, newInterface: fullInterface
             ))
         }
@@ -83,19 +83,19 @@ extension TheStash {
                             afterTree: afterTree
                         )
                         if treeEdits.isEmpty {
-                            return .noChange(InterfaceDelta.NoChange(elementCount: after.count))
+                            return .noChange(AccessibilityTrace.NoChange(elementCount: after.count))
                         }
-                        return .elementsChanged(InterfaceDelta.ElementsChanged(
+                        return .elementsChanged(AccessibilityTrace.ElementsChanged(
                             elementCount: after.count, edits: treeEdits
                         ))
                     } else {
-                        return .screenChanged(InterfaceDelta.ScreenChanged(
+                        return .screenChanged(AccessibilityTrace.ScreenChanged(
                             elementCount: after.count,
                             newInterface: Interface(timestamp: Date(), tree: afterTree)
                         ))
                     }
                 }
-                return .noChange(InterfaceDelta.NoChange(elementCount: after.count))
+                return .noChange(AccessibilityTrace.NoChange(elementCount: after.count))
             }
         }
 
@@ -128,13 +128,55 @@ extension TheStash {
         return makeDelta(edits: combined, elementCount: after.count)
     }
 
+    /// Compare two accessibility captures and return a compact delta. This is
+    /// the canonical capture-first path; snapshot-based callers are kept for
+    /// focused tests and old internal call sites.
+    static func computeDelta(
+        before: AccessibilityTrace.Capture,
+        after: AccessibilityTrace.Capture,
+        isScreenChange: Bool
+    ) -> AccessibilityTrace.Delta {
+        let beforeTree = before.interface.tree
+        let afterTree = after.interface.tree
+        let beforeElements = before.interface.elements
+        let afterElements = after.interface.elements
+
+        if isScreenChange {
+            return .screenChanged(AccessibilityTrace.ScreenChanged(
+                elementCount: afterElements.count,
+                newInterface: after.interface
+            ))
+        }
+
+        if before.hash == after.hash {
+            return .noChange(AccessibilityTrace.NoChange(elementCount: afterElements.count))
+        }
+
+        let elementEdits = computeElementEdits(beforeEls: beforeElements, afterEls: afterElements)
+        let treeEdits = computeTreeEdits(beforeTree: beforeTree, afterTree: afterTree)
+        let adjustedElementEdits = suppressFunctionalMoveElementChurn(
+            edits: elementEdits,
+            beforeEls: beforeElements,
+            afterEls: afterElements
+        )
+        let combined = ElementEdits(
+            added: adjustedElementEdits.added,
+            removed: adjustedElementEdits.removed,
+            updated: adjustedElementEdits.updated,
+            treeInserted: treeEdits.treeInserted,
+            treeRemoved: treeEdits.treeRemoved,
+            treeMoved: treeEdits.treeMoved
+        )
+        return makeDelta(edits: combined, elementCount: afterElements.count)
+    }
+
     // MARK: - Edit Assembly
 
-    private static func makeDelta(edits: ElementEdits, elementCount: Int) -> InterfaceDelta {
+    private static func makeDelta(edits: ElementEdits, elementCount: Int) -> AccessibilityTrace.Delta {
         if edits.isEmpty {
-            return .noChange(InterfaceDelta.NoChange(elementCount: elementCount))
+            return .noChange(AccessibilityTrace.NoChange(elementCount: elementCount))
         }
-        return .elementsChanged(InterfaceDelta.ElementsChanged(
+        return .elementsChanged(AccessibilityTrace.ElementsChanged(
             elementCount: elementCount, edits: edits
         ))
     }

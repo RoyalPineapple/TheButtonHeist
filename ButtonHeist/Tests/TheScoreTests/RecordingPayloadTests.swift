@@ -193,11 +193,11 @@ final class RecordingPayloadTests: XCTestCase {
     // MARK: - InteractionEvent
 
     func testInteractionEventActivateRoundTrip() throws {
-        let delta: InterfaceDelta = .noChange(.init(elementCount: 5))
+        let delta: AccessibilityTrace.Delta = .noChange(.init(elementCount: 5))
         let event = InteractionEvent(
             timestamp: 1.5,
             command: .activate(.matcher(ElementMatcher(identifier: "loginButton"))),
-            result: ActionResult(success: true, method: .activate, interfaceDelta: delta)
+            result: ActionResult(success: true, method: .activate, accessibilityDelta: delta)
         )
 
         let data = try JSONEncoder().encode(event)
@@ -210,12 +210,12 @@ final class RecordingPayloadTests: XCTestCase {
         XCTAssertEqual(matcher.identifier, "loginButton")
         XCTAssertTrue(decoded.result.success)
         XCTAssertEqual(decoded.result.method, .activate)
-        XCTAssertEqual(decoded.result.interfaceDelta?.kindRawValue, "noChange")
-        XCTAssertEqual(decoded.result.interfaceDelta?.elementCount, 5)
+        XCTAssertEqual(decoded.result.accessibilityDelta?.kindRawValue, "noChange")
+        XCTAssertEqual(decoded.result.accessibilityDelta?.elementCount, 5)
     }
 
     func testInteractionEventTouchTapRoundTrip() throws {
-        let delta: InterfaceDelta = .elementsChanged(.init(
+        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(
             elementCount: 1,
             edits: ElementEdits(updated: [
                 ElementUpdate(
@@ -227,7 +227,7 @@ final class RecordingPayloadTests: XCTestCase {
         let event = InteractionEvent(
             timestamp: 3.2,
             command: .touchTap(TouchTapTarget(elementTarget: .matcher(ElementMatcher(identifier: "okBtn")))),
-            result: ActionResult(success: true, method: .syntheticTap, interfaceDelta: delta)
+            result: ActionResult(success: true, method: .syntheticTap, accessibilityDelta: delta)
         )
 
         let data = try JSONEncoder().encode(event)
@@ -235,9 +235,9 @@ final class RecordingPayloadTests: XCTestCase {
 
         XCTAssertEqual(decoded.timestamp, 3.2)
         XCTAssertEqual(decoded.result.method, .syntheticTap)
-        XCTAssertNotNil(decoded.result.interfaceDelta)
-        XCTAssertEqual(decoded.result.interfaceDelta?.kindRawValue, "elementsChanged")
-        XCTAssertEqual(decoded.result.interfaceDelta?.elementEdits?.updated.first?.heistId, "okBtn")
+        XCTAssertNotNil(decoded.result.accessibilityDelta)
+        XCTAssertEqual(decoded.result.accessibilityDelta?.kindRawValue, "elementsChanged")
+        XCTAssertEqual(decoded.result.accessibilityDelta?.elementEdits?.updated.first?.heistId, "okBtn")
     }
 
     func testInteractionEventNilDelta() throws {
@@ -254,7 +254,7 @@ final class RecordingPayloadTests: XCTestCase {
         XCTAssertEqual(decoded.timestamp, 2.0)
         XCTAssertFalse(decoded.result.success)
         XCTAssertEqual(decoded.result.method, .elementNotFound)
-        XCTAssertNil(decoded.result.interfaceDelta)
+        XCTAssertNil(decoded.result.accessibilityDelta)
     }
 
     func testRecordingPayloadWithInteractionLog() throws {
@@ -263,7 +263,7 @@ final class RecordingPayloadTests: XCTestCase {
         let event = InteractionEvent(
             timestamp: 1.0,
             command: .activate(.matcher(ElementMatcher(label: "element_3"))),
-            result: ActionResult(success: true, method: .activate, interfaceDelta: .noChange(.init(elementCount: 0)))
+            result: ActionResult(success: true, method: .activate, accessibilityDelta: .noChange(.init(elementCount: 0)))
         )
         let payload = RecordingPayload(
             videoData: "AAAAIGZ0eXBpc29t",

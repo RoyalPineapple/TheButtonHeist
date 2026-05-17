@@ -9,11 +9,11 @@ struct ResponseRenderingTests {
     @Test("MCP renders no-change background transients")
     func rendersNoChangeBackgroundTransients() {
         let spinner = makeElement(heistId: "spinner", label: "Loading")
-        let delta: InterfaceDelta = .noChange(.init(elementCount: 4, transient: [spinner]))
+        let delta: AccessibilityTrace.Delta = .noChange(.init(elementCount: 4, transient: [spinner]))
 
         let result = ButtonHeistMCPServer.renderResponse(
             .ok(message: "done"),
-            backgroundDeltas: [delta]
+            backgroundAccessibilityDeltas: [delta]
         )
         let texts = textContents(result)
 
@@ -26,11 +26,11 @@ struct ResponseRenderingTests {
     func rendersElementChangedBackgroundTransients() {
         let added = makeElement(heistId: "result", label: "Result")
         let spinner = makeElement(heistId: "spinner", label: "Loading")
-        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: [added]), transient: [spinner]))
+        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: [added]), transient: [spinner]))
 
         let result = ButtonHeistMCPServer.renderResponse(
             .ok(message: "done"),
-            backgroundDeltas: [delta]
+            backgroundAccessibilityDeltas: [delta]
         )
         let texts = textContents(result)
 
@@ -43,14 +43,14 @@ struct ResponseRenderingTests {
     func rendersMultipleBackgroundDeltas() {
         let spinner = makeElement(heistId: "spinner", label: "Loading")
         let result = makeElement(heistId: "result", label: "Result")
-        let deltas: [InterfaceDelta] = [
+        let deltas: [AccessibilityTrace.Delta] = [
             .noChange(.init(elementCount: 4, transient: [spinner])),
             .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: [result]))),
         ]
 
         let response = ButtonHeistMCPServer.renderResponse(
             .ok(message: "done"),
-            backgroundDeltas: deltas
+            backgroundAccessibilityDeltas: deltas
         )
         let texts = textContents(response)
 
@@ -68,7 +68,7 @@ struct ResponseRenderingTests {
         )
         let response = FenceResponse.failure(FenceError.sessionLocked(payload.message))
 
-        let result = ButtonHeistMCPServer.renderResponse(response, backgroundDeltas: [])
+        let result = ButtonHeistMCPServer.renderResponse(response, backgroundAccessibilityDeltas: [])
         let texts = textContents(result)
 
         #expect(result.isError == true)
@@ -88,7 +88,7 @@ struct ResponseRenderingTests {
         )
         let response = FenceResponse.action(result: actionResult)
 
-        let result = ButtonHeistMCPServer.renderResponse(response, backgroundDeltas: [])
+        let result = ButtonHeistMCPServer.renderResponse(response, backgroundAccessibilityDeltas: [])
         let texts = textContents(result)
 
         #expect(result.isError == true)

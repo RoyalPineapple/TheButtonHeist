@@ -279,7 +279,7 @@ The `Stakeout` class provides on-device screen recording as H.264/MP4:
 4. Unlike screenshots, recording captures **include** the `FingerprintWindow` so interaction indicators are visible in the video.
 5. Frames are captured at the configured FPS (default 8, range 1-15) using `afterScreenUpdates: false` to reduce main thread impact
 6. Action-triggered bonus frames are captured after each successful action completes
-7. During recording, each interaction through `performInteraction` captures the `ClientMessage`, `ActionResult`, and optional `InterfaceDelta` as an `InteractionEvent`, appended to Stakeout's in-memory interaction log
+7. During recording, each interaction through `performInteraction` captures the `ClientMessage`, `ActionResult`, and optional `AccessibilityTrace.Delta` as an `InteractionEvent`, appended to Stakeout's in-memory interaction log
 8. An inactivity monitor checks every second — recording auto-stops when no screen changes and no real interactions (actions, touches, typing) are received for the configured timeout. Pings and keepalive messages do not reset the inactivity timer.
 9. File size is capped at 7MB to stay within the wire protocol's 10MB buffer limit after base64 encoding
 10. Default resolution is 1x point size (native pixels / screen scale), configurable from 0.25x to 1.0x native

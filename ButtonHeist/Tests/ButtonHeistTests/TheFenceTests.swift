@@ -497,7 +497,7 @@ final class TheFenceTests: XCTestCase {
     }
 
     func testActionWithExpectationFailedFormatting() {
-        let result = ActionResult(success: true, method: .activate, interfaceDelta: .noChange(.init(elementCount: 5)))
+        let result = ActionResult(success: true, method: .activate, accessibilityDelta: .noChange(.init(elementCount: 5)))
         let expectation = ExpectationResult(met: false, expectation: .screenChanged, actual: "noChange")
         let response = FenceResponse.action(result: result, expectation: expectation)
         let text = response.humanFormatted()
@@ -509,7 +509,7 @@ final class TheFenceTests: XCTestCase {
         let result = ActionResult(
             success: true,
             method: .activate,
-            interfaceDelta: .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
+            accessibilityDelta: .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
         )
         let expectation = ExpectationResult(met: false, expectation: .screenChanged, actual: "elementsChanged")
         let response = FenceResponse.action(result: result, expectation: expectation)
@@ -800,7 +800,7 @@ final class TheFenceTests: XCTestCase {
     // MARK: - Compact Delta Geometry Filtering
 
     func testCompactDeltaOmitsFrameChanges() {
-        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 3, edits: ElementEdits(updated: [
+        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 3, edits: ElementEdits(updated: [
                 ElementUpdate(heistId: "okBtn", changes: [
                     PropertyChange(property: .value, old: "0", new: "1"),
                     PropertyChange(property: .frame, old: "10,20,100,44", new: "10,25,100,44"),
@@ -812,7 +812,7 @@ final class TheFenceTests: XCTestCase {
     }
 
     func testCompactDeltaOmitsActivationPointChanges() {
-        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 2, edits: ElementEdits(updated: [
+        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 2, edits: ElementEdits(updated: [
                 ElementUpdate(heistId: "slider", changes: [
                     PropertyChange(property: .activationPoint, old: "50,22", new: "55,22"),
                 ]),
@@ -823,7 +823,7 @@ final class TheFenceTests: XCTestCase {
     }
 
     func testCompactDeltaKeepsNonGeometryChanges() {
-        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 4, edits: ElementEdits(updated: [
+        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 4, edits: ElementEdits(updated: [
                 ElementUpdate(heistId: "toggle", changes: [
                     PropertyChange(property: .value, old: "off", new: "on"),
                     PropertyChange(property: .traits, old: "button", new: "button, selected"),
@@ -852,13 +852,13 @@ final class TheFenceTests: XCTestCase {
     // MARK: - JSON Delta Geometry Filtering
 
     func testActionJsonDeltaOmitsGeometryByDefault() {
-        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 2, edits: ElementEdits(updated: [
+        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 2, edits: ElementEdits(updated: [
                 ElementUpdate(heistId: "label1", changes: [
                     PropertyChange(property: .frame, old: "0,0,100,44", new: "0,10,100,44"),
                     PropertyChange(property: .value, old: "a", new: "b"),
                 ]),
             ])))
-        let result = ActionResult(success: true, method: .activate, interfaceDelta: delta)
+        let result = ActionResult(success: true, method: .activate, accessibilityDelta: delta)
         let response = FenceResponse.action(result: result)
         let json = response.jsonDict()!
         let deltaDict = json["delta"] as! [String: Any]
@@ -872,13 +872,13 @@ final class TheFenceTests: XCTestCase {
     }
 
     func testActionJsonDeltaDropsGeometryOnlyUpdates() {
-        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 3, edits: ElementEdits(updated: [
+        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 3, edits: ElementEdits(updated: [
                 ElementUpdate(heistId: "img", changes: [
                     PropertyChange(property: .frame, old: "0,0,50,50", new: "0,5,50,50"),
                     PropertyChange(property: .activationPoint, old: "25,25", new: "25,30"),
                 ]),
             ])))
-        let result = ActionResult(success: true, method: .activate, interfaceDelta: delta)
+        let result = ActionResult(success: true, method: .activate, accessibilityDelta: delta)
         let response = FenceResponse.action(result: result)
         let json = response.jsonDict()!
         let deltaDict = json["delta"] as! [String: Any]
@@ -933,7 +933,7 @@ final class TheFenceTests: XCTestCase {
             ]),
         ])
 
-        let delta: InterfaceDelta = .elementsChanged(.init(
+        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(
             elementCount: 3,
             edits: ElementEdits(treeInserted: [
                 TreeInsertion(
@@ -942,7 +942,7 @@ final class TheFenceTests: XCTestCase {
                 ),
             ])
         ))
-        let result = ActionResult(success: true, method: .activate, interfaceDelta: delta)
+        let result = ActionResult(success: true, method: .activate, accessibilityDelta: delta)
         let response = FenceResponse.action(result: result)
         let json = response.jsonDict()!
 
@@ -1896,7 +1896,8 @@ final class TheFenceTests: XCTestCase {
     func testDrainBackgroundDeltaClearsAfterRead() async {
         let fence = TheFence(configuration: .init())
         // Simulate a background delta arriving via the handoff callback
-        let delta: InterfaceDelta = .screenChanged(.init(elementCount: 7, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])))
+        let interface = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+        let delta: AccessibilityTrace.Delta = .screenChanged(.init(elementCount: 7, newInterface: interface))
         fence.handoff.onBackgroundDelta?(delta)
 
         let first = fence.drainBackgroundDelta()
@@ -1996,7 +1997,7 @@ final class TheFenceTests: XCTestCase {
 
         if case .action(let result, let expectation) = response {
             XCTAssertTrue(result.success)
-            XCTAssertEqual(result.interfaceDelta?.isScreenChanged, true)
+            XCTAssertEqual(result.accessibilityDelta?.isScreenChanged, true)
             XCTAssertEqual(expectation?.met, true)
             XCTAssertEqual(mockDiscovery.startCount, 0, "Short-circuit should avoid discovery")
             XCTAssertEqual(mockConnection.connectCount, 0, "Short-circuit should avoid connection")
@@ -2063,7 +2064,7 @@ final class TheFenceTests: XCTestCase {
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44, actions: [.activate]
         )
         let fullInterface = Interface(timestamp: Date(), tree: [.element(element)])
-        let delta: InterfaceDelta = .screenChanged(.init(elementCount: 1, newInterface: fullInterface))
+        let delta: AccessibilityTrace.Delta = .screenChanged(.init(elementCount: 1, newInterface: fullInterface))
         fence.handoff.onBackgroundDelta?(delta)
 
         // wait_for_change may satisfy a late call from a queued background delta.
@@ -2093,14 +2094,14 @@ final class TheFenceTests: XCTestCase {
                 return .actionResult(ActionResult(
                     success: true,
                     method: .activate,
-                    interfaceDelta: .noChange(.init(elementCount: 1))
+                    accessibilityDelta: .noChange(.init(elementCount: 1))
                 ))
             case .waitForChange:
                 return .actionResult(ActionResult(
                     success: true,
                     method: .waitForChange,
                     message: "expectation already met by current state (0.0s)",
-                    interfaceDelta: .noChange(.init(elementCount: 1))
+                    accessibilityDelta: .noChange(.init(elementCount: 1))
                 ))
             default:
                 return .actionResult(ActionResult(success: true, method: .activate))
@@ -2146,14 +2147,14 @@ final class TheFenceTests: XCTestCase {
                 return .actionResult(ActionResult(
                     success: true,
                     method: .activate,
-                    interfaceDelta: .noChange(.init(elementCount: 1))
+                    accessibilityDelta: .noChange(.init(elementCount: 1))
                 ))
             case .waitForChange:
                 return .actionResult(ActionResult(
                     success: true,
                     method: .waitForChange,
                     message: "expectation met after 0.1s",
-                    interfaceDelta: .elementsChanged(.init(
+                    accessibilityDelta: .elementsChanged(.init(
                         elementCount: 2,
                         edits: ElementEdits(added: [appeared])
                     ))
@@ -2192,7 +2193,7 @@ final class TheFenceTests: XCTestCase {
                 return .actionResult(ActionResult(
                     success: true,
                     method: .activate,
-                    interfaceDelta: .noChange(.init(elementCount: 1))
+                    accessibilityDelta: .noChange(.init(elementCount: 1))
                 ))
             case .waitForChange:
                 return .actionResult(ActionResult(
@@ -2200,7 +2201,7 @@ final class TheFenceTests: XCTestCase {
                     method: .waitForChange,
                     message: "expectation not met after 0.1s",
                     errorKind: .timeout,
-                    interfaceDelta: .elementsChanged(.init(elementCount: 3, edits: ElementEdits()))
+                    accessibilityDelta: .elementsChanged(.init(elementCount: 3, edits: ElementEdits()))
                 ))
             default:
                 return .actionResult(ActionResult(success: true, method: .activate))
@@ -2217,7 +2218,7 @@ final class TheFenceTests: XCTestCase {
             XCTAssertFalse(result.success)
             XCTAssertEqual(result.method, .waitForChange)
             XCTAssertEqual(result.errorKind, .timeout)
-            XCTAssertEqual(result.interfaceDelta?.kindRawValue, "elementsChanged")
+            XCTAssertEqual(result.accessibilityDelta?.kindRawValue, "elementsChanged")
             XCTAssertEqual(expectation?.met, false)
             XCTAssertEqual(expectation?.actual, "expectation not met after 0.1s")
         } else {
@@ -2235,7 +2236,7 @@ final class TheFenceTests: XCTestCase {
                 return .actionResult(ActionResult(
                     success: true,
                     method: .activate,
-                    interfaceDelta: .noChange(.init(elementCount: 1))
+                    accessibilityDelta: .noChange(.init(elementCount: 1))
                 ))
             default:
                 return .actionResult(ActionResult(success: true, method: .activate))
@@ -2267,7 +2268,7 @@ final class TheFenceTests: XCTestCase {
                 return .actionResult(ActionResult(
                     success: true,
                     method: .activate,
-                    interfaceDelta: .screenChanged(.init(
+                    accessibilityDelta: .screenChanged(.init(
                         elementCount: 1,
                         newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
                     ))
@@ -2304,7 +2305,8 @@ final class TheFenceTests: XCTestCase {
         let fence = TheFence(configuration: .init())
 
         // Background delta present but no expectation on the action
-        let delta: InterfaceDelta = .screenChanged(.init(elementCount: 3, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])))
+        let interface = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+        let delta: AccessibilityTrace.Delta = .screenChanged(.init(elementCount: 3, newInterface: interface))
         fence.handoff.onBackgroundDelta?(delta)
 
         // Action without expect — should NOT short-circuit against the
@@ -2337,7 +2339,7 @@ final class TheFenceTests: XCTestCase {
                 return .actionResult(ActionResult(
                     success: true,
                     method: .activate,
-                    interfaceDelta: .noChange(.init(elementCount: 1))
+                    accessibilityDelta: .noChange(.init(elementCount: 1))
                 ))
             case .requestInterface:
                 return .interface(Interface(timestamp: Date(timeIntervalSince1970: 0), tree: []))
@@ -2374,9 +2376,13 @@ final class TheFenceTests: XCTestCase {
                 return .actionResult(ActionResult(
                     success: true,
                     method: .activate,
-                    interfaceDelta: .screenChanged(.init(
+                    accessibilityDelta: .screenChanged(.init(
                         elementCount: 0,
                         newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+                    )),
+                    accessibilityTrace: AccessibilityTrace(interface: Interface(
+                        timestamp: Date(timeIntervalSince1970: 0),
+                        tree: []
                     ))
                 ))
             case .waitForChange:
@@ -2417,6 +2423,99 @@ final class TheFenceTests: XCTestCase {
         let heist = try TheBookKeeper.readHeist(from: output)
         XCTAssertEqual(heist.steps.count, 1)
         XCTAssertEqual(heist.steps[0].command, "activate")
+        XCTAssertEqual(heist.steps[0].recorded?.accessibilityTrace?.receipts.first?.kind, .capture)
+        XCTAssertEqual(heist.steps[0].recorded?.accessibilityDelta?.kindRawValue, "screenChanged")
+        XCTAssertEqual(heist.steps[0].recorded?.expectation?.met, true)
+        try? await fence.bookKeeper.closeSession()
+    }
+
+    @ButtonHeistActor
+    func testHeistRecordingUsesVerifiedWaitResultAsTraceEvidence() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        mockConn.autoResponse = { message in
+            switch message {
+            case .activate:
+                return .actionResult(ActionResult(
+                    success: true,
+                    method: .activate,
+                    accessibilityDelta: .noChange(.init(elementCount: 1)),
+                    accessibilityTrace: AccessibilityTrace(interface: Interface(
+                        timestamp: Date(timeIntervalSince1970: 0),
+                        tree: [.element(HeistElement(
+                            heistId: "loading",
+                            description: "Loading",
+                            label: "Loading",
+                            value: nil,
+                            identifier: nil,
+                            traits: [.staticText],
+                            frameX: 0,
+                            frameY: 0,
+                            frameWidth: 100,
+                            frameHeight: 44,
+                            actions: []
+                        ))]
+                    ))
+                ))
+            case .waitForChange:
+                let doneInterface = Interface(
+                    timestamp: Date(timeIntervalSince1970: 1),
+                    tree: [.element(HeistElement(
+                        heistId: "done",
+                        description: "Done",
+                        label: "Done",
+                        value: nil,
+                        identifier: nil,
+                        traits: [.button],
+                        frameX: 0,
+                        frameY: 0,
+                        frameWidth: 100,
+                        frameHeight: 44,
+                        actions: []
+                    ))]
+                )
+                return .actionResult(ActionResult(
+                    success: true,
+                    method: .waitForChange,
+                    accessibilityDelta: .screenChanged(.init(
+                        elementCount: 1,
+                        newInterface: doneInterface
+                    )),
+                    accessibilityTrace: AccessibilityTrace(interface: doneInterface)
+                ))
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+        try await startHeistRecording(on: fence)
+
+        let response = try await fence.execute(request: [
+            "command": "activate",
+            "label": "Continue",
+            "expect": ["type": "screen_changed"],
+        ])
+
+        if case .action(let result, let expectation) = response {
+            XCTAssertEqual(result.method, .waitForChange)
+            XCTAssertEqual(expectation?.met, true)
+        } else {
+            XCTFail("Expected action response, got \(response)")
+        }
+
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("heist")
+        defer { try? FileManager.default.removeItem(at: output) }
+        _ = try await fence.execute(request: [
+            "command": "stop_heist",
+            "output": output.path,
+        ])
+
+        let heist = try TheBookKeeper.readHeist(from: output)
+        XCTAssertEqual(heist.steps.count, 1)
+        XCTAssertEqual(heist.steps[0].command, "activate")
+        XCTAssertEqual(heist.steps[0].recorded?.accessibilityTrace?.captures.first?.interface.elements.first?.label, "Done")
+        XCTAssertEqual(heist.steps[0].recorded?.accessibilityDelta?.kindRawValue, "screenChanged")
+        XCTAssertEqual(heist.steps[0].recorded?.expectation?.met, true)
         try? await fence.bookKeeper.closeSession()
     }
 
@@ -2429,7 +2528,7 @@ final class TheFenceTests: XCTestCase {
                 return .actionResult(ActionResult(
                     success: true,
                     method: .activate,
-                    interfaceDelta: .noChange(.init(elementCount: 1))
+                    accessibilityDelta: .noChange(.init(elementCount: 1))
                 ))
             default:
                 return .actionResult(ActionResult(success: true, method: .activate))
@@ -2619,7 +2718,7 @@ final class TheFenceTests: XCTestCase {
         // must not throw, must leave the socket alone.
         let lateResult = ActionResult(success: true, method: .activate)
         mockConnection.onEvent?(
-            .message(.actionResult(lateResult), requestId: timedOutRequestId, backgroundDelta: nil)
+            .message(.actionResult(lateResult), requestId: timedOutRequestId, backgroundAccessibilityDelta: nil)
         )
 
         XCTAssertTrue(
@@ -2695,7 +2794,7 @@ final class TheFenceTests: XCTestCase {
         // Sibling must still be alive. Resolve it with its own response.
         let siblingResult = ActionResult(success: true, method: .activate)
         mockConnection.onEvent?(
-            .message(.actionResult(siblingResult), requestId: siblingRequestId, backgroundDelta: nil)
+            .message(.actionResult(siblingResult), requestId: siblingRequestId, backgroundAccessibilityDelta: nil)
         )
 
         let result = try await sibling.value
@@ -2727,6 +2826,8 @@ final class TheFenceTests: XCTestCase {
               case .recording(let recording) = session.heistRecording else {
             return nil
         }
-        return recording.evidenceCount
+        recording.fileHandle.synchronizeFile()
+        guard let data = try? Data(contentsOf: recording.filePath) else { return nil }
+        return data.split(separator: 0x0A).count
     }
 }

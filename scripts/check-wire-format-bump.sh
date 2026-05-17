@@ -3,7 +3,7 @@
 #
 # Wire format lives in `ButtonHeist/Sources/TheScore/` — every Codable type that
 # crosses the connection, the Codable adapters, the `WireBoundaryTypes` rawValue
-# strings, the `InterfaceDelta` / `ActionExpectation` / `ConnectionScope`
+# strings, the `AccessibilityTrace.Delta` / `ActionExpectation` / `ConnectionScope`
 # payloads, and the `AccessibilityPolicy` (whose
 # `synthesisPriority` order is wire-format because it determines synthesized
 # heistIds, per CLAUDE.md).

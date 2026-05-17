@@ -451,7 +451,7 @@ final class TheHandoff {
     var onInteraction: (@ButtonHeistActor (InteractionEvent) -> Void)?
     /// The server pushed an interface delta between commands (the UI changed
     /// without a direct action request). Drained by `TheFence` for session state.
-    var onBackgroundDelta: (@ButtonHeistActor (InterfaceDelta) -> Void)?
+    var onBackgroundDelta: (@ButtonHeistActor (AccessibilityTrace.Delta) -> Void)?
 
     // MARK: - Configuration
 
@@ -686,9 +686,9 @@ final class TheHandoff {
                     }
                     self.reconnectPolicy = .enabled(filter: filter, reconnectTask: reconnectTask)
                 }
-            case .message(let message, let requestId, let backgroundDelta):
+            case .message(let message, let requestId, let backgroundAccessibilityDelta):
                 if self.isActiveConnectionAttempt(attemptID) {
-                    self.handleServerMessage(message, requestId: requestId, backgroundDelta: backgroundDelta)
+                    self.handleServerMessage(message, requestId: requestId, backgroundAccessibilityDelta: backgroundAccessibilityDelta)
                     return
                 }
                 guard let requestId, self.isCurrentOrTerminalConnectionAttempt(attemptID) else { return }
@@ -718,9 +718,9 @@ final class TheHandoff {
         }
     }
 
-    func handleServerMessage(_ message: ServerMessage, requestId: String?, backgroundDelta: InterfaceDelta? = nil) {
-        if let backgroundDelta {
-            onBackgroundDelta?(backgroundDelta)
+    func handleServerMessage(_ message: ServerMessage, requestId: String?, backgroundAccessibilityDelta: AccessibilityTrace.Delta? = nil) {
+        if let backgroundAccessibilityDelta {
+            onBackgroundDelta?(backgroundAccessibilityDelta)
         }
         switch message {
         case .info(let info):

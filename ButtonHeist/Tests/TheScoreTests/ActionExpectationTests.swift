@@ -56,14 +56,15 @@ final class ActionExpectationTests: XCTestCase {
     // MARK: - Validation: screenChanged
 
     func testScreenChangedMetWhenDeltaIsScreenChanged() {
-        let delta: InterfaceDelta = .screenChanged(.init(elementCount: 5, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])))
+        let interface = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+        let delta: AccessibilityTrace.Delta = .screenChanged(.init(elementCount: 5, newInterface: interface))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.screenChanged.validate(against: action)
         XCTAssertTrue(result.met)
     }
 
     func testScreenChangedNotMetWhenDeltaIsElementsChanged() {
-        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
+        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.screenChanged.validate(against: action)
         XCTAssertFalse(result.met)
@@ -80,14 +81,14 @@ final class ActionExpectationTests: XCTestCase {
     // MARK: - Validation: elementsChanged
 
     func testElementsChangedMetWhenDeltaIsElementsChanged() {
-        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 10, edits: ElementEdits()))
+        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 10, edits: ElementEdits()))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.elementsChanged.validate(against: action)
         XCTAssertTrue(result.met)
     }
 
     func testElementsChangedNotMetWhenDeltaIsNoChange() {
-        let delta: InterfaceDelta = .noChange(.init(elementCount: 5))
+        let delta: AccessibilityTrace.Delta = .noChange(.init(elementCount: 5))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.elementsChanged.validate(against: action)
         XCTAssertFalse(result.met)
@@ -95,7 +96,8 @@ final class ActionExpectationTests: XCTestCase {
     }
 
     func testElementsChangedMetWhenScreenChanged() {
-        let delta: InterfaceDelta = .screenChanged(.init(elementCount: 5, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])))
+        let interface = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+        let delta: AccessibilityTrace.Delta = .screenChanged(.init(elementCount: 5, newInterface: interface))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.elementsChanged.validate(against: action)
         XCTAssertTrue(result.met)
@@ -128,7 +130,7 @@ final class ActionExpectationTests: XCTestCase {
     // MARK: - Validation: elementUpdated
 
     func testElementUpdatedMetWhenNewValueMatches() {
-        let delta: InterfaceDelta = makeUpdateDelta(
+        let delta: AccessibilityTrace.Delta = makeUpdateDelta(
             heistId: "counter", property: .value, old: "3", new: "5"
         )
         let action = makeResult(success: true, delta: delta)
@@ -137,7 +139,7 @@ final class ActionExpectationTests: XCTestCase {
     }
 
     func testElementUpdatedNotMetWhenNoMatch() {
-        let delta: InterfaceDelta = makeUpdateDelta(
+        let delta: AccessibilityTrace.Delta = makeUpdateDelta(
             heistId: "counter", property: .value, old: "3", new: "4"
         )
         let action = makeResult(success: true, delta: delta)
@@ -146,7 +148,7 @@ final class ActionExpectationTests: XCTestCase {
     }
 
     func testElementUpdatedMetWhenHeistIdAndNewValueMatch() {
-        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [
+        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [
                 ElementUpdate(heistId: "other", changes: [PropertyChange(property: .value, old: "1", new: "5")]),
                 ElementUpdate(heistId: "counter", changes: [PropertyChange(property: .value, old: "3", new: "5")]),
             ])))
@@ -156,7 +158,7 @@ final class ActionExpectationTests: XCTestCase {
     }
 
     func testElementUpdatedNotMetWhenHeistIdDoesNotMatch() {
-        let delta: InterfaceDelta = makeUpdateDelta(
+        let delta: AccessibilityTrace.Delta = makeUpdateDelta(
             heistId: "other", property: .value, old: "3", new: "5"
         )
         let action = makeResult(success: true, delta: delta)
@@ -165,7 +167,7 @@ final class ActionExpectationTests: XCTestCase {
     }
 
     func testElementUpdatedMetWhenOldAndNewValueMatch() {
-        let delta: InterfaceDelta = makeUpdateDelta(
+        let delta: AccessibilityTrace.Delta = makeUpdateDelta(
             heistId: "counter", property: .value, old: "3", new: "5"
         )
         let action = makeResult(success: true, delta: delta)
@@ -174,7 +176,7 @@ final class ActionExpectationTests: XCTestCase {
     }
 
     func testElementUpdatedNoFieldsMetWhenAnyUpdatesExist() {
-        let delta: InterfaceDelta = makeUpdateDelta(
+        let delta: AccessibilityTrace.Delta = makeUpdateDelta(
             heistId: "counter", property: .value, old: "a", new: "b"
         )
         let action = makeResult(success: true, delta: delta)
@@ -190,7 +192,7 @@ final class ActionExpectationTests: XCTestCase {
     }
 
     func testElementUpdatedNotMetWhenEmptyUpdates() {
-        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [])))
+        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [])))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.elementUpdated(newValue: "5").validate(against: action)
         XCTAssertFalse(result.met)
@@ -198,7 +200,7 @@ final class ActionExpectationTests: XCTestCase {
     }
 
     func testElementUpdatedDiagnosticOnMiss() {
-        let delta: InterfaceDelta = makeUpdateDelta(
+        let delta: AccessibilityTrace.Delta = makeUpdateDelta(
             heistId: "counter", property: .value, old: "3", new: "4"
         )
         let action = makeResult(success: true, delta: delta)
@@ -208,7 +210,7 @@ final class ActionExpectationTests: XCTestCase {
     }
 
     func testElementUpdatedMatchesAnyAmongMultipleUpdates() {
-        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 10, edits: ElementEdits(updated: [
+        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 10, edits: ElementEdits(updated: [
                 ElementUpdate(heistId: "label", changes: [PropertyChange(property: .value, old: "A", new: "B")]),
                 ElementUpdate(heistId: "counter", changes: [PropertyChange(property: .value, old: "3", new: "5")]),
             ])))
@@ -218,7 +220,7 @@ final class ActionExpectationTests: XCTestCase {
     }
 
     func testElementUpdatedWithPropertyFilter() {
-        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [ElementUpdate(heistId: "btn", changes: [
+        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [ElementUpdate(heistId: "btn", changes: [
                 PropertyChange(property: .traits, old: "", new: "selected"),
                 PropertyChange(property: .value, old: "3", new: "5"),
             ])])))
@@ -244,7 +246,7 @@ final class ActionExpectationTests: XCTestCase {
 
     func testElementAppearedMetWhenMatchFound() {
         let added = [makeElement(label: "New Task", traits: [.staticText])]
-        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: added)))
+        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: added)))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.elementAppeared(
             ElementMatcher(label: "New Task", traits: [.staticText])
@@ -254,7 +256,7 @@ final class ActionExpectationTests: XCTestCase {
 
     func testElementAppearedNotMetWhenNoMatch() {
         let added = [makeElement(label: "Other Item", traits: [.staticText])]
-        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: added)))
+        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: added)))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.elementAppeared(
             ElementMatcher(label: "New Task")
@@ -263,7 +265,7 @@ final class ActionExpectationTests: XCTestCase {
     }
 
     func testElementAppearedNotMetWhenNoAdded() {
-        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
+        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.elementAppeared(
             ElementMatcher(label: "New Task")
@@ -283,7 +285,7 @@ final class ActionExpectationTests: XCTestCase {
     }
 
     func testElementDisappearedMetWhenMatchFound() {
-        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 3, edits: ElementEdits(removed: ["button_old"])))
+        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 3, edits: ElementEdits(removed: ["button_old"])))
         let action = makeResult(success: true, delta: delta)
         let preAction: [String: HeistElement] = [
             "button_old": makeElement(label: "Old Item", traits: [.button]),
@@ -295,7 +297,7 @@ final class ActionExpectationTests: XCTestCase {
     }
 
     func testElementDisappearedNotMetWithoutCache() {
-        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 3, edits: ElementEdits(removed: ["button_old"])))
+        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 3, edits: ElementEdits(removed: ["button_old"])))
         let action = makeResult(success: true, delta: delta)
         // No pre-action cache — can't resolve removed heistIds
         let result = ActionExpectation.elementDisappeared(
@@ -318,7 +320,7 @@ final class ActionExpectationTests: XCTestCase {
 
     func testCompoundAllMet() {
         let added = [makeElement(label: "New Task", traits: [.staticText])]
-        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: added)))
+        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: added)))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.compound([
             .elementsChanged,
@@ -329,7 +331,7 @@ final class ActionExpectationTests: XCTestCase {
 
     func testCompoundFailsIfAnyUnmet() {
         let added = [makeElement(label: "New Task", traits: [.staticText])]
-        let delta: InterfaceDelta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: added)))
+        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: added)))
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.compound([
             .elementsChanged,
@@ -362,7 +364,7 @@ final class ActionExpectationTests: XCTestCase {
         old: String?,
         new: String?,
         elementCount: Int = 5
-    ) -> InterfaceDelta {
+    ) -> AccessibilityTrace.Delta {
         .elementsChanged(.init(
             elementCount: elementCount,
             edits: ElementEdits(updated: [
@@ -378,14 +380,14 @@ final class ActionExpectationTests: XCTestCase {
         success: Bool,
         message: String? = nil,
         value: String? = nil,
-        delta: InterfaceDelta? = nil
+        delta: AccessibilityTrace.Delta? = nil
     ) -> ActionResult {
         ActionResult(
             success: success,
             method: .syntheticTap,
             message: message,
             payload: value.map { .value($0) },
-            interfaceDelta: delta
+            accessibilityDelta: delta
         )
         // Note: animating param omitted (defaults to nil)
     }

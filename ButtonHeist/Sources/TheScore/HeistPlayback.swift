@@ -276,15 +276,27 @@ public struct RecordedMetadata: Codable, Sendable, Equatable {
     public let frame: RecordedFrame?
     /// Whether the step used coordinate-only targeting (no element).
     public let coordinateOnly: Bool?
+    /// Accessibility trace observed while recording.
+    public let accessibilityTrace: AccessibilityTrace?
+    /// Compact accessibility delta observed while recording.
+    public let accessibilityDelta: AccessibilityTrace.Delta?
+    /// Expectation evidence observed while recording. Playback ignores this.
+    public let expectation: ExpectationResult?
 
     public init(
         heistId: String? = nil,
         frame: RecordedFrame? = nil,
-        coordinateOnly: Bool? = nil
+        coordinateOnly: Bool? = nil,
+        accessibilityTrace: AccessibilityTrace? = nil,
+        accessibilityDelta: AccessibilityTrace.Delta? = nil,
+        expectation: ExpectationResult? = nil
     ) {
         self.heistId = heistId
         self.frame = frame
         self.coordinateOnly = coordinateOnly
+        self.accessibilityTrace = accessibilityTrace
+        self.accessibilityDelta = accessibilityDelta
+        self.expectation = expectation
     }
 }
 

@@ -17,7 +17,7 @@ public enum GetInterfaceScope: String, CaseIterable, Sendable {
 /// Summary of a single step within a batch execution.
 ///
 /// Consumed by batch formatters to build per-step human/JSON rows. `deltaKind`
-/// is the wire-level `kind` discriminator from the step's `InterfaceDelta`;
+/// is the wire-level `kind` discriminator from the step's `AccessibilityTrace.Delta`;
 /// `expectationMet` is nil when the step had no expectation attached.
 public struct BatchStepSummary: Sendable {
     public let command: String
@@ -88,7 +88,7 @@ public enum FenceResponse {
     case batch(
         results: [[String: Any]], completedSteps: Int, failedIndex: Int?,
         totalTimingMs: Int, expectationsChecked: Int = 0, expectationsMet: Int = 0,
-        stepSummaries: [BatchStepSummary] = [], netDelta: InterfaceDelta? = nil
+        stepSummaries: [BatchStepSummary] = [], netDelta: AccessibilityTrace.Delta? = nil
     )
     case sessionState(payload: [String: Any])
     case targets([String: TargetConfig], defaultTarget: String?)
@@ -398,7 +398,7 @@ public enum FenceResponse {
                     }
                 }
             }
-            if let delta = result.interfaceDelta {
+            if let delta = result.accessibilityDelta {
                 output += "  \(formatDelta(delta))"
             }
             if result.animating == true {
@@ -421,7 +421,7 @@ public enum FenceResponse {
         }
     }
 
-    private func formatDelta(_ delta: InterfaceDelta) -> String {
+    private func formatDelta(_ delta: AccessibilityTrace.Delta) -> String {
         switch delta {
         case .noChange(let payload):
             return "[\(payload.elementCount) elements, no change]"
