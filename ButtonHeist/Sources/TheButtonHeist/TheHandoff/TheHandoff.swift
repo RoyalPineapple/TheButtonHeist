@@ -452,6 +452,10 @@ final class TheHandoff {
     /// The server pushed an interface delta between commands (the UI changed
     /// without a direct action request). Drained by `TheFence` for session state.
     var onBackgroundDelta: (@ButtonHeistActor (AccessibilityTrace.Delta) -> Void)?
+    /// The server pushed capture receipts for an interface change observed
+    /// between commands. This is the source-of-truth form; `onBackgroundDelta`
+    /// remains as a legacy compatibility projection.
+    var onBackgroundAccessibilityTrace: (@ButtonHeistActor (AccessibilityTrace) -> Void)?
 
     // MARK: - Configuration
 
@@ -686,9 +690,14 @@ final class TheHandoff {
                     }
                     self.reconnectPolicy = .enabled(filter: filter, reconnectTask: reconnectTask)
                 }
-            case .message(let message, let requestId, let backgroundAccessibilityDelta):
+            case .message(let message, let requestId, let backgroundAccessibilityDelta, let accessibilityTrace):
                 if self.isActiveConnectionAttempt(attemptID) {
-                    self.handleServerMessage(message, requestId: requestId, backgroundAccessibilityDelta: backgroundAccessibilityDelta)
+                    self.handleServerMessage(
+                        message,
+                        requestId: requestId,
+                        backgroundAccessibilityDelta: backgroundAccessibilityDelta,
+                        accessibilityTrace: accessibilityTrace
+                    )
                     return
                 }
                 guard let requestId, self.isCurrentOrTerminalConnectionAttempt(attemptID) else { return }
@@ -718,10 +727,16 @@ final class TheHandoff {
         }
     }
 
-    func handleServerMessage(_ message: ServerMessage, requestId: String?, backgroundAccessibilityDelta: AccessibilityTrace.Delta? = nil) {
-        if let backgroundAccessibilityDelta {
-            onBackgroundDelta?(backgroundAccessibilityDelta)
-        }
+    func handleServerMessage(
+        _ message: ServerMessage,
+        requestId: String?,
+        backgroundAccessibilityDelta: AccessibilityTrace.Delta? = nil,
+        accessibilityTrace: AccessibilityTrace? = nil
+    ) {
+        handleBackgroundAccessibility(
+            delta: backgroundAccessibilityDelta,
+            accessibilityTrace: accessibilityTrace
+        )
         switch message {
         case .info(let info):
             mutateConnectedSession { $0.serverInfo = info }
@@ -786,6 +801,23 @@ final class TheHandoff {
         // swiftlint:disable:next agent_wire_message_arm_no_op_break
         case .serverHello, .authRequired:
             break
+        }
+    }
+
+    private func handleBackgroundAccessibility(
+        delta: AccessibilityTrace.Delta?,
+        accessibilityTrace: AccessibilityTrace?
+    ) {
+        if let accessibilityTrace {
+            if let onBackgroundAccessibilityTrace {
+                onBackgroundAccessibilityTrace(accessibilityTrace)
+            } else if let projectedDelta = accessibilityTrace.captureReceiptDelta ?? delta {
+                onBackgroundDelta?(projectedDelta)
+            }
+            return
+        }
+        if let delta {
+            onBackgroundDelta?(delta)
         }
     }
 

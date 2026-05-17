@@ -1852,6 +1852,65 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testBatchNetDeltaPrefersCaptureReceiptEndpoints() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        let counter0 = makeReceiptTestInterface([
+            makeReceiptTestElement(heistId: "counter", label: "Counter", value: "0"),
+        ])
+        let counter1 = makeReceiptTestInterface([
+            makeReceiptTestElement(heistId: "counter", label: "Counter", value: "1"),
+        ])
+        let counter2 = makeReceiptTestInterface([
+            makeReceiptTestElement(heistId: "counter", label: "Counter", value: "2"),
+        ])
+        var responses = [
+            ActionResult(
+                success: true,
+                method: .activate,
+                accessibilityDelta: .screenChanged(.init(
+                    elementCount: 0,
+                    newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+                )),
+                accessibilityTrace: makeReceiptTestTrace(before: counter0, after: counter1)
+            ),
+            ActionResult(
+                success: true,
+                method: .activate,
+                accessibilityDelta: .noChange(.init(elementCount: 0)),
+                accessibilityTrace: makeReceiptTestTrace(before: counter1, after: counter2)
+            ),
+        ]
+        mockConn.autoResponse = { message in
+            switch message {
+            case .activate:
+                return .actionResult(responses.removeFirst())
+            case .requestInterface:
+                return .interface(Interface(timestamp: Date(timeIntervalSince1970: 0), tree: []))
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "run_batch",
+            "steps": [
+                ["command": "activate", "identifier": "first"],
+                ["command": "activate", "identifier": "second"],
+            ] as [[String: Any]],
+        ])
+
+        guard case .batch(_, _, _, _, _, _, _, let netDelta) = response else {
+            return XCTFail("Expected batch response, got \(response)")
+        }
+        guard case .elementsChanged(let payload)? = netDelta else {
+            return XCTFail("Expected capture-derived elementsChanged net delta, got \(String(describing: netDelta))")
+        }
+        XCTAssertEqual(payload.edits.updated.first?.heistId, "counter")
+        XCTAssertEqual(payload.edits.updated.first?.changes.first?.old, "0")
+        XCTAssertEqual(payload.edits.updated.first?.changes.first?.new, "2")
+    }
+
+    @ButtonHeistActor
     func testBatchStopsOnErrorResponse() async throws {
         let (fence, mockConn) = makeConnectedFence()
         mockConn.autoResponse = { _ in

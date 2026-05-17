@@ -7,7 +7,12 @@ enum ConnectionEvent {
     case transportReady
     case connected
     case disconnected(DisconnectReason)
-    case message(ServerMessage, requestId: String?, backgroundAccessibilityDelta: AccessibilityTrace.Delta?)
+    case message(
+        ServerMessage,
+        requestId: String?,
+        backgroundAccessibilityDelta: AccessibilityTrace.Delta?,
+        accessibilityTrace: AccessibilityTrace?
+    )
 }
 
 /// Events emitted by a device discovery session as services appear and disappear.

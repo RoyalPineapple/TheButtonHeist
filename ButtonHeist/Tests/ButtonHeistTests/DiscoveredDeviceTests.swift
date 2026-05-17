@@ -585,6 +585,6 @@ private final class ReachabilityProbeConnection: DeviceConnecting {
             ),
             session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
         )
-        onEvent?(.message(.status(payload), requestId: requestId, backgroundAccessibilityDelta: nil))
+        onEvent?(.message(.status(payload), requestId: requestId, backgroundAccessibilityDelta: nil, accessibilityTrace: nil))
     }
 }

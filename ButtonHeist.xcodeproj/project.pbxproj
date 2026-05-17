@@ -109,6 +109,7 @@
 		6BEF5654D1A9FFD654921870 /* PendingRequestTrackerIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CE5A357B75EBB623990B852 /* PendingRequestTrackerIntegrationTests.swift */; };
 		6CACA04A2302C8A94F77B362 /* TheBrainsActionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4ED50A9A94649523608BDE72 /* TheBrainsActionTests.swift */; };
 		6CCE3D073DEB6672A8847820 /* InterfaceDiff.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B70EF95833F2926EFD70F8D /* InterfaceDiff.swift */; };
+		6DF0EC7293EB8B9FEF13F7A4 /* AccessibilityTrace+ReceiptProjection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 086C11119F639DA9E5CAD216 /* AccessibilityTrace+ReceiptProjection.swift */; };
 		6FF3F81EA0233A70E63EE646 /* AccessibilityTrace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 887CF576098DCA926C151B77 /* AccessibilityTrace.swift */; };
 		70645F302E2187171D64E958 /* TheMuscleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 594A7F8340C7B335C8033319 /* TheMuscleTests.swift */; };
 		71D803CC09A6B351F9EE95F4 /* ButtonHeistActor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48C0A7E7B525AB54B71D0EC5 /* ButtonHeistActor.swift */; };
@@ -368,6 +369,7 @@
 		05CB1CBE21394403A78BC900 /* TargetConfigTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TargetConfigTests.swift; sourceTree = "<group>"; };
 		06D7913F56126CFD418986FA /* TheInsideJobTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "TheInsideJobTests-Info.plist"; sourceTree = "<group>"; };
 		07DE8C276376C372FBC44610 /* ExploreOffFoldGateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExploreOffFoldGateTests.swift; sourceTree = "<group>"; };
+		086C11119F639DA9E5CAD216 /* AccessibilityTrace+ReceiptProjection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AccessibilityTrace+ReceiptProjection.swift"; sourceTree = "<group>"; };
 		09C4C594B932300D1817D3F0 /* ThePlantAutoStart.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ThePlantAutoStart.h; sourceTree = "<group>"; };
 		0A30441A167F4DEDD5C2F562 /* TheInsideJob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheInsideJob.swift; sourceTree = "<group>"; };
 		0B05AC474B9C2427612BB9A7 /* AccessibilityPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityPolicyTests.swift; sourceTree = "<group>"; };
@@ -685,6 +687,7 @@
 				FBBC4FE1FFF97A07A7C14B51 /* TheBookKeeper */,
 				0E2FBA9D8B133CEA645072F9 /* TheFence */,
 				73FBFF062EEE0B5B5B516EA2 /* TheHandoff */,
+				086C11119F639DA9E5CAD216 /* AccessibilityTrace+ReceiptProjection.swift */,
 				48C0A7E7B525AB54B71D0EC5 /* ButtonHeistActor.swift */,
 				286300664EC22C2386C8F58E /* Exports.swift */,
 			);
@@ -1483,6 +1486,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6DF0EC7293EB8B9FEF13F7A4 /* AccessibilityTrace+ReceiptProjection.swift in Sources */,
 				71D803CC09A6B351F9EE95F4 /* ButtonHeistActor.swift in Sources */,
 				4F08CC403035BFEACB1DEE59 /* EnvironmentConfig.swift in Sources */,
 				B259D7CF0E8D1620C5E8746B /* TargetConfig.swift in Sources */,

@@ -2007,6 +2007,37 @@ final class TheFenceTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testBackgroundDeltaCompatibilityIsDerivedFromTraceReceipt() async {
+        let fence = TheFence(configuration: .init())
+        let before = makeReceiptTestInterface([
+            makeReceiptTestElement(heistId: "status", label: "Status", value: "Old"),
+        ])
+        let after = makeReceiptTestInterface([
+            makeReceiptTestElement(heistId: "status", label: "Status", value: "New"),
+        ])
+        let trace = makeReceiptTestTrace(before: before, after: after)
+        let misleadingLegacyDelta: AccessibilityTrace.Delta = .screenChanged(.init(
+            elementCount: 0,
+            newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+        ))
+
+        fence.handoff.handleServerMessage(
+            .pong,
+            requestId: nil,
+            backgroundAccessibilityDelta: misleadingLegacyDelta,
+            accessibilityTrace: trace
+        )
+
+        let derived = fence.drainBackgroundDelta()
+        guard case .elementsChanged(let payload)? = derived else {
+            return XCTFail("Expected trace-derived elementsChanged delta, got \(String(describing: derived))")
+        }
+        XCTAssertEqual(payload.edits.updated.first?.heistId, "status")
+        XCTAssertEqual(payload.edits.updated.first?.changes.first?.old, "Old")
+        XCTAssertEqual(payload.edits.updated.first?.changes.first?.new, "New")
+    }
+
+    @ButtonHeistActor
     func testBackgroundExpectationMismatchDoesNotConsumeDelta() async throws {
         let (fence, _) = makeConnectedFence()
         fence.handoff.onBackgroundDelta?(.screenChanged(.init(elementCount: 7, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: []))))
@@ -2787,7 +2818,7 @@ final class TheFenceTests: XCTestCase {
         // must not throw, must leave the socket alone.
         let lateResult = ActionResult(success: true, method: .activate)
         mockConnection.onEvent?(
-            .message(.actionResult(lateResult), requestId: timedOutRequestId, backgroundAccessibilityDelta: nil)
+            .message(.actionResult(lateResult), requestId: timedOutRequestId, backgroundAccessibilityDelta: nil, accessibilityTrace: nil)
         )
 
         XCTAssertTrue(
@@ -2863,7 +2894,7 @@ final class TheFenceTests: XCTestCase {
         // Sibling must still be alive. Resolve it with its own response.
         let siblingResult = ActionResult(success: true, method: .activate)
         mockConnection.onEvent?(
-            .message(.actionResult(siblingResult), requestId: siblingRequestId, backgroundAccessibilityDelta: nil)
+            .message(.actionResult(siblingResult), requestId: siblingRequestId, backgroundAccessibilityDelta: nil, accessibilityTrace: nil)
         )
 
         let result = try await sibling.value

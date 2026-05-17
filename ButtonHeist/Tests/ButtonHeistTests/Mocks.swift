@@ -115,7 +115,7 @@ final class MockConnection: DeviceConnecting {
         }
         onEvent?(.connected)
         if let info = serverInfo {
-            onEvent?(.message(.info(info), requestId: nil, backgroundAccessibilityDelta: nil))
+            onEvent?(.message(.info(info), requestId: nil, backgroundAccessibilityDelta: nil, accessibilityTrace: nil))
         }
     }
 
@@ -128,7 +128,7 @@ final class MockConnection: DeviceConnecting {
         if let handler = autoResponse {
             let response = handler(message)
             Task { @ButtonHeistActor [self] in
-                self.onEvent?(.message(response, requestId: requestId, backgroundAccessibilityDelta: nil))
+                self.onEvent?(.message(response, requestId: requestId, backgroundAccessibilityDelta: nil, accessibilityTrace: nil))
             }
         }
     }
