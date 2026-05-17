@@ -1407,6 +1407,68 @@ final class TheFenceTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testRecordingPhaseIsFenceOwnedFromHandoffEvents() async throws {
+        let mockConnection = MockConnection()
+        mockConnection.serverInfo = TheFenceFixtures.testServerInfo
+
+        let fence = TheFence(configuration: .init())
+        fence.handoff.makeConnection = { _, _, _ in mockConnection }
+        fence.handoff.connect(to: TheFenceFixtures.testDevice)
+
+        fence.handoff.handleServerMessage(.recordingStarted, requestId: nil)
+        let recordingState = try await fence.execute(request: ["command": "get_session_state"])
+        guard case .sessionState(let recordingPayload) = recordingState else {
+            return XCTFail("Expected sessionState response, got \(recordingState)")
+        }
+        XCTAssertEqual(recordingPayload["isRecording"] as? Bool, true)
+
+        fence.handoff.handleServerMessage(.recordingStopped, requestId: nil)
+        let stoppedState = try await fence.execute(request: ["command": "get_session_state"])
+        guard case .sessionState(let stoppedPayload) = stoppedState else {
+            return XCTFail("Expected sessionState response, got \(stoppedState)")
+        }
+        XCTAssertEqual(stoppedPayload["isRecording"] as? Bool, false)
+
+        fence.handoff.handleServerMessage(.recordingStarted, requestId: nil)
+        fence.handoff.handleServerMessage(.recording(RecordingPayload(
+            videoData: "",
+            width: 100,
+            height: 200,
+            duration: 1.0,
+            frameCount: 10,
+            fps: 10,
+            startTime: Date(),
+            endTime: Date(),
+            stopReason: .manual
+        )), requestId: nil)
+        let completedState = try await fence.execute(request: ["command": "get_session_state"])
+        guard case .sessionState(let completedPayload) = completedState else {
+            return XCTFail("Expected sessionState response, got \(completedState)")
+        }
+        XCTAssertEqual(completedPayload["isRecording"] as? Bool, false)
+    }
+
+    @ButtonHeistActor
+    func testDisconnectClearsFenceRecordingPhase() async throws {
+        let mockConnection = MockConnection()
+        mockConnection.serverInfo = TheFenceFixtures.testServerInfo
+
+        let fence = TheFence(configuration: .init())
+        fence.handoff.makeConnection = { _, _, _ in mockConnection }
+        fence.handoff.connect(to: TheFenceFixtures.testDevice)
+        fence.handoff.handleServerMessage(.recordingStarted, requestId: nil)
+
+        mockConnection.onEvent?(.disconnected(.serverClosed))
+
+        let response = try await fence.execute(request: ["command": "get_session_state"])
+        guard case .sessionState(let payload) = response else {
+            return XCTFail("Expected sessionState response, got \(response)")
+        }
+        XCTAssertEqual(payload["isRecording"] as? Bool, false)
+        XCTAssertEqual(payload["connected"] as? Bool, false)
+    }
+
+    @ButtonHeistActor
     func testGetSessionStateFailedAuthReportsFailureDetails() async throws {
         let fence = TheFence(configuration: .init())
         fence.handoff.handleServerMessage(
@@ -1544,7 +1606,7 @@ final class TheFenceTests: XCTestCase {
         // afterRegister fires synchronously once the tracker has registered the
         // recording callback — deliver the payload right then, no sleep needed.
         let result = try await fence.waitForRecording(timeout: 1.0) {
-            fence.handoff.onRecording?(expectedPayload)
+            fence.handoff.onRecordingEvent?(.completed(expectedPayload))
         }
         XCTAssertEqual(result.videoData, expectedPayload.videoData)
         XCTAssertEqual(result.width, expectedPayload.width)
@@ -1557,7 +1619,7 @@ final class TheFenceTests: XCTestCase {
 
         do {
             _ = try await fence.waitForRecording(timeout: 1.0) {
-                fence.handoff.onRecordingError?("disk full")
+                fence.handoff.onRecordingEvent?(.failed("disk full"))
             }
             XCTFail("Expected FenceError.actionFailed to be thrown")
         } catch let error as FenceError {
@@ -1614,14 +1676,16 @@ final class TheFenceTests: XCTestCase {
             startTime: Date(), endTime: Date(), stopReason: .manual
         )
         var observerPayload: RecordingPayload?
-        let stableCallback = fence.handoff.onRecording
-        fence.handoff.onRecording = { payload in
-            observerPayload = payload
-            stableCallback?(payload)
+        let stableCallback = fence.handoff.onRecordingEvent
+        fence.handoff.onRecordingEvent = { event in
+            if case .completed(let payload) = event {
+                observerPayload = payload
+            }
+            stableCallback?(event)
         }
 
         let result = try await fence.waitForRecording(timeout: 1.0) {
-            fence.handoff.onRecording?(expectedPayload)
+            fence.handoff.onRecordingEvent?(.completed(expectedPayload))
         }
 
         XCTAssertEqual(result.videoData, expectedPayload.videoData)
@@ -1721,7 +1785,7 @@ final class TheFenceTests: XCTestCase {
                     for _ in 0..<200 where !fence.isWaitingForRecordingCompletion {
                         await Task.yield()
                     }
-                    fence.handoff.onRecording?(expectedPayload)
+                    fence.handoff.onRecordingEvent?(.completed(expectedPayload))
                 }
                 return .recordingStarted
             }
@@ -1830,7 +1894,7 @@ final class TheFenceTests: XCTestCase {
         mockConn.autoResponse = { message in
             if case .startRecording = message {
                 Task { @ButtonHeistActor in
-                    fence.handoff.onRecordingError?("disk full")
+                    fence.handoff.onRecordingEvent?(.failed("disk full"))
                 }
             }
             return .actionResult(ActionResult(success: true, method: .activate))
@@ -1868,7 +1932,7 @@ final class TheFenceTests: XCTestCase {
                     for _ in 0..<200 where !fence.isWaitingForRecordingCompletion {
                         await Task.yield()
                     }
-                    fence.handoff.onRecordingError?("disk full")
+                    fence.handoff.onRecordingEvent?(.failed("disk full"))
                 }
                 return .recordingStarted
             }

@@ -128,7 +128,6 @@ final class TheHandoff {
         let device: DiscoveredDevice
         let keepaliveTask: Task<Void, Never>
         var serverInfo: ServerInfo?
-        var recordingPhase: RecordingPhase
         var missedPongCount: Int
 
         init(
@@ -136,14 +135,12 @@ final class TheHandoff {
             device: DiscoveredDevice,
             keepaliveTask: Task<Void, Never>,
             serverInfo: ServerInfo? = nil,
-            recordingPhase: RecordingPhase = .idle,
             missedPongCount: Int = 0
         ) {
             self.attemptID = attemptID
             self.device = device
             self.keepaliveTask = keepaliveTask
             self.serverInfo = serverInfo
-            self.recordingPhase = recordingPhase
             self.missedPongCount = missedPongCount
         }
     }
@@ -171,13 +168,6 @@ final class TheHandoff {
     enum ReconnectPolicy {
         case disabled
         case enabled(filter: String?, reconnectTask: Task<Void, Never>?)
-    }
-
-    /// Recording lifecycle state machine. Replaces the old `isRecording: Bool`
-    /// so the type system distinguishes idle from active recording.
-    enum RecordingPhase: Equatable {
-        case idle
-        case recording
     }
 
     // MARK: - State
@@ -376,11 +366,6 @@ final class TheHandoff {
         return nil
     }
 
-    var recordingPhase: RecordingPhase {
-        if case .connected(let session) = connectionPhase { return session.recordingPhase }
-        return .idle
-    }
-
     /// Test seam: how many pings have been sent on the live connection
     /// without a corresponding `.pong` reply. Resets to zero when a pong
     /// arrives, and is automatically discarded when the connection phase
@@ -388,10 +373,6 @@ final class TheHandoff {
     var missedPongCount: Int {
         if case .connected(let session) = connectionPhase { return session.missedPongCount }
         return 0
-    }
-
-    var isRecording: Bool {
-        recordingPhase == .recording
     }
 
     // MARK: - Discovery Callbacks
@@ -415,12 +396,9 @@ final class TheHandoff {
     var onActionResult: (@ButtonHeistActor (ActionResult, String?) -> Void)?
     /// A `get_screen` response arrived. Trailing `String?` is the originating requestId.
     var onScreen: (@ButtonHeistActor (ScreenPayload, String?) -> Void)?
-    /// The server acknowledged that screen recording has begun.
-    var onRecordingStarted: (@ButtonHeistActor () -> Void)?
-    /// A completed recording is delivered (as base64 payload + metadata).
-    var onRecording: (@ButtonHeistActor (RecordingPayload) -> Void)?
-    /// Recording failed mid-capture; the string is the server-reported reason.
-    var onRecordingError: (@ButtonHeistActor (String) -> Void)?
+    /// Recording lifecycle messages from the server. TheFence owns the
+    /// client-side recording phase; TheHandoff only forwards typed messages.
+    var onRecordingEvent: (@ButtonHeistActor (RecordingEvent) -> Void)?
     /// General protocol/transport error reported by the server.
     var onError: (@ButtonHeistActor (String) -> Void)?
     /// Error response for a specific in-flight request.
@@ -725,16 +703,13 @@ final class TheHandoff {
         case .screen(let payload):
             onScreen?(payload, requestId)
         case .recordingStarted:
-            mutateConnectedSession { $0.recordingPhase = .recording }
-            onRecordingStarted?()
+            emitRecordingEvent(.started)
         case .recording(let payload):
-            mutateConnectedSession { $0.recordingPhase = .idle }
-            onRecording?(payload)
+            emitRecordingEvent(.completed(payload))
         case .error(let serverError):
             switch serverError.kind {
             case .recording:
-                mutateConnectedSession { $0.recordingPhase = .idle }
-                onRecordingError?(serverError.message)
+                emitRecordingEvent(.failed(serverError.message))
             case .authFailure:
                 transitionToFailed(.authFailed(serverError.message))
                 onAuthFailed?(serverError.message)
@@ -761,12 +736,17 @@ final class TheHandoff {
         case .pong:
             mutateConnectedSession { $0.missedPongCount = 0 }
         case .recordingStopped:
-            mutateConnectedSession { $0.recordingPhase = .idle }
+            emitRecordingEvent(.stopped)
         // Handshake messages are consumed inside DeviceConnection before bubbling here; no caller-visible side effect needed at this layer.
         // swiftlint:disable:next agent_wire_message_arm_no_op_break
         case .serverHello, .authRequired, .interaction:
             break
         }
+    }
+
+    private func emitRecordingEvent(_ event: RecordingEvent) {
+        guard isConnected else { return }
+        onRecordingEvent?(event)
     }
 
     private func handleBackgroundAccessibility(

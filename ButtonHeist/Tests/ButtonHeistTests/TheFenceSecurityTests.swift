@@ -55,7 +55,7 @@ final class TheFenceSecurityTests: XCTestCase {
     @ButtonHeistActor
     func testStopRecordingRejectsPathTraversal() async {
         let (fence, mockConn) = makeConnectedFence()
-        // Put the handoff into recording state by simulating a server recordingStarted
+        // Put TheFence into recording state by simulating a server recordingStarted.
         mockConn.autoResponse = { message in
             switch message {
             case .requestInterface:
@@ -76,7 +76,7 @@ final class TheFenceSecurityTests: XCTestCase {
         }
         do {
             try await fence.start()
-            // Trigger recording so handoff.isRecording becomes true
+            // Trigger recording so TheFence's recording phase becomes active.
             _ = try await fence.execute(request: ["command": "start_recording"])
             // Allow the mock's Task-dispatched recordingStarted message to arrive
             for _ in 0..<5 { await Task.yield() }

@@ -14,8 +14,6 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertFalse(handoff.isDiscovering)
         assertDisconnected(handoff.connectionPhase)
         XCTAssertEqual(handoff.reconnectPolicy, .disabled)
-        XCTAssertEqual(handoff.recordingPhase, .idle)
-        XCTAssertFalse(handoff.isRecording)
     }
 
     @ButtonHeistActor
@@ -27,7 +25,6 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertNil(handoff.connectedDevice)
         XCTAssertNil(handoff.serverInfo)
         assertDisconnected(handoff.connectionPhase)
-        XCTAssertEqual(handoff.recordingPhase, .idle)
     }
 
     @ButtonHeistActor
@@ -400,69 +397,6 @@ final class TheHandoffStateTests: XCTestCase {
 
         connectionA.onEvent?(.disconnected(.serverClosed))
         assertConnected(handoff.connectionPhase, device: deviceB)
-    }
-
-    // MARK: - RecordingPhase
-
-    @ButtonHeistActor
-    func testRecordingStartedSetsPhaseToRecording() async {
-        let handoff = TheHandoff()
-        connectMockHandoff(handoff)
-
-        handoff.handleServerMessage(.recordingStarted, requestId: nil)
-
-        XCTAssertEqual(handoff.recordingPhase, .recording)
-        XCTAssertTrue(handoff.isRecording)
-    }
-
-    @ButtonHeistActor
-    func testRecordingCompletedResetsPhaseToIdle() async {
-        let handoff = TheHandoff()
-        connectMockHandoff(handoff)
-        handoff.handleServerMessage(.recordingStarted, requestId: nil)
-
-        handoff.handleServerMessage(.recording(RecordingPayload(
-            videoData: "",
-            width: 100,
-            height: 200,
-            duration: 1.0,
-            frameCount: 10,
-            fps: 10,
-            startTime: Date(),
-            endTime: Date(),
-            stopReason: .manual,
-            interactionLog: nil
-        )), requestId: nil)
-
-        XCTAssertEqual(handoff.recordingPhase, .idle)
-        XCTAssertFalse(handoff.isRecording)
-    }
-
-    @ButtonHeistActor
-    func testRecordingErrorResetsPhaseToIdle() async {
-        let handoff = TheHandoff()
-        connectMockHandoff(handoff)
-        handoff.handleServerMessage(.recordingStarted, requestId: nil)
-
-        handoff.handleServerMessage(
-            .error(ServerError(kind: .recording, message: "disk full")),
-            requestId: nil
-        )
-
-        XCTAssertEqual(handoff.recordingPhase, .idle)
-        XCTAssertFalse(handoff.isRecording)
-    }
-
-    @ButtonHeistActor
-    func testDisconnectResetsRecordingPhase() async {
-        let handoff = TheHandoff()
-        connectMockHandoff(handoff)
-        handoff.handleServerMessage(.recordingStarted, requestId: nil)
-        XCTAssertEqual(handoff.recordingPhase, .recording)
-
-        handoff.disconnect()
-
-        XCTAssertEqual(handoff.recordingPhase, .idle)
     }
 
     // MARK: - Discovery (existing)
