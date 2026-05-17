@@ -794,6 +794,62 @@ final class TheHandoffStateTests: XCTestCase {
         )
     }
 
+    @ButtonHeistActor
+    func testConnectWithDiscoverySuccessReplacesExistingSession() async throws {
+        let existingDevice = DiscoveredDevice(
+            id: "existing-device",
+            name: "AccessibilityTestApp#existing",
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 9),
+            certFingerprint: "sha256:existing"
+        )
+        let replacementDevice = DiscoveredDevice(
+            id: "replacement-device",
+            name: "AccessibilityTestApp#replacement",
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 10),
+            certFingerprint: "sha256:replacement"
+        )
+
+        let handoff = TheHandoff()
+        let existingConnection = MockConnection()
+        let replacementConnection = MockConnection()
+        handoff.makeConnection = { device, _, _ in
+            switch device.id {
+            case existingDevice.id:
+                return existingConnection
+            case replacementDevice.id:
+                return replacementConnection
+            default:
+                XCTFail("Unexpected connection device: \(device)")
+                return MockConnection()
+            }
+        }
+
+        var disconnectReasons: [DisconnectReason] = []
+        handoff.onDisconnected = { reason in
+            disconnectReasons.append(reason)
+        }
+
+        handoff.connect(to: existingDevice)
+        assertConnected(handoff.connectionPhase, device: existingDevice)
+        XCTAssertTrue(existingConnection.isConnected)
+
+        let mockDiscovery = MockDiscovery()
+        mockDiscovery.discoveredDevices = [replacementDevice]
+        handoff.makeDiscovery = { mockDiscovery }
+
+        let previousFactory = makeReachabilityConnection
+        makeReachabilityConnection = { _ in Self.makeReachableStatusConnection() }
+        defer { makeReachabilityConnection = previousFactory }
+
+        try await handoff.connectWithDiscovery(filter: nil, timeout: 0.5)
+
+        XCTAssertFalse(existingConnection.isConnected)
+        XCTAssertTrue(replacementConnection.isConnected)
+        XCTAssertEqual(disconnectReasons, [.localDisconnect])
+        assertConnected(handoff.connectionPhase, device: replacementDevice)
+        XCTAssertNil(handoff.connectionDiagnosticFailure)
+    }
+
     // MARK: - waitForConnectionResult continuation
 
     @ButtonHeistActor
