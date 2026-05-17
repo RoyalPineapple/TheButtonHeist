@@ -27,7 +27,10 @@ enum ToolDefinitions {
 
     // Element targeting = matcher fields plus heistId and ordinal disambiguation.
     static let elementTargetProperties: [String: Value] = elementMatcherProperties.merging([
-        "heistId": ["type": "string", "description": "Current-hierarchy heistId handle returned by get_interface or an action delta. Use matchers for durable flows."],
+        "heistId": [
+            "type": "string",
+            "description": "Current-hierarchy heistId handle returned by get_interface or an action delta. Use matchers for durable flows.",
+        ],
         "ordinal": [
             "type": "integer",
             "description": """
