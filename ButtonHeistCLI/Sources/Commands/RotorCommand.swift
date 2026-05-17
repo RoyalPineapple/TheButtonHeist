@@ -3,7 +3,7 @@ import ButtonHeist
 
 struct RotorCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "rotor",
+        commandName: TheFence.Command.rotor.rawValue,
         abstract: "Move through an accessibility rotor",
         discussion: """
             Moves one step through one of an element's accessibility rotors. Defaults to next. \

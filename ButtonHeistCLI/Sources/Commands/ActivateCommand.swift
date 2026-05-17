@@ -3,7 +3,7 @@ import ButtonHeist
 
 struct ActivateCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "activate",
+        commandName: TheFence.Command.activate.rawValue,
         abstract: "Activate a UI element (primary interaction command)",
         discussion: """
             This is the primary way to interact with UI elements. It uses an \

@@ -3,7 +3,7 @@ import ButtonHeist
 
 struct WaitForCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "wait_for",
+        commandName: TheFence.Command.waitFor.rawValue,
         abstract: "Wait for an element matching a predicate to appear or disappear",
         discussion: """
             Waits for an element matching the given predicate to appear (or \

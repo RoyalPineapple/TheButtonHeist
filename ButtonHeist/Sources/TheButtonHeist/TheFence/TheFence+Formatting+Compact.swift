@@ -252,9 +252,9 @@ extension FenceResponse {
     private static func compactScrollSearchCommandName(for method: ActionMethod) -> String {
         switch method {
         case .elementSearch:
-            return "element_search"
+            return TheFence.Command.elementSearch.rawValue
         case .scrollToVisible:
-            return "scroll_to_visible"
+            return TheFence.Command.scrollToVisible.rawValue
         default:
             return method.rawValue
         }

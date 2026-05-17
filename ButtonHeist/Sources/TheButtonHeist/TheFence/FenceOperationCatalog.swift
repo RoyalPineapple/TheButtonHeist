@@ -21,10 +21,10 @@ public enum FenceOperationCatalog {
         case "gesture":
             return routeGesture(arguments)
 
-        case "scroll":
+        case TheFence.Command.scroll.rawValue:
             return routeScroll(arguments)
 
-        case "edit_action":
+        case TheFence.Command.editAction.rawValue:
             return routeEditAction(arguments)
 
         default:
@@ -73,7 +73,7 @@ public enum FenceOperationCatalog {
         }
 
         var request = arguments
-        request["command"] = name
+        request["command"] = command.rawValue
         return .success(request)
     }
 
@@ -87,21 +87,21 @@ public enum FenceOperationCatalog {
                 selectorValue: command.rawValue
             )
 
-        case .groupedUnder("scroll"):
+        case .groupedUnder(TheFence.Command.scroll.rawValue):
             guard let mode = ScrollMode.allCases.first(where: { $0.canonicalCommand == command.rawValue }) else {
                 return nil
             }
             return groupedToolRoutingMessage(
                 rawToolName: command.rawValue,
-                groupedToolName: "scroll",
+                groupedToolName: TheFence.Command.scroll.rawValue,
                 selectorName: "mode",
                 selectorValue: mode.rawValue
             )
 
-        case .groupedUnder("edit_action") where command == .dismissKeyboard:
+        case .groupedUnder(TheFence.Command.editAction.rawValue) where command == .dismissKeyboard:
             return groupedToolRoutingMessage(
                 rawToolName: command.rawValue,
-                groupedToolName: "edit_action",
+                groupedToolName: TheFence.Command.editAction.rawValue,
                 selectorName: "action",
                 selectorValue: "dismiss"
             )
@@ -131,7 +131,10 @@ public enum FenceOperationCatalog {
             return .failure(FenceOperationRoutingError(message: error.localizedDescription))
         }
         request.removeValue(forKey: "type")
-        request["command"] = gestureType.rawValue
+        guard let command = TheFence.Command(rawValue: gestureType.rawValue) else {
+            return .failure(FenceOperationRoutingError(message: "Unknown gesture command: \(gestureType.rawValue)"))
+        }
+        request["command"] = command.rawValue
         return .success(request)
     }
 
@@ -146,7 +149,10 @@ public enum FenceOperationCatalog {
             return .failure(FenceOperationRoutingError(message: error.localizedDescription))
         }
         request.removeValue(forKey: "mode")
-        request["command"] = scrollMode.canonicalCommand
+        guard let command = TheFence.Command(rawValue: scrollMode.canonicalCommand) else {
+            return .failure(FenceOperationRoutingError(message: "Unknown scroll command: \(scrollMode.canonicalCommand)"))
+        }
+        request["command"] = command.rawValue
         return .success(request)
     }
 
@@ -154,9 +160,9 @@ public enum FenceOperationCatalog {
         var request = arguments
         if let action = request["action"] as? String, action == "dismiss" {
             request.removeValue(forKey: "action")
-            request["command"] = "dismiss_keyboard"
+            request["command"] = TheFence.Command.dismissKeyboard.rawValue
         } else {
-            request["command"] = "edit_action"
+            request["command"] = TheFence.Command.editAction.rawValue
         }
         return .success(request)
     }

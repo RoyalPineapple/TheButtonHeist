@@ -159,7 +159,7 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
     /// Build a scroll_to_visible request from this step's element matcher.
     /// Used by the playback engine to scroll off-screen elements into view before retrying.
     public func scrollToVisibleRequest() -> [String: Any] {
-        var request: [String: Any] = ["command": "scroll_to_visible"]
+        var request: [String: Any] = ["command": ScrollMode.toVisible.canonicalCommand]
         if let target {
             if let label = target.label { request["label"] = label }
             if let matchIdentifier = target.identifier { request["identifier"] = matchIdentifier }

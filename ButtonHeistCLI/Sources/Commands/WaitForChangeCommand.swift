@@ -3,7 +3,7 @@ import ButtonHeist
 
 struct WaitForChangeCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "wait_for_change",
+        commandName: TheFence.Command.waitForChange.rawValue,
         abstract: "Wait for the UI to change, optionally matching an expectation"
     )
 

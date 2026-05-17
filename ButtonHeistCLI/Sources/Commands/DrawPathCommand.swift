@@ -4,7 +4,7 @@ import Foundation
 
 struct DrawPathCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "draw_path",
+        commandName: TheFence.Command.drawPath.rawValue,
         abstract: "Trace a polyline gesture through JSON-specified waypoints",
         discussion: """
             Reads a waypoint array (`[{ "x": …, "y": … }, …]`) either inline

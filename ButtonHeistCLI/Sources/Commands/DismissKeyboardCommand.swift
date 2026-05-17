@@ -3,7 +3,7 @@ import ButtonHeist
 
 struct DismissKeyboardCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "dismiss_keyboard",
+        commandName: TheFence.Command.dismissKeyboard.rawValue,
         abstract: "Dismiss the software keyboard by resigning first responder"
     )
 

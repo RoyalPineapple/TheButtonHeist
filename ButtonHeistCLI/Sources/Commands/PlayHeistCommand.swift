@@ -5,7 +5,7 @@ import TheScore
 
 struct PlayHeistCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "play_heist",
+        commandName: TheFence.Command.playHeist.rawValue,
         abstract: "Play back a recorded .heist file"
     )
 

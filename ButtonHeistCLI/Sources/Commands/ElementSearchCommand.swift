@@ -3,7 +3,7 @@ import ButtonHeist
 
 struct ElementSearchCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "element_search",
+        commandName: TheFence.Command.elementSearch.rawValue,
         abstract: "Search for an element by scrolling",
         discussion: """
             Scrolls the current screen while looking for an element that matches \

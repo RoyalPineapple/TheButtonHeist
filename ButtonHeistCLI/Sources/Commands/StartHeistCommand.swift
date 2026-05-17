@@ -4,7 +4,7 @@ import Foundation
 
 struct StartHeistCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "start_heist",
+        commandName: TheFence.Command.startHeist.rawValue,
         abstract: "Start recording a heist playback (.heist file)"
     )
 

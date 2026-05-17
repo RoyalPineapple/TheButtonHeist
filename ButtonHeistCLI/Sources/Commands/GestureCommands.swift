@@ -5,7 +5,7 @@ import ButtonHeist
 
 struct TapSubcommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "one_finger_tap",
+        commandName: TheFence.Command.oneFingerTap.rawValue,
         abstract: "Raw synthetic tap at coordinates or element center",
         discussion: """
             Performs a direct synthetic tap without accessibility semantics. \
@@ -53,7 +53,7 @@ struct TapSubcommand: AsyncParsableCommand {
 // MARK: - Long Press
 
 struct LongPressSubcommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "long_press", abstract: "Long press at a point or element")
+    static let configuration = CommandConfiguration(commandName: TheFence.Command.longPress.rawValue, abstract: "Long press at a point or element")
 
     @OptionGroup var element: ElementTargetOptions
 
@@ -95,7 +95,7 @@ struct LongPressSubcommand: AsyncParsableCommand {
 // MARK: - Swipe
 
 struct SwipeSubcommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "swipe", abstract: "Swipe between two points or in a direction")
+    static let configuration = CommandConfiguration(commandName: TheFence.Command.swipe.rawValue, abstract: "Swipe between two points or in a direction")
 
     @OptionGroup var element: ElementTargetOptions
 
@@ -187,7 +187,7 @@ struct SwipeSubcommand: AsyncParsableCommand {
 // MARK: - Drag
 
 struct DragSubcommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "drag", abstract: "Drag from one point to another")
+    static let configuration = CommandConfiguration(commandName: TheFence.Command.drag.rawValue, abstract: "Drag from one point to another")
 
     @OptionGroup var element: ElementTargetOptions
 
@@ -237,7 +237,7 @@ struct DragSubcommand: AsyncParsableCommand {
 // MARK: - Pinch
 
 struct PinchSubcommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "pinch", abstract: "Pinch/zoom at a point or element")
+    static let configuration = CommandConfiguration(commandName: TheFence.Command.pinch.rawValue, abstract: "Pinch/zoom at a point or element")
 
     @OptionGroup var element: ElementTargetOptions
 
@@ -287,7 +287,7 @@ struct PinchSubcommand: AsyncParsableCommand {
 // MARK: - Rotate
 
 struct RotateSubcommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "rotate", abstract: "Rotate at a point or element")
+    static let configuration = CommandConfiguration(commandName: TheFence.Command.rotate.rawValue, abstract: "Rotate at a point or element")
 
     @OptionGroup var element: ElementTargetOptions
 
@@ -337,7 +337,7 @@ struct RotateSubcommand: AsyncParsableCommand {
 // MARK: - Two-Finger Tap
 
 struct TwoFingerTapSubcommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "two_finger_tap", abstract: "Tap with two fingers at a point or element")
+    static let configuration = CommandConfiguration(commandName: TheFence.Command.twoFingerTap.rawValue, abstract: "Tap with two fingers at a point or element")
 
     @OptionGroup var element: ElementTargetOptions
 

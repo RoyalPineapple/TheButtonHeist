@@ -3,7 +3,7 @@ import ButtonHeist
 
 struct TypeCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "type_text",
+        commandName: TheFence.Command.typeText.rawValue,
         abstract: "Type text into a field by tapping keyboard keys",
         discussion: """
             Type text character-by-character and/or delete characters.

@@ -286,14 +286,14 @@ extension TheFence {
         case .scroll:
             let direction = try args.requiredSchemaEnum("direction", as: ScrollDirection.self) { $0.lowercased() }
             guard let target = try elementTarget(args) else {
-                return missingElementTargetResponse(command: "scroll")
+                return missingElementTargetResponse(command: Command.scroll.rawValue)
             }
             return try await sendAction(
                 .scroll(ScrollTarget(elementTarget: target, direction: direction))
             )
         case .scrollToVisible:
             guard let target = try elementTarget(args) else {
-                return missingElementTargetResponse(command: "scroll_to_visible")
+                return missingElementTargetResponse(command: Command.scrollToVisible.rawValue)
             }
             let scrollToVisibleTarget = ScrollToVisibleTarget(elementTarget: target)
             let result = try await sendAndAwaitAction(.scrollToVisible(scrollToVisibleTarget), timeout: Timeouts.actionSeconds)
@@ -301,7 +301,7 @@ extension TheFence {
             return .action(result: result)
         case .elementSearch:
             guard let target = try elementTarget(args) else {
-                return missingElementTargetResponse(command: "element_search")
+                return missingElementTargetResponse(command: Command.elementSearch.rawValue)
             }
             let direction = try args.schemaEnum("direction", as: ScrollSearchDirection.self) { $0.lowercased() }
             let searchTarget = ElementSearchTarget(
@@ -314,7 +314,7 @@ extension TheFence {
         case .scrollToEdge:
             let edge = try args.requiredSchemaEnum("edge", as: ScrollEdge.self) { $0.lowercased() }
             guard let target = try elementTarget(args) else {
-                return missingElementTargetResponse(command: "scroll_to_edge")
+                return missingElementTargetResponse(command: Command.scrollToEdge.rawValue)
             }
             return try await sendAction(.scrollToEdge(ScrollToEdgeTarget(elementTarget: target, edge: edge)))
         default:
@@ -336,8 +336,8 @@ extension TheFence {
         // Resolve the action name: activate uses "action" param, standalone commands use the command itself
         let actionName: String? = switch command {
         case .activate: try args.schemaString("action")
-        case .increment: "increment"
-        case .decrement: "decrement"
+        case .increment: Command.increment.rawValue
+        case .decrement: Command.decrement.rawValue
         case .performCustomAction: try args.schemaString("action")
         default: nil
         }
@@ -369,10 +369,10 @@ extension TheFence {
 
         // Built-in actions map to their wire messages; everything else is a custom action
         switch actionName {
-        case "increment":
+        case Command.increment.rawValue:
             let count = try accessibilityAdjustmentCount(args)
             return try await sendRepeatedAdjustment(.increment(target), actionName: actionName, count: count)
-        case "decrement":
+        case Command.decrement.rawValue:
             let count = try accessibilityAdjustmentCount(args)
             return try await sendRepeatedAdjustment(.decrement(target), actionName: actionName, count: count)
         default:
@@ -419,7 +419,7 @@ extension TheFence {
 
     private func handleRotor(_ args: [String: Any]) async throws -> FenceResponse {
         guard let target = try elementTarget(args) else {
-            return missingElementTargetResponse(command: "rotor")
+            return missingElementTargetResponse(command: Command.rotor.rawValue)
         }
         let direction = try args.schemaEnum("direction", as: RotorDirection.self) { $0.lowercased() } ?? .next
         if let rotorIndex = try args.schemaInteger("rotorIndex"), rotorIndex < 0 {
@@ -502,7 +502,7 @@ extension TheFence {
 
     func handleWaitFor(_ args: [String: Any]) async throws -> FenceResponse {
         guard let target = try elementTarget(args) else {
-            return missingElementTargetResponse(command: "wait_for")
+            return missingElementTargetResponse(command: Command.waitFor.rawValue)
         }
         let waitForTarget = WaitForTarget(
             elementTarget: target,
@@ -787,7 +787,7 @@ extension TheFence {
         defer { playbackPhase = .idle }
 
         // Prime the registry before playback — get_interface defaults to full exploration
-        _ = try await execute(request: ["command": "get_interface"])
+        _ = try await execute(request: ["command": Command.getInterface.rawValue])
 
         for (index, step) in heist.steps.enumerated() {
             let stepStart = CFAbsoluteTimeGetCurrent()
@@ -903,7 +903,7 @@ extension TheFence {
     /// Capture a live interface snapshot for failure diagnostics.
     private func captureInterfaceSnapshot() async -> Interface? {
         do {
-            let response = try await execute(request: ["command": "get_interface"])
+            let response = try await execute(request: ["command": Command.getInterface.rawValue])
             if case .interface(let snapshot, _, _, _) = response {
                 return snapshot
             }

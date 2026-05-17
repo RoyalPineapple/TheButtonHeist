@@ -4,7 +4,7 @@ import ButtonHeist
 
 struct ScreenshotCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "get_screen",
+        commandName: TheFence.Command.getScreen.rawValue,
         abstract: "Capture a screenshot from the connected device"
     )
 

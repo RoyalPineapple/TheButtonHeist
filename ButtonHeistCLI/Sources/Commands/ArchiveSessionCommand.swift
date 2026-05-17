@@ -4,7 +4,7 @@ import Foundation
 
 struct ArchiveSessionCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "archive_session",
+        commandName: TheFence.Command.archiveSession.rawValue,
         abstract: "Close and archive the current session into a .tar.gz file"
     )
 

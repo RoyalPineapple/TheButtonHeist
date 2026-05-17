@@ -3,7 +3,7 @@ import ButtonHeist
 
 struct ScrollToEdgeCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "scroll_to_edge",
+        commandName: TheFence.Command.scrollToEdge.rawValue,
         abstract: "Scroll to the edge of a scroll view",
         discussion: """
             Finds the nearest scroll view ancestor of the target element and
