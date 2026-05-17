@@ -2,9 +2,11 @@ import ArgumentParser
 import Foundation
 import ButtonHeist
 
-struct ScreenshotCommand: AsyncParsableCommand {
+struct ScreenshotCommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.getScreen
+
     static let configuration = CommandConfiguration(
-        commandName: TheFence.Command.getScreen.rawValue,
+        commandName: Self.cliCommandName,
         abstract: "Capture a screenshot from the connected device"
     )
 
@@ -15,7 +17,7 @@ struct ScreenshotCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     func run() async throws {
-        var request: [String: Any] = ["command": TheFence.Command.getScreen.rawValue]
+        var request = Self.fenceRequest()
         if let outputPath = output {
             request["output"] = outputPath
             try await CLIRunner.run(

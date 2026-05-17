@@ -2,9 +2,11 @@ import ArgumentParser
 import Foundation
 import ButtonHeist
 
-struct RecordCommand: AsyncParsableCommand {
+struct RecordCommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.startRecording
+
     static let configuration = CommandConfiguration(
-        commandName: TheFence.Command.startRecording.rawValue,
+        commandName: Self.cliCommandName,
         abstract: "Record the screen of the connected device"
     )
 

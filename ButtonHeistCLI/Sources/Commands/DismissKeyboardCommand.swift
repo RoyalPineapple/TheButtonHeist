@@ -1,9 +1,11 @@
 import ArgumentParser
 import ButtonHeist
 
-struct DismissKeyboardCommand: AsyncParsableCommand {
+struct DismissKeyboardCommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.dismissKeyboard
+
     static let configuration = CommandConfiguration(
-        commandName: TheFence.Command.dismissKeyboard.rawValue,
+        commandName: Self.cliCommandName,
         abstract: "Dismiss the software keyboard by resigning first responder"
     )
 
@@ -12,9 +14,7 @@ struct DismissKeyboardCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        let request: [String: Any] = [
-            "command": TheFence.Command.dismissKeyboard.rawValue,
-        ]
+        let request = Self.fenceRequest()
         try await CLIRunner.run(
             connection: connection,
             format: output.format,

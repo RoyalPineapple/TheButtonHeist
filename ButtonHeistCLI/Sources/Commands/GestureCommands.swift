@@ -3,9 +3,11 @@ import ButtonHeist
 
 // MARK: - Tap
 
-struct TapSubcommand: AsyncParsableCommand {
+struct TapSubcommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.oneFingerTap
+
     static let configuration = CommandConfiguration(
-        commandName: TheFence.Command.oneFingerTap.rawValue,
+        commandName: Self.cliCommandName,
         abstract: "Raw synthetic tap at coordinates or element center",
         discussion: """
             Performs a direct synthetic tap without accessibility semantics. \
@@ -36,7 +38,7 @@ struct TapSubcommand: AsyncParsableCommand {
             throw ValidationError("Must specify a heistId, -id, or --x/--y coordinates")
         }
 
-        var request: [String: Any] = ["command": TheFence.Command.oneFingerTap.rawValue]
+        var request = Self.fenceRequest()
         try element.applyTo(&request)
         if let x { request["x"] = x }
         if let y { request["y"] = y }
@@ -52,8 +54,10 @@ struct TapSubcommand: AsyncParsableCommand {
 
 // MARK: - Long Press
 
-struct LongPressSubcommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(commandName: TheFence.Command.longPress.rawValue, abstract: "Long press at a point or element")
+struct LongPressSubcommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.longPress
+
+    static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Long press at a point or element")
 
     @OptionGroup var element: ElementTargetOptions
 
@@ -75,10 +79,7 @@ struct LongPressSubcommand: AsyncParsableCommand {
             throw ValidationError("Must specify a heistId, -id, or --x/--y coordinates")
         }
 
-        var request: [String: Any] = [
-            "command": TheFence.Command.longPress.rawValue,
-            "duration": duration,
-        ]
+        var request = Self.fenceRequest(["duration": duration])
         try element.applyTo(&request)
         if let x { request["x"] = x }
         if let y { request["y"] = y }
@@ -94,8 +95,10 @@ struct LongPressSubcommand: AsyncParsableCommand {
 
 // MARK: - Swipe
 
-struct SwipeSubcommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(commandName: TheFence.Command.swipe.rawValue, abstract: "Swipe between two points or in a direction")
+struct SwipeSubcommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.swipe
+
+    static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Swipe between two points or in a direction")
 
     @OptionGroup var element: ElementTargetOptions
 
@@ -160,7 +163,7 @@ struct SwipeSubcommand: AsyncParsableCommand {
             }
         }
 
-        var request: [String: Any] = ["command": TheFence.Command.swipe.rawValue]
+        var request = Self.fenceRequest()
         try element.applyTo(&request)
         if let fromX { request["startX"] = fromX }
         if let fromY { request["startY"] = fromY }
@@ -186,8 +189,10 @@ struct SwipeSubcommand: AsyncParsableCommand {
 
 // MARK: - Drag
 
-struct DragSubcommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(commandName: TheFence.Command.drag.rawValue, abstract: "Drag from one point to another")
+struct DragSubcommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.drag
+
+    static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Drag from one point to another")
 
     @OptionGroup var element: ElementTargetOptions
 
@@ -215,11 +220,10 @@ struct DragSubcommand: AsyncParsableCommand {
             throw ValidationError("Must specify a heistId, -id, or --from-x/--from-y coordinates")
         }
 
-        var request: [String: Any] = [
-            "command": TheFence.Command.drag.rawValue,
+        var request = Self.fenceRequest([
             "endX": toX,
             "endY": toY,
-        ]
+        ])
         try element.applyTo(&request)
         if let fromX { request["startX"] = fromX }
         if let fromY { request["startY"] = fromY }
@@ -236,8 +240,10 @@ struct DragSubcommand: AsyncParsableCommand {
 
 // MARK: - Pinch
 
-struct PinchSubcommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(commandName: TheFence.Command.pinch.rawValue, abstract: "Pinch/zoom at a point or element")
+struct PinchSubcommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.pinch
+
+    static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Pinch/zoom at a point or element")
 
     @OptionGroup var element: ElementTargetOptions
 
@@ -265,10 +271,7 @@ struct PinchSubcommand: AsyncParsableCommand {
             throw ValidationError("Must specify a heistId, -id, or --x/--y coordinates")
         }
 
-        var request: [String: Any] = [
-            "command": TheFence.Command.pinch.rawValue,
-            "scale": scale,
-        ]
+        var request = Self.fenceRequest(["scale": scale])
         try element.applyTo(&request)
         if let x { request["x"] = x }
         if let y { request["y"] = y }
@@ -286,8 +289,10 @@ struct PinchSubcommand: AsyncParsableCommand {
 
 // MARK: - Rotate
 
-struct RotateSubcommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(commandName: TheFence.Command.rotate.rawValue, abstract: "Rotate at a point or element")
+struct RotateSubcommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.rotate
+
+    static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Rotate at a point or element")
 
     @OptionGroup var element: ElementTargetOptions
 
@@ -315,10 +320,7 @@ struct RotateSubcommand: AsyncParsableCommand {
             throw ValidationError("Must specify a heistId, -id, or --x/--y coordinates")
         }
 
-        var request: [String: Any] = [
-            "command": TheFence.Command.rotate.rawValue,
-            "angle": angle,
-        ]
+        var request = Self.fenceRequest(["angle": angle])
         try element.applyTo(&request)
         if let x { request["x"] = x }
         if let y { request["y"] = y }
@@ -336,8 +338,10 @@ struct RotateSubcommand: AsyncParsableCommand {
 
 // MARK: - Two-Finger Tap
 
-struct TwoFingerTapSubcommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(commandName: TheFence.Command.twoFingerTap.rawValue, abstract: "Tap with two fingers at a point or element")
+struct TwoFingerTapSubcommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.twoFingerTap
+
+    static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Tap with two fingers at a point or element")
 
     @OptionGroup var element: ElementTargetOptions
 
@@ -359,7 +363,7 @@ struct TwoFingerTapSubcommand: AsyncParsableCommand {
             throw ValidationError("Must specify a heistId, -id, or --x/--y coordinates")
         }
 
-        var request: [String: Any] = ["command": TheFence.Command.twoFingerTap.rawValue]
+        var request = Self.fenceRequest()
         try element.applyTo(&request)
         if let x { request["x"] = x }
         if let y { request["y"] = y }

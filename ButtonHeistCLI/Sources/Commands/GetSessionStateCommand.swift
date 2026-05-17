@@ -1,9 +1,11 @@
 import ArgumentParser
 import ButtonHeist
 
-struct GetSessionStateCommand: AsyncParsableCommand {
+struct GetSessionStateCommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.getSessionState
+
     static let configuration = CommandConfiguration(
-        commandName: TheFence.Command.getSessionState.rawValue,
+        commandName: Self.cliCommandName,
         abstract: "Report the current connection + session state",
         discussion: """
             Returns connection status, connected device, recording state,
@@ -22,9 +24,7 @@ struct GetSessionStateCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        let request: [String: Any] = [
-            "command": TheFence.Command.getSessionState.rawValue,
-        ]
+        let request = Self.fenceRequest()
         try await CLIRunner.run(
             connection: connection,
             format: output.format,

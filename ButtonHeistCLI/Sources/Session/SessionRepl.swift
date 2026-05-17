@@ -236,28 +236,28 @@ nonisolated extension ReplSession {
         JSON input still works: {"command":"activate","heistId":"button_save"}
         """
 
-    private static let commandAliases: [String: String] = [
-        "tap": TheFence.Command.oneFingerTap.rawValue,
-        "press": TheFence.Command.longPress.rawValue,
-        "ui": TheFence.Command.getInterface.rawValue,
-        "screen": TheFence.Command.getScreen.rawValue,
-        "screenshot": TheFence.Command.getScreen.rawValue,
-        "idle": TheFence.Command.waitForChange.rawValue,
-        "change": TheFence.Command.waitForChange.rawValue,
-        "wait": TheFence.Command.waitFor.rawValue,
-        "devices": TheFence.Command.listDevices.rawValue,
-        "list": TheFence.Command.listDevices.rawValue,
-        "type": TheFence.Command.typeText.rawValue,
-        "record": TheFence.Command.startRecording.rawValue,
+    private static let commandAliases: [String: TheFence.Command] = [
+        "tap": .oneFingerTap,
+        "press": .longPress,
+        "ui": .getInterface,
+        "screen": .getScreen,
+        "screenshot": .getScreen,
+        "idle": .waitForChange,
+        "change": .waitForChange,
+        "wait": .waitFor,
+        "devices": .listDevices,
+        "list": .listDevices,
+        "type": .typeText,
+        "record": .startRecording,
     ]
 
     /// Aliases that expand to a command + default parameter (e.g. "copy" → edit_action with action=copy).
-    private static let compoundAliases: [String: (command: String, params: [String: String])] = [
-        "copy": (TheFence.Command.editAction.rawValue, ["action": EditAction.copy.rawValue]),
-        "paste": (TheFence.Command.editAction.rawValue, ["action": EditAction.paste.rawValue]),
-        "cut": (TheFence.Command.editAction.rawValue, ["action": EditAction.cut.rawValue]),
-        "select": (TheFence.Command.editAction.rawValue, ["action": EditAction.select.rawValue]),
-        "select_all": (TheFence.Command.editAction.rawValue, ["action": EditAction.selectAll.rawValue]),
+    private static let compoundAliases: [String: (command: TheFence.Command, params: [String: String])] = [
+        "copy": (.editAction, ["action": EditAction.copy.rawValue]),
+        "paste": (.editAction, ["action": EditAction.paste.rawValue]),
+        "cut": (.editAction, ["action": EditAction.cut.rawValue]),
+        "select": (.editAction, ["action": EditAction.select.rawValue]),
+        "select_all": (.editAction, ["action": EditAction.selectAll.rawValue]),
     ]
 
     private static let directionWords: Set<String> = [
@@ -268,8 +268,8 @@ nonisolated extension ReplSession {
         "top", "bottom", "left", "right"
     ]
 
-    private static let directionCommands: Set<String> = [
-        TheFence.Command.swipe.rawValue, TheFence.Command.scroll.rawValue, TheFence.Command.rotor.rawValue,
+    private static let directionCommands: Set<TheFence.Command> = [
+        .swipe, .scroll, .rotor,
     ]
 
     static func parseHumanInput(_ line: String) -> [String: Any] {
@@ -277,17 +277,17 @@ nonisolated extension ReplSession {
         guard let first = tokens.first else { return [:] }
 
         let rawCommand = first.lowercased()
-        let command: String
+        let command: TheFence.Command?
         var result: [String: Any]
         let args = Array(tokens.dropFirst())
 
         if let compound = compoundAliases[rawCommand] {
             command = compound.command
-            result = ["command": command]
+            result = compound.command.cliRequest()
             for (key, value) in compound.params { result[key] = value }
         } else {
-            command = commandAliases[rawCommand] ?? rawCommand
-            result = ["command": command]
+            command = commandAliases[rawCommand] ?? TheFence.Command(rawValue: rawCommand)
+            result = command?.cliRequest() ?? ["command": rawCommand]
         }
 
         // Separate key=value pairs from positional tokens
@@ -324,22 +324,26 @@ nonisolated extension ReplSession {
         result["expect"] = expectation
     }
 
-    private static func interpretPositionalArgs(command: String, positional: [String], into result: inout [String: Any]) {
+    private static func interpretPositionalArgs(
+        command: TheFence.Command?,
+        positional: [String],
+        into result: inout [String: Any]
+    ) {
         guard !positional.isEmpty else { return }
 
         switch command {
-        case TheFence.Command.typeText.rawValue:
+        case .some(.typeText):
             // Everything after "type" is the text to type
             if result["text"] == nil {
                 result["text"] = positional.joined(separator: " ")
             }
 
-        case TheFence.Command.editAction.rawValue:
+        case .some(.editAction):
             if result["action"] == nil, let action = positional.first {
                 result["action"] = action
             }
 
-        case TheFence.Command.scrollToEdge.rawValue:
+        case .some(.scrollToEdge):
             // First positional: edge or identifier; second: identifier
             var remaining = positional
             if let first = remaining.first, edgeWords.contains(first.lowercased()) {
@@ -348,7 +352,7 @@ nonisolated extension ReplSession {
             }
             applyElementTarget(remaining, into: &result)
 
-        case TheFence.Command.performCustomAction.rawValue:
+        case .some(.performCustomAction):
             // First positional: identifier, rest: actionName
             if let first = positional.first {
                 applyElementTarget([first], into: &result)
@@ -362,7 +366,7 @@ nonisolated extension ReplSession {
             var remaining = positional
 
             // For direction commands, consume a direction word first
-            if directionCommands.contains(command),
+            if let command, directionCommands.contains(command),
                let first = remaining.first, directionWords.contains(first.lowercased()) {
                 result["direction"] = first.lowercased()
                 remaining.removeFirst()

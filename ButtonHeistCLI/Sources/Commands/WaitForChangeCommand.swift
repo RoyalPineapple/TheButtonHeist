@@ -1,9 +1,11 @@
 import ArgumentParser
 import ButtonHeist
 
-struct WaitForChangeCommand: AsyncParsableCommand {
+struct WaitForChangeCommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.waitForChange
+
     static let configuration = CommandConfiguration(
-        commandName: TheFence.Command.waitForChange.rawValue,
+        commandName: Self.cliCommandName,
         abstract: "Wait for the UI to change, optionally matching an expectation"
     )
 
@@ -18,10 +20,7 @@ struct WaitForChangeCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        var request: [String: Any] = [
-            "command": TheFence.Command.waitForChange.rawValue,
-            "timeout": timeout,
-        ]
+        var request = Self.fenceRequest(["timeout": timeout])
         if let expect {
             request["expect"] = try ExpectationArgumentParser.parse(expect)
         }

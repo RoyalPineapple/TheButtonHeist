@@ -1,9 +1,11 @@
 import ArgumentParser
 import ButtonHeist
 
-struct RotorCommand: AsyncParsableCommand {
+struct RotorCommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.rotor
+
     static let configuration = CommandConfiguration(
-        commandName: TheFence.Command.rotor.rawValue,
+        commandName: Self.cliCommandName,
         abstract: "Move through an accessibility rotor",
         discussion: """
             Moves one step through one of an element's accessibility rotors. Defaults to next. \
@@ -64,10 +66,7 @@ struct RotorCommand: AsyncParsableCommand {
             }
         }
 
-        var request: [String: Any] = [
-            "command": TheFence.Command.rotor.rawValue,
-            "direction": direction.lowercased(),
-        ]
+        var request = Self.fenceRequest(["direction": direction.lowercased()])
         if let rotor { request["rotor"] = rotor }
         if let rotorIndex { request["rotorIndex"] = rotorIndex }
         if let currentHeistId { request["currentHeistId"] = currentHeistId }

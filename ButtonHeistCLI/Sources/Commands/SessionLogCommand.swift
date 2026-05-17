@@ -2,9 +2,11 @@ import ArgumentParser
 import ButtonHeist
 import Foundation
 
-struct SessionLogCommand: AsyncParsableCommand {
+struct SessionLogCommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.getSessionLog
+
     static let configuration = CommandConfiguration(
-        commandName: TheFence.Command.getSessionLog.rawValue,
+        commandName: Self.cliCommandName,
         abstract: "Show the current session manifest and stats"
     )
 
@@ -14,7 +16,7 @@ struct SessionLogCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     func run() async throws {
-        let request: [String: Any] = ["command": TheFence.Command.getSessionLog.rawValue]
+        let request = Self.fenceRequest()
         try await CLIRunner.run(
             connection: connection,
             format: output.format,

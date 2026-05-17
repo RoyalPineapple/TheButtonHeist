@@ -1,9 +1,11 @@
 import ArgumentParser
 import ButtonHeist
 
-struct StopRecordingCommand: AsyncParsableCommand {
+struct StopRecordingCommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.stopRecording
+
     static let configuration = CommandConfiguration(
-        commandName: TheFence.Command.stopRecording.rawValue,
+        commandName: Self.cliCommandName,
         abstract: "Stop an in-progress screen recording"
     )
 
@@ -11,9 +13,7 @@ struct StopRecordingCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     func run() async throws {
-        let request: [String: Any] = [
-            "command": TheFence.Command.stopRecording.rawValue,
-        ]
+        let request = Self.fenceRequest()
 
         try await CLIRunner.run(
             connection: connection,

@@ -1,9 +1,11 @@
 import ArgumentParser
 import ButtonHeist
 
-struct ScrollCommand: AsyncParsableCommand {
+struct ScrollCommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.scroll
+
     static let configuration = CommandConfiguration(
-        commandName: TheFence.Command.scroll.rawValue,
+        commandName: Self.cliCommandName,
         abstract: "Scroll a scroll view by one page",
         discussion: """
             Scrolls the nearest scroll view ancestor of a target element by
@@ -33,11 +35,10 @@ struct ScrollCommand: AsyncParsableCommand {
             throw ValidationError("Invalid direction '\(direction)'. Valid: \(ScrollDirection.allCases.map(\.rawValue).joined(separator: ", "))")
         }
 
-        var request: [String: Any] = [
-            "command": TheFence.Command.scroll.rawValue,
+        var request = Self.fenceRequest([
             "direction": direction.lowercased(),
             "timeout": timeoutOption.timeout,
-        ]
+        ])
         try element.applyTo(&request)
 
         try await CLIRunner.run(

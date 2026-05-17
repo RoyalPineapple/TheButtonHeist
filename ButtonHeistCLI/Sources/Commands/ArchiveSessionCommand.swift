@@ -2,9 +2,11 @@ import ArgumentParser
 import ButtonHeist
 import Foundation
 
-struct ArchiveSessionCommand: AsyncParsableCommand {
+struct ArchiveSessionCommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.archiveSession
+
     static let configuration = CommandConfiguration(
-        commandName: TheFence.Command.archiveSession.rawValue,
+        commandName: Self.cliCommandName,
         abstract: "Close and archive the current session into a .tar.gz file"
     )
 
@@ -17,10 +19,7 @@ struct ArchiveSessionCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     func run() async throws {
-        let request: [String: Any] = [
-            "command": TheFence.Command.archiveSession.rawValue,
-            "delete_source": deleteSource,
-        ]
+        let request = Self.fenceRequest(["delete_source": deleteSource])
         try await CLIRunner.run(
             connection: connection,
             format: output.format,

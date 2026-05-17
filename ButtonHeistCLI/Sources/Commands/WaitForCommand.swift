@@ -1,9 +1,11 @@
 import ArgumentParser
 import ButtonHeist
 
-struct WaitForCommand: AsyncParsableCommand {
+struct WaitForCommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.waitFor
+
     static let configuration = CommandConfiguration(
-        commandName: TheFence.Command.waitFor.rawValue,
+        commandName: Self.cliCommandName,
         abstract: "Wait for an element matching a predicate to appear or disappear",
         discussion: """
             Waits for an element matching the given predicate to appear (or \
@@ -38,10 +40,7 @@ struct WaitForCommand: AsyncParsableCommand {
     mutating func run() async throws {
         _ = try element.requireTarget()
 
-        var request: [String: Any] = [
-            "command": TheFence.Command.waitFor.rawValue,
-            "timeout": timeout,
-        ]
+        var request = Self.fenceRequest(["timeout": timeout])
         try element.applyTo(&request)
         if absent { request["absent"] = true }
 

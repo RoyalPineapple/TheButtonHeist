@@ -1,9 +1,11 @@
 import ArgumentParser
 import ButtonHeist
 
-struct ActivateCommand: AsyncParsableCommand {
+struct ActivateCommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.activate
+
     static let configuration = CommandConfiguration(
-        commandName: TheFence.Command.activate.rawValue,
+        commandName: Self.cliCommandName,
         abstract: "Activate a UI element (primary interaction command)",
         discussion: """
             This is the primary way to interact with UI elements. It uses an \
@@ -42,17 +44,14 @@ struct ActivateCommand: AsyncParsableCommand {
         var request: [String: Any]
         switch action.flatMap({ TheFence.Command(rawValue: $0.lowercased()) }) {
         case .increment:
-            request = ["command": TheFence.Command.increment.rawValue]
+            request = TheFence.Command.increment.cliRequest()
         case .decrement:
-            request = ["command": TheFence.Command.decrement.rawValue]
+            request = TheFence.Command.decrement.cliRequest()
         default:
             if let action {
-                request = [
-                    "command": TheFence.Command.performCustomAction.rawValue,
-                    "action": action,
-                ]
+                request = TheFence.Command.performCustomAction.cliRequest(["action": action])
             } else {
-                request = ["command": TheFence.Command.activate.rawValue]
+                request = Self.fenceRequest()
             }
         }
 

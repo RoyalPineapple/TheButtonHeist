@@ -1,9 +1,11 @@
 import ArgumentParser
 import ButtonHeist
 
-struct ElementSearchCommand: AsyncParsableCommand {
+struct ElementSearchCommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.elementSearch
+
     static let configuration = CommandConfiguration(
-        commandName: TheFence.Command.elementSearch.rawValue,
+        commandName: Self.cliCommandName,
         abstract: "Search for an element by scrolling",
         discussion: """
             Scrolls the current screen while looking for an element that matches \
@@ -39,10 +41,7 @@ struct ElementSearchCommand: AsyncParsableCommand {
             }
         }
 
-        var request: [String: Any] = [
-            "command": TheFence.Command.elementSearch.rawValue,
-            "timeout": timeout,
-        ]
+        var request = Self.fenceRequest(["timeout": timeout])
         try element.applyTo(&request)
         if let direction { request["direction"] = direction.lowercased() }
 

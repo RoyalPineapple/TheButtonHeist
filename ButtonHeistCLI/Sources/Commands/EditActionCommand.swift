@@ -1,9 +1,11 @@
 import ArgumentParser
 import ButtonHeist
 
-struct EditActionCommand: AsyncParsableCommand {
+struct EditActionCommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.editAction
+
     static let configuration = CommandConfiguration(
-        commandName: TheFence.Command.editAction.rawValue,
+        commandName: Self.cliCommandName,
         abstract: "Perform an edit menu action on the current first responder",
         discussion: """
             Triggers copy, paste, cut, select, or selectAll on the element \
@@ -30,10 +32,7 @@ struct EditActionCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        let request: [String: Any] = [
-            "command": TheFence.Command.editAction.rawValue,
-            "action": action,
-        ]
+        let request = Self.fenceRequest(["action": action])
 
         try await CLIRunner.run(
             connection: connection,

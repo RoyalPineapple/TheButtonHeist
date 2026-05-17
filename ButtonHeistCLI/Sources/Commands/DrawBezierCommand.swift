@@ -2,9 +2,11 @@ import ArgumentParser
 import ButtonHeist
 import Foundation
 
-struct DrawBezierCommand: AsyncParsableCommand {
+struct DrawBezierCommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.drawBezier
+
     static let configuration = CommandConfiguration(
-        commandName: TheFence.Command.drawBezier.rawValue,
+        commandName: Self.cliCommandName,
         abstract: "Trace cubic bezier segments sampled to a polyline",
         discussion: """
             Reads a segment array (`[{ "cp1X": …, "cp1Y": …, "cp2X": …, "cp2Y": …,
@@ -47,12 +49,11 @@ struct DrawBezierCommand: AsyncParsableCommand {
     @ButtonHeistActor
     mutating func run() async throws {
         let array = try loadJSONArray(inline: segments, fromFile: segmentsFromFile, optionName: "segments")
-        var request: [String: Any] = [
-            "command": TheFence.Command.drawBezier.rawValue,
+        var request = Self.fenceRequest([
             "startX": startX,
             "startY": startY,
             "segments": array,
-        ]
+        ])
         if let samplesPerSegment { request["samplesPerSegment"] = samplesPerSegment }
         if let duration { request["duration"] = duration }
         if let velocity { request["velocity"] = velocity }
