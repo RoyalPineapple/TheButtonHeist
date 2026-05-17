@@ -14,14 +14,14 @@ TLS/TCP server infrastructure — listener, transport, authentication, and conne
 
 2. **`TheMuscle.swift`** — `actor`. Authentication and session locking. UI alert presentation lives in `AlertPresenter` (`@MainActor` companion); the auth state machine itself runs on its own actor.
 
-   **`ClientPhase`**: `.connected` → `.helloValidated` → `.pendingApproval` or `.authenticated` or `.observer`.
+   **`ClientPhase`**: `.connected` → `.helloValidated` → `.pendingApproval` or `.authenticated`.
 
    **`SessionPhase`**: `.idle` → `.active(driverId:, connections:)` → `.draining(driverId:, releaseTimer:)` → `.idle`.
 
    Auth flow: `handleUnauthenticatedMessage` decodes the envelope, checks protocol version, then dispatches:
    - `.clientHello` → transition to `.helloValidated`, send `.authRequired`
    - `.authenticate(payload)` → check lockout → empty token: show `UIAlertController` (`.pendingApproval`) → wrong token: `recordFailedAttempt`, locked after 5 failures for 30s → correct token: `acquireSession`
-   - `.watch(payload)` → observer mode (read-only, no session claim)
+   - all other pre-auth messages → disconnect
 
    `acquireSession`: `.idle` → claim. Same driver → add connection. Different driver → `.sessionLocked`, disconnect after 100ms grace. Draining same driver → cancel release timer, re-activate.
 

@@ -11,7 +11,7 @@ Navigation's invariant: visible pages are physical evidence; known state is sema
 
 Both components are owned by TheBrains (`let navigation: Navigation`, `let actions: Actions`) and share the same TheStash / TheSafecracker / TheTripwire references. They are *internal components of TheBrains*, not crew members in their own right — neutral noun-style names. Actions holds a reference to Navigation so targeted element/point flows can call `ensureOnScreen(for:)`, and edit, pasteboard, and resign-first-responder commands can call `ensureFirstResponderOnScreen()`.
 
-TheBrains keeps the post-action delta cycle, dispatch, wait handlers, and broadcast state. It also re-exposes the most-touched Navigation/Actions members via typealiases and forwarding properties so callers can spell them `brains.X` when the original location was less ergonomic; new code should call `brains.navigation.X` / `brains.actions.X` directly.
+TheBrains keeps the post-action delta cycle, dispatch, wait handlers, response state, and recording state. It also re-exposes the most-touched Navigation/Actions members via typealiases and forwarding properties so callers can spell them `brains.X` when the original location was less ergonomic; new code should call `brains.navigation.X` / `brains.actions.X` directly.
 
 ## Reading order
 

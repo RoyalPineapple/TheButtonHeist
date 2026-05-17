@@ -213,7 +213,7 @@ Key design: each waiter starts its own quiet-frame counter at zero, independent 
 
 | Call site | Timeout | Purpose |
 |-----------|---------|---------|
-| `checkForChanges()` | sync `allClear()` | Gate polling broadcasts |
+| `checkForChanges()` | sync `allClear()` | Gate settled capture checks |
 | `sendInterface()` | 0.5s | Wait before sending interface snapshot |
 | `actionResultWithDelta()` | 1.0s | Wait after action before computing delta |
 | `handleWaitForIdle()` | user-specified (clamped to 60s) | Explicit idle wait command |
@@ -274,7 +274,7 @@ Window-stack changes are Tripwire triggers only. Key-window status is input rout
 | `.settled` | quiet → settled edge | Every tick |
 | `.unsettled` | settled → not-quiet edge | Every tick |
 
-TheInsideJob wires `onTransition` and uses `.settled` to trigger deferred hierarchy broadcasts when `hierarchyInvalidated` is true.
+TheInsideJob wires `onTransition` and uses `.settled` to trigger deferred settled-change tracking when `hierarchyInvalidated` is true.
 
 ## Window Filtering
 
@@ -303,12 +303,12 @@ graph LR
     BM["TheStash"] -->|"let tripwire (strong)"| TW
     SC["TheSafecracker"] -->|"weak var tripwire"| TW
 
-    TW -->|".settled → broadcastCurrentHierarchy()"| IJ
+    TW -->|".settled → noteSettledChangeIfNeeded()"| IJ
     TW -->|"window access, waitForAllClear, tripwireSignal, topmostVC"| BM
     TW -->|"waitForAllClear"| SC
 ```
 
-- **TheInsideJob** owns the instance. Sets `onTransition` in `start()`, calls `startPulse()`/`stopPulse()` on suspend/resume. On `.settled`, broadcasts hierarchy if invalidated.
+- **TheInsideJob** owns the instance. Sets `onTransition` in `start()`, calls `startPulse()`/`stopPulse()` on suspend/resume. On `.settled`, tracks the settled change if invalidated.
 - **TheStash** holds a strong ref passed at init. Uses accessible windows for parsing, traversable windows for capture, and `waitForAllClear()` post-action.
 - **TheSafecracker** uses `waitForAllClear()` for scroll-settle in `ensureOnScreen`.
 

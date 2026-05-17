@@ -6,7 +6,7 @@ Technical documentation for Button Heist internals. The blueprints, not the sale
 
 | Document | Description |
 |----------|-------------|
-| [Architecture](ARCHITECTURE.md) | System design, component interaction, and data flow diagrams |
+| [Architecture](ARCHITECTURE.md) | Load-bearing product contracts and the compact component map |
 | [API Reference](API.md) | Complete API for the MCP server, TheInsideJob, TheFence, TheHandoff, and CLI |
 | [Wire Protocol](WIRE-PROTOCOL.md) | Protocol specification — explicit envelopes, canonical interface tree, authentication, TLS transport. Versioned via `buttonHeistVersion` (CalVer); no separate wire-protocol version. |
 | [Authentication](AUTH.md) | Token auth, session locking, UI approval |

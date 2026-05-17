@@ -10,7 +10,7 @@ TheHandoff owns the full lifecycle of communicating with a remote iOS device run
 
 1. **Device discovery** — starts and stops Bonjour (`DeviceDiscovery`) and USB (`USBDeviceDiscovery`) discovery sessions; maintains `discoveredDevices`
 2. **Connection management** — creates `DeviceConnection` instances, routes `ConnectionEvent`s from the transport layer to named callbacks, and manages `connectionPhase` (an explicit state machine carrying the device in `.connecting` and `.connected` phases)
-3. **Session state tracking** — maintains `connectionPhase` (disconnected/connecting(device)/connected(device)/failed(ConnectionError)), `currentInterface`, `currentScreen`, `recordingPhase` (idle/recording)
+3. **Session state tracking** — maintains `connectionPhase` (disconnected/connecting(device)/connected(device)/failed(ConnectionError)) and `recordingPhase` (idle/recording)
 4. **Keepalive** — sends `.ping` every 5 seconds over an active connection to keep the channel alive
 5. **Session management** — `connectWithDiscovery(filter:timeout:)` closes any active session, then orchestrates discovery → device resolution → connection with timeout tracking
 6. **Reachability probing** — `discoverReachableDevices(timeout:)` discovers and validates each device advertisement via parallel TCP status probes
@@ -26,8 +26,8 @@ graph TD
     subgraph TheHandoff["TheHandoff (@ButtonHeistActor)"]
         DiscState["Discovery State\ndiscoveredDevices, isDiscovering"]
         ConnState["Connection State\nconnectionPhase, serverInfo"]
-        Callbacks["Typed Callbacks\nonDeviceFound/Lost, onConnected/Disconnected,\nonInterface, onActionResult, onScreen,\nonRecording*, onError, onAuth*,\nonSessionLocked, onInteraction, onStatus"]
-        Config["Configuration\ntoken, driverId, observeMode, autoSubscribe"]
+        Callbacks["Typed Callbacks\nonDeviceFound/Lost, onConnected/Disconnected,\nonInterface, onActionResult, onScreen,\nonRecording*, onError, onAuth*,\nonSessionLocked, onStatus"]
+        Config["Configuration\ntoken, driverId"]
 
         subgraph Factories["Injectable Closures (mock boundary)"]
             MakeDisc["makeDiscovery: () → DeviceDiscovering"]
@@ -116,7 +116,6 @@ sequenceDiagram
     C->>S: clientHello
     S->>C: authRequired
     C->>S: authenticate(token, driverId)
-    Note right of C: or .watch in observeMode
     S->>C: info(ServerInfo)
     Note right of S: triggers .connected event
 ```
@@ -191,7 +190,6 @@ DeviceDiscovering (@ButtonHeistActor)
 
 DeviceConnecting (@ButtonHeistActor)
     var isConnected: Bool
-    var observeMode: Bool
     var onEvent: (@ButtonHeistActor (ConnectionEvent) -> Void)?
     func connect()
     func disconnect()
@@ -226,7 +224,7 @@ On receiving a `ConnectionEvent.connected`, `startKeepalive()` launches a `Task`
 3. Creates `~/.buttonheist/` if needed and writes the UUID atomically
 4. Returns the UUID
 
-The driver ID is passed to `DeviceConnection` and sent in every `.authenticate` or `.watch` message, allowing TheInsideJob/TheMuscle to identify and lock sessions to specific clients.
+The driver ID is passed to `DeviceConnection` and sent in every `.authenticate` message, allowing TheInsideJob/TheMuscle to identify and lock sessions to specific clients.
 
 ## Auto-Connect and Auto-Reconnect
 
@@ -251,12 +249,9 @@ Sets `reconnectPolicy = .enabled(filter:)`. The disconnect event handler in `con
 - `runAutoReconnect` makes up to 60 attempts: sleep 1s → look for matching device in `discoveredDevices` → call `connect(to:)` → poll `isConnected` for up to 10s
 - Reports progress via `onStatus?` and stops on success or exhaustion
 
-## Auto-Subscribe Behavior
+## Initial Interface Read
 
-When `autoSubscribe` is `true` (the default), TheHandoff sends two messages immediately upon receiving the `info` server message:
-
-1. `.subscribe` — registers for push notifications
-2. `.requestInterface` — fetches the current accessibility hierarchy
+After receiving the `info` server message, callers request interface state explicitly through `requestInterface` / `get_interface`.
 
 Screen snapshots are requested only through explicit `.requestScreen` calls.
 

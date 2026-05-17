@@ -2,7 +2,7 @@
 
 > **Directory:** `ButtonHeist/Sources/TheInsideJob/TheGetaway/` (`TheGetaway.swift`, `TheGetaway+Recording.swift`, `PingFastPath.swift`)
 > **Platform:** iOS 17.0+ (UIKit, DEBUG builds only)
-> **Role:** Runs all comms between the wire and the crew — message dispatch, encode/decode, broadcast, transport wiring, recording lifecycle
+> **Role:** Runs all comms between the wire and the crew — message dispatch, encode/decode, transport wiring, response state, recording lifecycle
 
 ## Responsibilities
 
@@ -12,9 +12,9 @@ TheGetaway is the communication backbone of the inside operation:
 2. **Message dispatch** — `handleClientMessage` is the two-level switch routing every `ClientMessage` to the right crew member: protocol messages to TheMuscle, observation to TheBrains (wait handlers, interface requests), actions to TheBrains (`executeCommand`), recording to TheStakeout.
 3. **Background trace fast-redirect** — before dispatching actions, checks `brains.computeBackgroundAccessibilityTrace()`. If the trace-derived delta shows the screen changed while the agent was thinking, returns a synthetic result instead of executing a stale action.
 4. **Encode/decode** — `encodeEnvelope` wraps `ServerMessage` in `ResponseEnvelope`, `decodeRequest` unwraps `RequestEnvelope`. Single codepath for all message types.
-5. **Send/broadcast** — `sendMessage` handles single-client responses with error fallback. `broadcastToSubscribed`/`broadcastToAll` encode once, send to many.
-6. **Hierarchy broadcast** — `broadcastIfChanged()` calls `brains.broadcastInterfaceIfChanged()` and broadcasts to subscribers. Called by TheInsideJob's pulse handler and polling task.
-7. **Interface sending** — `sendInterface` settles, refreshes, explores, builds the full payload, sends, and records the sent state.
+5. **Send** — `sendMessage` handles single-client responses with error fallback. `broadcastToAll` remains only for recording stop/error notifications.
+6. **Settled change tracking** — `noteSettledChangeIfNeeded()` updates recording inactivity state from settled accessibility captures. Runtime hierarchy subscriptions are no longer a public surface.
+7. **Interface sending** — `sendInterface` settles, refreshes, builds the app accessibility-state payload, sends, and records the sent state.
 8. **Screen capture** — `handleScreen` captures via `brains.captureScreen()`, PNG-encodes, and sends explicit screen responses.
 9. **Recording lifecycle** — owns `RecordingPhase` (`.idle`/`.recording(stakeout:)`). Creates TheStakeout on demand, wires capture/completion closures, manages phase transitions.
 
@@ -26,8 +26,8 @@ graph TD
         Wire["wireTransport()<br/>5 closures on TheMuscle<br/>4 callbacks on ServerTransport"]
         Dispatch["handleClientMessage()<br/>Two-level switch"]
         Encode["encodeEnvelope / decodeRequest"]
-        Send["sendMessage / broadcastToSubscribed"]
-        Broadcast["broadcastIfChanged / sendInterface"]
+        Send["sendMessage / broadcastToAll(recording)"]
+        Broadcast["noteSettledChangeIfNeeded / sendInterface"]
         Recording["handleStartRecording / handleStopRecording"]
     end
 
@@ -35,7 +35,7 @@ graph TD
     Dispatch -->|"actions"| Brains["TheBrains.executeCommand"]
     Dispatch -->|"wait_for_change"| BrainsWait["TheBrains.executeWaitFor*"]
     Dispatch -->|"recording"| Recording
-    Broadcast -->|"refresh + delta"| Brains
+    Broadcast -->|"settled capture check"| Brains
     Wire --> Muscle
     Wire --> Transport["ServerTransport"]
 ```
@@ -67,7 +67,7 @@ TheGetaway follows the same closure-injection pattern as TheMuscle:
 - TheMuscle's closures (`sendToClient`, `markClientAuthenticated`, etc.) are set by TheGetaway in `wireTransport`
 - ServerTransport delivers a single ordered `AsyncStream<TransportEvent>` (`transport.events`); TheGetaway runs one long-lived consumer task that awaits each event and dispatches via `handleTransportEvent(_:)`. The optional synchronous ping fast-path is installed via `transport.setSyncDataInterceptor(_:)` before `start()`.
 - TheBrains is called directly (same `@MainActor`, synchronous calls)
-- TheInsideJob calls `getaway.broadcastIfChanged()` and `getaway.wireTransport(_:)` — those are the only entry points from the job
+- TheInsideJob calls `getaway.noteSettledChangeIfNeeded()` and `getaway.wireTransport(_:)` — those are the only entry points from the job
 
 ## Identity
 

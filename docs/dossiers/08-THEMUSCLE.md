@@ -14,9 +14,8 @@ TheMuscle controls who gets access and enforces single-driver exclusivity:
 2. **On-device UI approval** - shows Allow/Deny popup for empty-token connections
 3. **Session locking** - ensures only one "driver" controls the app at a time
 4. **Single-timer session release** - inactivity timer for cleanup when all connections drop
-5. **Observer management** - tracks read-only observer connections (`observerClients`), routes `watch` messages, validates token by default (`restrictWatchers` defaults to `true`). Set `INSIDEJOB_RESTRICT_WATCHERS=0` (env) or `InsideJobRestrictWatchers=false` (plist) to allow unauthenticated observers
-6. **Brute-force protection** - tracks per-address rate-limiting state via `addressAuthStates: [String: AddressAuthState]`. `AddressAuthState` is an enum with two cases: `.failing(attempts: Int)` for accumulating failures and `.lockedOut(until: Date, attempts: Int)` for lockout after 5 consecutive failures. Lockout lasts 30 seconds, persists across TCP reconnections (keyed on IP, not client ID), and clears automatically on expiry. Successful authentication removes the entry for that address
-7. **Per-client lifecycle tracking** - each client traverses a `ClientPhase` enum stored in `clients: [Int: ClientPhase]`. The five phases are: `.connected(address:)`, `.helloValidated(address:)`, `.pendingApproval(address:respond:isObserver:)`, `.authenticated(address:driverIdentity:subscribed:)`, and `.observer(address:subscribed:)`. Disconnection removes the entry entirely. Clients must reach `.helloValidated` before auth is processed; clients still in `.connected` are rejected and disconnected
+5. **Brute-force protection** - tracks per-address rate-limiting state via `addressAuthStates: [String: AddressAuthState]`. `AddressAuthState` is an enum with two cases: `.failing(attempts: Int)` for accumulating failures and `.lockedOut(until: Date, attempts: Int)` for lockout after 5 consecutive failures. Lockout lasts 30 seconds, persists across TCP reconnections (keyed on IP, not client ID), and clears automatically on expiry. Successful authentication removes the entry for that address
+6. **Per-client lifecycle tracking** - each client traverses a `ClientPhase` enum stored in `clients: [Int: ClientPhase]`. The phases are: `.connected(address:)`, `.helloValidated(address:)`, `.pendingApproval(address:respond:driverId:)`, and `.authenticated(address:driverIdentity:)`. Disconnection removes the entry entirely. Clients must reach `.helloValidated` before auth is processed; clients still in `.connected` are rejected and disconnected
 
 ## Architecture Diagram
 
@@ -24,7 +23,7 @@ TheMuscle controls who gets access and enforces single-driver exclusivity:
 graph TD
     subgraph TheMuscle["TheMuscle (actor)"]
         TokenRes["Token Resolution - explicit > env var > plist > auto-generated UUID"]
-        HelloGate["Hello Gate - require clientHello before auth/watch/status"]
+        HelloGate["Hello Gate - require clientHello before auth/status"]
         AuthFlow["Auth Flow - validate token / hop to AlertPresenter"]
         SessionMgr["Session Manager - driver identity tracking"]
         Timer["Release Timer - fires when all connections drop"]
@@ -34,11 +33,8 @@ graph TD
         UIPrompt["UIAlertController - Allow / Deny"]
     end
 
-    WatchMgr["Observer Manager - observer tracking, token-checked by default"]
-
     Client["Remote Client"] -->|clientHello| HelloGate
     HelloGate -->|authenticate(token)| AuthFlow
-    HelloGate -->|watch(token)| WatchMgr
     AuthFlow -->|valid| SessionMgr
     AuthFlow -->|empty| UIPrompt
     UIPrompt -->|Allow/Deny callback hops back into actor| AuthFlow
@@ -129,8 +125,6 @@ stateDiagram-v2
 | Environment | `INSIDEJOB_TOKEN` | auto-UUID | Explicit auth token |
 | Info.plist | `InsideJobToken` | auto-UUID | Fallback when env var not set |
 | Environment | `INSIDEJOB_SESSION_TIMEOUT` | 30s | Release timer (fires when all connections drop). No plist fallback. |
-| Environment | `INSIDEJOB_RESTRICT_WATCHERS` | `true` (restricted) | Set to `"0"`, `"false"`, or `"no"` to allow unauthenticated observers. Accepts `"1"`, `"true"`, `"yes"` (case-insensitive) to restrict. |
-| Info.plist | `InsideJobRestrictWatchers` | `true` (restricted) | Fallback when env var not set. Boolean plist value. |
 
 ### Callbacks
 
@@ -152,8 +146,8 @@ stateDiagram-v2
 - Documented behavior, but potential for annoyance/DoS in shared network environments
 - Consider: should there be a way to disable UI approval flow entirely?
 
-**Client lifecycle is a 5-phase state machine** (`TheMuscle.swift`)
-- `ClientPhase` tracks each client through: connected, helloValidated, pendingApproval, authenticated, observer
+**Client lifecycle is a 4-phase state machine** (`TheMuscle.swift`)
+- `ClientPhase` tracks each client through: connected, helloValidated, pendingApproval, authenticated
 - `helloValidatedClients` is a computed property derived from `clients` (any phase past `.connected`)
 - Any future auth changes need to preserve these phase distinctions or disconnections will get subtle
 

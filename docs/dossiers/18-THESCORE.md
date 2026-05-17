@@ -16,9 +16,9 @@ TheScore is the shared playbook. It defines:
 6. **Action result types** (`ActionResult`, `AccessibilityTrace.Delta`, `ActionMethod`, `ScrollSearchResult`)
 7. **Action outcome signals** (`ActionExpectation`, `ExpectationResult`) — outcome classifiers for actions
 8. **Media payloads** (`ScreenPayload`, `RecordingPayload`)
-9. **Interaction events** (`InteractionEvent`) — wire-level command/result recording, also broadcast live to observers
+9. **Interaction events** (`InteractionEvent`) — wire-level command/result recording
 10. **Status types** (`StatusPayload`, `StatusIdentity`, `StatusSession`) — server identity and session state
-11. **Watch payload** (`WatchPayload`) — observer connection parameters
+11. **Watch payload** (`WatchPayload`) — legacy watch payload retained for wire decoding
 12. **Server info** (`ServerInfo`)
 13. **Protocol constants** (service type, version)
 14. **`ButtonHeistActor`** — dedicated global actor for the host-side control plane
@@ -83,7 +83,7 @@ graph TD
     subgraph ClientMessages["ClientMessage (37 cases)"]
         Hello["clientHello"]
         Auth["authenticate(AuthenticatePayload)"]
-        Sub["subscribe / unsubscribe"]
+        Sub["subscribe / unsubscribe<br/>(legacy unsupported)"]
         Ping["ping / status"]
         Query["requestInterface / requestScreen / waitForIdle"]
         Actions["activate / increment / decrement / performCustomAction"]
@@ -92,7 +92,7 @@ graph TD
         Text["typeText / editAction / resignFirstResponder"]
         Pasteboard["setPasteboard / getPasteboard"]
         Recording["startRecording / stopRecording"]
-        Watch["watch(WatchPayload)"]
+        Watch["watch(WatchPayload)<br/>(legacy unsupported)"]
         Explore["explore"]
         WaitFor["waitFor"]
     end
@@ -341,7 +341,7 @@ classDiagram
 
     class StatusSession {
         +Bool active
-        +Bool watchersAllowed
+        +Bool watchersAllowed=false
         +Int activeConnections
     }
 

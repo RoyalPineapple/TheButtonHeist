@@ -14,9 +14,9 @@ The getaway driver — runs all comms between the wire and the crew.
 
 `handleClientMessage(_:data:respond:)` is the two-level switch:
 
-1. **Protocol level** — clientHello/authenticate/watch (pre-auth, handled via onUnauthenticatedData), requestInterface, subscribe/unsubscribe, ping, status
+1. **Protocol level** — clientHello/authenticate (pre-auth, handled via onUnauthenticatedData), requestInterface, ping, status. Legacy subscribe/unsubscribe/watch messages return `unsupported`.
 2. **Observation level** — requestScreen, waitForIdle (`brains.executeWaitForIdle`), waitForChange (`brains.executeWaitForChange`)
-3. **Action level** (blocked for observers) — recording start/stop, or `brains.executeCommand(message)` for all action commands
+3. **Action level** — recording start/stop, or `brains.executeCommand(message)` for all action commands
 
 Before dispatching actions, checks `brains.computeBackgroundAccessibilityTrace()` — if the screen changed while the agent was thinking and the command targets a specific element, fails before execution and returns the current accessibility trace plus its derived delta.
 
@@ -31,11 +31,11 @@ Before dispatching actions, checks `brains.computeBackgroundAccessibilityTrace()
 
 Owns `RecordingPhase` state machine (`.idle` / `.recording(stakeout:)`). `handleStartRecording` creates a `TheStakeout`, wires `captureFrame` to `brains.captureScreenForRecording()`, and stores completed recordings until `stop_recording` retrieves them. `handleStopRecording` calls `stakeout.stopRecording(reason: .manual)` and returns the final payload to that caller.
 
-### Hierarchy broadcast
+### Settled change tracking
 
-`broadcastIfChanged()` calls `brains.broadcastInterfaceIfChanged()` — if the tree changed, broadcasts the `Interface` to subscribers. Called by TheInsideJob's pulse handler and polling task.
+`noteSettledChangeIfNeeded()` updates recording inactivity state when a settled accessibility capture has changed. Runtime hierarchy subscriptions are no longer a public surface.
 
-`sendInterface(requestId:respond:)` settles, refreshes, builds the visible `Interface` payload via `brains.currentInterface()`, sends it, and records the sent state. Full-screen exploration is handled by the explicit `.explore` command.
+`sendInterface(requestId:respond:)` settles, refreshes, builds the normal app accessibility-state payload via `brains.currentInterface()`, sends it, and records the sent state. Diagnostic on-screen reads and explicit exploration are command-level concerns outside this transport helper.
 
 ### Identity
 

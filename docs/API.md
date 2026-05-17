@@ -18,7 +18,7 @@ When the TheInsideJob framework loads:
 1. Reads configuration from environment variables or Info.plist
 2. Creates a TCP server on an OS-assigned port
 3. Begins Bonjour advertisement as `_buttonheist._tcp`
-4. Starts polling for UI element snapshot changes
+4. Starts settle-driven UI change detection
 
 ### Configuration
 
@@ -30,7 +30,6 @@ INSIDEJOB_DISABLE_FINGERPRINTS=true  # Suppress visual tap/gesture indicators
 INSIDEJOB_TOKEN=my-secret-token      # Auth token (fresh UUID auto-generated each launch if not set)
 INSIDEJOB_ID=my-instance             # Human-readable instance identifier
 INSIDEJOB_SESSION_TIMEOUT=30         # Session release timeout in seconds (default: 30, min: 1)
-INSIDEJOB_RESTRICT_WATCHERS=0        # Allow unauthenticated watch (observer) connections (default: restricted, watchers require token)
 ```
 
 **Info.plist (fallback):**
@@ -141,7 +140,7 @@ Stop automatic polling.
 public func notifyChange()
 ```
 
-Manually trigger a debounced hierarchy broadcast to connected clients. Uses a 300ms debounce to prevent update spam.
+Mark the hierarchy as changed so the next settled Tripwire pulse refreshes Button Heist's accessibility capture.
 
 ### Interaction Philosophy: Activation-First
 
@@ -245,8 +244,6 @@ public final class TheHandoff
 | `reconnectPolicy` | `ReconnectPolicy` | Whether auto-reconnect fires on disconnect (disabled/enabled) |
 | `recordingPhase` | `RecordingPhase` | Recording lifecycle state machine (idle/recording) |
 | `serverInfo` | `ServerInfo?` | Server info received after connecting |
-| `currentInterface` | `Interface?` | Most recent UI hierarchy from push broadcasts |
-| `currentScreen` | `ScreenPayload?` | Most recent unsolicited screenshot payload, retained for protocol compatibility. Normal screenshots are explicit `requestScreen` responses. |
 | `isConnected` | `Bool` | Whether transport is connected |
 | `isDiscovering` | `Bool` | Whether Bonjour discovery is active |
 | `isRecording` | `Bool` | Whether screen recording is in progress |
@@ -269,7 +266,6 @@ public final class TheHandoff
 | `onAuthApproved` | `((String?) -> Void)?` | Auth approved (token provided) |
 | `onSessionLocked` | `((SessionLockedPayload) -> Void)?` | Session locked by another driver |
 | `onAuthFailed` | `((String) -> Void)?` | Auth rejected |
-| `onInteraction` | `((InteractionEvent) -> Void)?` | Interaction broadcast from observer mode |
 | `onStatus` | `((String) -> Void)?` | Progress messages for session management |
 
 > **Note:** At the network layer, `DeviceConnection` and `DeviceDiscovery` use a single `onEvent` callback with typed enums (`ConnectionEvent`, `DiscoveryEvent`). TheHandoff translates these into the named callbacks above.
@@ -280,8 +276,6 @@ public final class TheHandoff
 |----------|------|-------------|
 | `token` | `String?` | Auth token for connections |
 | `driverId` | `String?` | Driver identity for session locking |
-| `autoSubscribe` | `Bool` | Auto-send subscribe/requestInterface on connect (default: true) |
-| `observeMode` | `Bool` | Send `watch` instead of `authenticate` (default: false) |
 
 #### Injectable Closures (Test Boundary)
 
@@ -416,7 +410,7 @@ Called with status messages during connection lifecycle (searching, connecting, 
 ```swift
 public var onAuthApproved: (@ButtonHeistActor (String?) -> Void)?
 ```
-Called when the connection is approved. Token is `nil` for observer connections.
+Called when the connection is approved. UI approval returns the token that the client can reuse.
 
 #### Methods
 
@@ -592,11 +586,11 @@ cd ButtonHeistMCP && swift build -c release
 
 ButtonHeistMCP exposes 24 tools. The exact schemas are projected from `TheFence.Command.parameters` in `ToolDefinitions.swift` and guarded by sync tests; this section documents the contract rather than duplicating every parameter.
 
-- Direct tools map 1:1 to raw Fence commands such as `activate`, `type_text`, `wait_for`, `get_screen`, `set_pasteboard`, `run_batch`, and session-management commands.
+- Direct tools map 1:1 to canonical Fence commands such as `activate`, `type_text`, `wait_for`, `get_screen`, `set_pasteboard`, `run_batch`, and session-management commands.
 - `gesture` is a top-level MCP grouping for low-level gesture commands selected by `type`.
 - `scroll` is a top-level MCP grouping for page scrolling, scroll-to-visible, search scrolling, and edge scrolling selected by `mode`.
-- `edit_action` accepts responder-chain edit actions, with the top-level MCP `dismiss` selector routing to raw Fence command `dismiss_keyboard`.
-- `run_batch` is the exception to MCP grouping: each step must be a raw Fence command dictionary, not a nested MCP grouped-tool shape.
+- `edit_action` accepts responder-chain edit actions, with the top-level MCP `dismiss` selector routing to canonical Fence command `dismiss_keyboard`.
+- `run_batch` is the exception to MCP grouping: each step must use a batch-executable canonical Fence command request, not a nested MCP grouped-tool shape.
 
 `get_session_state` reports the current connection phase and the last known failure/disconnect reason without doing observation work. It does not send `requestInterface` or `explore`.
 
@@ -644,13 +638,13 @@ Perform an edit or keyboard action on the current first responder. Requires `act
 
 #### run_batch
 
-Execute an ordered sequence of raw Fence command requests in a single MCP call. Steps run sequentially — the response from one step is not piped into the next.
+Execute an ordered sequence of batch-executable canonical command requests in a single MCP call. Steps run sequentially — the response from one step is not piped into the next.
 
 Batch steps use the batch-executable `TheFence.Command` shape. Do not use grouped MCP wrapper names inside `steps`: use `swipe` instead of `gesture` with `type`, `element_search` instead of `scroll` with `mode: "search"`, and `dismiss_keyboard` instead of `edit_action` with `action: "dismiss"`. Session-only commands (`help`, `status`, `quit`, `exit`) and nested `run_batch` are rejected inside batches.
 
 **Parameters:**
 
-- `steps` (required) — Array of raw Fence command request objects (e.g., `[{"command": "activate", "identifier": "loginButton", "expect": {"type": "screen_changed"}}, {"command": "swipe", "direction": "left"}]`)
+- `steps` (required) — Array of canonical command request objects (e.g., `[{"command": "activate", "identifier": "loginButton", "expect": {"type": "screen_changed"}}, {"command": "swipe", "direction": "left"}]`)
 - `policy` — `"stop_on_error"` (default) or `"continue_on_error"`
 
 With the default `stop_on_error` policy, the batch halts at the first mismet expectation or delivery failure. `failedIndex` points at the step that broke — not a downstream step that failed because the expected state change never happened.
@@ -783,9 +777,8 @@ Messages sent from client to server.
 
 - `clientHello` - Version-negotiation hello sent immediately after `serverHello`
 - `authenticate(AuthenticatePayload)` - Authenticate with a token (sent after `clientHello` / `authRequired`)
-- `requestInterface` - Request current hierarchy
-- `subscribe` - Subscribe to automatic updates
-- `unsubscribe` - Unsubscribe from updates
+- `requestInterface` - Request current app accessibility state
+- `subscribe` / `unsubscribe` - Legacy runtime subscription messages. They are retained for wire compatibility and return `unsupported`.
 - `ping` - Keepalive
 - `activate(ActionTarget)` - Activate element (VoiceOver double-tap)
 - `increment(ActionTarget)` - Increment adjustable element
@@ -880,7 +873,7 @@ public struct StatusSession: Codable, Sendable
 #### Properties
 
 - `active: Bool` - Whether a driver session is active
-- `watchersAllowed: Bool` - Whether observer connections are allowed for the active session
+- `watchersAllowed: Bool` - Always `false`; legacy watch connections are not a public surface
 - `activeConnections: Int` - Number of connections in the current session
 
 ### AuthenticatePayload
@@ -1771,7 +1764,7 @@ OPTIONS:
 
 ### buttonheist stop_recording
 
-Explicitly stop an in-progress recording or retrieve a cached auto-finished recording. The recording payload is broadcast to all connected clients, so the original `start_recording` process (running in background) receives it and writes the file.
+Explicitly stop an in-progress recording or retrieve a cached auto-finished recording. The response contains the completed recording payload for the caller.
 
 ```
 USAGE: buttonheist stop_recording [OPTIONS]
@@ -1816,44 +1809,6 @@ buttonheist wait_for --label "Welcome" --timeout 10
 # Wait for an element by heistId
 buttonheist wait_for --heist-id button_login
 ```
-
-### buttonheist watch
-
-Watch a live session as a read-only observer. Streams JSON events to stdout until killed with Ctrl+C. Observers require a valid token by default, but do not claim a session lock. Set `INSIDEJOB_RESTRICT_WATCHERS=0` on the server to allow unauthenticated observers.
-
-```
-USAGE: buttonheist watch [OPTIONS]
-
-OPTIONS:
-  --device <filter>       Target a specific device by name, ID prefix, or index
-  -t, --timeout <seconds> Connection timeout (default: 30)
-  --token <token>         Auth token (required by default; optional only when INSIDEJOB_RESTRICT_WATCHERS=0)
-```
-
-**Output**: Newline-delimited JSON objects, each with a `type` field:
-
-| Type | Description |
-|------|-------------|
-| `"info"` | Connection established, contains `ServerInfo` |
-| `"interface"` | UI hierarchy update |
-| `"interaction"` | Driver performed an action (contains command, result, delta) |
-
-**Examples:**
-```bash
-# Watch the first available device with auth
-buttonheist watch --token my-secret-token
-
-# Watch a specific device
-buttonheist watch --device my-simulator --token my-secret-token
-
-# Pipe to jq for formatted output
-buttonheist watch --token my-secret-token | jq .
-
-# Watch without auth only when the server sets INSIDEJOB_RESTRICT_WATCHERS=0
-buttonheist watch
-```
-
----
 
 ## Usage Examples
 

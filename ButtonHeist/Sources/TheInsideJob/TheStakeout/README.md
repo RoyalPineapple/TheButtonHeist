@@ -19,7 +19,7 @@ Screen recording engine. Captures frames at configurable FPS, encodes H.264/MP4 
 2. Checks file size (>7 MB → stop, `.fileSizeLimit`), max duration (configurable → stop)
 3. Allocates `CVPixelBuffer` from the adaptor's pool, draws the image into a `CGContext`, appends with `CMTime(value: frameCount, timescale: fps)`
 
-**Inactivity monitor** — wakes every 1s, checks `Date().timeIntervalSince(lastActivityTime)` against `inactivityTimeout`. Activity is bumped by `noteActivity()` (incoming commands) and `noteScreenChange()` (hierarchy broadcasts). When omitted, `inactivityTimeout` follows `maxDuration`; explicit values remain early-stop hints.
+**Inactivity monitor** — wakes every 1s, checks `Date().timeIntervalSince(lastActivityTime)` against `inactivityTimeout`. Activity is bumped by `noteActivity()` (incoming commands) and `noteScreenChange()` (settled accessibility capture changes). When omitted, `inactivityTimeout` follows `maxDuration`; explicit values remain early-stop hints.
 
 **`stopRecording(reason:)`** — cancels both tasks, transitions to `.finalizing`, calls `finalizeRecording`.
 

@@ -2057,7 +2057,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(
             summaries[0].error,
             "run_batch step 0: run_batch step \"scroll\" uses the MCP mode selector; " +
-                "use raw Fence commands scroll, scroll_to_visible, element_search, or scroll_to_edge."
+                "use canonical Fence commands scroll, scroll_to_visible, element_search, or scroll_to_edge."
         )
     }
 
@@ -2090,7 +2090,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testBatchStillAcceptsRawFenceCommandShapes() async throws {
+    func testBatchStillAcceptsCanonicalFenceCommandShapes() async throws {
         let (fence, mockConn) = makeConnectedFence()
         mockConn.autoResponse = { _ in
             .actionResult(ActionResult(success: true, method: .activate))
@@ -2115,7 +2115,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testBatchReportsUnknownRawCommandWithStepIndex() async throws {
+    func testBatchReportsUnknownCanonicalCommandWithStepIndex() async throws {
         let (fence, mockConn) = makeConnectedFence()
         mockConn.autoResponse = { _ in
             .actionResult(ActionResult(success: true, method: .activate))
@@ -2138,7 +2138,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(results.count, 2)
         XCTAssertEqual(failedIndex, 1)
         XCTAssertEqual(summaries.map(\.command), ["activate", "gesture", "activate"])
-        let expectedError = "run_batch step 1: run_batch step command must be a raw TheFence.Command; unknown command \"gesture\""
+        let expectedError = "run_batch step 1: run_batch step command must be a canonical TheFence.Command; unknown command \"gesture\""
         XCTAssertEqual(
             summaries[1].error,
             expectedError

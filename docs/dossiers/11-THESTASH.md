@@ -44,7 +44,7 @@ let screen = stash.parse()        // pure read — does not touch currentScreen
 stash.currentScreen = screen      // commit
 
 // Exploration path (Navigation+Explore.exploreAndPrune):
-var union = stash.currentScreen   // seed with current viewport
+var union = stash.currentScreen   // seed with current interaction snapshot
 for container in scrollableContainers {
     await scrollToTop(container)
     if let parsed = stash.refresh() {
@@ -52,7 +52,7 @@ for container in scrollableContainers {
     }
     while await scrollOnePageAndSettle(container) {
         if let parsed = stash.parse() {
-            stash.currentScreen = parsed     // mid-cycle live viewport for termination heuristics
+            stash.currentScreen = parsed     // mid-cycle interaction snapshot for termination heuristics
             union = union.merging(parsed)
         }
     }
@@ -60,7 +60,7 @@ for container in scrollableContainers {
 stash.currentScreen = union       // commit final union
 ```
 
-Mid-exploration writes to `currentScreen` keep in-cycle termination checks ("did the viewport change after this scroll?") working without exposing the in-flight union to other code. The agent-visible screen state is always either "viewport from the most recent parse" or "union from the most recent exploration commit" — never a partial in-flight blend.
+Mid-exploration writes to `currentScreen` keep in-cycle termination checks ("did the parsed page change after this scroll?") working without exposing the in-flight union to other code. The public screen state is always either the most recent committed app accessibility state or the final exploration union — never a partial in-flight blend.
 
 ## Crew Responsibility Boundaries
 

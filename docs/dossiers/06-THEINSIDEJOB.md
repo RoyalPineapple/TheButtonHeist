@@ -14,7 +14,7 @@ TheInsideJob is the job. It assembles the crew, manages the operation lifecycle,
 4. **App lifecycle** — observes `didEnterBackground` (suspend), `willEnterForeground` (resume), `willTerminate` (stop)
 5. **Suspend/resume** — tears down transport, pulse, keyboard observation, and cache on background; recreates everything on foreground
 6. **Polling management** — `PollingPhase` state machine, `makePollingTask` settle loop, pause/resume across background
-7. **Pulse routing** — receives `TheTripwire.PulseTransition` via callback, tells TheGetaway to broadcast on `.settled`
+7. **Pulse routing** — receives `TheTripwire.PulseTransition` via callback, tells TheGetaway when a settled capture may have changed
 8. **Accessibility observation** — listens for `elementFocusedNotification` and `voiceOverStatusDidChange`, tells TheGetaway to mark hierarchy invalidated
 
 ## Architecture Diagram
@@ -66,14 +66,14 @@ graph TD
 | `TheInsideJob.swift` | Singleton, crew assembly, server lifecycle, polling, app lifecycle |
 | `AutoStart.swift` | `@_cdecl` bridge for ObjC auto-start (ThePlant calls this) |
 
-All message handling, encoding, broadcasting, and recording now live in [`TheGetaway/`](../../ButtonHeist/Sources/TheInsideJob/TheGetaway/). See [09-THEGETAWAY.md](09-THEGETAWAY.md).
+All message handling, encoding, transport notifications, and recording now live in [`TheGetaway/`](../../ButtonHeist/Sources/TheInsideJob/TheGetaway/). See [09-THEGETAWAY.md](09-THEGETAWAY.md).
 
 ## Ownership
 
 ```mermaid
 graph TD
     TIJ["<b>TheInsideJob</b><br/><i>the job</i>"]
-    TG["<b>TheGetaway</b><br/><i>comms — dispatch, encode,<br/>broadcast, transport, recording</i>"]
+    TG["<b>TheGetaway</b><br/><i>comms — dispatch, encode,<br/>transport, recording</i>"]
     TT["<b>TheTripwire</b><br/><i>pulse — settle detection,<br/>injected into others</i>"]
     TM["<b>TheMuscle</b><br/><i>auth — session locking,<br/>closure-wired via TheGetaway</i>"]
     TB["<b>TheBrains</b><br/><i>actions — execution, scroll,<br/>explore, delta, wait handlers</i>"]
@@ -108,14 +108,10 @@ Calling `shared` before `configure()` creates a default instance that ignores an
 flowchart TD
     Receive["handleClientMessage"]
     Receive --> Decode["Decode RequestEnvelope"]
-    Decode --> ObsCheck["isObserver = muscle.observerClients.contains(clientId)"]
+    Decode --> Level1["Level 1: Protocol + Observation"]
 
-    ObsCheck --> Level1["Level 1: Protocol + Observation (all clients)"]
-    Level1 --> L1Cases["subscribe / unsubscribe / ping / status / requestInterface / requestScreen / waitForIdle"]
-
-    ObsCheck --> ObsGate{"is observer?"}
-    ObsGate -->|yes| ReadOnly["Return: Watch mode is read-only"]
-    ObsGate -->|no| Level2["Level 2: Recording + Interactions"]
+    Level1 --> L1Cases["ping / status / requestInterface / requestScreen / waitForIdle"]
+    Level1 --> Level2["Level 2: Recording + Interactions"]
 
     Level2 --> RecCases["startRecording / stopRecording"]
     Level2 --> DispatchInt["dispatchInteraction → 3 sub-dispatchers"]
@@ -162,7 +158,7 @@ flowchart TD
     S6 -->|yes| S6a["7. Record InteractionEvent to Stakeout"]
     S6 -->|no| S7["8. send(.actionResult)"]
     S6a --> S7
-    S7 --> S8["9. If hasSubscribers: broadcast InteractionEvent"]
+    S7 --> S8["9. Return action result"]
 ```
 
 `performElementSearch` is structurally identical but calls `brains.executeElementSearch` directly (handles repeated scroll+settle cycles internally) and preserves `scrollSearchResult` in the response. `scrollToVisible` is now a one-shot jump that flows through the standard `performInteraction` pipeline.
@@ -171,12 +167,12 @@ flowchart TD
 
 `status` is handled specially:
 - Allowed **pre-auth**: any client that has completed `clientHello` → `serverHello` (is in `helloValidatedClients`) can send `status` before providing a token
-- Allowed **post-auth**: routed through the Level 1 dispatch for all authenticated clients including observers
+- Allowed **post-auth**: routed through the Level 1 dispatch for authenticated clients
 - Builds `StatusPayload` via `makeStatusPayload()` from `Bundle.main`, `UIDevice.current`, and `TheMuscle` state
 
-## Update Mechanisms
+## Settled Change Tracking
 
-Two paths trigger hierarchy broadcasts:
+Two paths update recording/background state from settled hierarchy changes:
 
 ### 1. Pulse-driven invalidation (primary)
 
@@ -186,17 +182,17 @@ flowchart LR
     Schedule --> SetFlag["hierarchyInvalidated = true"]
     SetFlag --> Wait["Wait for next .settled transition"]
     Wait --> Pulse["handlePulseTransition(.settled)"]
-    Pulse --> Broadcast["broadcastIfChanged()"]
+    Pulse --> Track["noteSettledChangeIfNeeded()"]
 ```
 
 There is **no debounce timer**. The mechanism is entirely pulse-driven:
 - `scheduleHierarchyUpdate()` sets `hierarchyInvalidated = true`
 - the next `.settled` transition fires `handlePulseTransition`
-- `broadcastIfChanged()` refreshes via TheBrains, compares the snapshot hash, and broadcasts the same shared interface payload path
+- `noteSettledChangeIfNeeded()` refreshes via TheBrains and updates recording inactivity state if the capture changed
 
 ### 2. Settle-driven polling (supplementary)
 
-`startPolling(interval:)` enables an optional loop that waits on `tripwire.waitForAllClear(timeout:)`, then calls the same `broadcastIfChanged()` path. The timeout defaults to 2s and is clamped to a 0.5s minimum. **Disabled by default** (`isPollingEnabled = false`); auto-started instances can enable it.
+`startPolling(interval:)` enables an optional loop that waits on `tripwire.waitForAllClear(timeout:)`, then calls the same settled-change tracking path. The timeout defaults to 2s and is clamped to a 0.5s minimum. **Disabled by default** (`isPollingEnabled = false`); auto-started instances can enable it.
 
 ## Lifecycle State Machine
 

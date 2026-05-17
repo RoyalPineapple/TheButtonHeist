@@ -225,7 +225,7 @@ These commands do not resolve exactly one live element through `resolveTarget()`
 
 | Command | Why |
 |---------|-----|
-| `get_interface` | Filters the full hierarchy tree, returns multiple matches |
+| `get_interface` | Filters the current app accessibility state, returns multiple matches |
 | `wait_for` | Carries an `ElementTarget`, but polls `hasTarget` for appearance/disappearance instead of resolving a single element |
 
 ## Design Principles

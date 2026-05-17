@@ -774,12 +774,12 @@ extension TheFence.Command {
             return [
                 .init(
                     key: "steps", type: .array, required: true,
-                    description: "Ordered list of raw Fence command requests to execute",
+                    description: "Ordered list of batch-executable canonical Fence command requests to execute",
                     arrayItemType: .object,
                     arrayItemProperties: [
                         .init(
                             key: "command", type: .string, required: true,
-                            description: "Raw TheFence.Command name (e.g. activate, swipe, element_search, dismiss_keyboard). " +
+                            description: "Canonical TheFence.Command name (e.g. activate, swipe, element_search, dismiss_keyboard). " +
                                 "Grouped MCP tool names and selector shapes are not accepted inside batches.",
                             enumValues: Self.batchExecutableCases.map(\.rawValue)
                         ),

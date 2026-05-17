@@ -36,7 +36,7 @@ The dossiers are numbered to be read in order. Start at the entry point a user a
 | 06 | [TheInsideJob](06-THEINSIDEJOB.md) | The Job | Singleton coordinator, crew assembly, server lifecycle |
 | 07 | [ThePlant](07-THEPLANT.md) | The Advance Man | Zero-config auto-start via ObjC +load |
 | 08 | [TheMuscle](08-THEMUSCLE.md) | The Bouncer | Authentication, session locking, on-device approval |
-| 09 | [TheGetaway](09-THEGETAWAY.md) | The Getaway Driver | Message dispatch, encode/decode, broadcast, transport wiring, recording |
+| 09 | [TheGetaway](09-THEGETAWAY.md) | The Getaway Driver | Message dispatch, encode/decode, transport notifications, recording |
 
 ### Inside Team — Finding the Element
 | # | Crew Member | Alias | Primary Role |
