@@ -548,11 +548,45 @@ final class TheBrains {
         let delta = current.map { computeDelta(before: baseline, after: $0) }
             ?? InterfaceDelta.noChange(.init(elementCount: 0))
         var builder = ActionResultBuilder(method: .waitForChange, snapshot: afterSnapshot)
-        builder.message = predicate.expectation != nil
-            ? "timed out after \(elapsed)s — expectation not met"
-            : "timed out after \(elapsed)s — no change detected"
+        builder.message = waitForChangeTimeoutMessage(
+            elapsed: elapsed,
+            expectation: predicate.expectation,
+            delta: delta,
+            elementCount: afterSnapshot.count
+        )
         builder.interfaceDelta = delta
         return builder.failure(errorKind: .timeout)
+    }
+
+    private func waitForChangeTimeoutMessage(
+        elapsed: String,
+        expectation: ActionExpectation?,
+        delta: InterfaceDelta,
+        elementCount: Int
+    ) -> String {
+        let expected = expectation?.summaryDescription ?? "any settled UI change"
+        var parts = [
+            "timed out after \(elapsed)s",
+            "expected: \(expected)",
+            "observed: \(delta.kindRawValue)",
+            "known: \(elementCount) elements",
+        ]
+        if let screenId = stash.lastScreenId {
+            parts.append("screen: \(screenId)")
+        }
+        if expectation == .screenChanged {
+            parts.append(
+                "Next: retry wait_for_change with expect: {\"type\": \"elements_changed\"} " +
+                    "if element-level updates are acceptable, or call get_interface(scope: \"full\") " +
+                    "to inspect the current screen."
+            )
+        } else {
+            parts.append(
+                "Next: get_interface(scope: \"full\") to inspect the current screen, " +
+                    "then retry wait_for_change with the expected state."
+            )
+        }
+        return parts.joined(separator: "; ")
     }
 
     private func installWaitForChangePredicate(

@@ -225,6 +225,9 @@ extension FenceResponse {
         if let met = summary.expectationMet { entry["expectationMet"] = met }
         if let count = summary.elementCount { entry["elementCount"] = count }
         if let error = summary.error { entry["error"] = error }
+        if let errorCode = summary.errorCode { entry["errorCode"] = errorCode }
+        if let phase = summary.phase { entry["phase"] = phase }
+        if let nextCommand = summary.nextCommand { entry["nextCommand"] = nextCommand }
         return entry
     }
 

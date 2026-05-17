@@ -192,6 +192,26 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(result.message?.contains("2 matches") == true)
     }
 
+    func testWaitForAppearTimeoutNamesExpectedMatcherAndKnownCount() async throws {
+        let label = addLabel("WaitFor-Known-Anchor")
+        defer { label.removeFromSuperview() }
+
+        let response = await waitFor(
+            target: .matcher(ElementMatcher(label: "WaitFor-Missing-Target")),
+            timeout: 0.2
+        )
+        let result = try XCTUnwrap(response)
+        let message = try XCTUnwrap(result.message)
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .waitFor)
+        XCTAssertEqual(result.errorKind, .timeout)
+        XCTAssertTrue(message.contains("waiting for element to appear"), "Unexpected message: \(message)")
+        XCTAssertTrue(message.contains("expected: label=\"WaitFor-Missing-Target\""), "Unexpected message: \(message)")
+        XCTAssertTrue(message.contains("known:"), "Unexpected message: \(message)")
+        XCTAssertTrue(message.contains("Next: get_interface(scope: \"full\")"), "Unexpected message: \(message)")
+    }
+
     // MARK: - 2. Element appears after a delay
 
     func testWaitForElementAppearsAfterDelay() async throws {
@@ -508,7 +528,42 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .waitForChange)
         XCTAssertEqual(result.errorKind, .timeout)
-        XCTAssertTrue(result.message?.contains("expectation not met") == true)
+        XCTAssertTrue(result.message?.contains("expected: element_disappeared(WaitForChange-StillPresent)") == true)
+        XCTAssertTrue(result.message?.contains("Next: get_interface(scope: \"full\")") == true)
+    }
+
+    func testWaitForChangeScreenChangedTimeoutSuggestsElementsChanged() async throws {
+        let label = addLabel("WaitForChange-ScreenChangedTimeout")
+        defer { label.removeFromSuperview() }
+
+        let result = await waitForChange(
+            expectation: .screenChanged,
+            timeout: 0.2
+        )
+        let message = try XCTUnwrap(result.message)
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .waitForChange)
+        XCTAssertEqual(result.errorKind, .timeout)
+        XCTAssertTrue(message.contains("expected: screen_changed"), "Unexpected message: \(message)")
+        XCTAssertTrue(message.contains("expect: {\"type\": \"elements_changed\"}"), "Unexpected message: \(message)")
+    }
+
+    func testWaitForChangeElementsChangedTimeoutDoesNotSuggestElementsChanged() async throws {
+        let label = addLabel("WaitForChange-ElementsChangedTimeout")
+        defer { label.removeFromSuperview() }
+
+        let result = await waitForChange(
+            expectation: .elementsChanged,
+            timeout: 0.2
+        )
+        let message = try XCTUnwrap(result.message)
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .waitForChange)
+        XCTAssertEqual(result.errorKind, .timeout)
+        XCTAssertTrue(message.contains("expected: elements_changed"), "Unexpected message: \(message)")
+        XCTAssertFalse(message.contains("expect: {\"type\": \"elements_changed\"}"), "Unexpected message: \(message)")
     }
 
     func testWaitForChangeElementUpdatedWithOldValueRequiresObservedUpdate() async throws {

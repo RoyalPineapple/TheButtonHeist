@@ -284,7 +284,15 @@ extension FenceResponse {
         for (index, step) in stepSummaries.enumerated() {
             var line = "  [\(index)] \(step.command)"
             if let error = step.error {
-                line += " → error: \(error)"
+                if let errorCode = step.errorCode {
+                    let phase = step.phase.map { " \($0)" } ?? ""
+                    line += " → error[\(errorCode)\(phase)]: \(error)"
+                } else {
+                    line += " → error: \(error)"
+                }
+                if let nextCommand = step.nextCommand {
+                    line += " Next: \(nextCommand)"
+                }
             } else if let kind = step.deltaKind {
                 line += " → \(kind)"
             } else if let count = step.elementCount {
