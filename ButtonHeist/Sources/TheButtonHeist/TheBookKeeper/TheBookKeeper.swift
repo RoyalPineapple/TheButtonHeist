@@ -687,7 +687,13 @@ final class TheBookKeeper {
         let accessibilityTrace = actionResult?.accessibilityTrace
         let accessibilityDelta = actionResult?.accessibilityDelta
         let unsupportedArguments = unsupportedArguments.isEmpty ? nil : unsupportedArguments
-        guard heistId != nil || frame != nil || coordinateOnly != nil || unsupportedArguments != nil || accessibilityTrace != nil || accessibilityDelta != nil || expectation != nil else {
+        guard heistId != nil ||
+            frame != nil ||
+            coordinateOnly != nil ||
+            unsupportedArguments != nil ||
+            accessibilityTrace != nil ||
+            accessibilityDelta != nil ||
+            expectation != nil else {
             return nil
         }
         return RecordedMetadata(
