@@ -626,9 +626,6 @@ extension TheFence {
             return .error("Must specify 'target' (named config target), 'device' (host:port), or configure BUTTONHEIST_DEVICE/.buttonheist.json")
         }
 
-        let previousConfig = config
-        let previousToken = handoff.token
-
         stop()
 
         handoff.token = resolvedToken
@@ -645,27 +642,14 @@ extension TheFence {
         do {
             try await startWithoutImplicitObservation()
         } catch {
-            config = previousConfig
-            handoff.token = previousToken
             let connectionFailure = error as? FenceError
             let connectionFailureDetails = connectionFailure?.failureDetails
             let connectionFailureMessage = connectionFailure?.coreMessage ?? error.displayMessage
-            do {
-                try await startWithoutImplicitObservation()
-            } catch {
-                let restoreFailure = error as? FenceError
-                // Prefer restore details when available; otherwise keep the original connection failure typed.
-                let restoreFailureDetails = restoreFailure?.failureDetails ?? connectionFailureDetails
-                let restoreFailureMessage = restoreFailure?.coreMessage ?? error.displayMessage
-                let message = "Connect failed (\(connectionFailureMessage)) " +
-                    "and could not restore previous connection: \(restoreFailureMessage)"
-                return .error(
-                    message,
-                    details: restoreFailureDetails
-                )
-            }
+            handoff.disableAutoReconnect()
+            handoff.stopDiscovery()
+            clearClientSessionState(error: connectionFailure ?? FenceError.notConnected)
             return .error(
-                "Connect failed, restored previous connection: \(connectionFailureMessage)",
+                "Connect failed; disconnected from previous target: \(connectionFailureMessage)",
                 details: connectionFailureDetails
             )
         }
