@@ -121,17 +121,51 @@ final class ScreenClassifierTests: XCTestCase {
         XCTAssertEqual(result, .sameScreen)
     }
 
-    func testWindowWrapperAroundSameContentIsSameScreen() {
+    func testDelimiterLikeIdentifierDoesNotCollideWithSelectedState() {
+        let before = screen(elements: [
+            element(label: "Action", identifier: "toolbar:selected", traits: .button),
+        ])
+        let after = screen(elements: [
+            element(label: "Action", identifier: "toolbar", traits: [.button, .selected]),
+        ])
+
+        let result = classify(before: before, after: after)
+
+        XCTAssertEqual(result, .screenChanged(.rootShapeChanged))
+    }
+
+    func testDelimiterLikeContainerIdentifierDoesNotCollideWithModalState() {
+        let nonModal = AccessibilityContainer(
+            type: .semanticGroup(label: "Panel", value: nil, identifier: "dialog:modal"),
+            frame: .zero
+        )
+        let modal = AccessibilityContainer(
+            type: .semanticGroup(label: "Panel", value: nil, identifier: "dialog"),
+            frame: .zero,
+            isModalBoundary: true
+        )
+
+        let before = ScreenClassifier.snapshot(of: screen(hierarchy: [
+            .container(nonModal, children: []),
+        ]))
+        let after = ScreenClassifier.snapshot(of: screen(hierarchy: [
+            .container(modal, children: []),
+        ]))
+
+        XCTAssertNotEqual(before.signature.rootShape, after.signature.rootShape)
+    }
+
+    func testTopLevelMultiRootWrapperAroundSameContentIsSameScreen() {
         let before = screen(elements: [
             element(label: "Checkout", traits: .header),
             element(label: "Total", value: "$1.00", traits: .staticText),
         ])
         let overlayWindow = AccessibilityContainer(
-            type: .semanticGroup(label: "OverlayWindow", value: "windowLevel: 1999.0", identifier: nil),
+            type: .semanticGroup(label: "OverlayWindow", value: "debug wrapper", identifier: nil),
             frame: .zero
         )
         let appWindow = AccessibilityContainer(
-            type: .semanticGroup(label: "UIWindow", value: "windowLevel: 0.0", identifier: nil),
+            type: .semanticGroup(label: "UIWindow", value: "debug wrapper", identifier: nil),
             frame: .zero
         )
         let after = screen(hierarchy: [
@@ -145,6 +179,25 @@ final class ScreenClassifierTests: XCTestCase {
         let result = classify(before: before, after: after)
 
         XCTAssertEqual(result, .sameScreen)
+    }
+
+    func testSingleTopLevelSemanticGroupAroundSameContentContributesToRootShape() {
+        let before = screen(elements: [
+            element(label: "Checkout", traits: .header),
+        ])
+        let group = AccessibilityContainer(
+            type: .semanticGroup(label: "Content", value: nil, identifier: nil),
+            frame: .zero
+        )
+        let after = screen(hierarchy: [
+            .container(group, children: [
+                .element(element(label: "Checkout", traits: .header), traversalIndex: 0),
+            ]),
+        ])
+
+        let result = classify(before: before, after: after)
+
+        XCTAssertEqual(result, .screenChanged(.rootShapeChanged))
     }
 
     private func classify(before: Screen, after: Screen) -> ScreenClassifier.Classification {
@@ -194,11 +247,13 @@ final class ScreenClassifierTests: XCTestCase {
     private func element(
         label: String,
         value: String? = nil,
+        identifier: String? = nil,
         traits: UIAccessibilityTraits
     ) -> AccessibilityElement {
         .make(
             label: label,
             value: value,
+            identifier: identifier,
             traits: traits,
             respondsToUserInteraction: false
         )

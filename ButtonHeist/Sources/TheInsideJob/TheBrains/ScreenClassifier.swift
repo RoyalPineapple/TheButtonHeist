@@ -22,13 +22,50 @@ import TheScore
         let primaryHeader: String?
         let backButton: Marker?
         let selectedTab: Marker?
-        let rootShape: [String]
+        let rootShape: [RootShapeToken]
     }
 
     struct Marker: Equatable, Hashable {
         let label: String?
         let value: String?
         let identifier: String?
+    }
+
+    struct RootShapeToken: Equatable, Hashable {
+        let kind: RootShapeKind
+        let depth: Int
+        let stableIdentifier: String?
+        let state: RootShapeState
+    }
+
+    enum RootShapeKind: Equatable, Hashable {
+        case container(ContainerRootShapeRole)
+        case element(ElementRootShapeRole)
+    }
+
+    enum ContainerRootShapeRole: Equatable, Hashable {
+        case semanticGroup
+        case list
+        case landmark
+        case dataTable
+        case tabBar
+        case scrollable
+    }
+
+    enum ElementRootShapeRole: Equatable, Hashable {
+        case backButton
+        case header
+        case tabBarItem
+        case searchField
+        case textEntry
+        case button
+        case link
+        case adjustable
+    }
+
+    struct RootShapeState: Equatable, Hashable {
+        let isSelected: Bool
+        let isModal: Bool
     }
 
     enum Reason: String, Equatable {
@@ -154,10 +191,16 @@ import TheScore
         return markers.first
     }
 
-    private static func rootShapeTokens(in hierarchy: [AccessibilityHierarchy]) -> [String] {
-        var tokens: [String] = []
+    private static func rootShapeTokens(in hierarchy: [AccessibilityHierarchy]) -> [RootShapeToken] {
+        var tokens: [RootShapeToken] = []
+        let hasMultipleRootNodes = hierarchy.count > 1
         for node in hierarchy {
-            appendShapeTokens(from: node, depth: 0, into: &tokens)
+            appendShapeTokens(
+                from: node,
+                depth: 0,
+                hasMultipleRootNodes: hasMultipleRootNodes,
+                into: &tokens
+            )
         }
         return Array(tokens.prefix(80))
     }
@@ -165,61 +208,88 @@ import TheScore
     private static func appendShapeTokens(
         from node: AccessibilityHierarchy,
         depth: Int,
-        into tokens: inout [String]
+        hasMultipleRootNodes: Bool,
+        into tokens: inout [RootShapeToken]
     ) {
         switch node {
         case .element(let element, _):
             guard let role = structuralRole(of: element) else { return }
-            var token = "e\(depth):\(role)"
-            if let identifier = stableIdentifier(element.identifier) {
-                token += "#\(identifier)"
-            }
-            if element.traits.contains(.selected) {
-                token += ":selected"
-            }
-            tokens.append(token)
+            tokens.append(
+                RootShapeToken(
+                    kind: .element(role),
+                    depth: depth,
+                    stableIdentifier: stableIdentifier(element.identifier),
+                    state: RootShapeState(
+                        isSelected: element.traits.contains(.selected),
+                        isModal: false
+                    )
+                )
+            )
         case .container(let container, let children):
-            if isWindowMarker(container) {
+            if isTransparentTopLevelWrapper(container, depth: depth, hasMultipleRootNodes: hasMultipleRootNodes) {
                 for child in children {
-                    appendShapeTokens(from: child, depth: depth, into: &tokens)
+                    appendShapeTokens(
+                        from: child,
+                        depth: depth,
+                        hasMultipleRootNodes: hasMultipleRootNodes,
+                        into: &tokens
+                    )
                 }
                 return
             }
-            tokens.append("c\(depth):\(containerRole(of: container))")
+            tokens.append(
+                RootShapeToken(
+                    kind: .container(containerRole(of: container)),
+                    depth: depth,
+                    stableIdentifier: stableIdentifier(containerIdentifier(of: container)),
+                    state: RootShapeState(
+                        isSelected: false,
+                        isModal: container.isModalBoundary
+                    )
+                )
+            )
             for child in children {
-                appendShapeTokens(from: child, depth: depth + 1, into: &tokens)
+                appendShapeTokens(
+                    from: child,
+                    depth: depth + 1,
+                    hasMultipleRootNodes: hasMultipleRootNodes,
+                    into: &tokens
+                )
             }
         }
     }
 
-    private static func containerRole(of container: AccessibilityContainer) -> String {
-        let suffix = container.isModalBoundary ? ":modal" : ""
+    private static func containerRole(of container: AccessibilityContainer) -> ContainerRootShapeRole {
         switch container.type {
-        case .semanticGroup(_, _, let identifier):
-            if let identifier = stableIdentifier(identifier) { return "group#\(identifier)\(suffix)" }
-            return "group\(suffix)"
+        case .semanticGroup:
+            return .semanticGroup
         case .list:
-            return "list\(suffix)"
+            return .list
         case .landmark:
-            return "landmark\(suffix)"
+            return .landmark
         case .dataTable:
-            return "dataTable\(suffix)"
+            return .dataTable
         case .tabBar:
-            return "tabBar\(suffix)"
+            return .tabBar
         case .scrollable:
-            return "scrollable\(suffix)"
+            return .scrollable
         }
     }
 
-    private static func structuralRole(of element: AccessibilityElement) -> String? {
-        if isBackButton(element) { return "backButton" }
-        if element.traits.contains(.header) { return "header" }
-        if element.traits.contains(.tabBarItem) { return "tabBarItem" }
-        if element.traits.contains(.searchField) { return "searchField" }
-        if element.traits.contains(.textEntry) { return "textEntry" }
-        if element.traits.contains(.button) { return "button" }
-        if element.traits.contains(.link) { return "link" }
-        if element.traits.contains(.adjustable) { return "adjustable" }
+    private static func containerIdentifier(of container: AccessibilityContainer) -> String? {
+        guard case .semanticGroup(_, _, let identifier) = container.type else { return nil }
+        return identifier
+    }
+
+    private static func structuralRole(of element: AccessibilityElement) -> ElementRootShapeRole? {
+        if isBackButton(element) { return .backButton }
+        if element.traits.contains(.header) { return .header }
+        if element.traits.contains(.tabBarItem) { return .tabBarItem }
+        if element.traits.contains(.searchField) { return .searchField }
+        if element.traits.contains(.textEntry) { return .textEntry }
+        if element.traits.contains(.button) { return .button }
+        if element.traits.contains(.link) { return .link }
+        if element.traits.contains(.adjustable) { return .adjustable }
         return nil
     }
 
@@ -227,14 +297,19 @@ import TheScore
         element.traits.contains(.backButton)
     }
 
-    private static func isWindowMarker(_ container: AccessibilityContainer) -> Bool {
-        guard case .semanticGroup(_, let value, _) = container.type else { return false }
-        return value?.hasPrefix("windowLevel:") == true
+    private static func isTransparentTopLevelWrapper(
+        _ container: AccessibilityContainer,
+        depth: Int,
+        hasMultipleRootNodes: Bool
+    ) -> Bool {
+        guard depth == 0, hasMultipleRootNodes, !container.isModalBoundary else { return false }
+        guard case .semanticGroup = container.type else { return false }
+        return stableIdentifier(containerIdentifier(of: container)) == nil
     }
 
-    private static func isRootShapeReplacement(before: [String], after: [String]) -> Bool {
+    private static func isRootShapeReplacement(before: [RootShapeToken], after: [RootShapeToken]) -> Bool {
         guard !before.isEmpty || !after.isEmpty else { return false }
-        var afterCounts = after.reduce(into: [String: Int]()) { counts, token in
+        var afterCounts = after.reduce(into: [RootShapeToken: Int]()) { counts, token in
             counts[token, default: 0] += 1
         }
         var matchedCount = 0
