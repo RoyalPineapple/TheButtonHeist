@@ -153,7 +153,50 @@ enum FenceParameterBlocks: Sendable {
     /// Inline expectation for action commands.
     static let expect: FenceParameterSpec = .init(
         key: "expect", type: .object,
-        description: "Inline verification for this action."
+        description: """
+            Inline verification for this action. Use {"type": "screen_changed"} or \
+            {"type": "elements_changed"} for simple expectations, or object forms like \
+            {"type": "element_updated"|"element_appeared"|"element_disappeared"|"compound", ...}. \
+            See docs/MCP-AGENT-GUIDE.md for the full expectation vocabulary and recipes.
+            """,
+        objectProperties: [
+            .init(
+                key: "type", type: .string, required: true,
+                description: "Object-form discriminator, such as screen_changed or element_updated.",
+                enumValues: ActionExpectation.wireTypeValues
+            ),
+            .init(key: "heistId", type: .string, description: "element_updated: match a specific element"),
+            .init(
+                key: "property", type: .string,
+                description: "element_updated: match a specific property",
+                enumValues: fenceEnumValues(ElementProperty.self)
+            ),
+            .init(key: "oldValue", type: .string, description: "element_updated: expected previous value"),
+            .init(key: "newValue", type: .string, description: "element_updated: expected new value"),
+            .init(
+                key: "matcher", type: .object,
+                description: "element_appeared / element_disappeared: predicate identifying the element",
+                objectProperties: [
+                    .init(key: "label", type: .string),
+                    .init(key: "identifier", type: .string),
+                    .init(key: "value", type: .string),
+                    .init(key: "traits", type: .stringArray),
+                    .init(key: "excludeTraits", type: .stringArray),
+                ]
+            ),
+            .init(
+                key: "expectations", type: .array,
+                description: "compound: array of sub-expectation objects",
+                arrayItemType: .object,
+                arrayItemProperties: [
+                    .init(
+                        key: "type", type: .string, required: true,
+                        enumValues: ActionExpectation.wireTypeValues
+                    ),
+                ],
+                arrayItemAdditionalProperties: true
+            ),
+        ]
     )
 
     static let unitPoint: [FenceParameterSpec] = [
@@ -552,7 +595,7 @@ extension TheFence.Command {
                     arrayItemProperties: [
                         .init(
                             key: "command", type: .string, required: true,
-                            description: "Any Button Heist command (activate, dismiss_keyboard, perform_custom_action, etc.)"
+                            description: "Any MCP tool name or raw Button Heist command (activate, dismiss_keyboard, perform_custom_action, etc.)"
                         ),
                         expect,
                     ],

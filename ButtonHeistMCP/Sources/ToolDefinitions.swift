@@ -136,98 +136,6 @@ enum ToolDefinitions {
         .array((E.allCases.map(\.rawValue) + extraValues).map { .string($0) })
     }
 
-    static let drawingPointArraySchema: Value = [
-        "type": "array",
-        "description": "Array of {x, y} waypoints (draw_path)",
-        "items": [
-            "type": "object",
-            "properties": [
-                "x": ["type": "number", "description": "X coordinate"],
-                "y": ["type": "number", "description": "Y coordinate"],
-            ],
-            "required": .array([.string("x"), .string("y")]),
-            "additionalProperties": false,
-        ],
-    ]
-
-    static let bezierSegmentArraySchema: Value = [
-        "type": "array",
-        "description": "Array of bezier segments: {cp1X, cp1Y, cp2X, cp2Y, endX, endY} (draw_bezier)",
-        "items": [
-            "type": "object",
-            "properties": [
-                "cp1X": ["type": "number", "description": "First control point X coordinate"],
-                "cp1Y": ["type": "number", "description": "First control point Y coordinate"],
-                "cp2X": ["type": "number", "description": "Second control point X coordinate"],
-                "cp2Y": ["type": "number", "description": "Second control point Y coordinate"],
-                "endX": ["type": "number", "description": "Segment end X coordinate"],
-                "endY": ["type": "number", "description": "Segment end Y coordinate"],
-            ],
-            "required": .array([
-                .string("cp1X"), .string("cp1Y"), .string("cp2X"),
-                .string("cp2Y"), .string("endX"), .string("endY"),
-            ]),
-            "additionalProperties": false,
-        ],
-    ]
-
-    // Shared expect property for action tools — matches the batch step schema.
-    // Expectations use the object discriminator form so all clients see one
-    // shape and avoid JSON Schema unions/composition keywords.
-    static let expectProperty: Value = [
-        "type": "object",
-        "description": """
-            Inline verification for this action. Use {"type": "screen_changed"} or \
-            {"type": "elements_changed"} for simple expectations, or object forms like \
-            {"type": "element_updated"|"element_appeared"|"element_disappeared"|"compound", ...}. \
-            See docs/MCP-AGENT-GUIDE.md for the full expectation vocabulary and recipes.
-            """,
-        "required": .array([.string("type")]),
-        "properties": [
-            "type": [
-                "type": "string",
-                "enum": .array(ActionExpectation.wireTypeValues.map { .string($0) }),
-                "description": "Object-form discriminator, such as screen_changed or element_updated.",
-            ],
-            "heistId": ["type": "string", "description": "element_updated: match a specific element"],
-            "property": [
-                "type": "string",
-                "description": "element_updated: match a specific property",
-                "enum": .array(ElementProperty.allCases.map { .string($0.rawValue) }),
-            ],
-            "oldValue": ["type": "string", "description": "element_updated: expected previous value"],
-            "newValue": ["type": "string", "description": "element_updated: expected new value"],
-            "matcher": [
-                "type": "object",
-                "description": "element_appeared / element_disappeared: predicate identifying the element",
-                "properties": [
-                    "label": ["type": "string"],
-                    "identifier": ["type": "string"],
-                    "value": ["type": "string"],
-                    "traits": ["type": "array", "items": ["type": "string"]],
-                    "excludeTraits": ["type": "array", "items": ["type": "string"]],
-                ],
-                "additionalProperties": false,
-            ],
-            "expectations": [
-                "type": "array",
-                "description": "compound: array of sub-expectation objects",
-                "items": [
-                    "type": "object",
-                    "required": .array([.string("type")]),
-                    "properties": [
-                        "type": [
-                            "type": "string",
-                            "enum": .array(ActionExpectation.wireTypeValues.map { .string($0) }),
-                        ],
-                    ],
-                    "additionalProperties": true,
-                ],
-            ],
-        ],
-        "additionalProperties": false,
-    ]
-
     static let all: [Tool] = [
         getInterface, activate, rotor, typeText, getScreen,
         waitForChange, waitFor, startRecording, stopRecording, listDevices,
@@ -259,7 +167,7 @@ enum ToolDefinitions {
             controls. Pass 'action' to invoke a named action like "increment", "decrement", or \
             any entry from the element's actions array.
             """,
-        inputSchema: inputSchema(for: .activate, overriding: ["expect": expectProperty])
+        inputSchema: inputSchema(for: .activate)
     )
 
     static let rotor = Tool(
@@ -270,7 +178,7 @@ enum ToolDefinitions {
             object result to continue like a VoiceOver user. For text-range results, also pass \
             the returned start and end offsets.
             """,
-        inputSchema: inputSchema(for: .rotor, overriding: ["expect": expectProperty])
+        inputSchema: inputSchema(for: .rotor)
     )
 
     static let typeText = Tool(
@@ -279,7 +187,7 @@ enum ToolDefinitions {
             Type text and/or delete characters via keyboard injection. Optionally target an \
             element to focus it first and read back the resulting value.
             """,
-        inputSchema: inputSchema(for: .typeText, overriding: ["expect": expectProperty])
+        inputSchema: inputSchema(for: .typeText)
     )
 
     static let waitFor = Tool(
@@ -288,7 +196,7 @@ enum ToolDefinitions {
             Wait for an element matching a predicate to appear, or to disappear with absent=true. \
             Polls on UI settle events. Returns the matched element or diagnostic info on timeout.
             """,
-        inputSchema: inputSchema(for: .waitFor, overriding: ["expect": expectProperty])
+        inputSchema: inputSchema(for: .waitFor)
     )
 
     static let getScreen = Tool(
@@ -305,7 +213,7 @@ enum ToolDefinitions {
             rides through intermediate states (spinners, loading) until the expectation is met. \
             Use after an action whose delta showed a transient state and the expectation wasn't met yet.
             """,
-        inputSchema: inputSchema(for: .waitForChange, overriding: ["expect": expectProperty]),
+        inputSchema: inputSchema(for: .waitForChange),
         annotations: .init(readOnlyHint: true)
     )
 
@@ -351,7 +259,6 @@ enum ToolDefinitions {
                     "enum": stringEnumValues(ScrollMode.self),
                     "description": "Scroll mode (default: page)",
                 ],
-                "expect": expectProperty,
             ]
         )
     )
@@ -374,9 +281,6 @@ enum ToolDefinitions {
                     "enum": stringEnumValues(GestureType.self),
                     "description": "Gesture type",
                 ],
-                "points": drawingPointArraySchema,
-                "segments": bezierSegmentArraySchema,
-                "expect": expectProperty,
             ]
         )
     )
@@ -395,7 +299,6 @@ enum ToolDefinitions {
                     "enum": stringEnumValues(EditAction.self, appending: ["dismiss"]),
                     "description": "Action to perform",
                 ],
-                "expect": expectProperty,
             ]
         )
     )
@@ -406,7 +309,7 @@ enum ToolDefinitions {
             Write text to the general pasteboard from within the app. Content written by the app \
             itself does not trigger the iOS "Allow Paste" dialog when subsequently read.
             """,
-        inputSchema: inputSchema(for: .setPasteboard, overriding: ["expect": expectProperty])
+        inputSchema: inputSchema(for: .setPasteboard)
     )
 
     static let getPasteboard = Tool(
@@ -415,7 +318,7 @@ enum ToolDefinitions {
             Read text from the general pasteboard. iOS may show "Allow Paste" if the content \
             was written by another app.
             """,
-        inputSchema: inputSchema(for: .getPasteboard, overriding: ["expect": expectProperty]),
+        inputSchema: inputSchema(for: .getPasteboard),
         annotations: .init(readOnlyHint: true)
     )
 
@@ -427,29 +330,7 @@ enum ToolDefinitions {
             'expect' per step to verify inline. Returns per-step results and a merged net delta. \
             policy=stop_on_error (default) or continue_on_error.
             """,
-        inputSchema: inputSchema(
-            for: .runBatch,
-            overriding: [
-                "steps": [
-                    "type": "array",
-                    "description": "Ordered list of Button Heist requests to execute",
-                    "items": [
-                        "type": "object",
-                        "properties": [
-                            "command": ["type": "string", "description": "Any Button Heist command (activate, dismiss_keyboard, perform_custom_action, etc.)"],
-                            "expect": expectProperty,
-                        ],
-                        "required": .array([.string("command")]),
-                        "additionalProperties": true,
-                    ],
-                ],
-                "policy": [
-                    "type": "string",
-                    "enum": .array(["stop_on_error", "continue_on_error"].map { .string($0) }),
-                    "description": "Batch policy: stop_on_error (default) or continue_on_error",
-                ],
-            ]
-        )
+        inputSchema: inputSchema(for: .runBatch)
     )
 
     static let getSessionState = Tool(

@@ -320,6 +320,32 @@ struct ToolSyncTests {
         }
     }
 
+    @Test("Expect schemas are projected from FenceParameterSpec")
+    func expectSchemasAreProjectedFromFenceParameterSpec() {
+        guard let expectSpec = TheFence.Command.activate.parameters.first(where: { $0.key == "expect" }) else {
+            Issue.record("activate command is missing expect parameter spec")
+            return
+        }
+        #expect(
+            Set(expectSpec.objectProperties.map(\.key)) == [
+                "type", "heistId", "property", "oldValue", "newValue", "matcher", "expectations",
+            ],
+            "FenceParameterSpec should own the expect object shape"
+        )
+
+        let projectedSchema = ToolDefinitions.schemaProperty(for: expectSpec)
+        for tool in ToolDefinitions.all where extractPropertyKeys(from: tool).contains("expect") {
+            guard let actualSchema = extractPropertySchema(from: tool, property: "expect") else {
+                Issue.record("\(tool.name) is missing expect property schema")
+                continue
+            }
+            #expect(
+                Value.object(actualSchema) == projectedSchema,
+                "\(tool.name).expect should be projected from FenceParameterSpec"
+            )
+        }
+    }
+
     @Test("Expect object type enum matches ActionExpectation wire types")
     func expectObjectTypeEnumMatchesActionExpectationWireTypes() {
         for tool in ToolDefinitions.all where extractPropertyKeys(from: tool).contains("expect") {

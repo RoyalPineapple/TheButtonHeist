@@ -2,13 +2,13 @@
 
 > **Module:** `ButtonHeistMCP/Sources/`
 > **Platform:** macOS 14.0+
-> **Role:** Exposes Button Heist as 23 typed MCP tools for AI agents
+> **Role:** Exposes Button Heist as 24 typed MCP tools for AI agents
 
 ## Responsibilities
 
 This is the clean handshake between an AI agent and the rest of the crew:
 
-1. **23 typed tools** backed by `TheFence`
+1. **24 typed tools** backed by `TheFence`
 2. **Tool-to-command routing** for direct, grouped, and hybrid tools
 3. **Response adaptation** for MCP clients: screenshots inline as MCP image content, video summarized
 4. **Idle disconnects** with automatic reconnect on the next tool call
@@ -20,7 +20,7 @@ This is the clean handshake between an AI agent and the rest of the crew:
 | File | Contents |
 |------|----------|
 | `main.swift` | `ButtonHeistMCPServer` entry point, `setUp()`, `handleToolCall`, `renderResponse` |
-| `ToolDefinitions.swift` | 23 tool schemas with `expectProperty` shared across action tools |
+| `ToolDefinitions.swift` | 24 tool schemas projected from `FenceParameterSpec`, with grouped-tool selector overrides |
 
 `IdleMonitor` lives in the ButtonHeist framework (`ButtonHeist/Sources/TheButtonHeist/IdleMonitor.swift`), not in the MCP package.
 `TargetConfigResolver` lives in the ButtonHeist framework (`TargetConfig.swift`), not in the MCP package.
@@ -33,7 +33,7 @@ graph TD
         Main["main.swift — ButtonHeistMCPServer"]
         Server["swift-sdk Server"]
         Transport["StdioTransport"]
-        Tools["ToolDefinitions.swift — 23 tool schemas"]
+        Tools["ToolDefinitions.swift — 24 tool schemas"]
         Handler["handleToolCall — decode → route → execute → render"]
         Idle["IdleMonitor — fence.stop() after timeout"]
         Config["TargetConfigResolver — .buttonheist.json / ~/.config/..."]
