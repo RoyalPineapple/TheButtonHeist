@@ -2,6 +2,7 @@ import Testing
 import MCP
 @testable import ButtonHeistMCP
 import ButtonHeist
+import Foundation
 import TheScore
 
 /// Verifies that MCP tool definitions stay in sync with TheFence.Command.
@@ -419,7 +420,98 @@ struct ToolSyncTests {
         }
     }
 
+    // MARK: - Documentation Drift
+
+    @Test("Documented MCP tool counts match ToolDefinitions")
+    func documentedMCPToolCountsMatchToolDefinitions() throws {
+        let expectedCount = ToolDefinitions.all.count
+        for path in ["README.md", "ButtonHeistMCP/README.md", "docs/API.md", "docs/ARCHITECTURE.md"] {
+            let contents = try readRepositoryFile(path)
+            let countMatches = regexMatches(in: contents, pattern: #"expos(?:es|ing) ([0-9]+) (?:[A-Za-z-]+ )*tools"#)
+            #expect(!countMatches.isEmpty, "\(path) should document the MCP tool count")
+
+            for match in countMatches {
+                #expect(
+                    match == "\(expectedCount)",
+                    "\(path) documents \(match) MCP tools, expected \(expectedCount)"
+                )
+            }
+        }
+    }
+
+    @Test("MCP README tool surface matches ToolDefinitions")
+    func mcpReadmeToolSurfaceMatchesToolDefinitions() throws {
+        let contents = try readRepositoryFile("ButtonHeistMCP/README.md")
+        let toolSurface = try section(named: "## Tool Surface", endingBefore: "## Runtime Behavior", in: contents)
+        let documentedTools = Set(
+            toolSurface.split(separator: "\n").compactMap { line -> String? in
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                guard trimmed.hasPrefix("- `") else { return nil }
+                return trimmed.dropFirst(3).split(separator: "`", maxSplits: 1).first.map(String.init)
+            }
+        )
+        let actualTools = Set(ToolDefinitions.all.map(\.name))
+
+        #expect(
+            documentedTools == actualTools,
+            "MCP README tool list differs: docs-only \(documentedTools.subtracting(actualTools).sorted()), missing \(actualTools.subtracting(documentedTools).sorted())"
+        )
+    }
+
+    @Test("Documented command catalog counts match TheFence.Command")
+    func documentedCommandCatalogCountsMatchFenceCommands() throws {
+        let expectedCount = TheFence.Command.allCases.count
+        let api = try readRepositoryFile("docs/API.md")
+        let totalCasesMatches = regexMatches(in: api, pattern: #"// \.\.\. ([0-9]+) total cases"#)
+        #expect(totalCasesMatches.contains("\(expectedCount)"), "docs/API.md Command snippet should document \(expectedCount) total cases")
+
+        for path in ["docs/API.md", "docs/ARCHITECTURE.md"] {
+            let contents = try readRepositoryFile(path)
+            let countMatches = regexMatches(in: contents, pattern: #"([0-9]+) supported commands"#)
+            #expect(!countMatches.isEmpty, "\(path) should document the command catalog count")
+            #expect(
+                countMatches.allSatisfy { $0 == "\(expectedCount)" },
+                "\(path) documents stale command counts: \(countMatches)"
+            )
+        }
+    }
+
     // MARK: - Helpers
+
+    private func readRepositoryFile(_ path: String) throws -> String {
+        let data = try Data(contentsOf: repositoryRoot().appendingPathComponent(path))
+        guard let contents = String(bytes: data, encoding: .utf8) else {
+            Issue.record("\(path) is not UTF-8")
+            return ""
+        }
+        return contents
+    }
+
+    private func repositoryRoot() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+    }
+
+    private func section(named heading: String, endingBefore nextHeading: String, in contents: String) throws -> String {
+        guard let startRange = contents.range(of: heading),
+              let endRange = contents[startRange.upperBound...].range(of: nextHeading) else {
+            Issue.record("Missing section \(heading)")
+            return ""
+        }
+        return String(contents[startRange.upperBound..<endRange.lowerBound])
+    }
+
+    private func regexMatches(in contents: String, pattern: String) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        let range = NSRange(contents.startIndex..<contents.endIndex, in: contents)
+        return regex.matches(in: contents, range: range).compactMap { result in
+            guard result.numberOfRanges > 1,
+                  let matchRange = Range(result.range(at: 1), in: contents) else { return nil }
+            return String(contents[matchRange])
+        }
+    }
 
     /// Extract property key names from a Tool's inputSchema.
     private func extractPropertyKeys(from tool: Tool) -> Set<String> {

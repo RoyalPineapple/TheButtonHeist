@@ -451,11 +451,11 @@ public enum Command: String, CaseIterable, Sendable {
     case listTargets = "list_targets"
     case getSessionLog = "get_session_log"
     case archiveSession = "archive_session"
-    // ... 38 total cases
+    // ... 43 total cases
 }
 ```
 
-Single source of truth for the 38 supported commands. Each case has a `rawValue` matching the wire-format string (e.g., `.oneFingerTap` → `"one_finger_tap"`). `Command.allCases` replaces the former hand-maintained string array.
+Single source of truth for the 43 supported commands in the product command layer. Each case has a `rawValue` matching the command request string accepted by TheFence (e.g., `.oneFingerTap` -> `"one_finger_tap"`). These command names are the CLI/session/batch contract; wire message discriminators are a lower transport layer and may use different names such as `typeText`. `Command.allCases` replaces the former hand-maintained string array.
 
 `connect` establishes the session and returns session state; observation starts with `get_interface`. It verifies transport, handshake/auth, and session ownership, but it does not request, parse, or explore the UI hierarchy.
 
@@ -1780,7 +1780,7 @@ OPTIONS:
 
 ### buttonheist stop_recording
 
-Explicitly stop an in-progress recording. The recording payload is broadcast to all connected clients, so the original `record` process (running in background) receives it and writes the file.
+Explicitly stop an in-progress recording. The recording payload is broadcast to all connected clients, so the original `start_recording` process (running in background) receives it and writes the file.
 
 ```
 USAGE: buttonheist stop_recording [OPTIONS]

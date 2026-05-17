@@ -1,5 +1,6 @@
 import XCTest
 import ButtonHeist
+import Foundation
 @testable import ButtonHeistCLIExe
 
 final class CLICommandSyncTests: XCTestCase {
@@ -42,6 +43,21 @@ final class CLICommandSyncTests: XCTestCase {
         for cliName in topLevelCommandNames() {
             XCTAssertTrue(seen.insert(cliName).inserted, "Duplicate top-level CLI command: '\(cliName)'")
         }
+    }
+
+    func testDocumentedTopLevelCommandsMatchCLIConfiguration() throws {
+        let documentedCommands = try documentedTopLevelCommandNames()
+        let actualCommands = Set(topLevelCommandNames())
+
+        XCTAssertEqual(
+            documentedCommands,
+            actualCommands,
+            """
+            ButtonHeistCLI/README.md top-level command table differs: \
+            docs-only \(documentedCommands.subtracting(actualCommands).sorted()), \
+            missing \(actualCommands.subtracting(documentedCommands).sorted())
+            """
+        )
     }
 
     func testGetInterfaceScopeOptionsMatchFenceScope() {
@@ -87,5 +103,32 @@ final class CLICommandSyncTests: XCTestCase {
         ButtonHeistApp.configuration.subcommands.map { commandType in
             commandType.configuration.commandName ?? String(describing: commandType)
         }
+    }
+
+    private func documentedTopLevelCommandNames() throws -> Set<String> {
+        let data = try Data(contentsOf: repositoryRoot().appendingPathComponent("ButtonHeistCLI/README.md"))
+        guard let contents = String(bytes: data, encoding: .utf8) else {
+            XCTFail("ButtonHeistCLI/README.md is not UTF-8")
+            return []
+        }
+        guard let startRange = contents.range(of: "## Top-Level Commands"),
+              let endRange = contents[startRange.upperBound...].range(of: "### activate") else {
+            XCTFail("Missing Top-Level Commands table in ButtonHeistCLI/README.md")
+            return []
+        }
+
+        let section = contents[startRange.upperBound..<endRange.lowerBound]
+        return Set(section.split(separator: "\n").compactMap { line -> String? in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard trimmed.hasPrefix("| `") else { return nil }
+            return trimmed.dropFirst(3).split(separator: "`", maxSplits: 1).first.map(String.init)
+        })
+    }
+
+    private func repositoryRoot() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
     }
 }

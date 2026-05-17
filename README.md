@@ -93,7 +93,7 @@ Add the MCP server to your project's `.mcp.json`:
 }
 ```
 
-This exposes 23 tools, including `get_interface`, `activate`, `type_text`, `run_batch`, and `get_screen`. The agent discovers instrumented apps through Bonjour:
+This exposes 24 tools, including `get_interface`, `activate`, `type_text`, `run_batch`, and `get_screen`. The agent discovers instrumented apps through Bonjour:
 
 ```
 Agent: "I need to log the user in"
@@ -114,15 +114,16 @@ The agent can work in terms of UI intent instead of coordinates.
 cd ButtonHeistCLI && swift build -c release && cd ..
 BH=./ButtonHeistCLI/.build/release/buttonheist
 
-$BH list                                                  # Discover devices (WiFi + USB)
+$BH list_devices                                          # Discover devices (WiFi + USB)
 $BH session                                               # Interactive REPL
 $BH activate --identifier loginButton                     # Activate an element
-$BH action --name "Delete" --identifier cell_row_3        # Named custom action
-$BH type --text "Hello" --identifier nameField            # Type into a field
+$BH activate --action "Delete" --identifier cell_row_3    # Named custom action
+$BH type_text "Hello" --identifier nameField              # Type into a field
 $BH scroll --direction down --identifier scrollView       # Scroll one page
 $BH scroll_to_visible --identifier targetElement          # Scroll until visible
-$BH screenshot --output screen.png                        # Capture screenshot
-$BH record --output demo.mp4 --fps 8 --scale 0.5         # Record with touch overlay
+$BH get_screen --output screen.png                        # Capture screenshot
+$BH start_recording --fps 8 --scale 0.5                   # Start screen recording
+$BH stop_recording --output demo.mp4                      # Save recording
 ```
 
 The session REPL accepts JSON and shorthand commands: `tap loginButton`, `type "hello"`, `scroll down list`, `screen`.
@@ -273,8 +274,8 @@ Button Heist is a distributed system: an iOS framework inside the app, a macOS c
 
 | Name | Role |
 |------|------|
-| **ButtonHeistCLI** | Command-line interface for `list`, `session`, `activate`, `touch`, `type`, `screenshot`, `record`, and more |
-| **ButtonHeistMCP** | MCP server exposing 23 agent tools backed by TheFence |
+| **ButtonHeistCLI** | Command-line interface for `list_devices`, `session`, `activate`, `type_text`, `get_screen`, `start_recording`, and more |
+| **ButtonHeistMCP** | MCP server exposing 24 agent tools backed by TheFence |
 
 ## Development
 

@@ -24,7 +24,7 @@ All commands accept `--device <filter>`. The filter matches case-insensitively a
 
 ```bash
 buttonheist --device a1b2 activate --identifier loginButton
-buttonheist --device "BH Demo" screenshot --output screen.png
+buttonheist --device "BH Demo" get_screen --output screen.png
 ```
 
 Without `--device`, direct commands expect exactly one reachable target. No guessing, no roulette.
@@ -33,21 +33,43 @@ Without `--device`, direct commands expect exactly one reachable target. No gues
 
 | Command | Purpose |
 |---------|---------|
-| `list` | Discover reachable devices |
-| `activate` | Primary element interaction command |
-| `touch` | Low-level gesture escape hatch (9 subcommands) |
-| `type` | Type text and/or delete characters via keyboard injection |
-| `screenshot` | Capture a PNG screenshot |
-| `get_interface` | Fetch the current accessibility hierarchy |
-| `wait_for_idle` | Wait until UI animations settle |
+| `list_devices` | Discover reachable devices |
+| `connect` | Establish a configured session and print session state |
 | `session` | Start a persistent REPL / JSON session |
-| `record` | Record MP4 video and save it locally |
+| `activate` | Primary element interaction command |
+| `rotor` | Move through a VoiceOver rotor |
+| `type_text` | Type text and/or delete characters via keyboard injection |
+| `get_screen` | Capture a PNG screenshot |
+| `get_interface` | Fetch the current accessibility hierarchy |
+| `wait_for_change` | Wait for the UI hierarchy to change |
+| `wait_for` | Wait for an element to appear or disappear |
+| `start_recording` | Start MP4 screen recording |
 | `stop_recording` | Stop an in-progress recording session |
 | `scroll` | Scroll a view by one page |
 | `scroll_to_visible` | Scroll until an element is visible |
+| `element_search` | Search scrollable containers for an unseen element |
 | `scroll_to_edge` | Scroll to a scroll-view edge |
-| `swipe` | Convenience alias for `touch swipe` |
-| `action` | Accessibility actions: edit (copy/paste/cut/select/selectAll), increment, decrement, custom actions, dismiss keyboard |
+| `one_finger_tap` | Low-level tap gesture |
+| `long_press` | Low-level long-press gesture |
+| `swipe` | Low-level swipe gesture |
+| `drag` | Low-level drag gesture |
+| `pinch` | Low-level pinch/zoom gesture |
+| `rotate` | Low-level rotate gesture |
+| `two_finger_tap` | Low-level two-finger tap gesture |
+| `draw_path` | Draw a touch path through waypoints |
+| `draw_bezier` | Draw a touch path along cubic Bezier segments |
+| `edit_action` | Responder-chain edit actions: copy, paste, cut, select, selectAll |
+| `dismiss_keyboard` | Resign first responder and dismiss the keyboard |
+| `set_pasteboard` | Write text to the general pasteboard |
+| `get_pasteboard` | Read text from the general pasteboard |
+| `run_batch` | Execute multiple commands in one request |
+| `get_session_state` | Inspect client connection/session state |
+| `list_targets` | List named targets from Button Heist config |
+| `get_session_log` | Return the current session manifest |
+| `archive_session` | Close and archive the current session directory |
+| `start_heist` | Start recording a replayable `.heist` script |
+| `stop_heist` | Stop and save a `.heist` script |
+| `play_heist` | Play back a `.heist` script |
 
 ### activate
 
@@ -61,59 +83,49 @@ buttonheist activate --identifier loginButton --timeout 15
 
 Flags: `--identifier <id>`, `--index <n>`, `-t/--timeout` (default 10s), `-f/--format`, `-q/--quiet`.
 
-### action
+Named accessibility actions are routed through `activate --action`.
 
-Perform accessibility actions beyond activate.
-
-```bash
-buttonheist action --type increment --identifier volumeSlider
-buttonheist action --type decrement --identifier volumeSlider
-buttonheist action --type custom --custom-action "Delete" --identifier myCell
-```
-
-Flags: `--type` (activate/increment/decrement/custom, default "activate"), `--custom-action <name>`, `--identifier`, `--index`, `-t/--timeout` (default 10s).
-
-### type
+### type_text
 
 Type text into a focused field via keyboard injection.
 
 ```bash
-buttonheist type --text "Hello World" --identifier nameField
-buttonheist type --delete 5 --identifier nameField
-buttonheist type --delete 4 --text "orld" --identifier nameField   # Correct a typo
+buttonheist type_text "Hello World" --identifier nameField
+buttonheist type_text --delete 5 --identifier nameField
+buttonheist type_text --delete 4 "orld" --identifier nameField   # Correct a typo
 ```
 
-Flags: `--text <text>`, `--delete <n>`, `--identifier`, `--index`, `-t/--timeout` (default 30s). Outputs the action result to stdout (includes the field's current value when available).
+Flags: positional text, `--delete <n>`, `--identifier`, `--index`, `-t/--timeout` (default 30s). Outputs the action result to stdout (includes the field's current value when available).
 
-### screenshot
+### get_screen
 
 Capture a PNG screenshot.
 
 ```bash
-buttonheist screenshot --output screen.png
-buttonheist screenshot | imgcat
+buttonheist get_screen --output screen.png
+buttonheist get_screen | imgcat
 ```
 
-Flags: `-o/--output <path>` (default: raw PNG to stdout), `--timeout` (default 10s).
+Flags: `-o/--output <path>` (default: raw PNG to stdout).
 
-### record
+### start_recording
 
 Record the screen as H.264/MP4.
 
 ```bash
-buttonheist record --output demo.mp4
-buttonheist record --output demo.mp4 --fps 15 --scale 0.5 --action-log demo-actions.json
+buttonheist start_recording
+buttonheist start_recording --output demo.mp4 --fps 15 --scale 0.5 --action-log demo-actions.json
 ```
 
 Flags: `-o/--output` (default "recording.mp4"), `--fps` (default 8), `--scale`, `--inactivity-timeout` (default 5s), `--max-duration` (default 60s), `--action-log <path>`.
 
-### list
+### list_devices
 
 Discover devices on the network.
 
 ```bash
-buttonheist list                  # Human-readable table
-buttonheist list --format json    # JSON for scripting
+buttonheist list_devices                  # Human-readable table
+buttonheist list_devices --format json    # JSON for scripting
 ```
 
 Flags: `-t/--timeout` (default 3s), `-f/--format` (auto/human/json).
@@ -141,12 +153,12 @@ buttonheist scroll_to_edge --edge bottom --identifier scrollView
 `scroll_to_edge` flags: `--edge` (required: top/bottom/left/right), `--identifier`, `--index`.
 `scroll_to_visible` flags: `--identifier`, `--index`.
 
-## Touch Subcommands
+## Gesture Commands
 
-`buttonheist touch` is the low-level gesture toolkit. Nine subcommands for coordinate-precise touch injection when `activate` isn't enough:
+Low-level gestures are top-level commands for coordinate-precise touch injection when `activate` isn't enough:
 
-| Subcommand | Key Flags | Description |
-|------------|-----------|-------------|
+| Command | Key Flags | Description |
+|---------|-----------|-------------|
 | `one_finger_tap` | `--identifier`, `--x/--y` | Tap at a point or element |
 | `long_press` | `--identifier`, `--x/--y`, `--duration` (default 0.5) | Long press with configurable hold |
 | `swipe` | `--identifier`, `--direction`, `--from-x/y`, `--to-x/y`, `--distance`, `--duration` | Swipe by direction or between coordinates |
@@ -157,20 +169,20 @@ buttonheist scroll_to_edge --edge bottom --identifier scrollView
 | `draw_path` | `--points "x1,y1 x2,y2"` or `--path-file`, `--duration`, `--velocity` | Draw along a sequence of waypoints |
 | `draw_bezier` | `--bezier-file` (required), `--samples`, `--duration`, `--velocity` | Draw along cubic bezier curves |
 
-All touch subcommands also accept `--identifier`, `--index`, `--timeout` (default 10s, 30s for draw commands), `--format`, and `--device`.
+All gesture commands also accept `--identifier`, `--index`, `--timeout` (default 10s, 30s for draw commands), `--format`, and `--device`.
 
 ```bash
-buttonheist touch one_finger_tap --identifier loginButton
-buttonheist touch one_finger_tap --x 100 --y 200
-buttonheist touch long_press --identifier myButton --duration 1.0
-buttonheist touch swipe --identifier list --direction up
-buttonheist touch swipe --from-x 200 --from-y 400 --to-x 200 --to-y 100
-buttonheist touch drag --from-x 100 --from-y 200 --to-x 300 --to-y 200
-buttonheist touch pinch --identifier mapView --scale 2.0
-buttonheist touch rotate --x 200 --y 300 --angle 1.57
-buttonheist touch two_finger_tap --identifier zoomControl
-buttonheist touch draw_path --points "100,400 200,300 300,400" --duration 1.0
-buttonheist touch draw_bezier --bezier-file curve.json --velocity 300
+buttonheist one_finger_tap --identifier loginButton
+buttonheist one_finger_tap --x 100 --y 200
+buttonheist long_press --identifier myButton --duration 1.0
+buttonheist swipe --identifier list --direction up
+buttonheist swipe --from-x 200 --from-y 400 --to-x 200 --to-y 100
+buttonheist drag --from-x 100 --from-y 200 --to-x 300 --to-y 200
+buttonheist pinch --identifier mapView --scale 2.0
+buttonheist rotate --x 200 --y 300 --angle 1.57
+buttonheist two_finger_tap --identifier zoomControl
+buttonheist draw_path --points "100,400 200,300 300,400" --duration 1.0
+buttonheist draw_bezier --bezier-file curve.json --velocity 300
 ```
 
 ## Session Mode
@@ -178,14 +190,14 @@ buttonheist touch draw_bezier --bezier-file curve.json --velocity 300
 `buttonheist session` keeps a single connection open and accepts either:
 
 - human-friendly commands such as `tap loginButton`, `ui`, `idle`, and `status`
-- JSON requests with canonical Fence command names
+- JSON requests with TheFence command names
 
 ```bash
 buttonheist session
 buttonheist session --format json
 echo '{"command":"get_interface"}' | buttonheist session --format json
 echo '{"command":"get_session_state"}' | buttonheist session --format json
-echo '{"command":"run_batch","steps":[{"command":"get_interface"},{"command":"wait_for_idle","timeout":2}]}' | buttonheist session --format json
+echo '{"command":"run_batch","steps":[{"command":"get_interface"},{"command":"wait_for_change","timeout":2}]}' | buttonheist session --format json
 ```
 
 Flags: `--device`, `--token`, `-t/--timeout` (default 30s), `-f/--format`, `--session-timeout` (default 60s).
@@ -212,7 +224,8 @@ Common JSON session commands:
 - `type_text`
 - `edit_action`
 - `dismiss_keyboard`
-- `wait_for_idle`
+- `wait_for_change`
+- `wait_for`
 - `list_devices`
 - `run_batch`
 - `get_session_state`
@@ -240,13 +253,13 @@ Override with `-f/--format human` or `-f/--format json`. Status messages always 
 ## Examples
 
 ```bash
-buttonheist list
+buttonheist list_devices
 buttonheist activate --identifier loginButton
-buttonheist action --type increment --identifier volumeSlider
-buttonheist type --text "user@example.com" --identifier emailField
+buttonheist activate --action increment --identifier volumeSlider
+buttonheist type_text "user@example.com" --identifier emailField
 buttonheist get_interface --format json
-buttonheist screenshot --output screen.png
-buttonheist record --output demo.mp4 --action-log demo-actions.json
+buttonheist get_screen --output screen.png
+buttonheist start_recording --output demo.mp4 --action-log demo-actions.json
 buttonheist scroll_to_visible --identifier submitButton
 ```
 
