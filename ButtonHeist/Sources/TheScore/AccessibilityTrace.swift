@@ -22,6 +22,7 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
                 interface: capture.interface,
                 parentHash: previousHash,
                 context: capture.context,
+                transition: capture.transition,
                 hash: capture.hash
             )
             previousHash = linked.hash
@@ -51,18 +52,27 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
         try container.encode(captures, forKey: .captures)
     }
 
-    public func appending(_ interface: Interface, context: Context = .empty) -> AccessibilityTrace {
+    public func appending(
+        _ interface: Interface,
+        context: Context = .empty,
+        transition: Transition = .empty
+    ) -> AccessibilityTrace {
         let capture = Capture(
             sequence: captures.count + 1,
             interface: interface,
             parentHash: captures.last?.hash,
-            context: context
+            context: context,
+            transition: transition
         )
         return AccessibilityTrace(captures: captures + [capture])
     }
 
     public func capture(hash: String) -> Capture? {
         captures.first { $0.hash == hash }
+    }
+
+    public func capture(ref: CaptureRef) -> Capture? {
+        captures.first { $0.sequence == ref.sequence && $0.hash == ref.hash }
     }
 
     public var isLinearChain: Bool {
@@ -88,19 +98,56 @@ public extension AccessibilityTrace {
         public let parentHash: String?
         public let interface: Interface
         public let context: Context
+        /// Metadata about the edge from `parentHash` to this capture. This is
+        /// not included in `hash`: it describes the observed transition, not
+        /// the captured hierarchy state.
+        public let transition: Transition
+
+        private enum CodingKeys: String, CodingKey {
+            case sequence
+            case hash
+            case parentHash
+            case interface
+            case context
+            case transition
+        }
 
         public init(
             sequence: Int,
             interface: Interface,
             parentHash: String? = nil,
             context: Context = .empty,
+            transition: Transition = .empty,
             hash: String? = nil
         ) {
             self.sequence = sequence
             self.parentHash = parentHash
             self.interface = interface
             self.context = context
+            self.transition = transition
             self.hash = hash ?? Self.hash(interface: interface, context: context)
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            sequence = try container.decode(Int.self, forKey: .sequence)
+            hash = try container.decode(String.self, forKey: .hash)
+            parentHash = try container.decodeIfPresent(String.self, forKey: .parentHash)
+            interface = try container.decode(Interface.self, forKey: .interface)
+            context = try container.decodeIfPresent(Context.self, forKey: .context) ?? .empty
+            transition = try container.decodeIfPresent(Transition.self, forKey: .transition) ?? .empty
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(sequence, forKey: .sequence)
+            try container.encode(hash, forKey: .hash)
+            try container.encodeIfPresent(parentHash, forKey: .parentHash)
+            try container.encode(interface, forKey: .interface)
+            try container.encode(context, forKey: .context)
+            if !transition.isEmpty {
+                try container.encode(transition, forKey: .transition)
+            }
         }
 
         public var summary: String {
@@ -120,6 +167,60 @@ public extension AccessibilityTrace {
             let data = (try? encoder.encode(content)) ?? Data()
             return "sha256:" + SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
         }
+    }
+
+    struct Transition: Codable, Sendable, Equatable, Hashable {
+        public static let empty = Transition()
+
+        /// Reason a same-edge transition was classified as a screen change.
+        /// Stored as a string so producers outside TheScore can evolve their
+        /// classifier without making this wire receipt depend on that enum.
+        public let screenChangeReason: String?
+        /// Elements that appeared and disappeared while settling this edge.
+        public let transient: [HeistElement]
+
+        public init(
+            screenChangeReason: String? = nil,
+            transient: [HeistElement] = []
+        ) {
+            self.screenChangeReason = screenChangeReason
+            self.transient = transient
+        }
+
+        public var isEmpty: Bool {
+            screenChangeReason == nil && transient.isEmpty
+        }
+    }
+
+    struct CaptureRef: Codable, Sendable, Equatable, Hashable {
+        public let sequence: Int
+        public let hash: String
+
+        public init(sequence: Int, hash: String) {
+            self.sequence = sequence
+            self.hash = hash
+        }
+
+        public init(capture: Capture) {
+            self.init(sequence: capture.sequence, hash: capture.hash)
+        }
+    }
+
+    struct CaptureEdge: Codable, Sendable, Equatable, Hashable {
+        public let before: CaptureRef
+        public let after: CaptureRef
+
+        public init(before: CaptureRef, after: CaptureRef) {
+            self.before = before
+            self.after = after
+        }
+
+        public init(before: Capture, after: Capture) {
+            self.init(before: CaptureRef(capture: before), after: CaptureRef(capture: after))
+        }
+
+        public var beforeHash: String { before.hash }
+        public var afterHash: String { after.hash }
     }
 
     struct Context: Codable, Sendable, Equatable, Hashable {

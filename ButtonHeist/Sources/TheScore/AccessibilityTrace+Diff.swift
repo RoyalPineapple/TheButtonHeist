@@ -45,24 +45,37 @@ public extension AccessibilityTrace.Delta {
         _ after: AccessibilityTrace.Capture,
         isScreenChange: Bool = false
     ) -> AccessibilityTrace.Delta {
-        if !isScreenChange, before.hash == after.hash {
-            return .noChange(AccessibilityTrace.NoChange(elementCount: after.interface.elements.count))
+        let edge = AccessibilityTrace.CaptureEdge(before: before, after: after)
+        let screenChanged = isScreenChange
+            || before.context.screenId != after.context.screenId
+            || after.transition.screenChangeReason != nil
+        if !screenChanged, before.hash == after.hash {
+            return .noChange(AccessibilityTrace.NoChange(
+                elementCount: after.interface.elements.count,
+                captureEdge: edge,
+                transient: after.transition.transient
+            ))
         }
 
-        let screenChanged = isScreenChange || before.context.screenId != after.context.screenId
         let interfaceDelta = between(before.interface, after.interface, isScreenChange: screenChanged)
+            .withCaptureEdge(edge)
+            .withTransient(after.transition.transient)
 
         guard before.context != after.context else { return interfaceDelta }
         if case .noChange = interfaceDelta {
             return .elementsChanged(AccessibilityTrace.ElementsChanged(
                 elementCount: after.interface.elements.count,
-                edits: ElementEdits()
+                edits: ElementEdits(),
+                captureEdge: edge,
+                transient: after.transition.transient
             ))
         }
         return interfaceDelta
     }
 
-    /// Compare two full interface trees and emit the compact delta.
+    /// Compatibility projection for callers that only have interfaces. New
+    /// production emission should prefer the capture overload so the delta
+    /// carries the source capture edge.
     static func between(
         _ before: Interface,
         _ after: Interface,
@@ -84,7 +97,8 @@ public extension AccessibilityTrace.Delta {
         return makeDelta(edits: ElementEdits.between(before, after), elementCount: afterElements.count)
     }
 
-    /// Compare two single-element hierarchies and emit the compact delta.
+    /// Compatibility/test projection for callers that only have elements.
+    /// New production emission should prefer the capture overload.
     static func between(
         _ before: HeistElement,
         _ after: HeistElement,
@@ -93,7 +107,8 @@ public extension AccessibilityTrace.Delta {
         between(singleElementInterface(before), singleElementInterface(after), isScreenChange: isScreenChange)
     }
 
-    /// Compare two single-node hierarchies and emit the compact delta.
+    /// Compatibility/test projection for callers that only have nodes. New
+    /// production emission should prefer the capture overload.
     static func between(
         _ before: InterfaceNode,
         _ after: InterfaceNode,
@@ -102,7 +117,8 @@ public extension AccessibilityTrace.Delta {
         between([before], [after], isScreenChange: isScreenChange)
     }
 
-    /// Compare two interface root-node lists and emit the compact delta.
+    /// Compatibility/test projection for callers that only have root-node
+    /// lists. New production emission should prefer the capture overload.
     static func between(
         _ beforeTree: [InterfaceNode],
         _ afterTree: [InterfaceNode],

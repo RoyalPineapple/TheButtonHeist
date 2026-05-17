@@ -551,6 +551,9 @@ extension FenceResponse {
             "kind": delta.kindRawValue,
             "elementCount": delta.elementCount,
         ]
+        if let captureEdge = delta.captureEdge {
+            payload["captureEdge"] = captureEdgeDictionary(captureEdge)
+        }
         let transient = delta.transient
         if !transient.isEmpty {
             payload["transient"] = transient.map { elementDictionary($0, detail: .summary) }
@@ -577,6 +580,20 @@ extension FenceResponse {
             }
         }
         return payload
+    }
+
+    private func captureEdgeDictionary(_ edge: AccessibilityTrace.CaptureEdge) -> [String: Any] {
+        [
+            "before": captureRefDictionary(edge.before),
+            "after": captureRefDictionary(edge.after),
+        ]
+    }
+
+    private func captureRefDictionary(_ ref: AccessibilityTrace.CaptureRef) -> [String: Any] {
+        [
+            "sequence": ref.sequence,
+            "hash": ref.hash,
+        ]
     }
 
     private func mergeEditDictionary(_ edits: ElementEdits, into payload: inout [String: Any]) {

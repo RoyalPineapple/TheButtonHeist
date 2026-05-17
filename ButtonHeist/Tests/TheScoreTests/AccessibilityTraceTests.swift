@@ -32,12 +32,29 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertNotEqual(unfocused.hash, focused.hash)
     }
 
+    func testCaptureHashExcludesTransitionMetadata() throws {
+        let interface = makeInterface()
+        let stable = AccessibilityTrace.Capture(sequence: 1, interface: interface)
+        let withTransition = AccessibilityTrace.Capture(
+            sequence: 1,
+            interface: interface,
+            transition: AccessibilityTrace.Transition(
+                screenChangeReason: "primaryHeaderChanged",
+                transient: [makeElement(heistId: "spinner", label: "Loading", traits: [.staticText])]
+            )
+        )
+
+        XCTAssertEqual(stable.hash, withTransition.hash)
+        XCTAssertNotEqual(stable.transition, withTransition.transition)
+    }
+
     func testTraceCanLookupCaptureByHash() throws {
         let first = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Home"))
         let second = AccessibilityTrace.Capture(sequence: 2, interface: makeInterface(label: "Settings"), parentHash: first.hash)
         let trace = AccessibilityTrace(captures: [first, second])
 
         XCTAssertEqual(trace.capture(hash: second.hash)?.hash, second.hash)
+        XCTAssertEqual(trace.capture(ref: AccessibilityTrace.CaptureRef(capture: second))?.hash, second.hash)
         XCTAssertEqual(trace.receipts.map(\.hash), [first.hash, second.hash])
         XCTAssertEqual(trace.receipts[1].parentHash, first.hash)
         XCTAssertTrue(trace.isLinearChain)
@@ -53,6 +70,24 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertNil(trace.captures[0].parentHash)
         XCTAssertEqual(trace.captures[1].parentHash, trace.captures[0].hash)
         XCTAssertTrue(trace.isLinearChain)
+    }
+
+    func testAppendingCarriesTransitionOnCaptureEdge() throws {
+        let first = makeInterface(label: "Home")
+        let second = makeInterface(label: "Settings")
+        let transient = makeElement(heistId: "spinner", label: "Loading", traits: [.staticText])
+
+        let trace = AccessibilityTrace(first: first).appending(
+            second,
+            transition: AccessibilityTrace.Transition(
+                screenChangeReason: "primaryHeaderChanged",
+                transient: [transient]
+            )
+        )
+
+        XCTAssertEqual(trace.captures[1].transition.screenChangeReason, "primaryHeaderChanged")
+        XCTAssertEqual(trace.captures[1].transition.transient, [transient])
+        XCTAssertEqual(trace.captures[1].parentHash, trace.captures[0].hash)
     }
 
     func testTraceConstructionNormalizesToSingleLinkedList() throws {
@@ -71,6 +106,20 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertEqual(trace.captures[1].parentHash, trace.captures[0].hash)
         XCTAssertEqual(trace.captures[0].context.focusedElementId, "title")
         XCTAssertTrue(trace.isLinearChain)
+    }
+
+    func testOldCaptureWithoutTransitionDecodesAsEmptyTransition() throws {
+        let interface = makeInterface()
+        let capture = AccessibilityTrace.Capture(sequence: 1, interface: interface)
+        let data = try JSONEncoder().encode(capture)
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        json.removeValue(forKey: "transition")
+        let oldShapeData = try JSONSerialization.data(withJSONObject: json)
+
+        let decoded = try JSONDecoder().decode(AccessibilityTrace.Capture.self, from: oldShapeData)
+
+        XCTAssertEqual(decoded.hash, capture.hash)
+        XCTAssertEqual(decoded.transition, .empty)
     }
 
     private func makeInterface(label: String = "Settings", timestamp: Date = Date(timeIntervalSince1970: 0)) -> Interface {

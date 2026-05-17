@@ -197,13 +197,6 @@ final class TheBrains {
         _ = await navigation.exploreAndPrune()
         let afterSnapshot = stash.selectElements()
         let afterTree = stash.wireTree()
-        let accessibilityTrace = makeAccessibilityTrace(afterTree: afterTree, parentCapture: before.capture)
-
-        let baseDelta = deriveDelta(
-            from: accessibilityTrace,
-            before: before,
-            isScreenChange: isScreenChange
-        )
         let transientElements = Self.shouldSuppressTransient(
             settleOutcome: settleResult.outcome,
             isScreenChange: isScreenChange
@@ -214,9 +207,21 @@ final class TheBrains {
                 baseline: before.elements,
                 final: afterScreen?.hierarchy.sortedElements ?? []
             )
-        let delta = transientElements.isEmpty
-            ? baseDelta
-            : enriching(baseDelta, transient: transientElements)
+        let transition = AccessibilityTrace.Transition(
+            screenChangeReason: classification.reason?.rawValue,
+            transient: transientElements.map { TheStash.WireConversion.convert($0) }
+        )
+        let accessibilityTrace = makeAccessibilityTrace(
+            afterTree: afterTree,
+            parentCapture: before.capture,
+            transition: transition
+        )
+
+        let delta = deriveDelta(
+            from: accessibilityTrace,
+            before: before,
+            isScreenChange: isScreenChange
+        )
 
         await stash.captureActionFrame()
 
@@ -290,34 +295,6 @@ final class TheBrains {
     ) -> Bool {
         if case .tripwireTriggered = settleOutcome { return true }
         return isScreenChange
-    }
-
-    /// Return a copy of `delta` with `transient` populated.
-    private func enriching(
-        _ delta: AccessibilityTrace.Delta,
-        transient: [AccessibilityElement]
-    ) -> AccessibilityTrace.Delta {
-        let transientWire = transient.map { TheStash.WireConversion.convert($0) }
-        switch delta {
-        case .noChange(let payload):
-            return .noChange(AccessibilityTrace.NoChange(
-                elementCount: payload.elementCount,
-                transient: transientWire
-            ))
-        case .elementsChanged(let payload):
-            return .elementsChanged(AccessibilityTrace.ElementsChanged(
-                elementCount: payload.elementCount,
-                edits: payload.edits,
-                transient: transientWire
-            ))
-        case .screenChanged(let payload):
-            return .screenChanged(AccessibilityTrace.ScreenChanged(
-                elementCount: payload.elementCount,
-                newInterface: payload.newInterface,
-                postEdits: payload.postEdits,
-                transient: transientWire
-            ))
-        }
     }
 
     // MARK: - Keyboard Observation
@@ -793,13 +770,15 @@ final class TheBrains {
         tree: [InterfaceNode],
         sequence: Int = 1,
         parentHash: String? = nil,
-        tripwireSignal: TheTripwire.TripwireSignal? = nil
+        tripwireSignal: TheTripwire.TripwireSignal? = nil,
+        transition: AccessibilityTrace.Transition = .empty
     ) -> AccessibilityTrace.Capture {
         AccessibilityTrace.Capture(
             sequence: sequence,
             interface: Interface(timestamp: Date(), tree: tree),
             parentHash: parentHash,
-            context: makeCaptureContext(tripwireSignal: tripwireSignal)
+            context: makeCaptureContext(tripwireSignal: tripwireSignal),
+            transition: transition
         )
     }
 
@@ -820,11 +799,16 @@ final class TheBrains {
         )
     }
 
-    func makeAccessibilityTrace(afterTree: [InterfaceNode], parentCapture: AccessibilityTrace.Capture? = nil) -> AccessibilityTrace {
+    func makeAccessibilityTrace(
+        afterTree: [InterfaceNode],
+        parentCapture: AccessibilityTrace.Capture? = nil,
+        transition: AccessibilityTrace.Transition = .empty
+    ) -> AccessibilityTrace {
         let capture = makeTraceCapture(
             tree: afterTree,
             sequence: parentCapture == nil ? 1 : 2,
-            parentHash: parentCapture?.hash
+            parentHash: parentCapture?.hash,
+            transition: transition
         )
         if let parentCapture {
             return AccessibilityTrace(captures: [parentCapture, capture])
@@ -838,6 +822,7 @@ final class TheBrains {
             interface: afterCapture.interface,
             parentHash: parentCapture?.hash,
             context: afterCapture.context,
+            transition: afterCapture.transition,
             hash: afterCapture.hash
         )
         if let parentCapture {
