@@ -231,16 +231,16 @@ func findOverlap(
     )
 }
 
-// MARK: - Page Stitching
+// MARK: - Page Reconciliation
 
-/// Content-space axis used when stitching scroll pages with stable origins.
-enum StitchOrderingAxis: Sendable {
+/// Content-space axis used when reconciling scroll pages with stable origins.
+enum ContentOrderingAxis: Sendable {
     case horizontal
     case vertical
 }
 
 /// Result of merging a new page into the accumulated element sequence.
-struct StitchResult: Equatable {
+struct PageReconciliation: Equatable {
     /// The merged element sequence after incorporating the page.
     let elements: [AccessibilityElement]
 
@@ -254,19 +254,16 @@ struct StitchResult: Equatable {
     let previousCount: Int
 }
 
-/// Stitch a new page of elements into the accumulated sequence.
+/// Reconcile a visible page into accumulated semantic memory.
 ///
-/// The algorithm:
-/// 1. Fingerprint both sequences using content-space origins (scroll-invariant).
-/// 2. Slide page fingerprints over accumulated fingerprints to find the overlap.
-/// 3. Use the overlap as an anchor to position the page within the full sequence.
-/// 4. Elements before the overlap in the page → prepend (scrolled backward).
-/// 5. Elements in the overlap → update from page (fresher data).
-/// 6. Elements after the overlap in the page → append (scrolled forward).
-/// 7. Accumulated elements outside the page's range are preserved as-is.
-/// 8. When a scroll axis and complete content-space origins are provided, the
-///    merged result is ordered by content-space position so retained off-screen
-///    elements cannot drift behind newer page content.
+/// Visible pages are physical evidence; known state is semantic memory. This
+/// helper is the page-level bridge: content identity finds overlap, and
+/// content-space geometry orders the merged memory when available.
+///
+/// When content-space origins are complete, geometry orders the union. Otherwise,
+/// overlap anchors the page in semantic memory and page evidence wins inside the
+/// visible overlap. See `reconcileByContentOrigin` and `reconcileByOverlap` for
+/// those two merge strategies.
 ///
 /// - Parameters:
 ///   - accumulated: Elements seen so far from previous pages.
@@ -277,15 +274,15 @@ struct StitchResult: Equatable {
 ///     Pass nil entries for elements not inside a scroll view.
 ///
 /// When no overlap is found, the page is appended as entirely new content.
-func stitchPage(
+func reconcilePage(
     accumulated: [AccessibilityElement],
     accumulatedOrigins: [CGPoint?],
     page: [AccessibilityElement],
     pageOrigins: [CGPoint?],
-    orderingAxis: StitchOrderingAxis? = nil
-) -> StitchResult {
+    orderingAxis: ContentOrderingAxis? = nil
+) -> PageReconciliation {
     guard !page.isEmpty else {
-        return StitchResult(
+        return PageReconciliation(
             elements: accumulated,
             overlap: OverlapResult(accumulatedStart: 0, pageStart: 0, length: 0),
             inserted: [],
@@ -294,7 +291,7 @@ func stitchPage(
     }
 
     guard !accumulated.isEmpty else {
-        return StitchResult(
+        return PageReconciliation(
             elements: page,
             overlap: OverlapResult(accumulatedStart: 0, pageStart: 0, length: 0),
             inserted: page,
@@ -302,19 +299,17 @@ func stitchPage(
         )
     }
 
-    let accFingerprints = zip(accumulated, accumulatedOrigins).map { element, origin in
-        element.fingerprint(contentSpaceOrigin: origin)
-    }
-    let pageFingerprints = zip(page, pageOrigins).map { element, origin in
-        element.fingerprint(contentSpaceOrigin: origin)
-    }
+    let accumulatedFingerprints = fingerprints(for: accumulated, origins: accumulatedOrigins)
+    let pageFingerprints = fingerprints(for: page, origins: pageOrigins)
+    let overlap = findOverlap(
+        accumulated: accumulatedFingerprints,
+        page: pageFingerprints
+    )
 
-    let overlap = findOverlap(accumulated: accFingerprints, page: pageFingerprints)
-
-    if let ordered = stitchByContentOrigin(
+    if let ordered = reconcileByContentOrigin(
         accumulated: accumulated,
         accumulatedOrigins: accumulatedOrigins,
-        accumulatedFingerprints: accFingerprints,
+        accumulatedFingerprints: accumulatedFingerprints,
         page: page,
         pageOrigins: pageOrigins,
         pageFingerprints: pageFingerprints,
@@ -324,8 +319,30 @@ func stitchPage(
         return ordered
     }
 
+    return reconcileByOverlap(accumulated: accumulated, page: page, overlap: overlap)
+}
+
+private func fingerprints(
+    for elements: [AccessibilityElement],
+    origins: [CGPoint?]
+) -> [Int] {
+    zip(elements, origins).map { element, origin in
+        element.fingerprint(contentSpaceOrigin: origin)
+    }
+}
+
+private extension OverlapResult {
+    var accumulatedEnd: Int { accumulatedStart + length }
+    var pageEnd: Int { pageStart + length }
+}
+
+private func reconcileByOverlap(
+    accumulated: [AccessibilityElement],
+    page: [AccessibilityElement],
+    overlap: OverlapResult
+) -> PageReconciliation {
     guard overlap.length > 0 else {
-        return StitchResult(
+        return PageReconciliation(
             elements: accumulated + page,
             overlap: overlap,
             inserted: page,
@@ -333,52 +350,18 @@ func stitchPage(
         )
     }
 
-    // Build the merged sequence:
-    //
-    //   [accumulated before overlap] + [page before overlap] + [overlap from page] + [page after overlap] + [accumulated after overlap]
-    //
-    // Visualized with a scroll view that scrolled forward:
-    //
-    //   accumulated: [A B C D E F G]
-    //                        ^^^       ← overlap (D E F)
-    //   page:            [X D E F H I]
-    //                     ^       ^^^  ← new content
-    //   result:      [A B C X D E F H I G]
-    //                       ^       ^^   ← inserted
-
     var result: [AccessibilityElement] = []
-    var inserted: [AccessibilityElement] = []
+    result.reserveCapacity(accumulated.count + page.count - overlap.length)
+    result.append(contentsOf: accumulated[..<overlap.accumulatedStart])
+    result.append(contentsOf: page[..<overlap.pageStart])
+    result.append(contentsOf: page[overlap.pageStart..<overlap.pageEnd])
+    result.append(contentsOf: page[overlap.pageEnd..<page.endIndex])
+    result.append(contentsOf: accumulated[overlap.accumulatedEnd..<accumulated.endIndex])
 
-    // 1. Accumulated elements before the overlap region
-    let accBeforeEnd = overlap.accumulatedStart
-    result.append(contentsOf: accumulated[0..<accBeforeEnd])
+    let inserted = Array(page[..<overlap.pageStart])
+        + Array(page[overlap.pageEnd..<page.endIndex])
 
-    // 2. Page elements before its overlap region (scrolled backward / new at top)
-    let pageBeforeEnd = overlap.pageStart
-    if pageBeforeEnd > 0 {
-        let newElements = Array(page[0..<pageBeforeEnd])
-        result.append(contentsOf: newElements)
-        inserted.append(contentsOf: newElements)
-    }
-
-    // 3. Overlap region — take from page (fresher data, may have updated values)
-    let overlapEnd = overlap.pageStart + overlap.length
-    result.append(contentsOf: page[overlap.pageStart..<overlapEnd])
-
-    // 4. Page elements after its overlap region (scrolled forward / new at bottom)
-    if overlapEnd < page.count {
-        let newElements = Array(page[overlapEnd..<page.count])
-        result.append(contentsOf: newElements)
-        inserted.append(contentsOf: newElements)
-    }
-
-    // 5. Accumulated elements after the overlap region that aren't in the page
-    let accAfterStart = overlap.accumulatedStart + overlap.length
-    if accAfterStart < accumulated.count {
-        result.append(contentsOf: accumulated[accAfterStart..<accumulated.count])
-    }
-
-    return StitchResult(
+    return PageReconciliation(
         elements: result,
         overlap: overlap,
         inserted: inserted,
@@ -386,13 +369,13 @@ func stitchPage(
     )
 }
 
-private struct OriginStitchEntry {
+private struct ContentOriginEntry {
     let element: AccessibilityElement
     let origin: CGPoint
     let order: Int
 }
 
-private func stitchByContentOrigin(
+private func reconcileByContentOrigin(
     accumulated: [AccessibilityElement],
     accumulatedOrigins: [CGPoint?],
     accumulatedFingerprints: [Int],
@@ -400,8 +383,8 @@ private func stitchByContentOrigin(
     pageOrigins: [CGPoint?],
     pageFingerprints: [Int],
     overlap: OverlapResult,
-    orderingAxis: StitchOrderingAxis?
-) -> StitchResult? {
+    orderingAxis: ContentOrderingAxis?
+) -> PageReconciliation? {
     guard let orderingAxis,
           accumulated.count == accumulatedOrigins.count,
           page.count == pageOrigins.count,
@@ -416,9 +399,9 @@ private func stitchByContentOrigin(
     else { return nil }
 
     let accumulatedFingerprintSet = Set(accumulatedFingerprints)
-    var entriesByFingerprint: [Int: OriginStitchEntry] = [:]
+    var entriesByFingerprint: [Int: ContentOriginEntry] = [:]
     for index in accumulated.indices {
-        entriesByFingerprint[accumulatedFingerprints[index]] = OriginStitchEntry(
+        entriesByFingerprint[accumulatedFingerprints[index]] = ContentOriginEntry(
             element: accumulated[index],
             origin: accumulatedResolvedOrigins[index],
             order: index
@@ -431,7 +414,7 @@ private func stitchByContentOrigin(
         if !accumulatedFingerprintSet.contains(fingerprint) {
             inserted.append(page[index])
         }
-        entriesByFingerprint[fingerprint] = OriginStitchEntry(
+        entriesByFingerprint[fingerprint] = ContentOriginEntry(
             element: page[index],
             origin: pageResolvedOrigins[index],
             order: accumulated.count + index
@@ -450,7 +433,7 @@ private func stitchByContentOrigin(
         return lhs.order < rhs.order
     }
 
-    return StitchResult(
+    return PageReconciliation(
         elements: orderedEntries.map(\.element),
         overlap: overlap,
         inserted: inserted,
@@ -459,11 +442,11 @@ private func stitchByContentOrigin(
 }
 
 /// Convenience overload using window-space frames (for non-scrollable contexts or tests).
-func stitchPage(
+func reconcilePage(
     accumulated: [AccessibilityElement],
     page: [AccessibilityElement]
-) -> StitchResult {
-    stitchPage(
+) -> PageReconciliation {
+    reconcilePage(
         accumulated: accumulated,
         accumulatedOrigins: accumulated.map { _ in nil },
         page: page,
@@ -471,26 +454,26 @@ func stitchPage(
     )
 }
 
-// MARK: - Hierarchy Stitching
+// MARK: - Hierarchy Reconciliation
 
 extension Array where Element == AccessibilityHierarchy {
-    /// Flatten to elements, stitch, and report what happened.
+    /// Flatten to elements, reconcile, and report what happened.
     /// This is the convenience entry point for merging a page of hierarchy nodes
     /// into an accumulated hierarchy.
-    func stitchPage(
+    func reconcilePage(
         from page: [AccessibilityHierarchy]
-    ) -> StitchResult {
+    ) -> PageReconciliation {
         let accElements = self.sortedElements
         let pageElements = page.sortedElements
-        return buttonHeistStitchPage(accumulated: accElements, page: pageElements)
+        return buttonHeistReconcilePage(accumulated: accElements, page: pageElements)
     }
 }
 
 // Module-level function to avoid ambiguity with the extension method
-private func buttonHeistStitchPage(
+private func buttonHeistReconcilePage(
     accumulated: [AccessibilityElement],
     page: [AccessibilityElement]
-) -> StitchResult {
-    stitchPage(accumulated: accumulated, page: page)
+) -> PageReconciliation {
+    reconcilePage(accumulated: accumulated, page: page)
 }
 #endif // canImport(UIKit) && canImport(AccessibilitySnapshotParser)

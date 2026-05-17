@@ -51,10 +51,6 @@ extension Navigation {
         func visibleStateUnchanged(after visibleIds: Set<String>) -> Bool {
             visibleIds == previousVisibleIds
         }
-
-        func knownStateGrew(after visibleIds: Set<String>) -> Bool {
-            !visibleIds.subtracting(previousVisibleIds).isEmpty
-        }
     }
 
     enum ScrollTargetResolution {

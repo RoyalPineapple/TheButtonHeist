@@ -7,6 +7,8 @@ TheBrains is the orchestrator. Two internal components handle the heavy lifting:
 - **`Navigation`** — scroll orchestration and screen exploration. Owns `ScrollableTarget`, `SettleSwipeLoopState`, `ScreenManifest`, and `lastSwipeDirectionByTarget`. Public entry points are `executeScroll`, `executeScrollToVisible`, `executeScrollToEdge`, `executeElementSearch`, `exploreAndPrune`, `ensureOnScreen`, `ensureFirstResponderOnScreen`.
 - **`Actions`** — the 21 `executeXxx` action handlers (activate, increment, decrement, customAction, editAction, setPasteboard, getPasteboard, resignFirstResponder, tap, longPress, swipe, drag, pinch, rotate, twoFingerTap, drawPath, drawBezier, typeText, plus the `performElementAction` / `performPointAction` generic pipelines and duration helpers).
 
+Navigation's invariant: visible pages are physical evidence; known state is semantic memory; reconciliation is the only place evidence becomes memory.
+
 Both components are owned by TheBrains (`let navigation: Navigation`, `let actions: Actions`) and share the same TheStash / TheSafecracker / TheTripwire references. They are *internal components of TheBrains*, not crew members in their own right — neutral noun-style names. Actions holds a reference to Navigation so targeted element/point flows can call `ensureOnScreen(for:)`, and edit, pasteboard, and resign-first-responder commands can call `ensureFirstResponderOnScreen()`.
 
 TheBrains keeps the post-action delta cycle, dispatch, wait handlers, and broadcast state. It also re-exposes the most-touched Navigation/Actions members via typealiases and forwarding properties so callers can spell them `brains.X` when the original location was less ergonomic; new code should call `brains.navigation.X` / `brains.actions.X` directly.
@@ -45,7 +47,7 @@ TheBrains keeps the post-action delta cycle, dispatch, wait handlers, and broadc
 
 5. **`Navigation+Scroll.swift`** — `executeScroll` does one page. `executeScrollToVisible` tries three strategies: already visible → content-space one-shot jump → failure. `executeElementSearch` tries four: visible → one-shot → page-by-page loop (up to 200 scrolls) → not found. `ensureOnScreen` pre-scrolls off-viewport elements and nudges into the comfort zone (frame inset by 1/6). Direction mapping, axis detection, and `safeSwipeFrame` (tab-bar-aware clip) also live here.
 
-6. **`Navigation+Explore.swift`** — `exploreAndPrune()` builds a local `var union: Screen`, runs `exploreScreen()`, then writes `stash.currentScreen = union`. Per container: scrolls to leading edge → pages through accumulating elements via `stitchPage` → restores visual origin for `UIScrollView` targets. Exploration uses `ScrollableTarget` so non-`UIScrollView` containers use swipe fallback. `ScreenManifest` bookkeeping lives in `Navigation.swift`.
+6. **`Navigation+Explore.swift`** — `exploreAndPrune()` builds a local `var union: Screen`, runs `exploreScreen()`, then writes `stash.currentScreen = union`. Per container: scrolls to leading edge → pages through accumulating elements via `reconcilePage` → restores visual origin for `UIScrollView` targets. Exploration uses `ScrollableTarget` so non-`UIScrollView` containers use swipe fallback. `ScreenManifest` bookkeeping lives in `Navigation.swift`.
 
 7. **`ActionResultBuilder.swift`** — Assembles `ActionResult` from method + snapshot. Two init paths (from `[ScreenElement]` or explicit screenName/Id). Two terminal methods: `success(scrollSearchResult:exploreResult:)` and `failure(errorKind:)`.
 

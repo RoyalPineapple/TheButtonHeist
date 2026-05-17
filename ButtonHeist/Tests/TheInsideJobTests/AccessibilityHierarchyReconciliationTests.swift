@@ -163,26 +163,26 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
         XCTAssertEqual(result.length, 2, "Best contiguous run is 2 elements")
     }
 
-    // MARK: - Stitching: Empty Cases
+    // MARK: - Reconciliation: Empty Cases
 
-    func testStitchEmptyAccumulated() {
+    func testReconcileEmptyAccumulated() {
         let page = [makeElement(label: "A"), makeElement(label: "B")]
-        let result = stitchPage(accumulated: [], page: page)
+        let result = reconcilePage(accumulated: [], page: page)
         XCTAssertEqual(result.elements.count, 2)
         XCTAssertEqual(result.inserted.count, 2)
         XCTAssertEqual(result.previousCount, 0)
     }
 
-    func testStitchEmptyPage() {
+    func testReconcileEmptyPage() {
         let accumulated = [makeElement(label: "A"), makeElement(label: "B")]
-        let result = stitchPage(accumulated: accumulated, page: [])
+        let result = reconcilePage(accumulated: accumulated, page: [])
         XCTAssertEqual(result.elements.count, 2)
         XCTAssertTrue(result.inserted.isEmpty)
     }
 
-    // MARK: - Stitching: Scroll Forward
+    // MARK: - Reconciliation: Scroll Forward
 
-    func testStitchScrollForward() {
+    func testReconcileScrollForward() {
         // Accumulated: [Row1 Row2 Row3]
         // Page (scrolled down): [Row2 Row3 Row4 Row5]
         // Result: [Row1 Row2 Row3 Row4 Row5]
@@ -195,7 +195,7 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
         let accumulated = [row1, row2, row3]
         let page = [row2, row3, row4, row5]
 
-        let result = stitchPage(accumulated: accumulated, page: page)
+        let result = reconcilePage(accumulated: accumulated, page: page)
 
         XCTAssertEqual(result.elements.count, 5, "All 5 unique rows present")
         XCTAssertEqual(result.overlap.length, 2, "Row2 and Row3 overlap")
@@ -203,7 +203,7 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
         XCTAssertEqual(result.elements.map(\.label), ["Row 1", "Row 2", "Row 3", "Row 4", "Row 5"])
     }
 
-    func testStitchScrollBackward() {
+    func testReconcileScrollBackward() {
         // Accumulated: [Row3 Row4 Row5]
         // Page (scrolled up): [Row1 Row2 Row3 Row4]
         // Result: [Row1 Row2 Row3 Row4 Row5]
@@ -216,7 +216,7 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
         let accumulated = [row3, row4, row5]
         let page = [row1, row2, row3, row4]
 
-        let result = stitchPage(accumulated: accumulated, page: page)
+        let result = reconcilePage(accumulated: accumulated, page: page)
 
         XCTAssertEqual(result.elements.count, 5, "All 5 unique rows present")
         XCTAssertEqual(result.overlap.length, 2, "Row3 and Row4 overlap")
@@ -224,9 +224,9 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
         XCTAssertEqual(result.elements.map(\.label), ["Row 1", "Row 2", "Row 3", "Row 4", "Row 5"])
     }
 
-    // MARK: - Stitching: Multi-Page Assembly
+    // MARK: - Reconciliation: Multi-Page Assembly
 
-    func testStitchThreePages() {
+    func testReconcileThreePages() {
         // Simulate scrolling through 3 pages of a long list
         let rows = (0..<15).map { index in
             makeElement(
@@ -243,17 +243,17 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
         // Page 3: rows 7–12 (overlaps with page 2 at rows 7–8)
         let page3 = Array(rows[7..<13])
 
-        // Stitch page 1 into empty
-        let after1 = stitchPage(accumulated: [], page: page1)
+        // Reconcile page 1 into empty
+        let after1 = reconcilePage(accumulated: [], page: page1)
         XCTAssertEqual(after1.elements.count, 5)
 
-        // Stitch page 2 into accumulated
-        let after2 = stitchPage(accumulated: after1.elements, page: page2)
+        // Reconcile page 2 into accumulated
+        let after2 = reconcilePage(accumulated: after1.elements, page: page2)
         XCTAssertEqual(after2.elements.count, 9, "Rows 0-8")
         XCTAssertEqual(after2.overlap.length, 2, "Rows 3-4 overlap")
 
-        // Stitch page 3 into accumulated
-        let after3 = stitchPage(accumulated: after2.elements, page: page3)
+        // Reconcile page 3 into accumulated
+        let after3 = reconcilePage(accumulated: after2.elements, page: page3)
         XCTAssertEqual(after3.elements.count, 13, "Rows 0-12")
         XCTAssertEqual(after3.overlap.length, 2, "Rows 7-8 overlap")
 
@@ -263,9 +263,9 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
         }
     }
 
-    // MARK: - Stitching: No Overlap (Disjoint Pages)
+    // MARK: - Reconciliation: No Overlap (Disjoint Pages)
 
-    func testStitchDisjointPages() {
+    func testReconcileDisjointPages() {
         let row1 = makeElement(label: "Row 1", identifier: "r1", frame: CGRect(x: 0, y: 0, width: 320, height: 44))
         let row2 = makeElement(label: "Row 2", identifier: "r2", frame: CGRect(x: 0, y: 44, width: 320, height: 44))
         let row5 = makeElement(label: "Row 5", identifier: "r5", frame: CGRect(x: 0, y: 176, width: 320, height: 44))
@@ -274,15 +274,15 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
         let accumulated = [row1, row2]
         let page = [row5, row6]
 
-        let result = stitchPage(accumulated: accumulated, page: page)
+        let result = reconcilePage(accumulated: accumulated, page: page)
         XCTAssertEqual(result.elements.count, 4, "Both sets appended")
         XCTAssertTrue(result.overlap.isEmpty, "No overlap found")
         XCTAssertEqual(result.inserted.count, 2)
     }
 
-    // MARK: - Stitching: Complete Overlap
+    // MARK: - Reconciliation: Complete Overlap
 
-    func testStitchIdenticalPage() {
+    func testReconcileIdenticalPage() {
         let rows = (0..<5).map { index in
             makeElement(
                 label: "Row \(index)",
@@ -291,15 +291,15 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
             )
         }
 
-        let result = stitchPage(accumulated: rows, page: rows)
+        let result = reconcilePage(accumulated: rows, page: rows)
         XCTAssertEqual(result.elements.count, 5, "Same elements, no duplication")
         XCTAssertEqual(result.overlap.length, 5, "Full overlap")
         XCTAssertTrue(result.inserted.isEmpty, "Nothing new")
     }
 
-    // MARK: - Stitching: Value Updates in Overlap
+    // MARK: - Reconciliation: Value Updates in Overlap
 
-    func testStitchUpdatesValuesInOverlapRegion() {
+    func testReconcileUpdatesValuesInOverlapRegion() {
         let row1 = makeElement(label: "Score", value: "100", identifier: "score", frame: CGRect(x: 0, y: 0, width: 320, height: 44))
         let row2 = makeElement(label: "Lives", value: "3", identifier: "lives", frame: CGRect(x: 0, y: 44, width: 320, height: 44))
 
@@ -310,16 +310,16 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
         let updatedRow2 = makeElement(label: "Lives", value: "2", identifier: "lives", frame: CGRect(x: 0, y: 44, width: 320, height: 44))
         let page = [row1, updatedRow2]
 
-        let result = stitchPage(accumulated: accumulated, page: page)
+        let result = reconcilePage(accumulated: accumulated, page: page)
         // row1 overlaps, updatedRow2 doesn't match row2's fingerprint
         // So overlap is length 1 (row1), then updatedRow2 is inserted after,
         // and original row2 is appended from accumulated
         XCTAssertGreaterThanOrEqual(result.overlap.length, 1)
     }
 
-    // MARK: - Stitching: Insertion Detection
+    // MARK: - Reconciliation: Insertion Detection
 
-    func testStitchDetectsInsertedElement() {
+    func testReconcileDetectsInsertedElement() {
         // Accumulated: [A B C]
         // Page: [B NEW C D]
         // Overlap on [B] or [C] — NEW is inserted, D is appended
@@ -332,7 +332,7 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
         let accumulated = [elementA, elementB, elementC]
         let page = [elementB, elementNew, elementC, elementD]
 
-        let result = stitchPage(accumulated: accumulated, page: page)
+        let result = reconcilePage(accumulated: accumulated, page: page)
         XCTAssertGreaterThan(result.elements.count, 3, "At least one new element added")
         // The inserted list should contain at least NEW and D
         let insertedLabels = Set(result.inserted.map { $0.label ?? "" })
@@ -342,7 +342,7 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
 
     // MARK: - Hierarchy Convenience
 
-    func testHierarchyStitchPage() {
+    func testHierarchyReconcilePage() {
         let accumulated: [AccessibilityHierarchy] = [
             hierarchyElement(label: "Row 0", identifier: "r0", frame: CGRect(x: 0, y: 0, width: 320, height: 44), index: 0),
             hierarchyElement(label: "Row 1", identifier: "r1", frame: CGRect(x: 0, y: 44, width: 320, height: 44), index: 1),
@@ -354,12 +354,12 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
             hierarchyElement(label: "Row 3", identifier: "r3", frame: CGRect(x: 0, y: 132, width: 320, height: 44), index: 3),
         ]
 
-        let result = accumulated.stitchPage(from: page)
+        let result = accumulated.reconcilePage(from: page)
         XCTAssertEqual(result.elements.count, 4)
         XCTAssertEqual(result.elements.map(\.label), ["Row 0", "Row 1", "Row 2", "Row 3"])
     }
 
-    // MARK: - Content-Space Stitching (Scroll-Invariant)
+    // MARK: - Content-Space Reconciliation (Scroll-Invariant)
 
     func testContentSpaceFingerprintStableAcrossScrollPositions() {
         // Same element, different screen-space frames (scroll moved it), same content-space origin.
@@ -386,7 +386,7 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
         )
     }
 
-    func testStitchWithContentSpaceOrigins() {
+    func testReconcileWithContentSpaceOrigins() {
         // Simulate scrolling a table view forward by one row.
         // Screen-space frames shift, but content-space origins are stable.
         //
@@ -425,7 +425,7 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
             CGPoint(x: 0, y: 132),
         ]
 
-        let result = stitchPage(
+        let result = reconcilePage(
             accumulated: page1,
             accumulatedOrigins: page1Origins,
             page: page2,
@@ -475,7 +475,7 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
             CGPoint(x: 0, y: 700),
         ]
 
-        let result = stitchPage(
+        let result = reconcilePage(
             accumulated: accumulated,
             accumulatedOrigins: accumulatedOrigins,
             page: page,
@@ -601,7 +601,7 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
         _ = element.fingerprint(contentSpaceOrigin: nil)
     }
 
-    func testWindowSpaceStitchFailsWithScrolledFrames() {
+    func testWindowSpaceReconcileFailsWithScrolledFrames() {
         // Same scenario as above but using window-space fingerprints (no content origins).
         // The overlap should fail because Row 1 at screen y=44 ≠ Row 1 at screen y=0.
 
@@ -617,8 +617,8 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
             makeElement(label: "Row 3", identifier: "r3", frame: CGRect(x: 0, y: 88, width: 320, height: 44)),
         ]
 
-        // Window-space stitch — no content origins, so frames are compared directly
-        let result = stitchPage(accumulated: page1, page: page2)
+        // Window-space reconcile — no content origins, so frames are compared directly
+        let result = reconcilePage(accumulated: page1, page: page2)
 
         // The overlap should be 0 or very small because the screen-space frames don't match
         XCTAssertEqual(result.overlap.length, 0,

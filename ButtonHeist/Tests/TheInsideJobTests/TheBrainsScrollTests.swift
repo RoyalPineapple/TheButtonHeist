@@ -447,14 +447,13 @@ final class TheBrainsScrollTests: XCTestCase {
 
     // MARK: - Scroll Proof
 
-    func testScrollProofReportsEdgeAndKnownStateGrowth() {
+    func testScrollProofReportsEdgeAndVisibleState() {
         let edgeProof = Navigation.ScrollProof(
             moved: false,
             previousVisibleIds: ["visible"]
         )
         XCTAssertTrue(edgeProof.atEdge)
         XCTAssertTrue(edgeProof.visibleStateUnchanged(after: ["visible"]))
-        XCTAssertFalse(edgeProof.knownStateGrew(after: ["visible"]))
 
         let movedProof = Navigation.ScrollProof(
             moved: true,
@@ -462,7 +461,6 @@ final class TheBrainsScrollTests: XCTestCase {
         )
         XCTAssertFalse(movedProof.atEdge)
         XCTAssertFalse(movedProof.visibleStateUnchanged(after: ["visible", "new"]))
-        XCTAssertTrue(movedProof.knownStateGrew(after: ["visible", "new"]))
     }
 
     // MARK: - ScrollableTarget Properties
