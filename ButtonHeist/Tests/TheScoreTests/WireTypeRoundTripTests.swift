@@ -542,9 +542,9 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertTrue(decoded.isImportant)
     }
 
-    // MARK: - InterfaceDelta
+    // MARK: - AccessibilityTrace.Delta
     //
-    // Coverage lives in InterfaceDeltaRoundTripTests.swift — this file's
+    // Coverage lives in AccessibilityTraceDeltaRoundTripTests.swift — this file's
     // generic round-trip suite is for shapes without per-case Codable.
 
     // MARK: - PropertyChange / ElementUpdate

@@ -24,12 +24,12 @@ TheBrains keeps the post-action delta cycle, dispatch, wait handlers, and broadc
 
 2. **`TheBrains.swift`** — Core class. Key types:
 
-   - `BeforeState` — frozen snapshot (sorted elements, raw parsed elements, hierarchy, tripwire signal, parsed screen signature) taken before every action.
+   - `BeforeState` — frozen accessibility capture plus the local parser state needed for matching, screen classification, and diagnostics.
    - **`refresh()`** — delegates to `stash.refresh()`.
    - **`ScreenClassifier.swift`** — parsed accessibility signatures classify no-change, element-change, and screen-change. Tripwire triggers parsing; parsed signatures decide.
-   - **`actionResultWithDelta(before:)`** — the convergence point. On failure: immediate return from before-snapshot. On success: settle until stable or Tripwire-triggered → `stash.parse()` → `ScreenClassifier.classify(before:after:)` → `stash.apply()` → `navigation.exploreAndPrune()` → snapshot → `InterfaceDiff.computeDelta()` → re-resolve target for post-action element metadata → `ActionResultBuilder.success()`.
+   - **`actionResultWithDelta(before:)`** — the convergence point. On failure: immediate return from before-capture. On success: settle until stable or Tripwire-triggered → `stash.parse()` → `ScreenClassifier.classify(before:after:)` → `stash.apply()` → `navigation.exploreAndPrune()` → `AccessibilityTrace` → derived `AccessibilityTrace.Delta` → `ActionResultBuilder.success()`.
 
-   **Response state** — `SentState` struct (semantic `treeHash`, cheap `viewportHash`, beforeState, screenId) tracks the last response sent to the driver. `recordSentState()` snapshots current state; `computeBackgroundDelta()` first checks the viewport hash and only explores when the visible tree changed. TheGetaway calls `recordSentState()` after every send.
+   **Response state** — `SentState` struct (semantic `treeHash`, cheap `viewportHash`, `captureHash`, beforeState, screenId) tracks the last response sent to the driver. `recordSentState()` snapshots current state; `computeBackgroundCapture()` first checks the viewport hash plus capture context, then derives the public trace from capture hashes. TheGetaway calls `recordSentState()` after every send.
 
    **Wait handlers** — `executeWaitForIdle(timeout:)` and `executeWaitForChange(timeout:expectation:)` live here (not in TheGetaway) because they're accessibility-level work: refresh, settle, delta, expectation evaluation. Wait-for-change installs one server-side predicate, checks current state first, then watches settled changes until the expectation is true or the timeout clears it. In that wait-specific path, `element_disappeared` is current absence, not proof of a prior removal event.
 

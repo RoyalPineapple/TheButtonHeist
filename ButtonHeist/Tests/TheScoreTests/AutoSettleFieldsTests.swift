@@ -3,7 +3,7 @@ import XCTest
 
 /// Wire-shape tests for the two additive auto-settle fields:
 /// `ActionResult.settled` / `settleTimeMs` and
-/// `InterfaceDelta.transient`. Old payloads without these fields decode
+/// `AccessibilityTrace.Delta.transient`. Old payloads without these fields decode
 /// cleanly — that's the entire backward-compat contract.
 final class AutoSettleFieldsTests: XCTestCase {
 
@@ -31,9 +31,9 @@ final class AutoSettleFieldsTests: XCTestCase {
         XCTAssertNil(decoded.settleTimeMs)
     }
 
-    // MARK: - InterfaceDelta.transient
+    // MARK: - AccessibilityTrace.Delta.transient
 
-    func testInterfaceDeltaRoundTripsWithTransient() throws {
+    func testAccessibilityTraceDeltaRoundTripsWithTransient() throws {
         let element = HeistElement(
             heistId: "loading",
             description: "Loading",
@@ -44,18 +44,18 @@ final class AutoSettleFieldsTests: XCTestCase {
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 30,
             actions: []
         )
-        let delta: InterfaceDelta = .noChange(.init(elementCount: 12, transient: [element]))
+        let delta: AccessibilityTrace.Delta = .noChange(.init(elementCount: 12, transient: [element]))
         let data = try JSONEncoder().encode(delta)
-        let decoded = try JSONDecoder().decode(InterfaceDelta.self, from: data)
+        let decoded = try JSONDecoder().decode(AccessibilityTrace.Delta.self, from: data)
         XCTAssertEqual(decoded.transient.count, 1)
         XCTAssertEqual(decoded.transient.first?.label, "Processing")
     }
 
-    func testInterfaceDeltaWithoutTransientDecodesAsEmpty() throws {
+    func testAccessibilityTraceDeltaWithoutTransientDecodesAsEmpty() throws {
         let jsonString = """
         {"kind": "noChange", "elementCount": 5}
         """
-        let decoded = try JSONDecoder().decode(InterfaceDelta.self, from: Data(jsonString.utf8))
+        let decoded = try JSONDecoder().decode(AccessibilityTrace.Delta.self, from: Data(jsonString.utf8))
         XCTAssertTrue(decoded.transient.isEmpty)
         XCTAssertEqual(decoded.elementCount, 5)
     }
@@ -73,7 +73,7 @@ final class AutoSettleFieldsTests: XCTestCase {
         let message: String?
     }
 
-    private struct LegacyInterfaceDelta: Decodable {
+    private struct LegacyAccessibilityDelta: Decodable {
         let kind: String
         let elementCount: Int
     }
@@ -93,7 +93,7 @@ final class AutoSettleFieldsTests: XCTestCase {
         XCTAssertEqual(legacy.message, "tap")
     }
 
-    func testNewInterfaceDeltaPayloadDecodesIntoLegacyShape() throws {
+    func testNewAccessibilityTraceDeltaPayloadDecodesIntoLegacyShape() throws {
         let element = HeistElement(
             heistId: "loading",
             description: "Loading",
@@ -104,9 +104,9 @@ final class AutoSettleFieldsTests: XCTestCase {
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 30,
             actions: []
         )
-        let delta: InterfaceDelta = .noChange(.init(elementCount: 7, transient: [element]))
+        let delta: AccessibilityTrace.Delta = .noChange(.init(elementCount: 7, transient: [element]))
         let data = try JSONEncoder().encode(delta)
-        let legacy = try JSONDecoder().decode(LegacyInterfaceDelta.self, from: data)
+        let legacy = try JSONDecoder().decode(LegacyAccessibilityDelta.self, from: data)
         XCTAssertEqual(legacy.kind, "noChange")
         XCTAssertEqual(legacy.elementCount, 7)
     }

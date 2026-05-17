@@ -18,13 +18,13 @@ The getaway driver — runs all comms between the wire and the crew.
 2. **Observation level** — requestScreen, waitForIdle (`brains.executeWaitForIdle`), waitForChange (`brains.executeWaitForChange`)
 3. **Action level** (blocked for observers) — recording start/stop, or `brains.executeCommand(message)` for all action commands
 
-Before dispatching actions, checks `brains.computeBackgroundDelta()` — if the screen changed while the agent was thinking and the command targets a specific element, fails before execution and returns the current delta.
+Before dispatching actions, checks `brains.computeBackgroundCapture()` — if the screen changed while the agent was thinking and the command targets a specific element, fails before execution and returns the current accessibility trace plus its derived delta.
 
 ### Encode / decode / send
 
-- `encodeEnvelope(_:requestId:backgroundDelta:)` — wraps `ServerMessage` in `ResponseEnvelope`, JSON-encodes
+- `encodeEnvelope(_:requestId:backgroundAccessibilityDelta:)` — wraps `ServerMessage` in `ResponseEnvelope`, JSON-encodes
 - `decodeRequest(_:)` — JSON-decodes `RequestEnvelope`
-- `sendMessage(_:requestId:backgroundDelta:respond:)` — encode + respond, with error fallback
+- `sendMessage(_:requestId:backgroundAccessibilityDelta:respond:)` — encode + respond, with error fallback
 - `broadcastToSubscribed(_:)` / `broadcastToAll(_:)` — encode once, send to many
 
 ### Recording

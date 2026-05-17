@@ -1,10 +1,11 @@
 import Foundation
 
-// MARK: - Interface Delta
+// MARK: - Accessibility Trace Delta
 
 /// Compact description of what changed in the accessibility hierarchy after
 /// an action. Each case carries exactly the data valid for that phase.
-public enum InterfaceDelta: Sendable {
+public extension AccessibilityTrace {
+enum Delta: Sendable {
     /// Hierarchy is unchanged. May still carry transient elements that
     /// appeared and disappeared during settle while baseline and final were
     /// otherwise identical.
@@ -140,6 +141,7 @@ public enum InterfaceDelta: Sendable {
         case screenChanged
     }
 }
+}
 
 // MARK: - Element Edits
 
@@ -204,9 +206,9 @@ extension ElementEdits: Codable {
     }
 }
 
-// MARK: - InterfaceDelta Codable
+// MARK: - AccessibilityTrace.Delta Codable
 
-extension InterfaceDelta: Codable {
+extension AccessibilityTrace.Delta: Codable {
     private enum CodingKeys: String, CodingKey {
         case kind
         case elementCount

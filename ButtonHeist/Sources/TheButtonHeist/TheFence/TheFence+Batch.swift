@@ -20,7 +20,7 @@ extension TheFence {
 
         var results: [[String: Any]] = []
         var stepSummaries: [BatchStepSummary] = []
-        var stepDeltas: [InterfaceDelta] = []
+        var stepDeltas: [AccessibilityTrace.Delta] = []
         var failedIndex: Int?
         var expectationsMet = 0
         var expectationsChecked = 0
@@ -130,7 +130,7 @@ extension TheFence {
 
     private struct StepOutcome {
         let isFailed: Bool
-        let delta: InterfaceDelta?
+        let delta: AccessibilityTrace.Delta?
         /// Whether this step carried an explicit expectation that counts
         /// toward the batch's expectations-met/checked totals.
         let expectationCounted: Bool
@@ -148,7 +148,7 @@ extension TheFence {
             let failed = !actionResult.success || (result.map { !$0.met } ?? false)
             return StepOutcome(
                 isFailed: failed,
-                delta: actionResult.interfaceDelta,
+                delta: actionResult.accessibilityDelta,
                 expectationCounted: counted,
                 expectationMet: met
             )
@@ -168,7 +168,7 @@ extension TheFence {
         case .action(let result, _):
             return BatchStepSummary(
                 command: command,
-                deltaKind: result.interfaceDelta?.kindRawValue,
+                deltaKind: result.accessibilityDelta?.kindRawValue,
                 screenName: result.screenName,
                 screenId: result.screenId,
                 expectationMet: expectationMet,

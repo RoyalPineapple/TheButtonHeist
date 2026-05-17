@@ -5,7 +5,7 @@ import XCTest
 @testable import TheScore
 
 // Test-only conveniences for nil-or-array assertions.
-private extension InterfaceDelta {
+private extension AccessibilityTrace.Delta {
     /// Edit fields for a `.elementsChanged` or `.screenChanged.postEdits` delta.
     /// Empty for other cases.
     var testEdits: ElementEdits {

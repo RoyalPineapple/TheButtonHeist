@@ -126,7 +126,7 @@ extension FenceResponse {
         case .rotor(let search):
             text = Self.compactRotor(search)
         case .value, .explore, .none:
-            if let delta = result.interfaceDelta {
+            if let delta = result.accessibilityDelta {
                 text = Self.compactDelta(delta, method: result.method.rawValue)
             } else {
                 text = "\(result.method.rawValue): ok"
@@ -273,7 +273,7 @@ extension FenceResponse {
     private func compactBatchFormatted(
         completedSteps: Int, failedIndex: Int?, totalTimingMs: Int,
         checked: Int, met: Int, stepSummaries: [BatchStepSummary],
-        netDelta: InterfaceDelta?
+        netDelta: AccessibilityTrace.Delta?
     ) -> String {
         var text = "batch: \(completedSteps) steps in \(totalTimingMs)ms"
         if let failedIndex { text += " (failed at \(failedIndex))" }
@@ -436,7 +436,7 @@ extension FenceResponse {
         return parts.joined(separator: " ")
     }
 
-    static func compactDelta(_ delta: InterfaceDelta, method: String) -> String {
+    static func compactDelta(_ delta: AccessibilityTrace.Delta, method: String) -> String {
         switch delta {
         case .noChange(let payload):
             // Auto-settle can produce a no-change delta carrying transients

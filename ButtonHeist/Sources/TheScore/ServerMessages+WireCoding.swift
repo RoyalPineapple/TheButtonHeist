@@ -12,8 +12,8 @@ private enum ResponseEnvelopeCodingKeys: String, CodingKey {
     case requestId
     case type
     case payload
-    case backgroundDelta
-    case changeJournal
+    case backgroundAccessibilityDelta
+    case accessibilityTrace
 }
 
 // MARK: - ResponseEnvelope Codable
@@ -23,10 +23,9 @@ extension ResponseEnvelope {
         let container = try decoder.container(keyedBy: ResponseEnvelopeCodingKeys.self)
         buttonHeistVersion = try container.decode(String.self, forKey: .buttonHeistVersion)
         requestId = try container.decodeIfPresent(String.self, forKey: .requestId)
-        let decodedBackgroundDelta = try container.decodeIfPresent(InterfaceDelta.self, forKey: .backgroundDelta)
-        backgroundDelta = decodedBackgroundDelta
-        changeJournal = try container.decodeIfPresent(AccessibilityChangeJournal.self, forKey: .changeJournal)
-            ?? decodedBackgroundDelta.map { AccessibilityChangeJournal(backgroundDelta: $0) }
+        let decodedBackgroundDelta = try container.decodeIfPresent(AccessibilityTrace.Delta.self, forKey: .backgroundAccessibilityDelta)
+        backgroundAccessibilityDelta = decodedBackgroundDelta
+        accessibilityTrace = try container.decodeIfPresent(AccessibilityTrace.self, forKey: .accessibilityTrace)
         let type = try container.decode(WireMessageType.self, forKey: .type)
         let payloadDecoder: Decoder? = container.contains(.payload)
             ? try container.superDecoder(forKey: .payload)
@@ -38,8 +37,8 @@ extension ResponseEnvelope {
         var container = encoder.container(keyedBy: ResponseEnvelopeCodingKeys.self)
         try container.encode(buttonHeistVersion, forKey: .buttonHeistVersion)
         try container.encodeIfPresent(requestId, forKey: .requestId)
-        try container.encodeIfPresent(backgroundDelta, forKey: .backgroundDelta)
-        try container.encodeIfPresent(changeJournal, forKey: .changeJournal)
+        try container.encodeIfPresent(backgroundAccessibilityDelta, forKey: .backgroundAccessibilityDelta)
+        try container.encodeIfPresent(accessibilityTrace, forKey: .accessibilityTrace)
         let wire = message.wireRepresentation
         try container.encode(wire.type, forKey: .type)
         if let payload = wire.payload {

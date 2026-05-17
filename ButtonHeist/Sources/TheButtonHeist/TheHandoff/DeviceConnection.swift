@@ -477,7 +477,7 @@ final class DeviceConnection: DeviceConnecting {
                 logger.error("Failed to decode: \(str.prefix(200))")
             }
             let detail = String(data: data.prefix(200), encoding: .utf8) ?? "<binary data>"
-            onEvent?(.message(.error(ServerError(kind: .general, message: "Failed to decode server message: \(detail)")), requestId: nil, backgroundDelta: nil))
+            onEvent?(.message(.error(ServerError(kind: .general, message: "Failed to decode server message: \(detail)")), requestId: nil, backgroundAccessibilityDelta: nil))
             return
         }
 
@@ -487,7 +487,7 @@ final class DeviceConnection: DeviceConnecting {
             onEvent?(.message(.protocolMismatch(ProtocolMismatchPayload(
                 serverButtonHeistVersion: envelope.buttonHeistVersion,
                 clientButtonHeistVersion: buttonHeistVersion
-            )), requestId: envelope.requestId, backgroundDelta: nil))
+            )), requestId: envelope.requestId, backgroundAccessibilityDelta: nil))
             disconnect()
             onEvent?(.disconnected(.protocolMismatch(message)))
             return
@@ -500,33 +500,33 @@ final class DeviceConnection: DeviceConnecting {
         case .protocolMismatch(let payload):
             let message = "server=\(payload.serverButtonHeistVersion), client=\(payload.clientButtonHeistVersion)"
             logger.error("buttonHeistVersion mismatch: \(message)")
-            onEvent?(.message(.protocolMismatch(payload), requestId: envelope.requestId, backgroundDelta: nil))
+            onEvent?(.message(.protocolMismatch(payload), requestId: envelope.requestId, backgroundAccessibilityDelta: nil))
             disconnect()
             onEvent?(.disconnected(.protocolMismatch(message)))
         case .authRequired:
             if autoRespondToAuthRequired {
                 handleAuthRequired()
             } else {
-                onEvent?(.message(.authRequired, requestId: nil, backgroundDelta: nil))
+                onEvent?(.message(.authRequired, requestId: nil, backgroundAccessibilityDelta: nil))
             }
         case .error(let serverError) where serverError.kind == .authFailure:
             logger.error("Auth failed: \(serverError.message)")
-            onEvent?(.message(.error(serverError), requestId: nil, backgroundDelta: nil))
+            onEvent?(.message(.error(serverError), requestId: nil, backgroundAccessibilityDelta: nil))
             disconnect()
             onEvent?(.disconnected(.authFailed(serverError.message)))
         case .authApproved(let payload):
             logger.info("Auth approved via UI, received token")
             token = payload.token
-            onEvent?(.message(.authApproved(payload), requestId: nil, backgroundDelta: nil))
+            onEvent?(.message(.authApproved(payload), requestId: nil, backgroundAccessibilityDelta: nil))
         case .sessionLocked(let payload):
             logger.warning("Session locked: \(payload.message, privacy: .public)")
-            onEvent?(.message(.sessionLocked(payload), requestId: nil, backgroundDelta: nil))
+            onEvent?(.message(.sessionLocked(payload), requestId: nil, backgroundAccessibilityDelta: nil))
             disconnect()
             onEvent?(.disconnected(.sessionLocked(payload.message)))
         case .info(let info):
             logger.info("Received server info: \(info.appName)")
             onEvent?(.connected)
-            onEvent?(.message(.info(info), requestId: envelope.requestId, backgroundDelta: nil))
+            onEvent?(.message(.info(info), requestId: envelope.requestId, backgroundAccessibilityDelta: nil))
         case .pong:
             // Pong must reach TheHandoff so the keepalive task can reset
             // its missed-pong counter. Earlier code logged the pong here
@@ -537,7 +537,7 @@ final class DeviceConnection: DeviceConnecting {
             // log line stays for diagnostic noise; the message is also
             // propagated so TheHandoff can mark the connection live.
             logger.debug("Received pong")
-            onEvent?(.message(envelope.message, requestId: envelope.requestId, backgroundDelta: envelope.backgroundDelta))
+            onEvent?(.message(envelope.message, requestId: envelope.requestId, backgroundAccessibilityDelta: envelope.backgroundAccessibilityDelta))
         case .recordingStopped:
             // TheHandoff clears its recording phase on this message;
             // dropping it here left the client believing a recording
@@ -545,9 +545,9 @@ final class DeviceConnection: DeviceConnecting {
             // it down (e.g. a max-duration broadcast with no pending
             // stop_recording response).
             logger.debug("Recording stop acknowledged")
-            onEvent?(.message(envelope.message, requestId: envelope.requestId, backgroundDelta: envelope.backgroundDelta))
+            onEvent?(.message(envelope.message, requestId: envelope.requestId, backgroundAccessibilityDelta: envelope.backgroundAccessibilityDelta))
         default:
-            onEvent?(.message(envelope.message, requestId: envelope.requestId, backgroundDelta: envelope.backgroundDelta))
+            onEvent?(.message(envelope.message, requestId: envelope.requestId, backgroundAccessibilityDelta: envelope.backgroundAccessibilityDelta))
         }
     }
 

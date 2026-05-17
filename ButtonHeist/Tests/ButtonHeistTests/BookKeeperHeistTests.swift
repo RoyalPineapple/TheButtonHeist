@@ -66,7 +66,24 @@ final class BookKeeperHeistTests: XCTestCase {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
-        bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Go", "traits": ["button"]], interfaceCache: [:])
+        bookKeeper.recordHeistEvidence(
+            command: .activate,
+            args: ["command": "activate", "label": "Go", "traits": ["button"]],
+            actionResult: ActionResult(
+                success: true,
+                method: .activate,
+                accessibilityDelta: .noChange(.init(elementCount: 1)),
+                accessibilityTrace: AccessibilityTrace(interface: Interface(
+                    timestamp: Date(timeIntervalSince1970: 0),
+                    tree: [.element(makeElement(heistId: "go", label: "Go", traits: [.button]))]
+                )),
+                screenName: "Home",
+                screenId: "home",
+                settled: true,
+                settleTimeMs: 12
+            ),
+            interfaceCache: [:]
+        )
         let script = try bookKeeper.stopHeistRecording()
 
         XCTAssertEqual(script.version, HeistPlayback.currentVersion)
@@ -74,6 +91,10 @@ final class BookKeeperHeistTests: XCTestCase {
         XCTAssertEqual(script.steps.count, 1)
         XCTAssertEqual(script.steps[0].command, "activate")
         XCTAssertEqual(script.steps[0].target?.label, "Go")
+        let change = try XCTUnwrap(script.steps[0].recorded?.accessibilityTrace?.receipts.first)
+        XCTAssertEqual(change.kind, .capture)
+        XCTAssertEqual(change.interface.elements.first?.label, "Go")
+        XCTAssertNil(script.steps[0].toRequestDictionary()["_recorded"])
         XCTAssertFalse(bookKeeper.isRecordingHeist)
     }
 
@@ -235,7 +256,12 @@ final class BookKeeperHeistTests: XCTestCase {
         bookKeeper.recordHeistEvidence(
             command: .activate,
             args: ["command": "activate", "label": "Missing"],
-            succeeded: false,
+            actionResult: ActionResult(
+                success: false,
+                method: .activate,
+                message: "missing",
+                errorKind: .elementNotFound
+            ),
             interfaceCache: [:]
         )
         bookKeeper.recordHeistEvidence(
@@ -258,7 +284,12 @@ final class BookKeeperHeistTests: XCTestCase {
         bookKeeper.recordHeistEvidence(
             command: .activate,
             args: ["command": "activate", "label": "Missing"],
-            succeeded: false,
+            actionResult: ActionResult(
+                success: false,
+                method: .activate,
+                message: "missing",
+                errorKind: .elementNotFound
+            ),
             interfaceCache: [:]
         )
 
