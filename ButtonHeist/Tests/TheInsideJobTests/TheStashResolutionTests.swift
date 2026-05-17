@@ -497,6 +497,20 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertTrue(diagnostics.contains("scope: visible"), "Should identify failed resolution scope: \(diagnostics)")
     }
 
+    func testResolveFirstVisibleMatchIgnoresKnownOnlyEntry() {
+        let visible = element(label: "Visible", traits: .button)
+        let offScreen = element(label: "Below Fold", traits: .button)
+        register(visible, heistId: "button_visible", index: 0)
+        registerOffScreen(offScreen, heistId: "below_fold_button")
+
+        XCTAssertNil(bagman.resolveFirstVisibleMatch(.heistId("below_fold_button")))
+        XCTAssertNil(bagman.resolveFirstVisibleMatch(.matcher(ElementMatcher(label: "Below Fold"))))
+        XCTAssertEqual(
+            bagman.resolveFirstVisibleMatch(.matcher(ElementMatcher(label: "Visible")))?.screenElement.heistId,
+            "button_visible"
+        )
+    }
+
     func testKnownOnlyEntryWithStaleObjectIsNotDispatchableUntilVisible() {
         let offScreen = element(label: "Below Fold", traits: .button)
         let object = UIButton(type: .system)
