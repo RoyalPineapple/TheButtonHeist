@@ -309,10 +309,9 @@ final class TheGetaway {
                 if let stakeout {
                     await stakeout.noteActivity()
                 }
-                let backgroundCapture = await brains.computeBackgroundCapture()
-                let backgroundAccessibilityDelta = backgroundCapture?.delta
+                let backgroundTrace = await brains.computeBackgroundAccessibilityTrace()
 
-                if let actionResult = staleTargetedActionFailure(for: message, backgroundCapture: backgroundCapture) {
+                if let actionResult = staleTargetedActionFailure(for: message, backgroundTrace: backgroundTrace) {
                     await recordAndRespond(command: message, actionResult: actionResult, requestId: requestId, respond: respond)
                     return
                 }
@@ -322,17 +321,17 @@ final class TheGetaway {
                     command: message,
                     actionResult: actionResult,
                     requestId: requestId,
-                    backgroundAccessibilityDelta: backgroundAccessibilityDelta,
-                    accessibilityTrace: backgroundCapture?.accessibilityTrace,
+                    accessibilityTrace: backgroundTrace,
                     respond: respond
                 )
             }
         }
     }
 
-    func staleTargetedActionFailure(for message: ClientMessage, backgroundCapture: TheBrains.BackgroundCapture?) -> ActionResult? {
-        guard let backgroundCapture,
-              backgroundCapture.delta.isScreenChanged,
+    func staleTargetedActionFailure(for message: ClientMessage, backgroundTrace: AccessibilityTrace?) -> ActionResult? {
+        guard let backgroundTrace,
+              let backgroundDelta = backgroundTrace.backgroundDelta,
+              backgroundDelta.isScreenChanged,
               brains.screenChangedSinceLastSent,
               message.isStaleSensitiveTargetedAction else {
             return nil
@@ -348,8 +347,8 @@ final class TheGetaway {
         builder.message = "Action skipped because target became stale after a screen change; "
             + "retry against the current interface. Screen changed while you were thinking "
             + "(\(lastScreen) -> \(currentScreen))."
-        builder.accessibilityDelta = backgroundCapture.delta
-        builder.accessibilityTrace = backgroundCapture.accessibilityTrace
+        builder.accessibilityDelta = backgroundDelta
+        builder.accessibilityTrace = backgroundTrace
         return builder.failure(errorKind: .actionFailed)
     }
 
@@ -358,14 +357,12 @@ final class TheGetaway {
     func encodeEnvelope(
         _ message: ServerMessage,
         requestId: String? = nil,
-        backgroundAccessibilityDelta: AccessibilityTrace.Delta? = nil,
         accessibilityTrace: AccessibilityTrace? = nil
     ) -> Data? {
         do {
             return try ResponseEnvelope(
                 requestId: requestId,
                 message: message,
-                backgroundAccessibilityDelta: backgroundAccessibilityDelta,
                 accessibilityTrace: accessibilityTrace
             ).encoded()
         } catch {
@@ -388,14 +385,12 @@ final class TheGetaway {
     func sendMessage(
         _ message: ServerMessage,
         requestId: String? = nil,
-        backgroundAccessibilityDelta: AccessibilityTrace.Delta? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         respond: @escaping (Data) -> Void
     ) {
         if let data = encodeEnvelope(
             message,
             requestId: requestId,
-            backgroundAccessibilityDelta: backgroundAccessibilityDelta,
             accessibilityTrace: accessibilityTrace
         ) {
             insideJobLogger.debug("Sending \(data.count) bytes")
@@ -476,7 +471,6 @@ final class TheGetaway {
         command: ClientMessage,
         actionResult: ActionResult,
         requestId: String?,
-        backgroundAccessibilityDelta: AccessibilityTrace.Delta? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         respond: @escaping (Data) -> Void
     ) async {
@@ -487,7 +481,6 @@ final class TheGetaway {
         sendMessage(
             .actionResult(actionResult),
             requestId: requestId,
-            backgroundAccessibilityDelta: backgroundAccessibilityDelta,
             accessibilityTrace: accessibilityTrace,
             respond: respond
         )

@@ -480,7 +480,7 @@ final class DeviceConnection: DeviceConnecting {
             }
             let detail = String(data: data.prefix(200), encoding: .utf8) ?? "<binary data>"
             let error = ServerError(kind: .general, message: "Failed to decode server message: \(detail)")
-            emitMessage(.error(error), requestId: nil, backgroundAccessibilityDelta: nil)
+            emitMessage(.error(error), requestId: nil)
             return
         }
 
@@ -490,7 +490,7 @@ final class DeviceConnection: DeviceConnecting {
             emitMessage(.protocolMismatch(ProtocolMismatchPayload(
                 serverButtonHeistVersion: envelope.buttonHeistVersion,
                 clientButtonHeistVersion: buttonHeistVersion
-            )), requestId: envelope.requestId, backgroundAccessibilityDelta: nil)
+            )), requestId: envelope.requestId)
             disconnect()
             onEvent?(.disconnected(.protocolMismatch(message)))
             return
@@ -503,33 +503,33 @@ final class DeviceConnection: DeviceConnecting {
         case .protocolMismatch(let payload):
             let message = "server=\(payload.serverButtonHeistVersion), client=\(payload.clientButtonHeistVersion)"
             logger.error("buttonHeistVersion mismatch: \(message)")
-            emitMessage(.protocolMismatch(payload), requestId: envelope.requestId, backgroundAccessibilityDelta: nil)
+            emitMessage(.protocolMismatch(payload), requestId: envelope.requestId)
             disconnect()
             onEvent?(.disconnected(.protocolMismatch(message)))
         case .authRequired:
             if autoRespondToAuthRequired {
                 handleAuthRequired()
             } else {
-                emitMessage(.authRequired, requestId: nil, backgroundAccessibilityDelta: nil)
+                emitMessage(.authRequired, requestId: nil)
             }
         case .error(let serverError) where serverError.kind == .authFailure:
             logger.error("Auth failed: \(serverError.message)")
-            emitMessage(.error(serverError), requestId: nil, backgroundAccessibilityDelta: nil)
+            emitMessage(.error(serverError), requestId: nil)
             disconnect()
             onEvent?(.disconnected(.authFailed(serverError.message)))
         case .authApproved(let payload):
             logger.info("Auth approved via UI, received token")
             token = payload.token
-            emitMessage(.authApproved(payload), requestId: nil, backgroundAccessibilityDelta: nil)
+            emitMessage(.authApproved(payload), requestId: nil)
         case .sessionLocked(let payload):
             logger.warning("Session locked: \(payload.message, privacy: .public)")
-            emitMessage(.sessionLocked(payload), requestId: nil, backgroundAccessibilityDelta: nil)
+            emitMessage(.sessionLocked(payload), requestId: nil)
             disconnect()
             onEvent?(.disconnected(.sessionLocked(payload.message)))
         case .info(let info):
             logger.info("Received server info: \(info.appName)")
             onEvent?(.connected)
-            emitMessage(.info(info), requestId: envelope.requestId, backgroundAccessibilityDelta: nil)
+            emitMessage(.info(info), requestId: envelope.requestId)
         case .pong:
             // Pong must reach TheHandoff so the keepalive task can reset
             // its missed-pong counter. Earlier code logged the pong here
@@ -558,7 +558,6 @@ final class DeviceConnection: DeviceConnecting {
         emitMessage(
             envelope.message,
             requestId: envelope.requestId,
-            backgroundAccessibilityDelta: envelope.backgroundAccessibilityDelta,
             accessibilityTrace: envelope.accessibilityTrace
         )
     }
@@ -566,13 +565,11 @@ final class DeviceConnection: DeviceConnecting {
     private func emitMessage(
         _ message: ServerMessage,
         requestId: String?,
-        backgroundAccessibilityDelta: AccessibilityTrace.Delta?,
         accessibilityTrace: AccessibilityTrace? = nil
     ) {
         onEvent?(.message(
             message,
             requestId: requestId,
-            backgroundAccessibilityDelta: backgroundAccessibilityDelta,
             accessibilityTrace: accessibilityTrace
         ))
     }

@@ -2052,65 +2052,62 @@ final class TheFenceTests: XCTestCase {
         XCTAssertEqual(mockConnection.connectCount, 0)
     }
 
-    // MARK: - Background Delta
+    // MARK: - Background Accessibility Trace
 
     @ButtonHeistActor
-    func testDrainBackgroundDeltaReturnsNilWhenEmpty() async {
+    func testDrainBackgroundAccessibilityTraceReturnsNilWhenEmpty() async {
         let fence = TheFence(configuration: .init())
-        XCTAssertNil(fence.drainBackgroundDelta())
+        XCTAssertNil(fence.drainBackgroundAccessibilityTrace())
     }
 
     @ButtonHeistActor
-    func testDrainBackgroundDeltaClearsAfterRead() async {
+    func testDrainBackgroundAccessibilityTraceClearsAfterRead() async {
         let fence = TheFence(configuration: .init())
-        // Simulate a background delta arriving via the handoff callback
-        let delta: AccessibilityTrace.Delta = .screenChanged(.init(
-            elementCount: 7,
-            newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
-        ))
-        fence.handoff.onBackgroundDelta?(delta)
+        let trace = makeBackgroundScreenChangedTrace(elementCount: 7)
+        fence.handoff.onBackgroundAccessibilityTrace?(trace)
 
-        let first = fence.drainBackgroundDelta()
+        let first = fence.drainBackgroundAccessibilityTrace()
         XCTAssertNotNil(first)
-        XCTAssertEqual(first?.isScreenChanged, true)
-        XCTAssertEqual(first?.elementCount, 7)
+        XCTAssertEqual(first?.backgroundDelta?.isScreenChanged, true)
+        XCTAssertEqual(first?.backgroundDelta?.elementCount, 7)
 
-        let second = fence.drainBackgroundDelta()
+        let second = fence.drainBackgroundAccessibilityTrace()
         XCTAssertNil(second)
     }
 
     @ButtonHeistActor
-    func testDrainBackgroundDeltaPreservesArrivalOrder() async {
+    func testDrainBackgroundAccessibilityTracePreservesArrivalOrder() async {
         let fence = TheFence(configuration: .init())
-        fence.handoff.onBackgroundDelta?(.elementsChanged(.init(elementCount: 2, edits: ElementEdits())))
-        fence.handoff.onBackgroundDelta?(.screenChanged(.init(elementCount: 7, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: []))))
+        fence.handoff.onBackgroundAccessibilityTrace?(makeBackgroundElementsChangedTrace(elementCount: 2))
+        fence.handoff.onBackgroundAccessibilityTrace?(makeBackgroundScreenChangedTrace(elementCount: 7))
 
-        let first = fence.drainBackgroundDelta()
+        let first = fence.drainBackgroundAccessibilityTrace()?.backgroundDelta
         XCTAssertEqual(first?.kindRawValue, "elementsChanged")
         XCTAssertEqual(first?.elementCount, 2)
 
-        let second = fence.drainBackgroundDelta()
+        let second = fence.drainBackgroundAccessibilityTrace()?.backgroundDelta
         XCTAssertEqual(second?.isScreenChanged, true)
         XCTAssertEqual(second?.elementCount, 7)
 
-        XCTAssertNil(fence.drainBackgroundDelta())
+        XCTAssertNil(fence.drainBackgroundAccessibilityTrace())
     }
 
     @ButtonHeistActor
-    func testDrainBackgroundDeltasReturnsAllQueuedDeltas() async {
+    func testDrainBackgroundAccessibilityTracesReturnsAllQueuedTraces() async {
         let fence = TheFence(configuration: .init())
-        fence.handoff.onBackgroundDelta?(.elementsChanged(.init(elementCount: 2, edits: ElementEdits())))
-        fence.handoff.onBackgroundDelta?(.screenChanged(.init(elementCount: 7, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: []))))
+        fence.handoff.onBackgroundAccessibilityTrace?(makeBackgroundElementsChangedTrace(elementCount: 2))
+        fence.handoff.onBackgroundAccessibilityTrace?(makeBackgroundScreenChangedTrace(elementCount: 7))
 
-        let deltas = fence.drainBackgroundDeltas()
+        let traces = fence.drainBackgroundAccessibilityTraces()
+        let deltas = traces.compactMap(\.backgroundDelta)
 
         XCTAssertEqual(deltas.map(\.kindRawValue), ["elementsChanged", "screenChanged"])
         XCTAssertEqual(deltas.map(\.elementCount), [2, 7])
-        XCTAssertNil(fence.drainBackgroundDelta())
+        XCTAssertNil(fence.drainBackgroundAccessibilityTrace())
     }
 
     @ButtonHeistActor
-    func testBackgroundDeltaCompatibilityIsDerivedFromTraceReceipt() async {
+    func testBackgroundChangeIsStoredAsTraceAndDeltaIsDerivedAtTheEdge() async {
         let fence = TheFence(configuration: .init())
         let before = makeReceiptTestInterface([
             makeReceiptTestElement(heistId: "status", label: "Status", value: "Old"),
@@ -2119,19 +2116,16 @@ final class TheFenceTests: XCTestCase {
             makeReceiptTestElement(heistId: "status", label: "Status", value: "New"),
         ])
         let trace = makeReceiptTestTrace(before: before, after: after)
-        let misleadingLegacyDelta: AccessibilityTrace.Delta = .screenChanged(.init(
-            elementCount: 0,
-            newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
-        ))
 
         fence.handoff.handleServerMessage(
             .pong,
             requestId: nil,
-            backgroundAccessibilityDelta: misleadingLegacyDelta,
             accessibilityTrace: trace
         )
 
-        let derived = fence.drainBackgroundDelta()
+        let drained = fence.drainBackgroundAccessibilityTrace()
+        XCTAssertEqual(drained, trace)
+        let derived = drained?.backgroundDelta
         guard case .elementsChanged(let payload)? = derived else {
             return XCTFail("Expected trace-derived elementsChanged delta, got \(String(describing: derived))")
         }
@@ -2143,7 +2137,7 @@ final class TheFenceTests: XCTestCase {
     @ButtonHeistActor
     func testBackgroundExpectationMismatchDoesNotConsumeDelta() async throws {
         let (fence, _) = makeConnectedFence()
-        fence.handoff.onBackgroundDelta?(.screenChanged(.init(elementCount: 7, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: []))))
+        fence.handoff.onBackgroundAccessibilityTrace?(makeBackgroundScreenChangedTrace(elementCount: 7))
 
         let response = try await fence.execute(request: [
             "command": "activate",
@@ -2161,10 +2155,10 @@ final class TheFenceTests: XCTestCase {
             XCTFail("Expected action response, got \(response)")
         }
 
-        let queued = fence.drainBackgroundDelta()
+        let queued = fence.drainBackgroundAccessibilityTrace()?.backgroundDelta
         XCTAssertEqual(queued?.isScreenChanged, true)
         XCTAssertEqual(queued?.elementCount, 7)
-        XCTAssertNil(fence.drainBackgroundDelta())
+        XCTAssertNil(fence.drainBackgroundAccessibilityTrace())
     }
 
     @ButtonHeistActor
@@ -2188,8 +2182,8 @@ final class TheFenceTests: XCTestCase {
         fence.handoff.makeDiscovery = { mockDiscovery }
         fence.handoff.makeConnection = { _, _, _ in mockConnection }
 
-        fence.handoff.onBackgroundDelta?(.elementsChanged(.init(elementCount: 2, edits: ElementEdits())))
-        fence.handoff.onBackgroundDelta?(.screenChanged(.init(elementCount: 7, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: []))))
+        fence.handoff.onBackgroundAccessibilityTrace?(makeBackgroundElementsChangedTrace(elementCount: 2))
+        fence.handoff.onBackgroundAccessibilityTrace?(makeBackgroundScreenChangedTrace(elementCount: 7))
 
         let response = try await fence.execute(request: [
             "command": "wait_for_change",
@@ -2206,40 +2200,40 @@ final class TheFenceTests: XCTestCase {
             XCTFail("Expected action response, got \(response)")
         }
 
-        let remaining = fence.drainBackgroundDelta()
+        let remaining = fence.drainBackgroundAccessibilityTrace()?.backgroundDelta
         XCTAssertEqual(remaining?.kindRawValue, "elementsChanged")
         XCTAssertEqual(remaining?.elementCount, 2)
-        XCTAssertNil(fence.drainBackgroundDelta())
+        XCTAssertNil(fence.drainBackgroundAccessibilityTrace())
     }
 
     @ButtonHeistActor
-    func testBackgroundDeltaQueueDropsOldestWhenCapacityExceeded() async {
+    func testBackgroundTraceQueueDropsOldestWhenCapacityExceeded() async {
         let fence = TheFence(configuration: .init())
         for count in 1...25 {
-            fence.handoff.onBackgroundDelta?(.elementsChanged(.init(elementCount: count, edits: ElementEdits())))
+            fence.handoff.onBackgroundAccessibilityTrace?(makeBackgroundElementsChangedTrace(elementCount: count))
         }
 
-        let first = fence.drainBackgroundDelta()
+        let first = fence.drainBackgroundAccessibilityTrace()?.backgroundDelta
         XCTAssertEqual(first?.elementCount, 6)
 
         for expectedCount in 7...25 {
-            XCTAssertEqual(fence.drainBackgroundDelta()?.elementCount, expectedCount)
+            XCTAssertEqual(fence.drainBackgroundAccessibilityTrace()?.backgroundDelta?.elementCount, expectedCount)
         }
-        XCTAssertNil(fence.drainBackgroundDelta())
+        XCTAssertNil(fence.drainBackgroundAccessibilityTrace())
     }
 
     @ButtonHeistActor
-    func testBackgroundDeltaQueueClearsOnDisconnect() async {
+    func testBackgroundTraceQueueClearsOnDisconnect() async {
         let fence = TheFence(configuration: .init())
-        fence.handoff.onBackgroundDelta?(.screenChanged(.init(elementCount: 7, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: []))))
+        fence.handoff.onBackgroundAccessibilityTrace?(makeBackgroundScreenChangedTrace(elementCount: 7))
 
         fence.handoff.onDisconnected?(.serverClosed)
 
-        XCTAssertNil(fence.drainBackgroundDelta())
+        XCTAssertNil(fence.drainBackgroundAccessibilityTrace())
     }
 
     @ButtonHeistActor
-    func testWaitForChangeExpectationShortCircuitsOnBackgroundDelta() async throws {
+    func testWaitForChangeExpectationShortCircuitsOnBackgroundTrace() async throws {
         let device = DiscoveredDevice(
             id: "mock-device",
             name: "MockApp#test",
@@ -2259,16 +2253,20 @@ final class TheFenceTests: XCTestCase {
         fence.handoff.makeDiscovery = { mockDiscovery }
         fence.handoff.makeConnection = { _, _, _ in mockConnection }
 
-        // Simulate a screen-changed background delta
         let element = HeistElement(
             description: "Button", label: "New Order", value: nil, identifier: nil,
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44, actions: [.activate]
         )
         let fullInterface = Interface(timestamp: Date(), tree: [.element(element)])
-        let delta: AccessibilityTrace.Delta = .screenChanged(.init(elementCount: 1, newInterface: fullInterface))
-        fence.handoff.onBackgroundDelta?(delta)
+        let trace = makeReceiptTestTrace(
+            before: makeReceiptTestInterface(elementCount: 0),
+            after: fullInterface,
+            beforeScreenId: "before",
+            afterScreenId: "after"
+        )
+        fence.handoff.onBackgroundAccessibilityTrace?(trace)
 
-        // wait_for_change may satisfy a late call from a queued background delta.
+        // wait_for_change may satisfy a late call from a queued background trace.
         let response = try await fence.execute(request: [
             "command": "wait_for_change",
             "expect": ["type": "screen_changed"],
@@ -2308,10 +2306,7 @@ final class TheFenceTests: XCTestCase {
                 return .actionResult(ActionResult(success: true, method: .activate))
             }
         }
-        fence.handoff.onBackgroundDelta?(.screenChanged(.init(
-            elementCount: 7,
-            newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
-        )))
+        fence.handoff.onBackgroundAccessibilityTrace?(makeBackgroundScreenChangedTrace(elementCount: 7))
 
         let response = try await fence.execute(request: [
             "command": "activate",
@@ -2322,14 +2317,14 @@ final class TheFenceTests: XCTestCase {
         XCTAssertTrue(mockConn.sent.contains { sent, _ in
             if case .activate = sent { return true }
             return false
-        }, "Action must dispatch even when a queued background delta already matches")
+        }, "Action must dispatch even when a queued background trace already matches")
         if case .action(_, let expectation) = response {
             XCTAssertEqual(expectation?.met, true)
         } else {
             XCTFail("Expected action response, got \(response)")
         }
 
-        let queued = fence.drainBackgroundDelta()
+        let queued = fence.drainBackgroundAccessibilityTrace()?.backgroundDelta
         XCTAssertEqual(queued?.isScreenChanged, true)
         XCTAssertEqual(queued?.elementCount, 7)
     }
@@ -2505,15 +2500,11 @@ final class TheFenceTests: XCTestCase {
     func testNoShortCircuitWithoutExpectation() async throws {
         let fence = TheFence(configuration: .init())
 
-        // Background delta present but no expectation on the action
-        let delta: AccessibilityTrace.Delta = .screenChanged(.init(
-            elementCount: 3,
-            newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
-        ))
-        fence.handoff.onBackgroundDelta?(delta)
+        // Background trace present but no expectation on the action
+        fence.handoff.onBackgroundAccessibilityTrace?(makeBackgroundScreenChangedTrace(elementCount: 3))
 
         // Action without expect — should NOT short-circuit against the
-        // background delta. Depending on current connection setup this may
+        // background trace. Depending on current connection setup this may
         // surface as a thrown connection error or an error response, but it
         // must not return the synthetic "expectation already met" action.
         do {
@@ -2755,6 +2746,56 @@ final class TheFenceTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testBackgroundTraceRefreshesHeistMatcherCache() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        mockConn.autoResponse = { message in
+            switch message {
+            case .activate:
+                return .actionResult(ActionResult(
+                    success: true,
+                    method: .activate,
+                    accessibilityDelta: .noChange(.init(elementCount: 1))
+                ))
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+        try await startHeistRecording(on: fence)
+
+        let target = makeReceiptTestElement(
+            heistId: "pay_button",
+            label: "Pay",
+            identifier: "checkout.pay",
+            traits: [.button]
+        )
+        fence.handoff.onBackgroundAccessibilityTrace?(AccessibilityTrace(interface: makeReceiptTestInterface([target])))
+
+        let response = try await fence.execute(request: [
+            "command": "activate",
+            "heistId": "pay_button",
+        ])
+        guard case .action(let result, _) = response else {
+            return XCTFail("Expected action response, got \(response)")
+        }
+        XCTAssertTrue(result.success)
+
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("heist")
+        defer { try? FileManager.default.removeItem(at: output) }
+        _ = try await fence.execute(request: [
+            "command": "stop_heist",
+            "output": output.path,
+        ])
+
+        let heist = try TheBookKeeper.readHeist(from: output)
+        XCTAssertEqual(heist.steps.count, 1)
+        XCTAssertEqual(heist.steps[0].recorded?.heistId, "pay_button")
+        XCTAssertEqual(heist.steps[0].target?.identifier, "checkout.pay")
+        try? await fence.bookKeeper.closeSession()
+    }
+
+    @ButtonHeistActor
     func testHeistRecordingSkipsFailedActionResult() async throws {
         let (fence, mockConn) = makeConnectedFence()
         mockConn.autoResponse = { message in
@@ -2921,7 +2962,7 @@ final class TheFenceTests: XCTestCase {
         // must not throw, must leave the socket alone.
         let lateResult = ActionResult(success: true, method: .activate)
         mockConnection.onEvent?(
-            .message(.actionResult(lateResult), requestId: timedOutRequestId, backgroundAccessibilityDelta: nil, accessibilityTrace: nil)
+            .message(.actionResult(lateResult), requestId: timedOutRequestId, accessibilityTrace: nil)
         )
 
         XCTAssertTrue(
@@ -2997,7 +3038,7 @@ final class TheFenceTests: XCTestCase {
         // Sibling must still be alive. Resolve it with its own response.
         let siblingResult = ActionResult(success: true, method: .activate)
         mockConnection.onEvent?(
-            .message(.actionResult(siblingResult), requestId: siblingRequestId, backgroundAccessibilityDelta: nil, accessibilityTrace: nil)
+            .message(.actionResult(siblingResult), requestId: siblingRequestId, accessibilityTrace: nil)
         )
 
         let result = try await sibling.value

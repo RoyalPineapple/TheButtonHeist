@@ -134,7 +134,7 @@ When `requestId` is present, the server echoes it in the corresponding response 
 | `requestId` | `String?` | Optional correlation ID; echoed in the response |
 | `type` | `String` | Explicit message discriminator |
 | `payload` | `Object / String / null` | Optional message payload |
-| `backgroundAccessibilityDelta` | `AccessibilityTrace.Delta?` | (Response only) Changes that occurred while the agent was thinking between requests. Present when the accessibility tree changed since the last response was sent. Nil when nothing changed. |
+| `accessibilityTrace` | `AccessibilityTrace?` | (Response only) Capture trace for UI changes observed while the server prepared the response. Compact background-change summaries are derived from this trace at client formatting and expectation edges. |
 
 ## Client → Server Messages
 

@@ -16,7 +16,7 @@ Shared wire protocol. Every type that crosses the TCP boundary lives here. No UI
 
 3. **`ClientMessages.swift`** — What clients send. `RequestEnvelope` wraps `buttonHeistVersion`, `requestId`, and a `ClientMessage` (37 cases). Each action case carries a typed target struct (`TouchTapTarget`, `SwipeTarget`, `ScrollTarget`, etc.). `RecordingConfig` validates fps/scale ranges during deserialization, not after.
 
-4. **`ServerMessages.swift`** — What the server sends back. `ResponseEnvelope` carries `accessibilityTrace: AccessibilityTrace?` as the source-of-truth accessibility record for UI changes observed while the client was processing the previous response. `backgroundAccessibilityDelta: AccessibilityTrace.Delta?` is the derived compact view kept for expectation handling and client ergonomics.
+4. **`ServerMessages.swift`** — What the server sends back. `ResponseEnvelope` carries `accessibilityTrace: AccessibilityTrace?` as the source-of-truth accessibility record for UI changes observed while the client was processing the previous response. Background deltas are not stored on the envelope; clients derive compact views from the trace at formatting or expectation edges.
    - `ActionResult` — the richest payload: success/failure, method, message, value, accessibilityDelta, element metadata, scroll/explore results.
    - `AccessibilityTrace` — a linear chain of full `AccessibilityTrace.Capture` values. Each capture owns a content hash and points to the previous capture hash; deltas, summaries, and recording receipts derive from the chain.
    - `AccessibilityTrace.Delta` — derived compact view: `.noChange`, `.elementsChanged` (with added/removed/updated lists), or `.screenChanged` (with full new `Interface`).
@@ -34,8 +34,8 @@ Shared wire protocol. Every type that crosses the TCP boundary lives here. No UI
 
 **Server decodes:** `RequestEnvelope.decoded(from: data)` → reads `type` as `WireMessageType.activate` → `decodeActionMessage` calls `ElementTarget(from: payloadDecoder)` → returns `.activate(.heistId("button_save"))`.
 
-**Server encodes response:** `ResponseEnvelope(message: .actionResult(...), backgroundAccessibilityDelta: nil)` → encoder writes the envelope with `type: "actionResult"` and the result as `payload`.
+**Server encodes response:** `ResponseEnvelope(message: .actionResult(...), accessibilityTrace: trace)` → encoder writes the envelope with `type: "actionResult"`, the result as `payload`, and optional `accessibilityTrace` captures.
 
-**Client decodes:** `ResponseEnvelope(from: data)` → reads `type`, `backgroundAccessibilityDelta`, payload decoder → `decodeStateMessage` matches `.actionResult` → synthesized Codable on `ActionResult`.
+**Client decodes:** `ResponseEnvelope(from: data)` → reads `type`, optional `accessibilityTrace`, payload decoder → `decodeStateMessage` matches `.actionResult` → synthesized Codable on `ActionResult`.
 
 > Full dossier: [`docs/dossiers/18-THESCORE.md`](../../../docs/dossiers/18-THESCORE.md)

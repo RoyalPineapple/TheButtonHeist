@@ -15,7 +15,7 @@ Navigation's invariant: visible pages are physical evidence; known state is sema
 
 `Navigation` and `Actions` are *internal components of TheBrains*, not crew members in their own right — neutral noun-style names. Both are owned by TheBrains (`let navigation: Navigation`, `let actions: Actions`) and share the same TheStash / TheSafecracker / TheTripwire references. Actions holds a reference to Navigation because targeted element/point flows use `ensureOnScreen(for:)`, while edit, pasteboard, and resign-first-responder commands use `ensureFirstResponderOnScreen()`.
 
-TheBrains itself keeps the post-action delta cycle (`captureBeforeState`, `actionResultWithDelta`), command dispatch (`executeCommand`), wait handlers (`executeWaitForIdle`, `executeWaitForChange`), response state (`SentState`, `recordSentState`, `computeBackgroundDelta`), and screen-capture passthroughs.
+TheBrains itself keeps the post-action delta cycle (`captureBeforeState`, `actionResultWithDelta`), command dispatch (`executeCommand`), wait handlers (`executeWaitForIdle`, `executeWaitForChange`), response state (`SentState`, `recordSentState`, `computeBackgroundAccessibilityTrace`), and screen-capture passthroughs.
 
 ## Responsibilities
 
@@ -27,8 +27,8 @@ TheBrains itself keeps the post-action delta cycle (`captureBeforeState`, `actio
 6. **Post-action settle and transient capture (`SettleSession.swift`)** — `SettleSession` (owned and instantiated per call) drives a closure-based polling loop against TheStash and TheTripwire. It returns `.settled` after `cyclesRequired` consecutive identical AX-tree fingerprints, `.cancelled` if the surrounding task is cancelled, or `.timedOut` after the hard deadline. Tripwire changes are recorded as `SettleEvent.tripwireSignalChanged` events that reset the settle baseline and trigger a parse/check; the final outcome still owns whether the post-transition AX tree became stable. A Tripwire signal is allowed to classify as no-change after parsing. Elements observed mid-loop but absent from baseline ∪ final are returned as `AccessibilityTrace.Delta.transient` via `SettleSession.transientElements`. Spinners (`UIAccessibilityTraits.updatesFrequently`) are masked out of both the fingerprint and `TimelineKey`.
 7. **Refresh convenience** — `refresh()` delegates to `stash.refresh()`. TheBurglar is TheStash's private implementation detail — TheBrains never references it.
 8. **Wait handlers (`TheBrains.swift`)** — `executeWaitForIdle(timeout:)` and `executeWaitForChange(timeout:expectation:)`.
-9. **Response state tracking (`TheBrains.swift`)** — `SentState`, `recordSentState`, `computeBackgroundDelta`, `screenChangedSinceLastSent`, `lastSentScreenId`.
-10. **TheGetaway-facing methods** — `currentInterface()`, `broadcastInterfaceIfChanged()`, `computeBackgroundDelta()`, `captureScreen()`, `captureScreenForRecording()`, `screenName`, `screenId`, `stakeout`.
+9. **Response state tracking (`TheBrains.swift`)** — `SentState`, `recordSentState`, `computeBackgroundAccessibilityTrace`, `screenChangedSinceLastSent`, `lastSentScreenId`.
+10. **TheGetaway-facing methods** — `currentInterface()`, `broadcastInterfaceIfChanged()`, `computeBackgroundAccessibilityTrace()`, `captureScreen()`, `captureScreenForRecording()`, `screenName`, `screenId`, `stakeout`.
 
 ## Architecture
 
@@ -117,7 +117,7 @@ flowchart TD
 | Store | Lives on | Lifetime | Purpose |
 |-------|----------|----------|---------|
 | `lastSwipeDirectionByTarget` | Navigation | Across swipes | Last direction per swipeable target key (drives direction-change settle profile) |
-| `lastSentState` | TheBrains | Between responses | Snapshot (semantic treeHash, viewportHash, beforeState, screenId) of the last reply sent to the driver, used by `computeBackgroundDelta` and the wait-for-change fast path |
+| `lastSentState` | TheBrains | Between responses | Snapshot (semantic treeHash, viewportHash, beforeState, screenId) of the last reply sent to the driver, used by `computeBackgroundAccessibilityTrace` and the wait-for-change fast path |
 
 ## Ownership Model
 

@@ -80,6 +80,7 @@ func makeReceiptTestElement(
     heistId: String,
     label: String,
     value: String? = nil,
+    identifier: String? = nil,
     traits: [HeistTrait] = [.staticText]
 ) -> HeistElement {
     HeistElement(
@@ -87,7 +88,7 @@ func makeReceiptTestElement(
         description: label,
         label: label,
         value: value,
-        identifier: nil,
+        identifier: identifier,
         traits: traits,
         frameX: 0,
         frameY: 0,
@@ -102,6 +103,17 @@ func makeReceiptTestInterface(
     timestamp: Date = Date(timeIntervalSince1970: 0)
 ) -> Interface {
     Interface(timestamp: timestamp, tree: elements.map(InterfaceNode.element))
+}
+
+func makeReceiptTestInterface(
+    elementCount: Int,
+    prefix: String = "element",
+    timestamp: Date = Date(timeIntervalSince1970: 0)
+) -> Interface {
+    makeReceiptTestInterface(
+        (0..<elementCount).map { makeReceiptTestElement(heistId: "\(prefix)-\($0)", label: "\(prefix) \($0)") },
+        timestamp: timestamp
+    )
 }
 
 func makeReceiptTestTrace(
@@ -122,4 +134,25 @@ func makeReceiptTestTrace(
         context: AccessibilityTrace.Context(screenId: afterScreenId)
     )
     return AccessibilityTrace(captures: [beforeCapture, afterCapture])
+}
+
+func makeBackgroundElementsChangedTrace(elementCount: Int) -> AccessibilityTrace {
+    let interface = makeReceiptTestInterface(elementCount: elementCount)
+    let beforeCapture = AccessibilityTrace.Capture(sequence: 1, interface: interface)
+    let afterCapture = AccessibilityTrace.Capture(
+        sequence: 2,
+        interface: interface,
+        parentHash: beforeCapture.hash,
+        context: AccessibilityTrace.Context(focusedElementId: "background-change")
+    )
+    return AccessibilityTrace(captures: [beforeCapture, afterCapture])
+}
+
+func makeBackgroundScreenChangedTrace(elementCount: Int) -> AccessibilityTrace {
+    makeReceiptTestTrace(
+        before: makeReceiptTestInterface(elementCount: 0, prefix: "before"),
+        after: makeReceiptTestInterface(elementCount: elementCount, prefix: "after"),
+        beforeScreenId: "before",
+        afterScreenId: "after"
+    )
 }

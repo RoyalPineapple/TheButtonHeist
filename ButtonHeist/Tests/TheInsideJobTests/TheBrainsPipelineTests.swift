@@ -7,7 +7,7 @@ import UIKit
 
 /// Deterministic tests for the pipelines on TheBrains that operate purely against
 /// the current `Screen` snapshot: the failure branch of `actionResultWithDelta`, the
-/// `SentState` accessors, the `computeBackgroundDelta` guards, the
+/// `SentState` accessors, the `computeBackgroundAccessibilityTrace` guards, the
 /// settled-change cache-miss, and `exploreAndPrune` pruning.
 ///
 /// Success-path `actionResultWithDelta` and `exploreScreen` container iteration
@@ -334,21 +334,21 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertTrue(brains.interfaceChangedSinceLastSettledCheck())
     }
 
-    // MARK: - computeBackgroundDelta Guards
+    // MARK: - computeBackgroundAccessibilityTrace Guards
 
-    func testComputeBackgroundDeltaReturnsNilWithoutPriorSend() async {
-        let delta = await brains.computeBackgroundDelta()
-        XCTAssertNil(delta, "No prior send means no comparison baseline, so return nil")
+    func testComputeBackgroundAccessibilityTraceReturnsNilWithoutPriorSend() async {
+        let trace = await brains.computeBackgroundAccessibilityTrace()
+        XCTAssertNil(trace, "No prior send means no comparison baseline, so return nil")
     }
 
-    func testComputeBackgroundDeltaReturnsNilWhenViewportHashIsZero() async {
+    func testComputeBackgroundAccessibilityTraceReturnsNilWhenViewportHashIsZero() async {
         // A viewportHash of 0 is the sentinel for "not set" — even if lastSentState exists,
-        // the delta must be suppressed to avoid false positives.
+        // the trace must be suppressed to avoid false positives.
         seedScreen(elements: [("A", .button, "button_a")])
         brains.recordSentState(viewportHash: 0)
 
-        let delta = await brains.computeBackgroundDelta()
-        XCTAssertNil(delta)
+        let trace = await brains.computeBackgroundAccessibilityTrace()
+        XCTAssertNil(trace)
     }
 
     // MARK: - Unsupported Diagnostics

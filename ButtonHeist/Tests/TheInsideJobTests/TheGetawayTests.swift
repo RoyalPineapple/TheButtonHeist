@@ -166,7 +166,7 @@ final class TheGetawayTests: XCTestCase {
 
         let result = getaway.staleTargetedActionFailure(
             for: .touchTap(.init(elementTarget: .heistId("button_old"))),
-            backgroundCapture: screenChangedBackgroundCapture()
+            backgroundTrace: screenChangedBackgroundTrace()
         )
 
         let unwrapped = try XCTUnwrap(result)
@@ -187,7 +187,7 @@ final class TheGetawayTests: XCTestCase {
 
         let result = getaway.staleTargetedActionFailure(
             for: .waitFor(.init(elementTarget: .heistId("button_old"), timeout: 0.1)),
-            backgroundCapture: screenChangedBackgroundCapture()
+            backgroundTrace: screenChangedBackgroundTrace()
         )
 
         XCTAssertNil(result, "waitFor is wait-only; stale action failure semantics are only for targeted actions")
@@ -805,19 +805,21 @@ final class TheGetawayTests: XCTestCase {
         brains.stash.currentScreen = .makeForTests(elements: pairs)
     }
 
-    private func screenChangedDelta() -> AccessibilityTrace.Delta {
-        .screenChanged(.init(
-            elementCount: 1,
-            newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
-        ))
-    }
-
-    private func screenChangedBackgroundCapture() -> TheBrains.BackgroundCapture {
-        let interface = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
-        return TheBrains.BackgroundCapture(
-            delta: screenChangedDelta(),
-            accessibilityTrace: AccessibilityTrace(interface: interface)
+    private func screenChangedBackgroundTrace() -> AccessibilityTrace {
+        let beforeInterface = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+        let afterInterface = Interface(timestamp: Date(timeIntervalSince1970: 1), tree: [])
+        let before = AccessibilityTrace.Capture(
+            sequence: 1,
+            interface: beforeInterface,
+            context: AccessibilityTrace.Context(screenId: "home")
         )
+        let after = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: afterInterface,
+            parentHash: before.hash,
+            context: AccessibilityTrace.Context(screenId: "settings")
+        )
+        return AccessibilityTrace(captures: [before, after])
     }
 }
 #endif // canImport(UIKit)
