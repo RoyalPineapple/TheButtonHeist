@@ -200,7 +200,7 @@ final class Actions {
             // hit-test the (failed) tap would have used; the result is
             // observation-only and does not claim element-level obstruction.
             let receiver = self.safecracker.tapReceiverDiagnostic(at: tapPoint)
-            let traitNames = TheStash.WireConversion.traitNames(retryResolved.element.traits).map(\.rawValue)
+            let traitNames = ActionCapabilityDiagnostic.traitNames(retryResolved.element.traits)
             let message = ActivateFailureDiagnostic.build(
                 element: retryResolved.element,
                 traitNames: traitNames,

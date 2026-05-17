@@ -430,6 +430,9 @@ extension FenceResponse {
         case .scrollable(let contentWidth, let contentHeight):
             parts = ["scrollable", "= \"\(Int(contentWidth))x\(Int(contentHeight))\""]
         }
+        if info.isModalBoundary {
+            parts.append("modal")
+        }
         if detail == .full {
             parts.append("frame=(\(Int(info.frameX)),\(Int(info.frameY)),\(Int(info.frameWidth)),\(Int(info.frameHeight)))")
         }

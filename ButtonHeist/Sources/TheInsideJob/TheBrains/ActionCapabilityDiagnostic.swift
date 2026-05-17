@@ -4,6 +4,8 @@ import UIKit
 
 import TheScore
 
+import AccessibilitySnapshotParser
+
 @MainActor enum ActionCapabilityDiagnostic { // swiftlint:disable:this agent_main_actor_value_type
 
     // MARK: - Element Actions
@@ -134,7 +136,7 @@ import TheScore
         if let value = element.value, !value.isEmpty {
             parts.append("value=\(quote(value))")
         }
-        let traits = TheStash.WireConversion.traitNames(element.traits).map(\.rawValue)
+        let traits = traitNames(element.traits)
         parts.append("traits=\(formatList(traits))")
         parts.append("actions=\(formatList(availableActions(for: screenElement)))")
         if screenElement.object == nil {
@@ -190,12 +192,26 @@ import TheScore
     }
 
     private static func availableActions(for screenElement: TheStash.ScreenElement) -> [String] {
-        var names = TheStash.WireConversion.buildActions(
-            for: screenElement.element,
-            object: screenElement.object
-        ).map(\.description)
-        appendUnique(availableCustomActions(for: screenElement), to: &names)
+        var names: [String] = []
+        let element = screenElement.element
+        let isInteractive = TheStash.Interactivity.isInteractive(element: element, object: screenElement.object)
+        if isInteractive {
+            names.append("activate")
+        }
+        if isInteractive, element.traits.contains(.adjustable) {
+            names.append("increment")
+            names.append("decrement")
+        }
+        appendUnique(element.customActions.map(\.name).filter { !$0.isEmpty }, to: &names)
+        let liveNames = screenElement.object?.accessibilityCustomActions?
+            .map(\.name)
+            .filter { !$0.isEmpty } ?? []
+        appendUnique(liveNames, to: &names)
         return names
+    }
+
+    static func traitNames(_ traits: AccessibilityTraits) -> [String] {
+        traits.namesIncludingUnknownBits
     }
 
     private static func availableCustomActions(for screenElement: TheStash.ScreenElement) -> [String] {

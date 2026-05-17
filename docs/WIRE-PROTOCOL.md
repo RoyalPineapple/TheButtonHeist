@@ -1029,6 +1029,8 @@ The container payload is a flat object keyed by the discriminator `type`. Type-s
 | Field | Type | Always present | Description |
 |-------|------|----------------|-------------|
 | `type` | `String` | Yes | Discriminator; one of the container types listed below |
+| `stableId` | `String?` | When available | Stable container identity used by tree deltas |
+| `isModalBoundary` | `Bool` | Only when `true` | Parser-reported accessibility modal boundary marker |
 | `frameX` | `Double` | Yes | Frame origin X in points |
 | `frameY` | `Double` | Yes | Frame origin Y in points |
 | `frameWidth` | `Double` | Yes | Frame width in points |

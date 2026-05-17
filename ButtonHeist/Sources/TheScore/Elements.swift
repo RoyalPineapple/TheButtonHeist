@@ -362,10 +362,10 @@ public func isStableIdentifier(_ identifier: String) -> Bool {
 
 // MARK: - Interface Tree (canonical wire shape)
 
-/// Container metadata for the canonical interface tree. Mirrors
-/// `AccessibilitySnapshotParser.AccessibilityContainer` 1:1 but lives in
-/// TheScore so CLI/MCP don't pull UIKit. Created by the iOS server when
-/// converting the persistent registry tree to wire format.
+/// Container metadata for the canonical interface tree. Mirrors the parser's
+/// `AccessibilityContainer` data that is useful at client boundaries, while
+/// living in TheScore so CLI/MCP don't pull UIKit. Created by the iOS server
+/// when converting the parser hierarchy to wire format.
 public struct ContainerInfo: Equatable, Hashable, Sendable {
     public enum ContainerType: Equatable, Hashable, Sendable {
         case semanticGroup(label: String?, value: String?, identifier: String?)
@@ -378,6 +378,10 @@ public struct ContainerInfo: Equatable, Hashable, Sendable {
 
     public let type: ContainerType
     public let stableId: String?
+    /// True when the parser identified this container as an accessibility
+    /// modal boundary. Omitted from JSON when false for backward-compatible
+    /// wire output.
+    public let isModalBoundary: Bool
     public let frameX: Double
     public let frameY: Double
     public let frameWidth: Double
@@ -386,6 +390,7 @@ public struct ContainerInfo: Equatable, Hashable, Sendable {
     public init(
         type: ContainerType,
         stableId: String? = nil,
+        isModalBoundary: Bool = false,
         frameX: Double,
         frameY: Double,
         frameWidth: Double,
@@ -393,6 +398,7 @@ public struct ContainerInfo: Equatable, Hashable, Sendable {
     ) {
         self.type = type
         self.stableId = stableId
+        self.isModalBoundary = isModalBoundary
         self.frameX = frameX
         self.frameY = frameY
         self.frameWidth = frameWidth
@@ -406,6 +412,7 @@ public struct ContainerInfo: Equatable, Hashable, Sendable {
 private enum ContainerCodingKey: String, CodingKey {
     case type
     case stableId
+    case isModalBoundary
     case label, value, identifier
     case contentWidth, contentHeight
     case rowCount, columnCount
@@ -450,6 +457,9 @@ extension ContainerInfo: Codable {
             try container.encode(contentHeight, forKey: .contentHeight)
         }
         try container.encodeIfPresent(info.stableId, forKey: .stableId)
+        if info.isModalBoundary {
+            try container.encode(true, forKey: .isModalBoundary)
+        }
         try container.encode(info.frameX, forKey: .frameX)
         try container.encode(info.frameY, forKey: .frameY)
         try container.encode(info.frameWidth, forKey: .frameWidth)
@@ -494,6 +504,7 @@ extension ContainerInfo: Codable {
         return ContainerInfo(
             type: type,
             stableId: try container.decodeIfPresent(String.self, forKey: .stableId),
+            isModalBoundary: try container.decodeIfPresent(Bool.self, forKey: .isModalBoundary) ?? false,
             frameX: try container.decode(Double.self, forKey: .frameX),
             frameY: try container.decode(Double.self, forKey: .frameY),
             frameWidth: try container.decode(Double.self, forKey: .frameWidth),

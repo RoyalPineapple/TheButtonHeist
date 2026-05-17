@@ -405,6 +405,31 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded, info)
     }
 
+    func testContainerInfoModalBoundaryRoundTrip() throws {
+        let info = ContainerInfo(
+            type: .semanticGroup(label: "Alert", value: nil, identifier: nil),
+            isModalBoundary: true,
+            frameX: 0, frameY: 0, frameWidth: 390, frameHeight: 300
+        )
+        let data = try encoder.encode(info)
+        let decoded = try decoder.decode(ContainerInfo.self, from: data)
+        XCTAssertEqual(decoded, info)
+    }
+
+    func testContainerInfoLegacyPayloadDefaultsModalBoundaryFalse() throws {
+        let json = """
+        {
+          "type": "list",
+          "frameX": 0,
+          "frameY": 0,
+          "frameWidth": 390,
+          "frameHeight": 300
+        }
+        """
+        let decoded = try decoder.decode(ContainerInfo.self, from: Data(json.utf8))
+        XCTAssertFalse(decoded.isModalBoundary)
+    }
+
     // MARK: - InterfaceNode
 
     func testInterfaceNodeLeafRoundTrip() throws {

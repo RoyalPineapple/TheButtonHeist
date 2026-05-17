@@ -66,9 +66,25 @@ final class InterfaceNodeWireShapeTests: XCTestCase {
         let payload = try XCTUnwrap(dict["container"] as? [String: Any])
         XCTAssertNil(payload["_0"], "Container payload must not be wrapped under '_0'")
         XCTAssertEqual(payload["type"] as? String, "list")
+        XCTAssertNil(payload["isModalBoundary"], "False modal boundary should preserve existing wire shape")
         XCTAssertEqual(payload["frameX"] as? Double, 0)
         XCTAssertEqual(payload["frameWidth"] as? Double, 320)
         XCTAssertNotNil(payload["children"])
+    }
+
+    func testModalBoundaryContainerEncodesOnlyWhenTrue() throws {
+        let info = ContainerInfo(
+            type: .semanticGroup(label: "Alert", value: nil, identifier: nil),
+            isModalBoundary: true,
+            frameX: 0, frameY: 0, frameWidth: 320, frameHeight: 200
+        )
+        let node = InterfaceNode.container(info, children: [])
+
+        let dict = try encodeJSON(node)
+
+        let payload = try XCTUnwrap(dict["container"] as? [String: Any])
+        XCTAssertEqual(payload["type"] as? String, "semanticGroup")
+        XCTAssertEqual(payload["isModalBoundary"] as? Bool, true)
     }
 
     func testScrollableContainerEncodesContentSize() throws {

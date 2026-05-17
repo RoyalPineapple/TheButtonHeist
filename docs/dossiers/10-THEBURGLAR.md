@@ -18,11 +18,11 @@ TheBurglar breaks in and takes what he finds:
 
 ```mermaid
 flowchart TD
-    Parse["parse()"] --> PR["ParseResult (value type)<br/>• elements: [AccessibilityElement]<br/>• hierarchy: [AccessibilityHierarchy]<br/>• objects: [AE: NSObject]<br/>• scrollViews: [Container: UIView]"]
+    Parse["parse()"] --> PR["ParseResult (value type)<br/>• hierarchy: [AccessibilityHierarchy]<br/>• objects: [AE: NSObject]<br/>• scrollViews: [Container: UIView]"]
 
     PR --> Build["buildScreen(from:)"]
     Build --> Walk["buildElementContexts()<br/>→ ElementContext per element<br/>(contentSpaceOrigin, scrollView, object)"]
-    Walk --> IDs["IdAssignment.assign(elements)<br/>→ [String] parallel to elements"]
+    Walk --> IDs["IdAssignment.assign(hierarchy.sortedElements)<br/>→ [String] parallel to traversal order"]
     IDs --> Compose["Compose Screen value:<br/>• elements: [heistId: ScreenElement]<br/>• hierarchy<br/>• containerStableIds<br/>• heistIdByElement<br/>• firstResponderHeistId<br/>• scrollableContainerViews"]
     Compose --> Return["Return Screen — no TheStash mutation"]
 

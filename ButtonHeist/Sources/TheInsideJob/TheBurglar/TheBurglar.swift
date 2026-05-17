@@ -29,8 +29,9 @@ final class TheBurglar {
 
     /// Internal parse intermediate — raw output from the AccessibilitySnapshotParser
     /// walk before heistId assignment. Tests use it to inject pre-parsed data.
+    /// The hierarchy is the source of element order; callers derive flat
+    /// element lists from it instead of carrying a parallel array.
     struct ParseResult {
-        let elements: [AccessibilityElement]
         let hierarchy: [AccessibilityHierarchy]
         let objects: [AccessibilityElement: NSObject]
         let scrollViews: [AccessibilityContainer: UIView]
@@ -108,7 +109,6 @@ final class TheBurglar {
         }
 
         return ParseResult(
-            elements: allHierarchy.sortedElements,
             hierarchy: allHierarchy,
             objects: allObjects,
             scrollViews: allScrollViews
@@ -313,6 +313,7 @@ final class TheBurglar {
     /// (with content-position disambiguation), context resolution, container
     /// stable-id computation, and first-responder detection, all in one pass.
     static func buildScreen(from result: ParseResult) -> Screen {
+        let elements = result.hierarchy.sortedElements
         let contexts = buildElementContexts(
             hierarchy: result.hierarchy,
             scrollableContainerViews: result.scrollViews,
@@ -323,16 +324,16 @@ final class TheBurglar {
             scrollableContainerViews: result.scrollViews
         )
 
-        let baseHeistIds = TheStash.IdAssignment.assign(result.elements)
+        let baseHeistIds = TheStash.IdAssignment.assign(elements)
         let resolvedHeistIds = resolveHeistIds(
-            base: baseHeistIds, elements: result.elements, contexts: contexts
+            base: baseHeistIds, elements: elements, contexts: contexts
         )
 
         var screenElements: [String: Screen.ScreenElement] = [:]
-        screenElements.reserveCapacity(result.elements.count)
+        screenElements.reserveCapacity(elements.count)
         var heistIdByElement: [AccessibilityElement: String] = [:]
-        heistIdByElement.reserveCapacity(result.elements.count)
-        for (parsedElement, heistId) in zip(result.elements, resolvedHeistIds) {
+        heistIdByElement.reserveCapacity(elements.count)
+        for (parsedElement, heistId) in zip(elements, resolvedHeistIds) {
             let context = contexts[parsedElement]
             let entry = Screen.ScreenElement(
                 heistId: heistId,
@@ -345,7 +346,7 @@ final class TheBurglar {
             heistIdByElement[parsedElement] = heistId
         }
 
-        let firstResponders = zip(result.elements, resolvedHeistIds).filter { element, _ in
+        let firstResponders = zip(elements, resolvedHeistIds).filter { element, _ in
             (result.objects[element] as? UIView)?.isFirstResponder == true
         }
         if firstResponders.count > 1 {
