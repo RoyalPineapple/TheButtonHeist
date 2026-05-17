@@ -11,13 +11,7 @@ extension TheFence {
         case continueOnError = "continue_on_error"
     }
 
-    func handleRunBatch(_ args: [String: Any]) async throws -> FenceResponse {
-        let steps = try args.requiredSchemaDictionaryArray("steps")
-        guard !steps.isEmpty else {
-            throw SchemaValidationError(field: "steps", observed: "array count 0", expected: "array count >= 1")
-        }
-        let policy = try args.schemaEnum("policy", as: BatchPolicy.self) ?? .stopOnError
-
+    func handleRunBatch(_ request: RunBatchRequest) async throws -> FenceResponse {
         var results: [[String: Any]] = []
         var stepSummaries: [BatchStepSummary] = []
         var failedIndex: Int?
@@ -25,7 +19,7 @@ extension TheFence {
         var expectationsChecked = 0
         let batchStart = CFAbsoluteTimeGetCurrent()
 
-        for (index, step) in steps.enumerated() {
+        for (index, step) in request.steps.enumerated() {
             let originalCommandName = step["command"] as? String ?? "?"
             var normalizedCommand: Command?
             do {
@@ -51,7 +45,7 @@ extension TheFence {
                     expectationMet: outcome.expectationCounted ? outcome.expectationMet : nil
                 ))
 
-                if outcome.isFailed, policy == .stopOnError {
+                if outcome.isFailed, request.policy == .stopOnError {
                     failedIndex = index
                     break
                 }
@@ -72,16 +66,16 @@ extension TheFence {
                     phase: failureDetails?.phase.rawValue,
                     nextCommand: Self.batchNextCommand(from: failureDetails)
                 ))
-                if policy == .stopOnError {
+                if request.policy == .stopOnError {
                     failedIndex = index
                     break
                 }
             }
         }
 
-        if let failedIndex, policy == .stopOnError {
+        if let failedIndex, request.policy == .stopOnError {
             stepSummaries.append(contentsOf: skippedStepSummaries(
-                steps: steps,
+                steps: request.steps,
                 afterFailedIndex: failedIndex
             ))
         }
