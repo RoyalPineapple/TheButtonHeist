@@ -247,6 +247,7 @@ final class TheGetawayTests: XCTestCase {
 
     func testAutoFinishWithOriginatorStillConnectedSendsPayloadOnlyToOriginator() async {
         let (getaway, muscle, _) = await makeGetaway()
+        // swiftlint:disable:next agent_unchecked_sendable_no_comment - Test callback storage is protected by NSLock.
         final class SentBox: @unchecked Sendable {
             private var storage: [(Data, Int)] = []
             private let lock = NSLock()
@@ -303,6 +304,7 @@ final class TheGetawayTests: XCTestCase {
 
     func testManualStopAfterAutoFinishTargetDeliveryDoesNotDeliverSecondPayload() async {
         let (getaway, muscle, _) = await makeGetaway()
+        // swiftlint:disable:next agent_unchecked_sendable_no_comment - Test callback storage is protected by NSLock.
         final class SentBox: @unchecked Sendable {
             private var storage: [(Data, Int)] = []
             private let lock = NSLock()
