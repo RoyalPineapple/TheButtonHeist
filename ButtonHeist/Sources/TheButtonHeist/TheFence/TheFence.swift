@@ -523,11 +523,20 @@ public final class TheFence {
         }
 
         handoff.onDisconnected = { [weak self] reason in
-            self?.backgroundAccessibilityDeltas.removeAll()
-            self?.cancelAllPendingRequests(
+            self?.clearClientSessionState(
                 error: FenceError.connectionFailure(ConnectionFailure(disconnectReason: reason))
             )
         }
+    }
+
+    func clearClientSessionState(error: Error) {
+        backgroundAccessibilityDeltas.removeAll()
+        lastInterfaceCache.removeAll()
+        lastActionHistory = .unrun
+        lastLatencyMs = 0
+        recordingStartWait = .idle
+        recordingWait = .idle
+        cancelAllPendingRequests(error: error)
     }
 
     /// Bounded FIFO of background deltas received from the server.
@@ -573,8 +582,10 @@ public final class TheFence {
 
     /// Disconnect and cancel all pending requests.
     public func stop() {
-        backgroundAccessibilityDeltas.removeAll()
-        cancelAllPendingRequests()
+        clearClientSessionState(
+            error: FenceError.connectionFailure(ConnectionFailure(disconnectReason: .localDisconnect))
+        )
+        handoff.disableAutoReconnect()
         handoff.disconnect()
         handoff.stopDiscovery()
     }

@@ -86,13 +86,106 @@ final class TheHandoffStateTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testSetupAutoReconnectIsIdempotent() async {
+    func testSetupAutoReconnectReplacesFilter() async {
         let handoff = TheHandoff()
 
         handoff.setupAutoReconnect(filter: "FirstFilter")
         handoff.setupAutoReconnect(filter: "SecondFilter")
 
-        XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: "FirstFilter", reconnectTask: nil))
+        XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: "SecondFilter", reconnectTask: nil))
+    }
+
+    @ButtonHeistActor
+    func testSetupAutoReconnectCancelsStaleReconnectTaskWhenFilterChanges() async {
+        let handoff = TheHandoff()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mock = MockConnection()
+        mock.connectEventsOverride = [
+            .connected,
+            .disconnected(.serverClosed),
+        ]
+        handoff.makeConnection = { _, _, _ in mock }
+
+        handoff.setupAutoReconnect(filter: "OldFilter")
+        handoff.connect(to: device)
+
+        guard case .enabled(filter: "OldFilter", reconnectTask: let staleTask?) = handoff.reconnectPolicy else {
+            return XCTFail("Expected reconnect task for old filter")
+        }
+
+        handoff.setupAutoReconnect(filter: "NewFilter")
+
+        XCTAssertTrue(staleTask.isCancelled)
+        XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: "NewFilter", reconnectTask: nil))
+    }
+
+    @ButtonHeistActor
+    func testDisableAutoReconnectCancelsReconnectTaskAndClearsPolicy() async {
+        let handoff = TheHandoff()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mock = MockConnection()
+        mock.connectEventsOverride = [
+            .connected,
+            .disconnected(.serverClosed),
+        ]
+        handoff.makeConnection = { _, _, _ in mock }
+
+        handoff.setupAutoReconnect(filter: "App")
+        handoff.connect(to: device)
+
+        guard case .enabled(filter: "App", reconnectTask: let reconnectTask?) = handoff.reconnectPolicy else {
+            return XCTFail("Expected reconnect task")
+        }
+
+        handoff.disableAutoReconnect()
+
+        XCTAssertTrue(reconnectTask.isCancelled)
+        XCTAssertEqual(handoff.reconnectPolicy, .disabled)
+    }
+
+    @ButtonHeistActor
+    func testReplacingAutoReconnectFilterPreventsStaleReconnect() async throws {
+        let handoff = TheHandoff()
+        handoff.reconnectInterval = 0.01
+        let oldDevice = DiscoveredDevice(
+            id: "old-device",
+            name: "OldApp#one",
+            endpoint: .hostPort(host: .ipv4(.loopback), port: 1111)
+        )
+        let newDevice = DiscoveredDevice(
+            id: "new-device",
+            name: "NewApp#one",
+            endpoint: .hostPort(host: .ipv4(.loopback), port: 2222)
+        )
+
+        let mockDiscovery = MockDiscovery()
+        mockDiscovery.discoveredDevices = [oldDevice, newDevice]
+        handoff.makeDiscovery = { mockDiscovery }
+        handoff.startDiscovery()
+
+        var connectedIDs: [String] = []
+        handoff.makeConnection = { device, _, _ in
+            connectedIDs.append(device.id)
+            let connection = MockConnection()
+            connection.connectEventsOverride = connectedIDs.count == 1
+                ? [.connected, .disconnected(.serverClosed)]
+                : [.connected]
+            return connection
+        }
+
+        handoff.setupAutoReconnect(filter: "OldApp")
+        handoff.connect(to: oldDevice)
+        XCTAssertEqual(connectedIDs, ["old-device"])
+
+        handoff.setupAutoReconnect(filter: "NewApp")
+
+        // Negative assertion: give the stale reconnect task time to fire if it
+        // survived the filter replacement.
+        // swiftlint:disable:next agent_test_task_sleep
+        try await Task.sleep(for: .milliseconds(150))
+
+        XCTAssertEqual(connectedIDs, ["old-device"])
+        XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: "NewApp", reconnectTask: nil))
     }
 
     @ButtonHeistActor

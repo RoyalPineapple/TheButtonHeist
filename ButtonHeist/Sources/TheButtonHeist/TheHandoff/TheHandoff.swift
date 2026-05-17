@@ -799,6 +799,13 @@ final class TheHandoff {
         transitionToDisconnected()
     }
 
+    func disableAutoReconnect() {
+        if case .enabled(_, let reconnectTask) = reconnectPolicy {
+            reconnectTask?.cancel()
+        }
+        reconnectPolicy = .disabled
+    }
+
     /// Suspend until the connection phase transitions to `.connected` (returns),
     /// `.failed` (throws the mapped `ConnectionError`), or `.disconnected`
     /// (throws `ConnectionError.connectionFailed`). If the phase is already
@@ -987,8 +994,14 @@ final class TheHandoff {
     /// Set up auto-reconnect: when disconnected, poll for the device and reconnect.
     /// Makes 60 attempts at 1s intervals before giving up.
     func setupAutoReconnect(filter: String?) {
-        guard case .disabled = reconnectPolicy else { return }
-        reconnectPolicy = .enabled(filter: filter, reconnectTask: nil)
+        switch reconnectPolicy {
+        case .disabled:
+            reconnectPolicy = .enabled(filter: filter, reconnectTask: nil)
+        case .enabled(let currentFilter, let reconnectTask):
+            guard currentFilter != filter else { return }
+            reconnectTask?.cancel()
+            reconnectPolicy = .enabled(filter: filter, reconnectTask: nil)
+        }
     }
 
     private func runAutoReconnect(filter: String?) async {
@@ -996,11 +1009,13 @@ final class TheHandoff {
         var consecutiveMisses = 0
         for _ in 0..<60 {
             guard !Task.isCancelled else { return }
+            guard isAutoReconnectCurrent(filter: filter) else { return }
             // Backoff grows while no device is visible; resets after each connection attempt
             let delay = min(reconnectInterval * pow(2.0, Double(min(consecutiveMisses, 5))), 30.0)
             let jitter = Double.random(in: 0...(delay * 0.2))
             guard await Task.cancellableSleep(for: .seconds(delay + jitter)) else { return }
             guard !Task.isCancelled else { return }
+            guard isAutoReconnectCurrent(filter: filter) else { return }
             if let device = discoveredDevices.first(matching: filter) {
                 consecutiveMisses = 0
                 onStatus?("Reconnecting to \(device.name)...")
@@ -1021,6 +1036,11 @@ final class TheHandoff {
         }
         onStatus?("Auto-reconnect gave up after 60 attempts")
         reconnectPolicy = .disabled
+    }
+
+    private func isAutoReconnectCurrent(filter: String?) -> Bool {
+        guard case .enabled(let currentFilter, _) = reconnectPolicy else { return false }
+        return currentFilter == filter
     }
 
     // MARK: - Display Names

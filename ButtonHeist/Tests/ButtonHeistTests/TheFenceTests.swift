@@ -1189,6 +1189,71 @@ final class TheFenceTests: XCTestCase {
         }
     }
 
+    @ButtonHeistActor
+    func testStopDisablesAutoReconnectPolicyAndCancelsTask() async {
+        let fence = TheFence(configuration: .init())
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mockConnection = MockConnection()
+        mockConnection.connectEventsOverride = [
+            .connected,
+            .disconnected(.serverClosed),
+        ]
+        fence.handoff.makeConnection = { _, _, _ in mockConnection }
+
+        fence.handoff.setupAutoReconnect(filter: "MockApp")
+        fence.handoff.connect(to: device)
+
+        guard case .enabled(filter: "MockApp", reconnectTask: let reconnectTask?) = fence.handoff.reconnectPolicy else {
+            return XCTFail("Expected reconnect task before stop")
+        }
+
+        fence.stop()
+
+        XCTAssertTrue(reconnectTask.isCancelled)
+        XCTAssertEqual(fence.handoff.reconnectPolicy, .disabled)
+        assertDisconnected(fence.handoff.connectionPhase)
+    }
+
+    @ButtonHeistActor
+    func testDisconnectClearsLastActionSessionState() async {
+        let fence = TheFence(configuration: .init())
+        fence.lastActionHistory = .completed(ActionResult(success: true, method: .activate))
+        XCTAssertNotNil(fence.lastActionResult)
+
+        fence.handoff.onDisconnected?(.serverClosed)
+
+        XCTAssertNil(fence.lastActionResult)
+        XCTAssertNil(fence.currentSessionState()["lastAction"])
+    }
+
+    @ButtonHeistActor
+    func testSocketDisconnectCancelsInFlightSendAndAwaitAction() async {
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mockConnection = MockConnection()
+        mockConnection.connectEventsOverride = [.connected]
+        let fence = TheFence(configuration: .init())
+        fence.handoff.makeConnection = { _, _, _ in mockConnection }
+        fence.handoff.connect(to: device)
+
+        let waitTask = Task { @ButtonHeistActor in
+            try await fence.sendAndAwaitAction(.activate(.heistId("pending")), timeout: 10)
+        }
+        while mockConnection.sent.isEmpty {
+            await Task.yield()
+        }
+
+        mockConnection.onEvent?(.disconnected(.serverClosed))
+
+        do {
+            _ = try await waitTask.value
+            XCTFail("Expected in-flight action to fail")
+        } catch FenceError.connectionFailure(let failure) {
+            XCTAssertEqual(failure.errorCode, "transport.server_closed")
+        } catch {
+            XCTFail("Expected connectionFailure, got \(error)")
+        }
+    }
+
     func testNoMatchingDeviceError() {
         let error = FenceError.noMatchingDevice(filter: "MyApp", available: ["OtherApp"])
         XCTAssertTrue(error.errorDescription?.contains("MyApp") ?? false)
@@ -1896,8 +1961,10 @@ final class TheFenceTests: XCTestCase {
     func testDrainBackgroundDeltaClearsAfterRead() async {
         let fence = TheFence(configuration: .init())
         // Simulate a background delta arriving via the handoff callback
-        let interface = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
-        let delta: AccessibilityTrace.Delta = .screenChanged(.init(elementCount: 7, newInterface: interface))
+        let delta: AccessibilityTrace.Delta = .screenChanged(.init(
+            elementCount: 7,
+            newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+        ))
         fence.handoff.onBackgroundDelta?(delta)
 
         let first = fence.drainBackgroundDelta()
@@ -2305,8 +2372,10 @@ final class TheFenceTests: XCTestCase {
         let fence = TheFence(configuration: .init())
 
         // Background delta present but no expectation on the action
-        let interface = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
-        let delta: AccessibilityTrace.Delta = .screenChanged(.init(elementCount: 3, newInterface: interface))
+        let delta: AccessibilityTrace.Delta = .screenChanged(.init(
+            elementCount: 3,
+            newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+        ))
         fence.handoff.onBackgroundDelta?(delta)
 
         // Action without expect — should NOT short-circuit against the
