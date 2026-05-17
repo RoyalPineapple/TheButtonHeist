@@ -46,7 +46,7 @@ final class AuthFailureTests: XCTestCase {
 
         var authFailedReason: String?
         conn.onEvent = { event in
-            if case .message(.error(let serverError), _, _, _) = event,
+            if case .message(.error(let serverError), _, _) = event,
                serverError.kind == .authFailure {
                 authFailedReason = serverError.message
             }
@@ -68,7 +68,7 @@ final class AuthFailureTests: XCTestCase {
         let callOrder = CallOrder()
         conn.onEvent = { event in
             switch event {
-            case .message(.error(let serverError), _, _, _) where serverError.kind == .authFailure:
+            case .message(.error(let serverError), _, _) where serverError.kind == .authFailure:
                 callOrder.append("authFailed")
             case .disconnected:
                 callOrder.append("disconnected")

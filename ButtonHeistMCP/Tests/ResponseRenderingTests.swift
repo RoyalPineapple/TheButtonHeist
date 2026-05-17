@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 import MCP
 @testable import ButtonHeistMCP
@@ -9,11 +10,11 @@ struct ResponseRenderingTests {
     @Test("MCP renders no-change background transients")
     func rendersNoChangeBackgroundTransients() {
         let spinner = makeElement(heistId: "spinner", label: "Loading")
-        let delta: AccessibilityTrace.Delta = .noChange(.init(elementCount: 4, transient: [spinner]))
+        let trace = makeNoChangeTrace(elementCount: 4, transient: [spinner])
 
         let result = ButtonHeistMCPServer.renderResponse(
             .ok(message: "done"),
-            backgroundAccessibilityDeltas: [delta]
+            backgroundAccessibilityTraces: [trace]
         )
         let texts = textContents(result)
 
@@ -26,11 +27,11 @@ struct ResponseRenderingTests {
     func rendersElementChangedBackgroundTransients() {
         let added = makeElement(heistId: "result", label: "Result")
         let spinner = makeElement(heistId: "spinner", label: "Loading")
-        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: [added]), transient: [spinner]))
+        let trace = makeAddedTrace(added: added, finalElementCount: 5, transient: [spinner])
 
         let result = ButtonHeistMCPServer.renderResponse(
             .ok(message: "done"),
-            backgroundAccessibilityDeltas: [delta]
+            backgroundAccessibilityTraces: [trace]
         )
         let texts = textContents(result)
 
@@ -39,18 +40,18 @@ struct ResponseRenderingTests {
         #expect(texts[1] == FenceResponse.ok(message: "done").compactFormatted())
     }
 
-    @Test("MCP renders every queued background delta")
-    func rendersMultipleBackgroundDeltas() {
+    @Test("MCP renders every queued background trace")
+    func rendersMultipleBackgroundTraces() {
         let spinner = makeElement(heistId: "spinner", label: "Loading")
         let result = makeElement(heistId: "result", label: "Result")
-        let deltas: [AccessibilityTrace.Delta] = [
-            .noChange(.init(elementCount: 4, transient: [spinner])),
-            .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: [result]))),
+        let traces = [
+            makeNoChangeTrace(elementCount: 4, transient: [spinner]),
+            makeAddedTrace(added: result, finalElementCount: 5),
         ]
 
         let response = ButtonHeistMCPServer.renderResponse(
             .ok(message: "done"),
-            backgroundAccessibilityDeltas: deltas
+            backgroundAccessibilityTraces: traces
         )
         let texts = textContents(response)
 
@@ -68,7 +69,7 @@ struct ResponseRenderingTests {
         )
         let response = FenceResponse.failure(FenceError.sessionLocked(payload.message))
 
-        let result = ButtonHeistMCPServer.renderResponse(response, backgroundAccessibilityDeltas: [])
+        let result = ButtonHeistMCPServer.renderResponse(response, backgroundAccessibilityTraces: [])
         let texts = textContents(result)
 
         #expect(result.isError == true)
@@ -88,7 +89,7 @@ struct ResponseRenderingTests {
         )
         let response = FenceResponse.action(result: actionResult)
 
-        let result = ButtonHeistMCPServer.renderResponse(response, backgroundAccessibilityDeltas: [])
+        let result = ButtonHeistMCPServer.renderResponse(response, backgroundAccessibilityTraces: [])
         let texts = textContents(result)
 
         #expect(result.isError == true)
@@ -116,5 +117,46 @@ struct ResponseRenderingTests {
             frameHeight: 44,
             actions: []
         )
+    }
+
+    private func makeNoChangeTrace(elementCount: Int, transient: [HeistElement]) -> AccessibilityTrace {
+        let interface = makeInterface(elements: makePlaceholderElements(count: elementCount))
+        return makeTrace(before: interface, after: interface, transition: AccessibilityTrace.Transition(transient: transient))
+    }
+
+    private func makeAddedTrace(
+        added: HeistElement,
+        finalElementCount: Int,
+        transient: [HeistElement] = []
+    ) -> AccessibilityTrace {
+        let stableElements = makePlaceholderElements(count: finalElementCount - 1)
+        let before = makeInterface(elements: stableElements)
+        let after = makeInterface(elements: stableElements + [added])
+        return makeTrace(before: before, after: after, transition: AccessibilityTrace.Transition(transient: transient))
+    }
+
+    private func makeTrace(
+        before beforeInterface: Interface,
+        after afterInterface: Interface,
+        transition: AccessibilityTrace.Transition = .empty
+    ) -> AccessibilityTrace {
+        let before = AccessibilityTrace.Capture(sequence: 1, interface: beforeInterface)
+        let after = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: afterInterface,
+            parentHash: before.hash,
+            transition: transition
+        )
+        return AccessibilityTrace(captures: [before, after])
+    }
+
+    private func makeInterface(elements: [HeistElement]) -> Interface {
+        Interface(timestamp: Date(timeIntervalSince1970: 0), tree: elements.map(InterfaceNode.element))
+    }
+
+    private func makePlaceholderElements(count: Int) -> [HeistElement] {
+        (0..<max(0, count)).map { index in
+            makeElement(heistId: "stable-\(index)", label: "Stable \(index)")
+        }
     }
 }

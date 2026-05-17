@@ -30,7 +30,6 @@ enum ConnectionEvent {
     case message(
         ServerMessage,
         requestId: String?,
-        backgroundAccessibilityDelta: AccessibilityTrace.Delta?,
         accessibilityTrace: AccessibilityTrace?
     )
 }

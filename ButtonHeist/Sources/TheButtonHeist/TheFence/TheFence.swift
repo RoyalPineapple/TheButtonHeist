@@ -531,10 +531,6 @@ public final class TheFence {
             self.screenTracker.resolve(requestId: requestId, result: .failure(error))
         }
 
-        handoff.onBackgroundDelta = { [weak self] delta in
-            self?.enqueueBackgroundDelta(delta)
-        }
-
         handoff.onBackgroundAccessibilityTrace = { [weak self] trace in
             self?.enqueueBackgroundAccessibilityTrace(trace)
         }
@@ -547,7 +543,7 @@ public final class TheFence {
     }
 
     func clearClientSessionState(error: Error) {
-        backgroundAccessibilityReceipts.removeAll()
+        backgroundAccessibilityTraces.removeAll()
         lastInterfaceCache.removeAll()
         lastActionHistory = .unrun
         lastLatencyMs = 0
@@ -573,67 +569,33 @@ public final class TheFence {
         }
     }
 
-    /// Bounded FIFO of background accessibility receipts received from the server.
+    /// Bounded FIFO of background accessibility traces received from the server.
     ///
-    /// Capture traces are preferred and deltas are derived from their endpoint
-    /// receipts. Legacy delta entries are accepted for tests and compatibility
-    /// with older internal call sites. Expectation checks peek through this
-    /// queue and acknowledge only the receipt whose projected delta matches.
-    /// This prevents a mismatched expectation from destroying the only evidence
-    /// of a background change.
-    private enum BackgroundAccessibilityReceipt {
-        case captureTrace(AccessibilityTrace)
-        case legacyDelta(AccessibilityTrace.Delta)
-
-        var accessibilityTrace: AccessibilityTrace? {
-            if case .captureTrace(let trace) = self { return trace }
-            return nil
-        }
-
-        var delta: AccessibilityTrace.Delta? {
-            switch self {
-            case .captureTrace(let trace):
-                return trace.captureReceiptDelta
-            case .legacyDelta(let delta):
-                return delta
-            }
-        }
-    }
-
-    private var backgroundAccessibilityReceipts: [BackgroundAccessibilityReceipt] = []
-    private static let maxBackgroundDeltas = 20
-
-    private func enqueueBackgroundDelta(_ delta: AccessibilityTrace.Delta) {
-        enqueueBackgroundAccessibility(.legacyDelta(delta))
-    }
+    /// Expectation checks derive a compact delta from each trace at the match
+    /// edge and acknowledge only the trace whose delta matches. This prevents a
+    /// mismatched expectation from destroying the only evidence of a background
+    /// change.
+    private var backgroundAccessibilityTraces: [AccessibilityTrace] = []
+    private static let maxBackgroundAccessibilityTraces = 20
 
     private func enqueueBackgroundAccessibilityTrace(_ trace: AccessibilityTrace) {
-        enqueueBackgroundAccessibility(.captureTrace(trace))
-    }
-
-    private func enqueueBackgroundAccessibility(_ receipt: BackgroundAccessibilityReceipt) {
-        backgroundAccessibilityReceipts.append(receipt)
-        if backgroundAccessibilityReceipts.count > Self.maxBackgroundDeltas {
-            backgroundAccessibilityReceipts.removeFirst(backgroundAccessibilityReceipts.count - Self.maxBackgroundDeltas)
+        backgroundAccessibilityTraces.append(trace)
+        if backgroundAccessibilityTraces.count > Self.maxBackgroundAccessibilityTraces {
+            backgroundAccessibilityTraces.removeFirst(backgroundAccessibilityTraces.count - Self.maxBackgroundAccessibilityTraces)
         }
     }
 
-    /// Return and clear the oldest queued background delta, if any.
-    public func drainBackgroundDelta() -> AccessibilityTrace.Delta? {
-        while !backgroundAccessibilityReceipts.isEmpty {
-            let receipt = backgroundAccessibilityReceipts.removeFirst()
-            // Capture receipts with identical endpoints have no meaningful
-            // delta to expose on the legacy drain API.
-            if let delta = receipt.delta { return delta }
-        }
-        return nil
+    /// Return and clear the oldest queued background accessibility trace, if any.
+    public func drainBackgroundAccessibilityTrace() -> AccessibilityTrace? {
+        if backgroundAccessibilityTraces.isEmpty { return nil }
+        return backgroundAccessibilityTraces.removeFirst()
     }
 
-    /// Return and clear all queued background deltas in arrival order.
-    public func drainBackgroundDeltas() -> [AccessibilityTrace.Delta] {
-        let deltas = backgroundAccessibilityReceipts.compactMap(\.delta)
-        backgroundAccessibilityReceipts.removeAll()
-        return deltas
+    /// Return and clear all queued background accessibility traces in arrival order.
+    public func drainBackgroundAccessibilityTraces() -> [AccessibilityTrace] {
+        let traces = backgroundAccessibilityTraces
+        backgroundAccessibilityTraces.removeAll()
+        return traces
     }
 
     /// Connect to a device and optionally enable auto-reconnect.
@@ -700,7 +662,7 @@ public final class TheFence {
             return backgroundResponse
         }
 
-        let preDispatchBackgroundCount = backgroundAccessibilityReceipts.count
+        let preDispatchBackgroundCount = backgroundAccessibilityTraces.count
         let dispatched = try await dispatchCommand(parsed)
         lastLatencyMs = dispatched.durationMs
         logResponse(requestId: parsed.requestId, response: dispatched.response, durationMs: dispatched.durationMs)
@@ -859,18 +821,18 @@ public final class TheFence {
         startingAt startIndex: Int = 0
     ) -> FenceResponse? {
         guard let expectation else { return nil }
-        let boundedStartIndex = min(max(startIndex, 0), backgroundAccessibilityReceipts.count)
+        let boundedStartIndex = min(max(startIndex, 0), backgroundAccessibilityTraces.count)
 
         var matched: (index: Int, result: ActionResult, validation: ExpectationResult)?
-        for index in backgroundAccessibilityReceipts.indices.dropFirst(boundedStartIndex) {
-            let receipt = backgroundAccessibilityReceipts[index]
-            guard let backgroundAccessibilityDelta = receipt.delta else { continue }
+        for index in backgroundAccessibilityTraces.indices.dropFirst(boundedStartIndex) {
+            let trace = backgroundAccessibilityTraces[index]
+            guard let backgroundDelta = trace.backgroundDelta else { continue }
             let syntheticResult = ActionResult(
                 success: true,
                 method: .waitForChange,
                 message: "expectation already met by background change",
-                accessibilityDelta: backgroundAccessibilityDelta,
-                accessibilityTrace: receipt.accessibilityTrace
+                accessibilityDelta: backgroundDelta,
+                accessibilityTrace: trace
             )
             let validation = expectation.validate(against: syntheticResult)
             if validation.met {
@@ -880,7 +842,7 @@ public final class TheFence {
         }
 
         guard let matched else { return nil }
-        backgroundAccessibilityReceipts.remove(at: matched.index)
+        backgroundAccessibilityTraces.remove(at: matched.index)
         let response = FenceResponse.action(result: matched.result, expectation: matched.validation)
         logResponse(requestId: requestId, response: response, durationMs: 0)
         return response

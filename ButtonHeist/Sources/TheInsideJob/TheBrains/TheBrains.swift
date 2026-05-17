@@ -402,21 +402,11 @@ final class TheBrains {
         Interface(timestamp: Date(), tree: stash.wireTree())
     }
 
-    // MARK: - Background Delta
-
-    struct BackgroundCapture {
-        let delta: AccessibilityTrace.Delta
-        let accessibilityTrace: AccessibilityTrace
-    }
-
-    /// Check if the accessibility tree changed since the last response.
-    func computeBackgroundDelta() async -> AccessibilityTrace.Delta? {
-        await computeBackgroundCapture()?.delta
-    }
+    // MARK: - Background Accessibility Trace
 
     /// Check if the accessibility tree changed since the last response and
-    /// return both the internal delta and the public accessibility trace.
-    func computeBackgroundCapture() async -> BackgroundCapture? {
+    /// return the public accessibility trace.
+    func computeBackgroundAccessibilityTrace() async -> AccessibilityTrace? {
         guard case .sent(let sent) = sentHistory,
               sent.treeHash != 0,
               sent.viewportHash != 0 else { return nil }
@@ -431,14 +421,26 @@ final class TheBrains {
         let current = captureSemanticState()
         guard current.capture.hash != sent.captureHash else { return nil }
 
+        // Background edges carry classifier evidence inside the trace so
+        // downstream edges derive their compact delta from the same source.
+        let classification = ScreenClassifier.classify(
+            before: sent.beforeState.screenSnapshot,
+            after: current.screenSnapshot
+        )
+        let currentCapture = AccessibilityTrace.Capture(
+            sequence: current.capture.sequence,
+            interface: current.capture.interface,
+            parentHash: current.capture.parentHash,
+            context: current.capture.context,
+            transition: AccessibilityTrace.Transition(screenChangeReason: classification.reason?.rawValue),
+            hash: current.capture.hash
+        )
         let accessibilityTrace = makeAccessibilityTrace(
-            afterCapture: current.capture,
+            afterCapture: currentCapture,
             parentCapture: sent.beforeState.capture
         )
-        return BackgroundCapture(
-            delta: deriveDelta(from: accessibilityTrace, before: sent.beforeState, after: current),
-            accessibilityTrace: accessibilityTrace
-        )
+        guard accessibilityTrace.backgroundDelta != nil else { return nil }
+        return accessibilityTrace
     }
 
     /// Whether the screen changed since the last response (for fast-redirect logic).

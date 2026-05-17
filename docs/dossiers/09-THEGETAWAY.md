@@ -10,7 +10,7 @@ TheGetaway is the communication backbone of the inside operation:
 
 1. **Transport wiring** — `wireTransport(_:)` bridges TheMuscle (auth) to ServerTransport (networking) via five closures. Neither TheMuscle nor ServerTransport references the other directly.
 2. **Message dispatch** — `handleClientMessage` is the two-level switch routing every `ClientMessage` to the right crew member: protocol messages to TheMuscle, observation to TheBrains (wait handlers, interface requests), actions to TheBrains (`executeCommand`), recording to TheStakeout.
-3. **Background delta fast-redirect** — before dispatching actions, checks `brains.computeBackgroundDelta()`. If the screen changed while the agent was thinking, returns a synthetic result instead of executing a stale action.
+3. **Background trace fast-redirect** — before dispatching actions, checks `brains.computeBackgroundAccessibilityTrace()`. If the trace-derived delta shows the screen changed while the agent was thinking, returns a synthetic result instead of executing a stale action.
 4. **Encode/decode** — `encodeEnvelope` wraps `ServerMessage` in `ResponseEnvelope`, `decodeRequest` unwraps `RequestEnvelope`. Single codepath for all message types.
 5. **Send/broadcast** — `sendMessage` handles single-client responses with error fallback. `broadcastToSubscribed`/`broadcastToAll` encode once, send to many.
 6. **Hierarchy broadcast** — `broadcastIfChanged()` calls `brains.broadcastInterfaceIfChanged()` and broadcasts to subscribers. Called by TheInsideJob's pulse handler and polling task.

@@ -13,12 +13,6 @@ public struct ResponseEnvelope: Codable, Sendable {
     public let requestId: String?
     public let message: ServerMessage
 
-    /// Derived compact view of the captures observed between the previous
-    /// response and this one. nil means nothing changed in the background.
-    /// Lives on the envelope (not the message) because it's a session-level
-    /// concern: any response type can carry it.
-    public let backgroundAccessibilityDelta: AccessibilityTrace.Delta?
-
     /// Source-of-truth accessibility captures observed while this response was
     /// being prepared. Deltas and summaries are derived from this trace.
     public let accessibilityTrace: AccessibilityTrace?
@@ -26,23 +20,20 @@ public struct ResponseEnvelope: Codable, Sendable {
     public init(
         requestId: String? = nil,
         message: ServerMessage,
-        backgroundAccessibilityDelta: AccessibilityTrace.Delta? = nil,
         accessibilityTrace: AccessibilityTrace? = nil
     ) {
         self.init(buttonHeistVersion: TheScore.buttonHeistVersion, requestId: requestId,
-                  message: message, backgroundAccessibilityDelta: backgroundAccessibilityDelta, accessibilityTrace: accessibilityTrace)
+                  message: message, accessibilityTrace: accessibilityTrace)
     }
 
     public init(
         buttonHeistVersion: String, requestId: String? = nil,
         message: ServerMessage,
-        backgroundAccessibilityDelta: AccessibilityTrace.Delta? = nil,
         accessibilityTrace: AccessibilityTrace? = nil
     ) {
         self.buttonHeistVersion = buttonHeistVersion
         self.requestId = requestId
         self.message = message
-        self.backgroundAccessibilityDelta = backgroundAccessibilityDelta
         self.accessibilityTrace = accessibilityTrace
     }
 

@@ -410,11 +410,6 @@ final class TheHandoff {
     /// Auth rejected by server; the string is the reason.
     var onAuthFailed: (@ButtonHeistActor (String) -> Void)?
     /// Background UI-change evidence attached to explicit command responses.
-    /// Drained by `TheFence` for session state.
-    var onBackgroundDelta: (@ButtonHeistActor (AccessibilityTrace.Delta) -> Void)?
-    /// Capture receipts attached to explicit command responses. This is the
-    /// source-of-truth form; `onBackgroundDelta` remains as a legacy
-    /// compatibility projection.
     var onBackgroundAccessibilityTrace: (@ButtonHeistActor (AccessibilityTrace) -> Void)?
 
     // MARK: - Configuration
@@ -645,12 +640,11 @@ final class TheHandoff {
                     }
                     self.reconnectPolicy = .enabled(filter: filter, reconnectTask: reconnectTask)
                 }
-            case .message(let message, let requestId, let backgroundAccessibilityDelta, let accessibilityTrace):
+            case .message(let message, let requestId, let accessibilityTrace):
                 if self.isActiveConnectionAttempt(attemptID) {
                     self.handleServerMessage(
                         message,
                         requestId: requestId,
-                        backgroundAccessibilityDelta: backgroundAccessibilityDelta,
                         accessibilityTrace: accessibilityTrace
                     )
                     return
@@ -685,13 +679,9 @@ final class TheHandoff {
     func handleServerMessage(
         _ message: ServerMessage,
         requestId: String?,
-        backgroundAccessibilityDelta: AccessibilityTrace.Delta? = nil,
         accessibilityTrace: AccessibilityTrace? = nil
     ) {
-        handleBackgroundAccessibility(
-            delta: backgroundAccessibilityDelta,
-            accessibilityTrace: accessibilityTrace
-        )
+        handleBackgroundAccessibility(accessibilityTrace)
         switch message {
         case .info(let info):
             mutateConnectedSession { $0.serverInfo = info }
@@ -749,20 +739,9 @@ final class TheHandoff {
         onRecordingEvent?(event)
     }
 
-    private func handleBackgroundAccessibility(
-        delta: AccessibilityTrace.Delta?,
-        accessibilityTrace: AccessibilityTrace?
-    ) {
+    private func handleBackgroundAccessibility(_ accessibilityTrace: AccessibilityTrace?) {
         if let accessibilityTrace {
-            if let onBackgroundAccessibilityTrace {
-                onBackgroundAccessibilityTrace(accessibilityTrace)
-            } else if let projectedDelta = accessibilityTrace.captureReceiptDelta ?? delta {
-                onBackgroundDelta?(projectedDelta)
-            }
-            return
-        }
-        if let delta {
-            onBackgroundDelta?(delta)
+            onBackgroundAccessibilityTrace?(accessibilityTrace)
         }
     }
 
