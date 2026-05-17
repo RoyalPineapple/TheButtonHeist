@@ -134,29 +134,29 @@ final class WireConverterTests: XCTestCase {
     // MARK: - Trait Mapping
 
     func testSingleTraitMapped() {
-        let traits = WireConversion.traitNames(.button)
+        let traits = WireConversion.traitNames(AccessibilityTraits.button)
         XCTAssertEqual(traits, [.button])
     }
 
     func testMultipleTraitsMapped() {
-        let traits = WireConversion.traitNames([.button, .selected])
+        let traits = WireConversion.traitNames([AccessibilityTraits.button, .selected])
         XCTAssertTrue(traits.contains(.button))
         XCTAssertTrue(traits.contains(.selected))
         XCTAssertEqual(traits.count, 2)
     }
 
     func testBackButtonPrivateTraitMapped() {
-        let traits = WireConversion.traitNames(UIAccessibilityTraits(rawValue: 1 << 27))
+        let traits = WireConversion.traitNames(AccessibilityTraits(rawValue: 1 << 27))
         XCTAssertEqual(traits, [.backButton])
     }
 
     func testNoTraitsReturnsEmpty() {
-        let traits = WireConversion.traitNames(.none)
+        let traits = WireConversion.traitNames(AccessibilityTraits())
         XCTAssertTrue(traits.isEmpty)
     }
 
     func testTraitMappingDeclarationOrder() {
-        let traits = WireConversion.traitNames([.button, .selected])
+        let traits = WireConversion.traitNames([AccessibilityTraits.button, .selected])
         XCTAssertEqual(traits[0], .button)
         XCTAssertEqual(traits[1], .selected)
     }
@@ -164,7 +164,7 @@ final class WireConverterTests: XCTestCase {
     // MARK: - Trait Name Sync
 
     func testHeistTraitAllCasesMatchParser() {
-        let parserNames = UIAccessibilityTraits.knownTraitNames
+        let parserNames = AccessibilityTraits.knownTraitNames
         let wireNames = Set(HeistTrait.allCases.map(\.rawValue))
         XCTAssertEqual(wireNames, parserNames,
                        "HeistTrait.allCases must match parser's knownTraitNames")
@@ -175,8 +175,8 @@ final class WireConverterTests: XCTestCase {
     /// duplicate row would silently double-emit on the wire — invisible to the `Set`-based
     /// `testHeistTraitAllCasesMatchParser` above. Asserts row count equals name-set count.
     func testParserKnownTraitsHasNoDuplicateRows() {
-        let rowCount = UIAccessibilityTraits.knownTraits.count
-        let uniqueNameCount = UIAccessibilityTraits.knownTraitNames.count
+        let rowCount = AccessibilityTraits.knownTraits.count
+        let uniqueNameCount = AccessibilityTraits.knownTraitNames.count
         XCTAssertEqual(rowCount, uniqueNameCount,
                        "knownTraits table contains duplicate (trait, name) rows")
     }
@@ -185,7 +185,7 @@ final class WireConverterTests: XCTestCase {
     /// in its `traits` array. A duplicate row in the parser's `knownTraits` table caused
     /// `traits: ["secureTextField", "secureTextField"]` to ship to every client.
     func testSecureTextFieldEmitsSecureTraitOnce() {
-        let traits = WireConversion.traitNames(.secureTextField)
+        let traits = WireConversion.traitNames(AccessibilityTraits.secureTextField)
         let secureCount = traits.filter { $0 == .secureTextField }.count
         XCTAssertEqual(secureCount, 1,
                        "secureTextField must appear exactly once in wire trait list, got \(traits)")

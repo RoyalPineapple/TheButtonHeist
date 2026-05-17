@@ -92,7 +92,7 @@ extension AccessibilityElement {
                 hasher.combine(safeInt(rect.origin.x))
                 hasher.combine(safeInt(rect.origin.y))
             case let .path(path):
-                let bounds = path.safeBounds
+                let bounds = AccessibilityShape.path(path).frame
                 hasher.combine(safeInt(bounds.origin.x))
                 hasher.combine(safeInt(bounds.origin.y))
             }
@@ -103,7 +103,7 @@ extension AccessibilityElement {
             hasher.combine(safeInt(rect.size.width))
             hasher.combine(safeInt(rect.size.height))
         case let .path(path):
-            let bounds = path.safeBounds
+            let bounds = AccessibilityShape.path(path).frame
             hasher.combine(safeInt(bounds.size.width))
             hasher.combine(safeInt(bounds.size.height))
         }

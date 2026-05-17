@@ -30,7 +30,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             scrollableContainerViews: [:]
         )
 
-        XCTAssertEqual(result.contentFrames[container], container.frame)
+        XCTAssertEqual(result.contentFrames[container], container.frame.cgRect)
         XCTAssertFalse(result.nestedInScrollView.contains(container))
     }
 
@@ -45,7 +45,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
         window.isHidden = false
 
         let outer = AccessibilityContainer(
-            type: .scrollable(contentSize: CGSize(width: 320, height: 5000)),
+            type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 5000)),
             frame: CGRect(x: 0, y: 0, width: 320, height: 480)
         )
         let inner = AccessibilityContainer(
@@ -64,7 +64,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             scrollableContainerViews: [outer: scrollView]
         )
 
-        XCTAssertEqual(result.contentFrames[outer], outer.frame,
+        XCTAssertEqual(result.contentFrames[outer], outer.frame.cgRect,
                        "Top-level scrollable: no enclosing scrollable, frame stays in screen space")
         XCTAssertFalse(result.nestedInScrollView.contains(outer))
 
@@ -72,7 +72,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
         XCTAssertEqual(innerContent?.origin.x ?? .nan, 0, accuracy: 0.5)
         XCTAssertEqual(innerContent?.origin.y ?? .nan, 300, accuracy: 0.5,
                        "screen-y 200 + contentOffset.y 100 = content-y 300")
-        XCTAssertEqual(innerContent?.size, inner.frame.size,
+        XCTAssertEqual(innerContent?.size, inner.frame.size.cgSize,
                        "Size is unchanged by coordinate conversion")
         XCTAssertTrue(result.nestedInScrollView.contains(inner))
     }
@@ -88,7 +88,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
         window.isHidden = false
 
         let outer = AccessibilityContainer(
-            type: .scrollable(contentSize: CGSize(width: 320, height: 5000)),
+            type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 5000)),
             frame: CGRect(x: 0, y: 0, width: 320, height: 480)
         )
 

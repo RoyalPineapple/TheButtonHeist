@@ -161,7 +161,7 @@ final class Actions {
             // First attempt — accessibilityActivate on the live UIKit object.
             let firstOutcome = self.stash.activate(resolved.screenElement)
             if firstOutcome == .success {
-                self.safecracker.showFingerprint(at: resolved.element.activationPoint)
+                self.safecracker.showFingerprint(at: resolved.element.activationPoint.cgPoint)
                 return TheSafecracker.InteractionResult(success: true, method: .activate, message: nil, value: nil)
             }
 
@@ -175,7 +175,7 @@ final class Actions {
             let retryResolved = retryResolution.resolved ?? resolved
             let retryOutcome = self.stash.activate(retryResolved.screenElement)
             if retryOutcome == .success {
-                self.safecracker.showFingerprint(at: retryResolved.element.activationPoint)
+                self.safecracker.showFingerprint(at: retryResolved.element.activationPoint.cgPoint)
                 return TheSafecracker.InteractionResult(success: true, method: .activate, message: nil, value: nil)
             }
 
@@ -233,7 +233,7 @@ final class Actions {
                     )
                 )
             }
-            self.safecracker.showFingerprint(at: resolved.element.activationPoint)
+            self.safecracker.showFingerprint(at: resolved.element.activationPoint.cgPoint)
             return TheSafecracker.InteractionResult(success: true, method: .increment, message: nil, value: nil)
         }
     }
@@ -258,7 +258,7 @@ final class Actions {
                     )
                 )
             }
-            self.safecracker.showFingerprint(at: resolved.element.activationPoint)
+            self.safecracker.showFingerprint(at: resolved.element.activationPoint.cgPoint)
             return TheSafecracker.InteractionResult(success: true, method: .decrement, message: nil, value: nil)
         }
     }

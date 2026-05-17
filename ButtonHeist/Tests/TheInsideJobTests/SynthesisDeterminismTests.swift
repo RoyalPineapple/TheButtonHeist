@@ -59,7 +59,7 @@ final class SynthesisDeterminismTests: XCTestCase {
                 label: element.label,
                 value: element.value,
                 identifier: element.identifier,
-                traits: traitPool.first { UIAccessibilityTraits.fromNames($0.map(\.rawValue)) == element.traits } ?? []
+                traits: traitPool.first { AccessibilityTraits.fromNames($0.map(\.rawValue)) == element.traits } ?? []
             )
 
             let first = IdAssignment.synthesizeBaseId(element)

@@ -69,7 +69,7 @@ extension AccessibilityElement {
     var timelineKey: TimelineKey {
         let rect: CGRect
         if case .frame(let r) = shape {
-            rect = r
+            rect = r.cgRect
         } else {
             rect = .zero
         }

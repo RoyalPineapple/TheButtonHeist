@@ -119,7 +119,7 @@ extension TheStash {
                         value: matcher.value, excludeTraits: matcher.excludeTraits
                     ),
                     actual: { element in
-                        UIAccessibilityTraits.knownTraits
+                        AccessibilityTraits.knownTraits
                             .filter { element.traits.contains($0.trait) }
                             .map(\.name).joined(separator: ", ")
                     }
@@ -213,7 +213,7 @@ extension TheStash {
             if let label = element.label, !label.isEmpty { parts.append("label=\"\(label)\"") }
             if let identifier = element.identifier, !identifier.isEmpty { parts.append("id=\"\(identifier)\"") }
             if let value = element.value, !value.isEmpty { parts.append("value=\"\(value)\"") }
-            let traitNames = UIAccessibilityTraits.knownTraits
+            let traitNames = AccessibilityTraits.knownTraits
                 .filter { element.traits.contains($0.trait) }
                 .map(\.name)
             if !traitNames.isEmpty { parts.append("[\(traitNames.joined(separator: ","))]") }
