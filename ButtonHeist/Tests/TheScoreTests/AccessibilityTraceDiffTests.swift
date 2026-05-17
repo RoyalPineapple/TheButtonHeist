@@ -52,10 +52,77 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             AccessibilityTrace.Delta.between(beforeTree, afterTree),
             AccessibilityTrace.Delta.between(beforeInterface, afterInterface)
         )
-        XCTAssertEqual(
+        XCTAssertEqualIgnoringCaptureEdge(
             AccessibilityTrace.Delta.between(beforeInterface, afterInterface),
             AccessibilityTrace.Delta.between(beforeCapture, afterCapture)
         )
+    }
+
+    func testCaptureBackedNoChangeDeltaCarriesSourceEdgeAndDerivesFromTrace() throws {
+        let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface())
+        let after = AccessibilityTrace.Capture(sequence: 2, interface: makeInterface(), parentHash: before.hash)
+        let trace = AccessibilityTrace(captures: [before, after])
+
+        let delta = AccessibilityTrace.Delta.between(before, after)
+
+        guard case .noChange = delta else {
+            return XCTFail("Expected noChange, got \(delta)")
+        }
+        try assertDeltaDerivesFromCaptureEdge(delta, trace: trace)
+    }
+
+    func testCaptureBackedElementsChangedDeltaCarriesSourceEdgeAndDerivesFromTrace() throws {
+        let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu"))
+        let after = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: makeInterface(label: "Checkout"),
+            parentHash: before.hash
+        )
+        let trace = AccessibilityTrace(captures: [before, after])
+
+        let delta = AccessibilityTrace.Delta.between(before, after)
+
+        guard case .elementsChanged = delta else {
+            return XCTFail("Expected elementsChanged, got \(delta)")
+        }
+        try assertDeltaDerivesFromCaptureEdge(delta, trace: trace)
+    }
+
+    func testCaptureBackedScreenChangedDeltaCarriesSourceEdgeAndDerivesFromTransition() throws {
+        let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu"))
+        let after = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: makeInterface(label: "Checkout"),
+            parentHash: before.hash,
+            transition: AccessibilityTrace.Transition(screenChangeReason: "primaryHeaderChanged")
+        )
+        let trace = AccessibilityTrace(captures: [before, after])
+
+        let delta = AccessibilityTrace.Delta.between(before, after)
+
+        guard case .screenChanged(let payload) = delta else {
+            return XCTFail("Expected screenChanged, got \(delta)")
+        }
+        XCTAssertEqual(payload.newInterface, after.interface)
+        try assertDeltaDerivesFromCaptureEdge(delta, trace: trace)
+    }
+
+    func testTransitionTransientLivesOnCaptureEdgeAndProjectsToLegacyDeltaField() throws {
+        let transient = makeElement(heistId: "spinner", label: "Loading", traits: [.staticText])
+        let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface())
+        let after = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: makeInterface(),
+            parentHash: before.hash,
+            transition: AccessibilityTrace.Transition(transient: [transient])
+        )
+
+        let delta = AccessibilityTrace.Delta.between(before, after)
+
+        XCTAssertEqual(after.transition.transient, [transient])
+        XCTAssertEqual(delta.transient, [transient])
+        XCTAssertEqual(delta.captureEdge?.before.hash, before.hash)
+        XCTAssertEqual(delta.captureEdge?.after.hash, after.hash)
     }
 
     func testCaptureContextOnlyDiffsAsElementsChanged() {
@@ -106,8 +173,23 @@ final class AccessibilityTraceDiffTests: XCTestCase {
 
         XCTAssertEqual(
             AccessibilityTrace.Delta.between(before, after),
-            .noChange(AccessibilityTrace.NoChange(elementCount: interface.elements.count))
+            .noChange(AccessibilityTrace.NoChange(
+                elementCount: interface.elements.count,
+                captureEdge: AccessibilityTrace.CaptureEdge(before: before, after: after)
+            ))
         )
+    }
+
+    func testOldDeltaOnlyPayloadDecodesWithoutCaptureEdge() throws {
+        let jsonString = """
+        {"kind": "noChange", "elementCount": 2}
+        """
+
+        let decoded = try JSONDecoder().decode(AccessibilityTrace.Delta.self, from: Data(jsonString.utf8))
+
+        XCTAssertNil(decoded.captureEdge)
+        XCTAssertEqual(decoded.kindRawValue, "noChange")
+        XCTAssertEqual(decoded.elementCount, 2)
     }
 
     func testElementDiffTreatsIndistinguishableElementsAsNoChangeWithoutHierarchyContext() {
@@ -120,8 +202,12 @@ final class AccessibilityTraceDiffTests: XCTestCase {
     }
 
     private func makeInterface() -> Interface {
+        makeInterface(label: "Menu")
+    }
+
+    private func makeInterface(label: String) -> Interface {
         Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [
-            .element(makeElement(heistId: "search", label: "Search", traits: [.searchField])),
+            .element(makeElement(heistId: "title", label: label, traits: [.header])),
             .element(makeElement(heistId: "total", label: "Total", value: "$5.00", traits: [.staticText])),
         ])
     }
@@ -156,5 +242,52 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             frameHeight: 44,
             actions: []
         )
+    }
+
+    private func assertDeltaDerivesFromCaptureEdge(
+        _ delta: AccessibilityTrace.Delta,
+        trace: AccessibilityTrace,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let edge = try XCTUnwrap(delta.captureEdge, "Delta did not carry capture edge", file: file, line: line)
+        let before = try XCTUnwrap(trace.capture(ref: edge.before), "Trace did not contain before ref", file: file, line: line)
+        let after = try XCTUnwrap(trace.capture(ref: edge.after), "Trace did not contain after ref", file: file, line: line)
+
+        XCTAssertEqual(edge.before.hash, before.hash, file: file, line: line)
+        XCTAssertEqual(edge.after.hash, after.hash, file: file, line: line)
+        XCTAssertEqual(delta, AccessibilityTrace.Delta.between(before, after), file: file, line: line)
+    }
+
+    private func XCTAssertEqualIgnoringCaptureEdge(
+        _ lhs: AccessibilityTrace.Delta,
+        _ rhs: AccessibilityTrace.Delta,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        XCTAssertEqual(stripCaptureEdge(lhs), stripCaptureEdge(rhs), file: file, line: line)
+    }
+
+    private func stripCaptureEdge(_ delta: AccessibilityTrace.Delta) -> AccessibilityTrace.Delta {
+        switch delta {
+        case .noChange(let payload):
+            return .noChange(AccessibilityTrace.NoChange(
+                elementCount: payload.elementCount,
+                transient: payload.transient
+            ))
+        case .elementsChanged(let payload):
+            return .elementsChanged(AccessibilityTrace.ElementsChanged(
+                elementCount: payload.elementCount,
+                edits: payload.edits,
+                transient: payload.transient
+            ))
+        case .screenChanged(let payload):
+            return .screenChanged(AccessibilityTrace.ScreenChanged(
+                elementCount: payload.elementCount,
+                newInterface: payload.newInterface,
+                postEdits: payload.postEdits,
+                transient: payload.transient
+            ))
+        }
     }
 }

@@ -887,6 +887,26 @@ final class TheFenceTests: XCTestCase {
         XCTAssertNil(deltaDict["edits"], "Geometry-only updates should be dropped entirely")
     }
 
+    func testActionJsonDeltaIncludesCaptureEdge() {
+        let edge = AccessibilityTrace.CaptureEdge(
+            before: AccessibilityTrace.CaptureRef(sequence: 1, hash: "sha256:before"),
+            after: AccessibilityTrace.CaptureRef(sequence: 2, hash: "sha256:after")
+        )
+        let delta = AccessibilityTrace.Delta.noChange(.init(elementCount: 3, captureEdge: edge))
+        let result = ActionResult(success: true, method: .activate, accessibilityDelta: delta)
+        let response = FenceResponse.action(result: result)
+        let json = response.jsonDict()!
+        let deltaDict = json["delta"] as! [String: Any]
+        let edgeDict = deltaDict["captureEdge"] as! [String: Any]
+        let before = edgeDict["before"] as! [String: Any]
+        let after = edgeDict["after"] as! [String: Any]
+
+        XCTAssertEqual(before["sequence"] as? Int, 1)
+        XCTAssertEqual(before["hash"] as? String, "sha256:before")
+        XCTAssertEqual(after["sequence"] as? Int, 2)
+        XCTAssertEqual(after["hash"] as? String, "sha256:after")
+    }
+
     // MARK: - JSON Delta Tree Insertion Shape
 
     /// Pin the wire shape of `deltaNodeDictionary` so the `folded()`

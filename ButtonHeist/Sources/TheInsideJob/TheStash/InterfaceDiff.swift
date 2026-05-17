@@ -16,7 +16,9 @@ extension TheStash {
 
     // MARK: - Entry Point
 
-    /// Compare two element snapshots and return a compact delta.
+    /// Compatibility/test path for older callers that only have snapshots.
+    /// Production emission should use the capture overload so the derived
+    /// delta carries its source capture edge.
     static func computeDelta(
         before: [ScreenElement],
         after: [ScreenElement],
@@ -78,7 +80,7 @@ extension TheStash {
         )
     }
 
-    /// Compare two accessibility captures and return a compact delta.
+    /// Compare two accessibility captures and return a compact derived delta.
     static func computeDelta(
         before: AccessibilityTrace.Capture,
         after: AccessibilityTrace.Capture,

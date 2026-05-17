@@ -40,6 +40,26 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
         XCTAssertEqual(payload.transient.map(\.heistId), ["spin"])
     }
 
+    func testCaptureEdgeRoundTrips() throws {
+        let edge = AccessibilityTrace.CaptureEdge(
+            before: AccessibilityTrace.CaptureRef(sequence: 1, hash: "sha256:before"),
+            after: AccessibilityTrace.CaptureRef(sequence: 2, hash: "sha256:after")
+        )
+        let delta = AccessibilityTrace.Delta.noChange(.init(elementCount: 4, captureEdge: edge))
+        let data = try encoder.encode(delta)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let edgeJson = try XCTUnwrap(json["captureEdge"] as? [String: Any])
+        let beforeJson = try XCTUnwrap(edgeJson["before"] as? [String: Any])
+        let afterJson = try XCTUnwrap(edgeJson["after"] as? [String: Any])
+        XCTAssertEqual(beforeJson["sequence"] as? Int, 1)
+        XCTAssertEqual(beforeJson["hash"] as? String, "sha256:before")
+        XCTAssertEqual(afterJson["sequence"] as? Int, 2)
+        XCTAssertEqual(afterJson["hash"] as? String, "sha256:after")
+
+        let decoded = try decoder.decode(AccessibilityTrace.Delta.self, from: data)
+        XCTAssertEqual(decoded.captureEdge, edge)
+    }
+
     // MARK: - elementsChanged
 
     func testElementsChangedSparseRoundTrip() throws {
