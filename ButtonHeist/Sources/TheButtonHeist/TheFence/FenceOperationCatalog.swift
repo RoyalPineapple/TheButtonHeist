@@ -39,19 +39,18 @@ public enum FenceOperationCatalog {
         name: String,
         arguments: [String: Any]
     ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
-        switch name {
-        case "gesture":
-            return routeGesture(arguments)
-
-        case TheFence.Command.scroll.rawValue:
-            return routeScroll(arguments)
-
-        case TheFence.Command.editAction.rawValue:
-            return routeEditAction(arguments)
-
-        default:
+        guard let contract = TheFence.Command.mcpToolContract(named: name) else {
             return routeCommandNamed(name, arguments: arguments)
         }
+
+        if let selector = contract.selector {
+            return routeSelectorTool(contract, selector: selector, arguments: arguments)
+        }
+
+        guard let command = contract.commands.first, contract.commands.count == 1 else {
+            return .failure(FenceOperationRoutingError(message: "Unknown tool: \(name)"))
+        }
+        return .success(NormalizedOperation(command: command, arguments: arguments))
     }
 
     public static func normalizeBatchStep(
@@ -107,33 +106,18 @@ public enum FenceOperationCatalog {
 
     private static func groupedToolRoutingMessage(for command: TheFence.Command) -> String? {
         switch command.mcpExposure {
-        case .groupedUnder("gesture"):
-            return groupedToolRoutingMessage(
-                rawToolName: command.rawValue,
-                groupedToolName: "gesture",
-                selectorName: "type",
-                selectorValue: command.rawValue
-            )
-
-        case .groupedUnder(TheFence.Command.scroll.rawValue):
-            guard let mode = ScrollMode.allCases.first(where: { $0.canonicalCommand == command.rawValue }) else {
+        case .groupedUnder(let toolName):
+            guard let contract = TheFence.Command.mcpToolContract(named: toolName),
+                  let selector = contract.selector,
+                  let selectorValue = selector.selectorValue(for: command) else {
                 return nil
             }
             return groupedToolRoutingMessage(
                 rawToolName: command.rawValue,
-                groupedToolName: TheFence.Command.scroll.rawValue,
-                selectorName: "mode",
-                selectorValue: mode.rawValue
+                groupedToolName: toolName,
+                selectorName: selector.parameter.key,
+                selectorValue: selectorValue
             )
-
-        case .groupedUnder(TheFence.Command.editAction.rawValue) where command == .dismissKeyboard:
-            return groupedToolRoutingMessage(
-                rawToolName: command.rawValue,
-                groupedToolName: TheFence.Command.editAction.rawValue,
-                selectorName: "action",
-                selectorValue: "dismiss"
-            )
-
         default:
             return nil
         }
@@ -152,65 +136,100 @@ public enum FenceOperationCatalog {
         for command: TheFence.Command,
         arguments: [String: Any]
     ) -> FenceOperationRoutingError? {
-        switch command {
-        case .scroll where arguments["mode"] != nil:
-            return .init(
-                message: "run_batch step \"scroll\" uses the MCP mode selector; " +
-                    "use raw Fence commands scroll, scroll_to_visible, element_search, or scroll_to_edge."
-            )
-
-        case .editAction where arguments["action"] as? String == "dismiss":
-            return .init(message: "run_batch step \"edit_action\" uses the MCP dismiss selector; use raw Fence command dismiss_keyboard.")
-
-        default:
+        guard let contract = TheFence.Command.mcpToolContract(named: command.rawValue),
+              let selector = contract.selector else {
             return nil
         }
+
+        let selectorKey = selector.parameter.key
+        guard arguments[selectorKey] != nil else { return nil }
+
+        let commandParameterKeys = Set(command.parameters.map(\.key))
+        if !commandParameterKeys.contains(selectorKey) {
+            return .init(
+                message: "run_batch step \"\(command.rawValue)\" uses the MCP \(selectorKey) selector; " +
+                    "use raw Fence commands \(rawCommandList(contract.commands))."
+            )
+        }
+
+        guard let selectorValue = arguments[selectorKey] as? String,
+              selector.consumesValue(selectorValue),
+              let selectedCommand = selector.command(for: selectorValue),
+              selectedCommand != command else {
+            return nil
+        }
+        return .init(
+            message: "run_batch step \"\(command.rawValue)\" uses the MCP \(selectorValue) selector; " +
+                "use raw Fence command \(selectedCommand.rawValue)."
+        )
     }
 
-    private static func routeGesture(_ arguments: [String: Any]) -> Result<NormalizedOperation, FenceOperationRoutingError> {
+    private static func rawCommandList(_ commands: [TheFence.Command]) -> String {
+        let commandNames = commands.map(\.rawValue)
+        switch commandNames.count {
+        case 0:
+            return ""
+        case 1:
+            return commandNames[0]
+        case 2:
+            return "\(commandNames[0]) or \(commandNames[1])"
+        default:
+            return commandNames.dropLast().joined(separator: ", ") + ", or \(commandNames.last ?? "")"
+        }
+    }
+
+    private static func routeSelectorTool(
+        _ contract: MCPToolContract,
+        selector: MCPToolSelector,
+        arguments: [String: Any]
+    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
         var operationArguments = arguments
-        let gestureType: GestureType
+        let rawValue: String?
         do {
-            gestureType = try operationArguments.requiredSchemaEnum("type", as: GestureType.self)
+            rawValue = try selectorValue(in: operationArguments, selector: selector)
         } catch let error as SchemaValidationError {
             return .failure(FenceOperationRoutingError(message: error.message))
         } catch {
             return .failure(FenceOperationRoutingError(message: error.localizedDescription))
         }
-        operationArguments.removeValue(forKey: "type")
-        guard let command = TheFence.Command(rawValue: gestureType.rawValue) else {
-            return .failure(FenceOperationRoutingError(message: "Unknown gesture command: \(gestureType.rawValue)"))
-        }
-        return .success(NormalizedOperation(command: command, arguments: operationArguments))
-    }
 
-    private static func routeScroll(_ arguments: [String: Any]) -> Result<NormalizedOperation, FenceOperationRoutingError> {
-        var operationArguments = arguments
-        let scrollMode: ScrollMode
-        do {
-            scrollMode = try operationArguments.schemaEnum("mode", as: ScrollMode.self) ?? .page
-        } catch let error as SchemaValidationError {
-            return .failure(FenceOperationRoutingError(message: error.message))
-        } catch {
-            return .failure(FenceOperationRoutingError(message: error.localizedDescription))
-        }
-        operationArguments.removeValue(forKey: "mode")
-        guard let command = TheFence.Command(rawValue: scrollMode.canonicalCommand) else {
-            return .failure(FenceOperationRoutingError(message: "Unknown scroll command: \(scrollMode.canonicalCommand)"))
-        }
-        return .success(NormalizedOperation(command: command, arguments: operationArguments))
-    }
-
-    private static func routeEditAction(_ arguments: [String: Any]) -> Result<NormalizedOperation, FenceOperationRoutingError> {
-        var operationArguments = arguments
-        if let action = operationArguments["action"] as? String, action == "dismiss" {
-            operationArguments.removeValue(forKey: "action")
-            return .success(NormalizedOperation(
-                command: .dismissKeyboard,
-                arguments: operationArguments
+        guard let command = selector.command(for: rawValue) else {
+            return .failure(FenceOperationRoutingError(
+                message: "Unknown \(contract.name) selector value: \(rawValue ?? "missing")"
             ))
-        } else {
-            return .success(NormalizedOperation(command: .editAction, arguments: operationArguments))
         }
+        if selector.consumesValue(rawValue) {
+            operationArguments.removeValue(forKey: selector.parameter.key)
+        }
+        return .success(NormalizedOperation(command: command, arguments: operationArguments))
+    }
+
+    private static func selectorValue(
+        in arguments: [String: Any],
+        selector: MCPToolSelector
+    ) throws -> String? {
+        let key = selector.parameter.key
+        let rawValue = try arguments.schemaString(key)
+        guard let enumValues = selector.parameter.enumValues else { return rawValue ?? selector.defaultValue }
+
+        if let rawValue {
+            guard enumValues.contains(rawValue) else {
+                throw SchemaValidationError(
+                    field: key,
+                    observed: rawValue as Any,
+                    expected: SchemaValidationError.expectedEnumValues(enumValues)
+                )
+            }
+            return rawValue
+        }
+
+        guard !selector.parameter.required else {
+            throw SchemaValidationError(
+                field: key,
+                observed: nil,
+                expected: SchemaValidationError.expectedEnumValues(enumValues)
+            )
+        }
+        return selector.defaultValue
     }
 }

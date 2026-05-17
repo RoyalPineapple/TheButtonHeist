@@ -27,7 +27,11 @@ public struct SchemaValidationError: Error, LocalizedError, Equatable, Sendable 
     public var errorDescription: String? { message }
 
     public static func expectedEnum<E>(_ type: E.Type) -> String where E: CaseIterable & RawRepresentable, E.RawValue == String {
-        "enum one of \(type.allCases.map(\.rawValue).joined(separator: ", "))"
+        expectedEnumValues(type.allCases.map(\.rawValue))
+    }
+
+    public static func expectedEnumValues(_ values: [String]) -> String {
+        "enum one of \(values.joined(separator: ", "))"
     }
 
     public static func observedDescription(_ value: Any?) -> String {
