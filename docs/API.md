@@ -1392,8 +1392,8 @@ Recording configuration sent with `startRecording`.
 
 - `fps: Int?` - Frames per second (default: 8, range: 1-15)
 - `scale: Double?` - Resolution scale factor (default: 1.0, range: 0.25-1.0)
-- `inactivityTimeout: Double?` - Seconds of inactivity before auto-stop (default: 5.0)
 - `maxDuration: Double?` - Maximum recording duration in seconds (default: 60.0)
+- `inactivityTimeout: Double?` - Optional early-stop seconds of inactivity; omitted follows `maxDuration`
 
 ### RecordingPayload
 
@@ -1753,7 +1753,7 @@ OPTIONS:
 
 ### buttonheist start_recording
 
-Record the screen as H.264/MP4 video. Recording auto-stops on inactivity.
+Record the screen as H.264/MP4 video. `max_duration` is the hard cap; `inactivity_timeout` is an optional early-stop hint and follows `max_duration` when omitted.
 
 ```
 USAGE: buttonheist start_recording [OPTIONS]
@@ -1763,7 +1763,7 @@ OPTIONS:
   --fps <n>                   Frames per second (default: 8, range: 1-15)
   --scale <factor>            Resolution scale (default: 1.0, range: 0.25-1.0)
   --max-duration <seconds>    Maximum recording duration (default: 60)
-  --inactivity-timeout <secs> Auto-stop after N seconds of inactivity (default: 5)
+  --inactivity-timeout <secs> Optional early-stop after N seconds of inactivity
   -t, --timeout <seconds>     Timeout waiting for recording to complete (default: 120)
   -q, --quiet                 Suppress status messages
   --device <filter>           Target a specific device
@@ -1771,7 +1771,7 @@ OPTIONS:
 
 ### buttonheist stop_recording
 
-Explicitly stop an in-progress recording. The recording payload is broadcast to all connected clients, so the original `start_recording` process (running in background) receives it and writes the file.
+Explicitly stop an in-progress recording or retrieve a cached auto-finished recording. The recording payload is broadcast to all connected clients, so the original `start_recording` process (running in background) receives it and writes the file.
 
 ```
 USAGE: buttonheist stop_recording [OPTIONS]

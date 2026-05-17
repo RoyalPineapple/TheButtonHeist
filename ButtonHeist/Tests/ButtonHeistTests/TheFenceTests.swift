@@ -1727,6 +1727,45 @@ final class TheFenceTests: XCTestCase {
         }
     }
 
+    @ButtonHeistActor
+    func testStopRecordingRetrievesCachedPayloadWhenLocalRecordingPhaseIsIdle() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        let tempDirectory = TempDirectoryFixture.make(prefix: "cached-recording")
+        defer { TempDirectoryFixture.remove(tempDirectory) }
+        let outputURL = tempDirectory.appendingPathComponent("cached.mp4")
+        let expectedPayload = RecordingPayload(
+            videoData: "dGVzdA==", width: 390, height: 844,
+            duration: 2.0, frameCount: 16, fps: 8,
+            startTime: Date(), endTime: Date(), stopReason: .inactivity
+        )
+        mockConn.autoResponse = { message in
+            if case .stopRecording = message {
+                return .recording(expectedPayload)
+            }
+            return .actionResult(ActionResult(success: true, method: .activate))
+        }
+
+        try await fence.start()
+        XCTAssertFalse(fence.isRecording)
+
+        let response = try await fence.execute(request: [
+            "command": "stop_recording",
+            "output": outputURL.path,
+        ])
+
+        XCTAssertTrue(mockConn.sent.contains { sent in
+            if case .stopRecording = sent.0 { return true }
+            return false
+        }, "Expected stop_recording to be sent even when local recording phase is idle")
+        guard case .recording(let path, let payload) = response else {
+            return XCTFail("Expected .recording response, got \(response)")
+        }
+        XCTAssertEqual(path, outputURL.standardized.path)
+        XCTAssertEqual(payload.videoData, expectedPayload.videoData)
+        XCTAssertEqual(payload.stopReason, .inactivity)
+        XCTAssertEqual(try Data(contentsOf: outputURL), Data("test".utf8))
+    }
+
     // MARK: - recordToCompletion
 
     @ButtonHeistActor

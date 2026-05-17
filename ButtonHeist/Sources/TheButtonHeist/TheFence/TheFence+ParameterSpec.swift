@@ -758,7 +758,10 @@ extension TheFence.Command {
                 .init(key: "fps", type: .integer, description: "Frames per second (default: 8, range: 1-15)", minimum: 1, maximum: 15),
                 .init(key: "scale", type: .number, description: "Resolution scale factor (default: 1.0, range: 0.25-1.0)", minimum: 0.25, maximum: 1.0),
                 .init(key: "max_duration", type: .number, description: "Maximum recording duration in seconds (default: 60)"),
-                .init(key: "inactivity_timeout", type: .number, description: "Auto-stop after N seconds of no interactions (default: 5)"),
+                .init(
+                    key: "inactivity_timeout", type: .number,
+                    description: "Optional early-stop after N seconds of no interactions; omitted follows max_duration"
+                ),
             ]
 
         case .stopRecording:

@@ -97,13 +97,53 @@ while IFS= read -r file; do
     esac
 done <<< "$CHANGED_FILES"
 
-if [ "${#CHANGED_WIRE[@]}" -eq 0 ]; then
+has_non_comment_diff() {
+    local file="$1"
+    local diff_range
+    if [ "$DIFF_MODE" = "three-dot" ]; then
+        diff_range="$BASE_REF...HEAD"
+    else
+        diff_range="$BASE_REF HEAD"
+    fi
+
+    # The guard is about payload shape, not source comments. Treat lines whose
+    # only changes are Swift comments as documentation changes so fixing stale
+    # wire comments does not force a protocol version bump.
+    # shellcheck disable=SC2086
+    git diff --unified=0 --no-ext-diff $diff_range -- "$file" | awk '
+        /^@@/ { in_hunk = 1; next }
+        !in_hunk { next }
+        /^[+-][^+-]/ {
+            line = substr($0, 2)
+            gsub(/^[[:space:]]+/, "", line)
+            gsub(/[[:space:]]+$/, "", line)
+            if (line == "") next
+            if (line ~ /^\/\//) next
+            if (line ~ /^\/\*/) next
+            if (line ~ /^\*/) next
+            if (line ~ /^\*\//) next
+            found = 1
+        }
+        END { exit(found ? 0 : 1) }
+    '
+}
+
+CHANGED_WIRE_REQUIRING_BUMP=()
+if [ "${#CHANGED_WIRE[@]}" -gt 0 ]; then
+    for file in "${CHANGED_WIRE[@]}"; do
+        if has_non_comment_diff "$file"; then
+            CHANGED_WIRE_REQUIRING_BUMP+=("$file")
+        fi
+    done
+fi
+
+if [ "${#CHANGED_WIRE_REQUIRING_BUMP[@]}" -eq 0 ]; then
     echo "No wire-format files changed against $BASE_REF — nothing to check."
     exit 0
 fi
 
 echo "Wire-format files changed against $BASE_REF:"
-for file in "${CHANGED_WIRE[@]}"; do
+for file in "${CHANGED_WIRE_REQUIRING_BUMP[@]}"; do
     echo "  - $file"
 done
 

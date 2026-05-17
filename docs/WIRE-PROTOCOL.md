@@ -381,10 +381,10 @@ Request a PNG capture of the current screen.
 
 ### startRecording
 
-Start recording the screen as H.264/MP4 video. Frames are captured at the configured FPS using `drawHierarchy` compositing (includes fingerprint overlays for taps and continuous gestures). Recording auto-stops when no screen changes and no real interactions (actions, touches, typing) are received for the inactivity timeout. Pings and keepalive messages do not reset the inactivity timer.
+Start recording the screen as H.264/MP4 video. Frames are captured at the configured FPS using `drawHierarchy` compositing (includes fingerprint overlays for taps and continuous gestures). `maxDuration` is the hard cap. `inactivityTimeout` is an optional early-stop hint: when provided, recording auto-stops after that many seconds with no screen changes and no real interactions (actions, touches, typing). When omitted, the inactivity timeout follows `maxDuration`. Pings and keepalive messages do not reset the inactivity timer.
 
 ```json
-{"buttonHeistVersion":"<calver>","type":"startRecording","payload":{"fps":8,"scale":0.5,"inactivityTimeout":5.0,"maxDuration":60.0}}
+{"buttonHeistVersion":"<calver>","type":"startRecording","payload":{"fps":8,"scale":0.5,"maxDuration":60.0}}
 ```
 
 All fields are optional — defaults are applied server-side.
@@ -393,12 +393,12 @@ All fields are optional — defaults are applied server-side.
 |-------|------|-------------|
 | `fps` | `Int?` | Frames per second (1-15, default: 8) |
 | `scale` | `Double?` | Resolution scale of native pixels (0.25-1.0, default: 1x point size) |
-| `inactivityTimeout` | `Double?` | Seconds of no activity before auto-stop (default: 5.0) |
 | `maxDuration` | `Double?` | Maximum recording duration in seconds (default: 60.0) |
+| `inactivityTimeout` | `Double?` | Optional early-stop seconds of no activity; omitted follows `maxDuration` |
 
 ### stopRecording
 
-Stop an active recording. The server finalizes the video and sends a `recording` message.
+Stop an active recording or retrieve a cached auto-finished recording. The server finalizes the video when needed and sends a `recording` message, or returns its own `No recording in progress` error when neither active nor cached recording data exists.
 
 ```json
 {"buttonHeistVersion":"<calver>","type":"stopRecording"}
@@ -1437,8 +1437,8 @@ Each collection is omitted when empty.
 |-------|------|-------------|
 | `fps` | `Int?` | Frames per second (1-15, default: 8) |
 | `scale` | `Double?` | Resolution scale of native pixels (0.25-1.0, default: 1x point size) |
-| `inactivityTimeout` | `Double?` | Seconds of inactivity before auto-stop (default: 5.0) |
 | `maxDuration` | `Double?` | Maximum recording duration in seconds (default: 60.0) |
+| `inactivityTimeout` | `Double?` | Optional early-stop seconds of inactivity; omitted follows `maxDuration` |
 
 ### RecordingPayload
 
