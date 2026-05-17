@@ -7,8 +7,8 @@
 /// purely descriptive — reads from this namespace. Adding or moving a
 /// trait policy is a one-file edit; downstream sites are pure consumers.
 ///
-/// The policy lives in TheScore so both client-side recording
-/// (TheBookKeeper, which builds minimal matchers) and server-side
+/// The policy lives in TheScore so both client-side targeting
+/// (`MinimumMatcher`, which builds durable replay matchers) and server-side
 /// parsing (TheInsideJob, which assigns heistIds and writes the wire
 /// format) read the same `Set<HeistTrait>`. UIKit-bitmask derivations
 /// live in TheInsideJob as `AccessibilityPolicy+UIKit`.
@@ -28,9 +28,9 @@ public enum AccessibilityPolicy {
     /// same heistId — these traits do not contribute to element identity.
     /// Consumed by:
     /// - `TheBurglar.hasSameMinimumMatcher` (content-space disambiguation)
-    /// - `InterfaceDiff.identitySignature` (functional-move pairing)
-    /// - `TheBookKeeper.buildMinimalMatcher` (recording-time matcher
-    ///   construction — strips state from minimal matchers)
+    /// - `AccessibilityTrace.Delta.between` (functional-move pairing)
+    /// - `MinimumMatcher` (recording and repair matcher construction —
+    ///   adds state only when semantic predicates remain ambiguous)
     public static let transientTraits: Set<HeistTrait> = [
         .selected,
         .notEnabled,

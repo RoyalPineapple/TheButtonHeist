@@ -603,9 +603,9 @@ final class TheBookKeeper {
             fallbackCache: interfaceCache,
             fallbackElements: cache
         ) {
-            let result = buildMinimalMatcher(element: source.element, allElements: source.elements)
-            target = result.matcher
-            ordinal = result.ordinal
+            let minimumMatcher = MinimumMatcher.build(element: source.element, in: source.capture)
+            target = minimumMatcher.matcher
+            ordinal = minimumMatcher.ordinal
             recordedHeistId = heistId
             recordedFrame = RecordedFrame(
                 x: source.element.frameX, y: source.element.frameY,
@@ -653,15 +653,19 @@ final class TheBookKeeper {
         trace: AccessibilityTrace?,
         fallbackCache: [String: HeistElement],
         fallbackElements: [HeistElement]
-    ) -> (element: HeistElement, elements: [HeistElement])? {
+    ) -> (element: HeistElement, capture: AccessibilityTrace.Capture)? {
         if let capture = trace?.captures.first {
             let elements = capture.interface.elements
             if let element = elements.first(where: { $0.heistId == heistId }) {
-                return (element, elements)
+                return (element, capture)
             }
         }
         guard let element = fallbackCache[heistId] else { return nil }
-        return (element, fallbackElements)
+        let capture = AccessibilityTrace.Capture(
+            sequence: 1,
+            interface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: fallbackElements.map(InterfaceNode.element))
+        )
+        return (element, capture)
     }
 
     private func buildRecordedMetadata(
@@ -688,103 +692,6 @@ final class TheBookKeeper {
 
     private func hasCoordinateArgs(_ args: [String: Any]) -> Bool {
         args["x"] != nil || args["startX"] != nil || args["centerX"] != nil || args["points"] != nil
-    }
-
-    // MARK: - Minimal Matcher
-
-    private func identityTraits(_ traits: [HeistTrait]) -> [HeistTrait]? {
-        let filtered = traits.filter { !AccessibilityPolicy.transientTraits.contains($0) }
-        return filtered.isEmpty ? nil : filtered
-    }
-
-    /// Smallest unique matcher among `allElements`, falling back to a non-unique
-    /// matcher + ordinal when no field combination distinguishes the element.
-    func buildMinimalMatcher(
-        element: HeistElement,
-        allElements: [HeistElement]
-    ) -> (matcher: ElementMatcher, ordinal: Int?) {
-        let traits = identityTraits(element.traits)
-        let stableIdentifier = element.identifier.flatMap { isStableIdentifier($0) ? $0 : nil }
-
-        if let stableIdentifier {
-            let candidate = ElementMatcher(identifier: stableIdentifier)
-            if uniquelyMatches(candidate, element: element, in: allElements) {
-                return (candidate, nil)
-            }
-        }
-
-        if let elementLabel = element.label {
-            let candidate = ElementMatcher(label: elementLabel)
-            if uniquelyMatches(candidate, element: element, in: allElements) {
-                return (candidate, nil)
-            }
-
-            if let traits {
-                let candidate = ElementMatcher(label: elementLabel, traits: traits)
-                if uniquelyMatches(candidate, element: element, in: allElements) {
-                    return (candidate, nil)
-                }
-            }
-
-            if let stableIdentifier {
-                let candidate = ElementMatcher(label: elementLabel, identifier: stableIdentifier)
-                if uniquelyMatches(candidate, element: element, in: allElements) {
-                    return (candidate, nil)
-                }
-
-                if let traits {
-                    let candidate = ElementMatcher(
-                        label: elementLabel, identifier: stableIdentifier, traits: traits
-                    )
-                    if uniquelyMatches(candidate, element: element, in: allElements) {
-                        return (candidate, nil)
-                    }
-                }
-            }
-        }
-
-        // No unique matcher found — fall back to best-effort matcher with ordinal
-        let bestMatcher = ElementMatcher(
-            label: element.label,
-            identifier: stableIdentifier,
-            traits: traits
-        )
-        let ordinal = ordinalOf(element, matching: bestMatcher, in: allElements)
-        return (bestMatcher, ordinal)
-    }
-
-    private func uniquelyMatches(
-        _ matcher: ElementMatcher,
-        element: HeistElement,
-        in allElements: [HeistElement]
-    ) -> Bool {
-        var matchCount = 0
-        for candidate in allElements where candidate.matches(matcher) {
-            matchCount += 1
-            if matchCount > 1 { return false }
-        }
-        return matchCount == 1
-    }
-
-    /// Find the 0-based index of `element` among all elements matching `matcher`.
-    /// Returns nil if the element is the only match (ordinal would be redundant).
-    private func ordinalOf(
-        _ element: HeistElement,
-        matching matcher: ElementMatcher,
-        in allElements: [HeistElement]
-    ) -> Int? {
-        var index = 0
-        var found: Int?
-        var totalMatches = 0
-        for candidate in allElements where candidate.matches(matcher) {
-            if candidate.heistId == element.heistId {
-                found = index
-            }
-            index += 1
-            totalMatches += 1
-        }
-        guard totalMatches > 1 else { return nil }
-        return found
     }
 
     // MARK: - Heist File I/O
