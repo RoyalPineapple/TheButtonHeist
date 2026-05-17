@@ -93,6 +93,25 @@ final class NetDeltaAccumulatorTests: XCTestCase {
         XCTAssertEqual(payload.transient.map(\.heistId), ["spinner"])
     }
 
+    func testPostScreenEditsDoNotRewriteScreenChangeInterface() throws {
+        let screenElement = makeElement(heistId: "screen", label: "Screen", value: nil)
+        let laterElement = makeElement(heistId: "later", label: "Later", value: nil)
+        let screenInterface = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [.element(screenElement)])
+        let deltas: [AccessibilityTrace.Delta] = [
+            .screenChanged(.init(elementCount: 1, newInterface: screenInterface)),
+            .elementsChanged(.init(elementCount: 2, edits: ElementEdits(added: [laterElement]))),
+        ]
+
+        let merged = try XCTUnwrap(NetDeltaAccumulator.merge(deltas: deltas))
+
+        guard case .screenChanged(let payload) = merged else {
+            return XCTFail("Expected .screenChanged, got \(merged)")
+        }
+        XCTAssertEqual(payload.elementCount, 1)
+        XCTAssertEqual(payload.newInterface, screenInterface)
+        XCTAssertEqual(payload.postEdits?.added.map(\.heistId), ["later"])
+    }
+
     private func makeElement(
         heistId: String,
         label: String,

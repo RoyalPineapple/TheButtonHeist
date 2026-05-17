@@ -69,7 +69,7 @@ final class TheHandoffMessageTests: XCTestCase {
     // MARK: - .interface
 
     @ButtonHeistActor
-    func testInterfacePushUpdatesCurrentInterface() async {
+    func testInterfacePushCallsInterfaceCallback() async {
         let handoff = TheHandoff()
         connectMockHandoff(handoff)
         var receivedPayload: Interface?
@@ -78,24 +78,25 @@ final class TheHandoffMessageTests: XCTestCase {
         let interface = Interface(timestamp: Date(), tree: [])
         handoff.handleServerMessage(.interface(interface), requestId: nil)
 
-        XCTAssertNotNil(handoff.currentInterface)
         XCTAssertNotNil(receivedPayload)
     }
 
     @ButtonHeistActor
-    func testInterfaceResponseDoesNotUpdateCurrent() async {
+    func testInterfaceResponseCallsInterfaceCallback() async {
         let handoff = TheHandoff()
         connectMockHandoff(handoff)
+        var receivedRequestId: String?
+        handoff.onInterface = { _, requestId in receivedRequestId = requestId }
         handoff.handleServerMessage(.interface(Interface(timestamp: Date(), tree: [])),
                                     requestId: "req-1")
 
-        XCTAssertNil(handoff.currentInterface)
+        XCTAssertEqual(receivedRequestId, "req-1")
     }
 
     // MARK: - .screen
 
     @ButtonHeistActor
-    func testScreenPushUpdatesCurrentScreen() async {
+    func testScreenPushCallsScreenCallback() async {
         let handoff = TheHandoff()
         connectMockHandoff(handoff)
         var receivedScreen: ScreenPayload?
@@ -104,18 +105,19 @@ final class TheHandoffMessageTests: XCTestCase {
         let screen = ScreenPayload(pngData: "abc", width: 390, height: 844)
         handoff.handleServerMessage(.screen(screen), requestId: nil)
 
-        XCTAssertNotNil(handoff.currentScreen)
         XCTAssertNotNil(receivedScreen)
     }
 
     @ButtonHeistActor
-    func testScreenResponseDoesNotUpdateCurrent() async {
+    func testScreenResponseCallsScreenCallback() async {
         let handoff = TheHandoff()
         connectMockHandoff(handoff)
+        var receivedRequestId: String?
+        handoff.onScreen = { _, requestId in receivedRequestId = requestId }
         let screen = ScreenPayload(pngData: "abc", width: 390, height: 844)
         handoff.handleServerMessage(.screen(screen), requestId: "req-1")
 
-        XCTAssertNil(handoff.currentScreen)
+        XCTAssertEqual(receivedRequestId, "req-1")
     }
 
     // MARK: - .authApproved

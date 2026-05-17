@@ -11,7 +11,6 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertTrue(handoff.discoveredDevices.isEmpty)
         XCTAssertNil(handoff.connectedDevice)
         XCTAssertNil(handoff.serverInfo)
-        XCTAssertNil(handoff.currentInterface)
         XCTAssertFalse(handoff.isDiscovering)
         assertDisconnected(handoff.connectionPhase)
         XCTAssertEqual(handoff.reconnectPolicy, .disabled)
@@ -27,7 +26,6 @@ final class TheHandoffStateTests: XCTestCase {
 
         XCTAssertNil(handoff.connectedDevice)
         XCTAssertNil(handoff.serverInfo)
-        XCTAssertNil(handoff.currentInterface)
         assertDisconnected(handoff.connectionPhase)
         XCTAssertEqual(handoff.recordingPhase, .idle)
     }

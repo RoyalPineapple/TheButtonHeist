@@ -6,6 +6,28 @@ import TheScore
 private let logger = Logger(subsystem: "com.buttonheist.fence", category: "handlers")
 private let accessibilityAdjustmentCountRange = 1...100
 
+private extension Interface {
+    func retainingElements(withIds heistIds: Set<String>) -> Interface {
+        Interface(
+            timestamp: timestamp,
+            tree: tree.compactMap { $0.retainingElements(withIds: heistIds) }
+        )
+    }
+}
+
+private extension InterfaceNode {
+    func retainingElements(withIds heistIds: Set<String>) -> InterfaceNode? {
+        switch self {
+        case .element(let element):
+            return heistIds.contains(element.heistId) ? self : nil
+        case .container(let info, let children):
+            let filteredChildren = children.compactMap { $0.retainingElements(withIds: heistIds) }
+            guard !filteredChildren.isEmpty else { return nil }
+            return .container(info, children: filteredChildren)
+        }
+    }
+}
+
 @ButtonHeistActor
 extension TheFence {
 
@@ -48,21 +70,14 @@ extension TheFence {
         let matcher = try elementMatcher(args)
         if matcher.hasPredicates {
             let total = interface.elements.count
-            let filtered = interface.elements.filter { $0.matches(matcher) }
-            let filteredInterface = Interface(
-                timestamp: interface.timestamp,
-                tree: filtered.map { .element($0) }
-            )
+            let matchingIds = Set(interface.elements.filter { $0.matches(matcher) }.map(\.heistId))
+            let filteredInterface = interface.retainingElements(withIds: matchingIds)
             return (filteredInterface, total)
         }
 
         if let filterIds = try args.schemaStringArray("elements"), !filterIds.isEmpty {
             let filterSet = Set(filterIds)
-            let filtered = interface.elements.filter { filterSet.contains($0.heistId) }
-            let filteredInterface = Interface(
-                timestamp: interface.timestamp,
-                tree: filtered.map { .element($0) }
-            )
+            let filteredInterface = interface.retainingElements(withIds: filterSet)
             return (filteredInterface, interface.elements.count)
         }
         return (interface, nil)
