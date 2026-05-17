@@ -993,9 +993,12 @@ public final class TheFence {
 
     private func connectDirect(to device: DiscoveredDevice, autoSubscribe: Bool) async throws {
         handoff.onStatus?("Connecting to \(device.name)...")
-        handoff.connect(to: device, autoSubscribe: autoSubscribe)
+        let attemptID = handoff.connect(to: device, autoSubscribe: autoSubscribe)
         do {
             try await handoff.waitForConnectionResult(timeout: config.connectionTimeout)
+        } catch let error as TheHandoff.ConnectionError where error == .timeout {
+            handoff.disconnectConnectionAttempt(attemptID, failure: .timeout)
+            throw FenceError(error)
         } catch let error as TheHandoff.ConnectionError {
             throw FenceError(error)
         }

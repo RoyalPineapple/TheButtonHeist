@@ -1794,6 +1794,32 @@ final class TheFenceTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testDirectConnectTimeoutTearsDownAttempt() async {
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mockConnection = MockConnection()
+        mockConnection.connectEventsOverride = []
+
+        let fence = TheFence(configuration: .init(
+            connectionTimeout: 0.05,
+            autoReconnect: false,
+            directDevice: device
+        ))
+        fence.handoff.makeConnection = { _, _, _ in mockConnection }
+
+        do {
+            try await fence.start(autoSubscribe: false)
+            XCTFail("Expected connection timeout")
+        } catch FenceError.connectionTimeout {
+            // Expected.
+        } catch {
+            XCTFail("Expected connection timeout, got \(error)")
+        }
+
+        XCTAssertFalse(mockConnection.isConnected)
+        assertDisconnected(fence.handoff.connectionPhase)
+    }
+
+    @ButtonHeistActor
     func testListDevicesFiltersOutUnreachableDevicesWithoutConnecting() async throws {
         let reachableDevice = DiscoveredDevice(
             id: "reachable-device",

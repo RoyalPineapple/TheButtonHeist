@@ -44,6 +44,20 @@ func assertConnected(
 }
 
 @ButtonHeistActor
+func assertConnecting(
+    _ phase: TheHandoff.ConnectionPhase,
+    device expected: DiscoveredDevice,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) {
+    guard case .connecting(let attempt) = phase else {
+        XCTFail("Expected .connecting, got \(phase)", file: file, line: line)
+        return
+    }
+    XCTAssertEqual(attempt.device, expected, file: file, line: line)
+}
+
+@ButtonHeistActor
 func assertFailed(
     _ phase: TheHandoff.ConnectionPhase,
     failure expected: TheHandoff.ConnectionError,
