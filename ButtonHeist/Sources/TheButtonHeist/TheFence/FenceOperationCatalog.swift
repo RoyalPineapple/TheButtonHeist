@@ -13,8 +13,8 @@ public struct FenceOperationRoutingError: Error, LocalizedError, Sendable {
 /// A command plus its already-normalized arguments.
 ///
 /// External string command names are parsed into `TheFence.Command` at the
-/// routing edge. The dictionary form is only reconstructed when crossing into
-/// legacy APIs that still accept raw request dictionaries.
+/// routing edge. The dictionary form is only reconstructed when a caller needs
+/// the existing `execute(request:)` shape.
 public struct NormalizedOperation {
     public let command: TheFence.Command
     public let arguments: [String: Any]
@@ -26,7 +26,7 @@ public struct NormalizedOperation {
         self.arguments = sanitizedArguments
     }
 
-    public var legacyRequestDictionary: [String: Any] {
+    public var requestDictionary: [String: Any] {
         var request = arguments
         request["command"] = command.rawValue
         return request

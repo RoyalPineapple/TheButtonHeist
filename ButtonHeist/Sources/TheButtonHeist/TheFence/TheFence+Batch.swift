@@ -26,9 +26,7 @@ extension TheFence {
                 let operation = try Self.normalizedBatchStep(step, index: index)
                 let command = operation.command
                 normalizedCommand = command
-                // Legacy executor boundary: batch normalization carries a typed
-                // command until execute(request:) requires the raw dictionary.
-                let response = try await execute(request: operation.legacyRequestDictionary)
+                let response = try await execute(request: operation.requestDictionary)
                 results.append(response.jsonDict() ?? ["status": "ok"])
 
                 let outcome = stepOutcome(response: response)
