@@ -355,6 +355,7 @@ struct ToolSyncTests {
         #expect(!commandValues.contains(TheFence.Command.status.rawValue))
         #expect(!commandValues.contains(TheFence.Command.quit.rawValue))
         #expect(!commandValues.contains(TheFence.Command.exit.rawValue))
+        #expect(!commandValues.contains(TheFence.Command.runBatch.rawValue))
         #expect(!commandValues.contains("gesture"))
     }
 

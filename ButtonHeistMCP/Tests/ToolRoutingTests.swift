@@ -138,9 +138,9 @@ struct ToolRoutingTests {
         }
     }
 
-    @Test("run_batch rejects session-only commands")
-    func runBatchRejectsSessionOnlyCommands() {
-        for command in [TheFence.Command.help, .status, .quit, .exit] {
+    @Test("run_batch rejects non-batch-executable commands")
+    func runBatchRejectsNonBatchExecutableCommands() {
+        for command in [TheFence.Command.help, .status, .quit, .exit, .runBatch] {
             let result = FenceOperationCatalog.normalizeBatchStep(["command": command.rawValue])
             guard case .failure(let error) = result else {
                 Issue.record("Expected routing failure for \(command.rawValue)")

@@ -53,11 +53,11 @@ extension TheFence {
 public extension TheFence.Command {
     /// Commands that can execute as a run_batch step.
     ///
-    /// Shell/session-control conveniences are accepted at external edges but
-    /// should not appear in batch schemas or typed batch execution.
+    /// Session-control and batch-orchestration commands are accepted at
+    /// external edges but should not appear in batch schemas or execution.
     var isBatchExecutable: Bool {
         switch self {
-        case .help, .status, .quit, .exit:
+        case .help, .status, .quit, .exit, .runBatch:
             return false
         default:
             return true

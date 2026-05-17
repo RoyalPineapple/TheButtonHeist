@@ -2008,8 +2008,8 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testBatchRejectsSessionOnlyCommandsBeforeExecution() async throws {
-        for command in [TheFence.Command.help, .status, .quit, .exit] {
+    func testBatchRejectsNonBatchExecutableCommandsBeforeExecution() async throws {
+        for command in [TheFence.Command.help, .status, .quit, .exit, .runBatch] {
             let (fence, _) = makeConnectedFence()
 
             let response = try await fence.execute(request: [
