@@ -267,6 +267,50 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertEqual(handoff.reconnectPolicy, .disabled)
     }
 
+    @ButtonHeistActor
+    func testStaleConnectionEventsDoNotMutateNewAttempt() async {
+        let handoff = TheHandoff()
+        let deviceA = DiscoveredDevice(
+            id: "device-a",
+            name: "App#A",
+            endpoint: .hostPort(host: .ipv4(.loopback), port: 1111)
+        )
+        let deviceB = DiscoveredDevice(
+            id: "device-b",
+            name: "App#B",
+            endpoint: .hostPort(host: .ipv4(.loopback), port: 2222)
+        )
+        let connectionA = MockConnection()
+        let connectionB = MockConnection()
+        connectionA.connectEventsOverride = []
+        connectionB.connectEventsOverride = []
+        handoff.makeConnection = { device, _, _ in
+            switch device.id {
+            case deviceA.id: return connectionA
+            case deviceB.id: return connectionB
+            default:
+                XCTFail("Unexpected device: \(device)")
+                return MockConnection()
+            }
+        }
+
+        handoff.connect(to: deviceA)
+        assertConnecting(handoff.connectionPhase, device: deviceA)
+
+        handoff.connect(to: deviceB)
+        assertConnecting(handoff.connectionPhase, device: deviceB)
+
+        connectionA.onEvent?(.connected)
+        assertConnecting(handoff.connectionPhase, device: deviceB)
+        XCTAssertNil(handoff.connectedDevice)
+
+        connectionB.onEvent?(.connected)
+        assertConnected(handoff.connectionPhase, device: deviceB)
+
+        connectionA.onEvent?(.disconnected(.serverClosed))
+        assertConnected(handoff.connectionPhase, device: deviceB)
+    }
+
     // MARK: - RecordingPhase
 
     @ButtonHeistActor
@@ -694,6 +738,74 @@ final class TheHandoffStateTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testCancellingOneWaiterDoesNotCancelSiblingWaiter() async throws {
+        let handoff = TheHandoff()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mock = MockConnection()
+        mock.connectEventsOverride = []
+        handoff.makeConnection = { _, _, _ in mock }
+
+        handoff.connect(to: device)
+
+        let cancelledWaitTask = Task { @ButtonHeistActor in
+            try await handoff.waitForConnectionResult(timeout: 30)
+        }
+        let liveWaitTask = Task { @ButtonHeistActor in
+            try await handoff.waitForConnectionResult(timeout: 30)
+        }
+        await Task.yield()
+
+        cancelledWaitTask.cancel()
+        do {
+            try await cancelledWaitTask.value
+            XCTFail("Expected CancellationError")
+        } catch is CancellationError {
+            // Expected.
+        } catch {
+            XCTFail("Expected CancellationError, got \(error)")
+        }
+
+        mock.onEvent?(.connected)
+
+        try await liveWaitTask.value
+        assertConnected(handoff.connectionPhase, device: device)
+    }
+
+    @ButtonHeistActor
+    func testShortTimeoutWaiterDoesNotPoisonLongWaiter() async throws {
+        let handoff = TheHandoff()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mock = MockConnection()
+        mock.connectEventsOverride = []
+        handoff.makeConnection = { _, _, _ in mock }
+
+        handoff.connect(to: device)
+
+        let shortWaitTask = Task { @ButtonHeistActor in
+            try await handoff.waitForConnectionResult(timeout: 0.05)
+        }
+        let longWaitTask = Task { @ButtonHeistActor in
+            try await handoff.waitForConnectionResult(timeout: 30)
+        }
+        await Task.yield()
+
+        do {
+            try await shortWaitTask.value
+            XCTFail("Expected timeout")
+        } catch let error as TheHandoff.ConnectionError {
+            XCTAssertEqual(error, .timeout)
+        } catch {
+            XCTFail("Expected timeout, got \(error)")
+        }
+
+        assertConnecting(handoff.connectionPhase, device: device)
+        mock.onEvent?(.connected)
+
+        try await longWaitTask.value
+        assertConnected(handoff.connectionPhase, device: device)
+    }
+
+    @ButtonHeistActor
     func testWaitForConnectionResultResumesOnFailedTransition() async {
         let handoff = TheHandoff()
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
@@ -727,6 +839,105 @@ final class TheHandoffStateTests: XCTestCase {
         } catch {
             XCTFail("Unexpected error: \(error)")
         }
+    }
+
+    @ButtonHeistActor
+    func testTerminalConnectionFailureResolvesAllLiveWaitersForAttempt() async {
+        let handoff = TheHandoff()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mock = MockConnection()
+        mock.connectEventsOverride = []
+        handoff.makeConnection = { _, _, _ in mock }
+
+        handoff.connect(to: device)
+
+        let firstWaitTask = Task { @ButtonHeistActor in
+            try await handoff.waitForConnectionResult(timeout: 30)
+        }
+        let secondWaitTask = Task { @ButtonHeistActor in
+            try await handoff.waitForConnectionResult(timeout: 30)
+        }
+        await Task.yield()
+
+        mock.onEvent?(.disconnected(.missingFingerprint))
+
+        for waitTask in [firstWaitTask, secondWaitTask] {
+            do {
+                try await waitTask.value
+                XCTFail("Expected disconnect failure")
+            } catch let error as TheHandoff.ConnectionError {
+                XCTAssertEqual(error, .disconnected(.missingFingerprint))
+            } catch {
+                XCTFail("Unexpected error: \(error)")
+            }
+        }
+    }
+
+    @ButtonHeistActor
+    func testTerminalAttemptDeliversRequestScopedError() async {
+        let handoff = TheHandoff()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mock = MockConnection()
+        mock.connectEventsOverride = []
+        handoff.makeConnection = { _, _, _ in mock }
+
+        var receivedError: ServerError?
+        var receivedRequestID: String?
+        handoff.onRequestError = { error, requestID in
+            receivedError = error
+            receivedRequestID = requestID
+        }
+
+        handoff.connect(to: device)
+        mock.onEvent?(.connected)
+        mock.onEvent?(.message(
+            .error(ServerError(kind: .general, message: "connection failed")),
+            requestId: nil,
+            backgroundDelta: nil
+        ))
+        assertFailed(handoff.connectionPhase, failure: .connectionFailed("connection failed"))
+
+        mock.onEvent?(.message(
+            .error(ServerError(kind: .general, message: "request failed")),
+            requestId: "request-1",
+            backgroundDelta: nil
+        ))
+
+        XCTAssertEqual(receivedError?.message, "request failed")
+        XCTAssertEqual(receivedRequestID, "request-1")
+        assertFailed(handoff.connectionPhase, failure: .connectionFailed("connection failed"))
+    }
+
+    @ButtonHeistActor
+    func testTerminalAttemptIgnoresStateMutatingRequestScopedMessages() async {
+        let handoff = TheHandoff()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mock = MockConnection()
+        mock.connectEventsOverride = []
+        handoff.makeConnection = { _, _, _ in mock }
+
+        var connectedInfo: ServerInfo?
+        handoff.onConnected = { info in
+            connectedInfo = info
+        }
+
+        handoff.connect(to: device)
+        mock.onEvent?(.connected)
+        mock.onEvent?(.message(
+            .error(ServerError(kind: .general, message: "connection failed")),
+            requestId: nil,
+            backgroundDelta: nil
+        ))
+
+        mock.onEvent?(.message(
+            .info(TheFenceFixtures.testServerInfo),
+            requestId: "request-1",
+            backgroundDelta: nil
+        ))
+
+        XCTAssertNil(connectedInfo)
+        XCTAssertNil(handoff.serverInfo)
+        assertFailed(handoff.connectionPhase, failure: .connectionFailed("connection failed"))
     }
 
     @ButtonHeistActor
