@@ -91,6 +91,15 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
     }
 }
 
+private enum AccessibilityTraceCaptureCodingKeys: String, CodingKey {
+    case sequence
+    case hash
+    case parentHash
+    case interface
+    case context
+    case transition
+}
+
 public extension AccessibilityTrace {
     struct Capture: Codable, Sendable, Equatable {
         /// 1-based position in this trace's linear capture chain.
@@ -105,15 +114,6 @@ public extension AccessibilityTrace {
         /// not included in `hash`: it describes the observed transition, not
         /// the captured hierarchy state.
         public let transition: Transition
-
-        private enum CodingKeys: String, CodingKey {
-            case sequence
-            case hash
-            case parentHash
-            case interface
-            case context
-            case transition
-        }
 
         public init(
             sequence: Int,
@@ -132,7 +132,7 @@ public extension AccessibilityTrace {
         }
 
         public init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
+            let container = try decoder.container(keyedBy: AccessibilityTraceCaptureCodingKeys.self)
             sequence = try container.decode(Int.self, forKey: .sequence)
             hash = try container.decode(String.self, forKey: .hash)
             parentHash = try container.decodeIfPresent(String.self, forKey: .parentHash)
@@ -142,7 +142,7 @@ public extension AccessibilityTrace {
         }
 
         public func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
+            var container = encoder.container(keyedBy: AccessibilityTraceCaptureCodingKeys.self)
             try container.encode(sequence, forKey: .sequence)
             try container.encode(hash, forKey: .hash)
             try container.encodeIfPresent(parentHash, forKey: .parentHash)
