@@ -452,9 +452,7 @@ extension TheFence {
     }
 
     func handleStopRecording(_ request: ArtifactRequest) async throws -> FenceResponse {
-        guard isRecording else {
-            return .error("No recording in progress — use start_recording first")
-        }
+        guard handoff.isConnected else { throw FenceError.notConnected }
         let recording: RecordingPayload = try await stopRecordingAndWait(timeout: Timeouts.longActionSeconds)
         let metadata = RecordingMetadata(
             width: recording.width,

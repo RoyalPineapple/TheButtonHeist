@@ -225,10 +225,12 @@
 		EA349CAD7A8024EDA17335AC /* ExploreOffFoldGateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07DE8C276376C372FBC44610 /* ExploreOffFoldGateTests.swift */; };
 		EB70E312ACAB369A26299111 /* Messages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EB2EFB0B0E9B9ADCBDE598A /* Messages.swift */; };
 		EC8A154334ECF021BA4A2729 /* DiscoveredDeviceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9506D9D84CD17AEC619D171 /* DiscoveredDeviceTests.swift */; };
+		ECDA4CD711AEC9FE1B160FBB /* StakeoutTiming.swift in Sources */ = {isa = PBXBuildFile; fileRef = A99CA156168E01D0C3C6AEAF /* StakeoutTiming.swift */; };
 		EEE465CCCB3233DC463B1325 /* IdleMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4733C3D4A440AFEA26B7ECF3 /* IdleMonitor.swift */; };
 		EF33A29DE94964545E58B8E8 /* ServerMessages.swift in Sources */ = {isa = PBXBuildFile; fileRef = B191B5186E8A65BA9E5042F3 /* ServerMessages.swift */; };
 		F13170081E28A85905C0303D /* Error+Message.swift in Sources */ = {isa = PBXBuildFile; fileRef = F16F859F1B9863B934C03E3E /* Error+Message.swift */; };
 		F27EFB3BFD5F772ACEB4BAE6 /* PresentationObscuringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3471869CA78AB09EF66258C /* PresentationObscuringTests.swift */; };
+		F6AF811E1369A248D5AD2AC9 /* TheStakeoutTimingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 619E8B76FC181DA2C4A57FC0 /* TheStakeoutTimingTests.swift */; };
 		F749584E59209A57D9E3E996 /* TaskTrackerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A157E62B4AF73FED96E8D56E /* TaskTrackerTests.swift */; };
 		F74E540ED2A6D4D24FC9EBEB /* DocumentationDriftTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C309C7A16B40D97DA68C273 /* DocumentationDriftTests.swift */; };
 		F9821E9AFFD222BE89C6AD3A /* KeyboardWindowTestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D60707DDB4D8CF78ED74748 /* KeyboardWindowTestHelpers.swift */; };
@@ -447,6 +449,7 @@
 		5B70EF95833F2926EFD70F8D /* InterfaceDiff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InterfaceDiff.swift; sourceTree = "<group>"; };
 		5C309C7A16B40D97DA68C273 /* DocumentationDriftTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentationDriftTests.swift; sourceTree = "<group>"; };
 		5D9A980927A3C00ED36E2929 /* ButtonHeist.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = ButtonHeist.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		619E8B76FC181DA2C4A57FC0 /* TheStakeoutTimingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheStakeoutTimingTests.swift; sourceTree = "<group>"; };
 		61A7F4435F968A9D7DF4EF0A /* TheFenceBoolArgTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheFenceBoolArgTests.swift; sourceTree = "<group>"; };
 		61EDA1A956342901286B448D /* InteractivityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InteractivityTests.swift; sourceTree = "<group>"; };
 		62DD31D9145D6BABD29D286B /* USBDeviceDiscoveryParsingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = USBDeviceDiscoveryParsingTests.swift; sourceTree = "<group>"; };
@@ -510,6 +513,7 @@
 		A6E66628C74C420C04912FC4 /* TheStashCustomRotorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheStashCustomRotorTests.swift; sourceTree = "<group>"; };
 		A7E4CC1813061818AEFEECDC /* ScreenshotPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotPayloadTests.swift; sourceTree = "<group>"; };
 		A80FBE15B77A6320E4B9811F /* HeistTraitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistTraitTests.swift; sourceTree = "<group>"; };
+		A99CA156168E01D0C3C6AEAF /* StakeoutTiming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StakeoutTiming.swift; sourceTree = "<group>"; };
 		AA5E0175CC98C9187ECAEF74 /* AccessibilityTraceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityTraceTests.swift; sourceTree = "<group>"; };
 		ACA020DEAF0DB6FFA0BB3B27 /* PingFastPathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PingFastPathTests.swift; sourceTree = "<group>"; };
 		ACF6FCCFB96D20A5EBD41C48 /* TLSIdentityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TLSIdentityTests.swift; sourceTree = "<group>"; };
@@ -950,6 +954,7 @@
 		981ACCEE79A9A56EB6560D68 /* TheStakeout */ = {
 			isa = PBXGroup;
 			children = (
+				A99CA156168E01D0C3C6AEAF /* StakeoutTiming.swift */,
 				C0F8269FADA6D781B5F509DA /* TheStakeout.swift */,
 			);
 			path = TheStakeout;
@@ -1015,6 +1020,7 @@
 				56251CA89DDB9F186323DE2D /* TheSafecrackerScrollTests.swift */,
 				424717FB3ECFCCEA52B1971B /* TheSafecrackerTests.swift */,
 				E20911C376F477524EC4F207 /* TheStakeoutTests.swift */,
+				619E8B76FC181DA2C4A57FC0 /* TheStakeoutTimingTests.swift */,
 				A6E66628C74C420C04912FC4 /* TheStashCustomRotorTests.swift */,
 				71E06AB2C57CE2C760F6BF8F /* TheStashResolutionTests.swift */,
 				CDD59EB8684A62ABBB0EFEF4 /* TheTripwireTests.swift */,
@@ -1470,6 +1476,7 @@
 				5EB6D4F065D16719C45D0C41 /* TheSafecracker+Scroll.swift in Sources */,
 				19B2883BD89FF79837579882 /* TheSafecracker+TapDiagnostic.swift in Sources */,
 				461D067E90C5263C7A4CE830 /* TheSafecracker.swift in Sources */,
+				ECDA4CD711AEC9FE1B160FBB /* StakeoutTiming.swift in Sources */,
 				602171B77A5CD5D46E95687A /* TheStakeout.swift in Sources */,
 				AAEE8DC63033C8BEC937BAA5 /* AccessibilityPolicy+UIKit.swift in Sources */,
 				C122ECEEC6ABF51A9FF5470C /* ArrayHelpers.swift in Sources */,
@@ -1608,6 +1615,7 @@
 				4256CB616B986CB49F6C2E6D /* TheSafecrackerScrollTests.swift in Sources */,
 				7C171E0C9479C3EAD5757469 /* TheSafecrackerTests.swift in Sources */,
 				296CC925AB9F25B737FF1783 /* TheStakeoutTests.swift in Sources */,
+				F6AF811E1369A248D5AD2AC9 /* TheStakeoutTimingTests.swift in Sources */,
 				95E3392EF6D1C4EB3CB90C63 /* TheStashCustomRotorTests.swift in Sources */,
 				DB057320CFB8B72EC65E4926 /* TheStashResolutionTests.swift in Sources */,
 				D19C1AD163D7F2C987339045 /* TheTripwireTests.swift in Sources */,

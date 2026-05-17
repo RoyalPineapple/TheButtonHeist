@@ -21,8 +21,8 @@ struct RecordCommand: AsyncParsableCommand, CLICommandContract {
     @Option(name: .long, help: "Resolution scale of native pixels (0.25-1.0, default: 1x point size)")
     var scale: Double?
 
-    @Option(name: .long, help: "Inactivity timeout in seconds (default: 5)")
-    var inactivityTimeout: Double = 5.0
+    @Option(name: .long, help: "Optional early-stop after N seconds of inactivity; omitted follows max-duration")
+    var inactivityTimeout: Double?
 
     @Option(name: .long, help: "Max recording duration in seconds (default: 60)")
     var maxDuration: Double = 60.0

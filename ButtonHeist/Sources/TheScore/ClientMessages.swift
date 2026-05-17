@@ -641,8 +641,9 @@ public struct RecordingConfig: Sendable {
     /// Default: nil — uses 1x point resolution (native pixels / screen scale).
     /// 1.0 = full native resolution (no reduction).
     public let scale: Double?
-    /// Inactivity timeout in seconds — auto-stop when no screen changes
-    /// and no commands received for this duration (default: 5.0)
+    /// Optional early-stop timeout in seconds — auto-stop when no screen changes
+    /// and no commands are received for this duration. When omitted, follows
+    /// `maxDuration`.
     public let inactivityTimeout: Double?
     /// Maximum recording duration in seconds as a hard safety cap (default: 60.0)
     public let maxDuration: Double?

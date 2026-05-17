@@ -151,8 +151,7 @@ actor TheStakeout {
 
         // Apply config with clamping
         let fps = max(1, min(15, config.fps ?? 8))
-        let inactivityTimeout = max(1.0, config.inactivityTimeout ?? 5.0)
-        let maxDuration = max(1.0, config.maxDuration ?? 60.0)
+        let timing = resolvedStakeoutTiming(for: config)
         // Determine output dimensions from screen.
         // Default: 1x point resolution (native pixels / screen scale).
         // If caller provides scale, use that fraction of native resolution.
@@ -218,8 +217,8 @@ actor TheStakeout {
             outputURL: url,
             screenBounds: screenBounds,
             fps: fps,
-            maxDuration: maxDuration,
-            inactivityTimeout: inactivityTimeout,
+            maxDuration: timing.maxDuration,
+            inactivityTimeout: timing.inactivityTimeout,
             startTime: now,
             captureTimer: Task { },
             inactivityCheckTask: Task { },

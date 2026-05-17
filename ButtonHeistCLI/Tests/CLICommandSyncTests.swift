@@ -122,6 +122,19 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertThrowsError(try GetInterfaceCommand.parse(["--full"]))
     }
 
+    func testRecordCommandLeavesOmittedInactivityTimeoutUnset() throws {
+        let command = try RecordCommand.parse(["--max-duration", "120"])
+
+        XCTAssertNil(command.inactivityTimeout)
+        XCTAssertEqual(command.maxDuration, 120)
+    }
+
+    func testRecordCommandPreservesExplicitInactivityTimeout() throws {
+        let command = try RecordCommand.parse(["--inactivity-timeout", "3"])
+
+        XCTAssertEqual(command.inactivityTimeout, 3)
+    }
+
     func testExpectationArgumentParserNormalizesShorthand() throws {
         let parsed = try ExpectationArgumentParser.parse("screen_changed")
 

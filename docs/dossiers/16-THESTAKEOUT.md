@@ -80,8 +80,8 @@ flowchart TD
 |-----------|---------|-------|-------|
 | `fps` | 8 | 1-15 | Frames per second |
 | `scale` | `1.0 / screen.scale` (~0.33 on 3x Retina) | 0.25-1.0 | Resolution multiplier applied to native pixels. When omitted, defaults to 1x point size (native / screen.scale) |
-| `inactivityTimeout` | 5.0s | >0 | Auto-stop after no changes |
 | `maxDuration` | 60.0s | >0 | Hard cap on recording length |
+| `inactivityTimeout` | `maxDuration` | >0 | Optional early-stop after no changes |
 
 ## Interaction Recording
 
