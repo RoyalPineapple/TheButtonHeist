@@ -13,7 +13,7 @@ TheScore is the shared playbook. It defines:
 3. **Request/response envelopes** (`RequestEnvelope`, `ResponseEnvelope`) for correlation
 4. **UI element types** (`HeistElement`, `Interface`, `InterfaceNode`, `ElementAction`, `ContainerInfo`, `HeistCustomContent`)
 5. **Element targeting** (`ElementTarget`, `ElementMatcher`) — enum-based element reference (`.heistId`/`.matcher`) with structured multi-field AND matching
-6. **Action result types** (`ActionResult`, `InterfaceDelta`, `ActionMethod`, `ScrollSearchResult`)
+6. **Action result types** (`ActionResult`, `AccessibilityTrace.Delta`, `ActionMethod`, `ScrollSearchResult`)
 7. **Action outcome signals** (`ActionExpectation`, `ExpectationResult`) — outcome classifiers for actions
 8. **Media payloads** (`ScreenPayload`, `RecordingPayload`)
 9. **Interaction events** (`InteractionEvent`) — wire-level command/result recording, also broadcast live to observers
@@ -33,7 +33,7 @@ TheScore is the shared playbook. It defines:
 | `ClientMessages.swift` | `RequestEnvelope`, `ClientMessage` (37 cases), all action target structs, `UnitPoint`, `RecordingConfig` |
 | `ClientMessages+TouchTargets.swift` | Touch-specific target structs (`TapTarget`, `SwipeTarget`, `DragTarget`, `PinchTarget`, `RotateTarget`, `TwoFingerTapTarget`, `DrawPathTarget`, `DrawBezierTarget`, `LongPressTarget`) |
 | `ServerMessages.swift` | `ResponseEnvelope`, `ServerMessage` (18 cases), `ActionResult`, `ErrorKind`, `StatusPayload`, `ScreenPayload`, `RecordingPayload`, `InteractionEvent`, `ServerInfo` |
-| `InterfaceDelta.swift` | `InterfaceDelta` enum, `NoChange`, `ElementsChanged`, `ScreenChanged`, `ElementEdits`, `ElementUpdate`, `PropertyChange`, `ElementProperty`, `TreeInsertion`/`TreeRemoval`/`TreeMove` |
+| `AccessibilityTrace+Delta.swift` | `AccessibilityTrace.Delta` enum, `NoChange`, `ElementsChanged`, `ScreenChanged`, `ElementEdits`, `ElementUpdate`, `PropertyChange`, `ElementProperty`, `TreeInsertion`/`TreeRemoval`/`TreeMove` |
 | `Elements.swift` | `HeistElement`, `HeistTrait` (43 known cases + `unknown(String)`), `Interface`, `InterfaceNode`, `ContainerInfo` (with nested `ContainerType`), `ElementAction`, `HeistCustomContent`, `ElementTarget`, `ElementMatcher` |
 | `AccessibilityPolicy.swift` | `AccessibilityPolicy` namespace — single source of truth for trait policy: `transientTraits`, `interactiveTraits`, `staticOnlyTraits`, `synthesisPriority`, `tabSwitchPersistThreshold`. Consumed by both server-side parsing and client-side recording so the two cannot drift. |
 | `ActionExpectation.swift` | `ActionExpectation`, `ExpectationResult` |
@@ -63,7 +63,7 @@ graph TD
         Server["ServerMessages.swift — ResponseEnvelope, ServerMessage (18 cases), StatusPayload"]
         Elements["Elements.swift — HeistElement, Interface, ElementTarget, ElementMatcher"]
         Policy["AccessibilityPolicy.swift — trait policy (transient / interactive / synthesis priority)"]
-        Delta["InterfaceDelta.swift — InterfaceDelta, ElementEdits, tree ops"]
+        Delta["AccessibilityTrace+Delta.swift — AccessibilityTrace.Delta, ElementEdits, tree ops"]
         ConnScope["ConnectionScope.swift — ConnectionScope, NetworkInterfaceNaming"]
     end
 
@@ -219,7 +219,7 @@ classDiagram
         +String? message
         +ErrorKind? errorKind
         +String? value
-        +InterfaceDelta? interfaceDelta
+        +AccessibilityTrace.Delta? accessibilityDelta
         +Bool? animating
         +String? screenName
         +String? screenId
@@ -227,7 +227,7 @@ classDiagram
         +ExploreResult? exploreResult
     }
 
-    class InterfaceDelta {
+    class AccessibilityTrace.Delta {
         <<enum>>
         noChange(NoChange)
         elementsChanged(ElementsChanged)
@@ -306,12 +306,12 @@ classDiagram
     }
 
     ActionResult --> ErrorKind
-    ActionResult --> InterfaceDelta
+    ActionResult --> AccessibilityTrace.Delta
     ActionResult --> ScrollSearchResult
     ActionResult --> ExploreResult
-    InterfaceDelta --> NoChange
-    InterfaceDelta --> ElementsChanged
-    InterfaceDelta --> ScreenChanged
+    AccessibilityTrace.Delta --> NoChange
+    AccessibilityTrace.Delta --> ElementsChanged
+    AccessibilityTrace.Delta --> ScreenChanged
     ElementsChanged --> ElementEdits
     ScreenChanged --> ElementEdits
     ElementEdits --> ElementUpdate

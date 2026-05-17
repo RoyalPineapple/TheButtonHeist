@@ -1290,7 +1290,7 @@ public struct ActionResult: Codable, Sendable
 - `message: String?` - Additional context or error description. Action capability failures use a
   boundary/observation/recovery shape, e.g. `custom action failed: observed ...; try ...`.
 - `value: String?` - Current text field value (populated by `typeText`)
-- `interfaceDelta: InterfaceDelta?` - Compact delta describing what changed after the action
+- `accessibilityDelta: AccessibilityTrace.Delta?` - Compact delta describing what changed after the action
 - `animating: Bool?` - `true` if UI was still animating when result was produced; `nil` means idle
 - `screenName: String?` - Label of the first header element in the post-action snapshot
 - `screenId: String?` - Slugified screen name for machine use (e.g. `"controls_demo"`)
@@ -1345,8 +1345,8 @@ Expectations follow a **"say what you know"** design: agents express what they c
 
 #### Cases
 
-- `screenChanged` - Expected the result's `interfaceDelta` to be a `.screenChanged` case (view controller identity changed).
-- `elementsChanged` - Expected the result's `interfaceDelta` to be `.elementsChanged` (also met by `.screenChanged` under the superset rule).
+- `screenChanged` - Expected the result's `accessibilityDelta` to be a `.screenChanged` case (view controller identity changed).
+- `elementsChanged` - Expected the result's `accessibilityDelta` to be `.elementsChanged` (also met by `.screenChanged` under the superset rule).
 - `elementUpdated(heistId: String?, property: ElementProperty?, oldValue: String?, newValue: String?)` - Expected a property change on an element. All fields optional — provide what you know, omit what you don't. Met when any entry in the delta's `updated` list matches all provided fields.
 - `elementAppeared(ElementMatcher)` - Expected an element matching this predicate to appear in the delta's `added` list.
 - `elementDisappeared(ElementMatcher)` - Expected an element matching this predicate to disappear from the delta's `removed` list. Validation requires a pre-action element cache to resolve removed heistIds to matchers.
@@ -1438,7 +1438,7 @@ A single recorded interaction event captured during a Stakeout recording.
 - `timestamp: Double` - Time offset from recording start in seconds
 - `command: ClientMessage` - The command that triggered this interaction
 - `result: ActionResult` - The result returned to the client
-- `interfaceDelta: InterfaceDelta?` - Compact delta describing what changed in the hierarchy (from result.interfaceDelta)
+- `accessibilityDelta: AccessibilityTrace.Delta?` - Compact delta describing what changed in the hierarchy (from result.accessibilityDelta)
 
 ### Playback Types
 

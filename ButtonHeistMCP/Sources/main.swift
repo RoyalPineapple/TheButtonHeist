@@ -69,8 +69,8 @@ struct ButtonHeistMCPServer {
             }
 
             let response = try await fence.execute(request: request)
-            let backgroundDeltas = fence.drainBackgroundDeltas()
-            return renderResponse(response, backgroundDeltas: backgroundDeltas)
+            let backgroundAccessibilityDeltas = fence.drainBackgroundDeltas()
+            return renderResponse(response, backgroundAccessibilityDeltas: backgroundAccessibilityDeltas)
         } catch {
             let response = FenceResponse.failure(error)
             return .init(content: [.text(text: response.compactFormatted(), annotations: nil, _meta: nil)], isError: true)
@@ -113,19 +113,19 @@ struct ButtonHeistMCPServer {
         }
     }
 
-    static func renderResponse(_ response: FenceResponse, backgroundDeltas: [InterfaceDelta]) -> CallTool.Result {
+    static func renderResponse(_ response: FenceResponse, backgroundAccessibilityDeltas: [AccessibilityTrace.Delta]) -> CallTool.Result {
         var content: [Tool.Content] = []
 
         // Background changes: what happened while the agent was thinking
-        for backgroundDelta in backgroundDeltas {
+        for backgroundAccessibilityDelta in backgroundAccessibilityDeltas {
             // Skip silent no-change deltas; keep transient-bearing ones since
             // those describe activity the agent should know about.
-            if case .noChange(let payload) = backgroundDelta, payload.transient.isEmpty {
+            if case .noChange(let payload) = backgroundAccessibilityDelta, payload.transient.isEmpty {
                 continue
             }
-            let transient = backgroundDelta.transient
+            let transient = backgroundAccessibilityDelta.transient
             var lines: [String] = []
-            switch backgroundDelta {
+            switch backgroundAccessibilityDelta {
             case .screenChanged(let payload):
                 lines.append("[background: screen changed (\(payload.elementCount) elements)]")
                 for (index, element) in payload.newInterface.elements.enumerated() {

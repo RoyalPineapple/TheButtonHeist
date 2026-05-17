@@ -134,7 +134,7 @@ When `requestId` is present, the server echoes it in the corresponding response 
 | `requestId` | `String?` | Optional correlation ID; echoed in the response |
 | `type` | `String` | Explicit message discriminator |
 | `payload` | `Object / String / null` | Optional message payload |
-| `backgroundDelta` | `InterfaceDelta?` | (Response only) Changes that occurred while the agent was thinking between requests. Present when the accessibility tree changed since the last response was sent. Nil when nothing changed. |
+| `backgroundAccessibilityDelta` | `AccessibilityTrace.Delta?` | (Response only) Changes that occurred while the agent was thinking between requests. Present when the accessibility tree changed since the last response was sent. Nil when nothing changed. |
 
 ## Client → Server Messages
 
@@ -547,7 +547,7 @@ Wait for the UI to change in a way that matches an expectation. With `expect`, t
 | `expect` | `ActionExpectation?` | The change to wait for — prefer an object such as `{"type":"screen_changed"}`. Legacy top-level strings `"screen_changed"` and `"elements_changed"` are accepted by the Fence parser. When nil, any tree change satisfies. |
 | `timeout` | `Double?` | Max wait time in seconds (default: 10, max: 30) |
 
-Returns an `actionResult` with `method: "waitForChange"` and an `interfaceDelta` describing what changed. If the current state already satisfies a state predicate such as `element_appeared`, `element_disappeared`, or `element_updated` with `newValue`, the result can succeed with `noChange`. On timeout, returns `success: false` with `errorKind: "timeout"`.
+Returns an `actionResult` with `method: "waitForChange"` and an `accessibilityDelta` describing what changed. If the current state already satisfies a state predicate such as `element_appeared`, `element_disappeared`, or `element_updated` with `newValue`, the result can succeed with `noChange`. On timeout, returns `success: false` with `errorKind: "timeout"`.
 
 For `waitForChange`, `element_disappeared` is a current-state predicate: it is met when no current settled element matches the predicate. It does not require proving that the element existed earlier and was removed.
 
@@ -570,7 +570,7 @@ Wait for an element matching a predicate to appear (or disappear). Uses settle-e
 | `absent` | `Bool?` | When `true`, wait for element to NOT exist (default: `false`) |
 | `timeout` | `Double?` | Max wait time in seconds (default: 10, max: 30) |
 
-Returns an `actionResult` with `method: "waitFor"` and an `interfaceDelta` containing the settled interface.
+Returns an `actionResult` with `method: "waitFor"` and an `accessibilityDelta` containing the settled interface.
 
 ### ping
 
@@ -866,7 +866,7 @@ Completed screen recording. Contains the H.264/MP4 video as base64-encoded data.
     {
       "timestamp":1.2,
       "command":{"type":"activate","payload":{"identifier":"loginButton"}},
-      "result":{"success":true,"method":"syntheticTap","interfaceDelta":{"kind":"elementsChanged","elementCount":12,"edits":{"updated":[{"heistId":"button·loginButton","changes":[{"property":"value","old":null,"new":"Loading..."}]}]}}}
+      "result":{"success":true,"method":"syntheticTap","accessibilityDelta":{"kind":"elementsChanged","elementCount":12,"edits":{"updated":[{"heistId":"button·loginButton","changes":[{"property":"value","old":null,"new":"Loading..."}]}]}}}
     }
   ]
 }}
@@ -889,14 +889,14 @@ Recording-pipeline failures use the same `error` wire type with `kind: "recordin
 Broadcast to all subscribed clients (including observers) after a driver performs an action. Contains the command, result, and interface delta.
 
 ```json
-{"buttonHeistVersion":"<calver>","type":"interaction","payload":{"timestamp":1709472045.123,"command":{"type":"activate","payload":{"identifier":"loginButton"}},"result":{"success":true,"method":"syntheticTap","interfaceDelta":{"kind":"elementsChanged","elementCount":12,"edits":{"updated":[{"heistId":"button·loginButton","changes":[{"property":"value","old":null,"new":"Loading..."}]}]}}}}}
+{"buttonHeistVersion":"<calver>","type":"interaction","payload":{"timestamp":1709472045.123,"command":{"type":"activate","payload":{"identifier":"loginButton"}},"result":{"success":true,"method":"syntheticTap","accessibilityDelta":{"kind":"elementsChanged","elementCount":12,"edits":{"updated":[{"heistId":"button·loginButton","changes":[{"property":"value","old":null,"new":"Loading..."}]}]}}}}}
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `timestamp` | `Double` | Unix timestamp of the interaction |
 | `command` | `ClientMessage` | The command that triggered the interaction |
-| `result` | `ActionResult` | The result of the action (includes `interfaceDelta` when the UI hierarchy changed) |
+| `result` | `ActionResult` | The result of the action (includes `accessibilityDelta` when the UI hierarchy changed) |
 
 ### error
 
@@ -1296,7 +1296,7 @@ A point in unit coordinates (0–1) relative to an element's accessibility frame
 | `message` | `String?` | Additional context or error description |
 | `errorKind` | `String?` | Typed error classification: `"elementNotFound"`, `"timeout"`, `"unsupported"`, `"inputError"`, `"validationError"`, `"actionFailed"`, `"authFailure"`, `"recording"`, `"general"`. Nil on success. |
 | `payload` | `ResultPayload?` | Command-specific payload as a tagged union: `{"kind": "value", "data": "..."}` for `typeText` / `setPasteboard` / `getPasteboard`; `{"kind": "scrollSearch", "data": {...}}` for `elementSearch`; `{"kind": "explore", "data": {...}}` for `explore`. Omitted when no command-specific payload applies. |
-| `interfaceDelta` | `InterfaceDelta?` | Compact delta describing what changed after the action |
+| `accessibilityDelta` | `AccessibilityTrace.Delta?` | Compact delta describing what changed after the action |
 | `animating` | `Bool?` | `true` if UI was still animating when result was produced; `nil` means idle |
 | `screenName` | `String?` | Label of the first header element in the post-action snapshot (screen name hint) |
 | `screenId` | `String?` | Slugified screen name for machine use (e.g. `"controls_demo"`) |
@@ -1317,8 +1317,8 @@ Every `ActionExpectation` serializes to a JSON object with a `type` discriminato
 |--------|---------|-------------|
 | `"screen_changed"` | *(no fields)* | VC identity changed |
 | `"elements_changed"` | *(no fields)* | Element-level add/remove/update (superset-met by screen_changed) |
-| `"element_updated"` | `heistId?`, `property?`, `oldValue?`, `newValue?` | A matching entry appears in `interfaceDelta.edits.updated` |
-| `"element_appeared"` | `matcher` (ElementMatcher) | An element matching the matcher appears in `interfaceDelta.edits.added` |
+| `"element_updated"` | `heistId?`, `property?`, `oldValue?`, `newValue?` | A matching entry appears in `accessibilityDelta.edits.updated` |
+| `"element_appeared"` | `matcher` (ElementMatcher) | An element matching the matcher appears in `accessibilityDelta.edits.added` |
 | `"element_disappeared"` | `matcher` (ElementMatcher) | An element matching the matcher was removed |
 | `"compound"` | `expectations` (`[ActionExpectation]`) | Every sub-expectation must be met |
 
@@ -1364,9 +1364,9 @@ When a `run_batch` response includes steps with expectations, the response inclu
 
 Under `stop_on_error` policy, a failed expectation (`status: "expectation_failed"`) stops the batch.
 
-### InterfaceDelta
+### AccessibilityTrace.Delta
 
-`InterfaceDelta` is a discriminated union — the `kind` field selects which other fields are valid. Empty edit collections are omitted on the wire; missing keys decode as empty arrays.
+`AccessibilityTrace.Delta` is a discriminated union — the `kind` field selects which other fields are valid. Empty edit collections are omitted on the wire; missing keys decode as empty arrays.
 
 Common fields (every case):
 
@@ -1461,7 +1461,7 @@ A single recorded interaction event captured during a Stakeout recording.
 |-------|------|-------------|
 | `timestamp` | `Double` | Time offset from recording start in seconds |
 | `command` | `ClientMessage` | The command that triggered this interaction |
-| `result` | `ActionResult` | The result returned to the client (includes `interfaceDelta` when the UI hierarchy changed) |
+| `result` | `ActionResult` | The result returned to the client (includes `accessibilityDelta` when the UI hierarchy changed) |
 
 ## Example Session
 
@@ -1766,7 +1766,7 @@ The current shape, beyond what is described in the message reference above:
 - `ActionExpectation` uses an explicit `type` discriminator
   (`{"type": "element_updated", …}`) rather than Swift-synthesized Codable.
   The `expect` field accepts the object form only.
-- `InterfaceDelta` is a discriminated union with cases `noChange` /
+- `AccessibilityTrace.Delta` is a discriminated union with cases `noChange` /
   `elementsChanged` / `screenChanged`. `elementsChanged.edits` and
   `screenChanged.postEdits` both nest the same `ElementEdits` object;
   empty edits/postEdits are omitted and missing keys decode as empty.

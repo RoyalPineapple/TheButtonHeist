@@ -143,7 +143,7 @@ final class TheGetawayTests: XCTestCase {
 
         let result = getaway.staleTargetedActionFailure(
             for: .touchTap(.init(elementTarget: .heistId("button_old"))),
-            backgroundAccessibilityDelta: screenChangedDelta()
+            backgroundCapture: screenChangedBackgroundCapture()
         )
 
         let unwrapped = try XCTUnwrap(result)
@@ -164,7 +164,7 @@ final class TheGetawayTests: XCTestCase {
 
         let result = getaway.staleTargetedActionFailure(
             for: .waitFor(.init(elementTarget: .heistId("button_old"), timeout: 0.1)),
-            backgroundAccessibilityDelta: screenChangedDelta()
+            backgroundCapture: screenChangedBackgroundCapture()
         )
 
         XCTAssertNil(result, "waitFor is wait-only; stale action failure semantics are only for targeted actions")
@@ -751,6 +751,14 @@ final class TheGetawayTests: XCTestCase {
             elementCount: 1,
             newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
         ))
+    }
+
+    private func screenChangedBackgroundCapture() -> TheBrains.BackgroundCapture {
+        let interface = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+        return TheBrains.BackgroundCapture(
+            delta: screenChangedDelta(),
+            accessibilityTrace: AccessibilityTrace(interface: interface)
+        )
     }
 }
 #endif // canImport(UIKit)

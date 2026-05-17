@@ -218,6 +218,40 @@ final class ServerMessageTests: XCTestCase {
         XCTAssertEqual(textRange["rangeDescription"] as? String, "[10..<16]")
     }
 
+    func testActionResultAccessibilityTraceWireShape() throws {
+        let interface = Interface(
+            timestamp: Date(timeIntervalSince1970: 0),
+            tree: [
+                .element(HeistElement(
+                    heistId: "submit",
+                    description: "Submit",
+                    label: "Submit",
+                    value: nil,
+                    identifier: "submit_button",
+                    traits: [.button],
+                    frameX: 10,
+                    frameY: 20,
+                    frameWidth: 100,
+                    frameHeight: 44,
+                    actions: [.activate]
+                )),
+            ]
+        )
+        let result = ActionResult(
+            success: true,
+            method: .activate,
+            accessibilityDelta: .noChange(.init(elementCount: 1)),
+            accessibilityTrace: AccessibilityTrace(interface: interface)
+        )
+
+        let data = try JSONEncoder().encode(result)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        XCTAssertNotNil(json["accessibilityDelta"])
+        XCTAssertNotNil(json["accessibilityTrace"])
+        XCTAssertNil(json["interfaceDelta"])
+    }
+
     func testActionResultPayloadDecodesFromExplicitJSON() throws {
         let json = """
         {"type":"actionResult","payload":{"success":true,"method":"typeText","payload":{"kind":"value","data":"Hello"}}}

@@ -654,12 +654,10 @@ final class TheBookKeeper {
         fallbackCache: [String: HeistElement],
         fallbackElements: [HeistElement]
     ) -> (element: HeistElement, elements: [HeistElement])? {
-        if let trace {
-            for capture in trace.captures {
-                let elements = capture.interface.elements
-                if let element = elements.first(where: { $0.heistId == heistId }) {
-                    return (element, elements)
-                }
+        if let capture = trace?.captures.first {
+            let elements = capture.interface.elements
+            if let element = elements.first(where: { $0.heistId == heistId }) {
+                return (element, elements)
             }
         }
         guard let element = fallbackCache[heistId] else { return nil }
@@ -716,17 +714,31 @@ final class TheBookKeeper {
         }
 
         if let elementLabel = element.label {
-            let candidate = ElementMatcher(label: elementLabel, traits: traits)
+            let candidate = ElementMatcher(label: elementLabel)
             if uniquelyMatches(candidate, element: element, in: allElements) {
                 return (candidate, nil)
             }
 
-            if let stableIdentifier {
-                let candidate = ElementMatcher(
-                    label: elementLabel, identifier: stableIdentifier, traits: traits
-                )
+            if let traits {
+                let candidate = ElementMatcher(label: elementLabel, traits: traits)
                 if uniquelyMatches(candidate, element: element, in: allElements) {
                     return (candidate, nil)
+                }
+            }
+
+            if let stableIdentifier {
+                let candidate = ElementMatcher(label: elementLabel, identifier: stableIdentifier)
+                if uniquelyMatches(candidate, element: element, in: allElements) {
+                    return (candidate, nil)
+                }
+
+                if let traits {
+                    let candidate = ElementMatcher(
+                        label: elementLabel, identifier: stableIdentifier, traits: traits
+                    )
+                    if uniquelyMatches(candidate, element: element, in: allElements) {
+                        return (candidate, nil)
+                    }
                 }
             }
         }
