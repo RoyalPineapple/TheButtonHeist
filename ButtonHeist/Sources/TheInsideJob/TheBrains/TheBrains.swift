@@ -173,9 +173,14 @@ final class TheBrains {
             builder.settleTimeMs = cancelMs
             return builder.failure(errorKind: .actionFailed)
         }
-        logSettleOutcome(settleResult.outcome)
+        logSettleOutcome(settleResult.outcome, events: settleResult.events)
 
-        var afterScreen = stash.parse()
+        var afterScreen = settleResult.outcome.didSettleCleanly
+            ? settleResult.finalScreen
+            : nil
+        if afterScreen == nil {
+            afterScreen = stash.parse()
+        }
 
         let afterElements = afterScreen?.hierarchy.sortedElements ?? []
         let afterSnapshotForClassification = afterScreen.map(ScreenClassifier.snapshot(of:)) ?? ScreenClassifier.snapshot(of: .empty)
@@ -196,7 +201,7 @@ final class TheBrains {
         _ = await navigation.exploreAndPrune()
         let afterTree = stash.wireTree()
         let transientElements = Self.shouldSuppressTransient(
-            settleOutcome: settleResult.outcome,
+            settleEvents: settleResult.events,
             isScreenChange: isScreenChange
         )
             ? []
@@ -229,6 +234,8 @@ final class TheBrains {
             ),
             settle: SettleReceipt(
                 outcome: settleResult.outcome,
+                events: settleResult.events,
+                elementsByKey: settleResult.elementsByKey,
                 didSettle: didSettle,
                 accessibilityTrace: accessibilityTrace
             )
@@ -239,12 +246,14 @@ final class TheBrains {
 
     // MARK: - Settle Outcome Helpers
 
-    private func logSettleOutcome(_ outcome: SettleOutcome) {
+    private func logSettleOutcome(_ outcome: SettleOutcome, events: [SettleEvent]) {
         switch outcome {
         case .settled(let ms):
-            insideJobLogger.info("Post-action settle: settled in \(ms)ms")
-        case .tripwireTriggered(let ms):
-            insideJobLogger.info("Post-action settle: Tripwire triggered mid-loop after \(ms)ms")
+            if events.containsTripwireSignalChange {
+                insideJobLogger.info("Post-action settle: settled after Tripwire signal in \(ms)ms")
+            } else {
+                insideJobLogger.info("Post-action settle: settled in \(ms)ms")
+            }
         case .timedOut(let ms):
             insideJobLogger.info("Post-action settle: timed out after \(ms)ms")
         case .cancelled(let ms):
@@ -274,27 +283,27 @@ final class TheBrains {
     /// Should the post-action delta omit the `transient` list?
     ///
     /// `SettleSession.elementsByKey` accumulates every element seen during
-    /// the multi-cycle loop. On a clean settle (no Tripwire trigger and no
-    /// parsed screen change), the "appeared then disappeared" elements
-    /// really are transient — a spinner, a loading overlay, a snackbar.
-    /// On a screen change the
-    /// same accumulation includes the *previous screen's* elements,
-    /// which are stale-not-transient: they didn't come and go as part of
-    /// this action, they're just no longer the active screen. Reporting
-    /// them as `transient` claims the wrong thing and pollutes the delta
-    /// with elements the agent can no longer see or act on.
+    /// the multi-cycle loop. On a clean same-screen settle (no Tripwire
+    /// signal and no parsed screen change), the "appeared then disappeared"
+    /// elements really are transient — a spinner, a loading overlay, a
+    /// snackbar. On a transition, the same accumulation includes the
+    /// *previous screen's* elements, which are stale-not-transient: they
+    /// didn't come and go as part of this action, they're just no longer the
+    /// active screen. Reporting them as `transient` claims the wrong thing
+    /// and pollutes the delta with elements the agent can no longer see or
+    /// act on.
     ///
     /// Both checks matter:
-    /// - `.tripwireTriggered` outcome: the loop preempted itself because a
-    ///   cheap UIKit-side condition changed. Suppress transients because
-    ///   the settle timeline is not a clean same-screen sequence.
+    /// - `SettleEvent.tripwireSignalChanged`: the loop reset its baseline
+    ///   because a cheap UIKit-side condition changed. Suppress transients
+    ///   because the settle timeline is not a clean same-screen sequence.
     /// - `isScreenChange` flag: the parsed signature concluded the screen
     ///   changed even if the settle loop reached `.settled`.
     static func shouldSuppressTransient(
-        settleOutcome: SettleOutcome,
+        settleEvents: [SettleEvent],
         isScreenChange: Bool
     ) -> Bool {
-        if case .tripwireTriggered = settleOutcome { return true }
+        if settleEvents.containsTripwireSignalChange { return true }
         return isScreenChange
     }
 
@@ -528,35 +537,14 @@ final class TheBrains {
             }
         }
 
-        // Slow path: poll until a change lands or we time out
-        var beforeCaptureHash = initial.capture.hash
-        var round = 0
-
-        while CFAbsoluteTimeGetCurrent() < predicate.deadline {
-            let remaining = predicate.deadline - CFAbsoluteTimeGetCurrent()
-            guard remaining > 0 else { break }
-
-            _ = await tripwire.waitForAllClear(timeout: min(remaining, 1.0))
-            guard let current = await refreshSemanticSnapshot() else { continue }
-            round += 1
-
-            if current.capture.hash == beforeCaptureHash { continue }
-
-            let accessibilityTrace = makeAccessibilityTrace(afterCapture: current.capture, parentCapture: baseline.capture)
-            let delta = deriveDelta(from: accessibilityTrace, before: baseline, after: current)
-            let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
-
-            if let result = evaluateWaitForChange(
-                delta: delta, accessibilityTrace: accessibilityTrace,
-                afterSnapshot: current.snapshot, expectation: predicate.expectation,
-                preWaitElements: preWaitElements,
-                start: start, round: round, message: "changed after \(elapsed)s (\(round) rounds)"
-            ) {
-                return result
-            }
-
-            beforeCaptureHash = current.capture.hash
-            insideJobLogger.debug("wait_for_change round \(round): \(delta.kindRawValue), expectation not yet met")
+        if let result = await waitForChangeThroughSettledSnapshots(
+            baseline: baseline,
+            initial: initial,
+            predicate: predicate,
+            preWaitElements: preWaitElements,
+            start: start
+        ) {
+            return result
         }
 
         // Timeout
@@ -580,6 +568,57 @@ final class TheBrains {
         builder.accessibilityDelta = delta
         builder.accessibilityTrace = timeoutAccessibilityTrace
         return builder.failure(errorKind: .timeout)
+    }
+
+    private func waitForChangeThroughSettledSnapshots(
+        baseline: BeforeState,
+        initial: BeforeState,
+        predicate: WaitForChangePredicate,
+        preWaitElements: [String: HeistElement],
+        start: CFAbsoluteTime
+    ) async -> ActionResult? {
+        // Wait for stable AX-tree observations until a change lands or we time
+        // out. Tripwire signals reset the settle baseline inside
+        // `SettleSession`; the parsed AX captures below still decide whether
+        // anything changed.
+        var beforeCaptureHash = initial.capture.hash
+        var settleBaseline = initial
+        var round = 0
+
+        while CFAbsoluteTimeGetCurrent() < predicate.deadline {
+            let remaining = predicate.deadline - CFAbsoluteTimeGetCurrent()
+            guard remaining > 0 else { break }
+
+            guard let current = await waitForSettledSemanticSnapshot(
+                baselineTripwireSignal: settleBaseline.tripwireSignal,
+                timeout: min(remaining, 1.0)
+            ) else { continue }
+            round += 1
+
+            if current.capture.hash == beforeCaptureHash {
+                settleBaseline = current
+                continue
+            }
+
+            let accessibilityTrace = makeAccessibilityTrace(afterCapture: current.capture, parentCapture: baseline.capture)
+            let delta = deriveDelta(from: accessibilityTrace, before: baseline, after: current)
+            let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
+
+            if let result = evaluateWaitForChange(
+                delta: delta, accessibilityTrace: accessibilityTrace,
+                afterSnapshot: current.snapshot, expectation: predicate.expectation,
+                preWaitElements: preWaitElements,
+                start: start, round: round, message: "changed after \(elapsed)s (\(round) rounds)"
+            ) {
+                return result
+            }
+
+            beforeCaptureHash = current.capture.hash
+            settleBaseline = current
+            insideJobLogger.debug("wait_for_change round \(round): \(delta.kindRawValue), expectation not yet met")
+        }
+
+        return nil
     }
 
     private func waitForChangeTimeoutMessage(
@@ -840,6 +879,26 @@ final class TheBrains {
 
     private func refreshSemanticSnapshot() async -> BeforeState? {
         guard refresh() != nil else { return nil }
+        _ = await navigation.exploreAndPrune()
+        return captureSemanticState()
+    }
+
+    private func waitForSettledSemanticSnapshot(
+        baselineTripwireSignal: TheTripwire.TripwireSignal,
+        timeout: TimeInterval
+    ) async -> BeforeState? {
+        let timeoutMs = max(1, Int(timeout * 1000))
+        let settleSession = SettleSession.live(
+            stash: stash,
+            tripwire: tripwire,
+            timeoutMs: timeoutMs
+        )
+        let settle = await settleSession.run(
+            start: CFAbsoluteTimeGetCurrent(),
+            baselineTripwireSignal: baselineTripwireSignal
+        )
+        guard settle.outcome.didSettleCleanly, let screen = settle.finalScreen else { return nil }
+        stash.currentScreen = screen
         _ = await navigation.exploreAndPrune()
         return captureSemanticState()
     }

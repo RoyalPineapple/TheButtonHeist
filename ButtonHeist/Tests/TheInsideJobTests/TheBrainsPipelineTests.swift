@@ -144,6 +144,8 @@ final class TheBrainsPipelineTests: XCTestCase {
             attempt: .delivered(method: .typeText, message: "typed text", value: "hello"),
             settle: SettleReceipt(
                 outcome: .settled(timeMs: 321),
+                events: [],
+                elementsByKey: [:],
                 didSettle: true,
                 accessibilityTrace: accessibilityTrace
             )
@@ -211,6 +213,8 @@ final class TheBrainsPipelineTests: XCTestCase {
             attempt: .delivered(method: .activate),
             settle: SettleReceipt(
                 outcome: .settled(timeMs: 10),
+                events: [],
+                elementsByKey: [:],
                 didSettle: true,
                 accessibilityTrace: accessibilityTrace
             )
@@ -369,20 +373,29 @@ final class TheBrainsPipelineTests: XCTestCase {
     /// transition. Those are stale, not transient, and must not be surfaced
     /// under the delta's `transient` list when the action triggered a
     /// screen change.
-    func testShouldSuppressTransientOnTripwireTriggeredOutcome() {
+    func testShouldSuppressTransientOnTripwireSignalEvent() {
+        let changedObject = NSObject()
+        let changedSignal = TheTripwire.TripwireSignal(
+            topmostVC: ObjectIdentifier(changedObject),
+            navigation: .empty,
+            windowStack: .empty
+        )
         XCTAssertTrue(
             TheBrains.shouldSuppressTransient(
-                settleOutcome: .tripwireTriggered(timeMs: 120),
+                settleEvents: [
+                    .tripwireSignalChanged(from: .empty, to: changedSignal)
+                ],
                 isScreenChange: false
             ),
-            "A .tripwireTriggered settle outcome alone must suppress transients"
+            "A Tripwire signal event alone must suppress transients"
         )
+        _ = changedObject // keep alive
     }
 
     func testShouldSuppressTransientOnDiffDetectedScreenChange() {
         XCTAssertTrue(
             TheBrains.shouldSuppressTransient(
-                settleOutcome: .settled(timeMs: 300),
+                settleEvents: [],
                 isScreenChange: true
             ),
             "Even when the settle loop reached .settled, a parsed screen change must suppress transients"
@@ -392,7 +405,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     func testShouldNotSuppressTransientOnCleanSettle() {
         XCTAssertFalse(
             TheBrains.shouldSuppressTransient(
-                settleOutcome: .settled(timeMs: 300),
+                settleEvents: [],
                 isScreenChange: false
             ),
             "Clean settle without a screen change: transients are real (spinners, snackbars, overlays)"
@@ -402,7 +415,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     func testShouldNotSuppressTransientOnTimedOut() {
         XCTAssertFalse(
             TheBrains.shouldSuppressTransient(
-                settleOutcome: .timedOut(timeMs: 5_000),
+                settleEvents: [],
                 isScreenChange: false
             ),
             "Timed-out settle: still on the same screen, so observed transients are still valid"
@@ -412,7 +425,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     func testShouldNotSuppressTransientOnCancelled() {
         XCTAssertFalse(
             TheBrains.shouldSuppressTransient(
-                settleOutcome: .cancelled(timeMs: 50),
+                settleEvents: [],
                 isScreenChange: false
             ),
             "Cancelled mid-action: not a screen change, transients (if any) are valid"
