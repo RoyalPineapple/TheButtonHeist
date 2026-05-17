@@ -75,9 +75,9 @@ extension TheBrains {
         )
     }
 
-    /// Scroll-to-visible can use an off-viewport entry from the most recent
+    /// Scroll-to-visible can use an off-screen entry from the most recent
     /// exploration. Preserve that union across the dispatch refresh that
-    /// otherwise narrows `currentScreen` back to the live viewport.
+    /// otherwise narrows `currentScreen` back to the latest parsed page.
     func performScrollToVisible(
         target: ScrollToVisibleTarget,
         command: ClientMessage
@@ -86,7 +86,7 @@ extension TheBrains {
         guard refresh() != nil else {
             return treeUnavailableResult(method: Self.diagnosticMethod(for: command))
         }
-        let recordedScreen = recordedScreenIfCurrentViewportStillMatches(screenBeforeRefresh)
+        let recordedScreen = recordedScreenIfFreshParseStillMatches(screenBeforeRefresh)
         let before = captureBeforeState()
         let result = await navigation.executeScrollToVisible(target, recordedScreen: recordedScreen)
 
@@ -108,7 +108,7 @@ extension TheBrains {
         guard refresh() != nil else {
             return treeUnavailableResult(method: Self.diagnosticMethod(for: command))
         }
-        let recordedScreen = recordedScreenIfCurrentViewportStillMatches(screenBeforeRefresh)
+        let recordedScreen = recordedScreenIfFreshParseStillMatches(screenBeforeRefresh)
         let before = captureBeforeState()
         let result = await navigation.executeElementSearch(target, recordedScreen: recordedScreen)
 
@@ -126,10 +126,10 @@ extension TheBrains {
         return enriched
     }
 
-    private func recordedScreenIfCurrentViewportStillMatches(_ screenBeforeRefresh: Screen) -> Screen? {
-        let currentVisibleIds = stash.currentScreen.visibleIds
+    private func recordedScreenIfFreshParseStillMatches(_ screenBeforeRefresh: Screen) -> Screen? {
+        let currentVisibleIds = stash.currentScreen.interactionSnapshot.heistIds
         guard !screenBeforeRefresh.elements.isEmpty,
-              currentVisibleIds.isSubset(of: screenBeforeRefresh.knownIds) else {
+              currentVisibleIds.isSubset(of: screenBeforeRefresh.knownInterface.heistIds) else {
             return nil
         }
         return screenBeforeRefresh
@@ -243,7 +243,7 @@ extension TheBrains {
     }
 
     /// `wait_for` predicates observe the fresh semantic hierarchy, not just the
-    /// current viewport. Exploration may stop as soon as the target is found;
+    /// latest parsed page. Exploration may stop as soon as the target is found;
     /// if it is not found, all reachable scroll containers are scanned.
     private func refreshSemanticStateForWait(target: ElementTarget) async -> Bool {
         guard stash.refresh() != nil else { return false }

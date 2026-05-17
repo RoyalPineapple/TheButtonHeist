@@ -9,11 +9,12 @@ import AccessibilitySnapshotParser
 /// The stash — holds the goods and answers questions about them.
 ///
 /// TheStash holds the latest committed `Screen` and exposes lookup, matcher
-/// resolution, and wire-conversion facades. The persistent element registry
-/// is gone — there's exactly one mutable field, `currentScreen`, and a single
-/// rule: parse-then-assign. Callers call `parse()` to obtain a Screen value,
-/// then decide when to write it back via `currentScreen = ...`. The
-/// exploration accumulator lives in TheBrains as a local `var union`.
+/// resolution, and wire-conversion facades. `currentScreen.knownInterface`
+/// is targetable semantic state; `currentScreen.interactionSnapshot` is the
+/// latest parse used for geometry, live objects, and scrolling. Callers call
+/// `parse()` to obtain a Screen value, then decide when to write it back via
+/// `currentScreen = ...`. The exploration accumulator lives in TheBrains as
+/// a local `var union`.
 @MainActor
 final class TheStash {
 
@@ -24,19 +25,7 @@ final class TheStash {
 
     // MARK: - Mutable State
 
-    /// The one piece of mutable state — the latest committed screen value.
-    ///
-    /// **One field, two shapes:**
-    ///
-    /// 1. **After a plain parse** `currentScreen` is page-only: its known
-    ///    semantic set is exactly the live hierarchy. Scroll-settle heuristics
-    ///    compare this shape between frames to detect movement.
-    ///
-    /// 2. **After `Navigation.exploreAndPrune`** the local `union: Screen`
-    ///    accumulator is committed here. `elements` becomes the whole known
-    ///    hierarchy discovered by scrolling, while live-only fields (`hierarchy`,
-    ///    `heistIdByElement`, `firstResponderHeistId`) still come from the last
-    ///    parse via `Screen.merging`.
+    /// Latest committed interface state.
     ///
     /// **Writer audit** — the call sites that set this field:
     /// - `refresh()` — single parse + commit (page-only)
@@ -46,7 +35,7 @@ final class TheStash {
     /// - `clearCache()` / `clearScreen()` — reset to `.empty`
     /// - `TheBrains.actionResultWithDelta` — page-only commit after settle
     ///
-    /// Readers that specifically want "what's reachable in the latest parse"
+    /// Readers that specifically want "what's on-screen in the latest parse"
     /// read `visibleIds`; target resolution reads the known semantic set.
     var currentScreen: Screen = .empty
 
@@ -66,18 +55,19 @@ final class TheStash {
 
     // MARK: - Computed Accessors
 
-    /// Live hierarchy from the most recent parse. Proxy for call-site clarity —
+    /// Hierarchy from the most recent parse. Proxy for call-site clarity —
     /// reads, matchers, scroll dispatch, and tab-bar geometry all need it
-    /// without spelling out `currentScreen.hierarchy` every time.
+    /// without spelling out `currentScreen.interactionSnapshot.hierarchy`
+    /// every time.
     var currentHierarchy: [AccessibilityHierarchy] {
-        currentScreen.hierarchy
+        currentScreen.interactionSnapshot.hierarchy
     }
 
     /// Scrollable containers paired with their backing UIView.
     /// Unwraps the weak ref wrapper for call sites that need a live UIView.
     var scrollableContainerViews: [AccessibilityContainer: UIView] {
         var result: [AccessibilityContainer: UIView] = [:]
-        for (container, ref) in currentScreen.scrollableContainerViews {
+        for (container, ref) in currentScreen.interactionSnapshot.scrollableContainerViews {
             if let view = ref.view {
                 result[container] = view
             }
@@ -88,23 +78,22 @@ final class TheStash {
     /// HeistIds of all known elements in the current screen value.
     ///
     /// After an exploration commit this includes elements that were observed
-    /// during scrolling and are no longer on-screen; after a plain `refresh()`
-    /// this is the live viewport. Use `visibleIds` when you specifically
-    /// need "what's on screen right now".
+    /// during scrolling and are no longer on-screen. Use `visibleIds` when
+    /// you specifically need the latest parsed on-screen ids.
     var knownIds: Set<String> {
         ids(in: .known)
     }
 
-    /// HeistIds of elements present in the live hierarchy from the most
-    /// recent parse — i.e. on-screen right now. Strictly a subset of
-    /// `knownIds` after an exploration union has been committed.
+    /// HeistIds of elements present in the hierarchy from the most recent
+    /// parse. Strictly a subset of `knownIds` after an exploration union has
+    /// been committed.
     var visibleIds: Set<String> {
         ids(in: .visible)
     }
 
     /// HeistId of the element whose live object is currently first responder.
     var firstResponderHeistId: String? {
-        currentScreen.firstResponderHeistId
+        currentScreen.interactionSnapshot.firstResponderHeistId
     }
 
     /// Screen name from the current screen (first header element by traversal order).
@@ -334,7 +323,7 @@ final class TheStash {
            pending.screenElement.heistId == screenElement.heistId {
             return pending.object
         }
-        if currentScreen.findElement(heistId: screenElement.heistId) == nil {
+        if currentScreen.knownInterface.findElement(heistId: screenElement.heistId) == nil {
             return screenElement.object
         }
         return nil
@@ -421,8 +410,8 @@ final class TheStash {
     /// `.notFound` or `.ambiguous` with diagnostics on failure.
     ///
     /// Resolution reads the committed semantic state. If an element is not in
-    /// `currentScreen.elements`, resolution fails with a near-miss suggestion.
-    /// Live coordinate revalidation happens later in action execution.
+    /// `currentScreen.knownInterface`, resolution fails with a near-miss
+    /// suggestion. Live coordinate revalidation happens later in action execution.
     func resolveTarget(_ target: ElementTarget) -> TargetResolution {
         resolveTarget(target, in: currentScreen, includePendingRotor: true, resolutionScope: .known)
     }
@@ -438,14 +427,15 @@ final class TheStash {
     /// full target semantics (ambiguity and explicit ordinal) while excluding
     /// known-only entries retained from exploration.
     func resolveVisibleTarget(_ target: ElementTarget) -> TargetResolution {
-        let visibleIds = currentScreen.visibleIds
+        let snapshot = currentScreen.interactionSnapshot
+        let visibleIds = snapshot.heistIds
         let visibleScreen = Screen(
             elements: currentScreen.elements.filter { visibleIds.contains($0.key) },
-            hierarchy: currentScreen.hierarchy,
-            containerStableIds: currentScreen.containerStableIds,
-            heistIdByElement: currentScreen.heistIdByElement,
-            firstResponderHeistId: currentScreen.firstResponderHeistId,
-            scrollableContainerViews: currentScreen.scrollableContainerViews
+            hierarchy: snapshot.hierarchy,
+            containerStableIds: snapshot.containerStableIds,
+            heistIdByElement: snapshot.heistIdByElement,
+            firstResponderHeistId: snapshot.firstResponderHeistId,
+            scrollableContainerViews: snapshot.scrollableContainerViews
         )
         return resolveTarget(target, in: visibleScreen, includePendingRotor: false, resolutionScope: .visible)
     }
@@ -478,9 +468,9 @@ final class TheStash {
     func ids(in scope: InterfaceElementScope) -> Set<String> {
         switch scope {
         case .visible:
-            return currentScreen.visibleIds
+            return currentScreen.interactionSnapshot.heistIds
         case .known:
-            return currentScreen.knownIds
+            return currentScreen.knownInterface.heistIds
         }
     }
 
@@ -490,10 +480,10 @@ final class TheStash {
     /// exploration union. `.visible` only returns ids backed by the latest live
     /// hierarchy parse.
     func screenElement(heistId: String, in scope: InterfaceElementScope) -> ScreenElement? {
-        guard let entry = currentScreen.findElement(heistId: heistId) else { return nil }
+        guard let entry = currentScreen.knownInterface.findElement(heistId: heistId) else { return nil }
         switch scope {
         case .visible:
-            return currentScreen.heistIdByElement.values.contains(heistId) ? entry : nil
+            return currentScreen.interactionSnapshot.contains(heistId: heistId) ? entry : nil
         case .known:
             return entry
         }
@@ -505,7 +495,7 @@ final class TheStash {
     /// `heistIdByElement`. Off-screen known elements cannot be found with this
     /// overload.
     func screenElement(for element: AccessibilityElement, in scope: InterfaceElementScope) -> ScreenElement? {
-        guard let heistId = currentScreen.heistIdByElement[element] else { return nil }
+        guard let heistId = currentScreen.interactionSnapshot.heistId(for: element) else { return nil }
         return screenElement(heistId: heistId, in: scope)
     }
 
@@ -804,7 +794,8 @@ final class TheStash {
         let root = "rotor_result_\(base)"
         var candidate = root
         var suffix = 2
-        while currentScreen.knownIds.contains(candidate) {
+        let knownHeistIds = currentScreen.knownInterface.heistIds
+        while knownHeistIds.contains(candidate) {
             candidate = "\(root)_\(suffix)"
             suffix += 1
         }

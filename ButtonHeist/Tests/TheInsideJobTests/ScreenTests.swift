@@ -59,6 +59,42 @@ final class ScreenTests: XCTestCase {
         XCTAssertTrue(Screen.empty.visibleIds.isEmpty)
     }
 
+    // MARK: - KnownInterface / InteractionSnapshot
+
+    func testKnownInterfaceIncludesKnownEntriesOutsideLatestParse() {
+        let visible = makeElement(label: "Visible", traits: .button)
+        let knownOnly = makeElement(label: "Known", traits: .button)
+        let screen = Screen.makeForTests(
+            elements: [(visible, "button_visible")],
+            offViewport: [
+                Screen.OffViewportEntry(
+                    knownOnly,
+                    heistId: "button_known",
+                    contentSpaceOrigin: CGPoint(x: 0, y: 2_000)
+                )
+            ]
+        )
+
+        XCTAssertEqual(screen.knownInterface.heistIds, ["button_visible", "button_known"])
+        XCTAssertEqual(screen.interactionSnapshot.heistIds, ["button_visible"])
+        XCTAssertEqual(screen.knownInterface.findElement(heistId: "button_known")?.element.label, "Known")
+        XCTAssertFalse(screen.interactionSnapshot.contains(heistId: "button_known"))
+    }
+
+    func testMergingUnionsKnownInterfaceButTakesLatestInteractionSnapshot() {
+        let first = makeElement(label: "First", traits: .button)
+        let second = makeElement(label: "Second", traits: .button)
+        let oldPage = Screen.makeForTests(elements: [(first, "button_first")])
+        let newPage = Screen.makeForTests(elements: [(second, "button_second")])
+
+        let merged = oldPage.merging(newPage)
+
+        XCTAssertEqual(merged.knownInterface.heistIds, ["button_first", "button_second"])
+        XCTAssertEqual(merged.interactionSnapshot.heistIds, ["button_second"])
+        XCTAssertNil(merged.interactionSnapshot.heistId(for: first))
+        XCTAssertEqual(merged.interactionSnapshot.heistId(for: second), "button_second")
+    }
+
     // MARK: - findElement
 
     func testFindElementReturnsNilForUnknownId() {
