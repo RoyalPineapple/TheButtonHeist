@@ -457,13 +457,8 @@ extension TheFence {
     }
 
     private func decodeTypeTextTarget(_ request: [String: Any]) throws -> TypeTextTarget {
-        let text = try request.schemaString("text")
-        let deleteCount = try request.schemaInteger("deleteCount")
-        let clearFirst = try request.schemaBoolean("clearFirst")
         return TypeTextTarget(
-            text: text,
-            deleteCount: deleteCount,
-            clearFirst: clearFirst,
+            text: try request.requiredSchemaString("text"),
             elementTarget: try elementTarget(request)
         )
     }

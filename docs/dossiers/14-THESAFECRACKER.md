@@ -163,9 +163,7 @@ graph LR
 
     subgraph Text["Text & Pasteboard"]
         Type["typeText via KeyboardBridge"]
-        Delete["deleteText(count:)"]
-        Clear["clearText()"]
-        Edit["editAction (copy/paste/cut/select/selectAll)"]
+        Edit["editAction (copy/paste/cut/select/selectAll/delete)"]
         Dismiss["resignFirstResponder()"]
         SetPB["executeSetPasteboard()"]
         GetPB["executeGetPasteboard()"]
@@ -190,7 +188,6 @@ graph LR
 | `defaultInterKeyDelay` | 30 ms | Between keystrokes |
 | `maxInterKeyDelay` | 500 ms | Upper clamp for inter-key delay |
 | `gestureYieldDelay` | 50 ms | Between gesture phases (began/ended) |
-| `selectionSettleDelay` | 50 ms | After setting selectedTextRange |
 | `keyboardPollInterval` | 100 ms | Polling for keyboard appearance |
 | `keyboardPollMaxAttempts` | 20 | = 2 second max wait for keyboard |
 

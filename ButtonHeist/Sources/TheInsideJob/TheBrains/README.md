@@ -41,7 +41,7 @@ TheBrains keeps the post-action delta cycle, dispatch, wait handlers, response s
    - `performElementAction(target:method:action:)` — `navigation.ensureOnScreen` → `stash.resolveTarget` → checkInteractivity → action closure. Used by activate, increment, decrement, customAction.
    - `performPointAction(elementTarget:pointX:pointY:action:)` — `navigation.ensureOnScreen` when element-targeted → live geometry resolution or raw coordinate passthrough → action closure → showFingerprint. Used by tap, longPress, drag, pinch, rotate, twoFingerTap.
    - `executeSwipe` has two paths: unit-point (element-relative 0-1 coordinates resolved against frame) and absolute-point.
-   - `executeTypeText` is the longest: optional `navigation.ensureOnScreen` + tap-to-focus → poll for active text input → optional clear/delete → type string → refresh → re-resolve for value readback.
+   - `executeTypeText` handles optional `navigation.ensureOnScreen` + tap-to-focus → poll for active text input → type a non-empty string → refresh → re-resolve for value readback.
 
 4. **`Navigation.swift`** — Type declaration, init, state (`lastSwipeDirectionByTarget`), and the nested types `SettleSwipeProfile`, `SettleSwipeStep`, `SettleSwipeLoopState`, `ScrollableTarget`, `ScrollAxis`, `ScreenManifest`. Plus `refresh()` and `clearCache()` helpers.
 

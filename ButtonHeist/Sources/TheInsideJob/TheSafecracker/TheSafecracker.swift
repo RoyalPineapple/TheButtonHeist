@@ -341,31 +341,6 @@ final class TheSafecracker {
         return true
     }
 
-    /// Delete characters by sending backspace events to the active keyboard.
-    /// Routes through KeyboardBridge → UIKeyboardImpl.deleteFromInput per character.
-    func deleteText(count: Int, interKeyDelay: UInt64 = TheSafecracker.defaultInterKeyDelay) async -> Bool {
-        guard count > 0 else { return true }
-        guard let keyboard = activeKeyboardInput() else { return false }
-        for _ in 0..<count {
-            keyboard.deleteBackward()
-            guard await Task.cancellableSleep(nanoseconds: interKeyDelay) else { break }
-        }
-        return true
-    }
-
-    /// Clear all text in the focused text input using select-all + delete.
-    /// Routes through the responder chain — no view hierarchy walk needed.
-    func clearText() async -> Bool {
-        // Select all via responder chain
-        UIApplication.shared.sendAction(#selector(UIResponderStandardEditActions.selectAll), to: nil, from: nil, for: nil)
-        guard await Task.cancellableSleep(for: Self.selectionSettleDelay) else { return false }
-
-        // Delete via keyboard bridge (preferred) or responder chain
-        guard let keyboard = activeKeyboardInput() else { return false }
-        keyboard.deleteBackward()
-        return true
-    }
-
     // MARK: - Edit Actions (via Responder Chain)
 
     /// Perform a standard edit action on the current first responder.
@@ -514,8 +489,7 @@ final class TheSafecracker {
 
 nonisolated extension TheSafecracker {
 
-    /// Default inter-key delay for text injection (30ms). Single source of truth
-    /// for typeText and deleteText default parameters.
+    /// Default inter-key delay for text injection (30ms).
     static let defaultInterKeyDelay: UInt64 = 30_000_000
 
     /// Maximum allowed inter-key delay (500ms) to prevent unreasonably slow typing.
@@ -524,10 +498,6 @@ nonisolated extension TheSafecracker {
     /// Yield between touch began/ended phases (50ms) so SwiftUI's gesture
     /// pipeline has run-loop time to transition from "possible" to "recognized".
     static let gestureYieldDelay: Duration = .milliseconds(50)
-
-    /// Yield after setting selectedTextRange (50ms) so the keyboard's internal
-    /// state treats the selection as current before the subsequent delete.
-    static let selectionSettleDelay: Duration = .milliseconds(50)
 
     /// Poll interval for keyboard readiness after tapping a text field (100ms).
     static let keyboardPollInterval: Duration = .milliseconds(100)
@@ -546,6 +516,7 @@ extension EditAction {
         case .cut:       return #selector(UIResponderStandardEditActions.cut(_:))
         case .select:    return #selector(UIResponderStandardEditActions.select(_:))
         case .selectAll: return #selector(UIResponderStandardEditActions.selectAll(_:))
+        case .delete:    return #selector(UIResponderStandardEditActions.delete(_:))
         }
     }
 }

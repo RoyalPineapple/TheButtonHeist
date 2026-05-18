@@ -135,6 +135,18 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(command.inactivityTimeout, 3)
     }
 
+    func testTypeTextRequiresText() {
+        XCTAssertThrowsError(try TypeCommand.parse([]))
+    }
+
+    func testTypeTextRejectsEmptyText() throws {
+        XCTAssertThrowsError(try TypeCommand.parse([""]))
+    }
+
+    func testTypeTextRejectsLegacyDeleteOption() {
+        XCTAssertThrowsError(try TypeCommand.parse(["--delete", "3", "hello"]))
+    }
+
     func testExpectationArgumentParserNormalizesShorthand() throws {
         let parsed = try ExpectationArgumentParser.parse("screen_changed")
 

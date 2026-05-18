@@ -232,9 +232,12 @@ Use `count` to repeat increment/decrement in one call:
 
 Targeted, non-secure `type_text` focuses the target and reports the final target value. Targetless typing uses whatever editable element already has focus; treat it as a lower-level operation for advanced flows until focus transactions land.
 
-Optionally clear the field first. `clearFirst` by itself is valid, but empty `text` and non-positive `deleteCount` are rejected:
+`type_text` requires non-empty `text`. To replace existing contents, first focus the field, then use explicit edit actions before typing:
 ```json
-{"tool": "type_text", "arguments": {"heistId": "email-field", "text": "new text", "clearFirst": true}}
+{"tool": "activate", "arguments": {"heistId": "email-field"}}
+{"tool": "edit_action", "arguments": {"action": "selectAll"}}
+{"tool": "edit_action", "arguments": {"action": "delete"}}
+{"tool": "type_text", "arguments": {"heistId": "email-field", "text": "new text"}}
 ```
 
 ### Scroll
@@ -458,7 +461,7 @@ Start with `get_interface` for the current screen. If you need less, filter by t
 | Find unseen element not currently on screen | `scroll mode=search` / `element_search` | `label`/`identifier` |
 | Return to known element not currently on screen | `scroll mode=to_visible` / `scroll_to_visible` | `heistId` |
 | Tap/activate a control | `activate` | `heistId`, `action` |
-| Type text | `type_text` | `heistId`, `text`, `clearFirst` |
+| Type text | `type_text` | `heistId`, `text` |
 | Scroll | `scroll` | `heistId`, `direction` |
 | Wait for element | `wait_for` | `label`/`heistId`, `absent`, `timeout` |
 | Run multiple actions | `run_batch` | `steps`, `policy` |

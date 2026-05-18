@@ -414,6 +414,14 @@ final class TheBrainsActionTests: XCTestCase {
         ])
     }
 
+    func testExecuteTypeTextRejectsEmptyTextBeforeFocusCheck() async {
+        let result = await brains.actions.executeTypeText(TypeTextTarget(text: ""))
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .typeText)
+        XCTAssertEqual(result.message, "type_text requires non-empty text")
+    }
+
     func testExecuteEditActionWithoutResponderReportsFocusState() async {
         _ = brains.safecracker.resignFirstResponder()
 
@@ -428,6 +436,23 @@ final class TheBrainsActionTests: XCTestCase {
             "keyboardVisible=false",
             "activeTextInput=false",
             "try focus editable text before copy",
+        ])
+    }
+
+    func testExecuteDeleteEditActionWithoutResponderReportsFocusState() async {
+        _ = brains.safecracker.resignFirstResponder()
+
+        let result = await brains.actions.executeEditAction(EditActionTarget(action: .delete))
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .editAction)
+        XCTAssertDiagnostic(result.message, contains: [
+            "edit action failed",
+            "action=\"delete\"",
+            "focus=none",
+            "keyboardVisible=false",
+            "activeTextInput=false",
+            "try focus editable text before delete",
         ])
     }
 

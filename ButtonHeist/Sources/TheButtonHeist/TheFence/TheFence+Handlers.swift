@@ -282,14 +282,8 @@ extension TheFence {
     // MARK: - Handler: Text Input
 
     func handleTypeText(_ target: TypeTextTarget) async throws -> FenceResponse {
-        if let text = target.text, text.isEmpty {
-            throw SchemaValidationError(field: "text", observed: text as Any, expected: "non-empty string")
-        }
-        if let deleteCount = target.deleteCount, deleteCount <= 0 {
-            throw SchemaValidationError(field: "deleteCount", observed: deleteCount, expected: "integer >= 1")
-        }
-        guard target.text != nil || target.deleteCount != nil || target.clearFirst == true else {
-            return .error("Must specify text, deleteCount, clearFirst, or a combination")
+        if target.text.isEmpty {
+            throw SchemaValidationError(field: "text", observed: target.text as Any, expected: "non-empty string")
         }
 
         let result = try await sendAndAwaitAction(.typeText(target), timeout: Timeouts.longActionSeconds)

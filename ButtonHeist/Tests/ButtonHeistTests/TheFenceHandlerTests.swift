@@ -387,10 +387,10 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testSchemaValidatedCoercionsStillWork() async {
         await assertPassesValidation(
-            ["command": "type_text", "deleteCount": "5"]
+            ["command": "start_recording", "fps": "5"]
         )
         await assertPassesValidation(
-            ["command": "type_text", "clearFirst": "1"]
+            ["command": "start_recording", "scale": "0.5"]
         )
     }
 
@@ -1213,7 +1213,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testTypeTextMissingBothFields() async {
         await assertValidationError(
             ["command": "type_text"],
-            contains: "Must specify text, deleteCount, clearFirst, or a combination"
+            equals: "schema validation failed for text: observed missing; expected string"
         )
     }
 
@@ -1226,21 +1226,22 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testTypeTextRejectsNonPositiveDeleteCount() async {
+    func testTypeTextRejectsLegacyDeleteCount() async {
         await assertValidationError(
             ["command": "type_text", "deleteCount": 0],
-            equals: "schema validation failed for deleteCount: observed integer 0; expected integer >= 1"
+            equals: "schema validation failed for deleteCount: observed integer 0; expected valid type_text parameter"
         )
         await assertValidationError(
-            ["command": "type_text", "deleteCount": -1],
-            equals: "schema validation failed for deleteCount: observed integer -1; expected integer >= 1"
+            ["command": "type_text", "text": "hello", "deleteCount": 5],
+            equals: "schema validation failed for deleteCount: observed integer 5; expected valid type_text parameter"
         )
     }
 
     @ButtonHeistActor
-    func testTypeTextWithClearFirstOnlyPassesValidation() async {
-        await assertPassesValidation(
-            ["command": "type_text", "clearFirst": true]
+    func testTypeTextRejectsLegacyClearFirst() async {
+        await assertValidationError(
+            ["command": "type_text", "clearFirst": true],
+            equals: "schema validation failed for clearFirst: observed boolean true; expected valid type_text parameter"
         )
     }
 
@@ -1252,24 +1253,10 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testTypeTextWithDeleteCountPassesValidation() async {
-        await assertPassesValidation(
-            ["command": "type_text", "deleteCount": 5]
-        )
-    }
-
-    @ButtonHeistActor
-    func testTypeTextWithTextAndDeleteCountPassesValidation() async {
-        await assertPassesValidation(
-            ["command": "type_text", "text": "hello", "deleteCount": 5]
-        )
-    }
-
-    @ButtonHeistActor
     func testEditActionMissingAction() async {
         await assertValidationError(
             ["command": "edit_action"],
-            equals: "schema validation failed for action: observed missing; expected enum one of copy, paste, cut, select, selectAll"
+            equals: "schema validation failed for action: observed missing; expected enum one of copy, paste, cut, select, selectAll, delete"
         )
     }
 
@@ -1277,6 +1264,13 @@ final class TheFenceHandlerTests: XCTestCase {
     func testEditActionValidPassesValidation() async {
         await assertPassesValidation(
             ["command": "edit_action", "action": "copy"]
+        )
+    }
+
+    @ButtonHeistActor
+    func testEditActionDeletePassesValidation() async {
+        await assertPassesValidation(
+            ["command": "edit_action", "action": "delete"]
         )
     }
 

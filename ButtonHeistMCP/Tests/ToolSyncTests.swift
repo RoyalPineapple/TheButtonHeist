@@ -419,17 +419,18 @@ struct ToolSyncTests {
         }
     }
 
-    @Test("type_text schema rejects no-op scalar values")
-    func typeTextSchemaRejectsNoOpScalarValues() {
+    @Test("type_text schema requires non-empty text")
+    func typeTextSchemaRequiresNonEmptyText() {
         guard let typeText = ToolDefinitions.all.first(where: { $0.name == TheFence.Command.typeText.rawValue }),
-              let textSchema = extractPropertySchema(from: typeText, property: "text"),
-              let deleteCountSchema = extractPropertySchema(from: typeText, property: "deleteCount") else {
-            Issue.record("type_text is missing text or deleteCount schema")
+              let textSchema = extractPropertySchema(from: typeText, property: "text") else {
+            Issue.record("type_text is missing text schema")
             return
         }
 
         #expect(extractIntField(from: textSchema, key: "minLength") == 1)
-        #expect(extractIntField(from: deleteCountSchema, key: "minimum") == 1)
+        #expect(extractRequiredKeys(from: typeText).contains("text"))
+        #expect(extractPropertySchema(from: typeText, property: "deleteCount") == nil)
+        #expect(extractPropertySchema(from: typeText, property: "clearFirst") == nil)
     }
 
     // MARK: - Exhaustiveness
