@@ -4,7 +4,7 @@ extension TheBookKeeper {
 
     // MARK: - Session Compression
 
-    func compressLog(in directory: URL) async throws -> URL {
+    nonisolated static func compressLog(in directory: URL) async throws -> URL {
         let logPath = directory.appendingPathComponent("session.jsonl")
         let compressedPath = directory.appendingPathComponent("session.jsonl.gz")
 
@@ -14,7 +14,7 @@ extension TheBookKeeper {
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
 
-        try await runProcess(process)
+        try await Self.runProcess(process)
 
         guard process.terminationStatus == 0 else {
             throw BookKeeperError.compressionFailed(
@@ -29,7 +29,7 @@ extension TheBookKeeper {
         return compressedPath
     }
 
-    func createArchive(session: ClosedSession) async throws -> URL {
+    nonisolated func createArchive(session: ClosedSession) async throws -> URL {
         let parentDirectory = session.directory.deletingLastPathComponent()
         let directoryName = session.directory.lastPathComponent
         let archiveName = "\(session.sessionId).tar.gz"
@@ -41,7 +41,7 @@ extension TheBookKeeper {
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
 
-        try await runProcess(process)
+        try await Self.runProcess(process)
 
         guard process.terminationStatus == 0 else {
             throw BookKeeperError.archiveFailed(
@@ -56,7 +56,7 @@ extension TheBookKeeper {
         return archivePath
     }
 
-    private nonisolated func runProcess(_ process: Process) async throws {
+    private nonisolated static func runProcess(_ process: Process) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             process.terminationHandler = { _ in
                 continuation.resume()

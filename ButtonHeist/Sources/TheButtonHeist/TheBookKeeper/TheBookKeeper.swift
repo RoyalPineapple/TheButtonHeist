@@ -57,6 +57,19 @@ struct ClosingSession: Sendable {
     let sessionId: String
     let directory: URL
     let manifest: SessionManifest
+    let compressionTask: Task<URL, Error>?
+
+    init(
+        sessionId: String,
+        directory: URL,
+        manifest: SessionManifest,
+        compressionTask: Task<URL, Error>? = nil
+    ) {
+        self.sessionId = sessionId
+        self.directory = directory
+        self.manifest = manifest
+        self.compressionTask = compressionTask
+    }
 
     var startTime: Date {
         manifest.startTime
@@ -67,6 +80,15 @@ struct ClosingSession: Sendable {
             preconditionFailure("Closing session manifest must have an endTime")
         }
         return endTime
+    }
+
+    func withCompressionTask(_ compressionTask: Task<URL, Error>?) -> ClosingSession {
+        ClosingSession(
+            sessionId: sessionId,
+            directory: directory,
+            manifest: manifest,
+            compressionTask: compressionTask
+        )
     }
 }
 
@@ -183,10 +205,10 @@ final class TheBookKeeper {
 
     func beginSession(identifier: String) throws {
         switch phase {
-        case .idle, .closing, .closed, .archived:
+        case .idle, .closed, .archived:
             break
-        case .active:
-            throw BookKeeperError.invalidPhase(expected: "idle, closed, or archived", actual: "active")
+        case .active, .closing:
+            throw BookKeeperError.invalidPhase(expected: "idle, closed, or archived", actual: phaseName)
         }
 
         guard Self.isSafeSessionIdentifier(identifier) else {
@@ -227,18 +249,28 @@ final class TheBookKeeper {
     }
 
     func closeSession() async throws {
-        guard case .active(let session) = phase else {
-            throw BookKeeperError.invalidPhase(expected: "active", actual: phaseName)
+        let closingSession: ClosingSession
+        switch phase {
+        case .active(let session):
+            closingSession = try beginClosingSession(session)
+        case .closing(let session):
+            closingSession = ensureCompressionTask(for: session)
+        case .idle, .closed, .archived:
+            throw BookKeeperError.invalidPhase(expected: "active or closing", actual: phaseName)
         }
+
+        try await completeClosingSession(closingSession)
+    }
+
+    private func beginClosingSession(_ session: ActiveSession) throws -> ClosingSession {
         let closedManifest = session.manifest.closed(at: Date())
         try flushManifest(manifest: closedManifest, directory: session.directory)
 
-        let closingSession = ClosingSession(
+        var closingSession = ClosingSession(
             sessionId: session.sessionId,
             directory: session.directory,
             manifest: closedManifest
         )
-        phase = .closing(closingSession)
         session.logHandle.closeFile()
 
         // Close heist recording handle if still open (abandoned recording)
@@ -246,16 +278,66 @@ final class TheBookKeeper {
             abandonedRecording.fileHandle.closeFile()
         }
 
-        // If compressLog throws, phase stays .closing — session data is
-        // preserved and a fresh beginSession is still allowed.
-        let compressedPath = try await compressLog(in: session.directory)
+        closingSession = closingSession.withCompressionTask(makeCompressionTask(for: closingSession))
+        phase = .closing(closingSession)
+        return closingSession
+    }
+
+    private func ensureCompressionTask(for session: ClosingSession) -> ClosingSession {
+        if session.compressionTask != nil {
+            return session
+        }
+        let retryingSession = session.withCompressionTask(makeCompressionTask(for: session))
+        phase = .closing(retryingSession)
+        return retryingSession
+    }
+
+    private func makeCompressionTask(for session: ClosingSession) -> Task<URL, Error> {
+        let directory = session.directory
+        return Task {
+            try await Self.compressLog(in: directory)
+        }
+    }
+
+    private func completeClosingSession(_ session: ClosingSession) async throws {
+        let closingSession = ensureCompressionTask(for: session)
+        guard let compressionTask = closingSession.compressionTask else {
+            throw BookKeeperError.compressionFailed(
+                "Missing compression task for closing session \(closingSession.sessionId)"
+            )
+        }
+        let compressedPath: URL
+        do {
+            compressedPath = try await compressionTask.value
+        } catch {
+            clearFailedCompressionTask(for: closingSession)
+            throw error
+        }
+
+        if case .closed(let closedSession) = phase,
+           closedSession.directory == closingSession.directory {
+            return
+        }
+
+        guard case .closing(let currentSession) = phase,
+              currentSession.directory == closingSession.directory else {
+            return
+        }
 
         phase = .closed(ClosedSession(
-            sessionId: session.sessionId,
-            directory: session.directory,
+            sessionId: closingSession.sessionId,
+            directory: closingSession.directory,
             compressedLogPath: compressedPath,
-            manifest: closedManifest
+            manifest: closingSession.manifest
         ))
+    }
+
+    private func clearFailedCompressionTask(for session: ClosingSession) {
+        guard case .closing(let currentSession) = phase,
+              currentSession.directory == session.directory else {
+            return
+        }
+        phase = .closing(currentSession.withCompressionTask(nil))
     }
 
     func archiveSession(deleteSource: Bool = false) async throws -> (URL, SessionLogSnapshot) {
