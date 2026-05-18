@@ -31,8 +31,6 @@ private struct ElementPairingSignature: Hashable {
     let state: ElementStateSignature
 }
 
-private let stableDiffTimestamp = Date(timeIntervalSince1970: 0)
-
 public extension AccessibilityTrace {
     /// Raw compact projection between this trace's first and final capture.
     ///
@@ -101,20 +99,15 @@ public extension AccessibilityTrace.Delta {
 
     /// Compare two full accessibility captures and emit the compact delta.
     ///
-    /// This is the pure capture-first diff path. Higher layers decide whether
-    /// a transition is a screen change by passing `isScreenChange` or by
-    /// writing `after.transition.screenChangeReason`. When the transition
-    /// reason is present it is authoritative, so `isScreenChange: false` can
-    /// still produce `.screenChanged`. The diff then carries exactly the
-    /// evidence needed for expectations and replay diagnostics.
+    /// This is the pure capture-first diff path. Higher layers record screen
+    /// changes on `after.transition.screenChangeReason`; the diff then carries
+    /// exactly the evidence needed for expectations and replay diagnostics.
     static func between(
         _ before: AccessibilityTrace.Capture,
-        _ after: AccessibilityTrace.Capture,
-        isScreenChange: Bool = false
+        _ after: AccessibilityTrace.Capture
     ) -> AccessibilityTrace.Delta {
         let edge = AccessibilityTrace.CaptureEdge(before: before, after: after)
-        let screenChanged = isScreenChange
-            || before.context.screenId != after.context.screenId
+        let screenChanged = before.context.screenId != after.context.screenId
             || after.transition.screenChangeReason != nil
         if !screenChanged, before.hash == after.hash {
             return .noChange(AccessibilityTrace.NoChange(
@@ -124,7 +117,7 @@ public extension AccessibilityTrace.Delta {
             ))
         }
 
-        let interfaceDelta = between(before.interface, after.interface, isScreenChange: screenChanged)
+        let interfaceDelta = betweenCapturedInterfaces(before.interface, after.interface, isScreenChange: screenChanged)
             .withCaptureEdge(edge)
             .withTransient(after.transition.transient)
 
@@ -140,10 +133,7 @@ public extension AccessibilityTrace.Delta {
         return interfaceDelta
     }
 
-    /// Compatibility projection for callers that only have interfaces. New
-    /// production emission should prefer the capture overload so the delta
-    /// carries the source capture edge.
-    static func between(
+    private static func betweenCapturedInterfaces(
         _ before: Interface,
         _ after: Interface,
         isScreenChange: Bool = false
@@ -164,50 +154,12 @@ public extension AccessibilityTrace.Delta {
         return makeDelta(edits: ElementEdits.between(before, after), elementCount: afterElements.count)
     }
 
-    /// Compatibility/test projection for callers that only have elements.
-    /// New production emission should prefer the capture overload.
-    static func between(
-        _ before: HeistElement,
-        _ after: HeistElement,
-        isScreenChange: Bool = false
-    ) -> AccessibilityTrace.Delta {
-        between(singleElementInterface(before), singleElementInterface(after), isScreenChange: isScreenChange)
-    }
-
-    /// Compatibility/test projection for callers that only have nodes. New
-    /// production emission should prefer the capture overload.
-    static func between(
-        _ before: InterfaceNode,
-        _ after: InterfaceNode,
-        isScreenChange: Bool = false
-    ) -> AccessibilityTrace.Delta {
-        between([before], [after], isScreenChange: isScreenChange)
-    }
-
-    /// Compatibility/test projection for callers that only have root-node
-    /// lists. New production emission should prefer the capture overload.
-    static func between(
-        _ beforeTree: [InterfaceNode],
-        _ afterTree: [InterfaceNode],
-        isScreenChange: Bool = false
-    ) -> AccessibilityTrace.Delta {
-        between(
-            Interface(timestamp: stableDiffTimestamp, tree: beforeTree),
-            Interface(timestamp: stableDiffTimestamp, tree: afterTree),
-            isScreenChange: isScreenChange
-        )
-    }
-
     private static func makeDelta(edits: ElementEdits, elementCount: Int) -> AccessibilityTrace.Delta {
         if edits.isEmpty {
             return .noChange(AccessibilityTrace.NoChange(elementCount: elementCount))
         }
         return .elementsChanged(AccessibilityTrace.ElementsChanged(elementCount: elementCount, edits: edits))
     }
-}
-
-private func singleElementInterface(_ element: HeistElement) -> Interface {
-    Interface(timestamp: stableDiffTimestamp, tree: [.element(element)])
 }
 
 public extension ElementEdits {

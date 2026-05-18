@@ -2357,10 +2357,9 @@ final class TheFenceTests: XCTestCase {
         )
         let trace = AccessibilityTrace(captures: [beforeCapture, afterCapture])
         XCTAssertEqual(trace.captureEndpointDelta?.kindRawValue, "screenChanged")
-        XCTAssertEqual(
-            AccessibilityTrace.Delta.between(beforeCapture.interface, afterCapture.interface).kindRawValue,
-            "noChange",
-            "This fixture only proves the contract if interface-only recomputation would disagree."
+        XCTAssertTrue(
+            ElementEdits.between(beforeCapture.interface, afterCapture.interface).isEmpty,
+            "This fixture only proves the contract if raw interface edits would disagree."
         )
         fence.handoff.onBackgroundAccessibilityTrace?(trace)
 

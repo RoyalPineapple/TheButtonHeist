@@ -189,44 +189,55 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
             return XCTFail("Expected .screenChanged, got \(decoded)")
         }
         XCTAssertEqual(payload.elementCount, 8)
-        XCTAssertNil(payload.postEdits)
         XCTAssertTrue(payload.transient.isEmpty)
     }
 
-    func testScreenChangedWithPostEditsRoundTrip() throws {
-        let added = makeElement(heistId: "post", label: "Posted")
+    func testScreenChangedWithTransientRoundTrip() throws {
         let transient = makeElement(heistId: "spin", label: "Loading")
         let interface = Interface(timestamp: Date(timeIntervalSince1970: 1_000_000), tree: [])
-        let postEdits = ElementEdits(added: [added])
         let delta = AccessibilityTrace.Delta.screenChanged(.init(
             elementCount: 9,
             newInterface: interface,
-            postEdits: postEdits,
             transient: [transient]
         ))
         let data = try encoder.encode(delta)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        XCTAssertNotNil(json["postEdits"])
         XCTAssertNotNil(json["transient"])
 
         let decoded = try decoder.decode(AccessibilityTrace.Delta.self, from: data)
         guard case .screenChanged(let payload) = decoded else {
             return XCTFail("Expected .screenChanged, got \(decoded)")
         }
-        XCTAssertEqual(payload.postEdits?.added.map(\.heistId), ["post"])
         XCTAssertEqual(payload.transient.map(\.heistId), ["spin"])
     }
 
-    func testScreenChangedDropsEmptyPostEdits() throws {
-        let interface = Interface(timestamp: Date(timeIntervalSince1970: 1_000_000), tree: [])
-        let delta = AccessibilityTrace.Delta.screenChanged(.init(
-            elementCount: 8,
-            newInterface: interface,
-            postEdits: ElementEdits()
-        ))
-        let data = try encoder.encode(delta)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        XCTAssertNil(json["postEdits"], "postEdits should be omitted when empty")
+    func testScreenChangedDoesNotCarryLegacyPostEdits() throws {
+        let json = """
+        {
+          "kind": "screenChanged",
+          "elementCount": 1,
+          "newInterface": { "timestamp": 1000000, "tree": [] },
+          "postEdits": {
+            "added": [{
+              "heistId": "legacy",
+              "description": "Legacy",
+              "label": "Legacy",
+              "traits": ["staticText"],
+              "frameX": 0,
+              "frameY": 0,
+              "frameWidth": 10,
+              "frameHeight": 10,
+              "actions": []
+            }]
+          }
+        }
+        """
+        let decoded = try decoder.decode(AccessibilityTrace.Delta.self, from: Data(json.utf8))
+        XCTAssertNil(decoded.elementEdits)
+
+        let encoded = try encoder.encode(decoded)
+        let encodedJSON = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        XCTAssertNil(encodedJSON["postEdits"])
     }
 
     // MARK: - Cross-Case Accessors
@@ -268,7 +279,7 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
         )
     }
 
-    func testElementEditsAccessorReadsBothCases() {
+    func testElementEditsAccessorReadsElementsChangedOnly() {
         let interface = Interface(timestamp: Date(timeIntervalSince1970: 1_000_000), tree: [])
         let element = makeElement(heistId: "x", label: "X")
         let elementsChanged = AccessibilityTrace.Delta.elementsChanged(
@@ -278,15 +289,9 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
 
         let screenChanged = AccessibilityTrace.Delta.screenChanged(.init(
             elementCount: 1,
-            newInterface: interface,
-            postEdits: ElementEdits(added: [element])
+            newInterface: interface
         ))
-        XCTAssertEqual(screenChanged.elementEdits?.added.map(\.heistId), ["x"])
-
-        let screenChangedNoPostEdits = AccessibilityTrace.Delta.screenChanged(.init(
-            elementCount: 1, newInterface: interface
-        ))
-        XCTAssertNil(screenChangedNoPostEdits.elementEdits)
+        XCTAssertNil(screenChanged.elementEdits)
 
         let noChange = AccessibilityTrace.Delta.noChange(.init(elementCount: 0))
         XCTAssertNil(noChange.elementEdits)

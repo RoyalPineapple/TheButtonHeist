@@ -580,13 +580,6 @@ extension FenceResponse {
             }
         case .screenChanged(let casePayload):
             payload["newInterface"] = interfaceDictionary(casePayload.newInterface, detail: .summary)
-            if let postEdits = casePayload.postEdits, !postEdits.isEmpty {
-                var postDict: [String: Any] = [:]
-                mergeEditDictionary(postEdits, into: &postDict)
-                if !postDict.isEmpty {
-                    payload["postEdits"] = postDict
-                }
-            }
         }
         return payload
     }
