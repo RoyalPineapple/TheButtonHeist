@@ -20,7 +20,7 @@ Single-snapshot screen state, target resolution, wire conversion, and screen cap
    - `parse()` → read-only, returns a `Screen` value and does NOT mutate `currentScreen`. Callers decide when to commit.
    - `TheBurglar.buildScreen(from:)` → pure parse-result-to-`Screen` conversion.
 
-   **Tree read helpers** — `wireTree()` and `wireTreeHash()` compute the wire tree of `currentScreen` via `WireConversion.toWireTree(from:)`. They are not facades — they read state. Element-level wire conversion (`WireConversion.toWire`, `WireConversion.traitNames`) and delta computation (`InterfaceDiff.computeDelta`) are pure transforms; callers invoke them directly.
+   **Tree read helpers** — `wireTree()` and `wireTreeHash()` compute the wire tree of `currentScreen` via `WireConversion.toWireTree(from:)`. They are not facades — they read state. Element-level wire conversion (`WireConversion.toWire`, `WireConversion.traitNames`) is a pure transform. Delta emission should project from `AccessibilityTrace`; direct `InterfaceDiff.computeDelta` use is limited to compatibility edges and focused tests.
 
    **`selectElements()`** — thin facade over `Screen.orderedElements`: live hierarchy elements in traversal order, then known-only elements (from the post-explore union) sorted by heistId. Deterministic across runs.
 
