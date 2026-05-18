@@ -842,12 +842,11 @@ public final class TheFence {
         var matched: (index: Int, result: ActionResult, validation: ExpectationResult)?
         for index in backgroundAccessibilityTraces.indices.dropFirst(boundedStartIndex) {
             let trace = backgroundAccessibilityTraces[index]
-            guard let backgroundDelta = trace.backgroundDelta else { continue }
+            guard trace.backgroundDelta != nil else { continue }
             let syntheticResult = ActionResult(
                 success: true,
                 method: .waitForChange,
                 message: "expectation already met by background change",
-                accessibilityDelta: backgroundDelta,
                 accessibilityTrace: trace
             )
             let validation = expectation.validate(against: syntheticResult)

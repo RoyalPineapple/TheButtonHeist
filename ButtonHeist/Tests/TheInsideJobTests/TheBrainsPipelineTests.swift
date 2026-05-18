@@ -155,7 +155,6 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         var expectedBuilder = ActionResultBuilder(method: .typeText, capture: traceAfter)
         expectedBuilder.message = "typed text"
-        expectedBuilder.accessibilityDelta = delta
         expectedBuilder.accessibilityTrace = accessibilityTrace
         expectedBuilder.settled = true
         expectedBuilder.settleTimeMs = 321
@@ -167,13 +166,13 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(projected.settled, true)
         XCTAssertEqual(projected.settleTimeMs, 321)
         XCTAssertEqual(projected.accessibilityDelta, delta)
+        XCTAssertEqual(projected.accessibilityDelta, projected.accessibilityTrace?.captureEndpointDelta)
         XCTAssertEqual(projected.accessibilityTrace, accessibilityTrace)
         XCTAssertEqual(receipt.attempt.deliveryPhase, .delivered)
         XCTAssertEqual(receipt.settle?.outcome, .settled(timeMs: 321))
         XCTAssertEqual(receipt.settle?.didSettle, true)
         XCTAssertEqual(receipt.settle?.timeMs, 321)
         XCTAssertEqual(receipt.settle?.postCapture?.hash, postCapture.hash)
-        XCTAssertEqual(receipt.settle?.accessibilityDelta, delta)
         XCTAssertEqual(receipt.settle?.accessibilityTrace, accessibilityTrace)
     }
 
@@ -196,6 +195,30 @@ final class TheBrainsPipelineTests: XCTestCase {
             return
         }
         XCTAssertEqual(value, "hello")
+    }
+
+    func testCommandReceiptDeliveredWithoutTraceDeltaFails() {
+        seedScreen(elements: [("Before", .header, "before_header")])
+        let before = brains.captureBeforeState()
+        let receipt = CommandReceipt(
+            before: before,
+            attempt: .delivered(method: .getPasteboard, message: "settle incomplete", payload: .value("hello")),
+            settle: SettleReceipt(
+                outcome: .settled(timeMs: 1),
+                events: [],
+                elementsByKey: [:],
+                didSettle: true,
+                accessibilityTrace: AccessibilityTrace(capture: before.capture)
+            )
+        )
+
+        let result = receipt.actionResult()
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.message, "settle incomplete")
+        XCTAssertEqual(result.errorKind, .actionFailed)
+        XCTAssertNil(result.accessibilityDelta)
+        XCTAssertNil(result.accessibilityTrace)
     }
 
     func testCommandReceiptProjectionDerivesScreenChangeFromTraceTransition() throws {
@@ -250,6 +273,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(payload.captureEdge?.before.hash, before.capture.hash)
         XCTAssertEqual(payload.captureEdge?.after.hash, afterCapture.hash)
         XCTAssertEqual(payload.newInterface, afterInterface)
+        XCTAssertEqual(result.accessibilityDelta, result.accessibilityTrace?.captureEndpointDelta)
         XCTAssertEqual(result.accessibilityTrace, accessibilityTrace)
         XCTAssertEqual(result.screenName, "After")
         XCTAssertEqual(result.screenId, "after")

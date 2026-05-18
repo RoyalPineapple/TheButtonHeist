@@ -513,7 +513,7 @@ final class TheBrains {
            validateCurrentState(expectation, snapshot: initial.snapshot).met {
             var builder = ActionResultBuilder(method: .waitForChange, snapshot: initial.snapshot)
             builder.message = "expectation already met by current state (0.0s)"
-            builder.accessibilityDelta = .noChange(.init(elementCount: initial.snapshot.count))
+            builder.accessibilityTrace = AccessibilityTrace(captures: [initial.capture, initial.capture])
             return builder.success()
         }
 
@@ -523,8 +523,8 @@ final class TheBrains {
             return nil
         }()
         if let lastCaptureHash, initial.capture.hash != lastCaptureHash {
-            let accessibilityTrace = makeAccessibilityTrace(afterCapture: initial.capture, parentCapture: baseline.capture)
-            let delta = deriveDelta(from: accessibilityTrace, before: baseline, after: initial)
+            let accessibilityTrace = makeClassifiedAccessibilityTrace(after: initial, parent: baseline)
+            let delta = accessibilityTrace.captureEndpointDelta ?? .noChange(.init(elementCount: initial.snapshot.count))
             if let result = evaluateWaitForChange(
                 delta: delta, accessibilityTrace: accessibilityTrace,
                 afterSnapshot: initial.snapshot, expectation: predicate.expectation,
@@ -550,12 +550,9 @@ final class TheBrains {
         let current = await refreshSemanticSnapshot()
         let afterSnapshot = current?.snapshot ?? []
         let timeoutAccessibilityTrace = current.map {
-            makeAccessibilityTrace(afterCapture: $0.capture, parentCapture: baseline.capture)
+            makeClassifiedAccessibilityTrace(after: $0, parent: baseline)
         }
-        let delta = current.flatMap { current -> AccessibilityTrace.Delta? in
-            guard let timeoutAccessibilityTrace else { return nil }
-            return deriveDelta(from: timeoutAccessibilityTrace, before: baseline, after: current)
-        } ?? AccessibilityTrace.Delta.noChange(.init(elementCount: 0))
+        let delta = timeoutAccessibilityTrace?.captureEndpointDelta ?? .noChange(.init(elementCount: 0))
         var builder = ActionResultBuilder(method: .waitForChange, snapshot: afterSnapshot)
         builder.message = waitForChangeTimeoutMessage(
             elapsed: elapsed,
@@ -563,7 +560,6 @@ final class TheBrains {
             delta: delta,
             elementCount: afterSnapshot.count
         )
-        builder.accessibilityDelta = delta
         builder.accessibilityTrace = timeoutAccessibilityTrace
         return builder.failure(errorKind: .timeout)
     }
@@ -598,8 +594,8 @@ final class TheBrains {
                 continue
             }
 
-            let accessibilityTrace = makeAccessibilityTrace(afterCapture: current.capture, parentCapture: baseline.capture)
-            let delta = deriveDelta(from: accessibilityTrace, before: baseline, after: current)
+            let accessibilityTrace = makeClassifiedAccessibilityTrace(after: current, parent: baseline)
+            let delta = accessibilityTrace.captureEndpointDelta ?? .noChange(.init(elementCount: current.snapshot.count))
             let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
 
             if let result = evaluateWaitForChange(
@@ -675,7 +671,6 @@ final class TheBrains {
         message: String
     ) -> ActionResult? {
         var builder = ActionResultBuilder(method: .waitForChange, snapshot: afterSnapshot)
-        builder.accessibilityDelta = delta
         builder.accessibilityTrace = accessibilityTrace
 
         guard let expectation else {
@@ -875,6 +870,21 @@ final class TheBrains {
         return AccessibilityTrace(capture: capture)
     }
 
+    func makeClassifiedAccessibilityTrace(after: BeforeState, parent: BeforeState) -> AccessibilityTrace {
+        let classification = ScreenClassifier.classify(
+            before: parent.screenSnapshot,
+            after: after.screenSnapshot
+        )
+        let capture = AccessibilityTrace.Capture(
+            sequence: 1,
+            interface: after.capture.interface,
+            context: after.capture.context,
+            transition: AccessibilityTrace.Transition(screenChangeReason: classification.reason?.rawValue),
+            hash: after.capture.hash
+        )
+        return makeAccessibilityTrace(afterCapture: capture, parentCapture: parent.capture)
+    }
+
     private func refreshSemanticSnapshot() async -> BeforeState? {
         guard refresh() != nil else { return nil }
         _ = await navigation.exploreAndPrune()
@@ -899,38 +909,6 @@ final class TheBrains {
         stash.currentScreen = screen
         _ = await navigation.exploreAndPrune()
         return captureSemanticState()
-    }
-
-    func deriveDelta(
-        from accessibilityTrace: AccessibilityTrace,
-        before: BeforeState,
-        after: BeforeState
-    ) -> AccessibilityTrace.Delta {
-        let isScreenChange = ScreenClassifier.classify(
-            before: before.screenSnapshot,
-            after: after.screenSnapshot
-        ).isScreenChange
-        return deriveDelta(
-            from: accessibilityTrace,
-            before: before,
-            isScreenChange: isScreenChange
-        )
-    }
-
-    func deriveDelta(
-        from accessibilityTrace: AccessibilityTrace,
-        before: BeforeState,
-        isScreenChange: Bool
-    ) -> AccessibilityTrace.Delta {
-        let beforeCapture = accessibilityTrace.captures.dropLast().last ?? before.capture
-        guard let afterCapture = accessibilityTrace.captures.last else {
-            return .noChange(.init(elementCount: before.capture.interface.elements.count))
-        }
-        return TheStash.InterfaceDiff.computeDelta(
-            before: beforeCapture,
-            after: afterCapture,
-            isScreenChange: isScreenChange
-        )
     }
 
     // MARK: - Screen Capture

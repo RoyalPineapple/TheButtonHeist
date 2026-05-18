@@ -22,14 +22,9 @@ import TheScore
     let screenName: String?
     let screenId: String?
     var message: String?
-    var accessibilityDelta: AccessibilityTrace.Delta?
     var accessibilityTrace: AccessibilityTrace?
     var settled: Bool?
     var settleTimeMs: Int?
-
-    private var compatibilityDelta: AccessibilityTrace.Delta? {
-        accessibilityTrace?.captureEndpointDelta ?? accessibilityDelta
-    }
 
     /// Create a builder deriving screenName/screenId from a ScreenElement snapshot.
     init(method: ActionMethod, snapshot: [TheStash.ScreenElement]) {
@@ -61,7 +56,7 @@ import TheScore
             method: method,
             message: message,
             payload: payload,
-            accessibilityDelta: compatibilityDelta,
+            accessibilityDelta: accessibilityTrace?.captureEndpointDelta,
             accessibilityTrace: accessibilityTrace,
             screenName: screenName,
             screenId: screenId,
@@ -77,7 +72,7 @@ import TheScore
             message: message,
             errorKind: errorKind,
             payload: payload,
-            accessibilityDelta: compatibilityDelta,
+            accessibilityDelta: accessibilityTrace?.captureEndpointDelta,
             accessibilityTrace: accessibilityTrace,
             screenName: screenName,
             screenId: screenId,

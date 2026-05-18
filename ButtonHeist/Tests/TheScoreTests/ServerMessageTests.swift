@@ -252,6 +252,114 @@ final class ServerMessageTests: XCTestCase {
         XCTAssertNil(json["interfaceDelta"])
     }
 
+    func testActionResultAccessibilityDeltaProjectsFromTrace() throws {
+        let before = Interface(
+            timestamp: Date(timeIntervalSince1970: 0),
+            tree: [
+                .element(HeistElement(
+                    heistId: "before-title",
+                    description: "Before",
+                    label: "Before",
+                    value: nil,
+                    identifier: "before_title",
+                    traits: [.header],
+                    frameX: 0,
+                    frameY: 0,
+                    frameWidth: 100,
+                    frameHeight: 44,
+                    actions: []
+                )),
+            ]
+        )
+        let after = Interface(
+            timestamp: Date(timeIntervalSince1970: 1),
+            tree: [
+                .element(HeistElement(
+                    heistId: "after-title",
+                    description: "After",
+                    label: "After",
+                    value: nil,
+                    identifier: "after_title",
+                    traits: [.header],
+                    frameX: 0,
+                    frameY: 0,
+                    frameWidth: 100,
+                    frameHeight: 44,
+                    actions: []
+                )),
+            ]
+        )
+        let trace = AccessibilityTrace(first: before).appending(after)
+        let conflictingDelta = AccessibilityTrace.Delta.noChange(.init(elementCount: 999))
+
+        let result = ActionResult(
+            success: true,
+            method: .activate,
+            accessibilityDelta: conflictingDelta,
+            accessibilityTrace: trace
+        )
+
+        XCTAssertEqual(result.accessibilityDelta, trace.captureEndpointDelta)
+        XCTAssertEqual(result.effectiveAccessibilityDelta, trace.captureEndpointDelta)
+        XCTAssertNotEqual(result.accessibilityDelta, conflictingDelta)
+    }
+
+    func testActionResultDecodedAccessibilityDeltaProjectsFromTrace() throws {
+        let before = Interface(
+            timestamp: Date(timeIntervalSince1970: 0),
+            tree: [
+                .element(HeistElement(
+                    heistId: "before-title",
+                    description: "Before",
+                    label: "Before",
+                    value: nil,
+                    identifier: "before_title",
+                    traits: [.header],
+                    frameX: 0,
+                    frameY: 0,
+                    frameWidth: 100,
+                    frameHeight: 44,
+                    actions: []
+                )),
+            ]
+        )
+        let after = Interface(
+            timestamp: Date(timeIntervalSince1970: 1),
+            tree: [
+                .element(HeistElement(
+                    heistId: "after-title",
+                    description: "After",
+                    label: "After",
+                    value: nil,
+                    identifier: "after_title",
+                    traits: [.header],
+                    frameX: 0,
+                    frameY: 0,
+                    frameWidth: 100,
+                    frameHeight: 44,
+                    actions: []
+                )),
+            ]
+        )
+        let trace = AccessibilityTrace(first: before).appending(after)
+        let conflictingDelta = AccessibilityTrace.Delta.noChange(.init(elementCount: 999))
+        let traceJSON = try JSONSerialization.jsonObject(with: JSONEncoder().encode(trace))
+        let deltaJSON = try JSONSerialization.jsonObject(with: JSONEncoder().encode(conflictingDelta))
+        let json: [String: Any] = [
+            "success": true,
+            "method": "activate",
+            "accessibilityDelta": deltaJSON,
+            "accessibilityTrace": traceJSON,
+        ]
+        let data = try JSONSerialization.data(withJSONObject: json)
+
+        let result = try JSONDecoder().decode(ActionResult.self, from: data)
+
+        XCTAssertEqual(result.accessibilityDelta, trace.captureEndpointDelta)
+        XCTAssertEqual(result.effectiveAccessibilityDelta, trace.captureEndpointDelta)
+        XCTAssertNotEqual(result.accessibilityDelta, conflictingDelta)
+    }
+
     func testActionResultPayloadDecodesFromExplicitJSON() throws {
         let json = """
         {"type":"actionResult","payload":{"success":true,"method":"typeText","payload":{"kind":"value","data":"Hello"}}}

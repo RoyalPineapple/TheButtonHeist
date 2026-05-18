@@ -278,7 +278,9 @@ public struct ActionResult: Codable, Sendable {
     public var errorKind: ErrorKind?
     /// Command-specific payload. At most one variant per result.
     public var payload: ResultPayload?
-    /// Derived compact view describing what changed in the hierarchy after the action
+    /// Derived compact view describing what changed in the hierarchy after the action.
+    /// When `accessibilityTrace` is present, constructed and decoded results
+    /// project this field from the trace.
     public var accessibilityDelta: AccessibilityTrace.Delta?
     /// Source-of-truth accessibility capture receipt for this action.
     public var accessibilityTrace: AccessibilityTrace?
@@ -320,8 +322,8 @@ public struct ActionResult: Codable, Sendable {
         self.message = message
         self.errorKind = errorKind
         self.payload = payload
-        self.accessibilityDelta = accessibilityDelta
         self.accessibilityTrace = accessibilityTrace
+        self.accessibilityDelta = accessibilityTrace?.captureEndpointDelta ?? accessibilityDelta
         self.animating = animating
         self.screenName = screenName
         self.screenId = screenId
@@ -329,12 +331,43 @@ public struct ActionResult: Codable, Sendable {
         self.settleTimeMs = settleTimeMs
     }
 
+    private enum CodingKeys: String, CodingKey {
+        case success
+        case method
+        case message
+        case errorKind
+        case payload
+        case accessibilityDelta
+        case accessibilityTrace
+        case animating
+        case screenName
+        case screenId
+        case settled
+        case settleTimeMs
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            success: try container.decode(Bool.self, forKey: .success),
+            method: try container.decode(ActionMethod.self, forKey: .method),
+            message: try container.decodeIfPresent(String.self, forKey: .message),
+            errorKind: try container.decodeIfPresent(ErrorKind.self, forKey: .errorKind),
+            payload: try container.decodeIfPresent(ResultPayload.self, forKey: .payload),
+            accessibilityDelta: try container.decodeIfPresent(AccessibilityTrace.Delta.self, forKey: .accessibilityDelta),
+            accessibilityTrace: try container.decodeIfPresent(AccessibilityTrace.self, forKey: .accessibilityTrace),
+            animating: try container.decodeIfPresent(Bool.self, forKey: .animating),
+            screenName: try container.decodeIfPresent(String.self, forKey: .screenName),
+            screenId: try container.decodeIfPresent(String.self, forKey: .screenId),
+            settled: try container.decodeIfPresent(Bool.self, forKey: .settled),
+            settleTimeMs: try container.decodeIfPresent(Int.self, forKey: .settleTimeMs)
+        )
+    }
+
     /// Compact delta projection for this result.
     ///
     /// `accessibilityTrace` is authoritative when present; `accessibilityDelta`
-    /// remains a compatibility field for legacy delta-only payloads and older
-    /// tests. Callers that make behavior decisions should use this projection
-    /// instead of reading `accessibilityDelta` directly.
+    /// is the compact projection or a legacy delta-only fallback.
     public var effectiveAccessibilityDelta: AccessibilityTrace.Delta? {
         accessibilityTrace?.captureEndpointDelta ?? accessibilityDelta
     }
