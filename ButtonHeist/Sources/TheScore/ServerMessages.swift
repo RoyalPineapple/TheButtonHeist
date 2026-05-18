@@ -280,7 +280,7 @@ public struct ActionResult: Codable, Sendable {
     public var payload: ResultPayload?
     /// Derived compact view describing what changed in the hierarchy after the action.
     /// When `accessibilityTrace` is present, constructed and decoded results
-    /// project this field from the trace.
+    /// project this field from the trace, even when the trace projects nil.
     public var accessibilityDelta: AccessibilityTrace.Delta?
     /// Source-of-truth accessibility capture receipt for this action.
     public var accessibilityTrace: AccessibilityTrace?
@@ -323,7 +323,10 @@ public struct ActionResult: Codable, Sendable {
         self.errorKind = errorKind
         self.payload = payload
         self.accessibilityTrace = accessibilityTrace
-        self.accessibilityDelta = accessibilityTrace?.captureEndpointDelta ?? accessibilityDelta
+        self.accessibilityDelta = Self.projectedAccessibilityDelta(
+            trace: accessibilityTrace,
+            legacyDeltaOnlyBridge: accessibilityDelta
+        )
         self.animating = animating
         self.screenName = screenName
         self.screenId = screenId
@@ -367,9 +370,21 @@ public struct ActionResult: Codable, Sendable {
     /// Compact delta projection for this result.
     ///
     /// `accessibilityTrace` is authoritative when present; `accessibilityDelta`
-    /// is the compact projection or a legacy delta-only fallback.
+    /// is a named legacy bridge only for no-trace payloads.
     public var effectiveAccessibilityDelta: AccessibilityTrace.Delta? {
-        accessibilityTrace?.captureEndpointDelta ?? accessibilityDelta
+        Self.projectedAccessibilityDelta(
+            trace: accessibilityTrace,
+            legacyDeltaOnlyBridge: accessibilityDelta
+        )
+    }
+
+    private static func projectedAccessibilityDelta(
+        trace: AccessibilityTrace?,
+        legacyDeltaOnlyBridge: AccessibilityTrace.Delta?
+    ) -> AccessibilityTrace.Delta? {
+        // The only delta-only bridge: old no-trace payloads may still surface their compact projection.
+        guard let trace else { return legacyDeltaOnlyBridge }
+        return trace.captureEndpointDelta
     }
 }
 
