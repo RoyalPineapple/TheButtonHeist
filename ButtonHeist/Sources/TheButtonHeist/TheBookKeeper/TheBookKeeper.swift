@@ -652,12 +652,10 @@ final class TheBookKeeper {
         expectation: ExpectationResult?
     ) -> RecordedMetadata? {
         let accessibilityTrace = actionResult?.accessibilityTrace
-        let accessibilityDelta = actionResult?.effectiveAccessibilityDelta
         guard heistId != nil ||
             frame != nil ||
             coordinateOnly != nil ||
             accessibilityTrace != nil ||
-            accessibilityDelta != nil ||
             expectation != nil else {
             return nil
         }
@@ -666,7 +664,6 @@ final class TheBookKeeper {
             frame: frame,
             coordinateOnly: coordinateOnly,
             accessibilityTrace: accessibilityTrace,
-            accessibilityDelta: accessibilityDelta,
             expectation: expectation
         )
     }
