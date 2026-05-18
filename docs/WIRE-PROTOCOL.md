@@ -1488,7 +1488,7 @@ A single recorded interaction event captured during a Stakeout recording.
 {"buttonHeistVersion":"<calver>","type":"typeText","payload":{"text":"Hello World","elementTarget":{"identifier":"nameField"}}}
 
 # Server confirms with current field value
-{"buttonHeistVersion":"<calver>","type":"actionResult","payload":{"success":true,"method":"typeText","payload":{"kind":"value","data":"World"}}}
+{"buttonHeistVersion":"<calver>","type":"actionResult","payload":{"success":true,"method":"typeText","payload":{"kind":"value","data":"Hello World"}}}
 
 # Client replaces the current field contents explicitly
 {"buttonHeistVersion":"<calver>","type":"activate","payload":{"identifier":"nameField"}}
@@ -1497,7 +1497,7 @@ A single recorded interaction event captured during a Stakeout recording.
 {"buttonHeistVersion":"<calver>","type":"typeText","payload":{"text":"World","elementTarget":{"identifier":"nameField"}}}
 
 # Server confirms correction
-{"buttonHeistVersion":"<calver>","type":"actionResult","payload":{"success":true,"method":"typeText","payload":{"kind":"value","data":"Hello World"}}}
+{"buttonHeistVersion":"<calver>","type":"actionResult","payload":{"success":true,"method":"typeText","payload":{"kind":"value","data":"World"}}}
 
 # Client starts recording
 {"buttonHeistVersion":"<calver>","type":"startRecording","payload":{"fps":8}}
