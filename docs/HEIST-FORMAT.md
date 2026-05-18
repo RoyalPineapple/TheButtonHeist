@@ -201,10 +201,9 @@ The `_recorded` key carries optional recording notes for debugging. It is preser
 | `unsupportedArguments` | `[Object]?` | Arguments omitted from replay because they were not JSON-compatible. Includes `name`, `valueType`, and `reason`. |
 | `caps` | `[Object]?` | Inputs clamped during recording. Includes `name`, `requested`, `applied`, optional `minimum` / `maximum`, and `reason`. |
 | `accessibilityTrace` | `Object?` | Capture trace observed while recording |
-| `accessibilityDelta` | `Object?` | Compact delta observed while recording |
 | `expectation` | `Object?` | Expectation evidence observed while recording |
 
-`_recorded.heistId`, traces, caps, unsupported arguments, and frames are evidence only. Playback ignores `_recorded` entirely; the durable replay contract is the flat step command, matcher fields, ordinal, and command arguments outside `_recorded`.
+`_recorded.heistId`, traces, caps, unsupported arguments, and frames are evidence only. Playback ignores `_recorded` entirely; the durable replay contract is the flat step command, matcher fields, ordinal, and command arguments outside `_recorded`. Compact deltas are derived from `_recorded.accessibilityTrace` when needed; they are not stored as separate recorded evidence.
 
 ## Durable Recording
 
