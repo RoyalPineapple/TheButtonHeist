@@ -615,7 +615,7 @@ extension TheFence.Command {
                 Read the app accessibility hierarchy. Call once on a new screen, then track changes via \
                 action deltas — re-fetch only when you need elements the delta didn't cover. \
                 Filter with matcher fields or heistId handle list. Omit scope for the normal \
-                app accessibility state; use scope=visible only for diagnostic on-screen reads.
+                app accessibility state; use scope=visible only for fresh on-screen geometry diagnostics.
                 """
 
         case Self.getScreen.rawValue:
@@ -802,8 +802,7 @@ extension TheFence.Command {
                     key: "scope", type: .string, optionalRole: .behaviorSwitch,
                     description: """
                         Optional diagnostic scope. Omit for the app accessibility state. \
-                        Use visible only when you need a fresh on-screen parse for diagnostics \
-                        or geometry checks.
+                        Use visible only when you need fresh on-screen geometry diagnostics.
                         """,
                     enumValues: [GetInterfaceScope.visible.rawValue]
                 ),
@@ -818,7 +817,7 @@ extension TheFence.Command {
                 ),
                 .init(
                     key: "elements", type: .stringArray, optionalRole: .matcher,
-                    description: "Optional list of heistId handles to filter. Returns only matching elements. Omit for the current interface hierarchy."
+                    description: "Optional list of heistId handles to filter. Returns only matching elements. Omit for the app accessibility hierarchy."
                 ),
             ]
 

@@ -49,7 +49,7 @@ There's a second benefit: every interaction you make is an accessibility audit. 
 
 Every agent session follows the same rhythm:
 
-1. **See** the screen → `get_interface`
+1. **Read** app accessibility state → `get_interface`
 2. **Act** on an element → `activate`, `type_text`, `scroll`, `swipe`
 3. **Check** what changed → read the delta in the action response
 4. Repeat
@@ -78,7 +78,7 @@ Named targets come from a `.buttonheist.json` config file (in the working direct
 
 If a default target is set, the first command that needs a connection will auto-connect — no explicit `connect` call required.
 
-## Reading the Screen
+## Reading Accessibility State
 
 ### Default: app accessibility state
 
@@ -161,7 +161,7 @@ You don't always need every element. Filter by heistId list, or by matcher predi
 
 ### Detail levels
 
-By default, geometry (frames, activation points) is omitted to save tokens. Request it when you need coordinates:
+By default, geometry (frames, activation points) is omitted to save tokens. Request it when you need element geometry from the app accessibility state:
 
 ```json
 {"tool": "get_interface", "arguments": {"detail": "full"}}
@@ -450,14 +450,14 @@ Attach expectations to actions where you have a clear hypothesis. They cost noth
 
 ### Progressive disclosure
 
-Start with `get_interface` for the current screen. If you need less, filter by traits or labels. If a specific element is not currently on screen, use `element_search`; use `scroll_to_visible` to return to a known `heistId` while it is still valid in the current hierarchy. Use `scope: "visible"` only when you explicitly need a diagnostic on-screen read. Each level costs more time — escalate only when the cheaper option isn't enough.
+Start with `get_interface` for the current screen. If you need less, filter by traits or labels. If a specific element is not currently on screen, use `element_search`; use `scroll_to_visible` to return to a known `heistId` while it is still valid in the current hierarchy. Use `scope: "visible"` only when you explicitly need fresh on-screen geometry diagnostics. Each level costs more time — escalate only when the cheaper option isn't enough.
 
 ## Quick Reference
 
 | Task | Tool | Key Parameters |
 |------|------|----------------|
-| Read current UI accessibility state | `get_interface` | `detail`, `label`, `traits` |
-| Diagnostic on-screen read | `get_interface` | `scope: "visible"` |
+| Read app accessibility state | `get_interface` | `detail`, `label`, `traits` |
+| Fresh on-screen geometry diagnostic | `get_interface` | `scope: "visible"` |
 | Find unseen element not currently on screen | `scroll mode=search` / `element_search` | `label`/`identifier` |
 | Return to known element not currently on screen | `scroll mode=to_visible` / `scroll_to_visible` | `heistId` |
 | Tap/activate a control | `activate` | `heistId`, `action` |

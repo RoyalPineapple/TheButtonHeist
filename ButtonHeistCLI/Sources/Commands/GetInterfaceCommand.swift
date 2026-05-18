@@ -13,14 +13,14 @@ struct GetInterfaceCommand: AsyncParsableCommand, CLICommandContract {
 
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
-        abstract: "Get the current UI element hierarchy from the connected device"
+        abstract: "Read the app accessibility hierarchy from the connected device"
     )
 
     @OptionGroup var connection: ConnectionOptions
 
     @OptionGroup var output: OutputOptions
 
-    @Option(help: "Diagnostic scope. Omit for app accessibility state; use visible for an on-screen parse")
+    @Option(help: "Diagnostic scope. Omit for app accessibility state; use visible for fresh on-screen geometry")
     var scope: CLIGetInterfaceScope?
 
     @ButtonHeistActor
@@ -31,7 +31,7 @@ struct GetInterfaceCommand: AsyncParsableCommand, CLICommandContract {
             connection: connection,
             format: output.format,
             request: request,
-            statusMessage: scope == .visible ? "Requesting on-screen interface..." : "Reading interface..."
+            statusMessage: scope == .visible ? "Requesting visible diagnostic interface..." : "Reading interface..."
         )
     }
 }

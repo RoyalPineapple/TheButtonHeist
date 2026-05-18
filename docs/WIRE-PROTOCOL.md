@@ -152,7 +152,7 @@ The optional `driverId` field provides a unique driver identity for session lock
 
 ### requestInterface
 
-Request the current app accessibility state for the active screen. Public clients normally use `get_interface`; `scope: "visible"` is a client-side diagnostic option, not a separate wire message.
+Request the current on-screen interface from the server. Public clients normally use `get_interface`; omitted-scope `get_interface` performs app accessibility discovery, while `scope: "visible"` maps to this wire message for a fresh on-screen read.
 
 ```json
 {"buttonHeistVersion":"<calver>","type":"requestInterface"}
@@ -889,7 +889,7 @@ sequenceDiagram
     Client->>Host: request accessibility state
     Host-->>Agent: interface (accessibility hierarchy + summary metadata)
 
-    Note over Agent,Host: get_interface diagnostic on-screen read
+    Note over Agent,Host: get_interface fresh on-screen geometry diagnostic
     Agent->>Client: get_interface(scope: visible)
     Client->>Host: requestInterface
     Host-->>Agent: interface (on-screen elements)
@@ -900,7 +900,7 @@ Three ways to find elements, each suited to a different situation:
 | Command | What it returns | When to use |
 |---------|----------------|-------------|
 | `get_interface` | Current app accessibility state | You need to know what exists on the current screen before acting. Returns the `interface` response with discovered elements populated. |
-| `get_interface` with `scope: "visible"` | On-screen elements only | Diagnostic reads. You need to verify what is currently drawn or inspect geometry after an execution step. |
+| `get_interface` with `scope: "visible"` | Fresh on-screen elements only | Diagnostic reads. Use when you need to verify what is currently drawn or inspect geometry after an execution step. |
 | `scroll_to_visible` | Brings a known element into view | You have a visible target or a `heistId` still valid in the current hierarchy. Changes the scroll position. |
 | `element_search` | Scrolls until the target element is found, leaves it visible | You have not discovered the element yet and need to search scrollable content. |
 
@@ -914,27 +914,25 @@ Three ways to find elements, each suited to a different situation:
 
 ```mermaid
 flowchart TD
-    A[Need to find an element?] --> B{Is it likely visible?}
-    B -->|Yes| C[get_interface scope=visible<br>Diagnostic on-screen read]
-    B -->|No / unsure| D{Need to interact with it?}
+    A[Need element evidence?] --> B{Need fresh on-screen geometry?}
+    B -->|Yes| C[get_interface scope=visible<br>Fresh on-screen geometry]
+    B -->|No| D{Need to interact with unseen content?}
     D -->|Yes, already discovered| E[scroll_to_visible<br>Bring known element<br>into view]
     D -->|Yes, not yet discovered| I[element_search<br>Scroll until found]
-    D -->|No, just check existence| F[get_interface<br>Read accessibility state]
-    C --> G{Found it?}
-    G -->|Yes| H[activate / scroll / interact]
-    G -->|No| D
+    D -->|No, read state| F[get_interface<br>Read accessibility state]
+    C --> H[Use only for diagnostics]
 ```
 
 ### When you don't need either
 
-Most agent workflows start from the semantic interface and use diagnostic on-screen reads sparingly. The typical pattern is:
+Most agent workflows start from the semantic interface and use fresh on-screen geometry diagnostics sparingly. The typical pattern is:
 
 1. `get_interface` — read the current app accessibility state
 2. `activate` / `scroll` / `swipe` — interact with returned elements
 3. `element_search` — find a specific unseen element when needed
 4. `scroll_to_visible` — return to a known `heistId` while it is still valid in the current hierarchy
 
-Use `get_interface` with `scope: "visible"` only when you explicitly need the current on-screen parse, such as checking geometry after a scroll or gesture.
+Use `get_interface` with `scope: "visible"` only when you explicitly need fresh on-screen geometry, such as checking layout after a scroll or gesture.
 
 ## Data Types
 

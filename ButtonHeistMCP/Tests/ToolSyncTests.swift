@@ -283,6 +283,25 @@ struct ToolSyncTests {
 
         #expect(extractStringField(from: scopeSchema, key: "type") == "string")
         #expect(extractEnumValues(from: scopeSchema) == ["visible"])
+        let description = extractStringField(from: scopeSchema, key: "description") ?? ""
+        #expect(description.contains("fresh on-screen geometry diagnostics"))
+        #expect(!description.contains("on-screen parse"))
+        #expect(!description.localizedCaseInsensitiveContains("viewport"))
+    }
+
+    @Test("get_interface MCP description keeps full state default and visible diagnostic")
+    func getInterfaceMCPDescriptionKeepsFullStateDefaultAndVisibleDiagnostic() {
+        guard let getInterface = ToolDefinitions.all.first(where: { $0.name == TheFence.Command.getInterface.rawValue }) else {
+            Issue.record("get_interface tool missing")
+            return
+        }
+
+        let description = getInterface.description ?? ""
+        #expect(description.contains("Omit scope for the normal"))
+        #expect(description.contains("app accessibility state"))
+        #expect(description.contains("scope=visible only for fresh on-screen geometry diagnostics"))
+        #expect(!description.contains("diagnostic on-screen reads"))
+        #expect(!description.localizedCaseInsensitiveContains("viewport"))
     }
 
     @Test("Expect schema advertises Claude-compatible object form")

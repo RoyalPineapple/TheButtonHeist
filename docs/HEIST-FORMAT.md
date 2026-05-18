@@ -245,9 +245,9 @@ On failure, the response includes a `failure` object with everything needed to d
 | `error` | `String` | Human-readable error message |
 | `actionResult` | `ActionResult?` | Full action result — includes `errorKind`, `scrollSearchResult`, delta, etc. |
 | `expectation` | `ExpectationResult?` | Expectation check result (when `expect` was attached to the step) |
-| `interface` | `Interface?` | Complete interface snapshot at time of failure — every element on screen |
+| `interface` | `Interface?` | Complete interface state at time of failure |
 
-The interface snapshot lets you see exactly what was on screen when the step failed, so you can compare the expected target against the actual elements available.
+The interface state lets you compare the expected target against the actual accessibility elements available when the step failed.
 
 ## Playback Performance
 

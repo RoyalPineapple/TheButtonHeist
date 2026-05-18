@@ -51,8 +51,8 @@ snapshots rather than pretending an empty post-navigation parse is stable.
 
 `get_interface` without `scope` returns the normal app accessibility state for
 the current screen, including semantic content Button Heist can discover in
-scrollable containers. `scope: "visible"` is a diagnostic on-screen parse for
-cases such as geometry checks after a scroll or gesture.
+scrollable containers. `scope: "visible"` is only for fresh on-screen geometry
+diagnostics after a scroll or gesture.
 
 Legacy full-scope spellings remain compatibility inputs, not public concepts to
 teach. Detail level is separate: `detail: "summary"` keeps responses compact,

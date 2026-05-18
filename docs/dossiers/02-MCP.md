@@ -71,9 +71,9 @@ ButtonHeistMCP exposes 24 tools. The authoritative list and parameter schemas li
 `run_batch` intentionally does not accept these grouped MCP wrapper shapes inside `steps`. Batch steps use batch-executable canonical `TheFence.Command` request objects, so agents send commands such as `swipe`, `element_search`, and `dismiss_keyboard` directly.
 
 ### `get_interface`
-- `scope`: omit for the app accessibility state; `"visible"` requests a diagnostic on-screen parse
+- `scope`: omit for the app accessibility state; `"visible"` requests fresh on-screen geometry diagnostics
 - `detail`: `"summary"` (default — identity fields, traits, and actions only) or `"full"` (adds VoiceOver hint, customContent, frame, and activation point)
-- `elements`: optional `[String]` — heistIds to filter; omit for the current interface tree
+- `elements`: optional `[String]` — heistIds to filter; omit for the app accessibility hierarchy
 - `readOnlyHint: true`, `idempotentHint: true`
 
 ### Shared `expect` Property
