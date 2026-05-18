@@ -134,7 +134,7 @@ extension TheGetaway {
 
         // Claim the phase synchronously before the first await so a second
         // start_recording landing on the actor sees `.starting` and is rejected.
-        recordingRouteState = .starting(ownerClientId: clientId)
+        replaceRecordingRouteState(.starting(ownerClientId: clientId))
 
         // Wrap the entire startup pipeline in do-catch so the .starting claim is
         // always rolled back on any thrown error — including any future throwing
@@ -171,19 +171,19 @@ extension TheGetaway {
             try await recorder.startRecording(config: config, screen: screenInfo)
             guard case .starting(let owner) = recordingRouteState, owner == clientId else {
                 let reason = recordingInvalidationReason ?? .sessionReleased
-                recordingRouteState = .invalidated(stakeout: recorder, reason: reason)
+                replaceRecordingRouteState(.invalidated(stakeout: recorder, reason: reason))
                 if await recorder.isRecording {
                     await recorder.stopRecording(reason: .manual)
                 }
                 sendMessage(.error(ServerError(kind: .recording, message: reason.message)), requestId: requestId, respond: respond)
                 return
             }
-            recordingRouteState = .recording(stakeout: recorder, ownerClientId: clientId)
+            replaceRecordingRouteState(.recording(stakeout: recorder, ownerClientId: clientId))
             brains.stakeout = recorder
             sendMessage(.recordingStarted, requestId: requestId, respond: respond)
         } catch {
             // Roll back the claim so the next start_recording can proceed.
-            recordingRouteState = .idle
+            replaceRecordingRouteState(.idle)
             sendMessage(.error(ServerError(kind: .recording, message: error.localizedDescription)), requestId: requestId, respond: respond)
         }
     }
@@ -219,7 +219,7 @@ extension TheGetaway {
         // Pending stop waiter wins — that's the request the originator (or
         // another driver-session client) is parked on right now.
         if case .stopping(_, let pending) = state {
-            recordingRouteState = .idle
+            replaceRecordingRouteState(.idle)
             switch result {
             case .success(let payload):
                 sendMessage(.recording(payload), requestId: pending.requestId, respond: pending.respond)
@@ -231,7 +231,7 @@ extension TheGetaway {
         }
 
         if case .invalidated = state {
-            recordingRouteState = .idle
+            replaceRecordingRouteState(.idle)
             switch result {
             case .success:
                 await broadcastToAll(.recordingStopped)
@@ -245,10 +245,10 @@ extension TheGetaway {
         // can still pick it up if the targeted delivery below cannot find an
         // active client.
         let cachePolicy: RecordingCachePolicy = owner.map(RecordingCachePolicy.originatorOnly) ?? .anySessionClient
-        recordingRouteState = .completed(CompletedRecordingRoute(
+        replaceRecordingRouteState(.completed(CompletedRecordingRoute(
             outcome: RecordingOutcome(result: result),
             cachePolicy: cachePolicy
-        ))
+        )))
 
         switch result {
         case .success(let payload):
@@ -268,7 +268,7 @@ extension TheGetaway {
                 // still resolve it — never drop a recording into the void.
                 let deliveryOutcome = await muscle.sendData(payloadData, toClient: owner)
                 if deliveryOutcome.didEnqueue {
-                    recordingRouteState = .idle
+                    replaceRecordingRouteState(.idle)
                 }
                 if let stoppedData = encodeEnvelope(.recordingStopped) {
                     for otherClient in authenticated where otherClient != owner {
@@ -295,7 +295,7 @@ extension TheGetaway {
                 sendMessage(.error(ServerError(kind: .recording, message: "No recording in progress")), requestId: requestId, respond: respond)
                 return
             }
-            recordingRouteState = .idle
+            replaceRecordingRouteState(.idle)
             switch completion.outcome {
             case .succeeded(let payload):
                 sendMessage(.recording(payload), requestId: requestId, respond: respond)
@@ -307,7 +307,7 @@ extension TheGetaway {
             return
         case .recording(let stakeout, _):
             let waiter = RecordingWaiter(requestId: requestId, ownerClientId: clientId, respond: respond)
-            recordingRouteState = .stopping(stakeout: stakeout, waiter: waiter)
+            replaceRecordingRouteState(.stopping(stakeout: stakeout, waiter: waiter))
             if await stakeout.isRecording {
                 await stakeout.stopRecording(reason: .manual)
             }
@@ -329,14 +329,14 @@ extension TheGetaway {
     func invalidateRecordingForDisconnect(clientId: Int) {
         switch recordingRouteState {
         case .starting(let owner?) where owner == clientId:
-            recordingRouteState = .invalidated(stakeout: nil, reason: .originatorDisconnected)
+            replaceRecordingRouteState(.invalidated(stakeout: nil, reason: .originatorDisconnected))
         case .recording(let stakeout, let owner?) where owner == clientId:
-            recordingRouteState = .invalidated(stakeout: stakeout, reason: .originatorDisconnected)
+            replaceRecordingRouteState(.invalidated(stakeout: stakeout, reason: .originatorDisconnected))
         case .stopping(let stakeout, let waiter) where waiter.ownerClientId == clientId:
-            recordingRouteState = .invalidated(stakeout: stakeout, reason: .originatorDisconnected)
+            replaceRecordingRouteState(.invalidated(stakeout: stakeout, reason: .originatorDisconnected))
         case .completed(let completion):
             if case .originatorOnly(let owner) = completion.cachePolicy, owner == clientId {
-                recordingRouteState = .idle
+                replaceRecordingRouteState(.idle)
             }
         case .idle, .starting, .recording, .stopping, .invalidated:
             break
@@ -349,12 +349,12 @@ extension TheGetaway {
     func invalidateRecordingForSessionRelease() {
         switch recordingRouteState {
         case .recording(let stakeout, _), .stopping(let stakeout, _), .invalidated(let stakeout?, _):
-            recordingRouteState = .invalidated(stakeout: stakeout, reason: .sessionReleased)
+            replaceRecordingRouteState(.invalidated(stakeout: stakeout, reason: .sessionReleased))
         case .starting:
-            recordingRouteState = .invalidated(stakeout: nil, reason: .sessionReleased)
+            replaceRecordingRouteState(.invalidated(stakeout: nil, reason: .sessionReleased))
         case .idle, .completed, .invalidated(nil, _):
             // Completed routes have no pending async stakeout work; release can clear them immediately.
-            recordingRouteState = .idle
+            replaceRecordingRouteState(.idle)
         }
     }
 }

@@ -33,7 +33,7 @@ final class TheGetaway {
 
     // `RecordingRouteState`, `RecordingPhase`, `RecordingOutcome`, and their handlers live in
     // TheGetaway+Recording.swift.
-    var recordingRouteState: RecordingRouteState = .idle
+    private(set) var recordingRouteState: RecordingRouteState = .idle
     var hierarchyInvalidated = false
 
     /// Current transport — set by `wireTransport`, cleared on teardown.
@@ -55,17 +55,7 @@ final class TheGetaway {
     }
 
     var recordingPhase: RecordingPhase {
-        get { recordingRouteState.phase }
-        set {
-            switch newValue {
-            case .idle:
-                recordingRouteState = .idle
-            case .starting:
-                recordingRouteState = .starting(ownerClientId: nil)
-            case .recording(let stakeout):
-                recordingRouteState = .recording(stakeout: stakeout, ownerClientId: nil)
-            }
-        }
+        recordingRouteState.phase
     }
 
     var completedRecording: RecordingOutcome {
@@ -85,6 +75,18 @@ final class TheGetaway {
     var recordingInvalidationReason: RecordingInvalidationReason? {
         guard case .invalidated(_, let reason) = recordingRouteState else { return nil }
         return reason
+    }
+
+    /// Test seam for routing tests that need to stage an otherwise internal
+    /// recording lifecycle state without making the state store module-writable.
+    func installRecordingRouteStateForTest(_ state: RecordingRouteState) {
+        replaceRecordingRouteState(state)
+    }
+
+    /// Recording-route transitions are intentionally funneled through
+    /// TheGetaway methods so no other component can assign the lifecycle store.
+    func replaceRecordingRouteState(_ state: RecordingRouteState) {
+        recordingRouteState = state
     }
 
     // MARK: - Init
@@ -228,7 +230,7 @@ final class TheGetaway {
         pendingRecordingTasks.cancelAll()
         transport = nil
         hierarchyInvalidated = false
-        recordingRouteState = .idle
+        replaceRecordingRouteState(.idle)
     }
 
     /// Insert a Task into `pendingRecordingTasks` and prune already-completed

@@ -194,18 +194,18 @@ actor TheMuscle {
 
     // MARK: - Callbacks (set by TheInsideJob)
 
-    var sendToClient: (@Sendable (_ data: Data, _ clientId: Int) async -> ServerSendOutcome)?
-    var markClientAuthenticated: (@Sendable (_ clientId: Int) async -> Void)?
-    var disconnectClient: (@Sendable (_ clientId: Int) async -> Void)?
+    private var sendToClient: (@Sendable (_ data: Data, _ clientId: Int) async -> ServerSendOutcome)?
+    private var markClientAuthenticated: (@Sendable (_ clientId: Int) async -> Void)?
+    private var disconnectClient: (@Sendable (_ clientId: Int) async -> Void)?
     /// Invoked on `@MainActor` after a client completes authentication. The
     /// isolation is encoded in the closure type so callers can satisfy the
     /// hop with a single `await` rather than a fire-and-forget bridge Task.
-    var onClientAuthenticated: (@MainActor @Sendable (_ clientId: Int, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
+    private var onClientAuthenticated: (@MainActor @Sendable (_ clientId: Int, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
     /// Invoked on `@MainActor` when the session-active state changes
     /// (true = session claimed, false = released). MainActor-isolated for the
     /// same reason as `onClientAuthenticated`: the production handler mutates
     /// Bonjour TXT state, which is MainActor-bound.
-    var onSessionActiveChanged: (@MainActor @Sendable (_ isActive: Bool) -> Void)?
+    private var onSessionActiveChanged: (@MainActor @Sendable (_ isActive: Bool) -> Void)?
 
     // MARK: - Init
 
