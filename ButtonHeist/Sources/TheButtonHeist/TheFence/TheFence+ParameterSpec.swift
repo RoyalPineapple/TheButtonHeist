@@ -296,6 +296,14 @@ enum FenceParameterBlocks: Sendable {
         ]
     )
 
+    static let expectationTimeout: FenceParameterSpec = .init(
+        key: "timeout", type: .number,
+        description: "Max seconds to wait for the expectation when expect is provided (default: 10, max: 30)",
+        maximum: 30
+    )
+
+    static let expectation: [FenceParameterSpec] = [expect, expectationTimeout]
+
     static let unitPoint: [FenceParameterSpec] = [
         .init(key: "x", type: .number, required: true, description: "X position (0-1)"),
         .init(key: "y", type: .number, required: true, description: "Y position (0-1)"),
@@ -438,6 +446,7 @@ extension TheFence.Command {
         let target = FenceParameterBlocks.elementTarget
         let filter = FenceParameterBlocks.elementFilter
         let expect = FenceParameterBlocks.expect
+        let expectation = FenceParameterBlocks.expectation
 
         switch self {
 
@@ -448,7 +457,7 @@ extension TheFence.Command {
 
         // These take no targeting parameters but accept expect
         case .dismissKeyboard:
-            return [expect]
+            return expectation
 
         // MARK: Interface / observation
         case .getInterface:
@@ -497,16 +506,14 @@ extension TheFence.Command {
             return target + [
                 .init(key: "x", type: .number, description: "X coordinate"),
                 .init(key: "y", type: .number, description: "Y coordinate"),
-                expect,
-            ]
+            ] + expectation
 
         case .longPress:
             return target + [
                 .init(key: "x", type: .number, description: "X coordinate"),
                 .init(key: "y", type: .number, description: "Y coordinate"),
                 .init(key: "duration", type: .number, description: "Duration in seconds (default 0.5)"),
-                expect,
-            ]
+            ] + expectation
 
         case .swipe:
             return target + [
@@ -530,8 +537,7 @@ extension TheFence.Command {
                 .init(key: "endX", type: .number, description: "End X coordinate (swipe, drag)"),
                 .init(key: "endY", type: .number, description: "End Y coordinate (swipe, drag)"),
                 .init(key: "duration", type: .number, description: "Duration in seconds (swipe, long_press default 0.5, draw_path, draw_bezier)"),
-                expect,
-            ]
+            ] + expectation
 
         case .drag:
             return target + [
@@ -542,8 +548,7 @@ extension TheFence.Command {
                 .init(key: "x", type: .number, description: "X coordinate"),
                 .init(key: "y", type: .number, description: "Y coordinate"),
                 .init(key: "duration", type: .number, description: "Duration in seconds"),
-                expect,
-            ]
+            ] + expectation
 
         case .pinch:
             return target + [
@@ -554,8 +559,7 @@ extension TheFence.Command {
                 .init(key: "y", type: .number, description: "Y coordinate"),
                 .init(key: "spread", type: .number, description: "Finger spread distance (pinch, two_finger_tap)"),
                 .init(key: "duration", type: .number, description: "Duration in seconds"),
-                expect,
-            ]
+            ] + expectation
 
         case .rotate:
             return target + [
@@ -566,8 +570,7 @@ extension TheFence.Command {
                 .init(key: "y", type: .number, description: "Y coordinate"),
                 .init(key: "radius", type: .number, description: "Rotation radius (rotate)"),
                 .init(key: "duration", type: .number, description: "Duration in seconds"),
-                expect,
-            ]
+            ] + expectation
 
         case .twoFingerTap:
             return target + [
@@ -576,8 +579,7 @@ extension TheFence.Command {
                 .init(key: "x", type: .number, description: "X coordinate"),
                 .init(key: "y", type: .number, description: "Y coordinate"),
                 .init(key: "spread", type: .number, description: "Finger spread distance (pinch, two_finger_tap)"),
-                expect,
-            ]
+            ] + expectation
 
         case .drawPath:
             return [
@@ -592,8 +594,7 @@ extension TheFence.Command {
                 ),
                 .init(key: "duration", type: .number, description: "Duration in seconds (swipe, long_press default 0.5, draw_path, draw_bezier)"),
                 .init(key: "velocity", type: .number, description: "Drawing velocity in points/sec (draw_path, draw_bezier)"),
-                expect,
-            ]
+            ] + expectation
 
         case .drawBezier:
             return [
@@ -615,8 +616,7 @@ extension TheFence.Command {
                 .init(key: "samplesPerSegment", type: .integer, description: "Bezier curve sampling resolution (draw_bezier)"),
                 .init(key: "duration", type: .number, description: "Duration in seconds (swipe, long_press default 0.5, draw_path, draw_bezier)"),
                 .init(key: "velocity", type: .number, description: "Drawing velocity in points/sec (draw_path, draw_bezier)"),
-                expect,
-            ]
+            ] + expectation
 
         // MARK: Scroll
         case .scroll:
@@ -629,11 +629,10 @@ extension TheFence.Command {
                         """,
                     enumValues: fenceEnumValues(ScrollDirection.self)
                 ),
-                expect,
-            ]
+            ] + expectation
 
         case .scrollToVisible:
-            return target + [expect]
+            return target + expectation
 
         case .elementSearch:
             return target + [
@@ -642,8 +641,7 @@ extension TheFence.Command {
                     description: "Scroll search direction: down, up, left, right",
                     enumValues: fenceEnumValues(ScrollSearchDirection.self)
                 ),
-                expect,
-            ]
+            ] + expectation
 
         case .scrollToEdge:
             return target + [
@@ -652,8 +650,7 @@ extension TheFence.Command {
                     description: "Edge to scroll to (required for mode to_edge)",
                     enumValues: fenceEnumValues(ScrollEdge.self)
                 ),
-                expect,
-            ]
+            ] + expectation
 
         // MARK: Accessibility actions
         case .activate:
@@ -665,8 +662,7 @@ extension TheFence.Command {
                     minimum: 1,
                     maximum: 100
                 ),
-                expect,
-            ]
+            ] + expectation
 
         case .increment, .decrement:
             return target + [
@@ -676,14 +672,12 @@ extension TheFence.Command {
                     minimum: 1,
                     maximum: 100
                 ),
-                expect,
-            ]
+            ] + expectation
 
         case .performCustomAction:
             return target + [
                 .init(key: "action", type: .string, required: true, description: "Custom accessibility action name"),
-                expect,
-            ]
+            ] + expectation
 
         case .rotor:
             return target + [
@@ -708,8 +702,7 @@ extension TheFence.Command {
                     description: "Current text-range end offset for continuing through text-range rotor results",
                     minimum: 0
                 ),
-                expect,
-            ]
+            ] + expectation
 
         // MARK: Text / keyboard
         case .typeText:
@@ -717,8 +710,7 @@ extension TheFence.Command {
                 .init(key: "text", type: .string, description: "Text to type character-by-character", minLength: 1),
                 .init(key: "deleteCount", type: .integer, description: "Number of delete key taps before typing", minimum: 1),
                 .init(key: "clearFirst", type: .boolean, description: "Clear all existing text before typing (select-all + delete)"),
-                expect,
-            ]
+            ] + expectation
 
         case .editAction:
             return [
@@ -727,18 +719,16 @@ extension TheFence.Command {
                     description: "Action to perform",
                     enumValues: fenceEnumValues(EditAction.self)
                 ),
-                expect,
-            ]
+            ] + expectation
 
         // MARK: Pasteboard
         case .setPasteboard:
             return [
                 .init(key: "text", type: .string, required: true, description: "Text to write to the pasteboard"),
-                expect,
-            ]
+            ] + expectation
 
         case .getPasteboard:
-            return [expect]
+            return expectation
 
         // MARK: Wait
         case .waitFor:
