@@ -775,7 +775,6 @@ Messages sent from client to server.
 - `clientHello` - Version-negotiation hello sent immediately after `serverHello`
 - `authenticate(AuthenticatePayload)` - Authenticate with a token (sent after `clientHello` / `authRequired`)
 - `requestInterface` - Request the current on-screen interface
-- `subscribe` / `unsubscribe` - Legacy runtime subscription messages. They are retained for wire compatibility and return `unsupported`.
 - `ping` - Keepalive
 - `activate(ActionTarget)` - Activate element (VoiceOver double-tap)
 - `increment(ActionTarget)` - Increment adjustable element
@@ -870,7 +869,7 @@ public struct StatusSession: Codable, Sendable
 #### Properties
 
 - `active: Bool` - Whether a driver session is active
-- `watchersAllowed: Bool` - Always `false`; legacy watch connections are not a public surface
+- `watchersAllowed: Bool` - Always `false`; a session has one active driver connection
 - `activeConnections: Int` - Number of connections in the current session
 
 ### AuthenticatePayload

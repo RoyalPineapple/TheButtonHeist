@@ -450,8 +450,8 @@ extension TheBrains {
         case .waitForChange: return .waitForChange
         case .explore: return .explore
         case .clientHello, .authenticate, .requestInterface,
-             .subscribe, .unsubscribe, .ping, .status, .requestScreen,
-             .startRecording, .stopRecording, .watch:
+             .ping, .status, .requestScreen,
+             .startRecording, .stopRecording:
             return .activate
         }
     }
@@ -489,8 +489,6 @@ private extension ClientMessage {
         case .clientHello,
              .authenticate,
              .requestInterface,
-             .subscribe,
-             .unsubscribe,
              .ping,
              .status,
              .touchDrawPath,
@@ -509,8 +507,7 @@ private extension ClientMessage {
              .requestScreen,
              .explore,
              .startRecording,
-             .stopRecording,
-             .watch:
+             .stopRecording:
             return nil
         }
     }

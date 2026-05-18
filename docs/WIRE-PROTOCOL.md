@@ -158,22 +158,6 @@ Request the current on-screen interface from the server. Public clients normally
 {"buttonHeistVersion":"<calver>","type":"requestInterface"}
 ```
 
-### subscribe
-
-Legacy runtime subscription message. Runtime UI subscriptions are no longer supported; authenticated clients receive an `unsupported` error.
-
-```json
-{"buttonHeistVersion":"<calver>","type":"subscribe"}
-```
-
-### unsubscribe
-
-Legacy runtime subscription message. Runtime UI subscriptions are no longer supported; authenticated clients receive an `unsupported` error.
-
-```json
-{"buttonHeistVersion":"<calver>","type":"unsubscribe"}
-```
-
 ### activate
 
 Activate an element (equivalent to VoiceOver double-tap). Uses the TouchInjector system with synthetic event fallback chain.
@@ -559,18 +543,6 @@ Lightweight status probe. Unlike normal driver commands, this message may be sen
 ```json
 {"buttonHeistVersion":"<calver>","type":"status"}
 ```
-
-### watch
-
-Legacy watch message. Watch connections are no longer supported.
-
-```json
-{"buttonHeistVersion":"<calver>","type":"watch","payload":{"token":""}}
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `token` | `String` | Legacy field retained for decoding compatibility |
 
 ## Server → Client Messages
 
@@ -1565,14 +1537,8 @@ A single recorded interaction event captured during a Stakeout recording.
 | Field | Type | Description |
 |-------|------|-------------|
 | `active` | `Bool` | Whether a driver session is active |
-| `watchersAllowed` | `Bool` | Always `false`; legacy watch connections are not supported |
+| `watchersAllowed` | `Bool` | Always `false`; a session has one active driver connection |
 | `activeConnections` | `Int` | Number of connections in the current session |
-
-### WatchPayload
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `token` | `String` | Legacy field retained for decoding compatibility |
 
 ## Implementation Notes
 

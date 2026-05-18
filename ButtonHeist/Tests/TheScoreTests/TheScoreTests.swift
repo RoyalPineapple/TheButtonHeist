@@ -7,14 +7,14 @@ final class MessageIntegrationTests: XCTestCase {
 
     /// Test that a typical client-server message exchange encodes/decodes correctly
     func testClientServerExchange() throws {
-        // 1. Client sends subscribe
-        let clientMsg = ClientMessage.subscribe
+        // 1. Client requests the current interface
+        let clientMsg = ClientMessage.requestInterface
         let clientData = try JSONEncoder().encode(clientMsg)
 
         // 2. Server receives and decodes
         let decodedClientMsg = try JSONDecoder().decode(ClientMessage.self, from: clientData)
-        if case .subscribe = decodedClientMsg { } else {
-            XCTFail("Server should receive subscribe message")
+        if case .requestInterface = decodedClientMsg { } else {
+            XCTFail("Server should receive requestInterface message")
         }
 
         // 3. Server sends info
@@ -76,11 +76,9 @@ final class MessageIntegrationTests: XCTestCase {
     /// Test all message types round-trip in sequence
     func testAllMessageTypesSequence() throws {
         let clientMessages: [ClientMessage] = [
-            .subscribe,
             .requestInterface,
             .ping,
             .status,
-            .unsubscribe,
             .requestScreen
         ]
 
@@ -144,16 +142,8 @@ final class MessageIntegrationTests: XCTestCase {
         }
     }
 
-    /// Test full subscription flow
-    func testSubscriptionFlow() throws {
-        // 1. Client subscribes
-        let subscribeData = try JSONEncoder().encode(ClientMessage.subscribe)
-        let decodedSubscribe = try JSONDecoder().decode(ClientMessage.self, from: subscribeData)
-        if case .subscribe = decodedSubscribe { } else {
-            XCTFail("Expected subscribe message")
-        }
-
-        // 2. Server sends snapshot updates
+    /// Test repeated interface responses
+    func testInterfaceResponseSequence() throws {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         let decoder = JSONDecoder()
@@ -179,13 +169,6 @@ final class MessageIntegrationTests: XCTestCase {
             } else {
                 XCTFail("Expected interface update \(i)")
             }
-        }
-
-        // 3. Client unsubscribes
-        let unsubscribeData = try JSONEncoder().encode(ClientMessage.unsubscribe)
-        let decodedUnsubscribe = try JSONDecoder().decode(ClientMessage.self, from: unsubscribeData)
-        if case .unsubscribe = decodedUnsubscribe { } else {
-            XCTFail("Expected unsubscribe message")
         }
     }
 

@@ -13,17 +13,6 @@ final class ClientMessageTests: XCTestCase {
         }
     }
 
-    func testWatchRoundTrip() throws {
-        let message = ClientMessage.watch(WatchPayload(token: "observer-token"))
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-
-        guard case .watch(let payload) = decoded else {
-            return XCTFail("Expected watch, got \(decoded)")
-        }
-        XCTAssertEqual(payload.token, "observer-token")
-    }
-
     func testRequestSnapshotEncodeDecode() throws {
         let message = ClientMessage.requestInterface
         let data = try JSONEncoder().encode(message)
@@ -32,28 +21,6 @@ final class ClientMessageTests: XCTestCase {
         if case .requestInterface = decoded {
         } else {
             XCTFail("Expected requestInterface, got \(decoded)")
-        }
-    }
-
-    func testSubscribeEncodeDecode() throws {
-        let message = ClientMessage.subscribe
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-
-        if case .subscribe = decoded {
-        } else {
-            XCTFail("Expected subscribe, got \(decoded)")
-        }
-    }
-
-    func testUnsubscribeEncodeDecode() throws {
-        let message = ClientMessage.unsubscribe
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-
-        if case .unsubscribe = decoded {
-        } else {
-            XCTFail("Expected unsubscribe, got \(decoded)")
         }
     }
 
