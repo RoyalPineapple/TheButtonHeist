@@ -14,11 +14,11 @@ public struct RequestEnvelope: Codable, Sendable {
     public let requestId: String?
     public let message: ClientMessage
 
-    public init(requestId: String? = nil, message: ClientMessage) {
-        self.init(buttonHeistVersion: TheScore.buttonHeistVersion, requestId: requestId, message: message)
-    }
-
-    public init(buttonHeistVersion: String, requestId: String? = nil, message: ClientMessage) {
+    public init(
+        buttonHeistVersion: String = TheScore.buttonHeistVersion,
+        requestId: String? = nil,
+        message: ClientMessage
+    ) {
         self.buttonHeistVersion = buttonHeistVersion
         self.requestId = requestId
         self.message = message
