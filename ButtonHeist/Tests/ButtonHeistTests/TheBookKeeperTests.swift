@@ -247,12 +247,11 @@ final class TheBookKeeperTests: XCTestCase {
     func testLogCommandWritesJSONLLine() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-log")
-        try logCommand(bookKeeper,
-            BookKeeperCommandRecord(
-                requestId: "req-1",
-                command: .activate,
-                rawArguments: ["command": "activate", "identifier": "loginButton"]
-            )
+        try logCommand(
+            bookKeeper,
+            requestId: "req-1",
+            command: .activate,
+            arguments: ["identifier": "loginButton"]
         )
         guard case .active(let session) = bookKeeper.phase else {
             return XCTFail("Expected active phase")
@@ -312,43 +311,44 @@ final class TheBookKeeperTests: XCTestCase {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-count")
         try logCommand(bookKeeper, requestId: "r1", command: .status, arguments: [:])
-        try logCommand(bookKeeper, requestId: "r2", command: .activate, arguments: [:])
-        try logCommand(bookKeeper, requestId: "r3", command: .scroll, arguments: [:])
+        try logCommand(bookKeeper, requestId: "r2", command: .listDevices, arguments: [:])
+        try logCommand(bookKeeper, requestId: "r3", command: .getSessionState, arguments: [:])
         XCTAssertEqual(bookKeeper.manifest?.commandCount, 3)
     }
 
     @ButtonHeistActor
-    func testBinaryDataExcludedFromLog() async throws {
+    func testLogCommandUsesTypedFenceRequestArguments() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
-        try bookKeeper.beginSession(identifier: "test-binary")
-        let fakePngData = String(repeating: "A", count: 5000)
+        try bookKeeper.beginSession(identifier: "test-typed-args")
         try logCommand(bookKeeper,
             requestId: "r1",
             command: .getScreen,
-            arguments: ["command": "get_screen", "pngData": fakePngData]
+            arguments: ["output": "screen.png"]
         )
         guard case .active(let session) = bookKeeper.phase else {
             return XCTFail("Expected active phase")
         }
         let logPath = session.directory.appendingPathComponent("session.jsonl")
         let content = try String(contentsOf: logPath, encoding: .utf8)
-        XCTAssertFalse(content.contains(fakePngData), "Binary data should not appear in log")
+        let lines = content.split(separator: "\n")
+        let json = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
+        let args = json?["args"] as? [String: Any]
+
+        XCTAssertEqual(args?["output"] as? String, "screen.png")
+        XCTAssertNil(args?["command"])
     }
 
     @ButtonHeistActor
-    func testNestedLongStringIsTruncatedInLog() async throws {
+    func testLongStringIsTruncatedInLog() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
-        try bookKeeper.beginSession(identifier: "test-nested-truncate")
+        try bookKeeper.beginSession(identifier: "test-truncate")
         let longString = String(repeating: "x", count: 1500)
 
         try logCommand(bookKeeper,
             requestId: "r1",
-            command: .activate,
+            command: .typeText,
             arguments: [
-                "command": "activate",
-                "payload": [
-                    "nested": longString,
-                ],
+                "text": longString,
             ]
         )
 
@@ -360,42 +360,24 @@ final class TheBookKeeperTests: XCTestCase {
         let lines = content.split(separator: "\n")
         let json = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
         let args = json?["args"] as? [String: Any]
-        let payload = args?["payload"] as? [String: Any]
 
-        XCTAssertEqual(payload?["nested"] as? String, "<1500 chars>")
+        XCTAssertEqual(args?["text"] as? String, "<1500 chars>")
     }
 
     @ButtonHeistActor
-    func testNestedBinaryDataExcludedFromLog() async throws {
+    func testUnexpectedLogArgumentIsRejectedByFenceSchema() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
-        try bookKeeper.beginSession(identifier: "test-nested-binary")
+        try bookKeeper.beginSession(identifier: "test-schema-reject")
 
-        try logCommand(bookKeeper,
+        XCTAssertThrowsError(try logCommand(
+            bookKeeper,
             requestId: "r1",
             command: .activate,
-            arguments: [
-                "command": "activate",
-                "payload": [
-                    "pngData": "AAAA",
-                    "videoData": "BBBB",
-                    "label": "Submit",
-                ],
-            ]
-        )
-
-        guard case .active(let session) = bookKeeper.phase else {
-            return XCTFail("Expected active phase")
+            arguments: ["label": "Submit", "metadata": Data([0x01])]
+        )) { error in
+            let validation = error as? SchemaValidationError
+            XCTAssertEqual(validation?.field, "metadata")
         }
-        let logPath = session.directory.appendingPathComponent("session.jsonl")
-        let content = try String(contentsOf: logPath, encoding: .utf8)
-        let lines = content.split(separator: "\n")
-        let json = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
-        let args = json?["args"] as? [String: Any]
-        let payload = args?["payload"] as? [String: Any]
-
-        XCTAssertNil(payload?["pngData"])
-        XCTAssertNil(payload?["videoData"])
-        XCTAssertEqual(payload?["label"] as? String, "Submit")
     }
 
     @ButtonHeistActor
@@ -403,23 +385,21 @@ final class TheBookKeeperTests: XCTestCase {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-nested-values")
 
-        try logCommand(bookKeeper,
-            BookKeeperCommandRecord(
-                requestId: "r1",
-                command: .waitFor,
-                rawArguments: [
-                    "command": "wait_for",
-                    "expect": [
-                        "type": "element_appeared",
-                        "matcher": [
-                            "label": "Submit",
-                            "traits": ["button"],
-                        ],
-                        "timeout": 2.5,
-                        "required": true,
+        try logCommand(
+            bookKeeper,
+            requestId: "r1",
+            command: .waitForChange,
+            arguments: [
+                "timeout": 2.5,
+                "expect": [
+                    "type": "element_appeared",
+                    "matcher": [
+                        "label": "Submit",
+                        "traits": ["button"],
                     ],
-                ]
-            )
+                    "required": true,
+                ],
+            ]
         )
 
         guard case .active(let session) = bookKeeper.phase else {
@@ -434,38 +414,26 @@ final class TheBookKeeperTests: XCTestCase {
         let matcher = expect?["matcher"] as? [String: Any]
 
         XCTAssertEqual(expect?["type"] as? String, "element_appeared")
-        XCTAssertEqual(expect?["timeout"] as? Double, 2.5)
-        XCTAssertEqual(expect?["required"] as? Bool, true)
+        XCTAssertEqual(args?["timeout"] as? Double, 2.5)
+        XCTAssertNil(expect?["required"])
         XCTAssertEqual(matcher?["label"] as? String, "Submit")
         XCTAssertEqual(matcher?["traits"] as? [String], ["button"])
     }
 
     @ButtonHeistActor
-    func testUnsupportedLogArgumentIsOmitted() async throws {
+    func testUnsupportedLogArgumentIsRejectedByFenceSchema() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-unsupported-log")
 
-        try logCommand(bookKeeper,
-            BookKeeperCommandRecord(
-                requestId: "r1",
-                command: .typeText,
-                rawArguments: [
-                    "command": "type_text",
-                    "metadata": Data([0x01, 0x02]),
-                ]
-            )
-        )
-
-        guard case .active(let session) = bookKeeper.phase else {
-            return XCTFail("Expected active phase")
+        XCTAssertThrowsError(try logCommand(
+            bookKeeper,
+            requestId: "r1",
+            command: .typeText,
+            arguments: ["metadata": Data([0x01, 0x02])]
+        )) { error in
+            let validation = error as? SchemaValidationError
+            XCTAssertEqual(validation?.field, "metadata")
         }
-        let logPath = session.directory.appendingPathComponent("session.jsonl")
-        let content = try String(contentsOf: logPath, encoding: .utf8)
-        let lines = content.split(separator: "\n")
-        let json = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
-        let args = json?["args"] as? [String: Any]
-
-        XCTAssertNil(args?["metadata"])
     }
 
     @ButtonHeistActor
@@ -872,20 +840,23 @@ final class TheBookKeeperTests: XCTestCase {
 }
 
 @ButtonHeistActor
-private func logCommand(_ bookKeeper: TheBookKeeper, _ record: BookKeeperCommandRecord) throws {
-    try bookKeeper.logCommand(record)
-}
-
-@ButtonHeistActor
 private func logCommand(
     _ bookKeeper: TheBookKeeper,
     requestId: String,
     command: TheFence.Command,
     arguments: [String: Any]
 ) throws {
-    try bookKeeper.logCommand(BookKeeperCommandRecord(
-        requestId: requestId,
-        command: command,
-        rawArguments: arguments
-    ))
+    try bookKeeper.logCommand(parsedRequest(requestId: requestId, command: command, arguments: arguments))
+}
+
+@ButtonHeistActor
+private func parsedRequest(
+    requestId: String,
+    command: TheFence.Command,
+    arguments: [String: Any]
+) throws -> TheFence.ParsedRequest {
+    var request = arguments
+    request["command"] = command.rawValue
+    request["requestId"] = requestId
+    return try TheFence(configuration: .init()).parseRequest(command: command, request: request)
 }
