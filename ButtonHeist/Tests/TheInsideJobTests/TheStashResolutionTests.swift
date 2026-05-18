@@ -154,7 +154,7 @@ final class TheStashResolutionTests: XCTestCase {
             XCTFail("Expected .resolved, got \(result)")
             return
         }
-        XCTAssertEqual(resolved.heistId, "button_cancel")
+        XCTAssertEqual(resolved.screenElement.heistId, "button_cancel")
         XCTAssertEqual(resolved.element.label, "Cancel")
     }
 
