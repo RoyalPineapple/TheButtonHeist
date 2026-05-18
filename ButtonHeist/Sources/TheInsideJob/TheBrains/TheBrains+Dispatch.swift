@@ -319,16 +319,9 @@ extension TheBrains {
         let afterTree = stash.wireTree()
         let accessibilityTrace = makeAccessibilityTrace(afterTree: afterTree, parentCapture: before.capture)
 
-        let delta = deriveDelta(
-            from: accessibilityTrace,
-            before: before,
-            isScreenChange: false
-        )
-
         let exploreElements = TheStash.WireConversion.toWire(afterSnapshot)
 
         var builder = ActionResultBuilder(method: .explore, snapshot: afterSnapshot)
-        builder.accessibilityDelta = delta
         builder.accessibilityTrace = accessibilityTrace
         return builder.success(
             payload: .explore(ExploreResult(

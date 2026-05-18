@@ -341,7 +341,6 @@ final class TheGetaway {
         builder.message = "Action skipped because target became stale after a screen change; "
             + "retry against the current interface. Screen changed while you were thinking "
             + "(\(lastScreen) -> \(currentScreen))."
-        builder.accessibilityDelta = backgroundDelta
         builder.accessibilityTrace = backgroundTrace
         return builder.failure(errorKind: .actionFailed)
     }

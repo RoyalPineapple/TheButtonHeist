@@ -19,14 +19,13 @@ struct CommandReceipt {
         case .delivered:
             guard let settle,
                   let postCapture = settle.postCapture,
-                  let accessibilityDelta = settle.accessibilityDelta else {
+                  settle.accessibilityTrace.captureEndpointDelta != nil else {
                 var builder = ActionResultBuilder(method: attempt.method, snapshot: before.snapshot)
                 builder.message = attempt.message
                 return builder.failure(errorKind: .actionFailed, payload: attempt.payload)
             }
             var builder = ActionResultBuilder(method: attempt.method, capture: postCapture)
             builder.message = attempt.message
-            builder.accessibilityDelta = accessibilityDelta
             builder.accessibilityTrace = settle.accessibilityTrace
             builder.settled = settle.didSettle
             builder.settleTimeMs = settle.timeMs
@@ -115,7 +114,6 @@ struct SettleReceipt {
 
     var timeMs: Int { outcome.timeMs }
     var postCapture: AccessibilityTrace.Capture? { accessibilityTrace.captures.last }
-    var accessibilityDelta: AccessibilityTrace.Delta? { accessibilityTrace.captureEndpointDelta }
 }
 
 #endif // DEBUG
