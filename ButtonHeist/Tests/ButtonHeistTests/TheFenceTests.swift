@@ -1572,7 +1572,7 @@ final class TheFenceTests: XCTestCase {
     func testExecuteArchiveSessionAutoClosesActiveSession() async throws {
         let fence = TheFence(configuration: .init())
         try fence.bookKeeper.beginSession(identifier: "archive-auto-close")
-        try fence.bookKeeper.logCommand(requestId: "r1", command: .status, arguments: [:])
+        try fence.bookKeeper.logCommand(BookKeeperCommandRecord(requestId: "r1", command: .status))
 
         let response = try await fence.execute(request: ["command": "archive_session"])
 

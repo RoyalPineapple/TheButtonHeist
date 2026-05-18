@@ -656,11 +656,12 @@ public final class TheFence {
     func execute(parsed: ParsedRequest) async throws -> FenceResponse {
         if let immediate = parsed.immediateResponse { return immediate }
 
-        logCommand(
+        let commandRecord = BookKeeperCommandRecord(
             requestId: parsed.requestId,
             command: parsed.command,
-            request: parsed.originalRequest
+            rawArguments: parsed.originalRequest
         )
+        logCommand(commandRecord)
 
         if parsed.command == .waitForChange,
            let backgroundResponse = responseIfBackgroundExpectationMet(
@@ -684,8 +685,7 @@ public final class TheFence {
             postDispatchBackgroundStartIndex: preDispatchBackgroundCount
         )
         recordHeistEvidence(
-            command: parsed.command,
-            request: parsed.originalRequest,
+            commandRecord,
             dispatchedResponse: dispatched.response,
             validatedResponse: validatedResponse,
             cacheUpdate: postDispatch.cacheUpdate
@@ -818,11 +818,16 @@ public final class TheFence {
         }
     }
 
-    private func logCommand(requestId: String, command: Command, request: [String: Any]) {
+    private func logCommand(_ record: BookKeeperCommandRecord) {
         do {
-            try bookKeeper.logCommand(requestId: requestId, command: command, arguments: request)
+            try bookKeeper.logCommand(record)
         } catch {
-            logger.warning("Failed to log command \(command.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            logger.warning(
+                """
+                Failed to log command \(record.command.rawValue, privacy: .public): \
+                \(error.localizedDescription, privacy: .public)
+                """
+            )
         }
     }
 
@@ -943,8 +948,7 @@ public final class TheFence {
     }
 
     private func recordHeistEvidence(
-        command: Command,
-        request: [String: Any],
+        _ record: BookKeeperCommandRecord,
         dispatchedResponse _: FenceResponse,
         validatedResponse: FenceResponse,
         cacheUpdate: ResponseCacheUpdate
@@ -952,8 +956,7 @@ public final class TheFence {
         guard case .idle = playbackPhase else { return }
         guard let finalReceipt = validatedResponse.heistRecordingReceipt, finalReceipt.shouldRecord else { return }
         bookKeeper.recordHeistEvidence(
-            command: command,
-            args: request,
+            record,
             actionResult: finalReceipt.actionResult,
             expectation: finalReceipt.expectation,
             interfaceCache: cacheUpdate.evidenceCache ?? [:]

@@ -83,7 +83,7 @@ final class TheBookKeeperTests: XCTestCase {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-compress")
         // Write something so the log isn't empty
-        try bookKeeper.logCommand(requestId: "r1", command: .status, arguments: [:])
+        try logCommand(bookKeeper, requestId: "r1", command: .status, arguments: [:])
         try await bookKeeper.closeSession()
         guard case .closed(let session) = bookKeeper.phase else {
             return XCTFail("Expected closed phase")
@@ -96,7 +96,7 @@ final class TheBookKeeperTests: XCTestCase {
     func testArchiveSessionTransitionsToArchived() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-archive")
-        try bookKeeper.logCommand(requestId: "r1", command: .status, arguments: [:])
+        try logCommand(bookKeeper, requestId: "r1", command: .status, arguments: [:])
         try await bookKeeper.closeSession()
         let (archivePath, archiveManifest) = try await bookKeeper.archiveSession(deleteSource: false)
         if case .archived(let session) = bookKeeper.phase {
@@ -247,10 +247,12 @@ final class TheBookKeeperTests: XCTestCase {
     func testLogCommandWritesJSONLLine() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-log")
-        try bookKeeper.logCommand(
-            requestId: "req-1",
-            command: .activate,
-            arguments: ["command": "activate", "identifier": "loginButton"]
+        try logCommand(bookKeeper,
+            BookKeeperCommandRecord(
+                requestId: "req-1",
+                command: .activate,
+                rawArguments: ["command": "activate", "identifier": "loginButton"]
+            )
         )
         guard case .active(let session) = bookKeeper.phase else {
             return XCTFail("Expected active phase")
@@ -267,6 +269,9 @@ final class TheBookKeeperTests: XCTestCase {
         XCTAssertEqual(json?["requestId"] as? String, "req-1")
         XCTAssertEqual(json?["command"] as? String, "activate")
         XCTAssertNotNil(json?["t"])
+        let args = json?["args"] as? [String: Any]
+        XCTAssertNil(args?["command"])
+        XCTAssertEqual(args?["identifier"] as? String, "loginButton")
     }
 
     @ButtonHeistActor
@@ -306,9 +311,9 @@ final class TheBookKeeperTests: XCTestCase {
     func testLogCommandIncrementsCommandCount() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-count")
-        try bookKeeper.logCommand(requestId: "r1", command: .status, arguments: [:])
-        try bookKeeper.logCommand(requestId: "r2", command: .activate, arguments: [:])
-        try bookKeeper.logCommand(requestId: "r3", command: .scroll, arguments: [:])
+        try logCommand(bookKeeper, requestId: "r1", command: .status, arguments: [:])
+        try logCommand(bookKeeper, requestId: "r2", command: .activate, arguments: [:])
+        try logCommand(bookKeeper, requestId: "r3", command: .scroll, arguments: [:])
         XCTAssertEqual(bookKeeper.manifest?.commandCount, 3)
     }
 
@@ -317,7 +322,7 @@ final class TheBookKeeperTests: XCTestCase {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-binary")
         let fakePngData = String(repeating: "A", count: 5000)
-        try bookKeeper.logCommand(
+        try logCommand(bookKeeper,
             requestId: "r1",
             command: .getScreen,
             arguments: ["command": "get_screen", "pngData": fakePngData]
@@ -336,7 +341,7 @@ final class TheBookKeeperTests: XCTestCase {
         try bookKeeper.beginSession(identifier: "test-nested-truncate")
         let longString = String(repeating: "x", count: 1500)
 
-        try bookKeeper.logCommand(
+        try logCommand(bookKeeper,
             requestId: "r1",
             command: .activate,
             arguments: [
@@ -365,7 +370,7 @@ final class TheBookKeeperTests: XCTestCase {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-nested-binary")
 
-        try bookKeeper.logCommand(
+        try logCommand(bookKeeper,
             requestId: "r1",
             command: .activate,
             arguments: [
@@ -394,10 +399,80 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testNestedTypedValuesRemainStructuredInLog() async throws {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        try bookKeeper.beginSession(identifier: "test-nested-values")
+
+        try logCommand(bookKeeper,
+            BookKeeperCommandRecord(
+                requestId: "r1",
+                command: .waitFor,
+                rawArguments: [
+                    "command": "wait_for",
+                    "expect": [
+                        "type": "element_appeared",
+                        "matcher": [
+                            "label": "Submit",
+                            "traits": ["button"],
+                        ],
+                        "timeout": 2.5,
+                        "required": true,
+                    ],
+                ]
+            )
+        )
+
+        guard case .active(let session) = bookKeeper.phase else {
+            return XCTFail("Expected active phase")
+        }
+        let logPath = session.directory.appendingPathComponent("session.jsonl")
+        let content = try String(contentsOf: logPath, encoding: .utf8)
+        let lines = content.split(separator: "\n")
+        let json = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
+        let args = json?["args"] as? [String: Any]
+        let expect = args?["expect"] as? [String: Any]
+        let matcher = expect?["matcher"] as? [String: Any]
+
+        XCTAssertEqual(expect?["type"] as? String, "element_appeared")
+        XCTAssertEqual(expect?["timeout"] as? Double, 2.5)
+        XCTAssertEqual(expect?["required"] as? Bool, true)
+        XCTAssertEqual(matcher?["label"] as? String, "Submit")
+        XCTAssertEqual(matcher?["traits"] as? [String], ["button"])
+    }
+
+    @ButtonHeistActor
+    func testUnsupportedLogArgumentIsOmitted() async throws {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        try bookKeeper.beginSession(identifier: "test-unsupported-log")
+
+        try logCommand(bookKeeper,
+            BookKeeperCommandRecord(
+                requestId: "r1",
+                command: .typeText,
+                rawArguments: [
+                    "command": "type_text",
+                    "metadata": Data([0x01, 0x02]),
+                ]
+            )
+        )
+
+        guard case .active(let session) = bookKeeper.phase else {
+            return XCTFail("Expected active phase")
+        }
+        let logPath = session.directory.appendingPathComponent("session.jsonl")
+        let content = try String(contentsOf: logPath, encoding: .utf8)
+        let lines = content.split(separator: "\n")
+        let json = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
+        let args = json?["args"] as? [String: Any]
+
+        XCTAssertNil(args?["metadata"])
+    }
+
+    @ButtonHeistActor
     func testLogCommandSilentWhenIdle() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         // Should not throw — just silently does nothing
-        try bookKeeper.logCommand(requestId: "r1", command: .status, arguments: [:])
+        try logCommand(bookKeeper, requestId: "r1", command: .status, arguments: [:])
     }
 
     // MARK: - Manifest
@@ -603,7 +678,7 @@ final class TheBookKeeperTests: XCTestCase {
     func testLogCommandAndResponseProduceCorrelatedEntries() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-correlation")
-        try bookKeeper.logCommand(requestId: "req-42", command: .getScreen, arguments: ["command": "get_screen"])
+        try logCommand(bookKeeper, requestId: "req-42", command: .getScreen, arguments: ["command": "get_screen"])
         try bookKeeper.logResponse(
             requestId: "req-42",
             status: .ok,
@@ -704,7 +779,7 @@ final class TheBookKeeperTests: XCTestCase {
     func testArchiveSessionDeleteSourceRemovesDirectory() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-archive-delete")
-        try bookKeeper.logCommand(requestId: "r1", command: .status, arguments: [:])
+        try logCommand(bookKeeper, requestId: "r1", command: .status, arguments: [:])
         guard case .active(let activeSession) = bookKeeper.phase else {
             return XCTFail("Expected active phase")
         }
@@ -794,4 +869,23 @@ final class TheBookKeeperTests: XCTestCase {
         XCTAssertTrue(result?.path.contains("recordings/") == true)
         XCTAssertEqual(bookKeeper.manifest?.artifacts.first?.type, .recording)
     }
+}
+
+@ButtonHeistActor
+private func logCommand(_ bookKeeper: TheBookKeeper, _ record: BookKeeperCommandRecord) throws {
+    try bookKeeper.logCommand(record)
+}
+
+@ButtonHeistActor
+private func logCommand(
+    _ bookKeeper: TheBookKeeper,
+    requestId: String,
+    command: TheFence.Command,
+    arguments: [String: Any]
+) throws {
+    try bookKeeper.logCommand(BookKeeperCommandRecord(
+        requestId: requestId,
+        command: command,
+        rawArguments: arguments
+    ))
 }
