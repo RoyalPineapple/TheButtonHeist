@@ -521,15 +521,14 @@ final class TheBookKeeper {
     /// - Parameters:
     ///   - actionResult: The command's result envelope payload. Failed results are skipped.
     ///   - expectation: Final expectation evidence for the command. Failed expectations are skipped.
-    ///   - interfaceCache: Snapshot of currently visible elements keyed by
-    ///     heistId. The recorder uses this to resolve `heistId` arguments to
-    ///     minimum matchers. Caller is responsible for supplying the cache —
-    ///     TheBookKeeper does not maintain its own copy.
+    ///   - targetCapture: Capture containing the target at command time. The
+    ///     recorder resolves `heistId` arguments only against this capture so
+    ///     matchers are derived from durable capture evidence, not cache state.
     func recordHeistEvidence(
         _ request: TheFence.ParsedRequest,
         actionResult: ActionResult? = nil,
         expectation: ExpectationResult? = nil,
-        interfaceCache: [String: HeistElement]
+        targetCapture: AccessibilityTrace.Capture?
     ) {
         guard case .active(let session) = phase,
               case .recording(let recording) = session.heistRecording else { return }
@@ -539,8 +538,7 @@ final class TheBookKeeper {
 
         let step = buildStep(
             request: request,
-            cache: Array(interfaceCache.values),
-            interfaceCache: interfaceCache,
+            targetCapture: targetCapture,
             actionResult: actionResult,
             expectation: expectation
         )
@@ -565,8 +563,7 @@ final class TheBookKeeper {
 
     private func buildStep(
         request: TheFence.ParsedRequest,
-        cache: [HeistElement],
-        interfaceCache: [String: HeistElement],
+        targetCapture: AccessibilityTrace.Capture?,
         actionResult: ActionResult?,
         expectation: ExpectationResult?
     ) -> HeistEvidence {
@@ -579,9 +576,7 @@ final class TheBookKeeper {
         if case .heistId(let heistId)? = request.bookKeeperElementTarget,
            let source = matcherSource(
             heistId: heistId,
-            trace: actionResult?.accessibilityTrace,
-            fallbackCache: interfaceCache,
-            fallbackElements: cache
+            targetCapture: targetCapture
         ) {
             let minimumMatcher = MinimumMatcher.build(element: source.element, in: source.capture)
             target = minimumMatcher.matcher
@@ -615,22 +610,16 @@ final class TheBookKeeper {
 
     private func matcherSource(
         heistId: String,
-        trace: AccessibilityTrace?,
-        fallbackCache: [String: HeistElement],
-        fallbackElements: [HeistElement]
+        targetCapture: AccessibilityTrace.Capture?
     ) -> (element: HeistElement, capture: AccessibilityTrace.Capture)? {
-        if let capture = trace?.captures.first {
-            let elements = capture.interface.elements
-            if let element = elements.first(where: { $0.heistId == heistId }) {
-                return (element, capture)
-            }
+        guard let targetCapture else { return nil }
+        let elementsByHeistId = targetCapture.interface.elements.reduce(
+            into: [String: HeistElement]()
+        ) { partialResult, element in
+            partialResult[element.heistId] = element
         }
-        guard let element = fallbackCache[heistId] else { return nil }
-        let capture = AccessibilityTrace.Capture(
-            sequence: 1,
-            interface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: fallbackElements.map(InterfaceNode.element))
-        )
-        return (element, capture)
+        guard let element = elementsByHeistId[heistId] else { return nil }
+        return (element, targetCapture)
     }
 
     private func buildRecordedMetadata(
