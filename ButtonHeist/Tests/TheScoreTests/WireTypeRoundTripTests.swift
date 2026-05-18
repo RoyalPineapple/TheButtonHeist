@@ -413,6 +413,42 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertFalse(decoded.isModalBoundary)
     }
 
+    // MARK: - SubtreeSelector
+
+    func testSubtreeSelectorElementUsesToolSchemaShape() throws {
+        let selector = SubtreeSelector.element(
+            ElementMatcher(heistId: "button_save", label: "Save", traits: [.button]),
+            ordinal: 2
+        )
+
+        let data = try encoder.encode(selector)
+        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(payload["ordinal"] as? Int, 2)
+        let element = try XCTUnwrap(payload["element"] as? [String: Any])
+        XCTAssertNil(payload["container"])
+        XCTAssertEqual(element["heistId"] as? String, "button_save")
+        XCTAssertEqual(element["label"] as? String, "Save")
+        XCTAssertEqual(element["traits"] as? [String], ["button"])
+        XCTAssertEqual(try decoder.decode(SubtreeSelector.self, from: data), selector)
+    }
+
+    func testSubtreeSelectorContainerUsesToolSchemaShape() throws {
+        let selector = SubtreeSelector.container(
+            ContainerMatcher(stableId: "semantic_actions", type: .semanticGroup, label: "Actions"),
+            ordinal: 1
+        )
+
+        let data = try encoder.encode(selector)
+        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(payload["ordinal"] as? Int, 1)
+        let container = try XCTUnwrap(payload["container"] as? [String: Any])
+        XCTAssertNil(payload["element"])
+        XCTAssertEqual(container["stableId"] as? String, "semantic_actions")
+        XCTAssertEqual(container["type"] as? String, "semanticGroup")
+        XCTAssertEqual(container["label"] as? String, "Actions")
+        XCTAssertEqual(try decoder.decode(SubtreeSelector.self, from: data), selector)
+    }
+
     // MARK: - InterfaceNode
 
     func testInterfaceNodeLeafRoundTrip() throws {

@@ -874,6 +874,43 @@ public enum SubtreeSelector: Codable, Sendable, Equatable {
     case element(ElementMatcher, ordinal: Int? = nil)
     case container(ContainerMatcher, ordinal: Int? = nil)
 
+    private enum CodingKeys: String, CodingKey {
+        case element
+        case container
+        case ordinal
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let hasElement = container.contains(.element)
+        let hasContainer = container.contains(.container)
+        guard hasElement != hasContainer else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .element,
+                in: container,
+                debugDescription: "SubtreeSelector requires exactly one of element or container"
+            )
+        }
+        let ordinal = try container.decodeIfPresent(Int.self, forKey: .ordinal)
+        if hasElement {
+            self = .element(try container.decode(ElementMatcher.self, forKey: .element), ordinal: ordinal)
+        } else {
+            self = .container(try container.decode(ContainerMatcher.self, forKey: .container), ordinal: ordinal)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .element(let matcher, let ordinal):
+            try container.encode(matcher, forKey: .element)
+            try container.encodeIfPresent(ordinal, forKey: .ordinal)
+        case .container(let matcher, let ordinal):
+            try container.encode(matcher, forKey: .container)
+            try container.encodeIfPresent(ordinal, forKey: .ordinal)
+        }
+    }
+
     public var ordinal: Int? {
         switch self {
         case .element(_, let ordinal), .container(_, let ordinal):
