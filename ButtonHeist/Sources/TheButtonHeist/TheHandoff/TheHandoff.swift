@@ -203,7 +203,7 @@ final class TheHandoff {
         let attempt = ConnectionAttempt(id: UUID(), device: device)
         connectionAttemptFailure = nil
         terminalConnectionAttemptID = nil
-        connectionPhase = .connecting(attempt)
+        setConnectionPhase(.connecting(attempt))
         return attempt.id
     }
 
@@ -212,7 +212,7 @@ final class TheHandoff {
         let keepaliveTask = makeKeepaliveTask()
         connectionAttemptFailure = nil
         terminalConnectionAttemptID = nil
-        connectionPhase = .connected(ConnectedSession(attemptID: attemptID, device: device, keepaliveTask: keepaliveTask))
+        setConnectionPhase(.connected(ConnectedSession(attemptID: attemptID, device: device, keepaliveTask: keepaliveTask)))
         resumePhaseAwaiters(for: attemptID, with: .success(()))
     }
 
@@ -229,8 +229,8 @@ final class TheHandoff {
         if case .connected(let session) = connectionPhase {
             session.keepaliveTask.cancel()
         }
-        connectionPhase = .failed(failure)
         terminalConnectionAttemptID = attemptID
+        setConnectionPhase(.failed(failure))
         if wasActive, let attemptID {
             resumePhaseAwaiters(for: attemptID, with: .failure(failure))
         }
@@ -251,12 +251,12 @@ final class TheHandoff {
         if case .connected(let session) = connectionPhase {
             session.keepaliveTask.cancel()
         }
-        connectionPhase = .disconnected
         terminalConnectionAttemptID = attemptID
         if wasActive {
             if let reason {
                 let failure = ConnectionError.disconnected(reason)
                 connectionAttemptFailure = failure
+                setConnectionPhase(.disconnected)
                 if let attemptID {
                     resumePhaseAwaiters(for: attemptID, with: .failure(failure))
                 }
@@ -264,22 +264,26 @@ final class TheHandoff {
                 let failure = ConnectionError.connectionFailed(
                     "Disconnected during connection attempt. The app may have been busy, suspended, or restarted before the handshake completed."
                 )
+                setConnectionPhase(.disconnected)
                 if let attemptID {
                     resumePhaseAwaiters(for: attemptID, with: .failure(failure))
                 }
             }
-        } else if reason == nil {
-            // No active transition and no new cause: clear any stale attempt cause.
-            // If a cause arrives after the first disconnect, keep the original cause
-            // because it is the one waitForConnectionResult reports on the fast path.
-            connectionAttemptFailure = nil
+        } else {
+            if reason == nil {
+                // No active transition and no new cause: clear any stale attempt cause.
+                // If a cause arrives after the first disconnect, keep the original cause
+                // because it is the one waitForConnectionResult reports on the fast path.
+                connectionAttemptFailure = nil
+            }
+            setConnectionPhase(.disconnected)
         }
         return wasActive
     }
 
     /// Tear down an in-flight connection attempt after its owner reaches a setup
     /// terminal state (for example, discovery/direct-connect timeout). This
-    /// intentionally does not call `onDisconnected` or schedule reconnect:
+    /// intentionally does not schedule reconnect:
     /// there was no usable session drop, only a failed setup attempt.
     func disconnectConnectionAttempt(_ attemptID: UUID, failure: ConnectionError) {
         guard activeConnectionAttemptID == attemptID else { return }
@@ -289,9 +293,28 @@ final class TheHandoff {
         }
         connection?.disconnect()
         connection = nil
-        connectionPhase = .disconnected
         terminalConnectionAttemptID = attemptID
+        setConnectionPhase(.disconnected)
         resumePhaseAwaiters(for: attemptID, with: .failure(failure))
+    }
+
+    private func setConnectionPhase(_ phase: ConnectionPhase) {
+        let previousPhase = connectionPhase
+        connectionPhase = phase
+        guard !Self.isSameConnectionPhase(previousPhase, phase) else { return }
+        onConnectionStateChanged?(phase)
+    }
+
+    private static func isSameConnectionPhase(_ lhs: ConnectionPhase, _ rhs: ConnectionPhase) -> Bool {
+        switch (lhs, rhs) {
+        case (.disconnected, .disconnected),
+             (.connecting, .connecting),
+             (.connected, .connected),
+             (.failed, .failed):
+            return true
+        default:
+            return false
+        }
     }
 
     private func resumePhaseAwaiters(for attemptID: UUID, with result: Result<Void, Error>) {
@@ -372,8 +395,9 @@ final class TheHandoff {
 
     // MARK: - Connection Callbacks
 
-    /// The connection has dropped. `DisconnectReason` indicates whether this was local, remote, or error-driven.
-    var onDisconnected: (@ButtonHeistActor (DisconnectReason) -> Void)?
+    /// Emits after each connection phase transition. Consumers derive lifecycle
+    /// side effects from this state stream instead of one-off lifecycle hooks.
+    var onConnectionStateChanged: (@ButtonHeistActor (ConnectionPhase) -> Void)?
     /// A `get_interface` response arrived. The trailing `String?` is the originating requestId (nil for unsolicited pushes).
     var onInterface: (@ButtonHeistActor (Interface, String?) -> Void)?
     /// An action command (tap, swipe, type, etc.) produced a result. Trailing `String?` is the originating requestId.
@@ -606,11 +630,9 @@ final class TheHandoff {
             case .disconnected(let reason):
                 guard self.isCurrentOrTerminalConnectionAttempt(attemptID) else { return }
                 if case .failed = self.connectionPhase {
-                    self.onDisconnected?(reason)
                     return
                 }
                 guard self.transitionToDisconnected(reason: reason, attemptID: attemptID) else { return }
-                self.onDisconnected?(reason)
                 if reason.retryable, case .enabled(let filter, let existingReconnectTask) = self.reconnectPolicy {
                     existingReconnectTask?.cancel()
                     let reconnectTask = Task<Void, Never> { [weak self] in
@@ -740,7 +762,6 @@ final class TheHandoff {
 
         if hadActiveSession {
             transitionToDisconnected(reason: .localDisconnect)
-            onDisconnected?(.localDisconnect)
         } else {
             transitionToDisconnected()
         }
@@ -838,8 +859,13 @@ final class TheHandoff {
     func forceDisconnect() {
         guard isConnected else { return }
         logger.warning("Force-disconnecting stale connection")
-        disconnect()
-        onDisconnected?(.localDisconnect)
+        if case .enabled(let filter, let reconnectTask) = reconnectPolicy {
+            reconnectTask?.cancel()
+            reconnectPolicy = .enabled(filter: filter, reconnectTask: nil)
+        }
+        connection?.disconnect()
+        connection = nil
+        transitionToDisconnected(reason: .localDisconnect)
         if case .enabled(let filter, let existingReconnectTask) = reconnectPolicy {
             existingReconnectTask?.cancel()
             let reconnectTask = Task<Void, Never> { [weak self] in

@@ -1163,14 +1163,15 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     func testDisconnectCancelsPendingActionWaitWithReason() async {
-        let fence = TheFence(configuration: .init())
+        let (fence, mockConnection) = makeConnectedFence()
+        fence.handoff.connect(to: TheFenceFixtures.testDevice)
 
         let waitTask = Task { @ButtonHeistActor in
             try await fence.waitForActionResult(requestId: "pending", timeout: 10)
         }
         await Task.yield()
 
-        fence.handoff.onDisconnected?(.serverClosed)
+        mockConnection.onEvent?(.disconnected(.serverClosed))
 
         do {
             _ = try await waitTask.value
@@ -1186,15 +1187,42 @@ final class TheFenceTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testFailedConnectionStateCancelsPendingActionWait() async {
+        let (fence, mockConnection) = makeConnectedFence()
+        fence.handoff.connect(to: TheFenceFixtures.testDevice)
+
+        let waitTask = Task { @ButtonHeistActor in
+            try await fence.waitForActionResult(requestId: "pending", timeout: 10)
+        }
+        await Task.yield()
+
+        mockConnection.onEvent?(.message(
+            .error(ServerError(kind: .general, message: "server died")),
+            requestId: nil,
+            accessibilityTrace: nil
+        ))
+
+        do {
+            _ = try await waitTask.value
+            XCTFail("Expected pending wait to fail")
+        } catch FenceError.connectionFailed(let message) {
+            XCTAssertEqual(message, "server died")
+        } catch {
+            XCTFail("Expected connectionFailed, got \(error)")
+        }
+    }
+
+    @ButtonHeistActor
     func testDisconnectCancelsPendingRecordingWaitWithReason() async {
-        let fence = TheFence(configuration: .init())
+        let (fence, mockConnection) = makeConnectedFence()
+        fence.handoff.connect(to: TheFenceFixtures.testDevice)
 
         let waitTask = Task { @ButtonHeistActor in
             try await fence.waitForRecording(timeout: 10)
         }
         await Task.yield()
 
-        fence.handoff.onDisconnected?(.serverClosed)
+        mockConnection.onEvent?(.disconnected(.serverClosed))
 
         do {
             _ = try await waitTask.value
@@ -1236,11 +1264,12 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     func testDisconnectClearsLastActionSessionState() async {
-        let fence = TheFence(configuration: .init())
+        let (fence, mockConnection) = makeConnectedFence()
+        fence.handoff.connect(to: TheFenceFixtures.testDevice)
         fence.lastActionHistory = .completed(ActionResult(success: true, method: .activate))
         XCTAssertNotNil(fence.lastActionResult)
 
-        fence.handoff.onDisconnected?(.serverClosed)
+        mockConnection.onEvent?(.disconnected(.serverClosed))
 
         XCTAssertNil(fence.lastActionResult)
         XCTAssertNil(fence.currentSessionState()["lastAction"])
@@ -2244,10 +2273,11 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     func testBackgroundTraceQueueClearsOnDisconnect() async {
-        let fence = TheFence(configuration: .init())
+        let (fence, mockConnection) = makeConnectedFence()
+        fence.handoff.connect(to: TheFenceFixtures.testDevice)
         fence.handoff.onBackgroundAccessibilityTrace?(makeBackgroundScreenChangedTrace(elementCount: 7))
 
-        fence.handoff.onDisconnected?(.serverClosed)
+        mockConnection.onEvent?(.disconnected(.serverClosed))
 
         XCTAssertNil(fence.drainBackgroundAccessibilityTrace())
     }
@@ -3008,7 +3038,7 @@ final class TheFenceTests: XCTestCase {
     }
 
     /// With two actions in flight, a timeout on one must NOT cancel the other.
-    /// Before the fix, `forceDisconnect` -> `onDisconnected` ->
+    /// Before the fix, `forceDisconnect` -> connection-state change ->
     /// `cancelAllPendingRequests` would fail every sibling with
     /// `.connectionFailed`. Now the timeout is local to its own request and a
     /// sibling can still resolve from its own response.

@@ -301,8 +301,10 @@ final class TheHandoffStateTests: XCTestCase {
             ]
             return connection
         }
-        handoff.onDisconnected = { _ in
-            disconnected.fulfill()
+        handoff.onConnectionStateChanged = { state in
+            if case .disconnected = state {
+                disconnected.fulfill()
+            }
         }
 
         let mockDiscovery = MockDiscovery()
@@ -335,8 +337,10 @@ final class TheHandoffStateTests: XCTestCase {
             ]
             return connection
         }
-        handoff.onDisconnected = { _ in
-            disconnected.fulfill()
+        handoff.onConnectionStateChanged = { state in
+            if case .disconnected = state {
+                disconnected.fulfill()
+            }
         }
 
         handoff.connect(to: device)
@@ -645,8 +649,10 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.makeConnection = { _, _, _ in existingConnection }
 
         var disconnectReasons: [DisconnectReason] = []
-        handoff.onDisconnected = { reason in
-            disconnectReasons.append(reason)
+        handoff.onConnectionStateChanged = { _ in
+            if case .disconnected(let reason) = handoff.connectionDiagnosticFailure {
+                disconnectReasons.append(reason)
+            }
         }
 
         handoff.connect(to: existingDevice)
@@ -716,8 +722,10 @@ final class TheHandoffStateTests: XCTestCase {
         }
 
         var disconnectReasons: [DisconnectReason] = []
-        handoff.onDisconnected = { reason in
-            disconnectReasons.append(reason)
+        handoff.onConnectionStateChanged = { _ in
+            if case .disconnected(let reason) = handoff.connectionDiagnosticFailure {
+                disconnectReasons.append(reason)
+            }
         }
 
         handoff.connect(to: existingDevice)

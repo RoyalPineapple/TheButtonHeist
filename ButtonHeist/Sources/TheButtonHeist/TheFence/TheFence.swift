@@ -535,11 +535,30 @@ public final class TheFence {
             self?.enqueueBackgroundAccessibilityTrace(trace)
         }
 
-        handoff.onDisconnected = { [weak self] reason in
-            self?.clearClientSessionState(
-                error: FenceError.connectionFailure(ConnectionFailure(disconnectReason: reason))
-            )
+        handoff.onConnectionStateChanged = { [weak self] state in
+            self?.handleHandoffConnectionStateChanged(state)
         }
+    }
+
+    private func handleHandoffConnectionStateChanged(_ state: TheHandoff.ConnectionPhase) {
+        switch state {
+        case .failed(let failure):
+            clearClientSessionState(error: sessionStateError(for: failure))
+        case .disconnected:
+            guard let failure = handoff.connectionDiagnosticFailure,
+                  case .disconnected = failure
+            else { return }
+            clearClientSessionState(error: sessionStateError(for: failure))
+        case .connecting, .connected:
+            break
+        }
+    }
+
+    private func sessionStateError(for failure: TheHandoff.ConnectionError) -> Error {
+        if case .disconnected(let reason) = failure {
+            return FenceError.connectionFailure(ConnectionFailure(disconnectReason: reason))
+        }
+        return FenceError(failure)
     }
 
     func clearClientSessionState(error: Error) {

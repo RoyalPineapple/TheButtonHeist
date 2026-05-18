@@ -384,7 +384,11 @@ final class TheHandoffMessageTests: XCTestCase {
         let handoff = TheHandoff()
         connectMockHandoff(handoff)
         var disconnectFired = false
-        handoff.onDisconnected = { _ in disconnectFired = true }
+        handoff.onConnectionStateChanged = { state in
+            if case .disconnected = state {
+                disconnectFired = true
+            }
+        }
 
         // Eight ticks across ~40 simulated seconds — well past the
         // 30-second force-disconnect threshold. A pong arrives between
@@ -406,7 +410,11 @@ final class TheHandoffMessageTests: XCTestCase {
     func testForceDisconnectWhenNotConnectedIsNoOp() async {
         let handoff = TheHandoff()
         var disconnectedCalled = false
-        handoff.onDisconnected = { _ in disconnectedCalled = true }
+        handoff.onConnectionStateChanged = { state in
+            if case .disconnected = state {
+                disconnectedCalled = true
+            }
+        }
 
         handoff.forceDisconnect()
 
