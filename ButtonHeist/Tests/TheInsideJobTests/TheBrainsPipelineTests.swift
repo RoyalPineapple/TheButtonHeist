@@ -279,6 +279,45 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(result.screenId, "after")
     }
 
+    func testCommandReceiptSettleOutcomeDoesNotClassifyDelta() throws {
+        seedScreen(elements: [("Stable", .header, "stable_header")])
+        let before = brains.captureBeforeState()
+        let postCapture = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: before.capture.interface,
+            parentHash: before.capture.hash,
+            context: before.capture.context
+        )
+        let accessibilityTrace = AccessibilityTrace(captures: [before.capture, postCapture])
+        let receipt = CommandReceipt(
+            before: before,
+            attempt: .delivered(method: .activate, message: "delivered"),
+            settle: SettleReceipt(
+                outcome: .timedOut(timeMs: 5_000),
+                events: [],
+                elementsByKey: [:],
+                didSettle: false,
+                accessibilityTrace: accessibilityTrace
+            )
+        )
+
+        let result = receipt.actionResult()
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(result.message, "delivered")
+        XCTAssertEqual(result.settled, false)
+        XCTAssertEqual(result.settleTimeMs, 5_000)
+        guard case .noChange(let payload)? = result.accessibilityDelta else {
+            return XCTFail(
+                "Expected trace endpoints to project noChange, got \(String(describing: result.accessibilityDelta))"
+            )
+        }
+        XCTAssertEqual(payload.captureEdge?.before.hash, before.capture.hash)
+        XCTAssertEqual(payload.captureEdge?.after.hash, postCapture.hash)
+        XCTAssertEqual(result.accessibilityDelta, accessibilityTrace.captureEndpointDelta)
+        XCTAssertEqual(result.accessibilityTrace, accessibilityTrace)
+    }
+
     // MARK: - SentState
 
     func testLastSentStateStartsNil() {
