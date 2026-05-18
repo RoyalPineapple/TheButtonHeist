@@ -1229,13 +1229,11 @@ final class TheFenceHandlerTests: XCTestCase {
     func testTypeTextRejectsLegacyDeleteCount() async {
         await assertValidationError(
             ["command": "type_text", "deleteCount": 0],
-            equals: "schema validation failed for deleteCount: observed integer 0; expected unsupported by type_text; "
-                + "use edit_action delete for destructive edits"
+            equals: "schema validation failed for deleteCount: observed integer 0; expected valid type_text parameter"
         )
         await assertValidationError(
             ["command": "type_text", "text": "hello", "deleteCount": 5],
-            equals: "schema validation failed for deleteCount: observed integer 5; expected unsupported by type_text; "
-                + "use edit_action delete for destructive edits"
+            equals: "schema validation failed for deleteCount: observed integer 5; expected valid type_text parameter"
         )
     }
 
@@ -1243,8 +1241,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testTypeTextRejectsLegacyClearFirst() async {
         await assertValidationError(
             ["command": "type_text", "clearFirst": true],
-            equals: "schema validation failed for clearFirst: observed boolean true; expected unsupported by type_text; "
-                + "use edit_action selectAll then edit_action delete"
+            equals: "schema validation failed for clearFirst: observed boolean true; expected valid type_text parameter"
         )
     }
 
