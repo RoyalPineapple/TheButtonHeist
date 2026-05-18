@@ -2250,6 +2250,28 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testTimeoutIsAcceptedAsRequestControl() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        mockConn.autoResponse = { message in
+            switch message {
+            case .explore:
+                return .actionResult(self.exploredActionResult(elements: [
+                    self.testElement("visible_button", label: "Visible", traits: [.button]),
+                ]))
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "get_interface",
+            "timeout": 15,
+        ])
+
+        XCTAssertFalse(response.isFailure)
+    }
+
+    @ButtonHeistActor
     func testGetInterfaceFullAliasUsesCommandContractRejection() async {
         await assertValidationError(
             ["command": "get_interface", "full": false],
