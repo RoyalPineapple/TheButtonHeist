@@ -573,26 +573,7 @@ extension TheFence {
 
             do {
                 let response = try await execute(playback: operation)
-
-                // On elementNotFound with a matcher target, try scroll_to_visible then retry.
-                // The element may not be on-screen at this instant. Try bringing
-                // it into view before retrying the recorded action.
-                if let actionResult = response.actionResult,
-                   !actionResult.success,
-                   actionResult.errorKind == .elementNotFound,
-                   operation.hasScrollableTarget {
-                    let scrollResponse = try await execute(playback: operation.scrollToVisibleOperation())
-                    if let scrollResult = scrollResponse.actionResult, scrollResult.success {
-                        let retryResponse = try await execute(playback: operation)
-                        stepFailure = playbackFailure(operation: operation, response: retryResponse)
-                    } else {
-                        // Report the original action failure, not the scroll failure —
-                        // the root cause is the element not being found, not the scroll attempt.
-                        stepFailure = playbackFailure(operation: operation, response: response)
-                    }
-                } else {
-                    stepFailure = playbackFailure(operation: operation, response: response)
-                }
+                stepFailure = playbackFailure(operation: operation, response: response)
             } catch {
                 let failedStep = PlaybackFailure.FailedStep(command: operation.commandName, target: operation.target)
                 stepFailure = .thrown(step: failedStep, error: error.localizedDescription, interface: nil)

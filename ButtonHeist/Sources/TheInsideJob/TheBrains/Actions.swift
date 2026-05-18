@@ -47,10 +47,14 @@ final class Actions {
     func performElementAction(
         target: ElementTarget,
         method: ActionMethod,
+        recordedScreen: Screen? = nil,
         requireInteractive: Bool = true,
         action: @MainActor (TheStash.ResolvedTarget) async -> TheSafecracker.InteractionResult?
     ) async -> TheSafecracker.InteractionResult {
-        await navigation.ensureOnScreen(for: target)
+        let positioning = await navigation.ensureOnScreen(for: target, recordedScreen: recordedScreen)
+        if let failure = positioning.failure {
+            return .failure(failure.method ?? method, message: failure.message)
+        }
         let resolution = stash.resolveTarget(target)
         guard let resolved = resolution.resolved else {
             return .failure(.elementNotFound, message: resolution.diagnostics)
@@ -79,10 +83,14 @@ final class Actions {
         pointX: Double?,
         pointY: Double?,
         method: ActionMethod,
+        recordedScreen: Screen? = nil,
         action: (CGPoint) async -> Bool
     ) async -> TheSafecracker.InteractionResult {
         if let elementTarget {
-            await navigation.ensureOnScreen(for: elementTarget)
+            let positioning = await navigation.ensureOnScreen(for: elementTarget, recordedScreen: recordedScreen)
+            if let failure = positioning.failure {
+                return .failure(failure.method ?? method, message: failure.message)
+            }
         }
         switch resolveGesturePoint(from: elementTarget, pointX: pointX, pointY: pointY, method: method) {
         case .failure(let result):
@@ -156,8 +164,8 @@ final class Actions {
 
     // MARK: - Accessibility Actions
 
-    func executeActivate(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
-        await performElementAction(target: target, method: .activate) { resolved in
+    func executeActivate(_ target: ElementTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
+        await performElementAction(target: target, method: .activate, recordedScreen: recordedScreen) { resolved in
             // First attempt — accessibilityActivate on the live UIKit object.
             let firstOutcome = self.stash.activate(resolved.screenElement)
             if firstOutcome == .success {
@@ -170,7 +178,10 @@ final class Actions {
             // dispatch; re-resolving against a freshly-parsed tree gives us a new
             // live object at the (possibly updated) activation point.
             self.navigation.refresh()
-            await self.navigation.ensureOnScreen(for: target)
+            let retryPositioning = await self.navigation.ensureOnScreen(for: target, recordedScreen: recordedScreen)
+            if let failure = retryPositioning.failure {
+                return .failure(failure.method ?? .activate, message: failure.message)
+            }
             let retryResolution = self.stash.resolveTarget(target)
             let retryResolved = retryResolution.resolved ?? resolved
             let retryOutcome = self.stash.activate(retryResolved.screenElement)
@@ -213,8 +224,8 @@ final class Actions {
         }
     }
 
-    func executeIncrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
-        await performElementAction(target: target, method: .increment) { resolved in
+    func executeIncrement(_ target: ElementTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
+        await performElementAction(target: target, method: .increment, recordedScreen: recordedScreen) { resolved in
             guard resolved.element.traits.contains(.adjustable) else {
                 return .failure(
                     .increment,
@@ -238,8 +249,8 @@ final class Actions {
         }
     }
 
-    func executeDecrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
-        await performElementAction(target: target, method: .decrement) { resolved in
+    func executeDecrement(_ target: ElementTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
+        await performElementAction(target: target, method: .decrement, recordedScreen: recordedScreen) { resolved in
             guard resolved.element.traits.contains(.adjustable) else {
                 return .failure(
                     .decrement,
@@ -263,8 +274,15 @@ final class Actions {
         }
     }
 
-    func executeCustomAction(_ target: CustomActionTarget) async -> TheSafecracker.InteractionResult {
-        await performElementAction(target: target.elementTarget, method: .customAction) { resolved in
+    func executeCustomAction(
+        _ target: CustomActionTarget,
+        recordedScreen: Screen? = nil
+    ) async -> TheSafecracker.InteractionResult {
+        await performElementAction(
+            target: target.elementTarget,
+            method: .customAction,
+            recordedScreen: recordedScreen
+        ) { resolved in
             switch self.stash.performCustomAction(named: target.actionName, on: resolved.screenElement) {
             case .deallocated:
                 return .failure(
@@ -298,12 +316,13 @@ final class Actions {
         }
     }
 
-    func executeRotor(_ target: RotorTarget) async -> TheSafecracker.InteractionResult {
+    func executeRotor(_ target: RotorTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
         let direction = target.resolvedDirection
         let method: ActionMethod = .rotor
         return await performElementAction(
             target: target.elementTarget,
             method: method,
+            recordedScreen: recordedScreen,
             requireInteractive: false
         ) { resolved in
             let outcome = self.stash.performRotor(target, direction: direction, on: resolved.screenElement)
@@ -361,26 +380,37 @@ final class Actions {
 
     // MARK: - Touch Gestures
 
-    func executeTap(_ target: TouchTapTarget) async -> TheSafecracker.InteractionResult {
+    func executeTap(
+        _ target: TouchTapTarget,
+        recordedScreen: Screen? = nil
+    ) async -> TheSafecracker.InteractionResult {
         await performPointAction(
             elementTarget: target.elementTarget, pointX: target.pointX, pointY: target.pointY,
-            method: .syntheticTap
+            method: .syntheticTap,
+            recordedScreen: recordedScreen
         ) { point in
             await self.safecracker.tap(at: point)
         }
     }
 
-    func executeLongPress(_ target: LongPressTarget) async -> TheSafecracker.InteractionResult {
+    func executeLongPress(
+        _ target: LongPressTarget,
+        recordedScreen: Screen? = nil
+    ) async -> TheSafecracker.InteractionResult {
         let duration = clampDuration(target.duration)
         return await performPointAction(
             elementTarget: target.elementTarget, pointX: target.pointX, pointY: target.pointY,
-            method: .syntheticLongPress
+            method: .syntheticLongPress,
+            recordedScreen: recordedScreen
         ) { point in
             await self.safecracker.longPress(at: point, duration: duration)
         }
     }
 
-    func executeSwipe(_ target: SwipeTarget) async -> TheSafecracker.InteractionResult {
+    func executeSwipe(
+        _ target: SwipeTarget,
+        recordedScreen: Screen? = nil
+    ) async -> TheSafecracker.InteractionResult {
         // Unit-point swipe: resolve element frame, compute start/end from unit coordinates
         let unitStart: UnitPoint?
         let unitEnd: UnitPoint?
@@ -403,7 +433,10 @@ final class Actions {
                         + "try providing elementTarget or use absolute startX/startY/endX/endY."
                 )
             }
-            await navigation.ensureOnScreen(for: elementTarget)
+            let positioning = await navigation.ensureOnScreen(for: elementTarget, recordedScreen: recordedScreen)
+            if let failure = positioning.failure {
+                return .failure(failure.method ?? .syntheticSwipe, message: failure.message)
+            }
             let frame: CGRect
             switch resolveGestureFrame(for: elementTarget, method: .syntheticSwipe) {
             case .success(let liveFrame):
@@ -436,7 +469,10 @@ final class Actions {
 
         // Absolute-point swipe: resolve start point, compute end from direction or explicit coords
         if let elementTarget = target.elementTarget {
-            await navigation.ensureOnScreen(for: elementTarget)
+            let positioning = await navigation.ensureOnScreen(for: elementTarget, recordedScreen: recordedScreen)
+            if let failure = positioning.failure {
+                return .failure(failure.method ?? .syntheticSwipe, message: failure.message)
+            }
         }
         switch resolveGesturePoint(
             from: target.elementTarget,
@@ -481,22 +517,30 @@ final class Actions {
         }
     }
 
-    func executeDrag(_ target: DragTarget) async -> TheSafecracker.InteractionResult {
+    func executeDrag(
+        _ target: DragTarget,
+        recordedScreen: Screen? = nil
+    ) async -> TheSafecracker.InteractionResult {
         let duration = clampDuration(target.duration ?? 0.5)
         return await performPointAction(
             elementTarget: target.elementTarget, pointX: target.startX, pointY: target.startY,
-            method: .syntheticDrag
+            method: .syntheticDrag,
+            recordedScreen: recordedScreen
         ) { startPoint in
             await self.safecracker.drag(from: startPoint, to: target.endPoint, duration: duration)
         }
     }
 
-    func executePinch(_ target: PinchTarget) async -> TheSafecracker.InteractionResult {
+    func executePinch(
+        _ target: PinchTarget,
+        recordedScreen: Screen? = nil
+    ) async -> TheSafecracker.InteractionResult {
         let spread = target.spread ?? 100.0
         let duration = clampDuration(target.duration ?? 0.5)
         return await performPointAction(
             elementTarget: target.elementTarget, pointX: target.centerX, pointY: target.centerY,
-            method: .syntheticPinch
+            method: .syntheticPinch,
+            recordedScreen: recordedScreen
         ) { center in
             await self.safecracker.pinch(
                 center: center, scale: CGFloat(target.scale),
@@ -505,12 +549,16 @@ final class Actions {
         }
     }
 
-    func executeRotate(_ target: RotateTarget) async -> TheSafecracker.InteractionResult {
+    func executeRotate(
+        _ target: RotateTarget,
+        recordedScreen: Screen? = nil
+    ) async -> TheSafecracker.InteractionResult {
         let radius = target.radius ?? 100.0
         let duration = clampDuration(target.duration ?? 0.5)
         return await performPointAction(
             elementTarget: target.elementTarget, pointX: target.centerX, pointY: target.centerY,
-            method: .syntheticRotate
+            method: .syntheticRotate,
+            recordedScreen: recordedScreen
         ) { center in
             await self.safecracker.rotate(
                 center: center, angle: CGFloat(target.angle),
@@ -519,11 +567,15 @@ final class Actions {
         }
     }
 
-    func executeTwoFingerTap(_ target: TwoFingerTapTarget) async -> TheSafecracker.InteractionResult {
+    func executeTwoFingerTap(
+        _ target: TwoFingerTapTarget,
+        recordedScreen: Screen? = nil
+    ) async -> TheSafecracker.InteractionResult {
         let spread = target.spread ?? 40.0
         return await performPointAction(
             elementTarget: target.elementTarget, pointX: target.centerX, pointY: target.centerY,
-            method: .syntheticTwoFingerTap
+            method: .syntheticTwoFingerTap,
+            recordedScreen: recordedScreen
         ) { center in
             await self.safecracker.twoFingerTap(at: center, spread: CGFloat(spread))
         }
@@ -586,8 +638,11 @@ final class Actions {
 
     // MARK: - Text Entry
 
-    func executeTypeText(_ target: TypeTextTarget) async -> TheSafecracker.InteractionResult {
-        if let failure = await focusTextInput(target.elementTarget) { return failure }
+    func executeTypeText(
+        _ target: TypeTextTarget,
+        recordedScreen: Screen? = nil
+    ) async -> TheSafecracker.InteractionResult {
+        if let failure = await focusTextInput(target.elementTarget, recordedScreen: recordedScreen) { return failure }
 
         let interKeyDelay = min(TheSafecracker.defaultInterKeyDelay, TheSafecracker.maxInterKeyDelay)
         if target.clearFirst == true {
@@ -645,7 +700,10 @@ final class Actions {
         return TheSafecracker.InteractionResult(success: true, method: .typeText, message: nil, value: fieldValue)
     }
 
-    private func focusTextInput(_ elementTarget: ElementTarget?) async -> TheSafecracker.InteractionResult? {
+    private func focusTextInput(
+        _ elementTarget: ElementTarget?,
+        recordedScreen: Screen?
+    ) async -> TheSafecracker.InteractionResult? {
         guard let elementTarget else {
             guard safecracker.hasActiveTextInput() else {
                 return .failure(
@@ -661,7 +719,10 @@ final class Actions {
             return nil
         }
 
-        await navigation.ensureOnScreen(for: elementTarget)
+        let positioning = await navigation.ensureOnScreen(for: elementTarget, recordedScreen: recordedScreen)
+        if let failure = positioning.failure {
+            return .failure(failure.method ?? .typeText, message: failure.message)
+        }
         let resolution = stash.resolveTarget(elementTarget)
         guard let resolved = resolution.resolved else {
             return .failure(.elementNotFound, message: resolution.diagnostics)

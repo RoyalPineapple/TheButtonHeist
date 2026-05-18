@@ -743,6 +743,11 @@ final class TheStash {
         return pending.token
     }
 
+    func activePendingRotorResult(for target: ElementTarget) -> ScreenElement? {
+        guard case .heistId(let heistId) = target else { return nil }
+        return activePendingRotorResult(heistId: heistId)
+    }
+
     func clearPendingRotorResult() {
         pendingRotorState = .none
     }

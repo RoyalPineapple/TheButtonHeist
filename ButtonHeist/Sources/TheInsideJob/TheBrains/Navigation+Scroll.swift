@@ -32,11 +32,9 @@ extension Navigation {
             axis.contains(requiredAxis)
         }
 
-        func movement(for direction: ScrollSearchDirection) -> UIAccessibilityScrollDirection {
-            if !axis.isEmpty {
-                return Navigation.adaptDirection(direction, axis: axis)
-            }
-            return Navigation.adaptDirection(direction, for: target)
+        func movement(for direction: ScrollSearchDirection) -> UIAccessibilityScrollDirection? {
+            guard supports(Navigation.requiredAxis(for: direction)) else { return nil }
+            return Navigation.uiScrollDirection(for: direction)
         }
     }
 
@@ -96,7 +94,6 @@ extension Navigation {
     private enum ScrollAxisSelection {
         case any
         case required(ScrollAxis)
-        case preferred(ScrollAxis)
     }
 
     // MARK: - Scroll Axis Detection
@@ -437,7 +434,7 @@ extension Navigation {
 
         stash.refresh()
         let requestedAxis = Self.requiredAxis(for: searchDirection)
-        var candidates = scrollSearchCandidates(preferredAxis: requestedAxis)
+        var candidates = scrollSearchCandidates(requiredAxis: requestedAxis)
         var progress = ScrollSearchProgress(
             initialVisibleHeistIds: stash.visibleIds,
             knownContainers: Set(candidates.map(\.container)),
@@ -457,7 +454,7 @@ extension Navigation {
         // Iterative page-by-page search
         while progress.canScrollMore {
             refreshScrollSearchCandidates(
-                preferredAxis: requestedAxis,
+                requiredAxis: requestedAxis,
                 candidates: &candidates,
                 progress: &progress
             )
@@ -466,7 +463,10 @@ extension Navigation {
                 !progress.exhaustedContainers.contains($0.container)
             }) else { break }
 
-            let direction = plan.movement(for: searchDirection)
+            guard let direction = plan.movement(for: searchDirection) else {
+                progress.markContainerExhausted(plan.container)
+                continue
+            }
             progress.markContainerSearched(plan.container)
             let proof = await scrollOnePageAndSettle(plan.target, direction: direction)
 
@@ -477,7 +477,7 @@ extension Navigation {
 
             progress.markScrolledPage(in: plan.container, visibleHeistIds: stash.visibleIds)
             refreshScrollSearchCandidates(
-                preferredAxis: requestedAxis,
+                requiredAxis: requestedAxis,
                 candidates: &candidates,
                 progress: &progress
             )
@@ -521,31 +521,28 @@ extension Navigation {
     }
 
     func findScrollTarget(
-        preferredAxis axis: ScrollAxis?,
+        requiredAxis axis: ScrollAxis?,
         excluding exhausted: Set<AccessibilityContainer> = []
     ) -> ScrollPlan? {
         scrollCandidates(
-            selecting: axis.map(ScrollAxisSelection.preferred) ?? .any,
+            selecting: axis.map(ScrollAxisSelection.required) ?? .any,
             excluding: exhausted
         )
         .first
     }
 
     func scrollSearchCandidates(
-        preferredAxis axis: ScrollAxis?
+        requiredAxis axis: ScrollAxis?
     ) -> [ScrollPlan] {
-        scrollCandidates(selecting: axis.map(ScrollAxisSelection.preferred) ?? .any)
+        scrollCandidates(selecting: axis.map(ScrollAxisSelection.required) ?? .any)
     }
 
     private func refreshScrollSearchCandidates(
-        preferredAxis axis: ScrollAxis?,
+        requiredAxis axis: ScrollAxis?,
         candidates: inout [ScrollPlan],
         progress: inout ScrollSearchProgress
     ) {
-        candidates = orderScrollCandidates(
-            mergeScrollSearchCandidates(candidates, with: scrollSearchCandidates(preferredAxis: axis)),
-            selecting: axis.map(ScrollAxisSelection.preferred) ?? .any
-        )
+        candidates = mergeScrollSearchCandidates(candidates, with: scrollSearchCandidates(requiredAxis: axis))
         progress.recordKnownContainers(candidates.map(\.container))
     }
 
@@ -566,7 +563,7 @@ extension Navigation {
         selecting axisSelection: ScrollAxisSelection,
         excluding exhausted: Set<AccessibilityContainer> = []
     ) -> [ScrollPlan] {
-        let candidates = stash.currentHierarchy.scrollableContainers.compactMap { container -> ScrollPlan? in
+        stash.currentHierarchy.scrollableContainers.compactMap { container -> ScrollPlan? in
             guard !exhausted.contains(container),
                   case .scrollable(let contentSize) = container.type else { return nil }
 
@@ -586,22 +583,6 @@ extension Navigation {
             }
             return ScrollPlan(target: target, container: container)
         }
-        return orderScrollCandidates(candidates, selecting: axisSelection)
-    }
-
-    private func orderScrollCandidates(
-        _ candidates: [ScrollPlan],
-        selecting axisSelection: ScrollAxisSelection
-    ) -> [ScrollPlan] {
-        guard case .preferred(let preferredAxis) = axisSelection else { return candidates }
-
-        let preferred = candidates.filter {
-            $0.supports(preferredAxis)
-        }
-        let fallback = candidates.filter {
-            !$0.supports(preferredAxis)
-        }
-        return preferred + fallback
     }
 
     /// Build a ScrollableTarget for a container, preferring the live UIView when attached
@@ -666,6 +647,37 @@ extension Navigation {
 
     private static let comfortMarginFraction: CGFloat = 1.0 / 6.0
 
+    enum EnsureOnScreenResult {
+        case alreadyUsable
+        case adjustedVisibleTarget
+        case recoveredKnownOffscreen
+        case operationLocalRotorResult
+        case failed(EnsureOnScreenFailure)
+
+        var succeeded: Bool {
+            if case .failed = self { return false }
+            return true
+        }
+
+        var failure: EnsureOnScreenFailure? {
+            if case .failed(let failure) = self { return failure }
+            return nil
+        }
+    }
+
+    struct EnsureOnScreenFailure {
+        let method: ActionMethod?
+        let message: String
+
+        static func elementNotFound(_ message: String) -> EnsureOnScreenFailure {
+            EnsureOnScreenFailure(method: .elementNotFound, message: message)
+        }
+
+        static func actionFailed(_ message: String) -> EnsureOnScreenFailure {
+            EnsureOnScreenFailure(method: nil, message: message)
+        }
+    }
+
     private static var interactionComfortZone: CGRect {
         let bounds = ScreenMetrics.current.bounds
         return bounds.insetBy(
@@ -674,22 +686,57 @@ extension Navigation {
         )
     }
 
-    func ensureOnScreen(for target: ElementTarget) async {
-        if let entry = knownOffscreenEntry(for: target),
-           stash.jumpToRecordedPosition(entry) != nil {
-            _ = await tripwire.waitForAllClear(timeout: Self.postJumpSettleTimeout)
-            refresh()
+    func ensureOnScreen(for target: ElementTarget, recordedScreen: Screen? = nil) async -> EnsureOnScreenResult {
+        if stash.activePendingRotorResult(for: target) != nil {
+            return .operationLocalRotorResult
         }
 
-        guard let resolved = stash.resolveTarget(target).resolved,
-              let geometry = stash.liveGeometry(for: resolved.screenElement),
-              !Self.interactionComfortZone.contains(geometry.activationPoint) else { return }
-        if safecracker.scrollToMakeVisible(
-            geometry.frame, in: geometry.scrollView,
-            comfortMarginFraction: Self.comfortMarginFraction
-        ) {
-            await tripwire.yieldFrames(Self.postScrollLayoutFrames)
+        let visibleResolution = stash.resolveVisibleTarget(target)
+        if let visible = visibleResolution.resolved {
+            return await ensureVisibleResolvedTarget(visible)
+        }
+        if case .ambiguous(_, let diagnostics) = visibleResolution {
+            return .failed(.elementNotFound(diagnostics))
+        }
+
+        let knownScreen = recordedScreen ?? stash.currentScreen
+        if let entry = knownOffscreenEntry(for: target, in: knownScreen) {
+            guard stash.jumpToRecordedPosition(entry) != nil else {
+                return .failed(.actionFailed(
+                    "ensure_on_screen failed: \(scrollToVisibleKnownTargetFailureMessage(entry))"
+                ))
+            }
+            await tripwire.yieldRealFrames(Self.postJumpRealFrames)
             refresh()
+
+            let liveResolution = stash.resolveVisibleTarget(target)
+            guard let liveTarget = liveResolution.resolved else {
+                let suffix = liveResolution.diagnostics.isEmpty ? "" : ": \(liveResolution.diagnostics)"
+                return .failed(.elementNotFound(
+                    "ensure_on_screen failed: target was not visible after recorded-position recovery\(suffix)"
+                ))
+            }
+            let ensureResult = await ensureVisibleResolvedTarget(liveTarget)
+            guard ensureResult.succeeded else { return ensureResult }
+            await tripwire.yieldRealFrames(Self.postJumpRealFrames)
+            refresh()
+            guard stash.resolveVisibleTarget(target).resolved != nil else {
+                return .failed(.elementNotFound(
+                    "ensure_on_screen failed: target disappeared after recorded-position recovery"
+                ))
+            }
+            return .recoveredKnownOffscreen
+        }
+
+        switch stash.resolveTarget(target, in: knownScreen) {
+        case .resolved(let resolved):
+            return .failed(.elementNotFound(
+                "ensure_on_screen failed: target \(Self.describeScrollTarget(resolved.screenElement)) "
+                    + "is known but not currently visible and has no usable recorded scroll position; "
+                    + "use \(ScrollMode.toVisible.canonicalCommand) or \(ScrollMode.search.canonicalCommand)."
+            ))
+        case .notFound(let diagnostics), .ambiguous(_, let diagnostics):
+            return .failed(.elementNotFound(diagnostics))
         }
     }
 
@@ -717,6 +764,27 @@ extension Navigation {
             geometry.frame, in: geometry.scrollView, animated: animated,
             comfortMarginFraction: Self.comfortMarginFraction
         )
+    }
+
+    private func ensureVisibleResolvedTarget(_ resolved: TheStash.ResolvedTarget) async -> EnsureOnScreenResult {
+        guard let geometry = stash.liveGeometry(for: resolved.screenElement),
+              !ScreenMetrics.current.bounds.contains(geometry.frame),
+              !Self.interactionComfortZone.contains(geometry.activationPoint) else {
+            return .alreadyUsable
+        }
+        guard safecracker.scrollToMakeVisible(
+            geometry.frame,
+            in: geometry.scrollView,
+            comfortMarginFraction: Self.comfortMarginFraction
+        ) else {
+            return .failed(.actionFailed(
+                "ensure_on_screen failed: visible target \(Self.describeScrollTarget(resolved.screenElement)) "
+                    + "could not be scrolled fully on-screen"
+            ))
+        }
+        await tripwire.yieldFrames(Self.postScrollLayoutFrames)
+        refresh()
+        return .adjustedVisibleTarget
     }
 
     // MARK: - Known Offscreen Lookup
@@ -859,39 +927,6 @@ extension Navigation {
         case .next: return .next
         case .previous: return .previous
         }
-    }
-
-    static func adaptDirection(
-        _ direction: ScrollSearchDirection,
-        for target: ScrollableTarget
-    ) -> UIAccessibilityScrollDirection {
-        adaptDirection(direction, axis: scrollableAxis(of: target))
-    }
-
-    static func adaptDirection(
-        _ direction: ScrollSearchDirection,
-        for target: ScrollableTarget,
-        container: AccessibilityContainer
-    ) -> UIAccessibilityScrollDirection {
-        let axis = scrollableAxis(of: container)
-        if !axis.isEmpty {
-            return adaptDirection(direction, axis: axis)
-        }
-        return adaptDirection(direction, for: target)
-    }
-
-    private static func adaptDirection(
-        _ direction: ScrollSearchDirection,
-        axis: ScrollAxis
-    ) -> UIAccessibilityScrollDirection {
-        let requested = requiredAxis(for: direction)
-        if axis.contains(requested) { return uiScrollDirection(for: direction) }
-
-        let isForward = direction == .down || direction == .right
-        if axis.contains(.horizontal) { return isForward ? .right : .left }
-        if axis.contains(.vertical) { return isForward ? .down : .up }
-
-        return uiScrollDirection(for: direction)
     }
 
 }
