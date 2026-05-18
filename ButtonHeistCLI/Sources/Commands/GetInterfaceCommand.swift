@@ -26,8 +26,8 @@ struct GetInterfaceCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        var request = Self.fenceRequest(["timeout": timeoutOption.timeout])
-        if let scope { request["scope"] = scope.rawValue }
+        var request = Self.fenceRequest([.timeout: timeoutOption.timeout])
+        if let scope { request[.scope] = scope.rawValue }
         try await CLIRunner.run(
             connection: connection,
             format: output.format,

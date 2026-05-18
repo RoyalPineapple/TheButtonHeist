@@ -40,8 +40,8 @@ struct RunBatchCommand: AsyncParsableCommand, CLICommandContract {
     @ButtonHeistActor
     mutating func run() async throws {
         let array = try loadJSONArray(inline: steps, fromFile: stepsFromFile, optionName: "steps")
-        var request = Self.fenceRequest(["steps": array])
-        if let policy { request["policy"] = policy }
+        var request = Self.fenceRequest([.steps: array])
+        if let policy { request[.policy] = policy }
         try await CLIRunner.run(
             connection: connection,
             format: output.format,

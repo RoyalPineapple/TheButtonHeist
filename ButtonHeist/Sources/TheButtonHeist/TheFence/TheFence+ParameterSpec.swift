@@ -71,6 +71,110 @@ public struct FenceParameterSpec: Sendable, Equatable {
     }
 }
 
+/// Canonical external request keys owned by The Fence.
+public enum FenceParameterKey: String, CaseIterable, Sendable {
+    case absent
+    case action
+    case angle
+    case app
+    case centerX
+    case centerY
+    case command
+    case count
+    case cp1X
+    case cp1Y
+    case cp2X
+    case cp2Y
+    case currentHeistId
+    case currentTextEndOffset
+    case currentTextStartOffset
+    case deleteSource = "delete_source"
+    case detail
+    case device
+    case direction
+    case duration
+    case edge
+    case elements
+    case end
+    case endX
+    case endY
+    case excludeTraits
+    case expect
+    case expectations
+    case fps
+    case heistId
+    case identifier
+    case inactivityTimeout = "inactivity_timeout"
+    case input
+    case label
+    case matcher
+    case maxDuration = "max_duration"
+    case mode
+    case newValue
+    case oldValue
+    case ordinal
+    case output
+    case points
+    case policy
+    case property
+    case radius
+    case rotor
+    case rotorIndex
+    case samplesPerSegment
+    case scale
+    case scope
+    case segments
+    case spread
+    case start
+    case startX
+    case startY
+    case steps
+    case target
+    case text
+    case timeout
+    case token
+    case traits
+    case type
+    case value
+    case velocity
+    case x
+    case y
+}
+
+public extension FenceParameterSpec {
+    init(
+        key: FenceParameterKey,
+        type: ParamType,
+        required: Bool = false,
+        description: String? = nil,
+        enumValues: [String]? = nil,
+        minimum: Double? = nil,
+        maximum: Double? = nil,
+        minLength: Int? = nil,
+        objectProperties: [FenceParameterSpec] = [],
+        objectAdditionalProperties: Bool = false,
+        arrayItemType: ParamType? = nil,
+        arrayItemProperties: [FenceParameterSpec] = [],
+        arrayItemAdditionalProperties: Bool = false
+    ) {
+        self.init(
+            key: key.rawValue,
+            type: type,
+            required: required,
+            description: description,
+            enumValues: enumValues,
+            minimum: minimum,
+            maximum: maximum,
+            minLength: minLength,
+            objectProperties: objectProperties,
+            objectAdditionalProperties: objectAdditionalProperties,
+            arrayItemType: arrayItemType,
+            arrayItemProperties: arrayItemProperties,
+            arrayItemAdditionalProperties: arrayItemAdditionalProperties
+        )
+    }
+}
+
 private func fenceEnumValues<E>(_ type: E.Type) -> [String] where E: CaseIterable & RawRepresentable, E.RawValue == String {
     type.allCases.map(\.rawValue)
 }
@@ -131,23 +235,46 @@ public struct MCPToolSelector: Sendable, Equatable {
     }
 }
 
+/// MCP annotation metadata owned by the canonical tool contract.
+///
+/// The MCP adapter translates this neutral spec into SDK-specific annotation
+/// values without owning the command-name lists that receive those annotations.
+public struct MCPToolAnnotationSpec: Sendable, Equatable {
+    public let readOnlyHint: Bool?
+    public let idempotentHint: Bool?
+
+    public init(
+        readOnlyHint: Bool? = nil,
+        idempotentHint: Bool? = nil
+    ) {
+        self.readOnlyHint = readOnlyHint
+        self.idempotentHint = idempotentHint
+    }
+}
+
 /// Canonical MCP-facing tool contract derived from the Fence command catalog.
 ///
-/// Descriptions and annotations remain adapter-owned, but schema parameters are
-/// rendered from this contract instead of hand-maintained in the MCP target.
+/// MCP adapters render tool metadata and schemas from this contract instead of
+/// hand-maintaining command-name or parameter-name mirrors.
 public struct MCPToolContract: Sendable, Equatable {
     public let name: String
     public let commands: [TheFence.Command]
     public let selector: MCPToolSelector?
+    public let description: String
+    public let annotations: MCPToolAnnotationSpec?
 
     public init(
         name: String,
         commands: [TheFence.Command],
-        selector: MCPToolSelector? = nil
+        selector: MCPToolSelector? = nil,
+        description: String,
+        annotations: MCPToolAnnotationSpec? = nil
     ) {
         self.name = name
         self.commands = commands
         self.selector = selector
+        self.description = description
+        self.annotations = annotations
     }
 
     public var parameters: [FenceParameterSpec] {
@@ -314,6 +441,8 @@ enum FenceParameterBlocks: Sendable {
 
 extension TheFence.Command {
 
+    public static let gestureMCPToolName = "gesture"
+
     public var cliExposure: CLIExposure {
         switch self {
         case .help, .quit, .exit, .status:
@@ -344,7 +473,7 @@ extension TheFence.Command {
         // Grouped under "gesture" (including swipe)
         case .swipe, .oneFingerTap, .longPress, .drag, .pinch, .rotate, .twoFingerTap,
              .drawPath, .drawBezier:
-            return .groupedUnder("gesture")
+            return .groupedUnder(Self.gestureMCPToolName)
 
         // Grouped under "scroll"
         case .scrollToVisible, .elementSearch, .scrollToEdge:
@@ -384,7 +513,9 @@ extension TheFence.Command {
             return MCPToolContract(
                 name: toolName,
                 commands: commands,
-                selector: mcpSelector(for: toolName)
+                selector: mcpSelector(for: toolName),
+                description: mcpDescription(for: toolName),
+                annotations: mcpAnnotations(for: toolName)
             )
         }
     }
@@ -395,7 +526,7 @@ extension TheFence.Command {
 
     private static func mcpSelector(for toolName: String) -> MCPToolSelector? {
         switch toolName {
-        case "gesture":
+        case Self.gestureMCPToolName:
             return MCPToolSelector(
                 parameter: .init(
                     key: "type", type: .string, required: true,
@@ -437,6 +568,179 @@ extension TheFence.Command {
 
         default:
             return nil
+        }
+    }
+
+    private static func mcpAnnotations(for toolName: String) -> MCPToolAnnotationSpec? {
+        switch toolName {
+        case Self.getInterface.rawValue,
+             Self.getScreen.rawValue,
+             Self.listDevices.rawValue,
+             Self.getSessionState.rawValue,
+             Self.listTargets.rawValue,
+             Self.getSessionLog.rawValue:
+            return MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
+
+        case Self.waitForChange.rawValue,
+             Self.getPasteboard.rawValue:
+            return MCPToolAnnotationSpec(readOnlyHint: true)
+
+        default:
+            return nil
+        }
+    }
+
+    private static func mcpDescription(for toolName: String) -> String {
+        switch toolName {
+        case Self.getInterface.rawValue:
+            return """
+                Read the app accessibility hierarchy. Call once on a new screen, then track changes via \
+                action deltas — re-fetch only when you need elements the delta didn't cover. \
+                Filter with matcher fields or heistId handle list. Omit scope for the normal \
+                app accessibility state; use scope=visible only for diagnostic on-screen reads.
+                """
+
+        case Self.activate.rawValue:
+            return """
+                Activate a UI element (VoiceOver-style double-tap): tap buttons, follow links, toggle \
+                controls. Pass 'action' to invoke a named action like "increment", "decrement", or \
+                any entry from the element's actions array.
+                """
+
+        case Self.rotor.rawValue:
+            return """
+                Move through a rotor exposed by an element. Defaults to next. Use rotors listed by \
+                get_interface to pick rotor or rotorIndex; pass currentHeistId from the previous \
+                object result to continue like a VoiceOver user. For text-range results, also pass \
+                the returned start and end offsets.
+                """
+
+        case Self.typeText.rawValue:
+            return """
+                Type non-empty text via keyboard injection. Optionally target an \
+                element to focus it first and read back the resulting value.
+                """
+
+        case Self.waitFor.rawValue:
+            return """
+                Wait for an element matching a predicate to appear, or to disappear with absent=true. \
+                Polls on UI settle events. Returns the matched element or diagnostic info on timeout.
+                """
+
+        case Self.getScreen.rawValue:
+            return "Capture a PNG screenshot from the connected device. Returns inline base64 PNG image data. Use 'output' to save to a file path instead."
+
+        case Self.waitForChange.rawValue:
+            return """
+                Wait for the UI to change. With no expect, returns on any tree change. With expect, \
+                rides through intermediate states (spinners, loading) until the expectation is met. \
+                Use after an action whose delta showed a transient state and the expectation wasn't met yet.
+                """
+
+        case Self.startRecording.rawValue:
+            return "Start an H.264/MP4 screen recording. Recording auto-stops on inactivity or max duration."
+
+        case Self.stopRecording.rawValue:
+            return """
+                Stop an in-progress screen recording. Returns metadata only by default (raw video \
+                is too large for MCP context); pass 'output' to save the MP4 to a file path.
+                """
+
+        case Self.listDevices.rawValue:
+            return """
+                List iOS devices discovered via Bonjour plus named targets from .buttonheist.json. \
+                Empty when Bonjour is blocked and no config targets exist — use connect(device:token:) directly.
+                """
+
+        case Self.scroll.rawValue:
+            return """
+                Scroll within scroll views. mode=page scrolls one page in 'direction'; \
+                mode=to_visible brings a known element into view; mode=search scrolls until a \
+                matching element is found; mode=to_edge scrolls to a top/bottom/left/right edge.
+                """
+
+        case Self.gestureMCPToolName:
+            return """
+                Perform a touch gesture. Prefer 'activate' for element interactions — gestures are for \
+                swipes, drags, pinches, rotates, and free-form path drawing. Set 'type' to one of: \
+                swipe, one_finger_tap, drag, long_press, pinch, rotate, two_finger_tap, draw_path, draw_bezier.
+                """
+
+        case Self.editAction.rawValue:
+            return """
+                Perform an edit or keyboard action on the current first responder. \
+                Actions: copy, paste, cut, select, selectAll, delete, dismiss (dismiss the keyboard).
+                """
+
+        case Self.setPasteboard.rawValue:
+            return """
+                Write text to the general pasteboard from within the app. Content written by the app \
+                itself does not trigger the iOS "Allow Paste" dialog when subsequently read.
+                """
+
+        case Self.getPasteboard.rawValue:
+            return """
+                Read text from the general pasteboard. iOS may show "Allow Paste" if the content \
+                was written by another app.
+                """
+
+        case Self.runBatch.rawValue:
+            return """
+                Execute multiple commands in one call. Each step is a JSON object with 'command' set \
+                to a canonical TheFence.Command name plus that command's parameters; grouped MCP tool \
+                names and selector shapes are not accepted inside batches. Attach 'expect' per step to verify \
+                inline. Returns ordered per-step results. \
+                policy=stop_on_error (default) or continue_on_error.
+                """
+
+        case Self.getSessionState.rawValue:
+            return """
+                Inspect the current Button Heist session: connection status, device/app identity, \
+                recording state, client timeouts, and a lightweight summary of the last action.
+                """
+
+        case Self.connect.rawValue:
+            return """
+                Establish or switch the active connection to an iOS app with Button Heist enabled. \
+                Three patterns: target=NAME from .buttonheist.json, device=HOST:PORT + token, or \
+                BUTTONHEIST_DEVICE/BUTTONHEIST_TOKEN env vars. Tears down any existing session first. \
+                Returns session state; call get_interface explicitly to observe UI hierarchy.
+                """
+
+        case Self.listTargets.rawValue:
+            return """
+                List named connection targets from .buttonheist.json (or ~/.config/buttonheist/config.json), \
+                including each target's address and which one is the default.
+                """
+
+        case Self.getSessionLog.rawValue:
+            return "Return the current session manifest: commands executed and artifacts produced."
+
+        case Self.archiveSession.rawValue:
+            return "Close and compress the current session into a .tar.gz archive; returns the path."
+
+        case Self.startHeist.rawValue:
+            return """
+                Start recording a heist. Successful commands become steps in a .heist file; \
+                use matcher fields (label, identifier, traits) for durable element targeting, not heistId. \
+                Attach 'expect' to validate outcomes during playback.
+                """
+
+        case Self.stopHeist.rawValue:
+            return """
+                Stop recording and save the heist as a self-contained JSON playback script. \
+                Returns the file path and step count. At least one step must have been recorded.
+                """
+
+        case Self.playHeist.rawValue:
+            return """
+                Play back a .heist file. Steps execute sequentially; playback stops on the first \
+                failed step. On failure, returns full diagnostics: command, target, error, action \
+                result, expectation result, and a complete interface snapshot at the failure point.
+                """
+
+        default:
+            return "Execute the \(toolName) Button Heist tool."
         }
     }
 

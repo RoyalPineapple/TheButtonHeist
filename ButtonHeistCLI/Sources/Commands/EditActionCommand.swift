@@ -33,7 +33,7 @@ struct EditActionCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        let request = Self.fenceRequest(["action": action])
+        let request = Self.fenceRequest([.action: action])
 
         try await CLIRunner.run(
             connection: connection,

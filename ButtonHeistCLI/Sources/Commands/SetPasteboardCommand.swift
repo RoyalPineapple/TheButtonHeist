@@ -25,7 +25,7 @@ struct SetPasteboardCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        let request = Self.fenceRequest(["text": text])
+        let request = Self.fenceRequest([.text: text])
         try await CLIRunner.run(
             connection: connection,
             format: output.format,

@@ -74,13 +74,13 @@ struct ElementTargetOptions: ParsableArguments {
     /// Apply targeting options to a TheFence request dictionary.
     /// Uses the raw CLI option values so TheFence can parse them natively.
     func applyTo(_ request: inout [String: Any]) throws {
-        if let resolved = try resolvedHeistId { request["heistId"] = resolved }
-        if let identifier { request["identifier"] = identifier }
-        if let label { request["label"] = label }
-        if let value { request["value"] = value }
-        if !traits.isEmpty { request["traits"] = traits }
-        if !excludeTraits.isEmpty { request["excludeTraits"] = excludeTraits }
-        if let ordinal { request["ordinal"] = ordinal }
+        if let resolved = try resolvedHeistId { request[.heistId] = resolved }
+        if let identifier { request[.identifier] = identifier }
+        if let label { request[.label] = label }
+        if let value { request[.value] = value }
+        if !traits.isEmpty { request[.traits] = traits }
+        if !excludeTraits.isEmpty { request[.excludeTraits] = excludeTraits }
+        if let ordinal { request[.ordinal] = ordinal }
     }
 
     /// Returns true if any targeting option is specified.

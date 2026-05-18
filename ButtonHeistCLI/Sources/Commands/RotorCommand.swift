@@ -66,15 +66,15 @@ struct RotorCommand: AsyncParsableCommand, CLICommandContract {
             }
         }
 
-        var request = Self.fenceRequest(["direction": direction.lowercased()])
-        if let rotor { request["rotor"] = rotor }
-        if let rotorIndex { request["rotorIndex"] = rotorIndex }
-        if let currentHeistId { request["currentHeistId"] = currentHeistId }
-        if let currentTextStartOffset { request["currentTextStartOffset"] = currentTextStartOffset }
-        if let currentTextEndOffset { request["currentTextEndOffset"] = currentTextEndOffset }
+        var request = Self.fenceRequest([.direction: direction.lowercased()])
+        if let rotor { request[.rotor] = rotor }
+        if let rotorIndex { request[.rotorIndex] = rotorIndex }
+        if let currentHeistId { request[.currentHeistId] = currentHeistId }
+        if let currentTextStartOffset { request[.currentTextStartOffset] = currentTextStartOffset }
+        if let currentTextEndOffset { request[.currentTextEndOffset] = currentTextEndOffset }
 
         try element.applyTo(&request)
-        request["timeout"] = timeoutOption.timeout
+        request[.timeout] = timeoutOption.timeout
 
         try await CLIRunner.run(
             connection: connection,

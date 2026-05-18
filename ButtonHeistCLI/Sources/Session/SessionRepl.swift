@@ -103,7 +103,7 @@ final class ReplSession {
             do {
                 let data = Data(line.utf8)
                 guard let parsed = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                      parsed["command"] is String else {
+                      parsed[.command] is String else {
                     return (.error("Invalid JSON or missing 'command' field"), nil)
                 }
                 request = parsed
@@ -115,7 +115,7 @@ final class ReplSession {
             request = Self.parseHumanInput(line)
         }
 
-        guard let command = request["command"] as? String else {
+        guard let command = request[.command] as? String else {
             return (.error("Unknown command. Type 'help' for available commands."), nil)
         }
 
@@ -252,13 +252,13 @@ nonisolated extension ReplSession {
     ]
 
     /// Aliases that expand to a command + default parameter (e.g. "copy" → edit_action with action=copy).
-    private static let compoundAliases: [String: (command: TheFence.Command, params: [String: String])] = [
-        "copy": (.editAction, ["action": EditAction.copy.rawValue]),
-        "paste": (.editAction, ["action": EditAction.paste.rawValue]),
-        "cut": (.editAction, ["action": EditAction.cut.rawValue]),
-        "delete": (.editAction, ["action": EditAction.delete.rawValue]),
-        "select": (.editAction, ["action": EditAction.select.rawValue]),
-        "select_all": (.editAction, ["action": EditAction.selectAll.rawValue]),
+    private static let compoundAliases: [String: (command: TheFence.Command, params: [FenceParameterKey: String])] = [
+        "copy": (.editAction, [.action: EditAction.copy.rawValue]),
+        "paste": (.editAction, [.action: EditAction.paste.rawValue]),
+        "cut": (.editAction, [.action: EditAction.cut.rawValue]),
+        "delete": (.editAction, [.action: EditAction.delete.rawValue]),
+        "select": (.editAction, [.action: EditAction.select.rawValue]),
+        "select_all": (.editAction, [.action: EditAction.selectAll.rawValue]),
     ]
 
     private static let directionWords: Set<String> = [
@@ -288,7 +288,7 @@ nonisolated extension ReplSession {
             for (key, value) in compound.params { result[key] = value }
         } else {
             command = commandAliases[rawCommand] ?? TheFence.Command(rawValue: rawCommand)
-            result = command?.cliRequest() ?? ["command": rawCommand]
+            result = command?.cliRequest() ?? FenceParameterKey.rawDictionary([.command: rawCommand])
         }
 
         // Separate key=value pairs from positional tokens
@@ -318,11 +318,11 @@ nonisolated extension ReplSession {
     }
 
     private static func normalizeExpectationArgument(in result: inout [String: Any]) {
-        guard let rawExpectation = result["expect"] as? String,
+        guard let rawExpectation = result[.expect] as? String,
               let expectation = try? ExpectationArgumentParser.parse(rawExpectation) else {
             return
         }
-        result["expect"] = expectation
+        result[.expect] = expectation
     }
 
     private static func interpretPositionalArgs(
@@ -335,20 +335,20 @@ nonisolated extension ReplSession {
         switch command {
         case .some(.typeText):
             // Everything after "type" is the text to type
-            if result["text"] == nil {
-                result["text"] = positional.joined(separator: " ")
+            if result[.text] == nil {
+                result[.text] = positional.joined(separator: " ")
             }
 
         case .some(.editAction):
-            if result["action"] == nil, let action = positional.first {
-                result["action"] = action
+            if result[.action] == nil, let action = positional.first {
+                result[.action] = action
             }
 
         case .some(.scrollToEdge):
             // First positional: edge or identifier; second: identifier
             var remaining = positional
             if let first = remaining.first, edgeWords.contains(first.lowercased()) {
-                result["edge"] = first.lowercased()
+                result[.edge] = first.lowercased()
                 remaining.removeFirst()
             }
             applyElementTarget(remaining, into: &result)
@@ -358,7 +358,7 @@ nonisolated extension ReplSession {
             if let first = positional.first {
                 applyElementTarget([first], into: &result)
                 if positional.count > 1 {
-                    result["action"] = positional.dropFirst().joined(separator: " ")
+                    result[.action] = positional.dropFirst().joined(separator: " ")
                 }
             }
 
@@ -369,7 +369,7 @@ nonisolated extension ReplSession {
             // For direction commands, consume a direction word first
             if let command, directionCommands.contains(command),
                let first = remaining.first, directionWords.contains(first.lowercased()) {
-                result["direction"] = first.lowercased()
+                result[.direction] = first.lowercased()
                 remaining.removeFirst()
             }
 
@@ -377,8 +377,8 @@ nonisolated extension ReplSession {
             if remaining.count >= 2,
                let x = Double(remaining[0]),
                let y = Double(remaining[1]) {
-                result["x"] = x
-                result["y"] = y
+                result[.x] = x
+                result[.y] = y
                 remaining.removeFirst(2)
             } else {
                 // Otherwise treat as element target
@@ -390,7 +390,7 @@ nonisolated extension ReplSession {
 
     private static func applyElementTarget(_ tokens: [String], into result: inout [String: Any]) {
         guard let first = tokens.first else { return }
-        result["heistId"] = first
+        result[.heistId] = first
     }
 
     private static func tokenize(_ line: String) -> [String] {

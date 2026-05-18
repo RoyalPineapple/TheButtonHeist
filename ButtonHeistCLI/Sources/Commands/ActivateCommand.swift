@@ -49,14 +49,14 @@ struct ActivateCommand: AsyncParsableCommand, CLICommandContract {
             request = TheFence.Command.decrement.cliRequest()
         default:
             if let action {
-                request = TheFence.Command.performCustomAction.cliRequest(["action": action])
+                request = TheFence.Command.performCustomAction.cliRequest([.action: action])
             } else {
                 request = Self.fenceRequest()
             }
         }
 
         try element.applyTo(&request)
-        request["timeout"] = timeoutOption.timeout
+        request[.timeout] = timeoutOption.timeout
 
         try await CLIRunner.run(
             connection: connection,
