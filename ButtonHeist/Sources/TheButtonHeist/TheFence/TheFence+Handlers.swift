@@ -107,19 +107,10 @@ extension TheFence {
     func handleGesture(_ payload: GesturePayload) async throws -> FenceResponse {
         switch payload {
         case .oneFingerTap(let target):
-            if target.elementTarget == nil, target.point == nil {
-                return .error("Must specify element (heistId or matcher) or coordinates (x, y)")
-            }
             return try await sendAction(.touchTap(target))
         case .longPress(let target):
-            if target.elementTarget == nil, target.point == nil {
-                return .error("Must specify element (heistId or matcher) or coordinates (x, y)")
-            }
             return try await sendAction(.touchLongPress(target))
         case .swipe(let target):
-            if (target.start != nil) != (target.end != nil) {
-                return .error("Unit-point swipe requires both start and end")
-            }
             return try await sendAction(.touchSwipe(target))
         case .drag(let target):
             return try await sendAction(.touchDrag(target))
@@ -130,14 +121,8 @@ extension TheFence {
         case .twoFingerTap(let target):
             return try await sendAction(.touchTwoFingerTap(target))
         case .drawPath(let target):
-            guard target.points.count >= 2 else {
-                return .error("Path requires at least 2 points")
-            }
             return try await sendAction(.touchDrawPath(target))
         case .drawBezier(let target):
-            guard !target.segments.isEmpty else {
-                return .error("At least 1 bezier segment is required")
-            }
             return try await sendAction(.touchDrawBezier(target))
         }
     }
@@ -147,28 +132,16 @@ extension TheFence {
     func handleScrollAction(_ payload: ScrollPayload) async throws -> FenceResponse {
         switch payload {
         case .scroll(let target):
-            guard target.elementTarget != nil else {
-                return missingElementTargetResponse(command: Command.scroll.rawValue)
-            }
             return try await sendAction(.scroll(target))
         case .scrollToVisible(let target):
-            guard target.elementTarget != nil else {
-                return missingElementTargetResponse(command: Command.scrollToVisible.rawValue)
-            }
             let result = try await sendAndAwaitAction(.scrollToVisible(target), timeout: Timeouts.actionSeconds)
             lastActionHistory = .completed(result)
             return .action(result: result)
         case .elementSearch(let target):
-            guard target.elementTarget != nil else {
-                return missingElementTargetResponse(command: Command.elementSearch.rawValue)
-            }
             let result = try await sendAndAwaitAction(.elementSearch(target), timeout: Timeouts.longActionSeconds)
             lastActionHistory = .completed(result)
             return .action(result: result)
         case .scrollToEdge(let target):
-            guard target.elementTarget != nil else {
-                return missingElementTargetResponse(command: Command.scrollToEdge.rawValue)
-            }
             return try await sendAction(.scrollToEdge(target))
         }
     }
@@ -282,10 +255,6 @@ extension TheFence {
     // MARK: - Handler: Text Input
 
     func handleTypeText(_ target: TypeTextTarget) async throws -> FenceResponse {
-        if target.text.isEmpty {
-            throw SchemaValidationError(field: "text", observed: target.text as Any, expected: "non-empty string")
-        }
-
         let result = try await sendAndAwaitAction(.typeText(target), timeout: Timeouts.longActionSeconds)
         lastActionHistory = .completed(result)
         return .action(result: result)
@@ -344,12 +313,6 @@ extension TheFence {
         guard handoff.isConnected else { throw FenceError.notConnected }
         guard !isRecording else {
             return .error("Recording already in progress — use stop_recording first")
-        }
-        if let fps = config.fps, fps < 1 || fps > 15 {
-            throw SchemaValidationError(field: "fps", observed: fps, expected: "integer in 1...15")
-        }
-        if let scale = config.scale, scale < 0.25 || scale > 1.0 {
-            throw SchemaValidationError(field: "scale", observed: scale, expected: "number in 0.25...1.0")
         }
         try await startRecordingAndWait(config: config, timeout: Timeouts.actionSeconds)
         return .ok(message: "Recording started — use stop_recording to retrieve the video")
@@ -559,7 +522,7 @@ extension TheFence {
         defer { playbackPhase = .idle }
 
         // Prime current element data before playback.
-        _ = try await execute(request: ["command": Command.getInterface.rawValue])
+        _ = try await execute(parsed: defaultGetInterfaceParsedRequest())
 
         for (index, operation) in typedPlayback.steps.enumerated() {
             let stepStart = CFAbsoluteTimeGetCurrent()
@@ -657,7 +620,7 @@ extension TheFence {
     /// Capture a live interface snapshot for failure diagnostics.
     private func captureInterfaceSnapshot() async -> Interface? {
         do {
-            let response = try await execute(request: ["command": Command.getInterface.rawValue])
+            let response = try await execute(parsed: defaultGetInterfaceParsedRequest())
             if case .interface(let snapshot, _, _, _) = response {
                 return snapshot
             }

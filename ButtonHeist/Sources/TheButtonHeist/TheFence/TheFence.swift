@@ -653,8 +653,14 @@ public final class TheFence {
         return try await execute(parsed: parsed)
     }
 
-    private func execute(parsed: ParsedRequest) async throws -> FenceResponse {
+    func execute(parsed: ParsedRequest) async throws -> FenceResponse {
         if let immediate = parsed.immediateResponse { return immediate }
+
+        logCommand(
+            requestId: parsed.requestId,
+            command: parsed.command,
+            request: parsed.originalRequest
+        )
 
         if parsed.command == .waitForChange,
            let backgroundResponse = responseIfBackgroundExpectationMet(
@@ -689,16 +695,6 @@ public final class TheFence {
 
     // MARK: - Execute Pipeline
 
-    private struct ParsedRequest {
-        let command: Command
-        let requestId: String
-        let originalRequest: [String: Any]
-        let payload: RequestPayload
-        let expectationPayload: ExpectationPayload
-        /// Non-nil when the command short-circuits before dispatch (help/quit/exit).
-        let immediateResponse: FenceResponse?
-    }
-
     private struct DispatchResult {
         let response: FenceResponse
         let durationMs: Int
@@ -712,7 +708,7 @@ public final class TheFence {
     /// Parse and validate a raw request dictionary into typed fields.
     /// Returns an ImmediateResponse-bearing `ParsedRequest` for help/quit/exit
     /// so the caller short-circuits without logging or dispatching.
-    private func parseRequest(_ request: [String: Any]) throws -> ParsedRequest {
+    func parseRequest(_ request: [String: Any]) throws -> ParsedRequest {
         let commandString = try request.requiredSchemaString("command")
         guard let command = Command(rawValue: commandString) else {
             return ParsedRequest(
@@ -727,7 +723,7 @@ public final class TheFence {
         return try parseRequest(command: command, request: request)
     }
 
-    private func parseRequest(command: Command, request: [String: Any]) throws -> ParsedRequest {
+    func parseRequest(command: Command, request: [String: Any]) throws -> ParsedRequest {
         try validateRequestKeys(command: command, request: request)
         if let immediate = handleImmediateCommand(command) {
             return ParsedRequest(
@@ -740,7 +736,6 @@ public final class TheFence {
             )
         }
         let requestId = (request["requestId"] as? String) ?? UUID().uuidString
-        logCommand(requestId: requestId, command: command, request: request)
         let expectationPayload = try parseExpectationPayload(request)
         let payload: RequestPayload = if command == .waitForChange {
             .waitForChange(expectationPayload)
