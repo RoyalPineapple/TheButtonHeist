@@ -9,7 +9,15 @@ extension FenceResponse {
 
     // MARK: - JSON Encoding
 
-    public func jsonDict() -> [String: Any]? {
+    public func jsonDict() -> [String: Any] {
+        let dict = unvalidatedJsonDict()
+        guard JSONSerialization.isValidJSONObject(dict) else {
+            return Self.jsonEncodingFailureDict()
+        }
+        return dict
+    }
+
+    private func unvalidatedJsonDict() -> [String: Any] {
         switch self {
         case .ok(let message):
             return ["status": "ok", "message": message]
@@ -35,18 +43,14 @@ extension FenceResponse {
             return recordingJsonDict(path: path, payload: payload)
         case .recordingData(let payload):
             return recordingDataJsonDict(payload)
-        case .batch(
-            let results, let completedSteps, let failedIndex, let totalTimingMs,
-            let checked, let met, let stepSummaries, let accessibilityTrace
-        ):
+        case .batch(let outcomes, let totalTimingMs, let accessibilityTrace):
             return batchJsonDict(
-                results: results, completedSteps: completedSteps, failedIndex: failedIndex,
-                totalTimingMs: totalTimingMs, checked: checked, met: met,
-                stepSummaries: stepSummaries,
+                outcomes: outcomes,
+                totalTimingMs: totalTimingMs,
                 accessibilityTrace: accessibilityTrace
             )
         case .sessionState(let payload):
-            return payload
+            return sessionStateJsonDict(payload)
         case .targets(let targets, let defaultTarget):
             var info: [String: [String: Any]] = [:]
             for (name, target) in targets {
@@ -79,6 +83,17 @@ extension FenceResponse {
             }
             return dict
         }
+    }
+
+    private static func jsonEncodingFailureDict() -> [String: Any] {
+        [
+            "status": "error",
+            "message": "Failed to encode JSON response: response contained non-JSON values",
+            "errorCode": "formatting.json_encoding_failed",
+            "phase": FailurePhase.client.rawValue,
+            "retryable": false,
+            "hint": "Report this diagnostic with the command that produced it.",
+        ]
     }
 
     private func playbackFailureDict(_ failure: PlaybackFailure) -> [String: Any] {
@@ -211,15 +226,18 @@ extension FenceResponse {
     }
 
     private func batchJsonDict(
-        results: [[String: Any]], completedSteps: Int, failedIndex: Int?,
-        totalTimingMs: Int, checked: Int, met: Int,
-        stepSummaries: [BatchStepSummary],
+        outcomes: [BatchStepOutcome],
+        totalTimingMs: Int,
         accessibilityTrace: AccessibilityTrace?
     ) -> [String: Any] {
+        let failedIndex = outcomes.stoppedFailedIndex
+        let checked = outcomes.expectationsChecked
+        let met = outcomes.expectationsMet
+        let stepSummaries = outcomes.stepSummaries
         var dict: [String: Any] = [
             "status": failedIndex == nil ? "ok" : "partial",
-            "results": results,
-            "completedSteps": completedSteps,
+            "results": outcomes.jsonResultRows,
+            "completedSteps": outcomes.completedStepCount,
             "totalTimingMs": totalTimingMs,
         ]
         if let failedIndex { dict["failedIndex"] = failedIndex }
@@ -237,6 +255,51 @@ extension FenceResponse {
         }
         if let netDelta = accessibilityTrace?.meaningfulCaptureEndpointDelta {
             dict["netDelta"] = deltaDictionary(netDelta)
+        }
+        return dict
+    }
+
+    private func sessionStateJsonDict(_ payload: SessionStatePayload) -> [String: Any] {
+        var dict: [String: Any] = [
+            "status": "ok",
+            "connected": payload.connected,
+            "phase": payload.phase.rawValue,
+            "isRecording": payload.isRecording,
+            "actionTimeoutSeconds": payload.actionTimeoutSeconds,
+            "longActionTimeoutSeconds": payload.longActionTimeoutSeconds,
+        ]
+        if let device = payload.device {
+            dict["deviceName"] = device.deviceName
+            dict["appName"] = device.appName
+            dict["connectionType"] = device.connectionType.rawValue
+            if let shortId = device.shortId {
+                dict["shortId"] = shortId
+            }
+        }
+        if let failure = payload.lastFailure {
+            var failurePayload: [String: Any] = [
+                "errorCode": failure.errorCode,
+                "phase": failure.phase.rawValue,
+                "retryable": failure.retryable,
+            ]
+            if let message = failure.message {
+                failurePayload["message"] = message
+            }
+            if let hint = failure.hint {
+                failurePayload["hint"] = hint
+            }
+            dict["lastFailure"] = failurePayload
+        }
+        if let lastAction = payload.lastAction {
+            var lastActionPayload: [String: Any] = [
+                "method": lastAction.method.rawValue,
+                "success": lastAction.success,
+                "latency_ms": lastAction.latencyMs,
+            ]
+            if let message = lastAction.message {
+                lastActionPayload["message"] = message
+            }
+            dict["lastAction"] = lastActionPayload
         }
         return dict
     }

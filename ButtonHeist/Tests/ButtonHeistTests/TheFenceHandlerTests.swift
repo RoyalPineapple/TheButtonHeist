@@ -212,7 +212,7 @@ final class TheFenceHandlerTests: XCTestCase {
         guard case .sessionState(let payload) = response else {
             return XCTFail("Expected sessionState response, got \(response)")
         }
-        XCTAssertEqual(payload["connected"] as? Bool, true)
+        XCTAssertEqual(payload.connected, true)
         XCTAssertEqual(mockConn.connectCount, 1)
 
         for (message, _) in mockConn.sent {
@@ -1888,13 +1888,13 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(_, _, _, _, let checked, let met, _, _) = response else {
+        guard let batch = inspectBatch(response) else {
             XCTFail("Expected batch response, got \(response)")
             return
         }
         // Only step 1 had "expect", so checked should be 1
-        XCTAssertEqual(checked, 1, "Only steps with explicit 'expect' should be counted")
-        XCTAssertEqual(met, 1)
+        XCTAssertEqual(batch.expectationsChecked, 1, "Only steps with explicit 'expect' should be counted")
+        XCTAssertEqual(batch.expectationsMet, 1)
     }
 
     @ButtonHeistActor
@@ -1914,13 +1914,13 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(_, _, _, _, let checked, let met, _, _) = response else {
+        guard let batch = inspectBatch(response) else {
             XCTFail("Expected batch response, got \(response)")
             return
         }
         // Both steps have expect and the delta is screenChanged (satisfies both tiers)
-        XCTAssertEqual(checked, 2)
-        XCTAssertEqual(met, 2)
+        XCTAssertEqual(batch.expectationsChecked, 2)
+        XCTAssertEqual(batch.expectationsMet, 2)
     }
 
     @ButtonHeistActor
@@ -1966,20 +1966,20 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(let results, let completedSteps, let failedIndex, _, _, _, let summaries, _) = response else {
+        guard let batch = inspectBatch(response) else {
             return XCTFail("Expected batch response, got \(response)")
         }
-        XCTAssertEqual(completedSteps, 2)
-        XCTAssertNil(failedIndex)
-        XCTAssertEqual(results.compactMap { $0["message"] as? String }, ["first", "second"])
-        XCTAssertEqual(summaries.map(\.deltaKind), ["elementsChanged", "noChange"])
+        XCTAssertEqual(batch.completedSteps, 2)
+        XCTAssertNil(batch.failedIndex)
+        XCTAssertEqual(batch.results.compactMap { $0["message"] as? String }, ["first", "second"])
+        XCTAssertEqual(batch.summaries.map(\.deltaKind), ["elementsChanged", "noChange"])
 
-        let firstDelta = try XCTUnwrap(results[0]["delta"] as? [String: Any])
+        let firstDelta = try XCTUnwrap(batch.results[0]["delta"] as? [String: Any])
         XCTAssertEqual(firstDelta["kind"] as? String, "elementsChanged")
-        let secondDelta = try XCTUnwrap(results[1]["delta"] as? [String: Any])
+        let secondDelta = try XCTUnwrap(batch.results[1]["delta"] as? [String: Any])
         XCTAssertEqual(secondDelta["kind"] as? String, "noChange")
 
-        let json = try XCTUnwrap(response.jsonDict())
+        let json = response.jsonDict()
         XCTAssertNil(json["netDelta"], "Batch JSON must not advertise a wrapper-synthesized cumulative delta")
     }
 
@@ -2033,13 +2033,13 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(_, _, _, _, _, _, let summaries, let accessibilityTrace) = response else {
+        guard let batch = inspectBatch(response) else {
             return XCTFail("Expected batch response, got \(response)")
         }
-        XCTAssertEqual(summaries.map(\.deltaKind), ["elementsChanged", "elementsChanged"])
-        XCTAssertEqual(accessibilityTrace?.captures.count, 3)
+        XCTAssertEqual(batch.summaries.map(\.deltaKind), ["elementsChanged", "elementsChanged"])
+        XCTAssertEqual(batch.accessibilityTrace?.captures.count, 3)
 
-        let json = try XCTUnwrap(response.jsonDict())
+        let json = response.jsonDict()
         let netDelta = try XCTUnwrap(json["netDelta"] as? [String: Any])
         XCTAssertEqual(netDelta["kind"] as? String, "elementsChanged")
         let edits = try XCTUnwrap(netDelta["edits"] as? [String: Any])
@@ -2067,12 +2067,12 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(let results, _, let failedIndex, _, _, _, _, _) = response else {
+        guard let batch = inspectBatch(response) else {
             XCTFail("Expected batch response, got \(response)")
             return
         }
-        XCTAssertEqual(results.count, 1, "Batch should stop after the error step")
-        XCTAssertEqual(failedIndex, 0, "Failed index should be the error step")
+        XCTAssertEqual(batch.results.count, 1, "Batch should stop after the error step")
+        XCTAssertEqual(batch.failedIndex, 0, "Failed index should be the error step")
     }
 
     @ButtonHeistActor
@@ -2101,12 +2101,12 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(let results, _, let failedIndex, _, _, _, let summaries, _) = response else {
+        guard let batch = inspectBatch(response) else {
             XCTFail("Expected batch response, got \(response)")
             return
         }
-        XCTAssertEqual(results.count, 1, "Batch should stop after the failed action result")
-        XCTAssertEqual(failedIndex, 0)
+        XCTAssertEqual(batch.results.count, 1, "Batch should stop after the failed action result")
+        XCTAssertEqual(batch.failedIndex, 0)
         let activateCommands = mockConn.sent.filter { sent in
             if case .activate = sent.0 { return true }
             return false
@@ -2116,10 +2116,10 @@ final class TheFenceHandlerTests: XCTestCase {
             1,
             "Later batch steps must not dispatch after a stale targeted action failure"
         )
-        XCTAssertEqual(summaries.count, 2)
-        XCTAssertEqual(summaries[0].deltaKind, "screenChanged")
-        XCTAssertEqual(summaries[0].error, "Action skipped because target became stale after a screen change; retry against the current interface.")
-        XCTAssertEqual(summaries[1].error, "skipped: stop_on_error stopped batch after step 0")
+        XCTAssertEqual(batch.summaries.count, 2)
+        XCTAssertEqual(batch.summaries[0].deltaKind, "screenChanged")
+        XCTAssertEqual(batch.summaries[0].error, "Action skipped because target became stale after a screen change; retry against the current interface.")
+        XCTAssertEqual(batch.summaries[1].error, "skipped: stop_on_error stopped batch after step 0")
     }
 
     @ButtonHeistActor
@@ -2139,16 +2139,16 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(let results, _, let failedIndex, _, _, _, let summaries, _) = response else {
+        guard let batch = inspectBatch(response) else {
             XCTFail("Expected batch response, got \(response)")
             return
         }
-        XCTAssertEqual(results.count, 2, "Only executed steps should appear in results")
-        XCTAssertEqual(failedIndex, 1)
-        XCTAssertEqual(summaries.map(\.command), ["activate", "not_a_real_command", "activate"])
-        XCTAssertNil(summaries[0].error)
-        XCTAssertNotNil(summaries[1].error)
-        XCTAssertEqual(summaries[2].error, "skipped: stop_on_error stopped batch after step 1")
+        XCTAssertEqual(batch.results.count, 2, "Only executed steps should appear in results")
+        XCTAssertEqual(batch.failedIndex, 1)
+        XCTAssertEqual(batch.summaries.map(\.command), ["activate", "not_a_real_command", "activate"])
+        XCTAssertNil(batch.summaries[0].error)
+        XCTAssertNotNil(batch.summaries[1].error)
+        XCTAssertEqual(batch.summaries[2].error, "skipped: stop_on_error stopped batch after step 1")
     }
 
     @ButtonHeistActor
@@ -2168,18 +2168,18 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(let results, _, let failedIndex, _, let checked, let met, let summaries, _) = response else {
+        guard let batch = inspectBatch(response) else {
             XCTFail("Expected batch response, got \(response)")
             return
         }
-        XCTAssertEqual(results.count, 1, "Batch should stop after the failed expectation")
-        XCTAssertEqual(failedIndex, 0)
-        XCTAssertEqual(checked, 1)
-        XCTAssertEqual(met, 0)
-        XCTAssertEqual(summaries.count, 2)
-        XCTAssertEqual(summaries[0].expectationMet, false)
-        XCTAssertEqual(summaries[1].command, "activate")
-        XCTAssertEqual(summaries[1].error, "skipped: stop_on_error stopped batch after step 0")
+        XCTAssertEqual(batch.results.count, 1, "Batch should stop after the failed expectation")
+        XCTAssertEqual(batch.failedIndex, 0)
+        XCTAssertEqual(batch.expectationsChecked, 1)
+        XCTAssertEqual(batch.expectationsMet, 0)
+        XCTAssertEqual(batch.summaries.count, 2)
+        XCTAssertEqual(batch.summaries[0].expectationMet, false)
+        XCTAssertEqual(batch.summaries[1].command, "activate")
+        XCTAssertEqual(batch.summaries[1].error, "skipped: stop_on_error stopped batch after step 0")
     }
 
     @ButtonHeistActor
@@ -2193,15 +2193,15 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(let results, _, let failedIndex, _, _, _, let summaries, _) = response else {
+        guard let batch = inspectBatch(response) else {
             XCTFail("Expected batch response, got \(response)")
             return
         }
-        XCTAssertEqual(results.count, 1)
-        XCTAssertEqual(failedIndex, 0)
-        XCTAssertEqual(summaries.map(\.command), ["scroll"])
+        XCTAssertEqual(batch.results.count, 1)
+        XCTAssertEqual(batch.failedIndex, 0)
+        XCTAssertEqual(batch.summaries.map(\.command), ["scroll"])
         XCTAssertEqual(
-            summaries[0].error,
+            batch.summaries[0].error,
             "run_batch step 0: run_batch step \"scroll\" uses the MCP mode selector; " +
                 "use canonical Fence commands scroll, scroll_to_visible, element_search, or scroll_to_edge."
         )
@@ -2219,16 +2219,16 @@ final class TheFenceHandlerTests: XCTestCase {
                 ] as [[String: Any]],
             ])
 
-            guard case .batch(let results, _, let failedIndex, _, _, _, let summaries, _) = response else {
+            guard let batch = inspectBatch(response) else {
                 XCTFail("Expected batch response for \(command.rawValue), got \(response)")
                 continue
             }
 
-            XCTAssertEqual(results.count, 1)
-            XCTAssertEqual(failedIndex, 0)
-            XCTAssertEqual(summaries.map(\.command), [command.rawValue])
+            XCTAssertEqual(batch.results.count, 1)
+            XCTAssertEqual(batch.failedIndex, 0)
+            XCTAssertEqual(batch.summaries.map(\.command), [command.rawValue])
             XCTAssertEqual(
-                summaries[0].error,
+                batch.summaries[0].error,
                 "run_batch step 0: run_batch step command \"\(command.rawValue)\" " +
                     "is not batch-executable"
             )
@@ -2251,13 +2251,13 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(let results, _, let failedIndex, _, _, _, let summaries, _) = response else {
+        guard let batch = inspectBatch(response) else {
             XCTFail("Expected batch response, got \(response)")
             return
         }
-        XCTAssertEqual(results.count, 3)
-        XCTAssertNil(failedIndex)
-        XCTAssertEqual(summaries.map(\.command), ["swipe", "scroll_to_visible", "dismiss_keyboard"])
+        XCTAssertEqual(batch.results.count, 3)
+        XCTAssertNil(batch.failedIndex)
+        XCTAssertEqual(batch.summaries.map(\.command), ["swipe", "scroll_to_visible", "dismiss_keyboard"])
     }
 
     @ButtonHeistActor
@@ -2281,17 +2281,17 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(let results, _, let failedIndex, _, _, _, let summaries, _) = response else {
+        guard let batch = inspectBatch(response) else {
             XCTFail("Expected batch response, got \(response)")
             return
         }
         let expectedError = "schema validation failed for fps: observed string \"5\"; expected integer"
-        XCTAssertNil(failedIndex)
-        XCTAssertEqual(results.count, 2)
-        XCTAssertEqual(results[0]["message"] as? String, expectedError)
-        XCTAssertEqual(results[1]["message"] as? String, "ran")
-        XCTAssertEqual(summaries.map(\.command), ["start_recording", "activate"])
-        XCTAssertEqual(summaries[0].error, expectedError)
+        XCTAssertNil(batch.failedIndex)
+        XCTAssertEqual(batch.results.count, 2)
+        XCTAssertEqual(batch.results[0]["message"] as? String, expectedError)
+        XCTAssertEqual(batch.results[1]["message"] as? String, "ran")
+        XCTAssertEqual(batch.summaries.map(\.command), ["start_recording", "activate"])
+        XCTAssertEqual(batch.summaries[0].error, expectedError)
         XCTAssertFalse(mockConn.sent.contains { sent in
             if case .startRecording = sent.0 { return true }
             return false
@@ -2315,19 +2315,19 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(let results, _, let failedIndex, _, _, _, let summaries, _) = response else {
+        guard let batch = inspectBatch(response) else {
             XCTFail("Expected batch response, got \(response)")
             return
         }
-        XCTAssertEqual(results.count, 2)
-        XCTAssertEqual(failedIndex, 1)
-        XCTAssertEqual(summaries.map(\.command), ["activate", "gesture", "activate"])
+        XCTAssertEqual(batch.results.count, 2)
+        XCTAssertEqual(batch.failedIndex, 1)
+        XCTAssertEqual(batch.summaries.map(\.command), ["activate", "gesture", "activate"])
         let expectedError = "run_batch step 1: run_batch step command must be a canonical TheFence.Command; unknown command \"gesture\""
         XCTAssertEqual(
-            summaries[1].error,
+            batch.summaries[1].error,
             expectedError
         )
-        XCTAssertEqual(summaries[2].error, "skipped: stop_on_error stopped batch after step 1")
+        XCTAssertEqual(batch.summaries[2].error, "skipped: stop_on_error stopped batch after step 1")
     }
 
     @ButtonHeistActor
@@ -2343,16 +2343,16 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(let results, _, let failedIndex, _, _, _, let summaries, _) = response else {
+        guard let batch = inspectBatch(response) else {
             XCTFail("Expected batch response, got \(response)")
             return
         }
-        XCTAssertEqual(results.count, 1)
-        XCTAssertEqual(failedIndex, 0)
-        XCTAssertEqual(summaries[0].errorCode, "request.missing_target")
-        XCTAssertEqual(summaries[0].phase, "request")
-        XCTAssertEqual(summaries[0].nextCommand, "get_interface()")
-        XCTAssertEqual(summaries[1].error, "skipped: stop_on_error stopped batch after step 0")
+        XCTAssertEqual(batch.results.count, 1)
+        XCTAssertEqual(batch.failedIndex, 0)
+        XCTAssertEqual(batch.summaries[0].errorCode, "request.missing_target")
+        XCTAssertEqual(batch.summaries[0].phase, "request")
+        XCTAssertEqual(batch.summaries[0].nextCommand, "get_interface()")
+        XCTAssertEqual(batch.summaries[1].error, "skipped: stop_on_error stopped batch after step 0")
     }
 
     // MARK: - get_interface scope
@@ -2413,7 +2413,7 @@ final class TheFenceHandlerTests: XCTestCase {
             return
         }
 
-        let json = response.jsonDict()!
+        let json = response.jsonDict()
         let interface = json["interface"] as! [String: Any]
         XCTAssertNil(json["explore"])
         let tree = interface["tree"] as! [[String: Any]]
@@ -2479,7 +2479,7 @@ final class TheFenceHandlerTests: XCTestCase {
             return
         }
 
-        let json = response.jsonDict()!
+        let json = response.jsonDict()
         XCTAssertEqual(json["filteredFrom"] as? Int, 2)
         let explore = json["explore"] as? [String: Any]
         XCTAssertEqual(explore?["elementCount"] as? Int, 2)
@@ -2510,7 +2510,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "elements": ["second"],
         ])
 
-        let json = response.jsonDict()!
+        let json = response.jsonDict()
         XCTAssertEqual(json["filteredFrom"] as? Int, 2)
         let interface = json["interface"] as! [String: Any]
         let tree = interface["tree"] as! [[String: Any]]
@@ -2555,7 +2555,7 @@ final class TheFenceHandlerTests: XCTestCase {
             return
         }
 
-        let json = response.jsonDict()!
+        let json = response.jsonDict()
         XCTAssertEqual(json["filteredFrom"] as? Int, 2)
         let interface = json["interface"] as! [String: Any]
         let tree = interface["tree"] as! [[String: Any]]
@@ -2598,7 +2598,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "elements": ["second"],
         ])
 
-        let json = response.jsonDict()!
+        let json = response.jsonDict()
         XCTAssertEqual(json["filteredFrom"] as? Int, 2)
         let interface = json["interface"] as! [String: Any]
         let tree = interface["tree"] as! [[String: Any]]
@@ -2659,12 +2659,12 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(_, _, _, _, let checked, let met, _, _) = response else {
+        guard let batch = inspectBatch(response) else {
             XCTFail("Expected batch response, got \(response)")
             return
         }
-        XCTAssertEqual(checked, 0)
-        XCTAssertEqual(met, 0)
+        XCTAssertEqual(batch.expectationsChecked, 0)
+        XCTAssertEqual(batch.expectationsMet, 0)
     }
 
     // MARK: - Heist Playback

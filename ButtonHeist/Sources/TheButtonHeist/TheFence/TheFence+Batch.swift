@@ -12,270 +12,137 @@ extension TheFence {
     }
 
     func handleRunBatch(_ request: RunBatchRequest) async throws -> FenceResponse {
-        var results: [[String: Any]] = []
-        var stepSummaries: [BatchStepSummary] = []
-        var stepAccessibilityTraces: [AccessibilityTrace] = []
-        var actionOutcomeCount = 0
-        var failedIndex: Int?
-        var expectationsMet = 0
-        var expectationsChecked = 0
+        var outcomes: [BatchStepOutcome] = []
         let batchStart = CFAbsoluteTimeGetCurrent()
 
-        stepLoop: for (index, step) in request.steps.enumerated() {
+        stepLoop: for step in request.steps {
             switch step {
             case .decoded(let parsedRequest):
                 let command = parsedRequest.command
                 do {
                     let response = try await execute(parsed: parsedRequest)
-                    results.append(response.jsonDict() ?? ["status": "ok"])
-
-                    let outcome = stepOutcome(response: response)
-                    if outcome.hasActionResult {
-                        actionOutcomeCount += 1
-                        if let accessibilityTrace = outcome.accessibilityTrace {
-                            stepAccessibilityTraces.append(accessibilityTrace)
-                        }
-                    }
-
-                    // Count explicit tier expectations only — delivery failures have
-                    // expectation.expectation == nil and should not inflate the count
-                    if outcome.expectationCounted {
-                        expectationsChecked += 1
-                        if outcome.expectationMet == true { expectationsMet += 1 }
-                    }
-
-                    stepSummaries.append(makeStepSummary(
-                        command: command, response: response,
-                        expectationMet: outcome.expectationCounted ? outcome.expectationMet : nil
+                    let stopsBatch = response.isFailure && request.policy == .stopOnError
+                    outcomes.append(BatchStepOutcome(
+                        command: command.rawValue,
+                        response: response,
+                        stopsBatch: stopsBatch
                     ))
 
-                    if outcome.isFailed, request.policy == .stopOnError {
-                        failedIndex = index
+                    if stopsBatch {
                         break stepLoop
                     }
                 } catch {
-                    let errorDict: [String: Any] = [
-                        "status": "error",
-                        "message": error.localizedDescription,
-                    ]
                     let failureDetails = (error as? FenceError)?.failureDetails
-                    results.append(errorDict)
-                    stepSummaries.append(BatchStepSummary(
+                    outcomes.append(BatchStepOutcome(
                         command: command.rawValue,
-                        deltaKind: nil,
-                        screenName: nil,
-                        screenId: nil,
-                        expectationMet: nil, elementCount: nil, error: error.localizedDescription,
-                        errorCode: failureDetails?.errorCode,
-                        phase: failureDetails?.phase.rawValue,
-                        nextCommand: Self.batchNextCommand(from: failureDetails)
+                        response: .error(error.localizedDescription),
+                        diagnosticDetails: failureDetails,
+                        stopsBatch: request.policy == .stopOnError
                     ))
                     if request.policy == .stopOnError {
-                        failedIndex = index
                         break stepLoop
                     }
                 }
 
             case .invalid(let commandName, let failure):
-                results.append(failure.resultDictionary)
-                stepSummaries.append(BatchStepSummary(
+                outcomes.append(BatchStepOutcome(
                     command: commandName,
-                    deltaKind: nil,
-                    screenName: nil,
-                    screenId: nil,
-                    expectationMet: nil, elementCount: nil, error: failure.message,
-                    errorCode: failure.details?.errorCode,
-                    phase: failure.details?.phase.rawValue,
-                    nextCommand: Self.batchNextCommand(from: failure.details)
+                    response: failure.resultResponse,
+                    diagnosticDetails: failure.details,
+                    stopsBatch: request.policy == .stopOnError
                 ))
                 if request.policy == .stopOnError {
-                    failedIndex = index
                     break stepLoop
                 }
             }
         }
 
-        if let failedIndex, request.policy == .stopOnError {
-            stepSummaries.append(contentsOf: skippedStepSummaries(
+        if let failedIndex = outcomes.stoppedFailedIndex, request.policy == .stopOnError {
+            outcomes.append(contentsOf: skippedStepOutcomes(
                 steps: request.steps,
                 afterFailedIndex: failedIndex
             ))
         }
 
         let totalMs = Int((CFAbsoluteTimeGetCurrent() - batchStart) * 1000)
-        let accessibilityTrace = Self.batchAccessibilityTrace(
-            actionOutcomeCount: actionOutcomeCount,
-            stepAccessibilityTraces: stepAccessibilityTraces
-        )
+        let accessibilityTrace = Self.batchAccessibilityTrace(outcomes: outcomes)
         return .batch(
-            results: results,
-            completedSteps: results.count,
-            failedIndex: failedIndex,
+            outcomes: outcomes,
             totalTimingMs: totalMs,
-            expectationsChecked: expectationsChecked,
-            expectationsMet: expectationsMet,
-            stepSummaries: stepSummaries,
             accessibilityTrace: accessibilityTrace
         )
     }
 
     private static func batchAccessibilityTrace(
-        actionOutcomeCount: Int,
-        stepAccessibilityTraces: [AccessibilityTrace]
+        outcomes: [BatchStepOutcome]
     ) -> AccessibilityTrace? {
+        let actionOutcomeCount = outcomes.count(where: \.hasActionResult)
+        let stepAccessibilityTraces = outcomes.compactMap(\.accessibilityTrace)
         guard actionOutcomeCount > 0,
               stepAccessibilityTraces.count == actionOutcomeCount
         else { return nil }
         return AccessibilityTrace.captureEndpointTrace(from: stepAccessibilityTraces)
     }
 
-    private func skippedStepSummaries(
+    private func skippedStepOutcomes(
         steps: [RunBatchStepRequest], afterFailedIndex failedIndex: Int
-    ) -> [BatchStepSummary] {
+    ) -> [BatchStepOutcome] {
         steps.dropFirst(failedIndex + 1).map { step in
-            return BatchStepSummary(
-                command: step.commandName,
-                deltaKind: nil,
-                screenName: nil,
-                screenId: nil,
-                expectationMet: nil,
-                elementCount: nil,
-                error: "skipped: stop_on_error stopped batch after step \(failedIndex)"
-            )
+            BatchStepOutcome.skipped(command: step.commandName, afterFailedIndex: failedIndex)
         }
-    }
-
-    // MARK: - Step Outcome
-
-    private struct StepOutcome {
-        let hasActionResult: Bool
-        let isFailed: Bool
-        let accessibilityTrace: AccessibilityTrace?
-        /// Whether this step carried an explicit expectation that counts
-        /// toward the batch's expectations-met/checked totals.
-        let expectationCounted: Bool
-        /// Whether the explicit expectation was met. Only meaningful when
-        /// `expectationCounted` is true.
-        let expectationMet: Bool?
-    }
-
-    private func stepOutcome(response: FenceResponse) -> StepOutcome {
-        switch response {
-        case .action(let actionResult, let expectation):
-            let result = expectation
-            let counted = result?.expectation != nil
-            let met = counted ? result?.met : nil
-            let failed = !actionResult.success || (result.map { !$0.met } ?? false)
-            return StepOutcome(
-                hasActionResult: true,
-                isFailed: failed,
-                accessibilityTrace: actionResult.accessibilityTrace,
-                expectationCounted: counted,
-                expectationMet: met
-            )
-        case .error:
-            return StepOutcome(
-                hasActionResult: false,
-                isFailed: true,
-                accessibilityTrace: nil,
-                expectationCounted: false,
-                expectationMet: nil
-            )
-        default:
-            return StepOutcome(
-                hasActionResult: false,
-                isFailed: false,
-                accessibilityTrace: nil,
-                expectationCounted: false,
-                expectationMet: nil
-            )
-        }
-    }
-
-    // MARK: - Step Summary
-
-    private func makeStepSummary(
-        command: Command, response: FenceResponse, expectationMet: Bool?
-    ) -> BatchStepSummary {
-        let commandName = command.rawValue
-        switch response {
-        case .action(let result, _):
-            return BatchStepSummary(
-                command: commandName,
-                deltaKind: result.effectiveAccessibilityDelta?.kindRawValue,
-                screenName: result.screenName,
-                screenId: result.screenId,
-                expectationMet: expectationMet,
-                elementCount: nil,
-                error: result.success ? nil : result.message
-            )
-        case .interface(let iface, _, _, _):
-            return BatchStepSummary(
-                command: commandName, deltaKind: nil, screenName: nil, screenId: nil,
-                expectationMet: nil, elementCount: iface.elements.count, error: nil
-            )
-        case .error(let message, let details):
-            return BatchStepSummary(
-                command: commandName, deltaKind: nil, screenName: nil, screenId: nil,
-                expectationMet: nil, elementCount: nil, error: message,
-                errorCode: details?.errorCode,
-                phase: details?.phase.rawValue,
-                nextCommand: Self.batchNextCommand(from: details)
-            )
-        default:
-            return BatchStepSummary(
-                command: commandName, deltaKind: nil, screenName: nil, screenId: nil,
-                expectationMet: nil, elementCount: nil, error: nil
-            )
-        }
-    }
-
-    private static func batchNextCommand(from details: FailureDetails?) -> String? {
-        guard details?.errorCode == FenceRequestErrorCode.missingTarget else { return nil }
-        return details?.hint
     }
 
     // MARK: - Session State
 
-    func currentSessionState() -> [String: Any] {
+    func currentSessionState() -> SessionStatePayload {
         let connected = handoff.isConnected
-        var payload: [String: Any] = [
-            "status": "ok",
-            "connected": connected,
-            "phase": handoff.connectionPhaseName,
-        ]
-        if let device = handoff.connectedDevice {
-            payload["deviceName"] = handoff.displayName(for: device)
-            payload["appName"] = device.appName
-            payload["connectionType"] = device.connectionType.rawValue
-            if let shortId = device.shortId { payload["shortId"] = shortId }
+        let devicePayload = handoff.connectedDevice.map { device in
+            SessionDevicePayload(
+                deviceName: handoff.displayName(for: device),
+                appName: device.appName,
+                connectionType: device.connectionType,
+                shortId: device.shortId
+            )
         }
-        payload["isRecording"] = isRecording
-        payload["actionTimeoutSeconds"] = Timeouts.actionSeconds
-        payload["longActionTimeoutSeconds"] = Timeouts.longActionSeconds
-        if let failure = handoff.connectionDiagnosticFailure {
-            var failurePayload: [String: Any] = [
-                "errorCode": failure.failureCode,
-                "phase": failure.phase.rawValue,
-                "retryable": failure.retryable,
-            ]
-            if let message = failure.errorDescription {
-                failurePayload["message"] = message
-            }
-            if let hint = failure.hint {
-                failurePayload["hint"] = hint
-            }
-            payload["lastFailure"] = failurePayload
+        let failurePayload = handoff.connectionDiagnosticFailure.map { failure in
+            SessionFailurePayload(
+                errorCode: failure.failureCode,
+                phase: failure.phase,
+                retryable: failure.retryable,
+                message: failure.errorDescription,
+                hint: failure.hint
+            )
         }
+        let lastActionPayload = lastActionResult.map { last in
+            SessionLastActionPayload(
+                method: last.method,
+                success: last.success,
+                message: last.message,
+                latencyMs: lastLatencyMs
+            )
+        }
+        return SessionStatePayload(
+            connected: connected,
+            phase: currentSessionConnectionPhase(),
+            device: devicePayload,
+            isRecording: isRecording,
+            actionTimeoutSeconds: Timeouts.actionSeconds,
+            longActionTimeoutSeconds: Timeouts.longActionSeconds,
+            lastFailure: failurePayload,
+            lastAction: lastActionPayload
+        )
+    }
 
-        if let last = lastActionResult {
-            payload["lastAction"] = [
-                "method": last.method.rawValue,
-                "success": last.success,
-                "message": last.message as Any,
-                "latency_ms": lastLatencyMs,
-            ]
+    private func currentSessionConnectionPhase() -> SessionConnectionPhase {
+        switch handoff.connectionPhase {
+        case .disconnected:
+            return .disconnected
+        case .connecting:
+            return .connecting
+        case .connected:
+            return .connected
+        case .failed:
+            return .failed
         }
-        return payload
     }
 }
