@@ -489,8 +489,7 @@ final class TheSafecracker {
 
 nonisolated extension TheSafecracker {
 
-    /// Default inter-key delay for text injection (30ms). Single source of truth
-    /// for typeText and deleteText default parameters.
+    /// Default inter-key delay for text injection (30ms).
     static let defaultInterKeyDelay: UInt64 = 30_000_000
 
     /// Maximum allowed inter-key delay (500ms) to prevent unreasonably slow typing.
@@ -499,10 +498,6 @@ nonisolated extension TheSafecracker {
     /// Yield between touch began/ended phases (50ms) so SwiftUI's gesture
     /// pipeline has run-loop time to transition from "possible" to "recognized".
     static let gestureYieldDelay: Duration = .milliseconds(50)
-
-    /// Yield after setting selectedTextRange (50ms) so the keyboard's internal
-    /// state treats the selection as current before the subsequent delete.
-    static let selectionSettleDelay: Duration = .milliseconds(50)
 
     /// Poll interval for keyboard readiness after tapping a text field (100ms).
     static let keyboardPollInterval: Duration = .milliseconds(100)
