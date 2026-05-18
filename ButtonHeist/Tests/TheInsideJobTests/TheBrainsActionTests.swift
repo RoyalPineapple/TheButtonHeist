@@ -480,12 +480,9 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .syntheticTap)
         XCTAssertDiagnostic(result.message, contains: [
-            "gesture dispatch failed",
-            "method=syntheticTap",
-            "phase=dispatch",
-            "point=(-10000,-10000)",
-            "window=none",
-            "try target a visible element",
+            "syntheticTap failed",
+            "point must be inside screen bounds",
+            "observed (-10000, -10000)",
         ])
     }
 
