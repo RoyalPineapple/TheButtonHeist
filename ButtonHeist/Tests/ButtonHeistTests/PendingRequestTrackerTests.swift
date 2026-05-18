@@ -4,6 +4,27 @@ import TheScore
 
 final class PendingRequestTrackerTests: XCTestCase {
 
+    private func assertDuplicateRequestId(
+        _ error: Error,
+        requestId: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> Bool {
+        guard case PendingRequestTrackerError.duplicateRequestId(let duplicateId) = error else {
+            XCTFail("Expected duplicate request ID error, got \(error)", file: file, line: line)
+            return false
+        }
+
+        XCTAssertEqual(duplicateId, requestId, file: file, line: line)
+        XCTAssertEqual(
+            error.localizedDescription,
+            "Request ID '\(requestId)' already has a pending waiter",
+            file: file,
+            line: line
+        )
+        return true
+    }
+
     /// Yield until the tracker reaches the expected pending count.
     /// Uses cooperative scheduling — no wall-clock dependency.
     @ButtonHeistActor
@@ -38,6 +59,74 @@ final class PendingRequestTrackerTests: XCTestCase {
 
         let value = try await task.value
         XCTAssertEqual(value, "hello")
+        XCTAssertEqual(tracker.pendingCount, 0)
+    }
+
+    @ButtonHeistActor
+    func testDuplicateRequestIdFailsWithoutReplacingExistingWaiter() async throws {
+        let tracker = PendingRequestTracker<String>()
+        let requestId = "duplicate"
+
+        let first = Task { @ButtonHeistActor in
+            try await tracker.wait(requestId: requestId, timeout: 1)
+        }
+        defer { first.cancel() }
+
+        await yieldUntilPendingCount(1, in: tracker)
+        XCTAssertEqual(tracker.pendingCount, 1)
+
+        do {
+            _ = try await tracker.wait(requestId: requestId, timeout: 0.01)
+            XCTFail("Expected duplicate request ID error")
+            return
+        } catch {
+            guard assertDuplicateRequestId(error, requestId: requestId) else { return }
+        }
+
+        XCTAssertEqual(tracker.pendingCount, 1, "Duplicate registration must not replace the owner")
+
+        tracker.resolve(requestId: requestId, result: .success("first"))
+        let value = try await first.value
+        XCTAssertEqual(value, "first")
+        XCTAssertEqual(tracker.pendingCount, 0)
+
+        tracker.resolve(requestId: requestId, result: .success("late"))
+        XCTAssertEqual(tracker.pendingCount, 0, "Late duplicate resolve must stay a no-op")
+    }
+
+    @ButtonHeistActor
+    func testCancelledDuplicateWaitDoesNotCancelExistingOwner() async throws {
+        let tracker = PendingRequestTracker<String>()
+        let requestId = "cancelled-duplicate"
+
+        let first = Task { @ButtonHeistActor in
+            try await tracker.wait(requestId: requestId, timeout: 1)
+        }
+        defer { first.cancel() }
+
+        await yieldUntilPendingCount(1, in: tracker)
+
+        let duplicate = Task { @ButtonHeistActor in
+            try await tracker.wait(requestId: requestId, timeout: 1)
+        }
+        duplicate.cancel()
+
+        do {
+            _ = try await duplicate.value
+            XCTFail("Expected duplicate wait cancellation")
+            return
+        } catch is CancellationError {
+            // expected
+        } catch {
+            XCTFail("Expected CancellationError, got \(error)")
+            return
+        }
+
+        XCTAssertEqual(tracker.pendingCount, 1, "Duplicate cancellation must not remove the owner")
+
+        tracker.resolve(requestId: requestId, result: .success("first"))
+        let value = try await first.value
+        XCTAssertEqual(value, "first")
         XCTAssertEqual(tracker.pendingCount, 0)
     }
 
