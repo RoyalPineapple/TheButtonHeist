@@ -379,6 +379,121 @@ final class ScreenTests: XCTestCase {
 
         XCTAssertEqual(lhs.merging(rhs).firstResponderHeistId, "new_field")
     }
+
+    // MARK: - refreshingVisibleState
+
+    func testRefreshingVisibleStatePreservesKnownElementsWhenVisibleIdsAreKnown() {
+        let visible = makeElement(label: "Visible", traits: .button)
+        let knownOnly = makeElement(label: "Known", traits: .button)
+        let refreshedVisible = makeElement(label: "Visible", traits: .button)
+        let screen = Screen.makeForTests(
+            elements: [(visible, "button_visible")],
+            offViewport: [
+                Screen.OffViewportEntry(
+                    knownOnly,
+                    heistId: "button_known",
+                    contentSpaceOrigin: CGPoint(x: 0, y: 2_000)
+                )
+            ]
+        )
+        let refresh = Screen.makeForTests(
+            elements: [(refreshedVisible, "button_visible")],
+            firstResponderHeistId: "button_visible"
+        )
+
+        let updated = screen.refreshingVisibleState(with: refresh)
+
+        XCTAssertEqual(updated.knownIds, ["button_visible", "button_known"])
+        XCTAssertEqual(updated.visibleIds, ["button_visible"])
+        XCTAssertEqual(updated.firstResponderHeistId, "button_visible")
+        XCTAssertEqual(updated.findElement(heistId: "button_known")?.element.label, "Known")
+    }
+
+    func testRefreshingVisibleStateDropsDisappearedVisibleNonScrollElements() {
+        let disappearing = makeElement(label: "Disappearing", traits: .staticText)
+        let visible = makeElement(label: "Visible", traits: .button)
+        let screen = Screen.makeForTests(
+            elements: [
+                (disappearing, "disappearing_staticText"),
+                (visible, "button_visible")
+            ]
+        )
+        let refresh = Screen.makeForTests(elements: [(visible, "button_visible")])
+
+        let updated = screen.refreshingVisibleState(with: refresh)
+
+        XCTAssertEqual(updated.knownIds, ["button_visible"])
+        XCTAssertNil(updated.findElement(heistId: "disappearing_staticText"))
+    }
+
+    func testRefreshingVisibleStatePreservesDisappearedVisibleScrollElements() {
+        let scrolledAway = makeElement(label: "Scrolled Away", traits: .button)
+        let visible = makeElement(label: "Visible", traits: .button)
+        let screen = Screen(
+            elements: [
+                "button_scrolled_away": Screen.ScreenElement(
+                    heistId: "button_scrolled_away",
+                    contentSpaceOrigin: CGPoint(x: 0, y: 1_000),
+                    element: scrolledAway,
+                    object: nil,
+                    scrollView: nil
+                ),
+                "button_visible": Screen.ScreenElement(
+                    heistId: "button_visible",
+                    contentSpaceOrigin: nil,
+                    element: visible,
+                    object: nil,
+                    scrollView: nil
+                )
+            ],
+            hierarchy: [
+                .element(scrolledAway, traversalIndex: 0),
+                .element(visible, traversalIndex: 1)
+            ],
+            containerStableIds: [:],
+            heistIdByElement: [
+                scrolledAway: "button_scrolled_away",
+                visible: "button_visible"
+            ],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
+        let refresh = Screen.makeForTests(elements: [(visible, "button_visible")])
+
+        let updated = screen.refreshingVisibleState(with: refresh)
+
+        XCTAssertEqual(updated.knownIds, ["button_scrolled_away", "button_visible"])
+        XCTAssertEqual(updated.visibleIds, ["button_visible"])
+        XCTAssertEqual(updated.findElement(heistId: "button_scrolled_away")?.element.label, "Scrolled Away")
+    }
+
+    func testRefreshingVisibleStateReplacesKnownElementsWhenVisibleIdsAreUnknown() {
+        let old = makeElement(label: "Old", traits: .button)
+        let knownOnly = makeElement(label: "Known", traits: .button)
+        let replacement = makeElement(label: "Replacement", traits: .button)
+        let screen = Screen.makeForTests(
+            elements: [(old, "button_old")],
+            offViewport: [
+                Screen.OffViewportEntry(knownOnly, heistId: "button_known")
+            ]
+        )
+        let refresh = Screen.makeForTests(elements: [(replacement, "button_replacement")])
+
+        let updated = screen.refreshingVisibleState(with: refresh)
+
+        XCTAssertEqual(updated.knownIds, ["button_replacement"])
+        XCTAssertNil(updated.findElement(heistId: "button_known"))
+    }
+
+    func testRefreshingVisibleStateReplacesKnownElementsForEmptyRefresh() {
+        let old = makeElement(label: "Old", traits: .button)
+        let screen = Screen.makeForTests(elements: [(old, "button_old")])
+
+        let updated = screen.refreshingVisibleState(with: .empty)
+
+        XCTAssertTrue(updated.knownIds.isEmpty)
+        XCTAssertTrue(updated.visibleIds.isEmpty)
+    }
 }
 
 #endif // canImport(UIKit)

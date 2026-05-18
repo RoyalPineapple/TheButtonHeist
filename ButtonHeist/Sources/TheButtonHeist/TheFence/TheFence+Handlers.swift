@@ -130,11 +130,7 @@ extension TheFence {
             guard case .explore(let exploreResult) = result.payload else {
                 return .error("Explore failed: \(result.message ?? "unknown error")")
             }
-            let interface = Interface(
-                timestamp: result.accessibilityTrace?.captures.last?.interface.timestamp ?? Date(),
-                tree: result.accessibilityTrace?.captures.last?.interface.tree ??
-                    exploreResult.elements.map { .element($0) }
-            )
+            let interface = exploredInterface(from: result, exploreResult: exploreResult)
             let projected = projectedInterface(interface, request: request)
             if let error = projected.error { return .error(error) }
             return .interface(
@@ -149,6 +145,27 @@ extension TheFence {
         let projected = projectedInterface(interface, request: request)
         if let error = projected.error { return .error(error) }
         return .interface(projected.interface, detail: request.detail, filteredFrom: projected.filteredFrom)
+    }
+
+    private func exploredInterface(from result: ActionResult, exploreResult: ExploreResult) -> Interface {
+        let payloadTree = exploreResult.elements.map(InterfaceNode.element)
+        guard let traceInterface = result.accessibilityTrace?.captures.last?.interface else {
+            return Interface(timestamp: Date(), tree: payloadTree)
+        }
+
+        let payloadIds = Set(exploreResult.elements.map(\.heistId))
+        let traceIds = Set(traceInterface.elements.map(\.heistId))
+        guard payloadIds.isSubset(of: traceIds) else {
+            logger.warning(
+                """
+                Explore trace omitted payload elements; returning payload projection. \
+                payloadCount=\(payloadIds.count, privacy: .public) \
+                traceCount=\(traceIds.count, privacy: .public)
+                """
+            )
+            return Interface(timestamp: traceInterface.timestamp, tree: payloadTree)
+        }
+        return traceInterface
     }
 
     private func projectedInterface(
