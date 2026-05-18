@@ -253,7 +253,7 @@ public final class TheHandoff
 |----------|------|-------------|
 | `onDeviceFound` | `((DiscoveredDevice) -> Void)?` | New device discovered |
 | `onDeviceLost` | `((DiscoveredDevice) -> Void)?` | Device no longer available |
-| `onDisconnected` | `((DisconnectReason) -> Void)?` | Connection closed |
+| `onConnectionStateChanged` | `((ConnectionPhase) -> Void)?` | Connection lifecycle state changed |
 | `onInterface` | `((Interface, String?) -> Void)?` | Hierarchy received (with optional requestId) |
 | `onActionResult` | `((ActionResult, String?) -> Void)?` | Action result received (with optional requestId) |
 | `onScreen` | `((ScreenPayload, String?) -> Void)?` | Screenshot received (with optional requestId) |
@@ -265,7 +265,7 @@ public final class TheHandoff
 | `onAuthFailed` | `((String) -> Void)?` | Auth rejected |
 | `onStatus` | `((String) -> Void)?` | Progress messages for session management |
 
-> **Note:** At the network layer, `DeviceConnection` and `DeviceDiscovery` use a single `onEvent` callback with typed enums (`ConnectionEvent`, `DiscoveryEvent`). TheHandoff translates these into the named callbacks above.
+> **Note:** At the network layer, `DeviceConnection` and `DeviceDiscovery` use a single `onEvent` callback with typed enums (`ConnectionEvent`, `DiscoveryEvent`). TheHandoff translates connection lifecycle into `connectionPhase` plus `onConnectionStateChanged`; request/response payloads still use typed callbacks.
 
 #### Configuration
 
@@ -549,7 +549,7 @@ Stateless resolver for connection targets with environment variable override pre
 public enum DisconnectReason: Error, LocalizedError
 ```
 
-Structured reason for why a connection was closed. Passed via `ConnectionEvent.disconnected` on `DeviceConnection` and to `onDisconnected` callbacks on `TheHandoff`.
+Structured reason for why a connection was closed. Passed via `ConnectionEvent.disconnected` on `DeviceConnection`; TheHandoff folds it into `connectionPhase`/`connectionDiagnosticFailure` for session-state consumers.
 
 #### Cases
 
@@ -1867,8 +1867,11 @@ class Inspector {
             print("Screenshot: \(screenshot.width)x\(screenshot.height)")
         }
 
-        handoff.onDisconnected = { reason in
-            print("Disconnected: \(reason)")
+        handoff.onConnectionStateChanged = { [weak self] state in
+            if case .disconnected = state,
+               let failure = self?.handoff.connectionDiagnosticFailure {
+                print("Disconnected: \(failure.localizedDescription)")
+            }
         }
     }
 

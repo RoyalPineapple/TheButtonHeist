@@ -9,7 +9,7 @@
 TheHandoff owns the full lifecycle of communicating with a remote iOS device running TheInsideJob:
 
 1. **Device discovery** — starts and stops Bonjour (`DeviceDiscovery`) and USB (`USBDeviceDiscovery`) discovery sessions; maintains `discoveredDevices`
-2. **Connection management** — creates `DeviceConnection` instances, routes `ConnectionEvent`s from the transport layer to named callbacks, and manages `connectionPhase` (an explicit state machine carrying the device in `.connecting` and `.connected` phases)
+2. **Connection management** — creates `DeviceConnection` instances, folds transport lifecycle events into `connectionPhase`, and forwards request-scoped payloads through typed callbacks
 3. **Session state tracking** — maintains `connectionPhase` (disconnected/connecting(device)/connected(device)/failed(ConnectionError)) and `recordingPhase` (idle/recording)
 4. **Keepalive** — sends `.ping` every 5 seconds over an active connection to keep the channel alive
 5. **Session management** — `connectWithDiscovery(filter:timeout:)` closes any active session, then orchestrates discovery → device resolution → connection with timeout tracking
@@ -26,7 +26,7 @@ graph TD
     subgraph TheHandoff["TheHandoff (@ButtonHeistActor)"]
         DiscState["Discovery State\ndiscoveredDevices, isDiscovering"]
         ConnState["Connection State\nconnectionPhase, serverInfo"]
-        Callbacks["Typed Callbacks\nonDeviceFound/Lost, onDisconnected,\nonInterface, onActionResult, onScreen,\nonRecording*, onAuth*,\nonSessionLocked, onStatus"]
+        Callbacks["Typed Callbacks\nonDeviceFound/Lost,\nonConnectionStateChanged,\nonInterface, onActionResult, onScreen,\nonRecording*, onAuth*, onStatus"]
         Config["Configuration\ntoken, driverId"]
 
         subgraph Factories["Injectable Closures (mock boundary)"]
