@@ -19,7 +19,7 @@ struct ResponseRenderingTests {
         let texts = textContents(result)
 
         #expect(texts.count == 2)
-        #expect(texts[0] == "[background: no net change (4 elements)]\n  +- spinner \"Loading\" [button]")
+        #expect(texts[0] == "[while_idle: no net change (4 elements)]\n  +- spinner \"Loading\" [button]")
         #expect(texts[1] == FenceResponse.ok(message: "done").compactFormatted())
     }
 
@@ -36,7 +36,7 @@ struct ResponseRenderingTests {
         let texts = textContents(result)
 
         #expect(texts.count == 2)
-        #expect(texts[0] == "[background: elements changed +1 +-1 (5 total)]\n  + result \"Result\"\n  +- spinner \"Loading\" [button]")
+        #expect(texts[0] == "[while_idle: elements changed +1 +-1 (5 total)]\n  + result \"Result\"\n  +- spinner \"Loading\" [button]")
         #expect(texts[1] == FenceResponse.ok(message: "done").compactFormatted())
     }
 
@@ -56,8 +56,8 @@ struct ResponseRenderingTests {
         let texts = textContents(response)
 
         #expect(texts.count == 3)
-        #expect(texts[0] == "[background: no net change (4 elements)]\n  +- spinner \"Loading\" [button]")
-        #expect(texts[1] == "[background: elements changed +1 (5 total)]\n  + result \"Result\"")
+        #expect(texts[0] == "[while_idle: no net change (4 elements)]\n  +- spinner \"Loading\" [button]")
+        #expect(texts[1] == "[while_idle: elements changed +1 (5 total)]\n  + result \"Result\"")
         #expect(texts[2] == FenceResponse.ok(message: "done").compactFormatted())
     }
 

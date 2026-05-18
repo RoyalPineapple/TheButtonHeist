@@ -6,8 +6,8 @@ Button Heist drives iOS apps through the accessibility layer — the same interf
 
 1. **Read** — `get_interface` returns the app accessibility state with heistIds, labels, values, traits, and actions.
 2. **Act** — `activate`, `type_text`, `scroll`, `gesture` — target by heistId or matcher. Always attach `expect` when you know what should change.
-3. **Read the response** — action responses carry the action's `accessibilityDelta`; any `[background: ...]` block uses the same capture/delta contract to report a change that happened before the action ran. If either answers your question, skip `get_interface`.
-4. **Wait if needed** — when the delta shows a transient state (spinner, loading overlay) and your expectation wasn't met, call `wait_for_change` with the same expectation. The server checks the current state first, then watches settled changes until the expectation is true. If the change already happened in the background, `wait_for_change` returns instantly.
+3. **Read the response** — action responses carry the action's `accessibilityDelta`; any `[while_idle: ...]` block uses the same capture/delta contract to report a change that happened while you were idle between tool calls. If either answers your question, skip `get_interface`.
+4. **Wait if needed** — when the delta shows a transient state (spinner, loading overlay) and your expectation wasn't met, call `wait_for_change` with the same expectation. The server checks the current state first, then watches settled changes until the expectation is true. If the change already happened while you were idle, `wait_for_change` returns instantly.
 5. **Repeat** — only re-fetch when you need elements you haven't seen.
 
 ## Choosing Tools
@@ -92,20 +92,20 @@ xcrun simctl shutdown "$SIM_UDID"
 xcrun simctl delete "$SIM_UDID"
 ```
 
-## Background Changes
+## While-Idle Changes
 
-Button Heist records the capture it last sent to the driver. If the settled accessibility state changes before your next action, the next response includes a `[background: ...]` block derived from the same capture/delta model as action results. Three things can happen between your tool calls:
+Button Heist records the capture it last sent to the driver. If the settled accessibility state changes before your next action, the next response includes a `[while_idle: ...]` block derived from the same capture/delta model as action results. Three things can happen between your tool calls:
 
-**Nothing changed** — no `[background]` line, your heistIds are still valid, proceed.
+**Nothing changed** — no `[while_idle]` line, your heistIds are still valid, proceed.
 
-**Elements changed** — `[background: elements changed +2 -1 (15 total)]` with the added/removed elements listed. Your heistIds are still valid. The delta shows what's new.
+**Elements changed** — `[while_idle: elements changed +2 -1 (15 total)]` with the added/removed elements listed. Your heistIds are still valid. The delta shows what's new.
 
-**Screen changed** — `[background: screen changed (7 elements)]` with the full new element list. Your heistIds are stale. Don't try to use them — read the new elements from the background block. If you had an `expect` on your action and it matches the background change, the action is skipped entirely and you get "expectation already met." If you didn't have an expect, the action is skipped with "Screen changed while you were thinking" and the response carries the new interface. Either way, you're never left pointing at a screen that doesn't exist.
+**Screen changed** — `[while_idle: screen changed (7 elements)]` with the full new element list. Your heistIds are stale. Don't try to use them — read the new elements from the while-idle block. If you had an `expect` on your action and it matches the idle change, the action is skipped entirely and you get "expectation already met." If you didn't have an expect, the action is skipped with "Screen changed while you were thinking" and the response carries the new interface. Either way, you're never left pointing at a screen that doesn't exist.
 
 **Async pattern** — for operations that take time (payments, network requests):
 1. `activate pay_button expect={"type":"screen_changed"}` — tap and declare intent
 2. Delta shows spinner, expectation not met → `wait_for_change expect={"type":"screen_changed"}` — server waits until the real screen arrives
-3. Or: you were slow to act, payment already completed → your next call gets the confirmation instantly via background awareness. No wait needed.
+3. Or: you were slow to act, payment already completed → your next call gets the confirmation instantly via while-idle awareness. No wait needed.
 
 ## Expectations
 

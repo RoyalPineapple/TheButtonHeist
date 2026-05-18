@@ -33,7 +33,7 @@ struct ButtonHeistMCPServer {
         coordinates. The core loop is: `get_interface` to read the app accessibility state, \
         then `activate`/`type_text`/`scroll`/`gesture` to act with an `expect` attached. \
         Every response carries a \
-        `[background: ...]` block describing what changed since your last call — read it \
+        `[while_idle: ...]` block describing what changed since your last call — read it \
         before deciding to re-fetch. When an action produces a transient state (spinner, \
         loading overlay), call `wait_for_change` with the same expectation to ride through \
         intermediate states. Use `run_batch` for multi-step sequences with per-step expects. \
@@ -125,7 +125,7 @@ struct ButtonHeistMCPServer {
             var lines: [String] = []
             switch backgroundDelta {
             case .screenChanged(let payload):
-                lines.append("[background: screen changed (\(payload.elementCount) elements)]")
+                lines.append("[while_idle: screen changed (\(payload.elementCount) elements)]")
                 for (index, element) in payload.newInterface.elements.enumerated() {
                     lines.append("  [\(index)] \(Self.compactBackgroundElement(element))")
                 }
@@ -139,7 +139,7 @@ struct ButtonHeistMCPServer {
                 if !edits.removed.isEmpty { parts.append("-\(edits.removed.count)") }
                 if !edits.updated.isEmpty { parts.append("~\(edits.updated.count)") }
                 if !transient.isEmpty { parts.append("+-\(transient.count)") }
-                lines.append("[background: elements changed \(parts.joined(separator: " ")) (\(payload.elementCount) total)]")
+                lines.append("[while_idle: elements changed \(parts.joined(separator: " ")) (\(payload.elementCount) total)]")
                 for element in edits.added {
                     lines.append("  + \(element.heistId) \"\(element.label ?? "")\"")
                 }
@@ -150,7 +150,7 @@ struct ButtonHeistMCPServer {
                     lines.append("  +- \(Self.compactBackgroundElement(element))")
                 }
             case .noChange(let payload):
-                lines.append("[background: no net change (\(payload.elementCount) elements)]")
+                lines.append("[while_idle: no net change (\(payload.elementCount) elements)]")
                 for element in transient {
                     lines.append("  +- \(Self.compactBackgroundElement(element))")
                 }
