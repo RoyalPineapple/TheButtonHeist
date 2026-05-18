@@ -71,15 +71,15 @@ final class AccessibilityTraceHistoryTests: XCTestCase {
 
         XCTAssertEqual(history.captures.count, 1)
         XCTAssertEqual(history.captures[0].hash, deliveredRef.hash)
-        XCTAssertEqual(history.captures[0].sequence, 1)
+        XCTAssertEqual(history.captures[0].sequence, deliveredRef.sequence)
         XCTAssertNil(history.captures[0].parentHash)
-        XCTAssertNil(history.capture(ref: deliveredRef))
+        XCTAssertEqual(history.capture(ref: deliveredRef), history.captures[0])
 
         let baselineRef = try XCTUnwrap(history.latestRef)
         let latestRef = history.append(interface: makeInterface(label: "Checkout"))
         let delta = try XCTUnwrap(history.delta(from: baselineRef, to: latestRef))
 
-        XCTAssertEqual(history.captures.map(\.sequence), [1, 2])
+        XCTAssertEqual(history.captures.map(\.sequence), [deliveredRef.sequence, latestRef.sequence])
         XCTAssertEqual(delta, history.trace(from: baselineRef, to: latestRef)?.captureEndpointDelta)
         XCTAssertEqual(delta.captureEdge?.before.hash, baselineRef.hash)
         XCTAssertEqual(delta.captureEdge?.after.hash, latestRef.hash)
@@ -95,11 +95,11 @@ final class AccessibilityTraceHistoryTests: XCTestCase {
 
         XCTAssertEqual(history.captures.count, 2)
         XCTAssertEqual(history.captures.map(\.hash), [deliveredRef.hash, pendingRef.hash])
-        XCTAssertEqual(history.captures.map(\.sequence), [1, 2])
+        XCTAssertEqual(history.captures.map(\.sequence), [deliveredRef.sequence, pendingRef.sequence])
         XCTAssertNil(history.captures[0].parentHash)
         XCTAssertEqual(history.captures[1].parentHash, history.captures[0].hash)
-        XCTAssertNil(history.capture(ref: deliveredRef))
-        XCTAssertNil(history.capture(ref: pendingRef))
+        XCTAssertEqual(history.capture(ref: deliveredRef), history.captures[0])
+        XCTAssertEqual(history.capture(ref: pendingRef), history.captures[1])
         XCTAssertEqual(history.latestRef, AccessibilityTrace.CaptureRef(capture: history.captures[1]))
     }
 
@@ -112,9 +112,9 @@ final class AccessibilityTraceHistoryTests: XCTestCase {
 
         XCTAssertEqual(history.captures.count, 1)
         XCTAssertEqual(history.captures[0].hash, latestRef.hash)
-        XCTAssertEqual(history.captures[0].sequence, 1)
+        XCTAssertEqual(history.captures[0].sequence, latestRef.sequence)
         XCTAssertNil(history.captures[0].parentHash)
-        XCTAssertNil(history.capture(ref: latestRef))
+        XCTAssertEqual(history.capture(ref: latestRef), history.captures[0])
     }
 
     func testPersistForSessionRetainsFullChainAfterDeliveryMarkers() {
@@ -131,6 +131,24 @@ final class AccessibilityTraceHistoryTests: XCTestCase {
         XCTAssertEqual(history.latestRef, latestRef)
         XCTAssertEqual(history.captures[1].parentHash, history.captures[0].hash)
         XCTAssertEqual(history.captures[2].parentHash, history.captures[1].hash)
+    }
+
+    func testPruneRetainingRefsRelinksRetainedCapturesWithoutInvalidatingRefs() {
+        var history = AccessibilityTrace.History(retention: .dropAfterDelivery)
+        _ = history.append(interface: makeInterface(label: "Home"))
+        let retainedRef = history.append(interface: makeInterface(label: "Menu"))
+        let droppedRef = history.append(interface: makeInterface(label: "Review"))
+        let latestRef = history.append(interface: makeInterface(label: "Checkout"))
+
+        history.prune(retaining: [retainedRef])
+
+        XCTAssertEqual(history.captures.map(\.hash), [retainedRef.hash, latestRef.hash])
+        XCTAssertEqual(history.captures.map(\.sequence), [retainedRef.sequence, latestRef.sequence])
+        XCTAssertNil(history.captures[0].parentHash)
+        XCTAssertEqual(history.captures[1].parentHash, history.captures[0].hash)
+        XCTAssertEqual(history.capture(ref: retainedRef), history.captures[0])
+        XCTAssertNil(history.capture(ref: droppedRef))
+        XCTAssertEqual(history.capture(ref: latestRef), history.captures[1])
     }
 
     func testResetClearsEverything() {

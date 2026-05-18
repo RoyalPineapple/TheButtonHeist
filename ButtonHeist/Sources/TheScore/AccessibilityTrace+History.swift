@@ -158,7 +158,7 @@ public extension AccessibilityTrace {
                 keepStartIndex = captures.index(before: captures.endIndex)
             }
 
-            captures = Self.normalized(Array(captures[keepStartIndex...]))
+            captures = Self.relinked(Array(captures[keepStartIndex...]))
         }
 
         public mutating func markDelivered(
@@ -178,7 +178,7 @@ public extension AccessibilityTrace {
             if let latestRef {
                 refs.insert(latestRef)
             }
-            captures.removeAll { !refs.contains(AccessibilityTrace.CaptureRef(capture: $0)) }
+            captures = Self.relinked(captures.filter { refs.contains(AccessibilityTrace.CaptureRef(capture: $0)) })
         }
 
         public mutating func reset() {
@@ -197,10 +197,22 @@ public extension AccessibilityTrace {
             (captures.map(\.sequence).max() ?? 0) + 1
         }
 
-        private static func normalized(
+        private static func relinked(
             _ captures: [AccessibilityTrace.Capture]
         ) -> [AccessibilityTrace.Capture] {
-            AccessibilityTrace(captures: captures).captures
+            var previousHash: String?
+            return captures.map { capture in
+                let linked = AccessibilityTrace.Capture(
+                    sequence: capture.sequence,
+                    interface: capture.interface,
+                    parentHash: previousHash,
+                    context: capture.context,
+                    transition: capture.transition,
+                    hash: capture.hash
+                )
+                previousHash = linked.hash
+                return linked
+            }
         }
     }
 }
