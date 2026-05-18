@@ -43,12 +43,16 @@ actor TheStakeout {
         let maxDuration: TimeInterval
         let inactivityTimeout: TimeInterval
         let startTime: Date
+        let requestedConfig: RecordingConfigurationEvidence
+        let appliedConfig: RecordingConfigurationEvidence
+        let caps: [RecordedInputCap]
         var captureTimer: Task<Void, Never>
         var inactivityCheckTask: Task<Void, Never>
         var frameCount: Int
         var lastFrameTime: CMTime
         var lastActivityTime: Date
         var interactionLog: [InteractionEvent]
+        var droppedInteractionCount: Int
         var didLogCapWarning: Bool
     }
 
@@ -62,6 +66,10 @@ actor TheStakeout {
         let fps: Int
         let screenBounds: CGRect
         let interactionLog: [InteractionEvent]
+        let requestedConfig: RecordingConfigurationEvidence
+        let appliedConfig: RecordingConfigurationEvidence
+        let caps: [RecordedInputCap]
+        let droppedInteractionCount: Int
     }
 
     /// Screen metrics captured on MainActor and passed into the actor at startRecording.
@@ -70,6 +78,19 @@ actor TheStakeout {
     struct ScreenInfo: Sendable {
         let bounds: CGRect
         let scale: CGFloat
+    }
+
+    private struct RecordingSetup {
+        let requestedConfig: RecordingConfigurationEvidence
+        let appliedConfig: RecordingConfigurationEvidence
+        let caps: [RecordedInputCap]
+        let fps: Int
+        let maxDuration: TimeInterval
+        let inactivityTimeout: TimeInterval
+        let effectiveScale: CGFloat
+        let screenBounds: CGRect
+        let evenWidth: Int
+        let evenHeight: Int
     }
 
     enum TheStakeoutError: Error, LocalizedError {
@@ -101,6 +122,8 @@ actor TheStakeout {
     /// Maximum number of interaction events to record. Beyond this, events are silently dropped
     /// and the log is capped to prevent unbounded memory growth in long recordings.
     private static let maxInteractionCount = 500
+    /// Raw MP4 byte cap. Base64 expansion keeps this under the 10MB wire buffer.
+    private static let maxVideoDataBytes = 7_000_000
 
     var isRecording: Bool {
         if case .recording = stakeoutPhase { return true }
@@ -132,6 +155,146 @@ actor TheStakeout {
         return Date().timeIntervalSince(session.startTime)
     }
 
+    private static func clampInt(
+        name: String,
+        requested: Int?,
+        defaultValue: Int,
+        range: ClosedRange<Int>,
+        reason: String,
+        caps: inout [RecordedInputCap]
+    ) -> Int {
+        let value = requested ?? defaultValue
+        let applied = min(max(value, range.lowerBound), range.upperBound)
+        if let requested, requested != applied {
+            caps.append(RecordedInputCap(
+                name: name,
+                requested: .int(requested),
+                applied: .int(applied),
+                minimum: .int(range.lowerBound),
+                maximum: .int(range.upperBound),
+                reason: reason
+            ))
+        }
+        return applied
+    }
+
+    private static func clampDouble(
+        name: String,
+        requested: Double?,
+        defaultValue: Double,
+        minimum: Double,
+        maximum: Double?,
+        reason: String,
+        caps: inout [RecordedInputCap]
+    ) -> Double {
+        let value = requested ?? defaultValue
+        var applied = max(value, minimum)
+        if let maximum {
+            applied = min(applied, maximum)
+        }
+        if let requested, requested != applied {
+            caps.append(RecordedInputCap(
+                name: name,
+                requested: .double(requested),
+                applied: .double(applied),
+                minimum: .double(minimum),
+                maximum: maximum.map { .double($0) },
+                reason: reason
+            ))
+        }
+        return applied
+    }
+
+    private static func makeRecordingSetup(config: RecordingConfig, screen: ScreenInfo) -> RecordingSetup {
+        let requestedConfig = RecordingConfigurationEvidence(config)
+        var caps: [RecordedInputCap] = []
+
+        let fps = clampInt(
+            name: "fps",
+            requested: config.fps,
+            defaultValue: 8,
+            range: 1...15,
+            reason: "recording fps is capped to the encoder-supported range",
+            caps: &caps
+        )
+        let timing = resolvedStakeoutTiming(for: config)
+        let inactivityTimeout = timing.inactivityTimeout
+        let maxDuration = timing.maxDuration
+        if let requested = config.inactivityTimeout, requested != inactivityTimeout {
+            caps.append(RecordedInputCap(
+                name: "inactivityTimeout",
+                requested: .double(requested),
+                applied: .double(inactivityTimeout),
+                minimum: .double(1.0),
+                reason: "recording inactivity timeout must be at least 1 second"
+            ))
+        }
+        if let requested = config.maxDuration, requested != maxDuration {
+            caps.append(RecordedInputCap(
+                name: "maxDuration",
+                requested: .double(requested),
+                applied: .double(maxDuration),
+                minimum: .double(1.0),
+                reason: "recording max duration must be at least 1 second"
+            ))
+        }
+
+        let nativeWidth = screen.bounds.width * screen.scale
+        let nativeHeight = screen.bounds.height * screen.scale
+        let effectiveScale: CGFloat = if let requestedScale = config.scale {
+            CGFloat(clampDouble(
+                name: "scale",
+                requested: requestedScale,
+                defaultValue: Double(1.0 / screen.scale),
+                minimum: 0.25,
+                maximum: 1.0,
+                reason: "recording scale is capped to the supported output range",
+                caps: &caps
+            ))
+        } else {
+            1.0 / screen.scale
+        }
+        let width = Int(nativeWidth * effectiveScale)
+        let height = Int(nativeHeight * effectiveScale)
+        let evenWidth = width % 2 == 0 ? width : width + 1
+        let evenHeight = height % 2 == 0 ? height : height + 1
+        if evenWidth != width {
+            caps.append(RecordedInputCap(
+                name: "width",
+                requested: .int(width),
+                applied: .int(evenWidth),
+                reason: "H.264 output dimensions must be even"
+            ))
+        }
+        if evenHeight != height {
+            caps.append(RecordedInputCap(
+                name: "height",
+                requested: .int(height),
+                applied: .int(evenHeight),
+                reason: "H.264 output dimensions must be even"
+            ))
+        }
+
+        let appliedConfig = RecordingConfigurationEvidence(
+            fps: fps,
+            scale: Double(effectiveScale),
+            inactivityTimeout: inactivityTimeout,
+            maxDuration: maxDuration
+        )
+        return RecordingSetup(
+            requestedConfig: requestedConfig,
+            appliedConfig: appliedConfig,
+            caps: caps,
+            fps: fps,
+            maxDuration: maxDuration,
+            inactivityTimeout: inactivityTimeout,
+            effectiveScale: effectiveScale,
+            screenBounds: CGRect(x: 0, y: 0, width: evenWidth, height: evenHeight),
+            evenWidth: evenWidth,
+            evenHeight: evenHeight
+        )
+    }
+
     // MARK: - Init
 
     init(captureFrame: @escaping @MainActor @Sendable () async -> UIImage?) {
@@ -149,26 +312,7 @@ actor TheStakeout {
             throw TheStakeoutError.alreadyRecording
         }
 
-        // Apply config with clamping
-        let fps = max(1, min(15, config.fps ?? 8))
-        let timing = resolvedStakeoutTiming(for: config)
-        // Determine output dimensions from screen.
-        // Default: 1x point resolution (native pixels / screen scale).
-        // If caller provides scale, use that fraction of native resolution.
-        let nativeWidth = screen.bounds.width * screen.scale
-        let nativeHeight = screen.bounds.height * screen.scale
-        let effectiveScale: CGFloat = if let requestedScale = config.scale {
-            max(0.25, min(1.0, CGFloat(requestedScale)))
-        } else {
-            1.0 / screen.scale
-        }
-        let width = Int(nativeWidth * effectiveScale)
-        let height = Int(nativeHeight * effectiveScale)
-        // H.264 requires even pixel dimensions — the codec operates on 16x16 macroblocks,
-        // and AVAssetWriter will reject odd-dimensioned buffers. Round up to the next even number.
-        let evenWidth = width % 2 == 0 ? width : width + 1
-        let evenHeight = height % 2 == 0 ? height : height + 1
-        let screenBounds = CGRect(x: 0, y: 0, width: evenWidth, height: evenHeight)
+        let setup = Self.makeRecordingSetup(config: config, screen: screen)
 
         // Set up temp file
         let tempDir = NSTemporaryDirectory()
@@ -180,11 +324,11 @@ actor TheStakeout {
 
         let videoSettings: [String: Any] = [
             AVVideoCodecKey: AVVideoCodecType.h264,
-            AVVideoWidthKey: evenWidth,
-            AVVideoHeightKey: evenHeight,
+            AVVideoWidthKey: setup.evenWidth,
+            AVVideoHeightKey: setup.evenHeight,
             AVVideoCompressionPropertiesKey: [
-                AVVideoAverageBitRateKey: evenWidth * evenHeight * 2, // ~2 bits/pixel
-                AVVideoMaxKeyFrameIntervalKey: fps * 2, // Keyframe every 2 seconds
+                AVVideoAverageBitRateKey: setup.evenWidth * setup.evenHeight * 2, // ~2 bits/pixel
+                AVVideoMaxKeyFrameIntervalKey: setup.fps * 2, // Keyframe every 2 seconds
                 AVVideoProfileLevelKey: AVVideoProfileLevelH264BaselineAutoLevel,
             ]
         ]
@@ -194,8 +338,8 @@ actor TheStakeout {
 
         let sourcePixelBufferAttributes: [String: Any] = [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
-            kCVPixelBufferWidthKey as String: evenWidth,
-            kCVPixelBufferHeightKey as String: evenHeight,
+            kCVPixelBufferWidthKey as String: setup.evenWidth,
+            kCVPixelBufferHeightKey as String: setup.evenHeight,
         ]
         let adaptor = AVAssetWriterInputPixelBufferAdaptor(
             assetWriterInput: input,
@@ -215,23 +359,29 @@ actor TheStakeout {
             videoInput: input,
             pixelBufferAdaptor: adaptor,
             outputURL: url,
-            screenBounds: screenBounds,
-            fps: fps,
-            maxDuration: timing.maxDuration,
-            inactivityTimeout: timing.inactivityTimeout,
+            screenBounds: setup.screenBounds,
+            fps: setup.fps,
+            maxDuration: setup.maxDuration,
+            inactivityTimeout: setup.inactivityTimeout,
             startTime: now,
+            requestedConfig: setup.requestedConfig,
+            appliedConfig: setup.appliedConfig,
+            caps: setup.caps,
             captureTimer: Task { },
             inactivityCheckTask: Task { },
             frameCount: 0,
             lastFrameTime: .zero,
             lastActivityTime: now,
             interactionLog: [],
+            droppedInteractionCount: 0,
             didLogCapWarning: false
         )
 
         stakeoutPhase = .recording(session)
 
-        logger.info("Recording started: \(evenWidth)x\(evenHeight) @ \(fps)fps, effectiveScale=\(effectiveScale)")
+        logger.info(
+            "Recording started: \(setup.evenWidth)x\(setup.evenHeight) @ \(setup.fps)fps, effectiveScale=\(setup.effectiveScale)"
+        )
 
         // Start frame capture timer and inactivity monitor — these mutate the session
         // via stakeoutPhase, so they must be started after the state transition.
@@ -256,7 +406,11 @@ actor TheStakeout {
             frameCount: session.frameCount,
             fps: session.fps,
             screenBounds: session.screenBounds,
-            interactionLog: session.interactionLog
+            interactionLog: session.interactionLog,
+            requestedConfig: session.requestedConfig,
+            appliedConfig: session.appliedConfig,
+            caps: session.caps,
+            droppedInteractionCount: session.droppedInteractionCount
         )
         stakeoutPhase = .finalizing(finalizingSession)
 
@@ -289,11 +443,12 @@ actor TheStakeout {
     func recordInteraction(event: InteractionEvent) {
         guard case .recording(var session) = stakeoutPhase else { return }
         guard session.interactionLog.count < Self.maxInteractionCount else {
+            session.droppedInteractionCount += 1
             if !session.didLogCapWarning {
                 session.didLogCapWarning = true
-                stakeoutPhase = .recording(session)
                 logger.warning("Interaction log capped at \(Self.maxInteractionCount) events; further events will be dropped")
             }
+            stakeoutPhase = .recording(session)
             return
         }
         session.interactionLog.append(event)
@@ -357,7 +512,7 @@ actor TheStakeout {
             logger.warning("Could not read recording file size, skipping size check: \(error)")
             fileSize = nil
         }
-        if let fileSize, fileSize > 7_000_000 {
+        if let fileSize, fileSize > Self.maxVideoDataBytes {
             logger.warning("File size limit reached: \(fileSize) bytes")
             await stopRecording(reason: .fileSizeLimit)
             return
@@ -415,7 +570,7 @@ actor TheStakeout {
     //
     // Inactivity is tracked via `lastActivityTime`, updated by:
     //   - `noteActivity()` — called on each incoming client command
-    //   - `noteScreenChange()` — called when TheStash detects a hierarchy hash change
+    //   - `noteScreenChange()` — called by TheGetaway after a settled hierarchy change
     //
     // Note: screen hashing operates on the accessibility hierarchy, not pixels.
     // Subtle pixel-only animations (e.g. spinner rotation) do NOT count as activity,
@@ -527,7 +682,15 @@ actor TheStakeout {
             startTime: session.startTime,
             endTime: endTime,
             stopReason: reason,
-            interactionLog: session.interactionLog.isEmpty ? nil : session.interactionLog
+            interactionLog: session.interactionLog.isEmpty ? nil : session.interactionLog,
+            evidence: RecordingPayloadEvidence(
+                requestedConfig: session.requestedConfig,
+                appliedConfig: session.appliedConfig,
+                caps: session.caps,
+                interactionLogLimit: Self.maxInteractionCount,
+                droppedInteractionCount: session.droppedInteractionCount == 0 ? nil : session.droppedInteractionCount,
+                fileSizeLimitBytes: Self.maxVideoDataBytes
+            )
         )
 
         logger.info("Recording complete: \(session.frameCount) frames, \(String(format: "%.1f", duration))s, \(videoData.count) bytes")

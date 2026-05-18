@@ -206,6 +206,49 @@ final class TheStakeoutTests: XCTestCase {
         XCTAssertEqual(count, 500)
     }
 
+    func testRecordingPayloadEvidenceIncludesCapsAndDroppedInteractions() async throws {
+        let stakeout = makeStakeout()
+        let completionExpectation = XCTestExpectation(description: "Recording completed")
+        let completionResult = Box<Result<RecordingPayload, Error>?>(nil)
+        await stakeout.setOnRecordingComplete { result in
+            completionResult.value = result
+            completionExpectation.fulfill()
+        }
+
+        try await stakeout.startRecording(
+            config: RecordingConfig(
+                fps: 30,
+                scale: 2.0,
+                inactivityTimeout: 0.25,
+                maxDuration: 0.5
+            ),
+            screen: Self.testScreen
+        )
+
+        let event = InteractionEvent(
+            timestamp: 1.0,
+            command: .requestInterface,
+            result: ActionResult(success: true, method: .activate)
+        )
+        for _ in 0..<503 {
+            await stakeout.recordInteraction(event: event)
+        }
+
+        await stakeout.stopRecording(reason: .manual)
+        await fulfillment(of: [completionExpectation], timeout: 5.0)
+
+        guard case .success(let payload)? = completionResult.value else {
+            return XCTFail("Expected successful recording, got \(String(describing: completionResult.value))")
+        }
+
+        XCTAssertEqual(payload.evidence?.requestedConfig?.fps, 30)
+        XCTAssertEqual(payload.evidence?.appliedConfig?.fps, 15)
+        XCTAssertEqual(payload.evidence?.interactionLogLimit, 500)
+        XCTAssertEqual(payload.evidence?.droppedInteractionCount, 3)
+        XCTAssertEqual(payload.evidence?.fileSizeLimitBytes, 7_000_000)
+        XCTAssertEqual(payload.evidence?.caps?.map(\.name).sorted(), ["fps", "inactivityTimeout", "maxDuration", "scale"])
+    }
+
     func testRecordInteractionWhenIdleIsNoOp() async {
         let stakeout = makeStakeout()
 
