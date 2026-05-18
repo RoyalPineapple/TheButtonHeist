@@ -248,10 +248,22 @@ public struct RecordedMetadata: Codable, Sendable, Equatable {
     public let caps: [RecordedInputCap]?
     /// Accessibility trace observed while recording.
     public let accessibilityTrace: AccessibilityTrace?
-    /// Compact accessibility delta observed while recording.
+    /// Compact accessibility delta observed while recording. When
+    /// `accessibilityTrace` has an endpoint delta, this is its projection.
     public let accessibilityDelta: AccessibilityTrace.Delta?
     /// Expectation evidence observed while recording. Playback ignores this.
     public let expectation: ExpectationResult?
+
+    private enum CodingKeys: String, CodingKey {
+        case heistId
+        case frame
+        case coordinateOnly
+        case unsupportedArguments
+        case caps
+        case accessibilityTrace
+        case accessibilityDelta
+        case expectation
+    }
 
     public init(
         heistId: String? = nil,
@@ -271,6 +283,20 @@ public struct RecordedMetadata: Codable, Sendable, Equatable {
         self.accessibilityTrace = accessibilityTrace
         self.accessibilityDelta = accessibilityTrace?.captureEndpointDelta ?? accessibilityDelta
         self.expectation = expectation
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            heistId: try container.decodeIfPresent(String.self, forKey: .heistId),
+            frame: try container.decodeIfPresent(RecordedFrame.self, forKey: .frame),
+            coordinateOnly: try container.decodeIfPresent(Bool.self, forKey: .coordinateOnly),
+            unsupportedArguments: try container.decodeIfPresent([RecordedUnsupportedInput].self, forKey: .unsupportedArguments),
+            caps: try container.decodeIfPresent([RecordedInputCap].self, forKey: .caps),
+            accessibilityTrace: try container.decodeIfPresent(AccessibilityTrace.self, forKey: .accessibilityTrace),
+            accessibilityDelta: try container.decodeIfPresent(AccessibilityTrace.Delta.self, forKey: .accessibilityDelta),
+            expectation: try container.decodeIfPresent(ExpectationResult.self, forKey: .expectation)
+        )
     }
 }
 

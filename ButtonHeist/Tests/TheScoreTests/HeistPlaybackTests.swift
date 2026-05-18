@@ -140,6 +140,43 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertEqual(decoded.recorded?.expectation?.met, true)
     }
 
+    func testRecordedMetadataProjectsDeltaFromTraceOverLegacyDelta() throws {
+        let beforeInterface = Interface(
+            timestamp: Date(timeIntervalSince1970: 0),
+            tree: [.element(makeElement(heistId: "status", label: "Old"))]
+        )
+        let afterInterface = Interface(
+            timestamp: Date(timeIntervalSince1970: 0),
+            tree: [.element(makeElement(heistId: "status", label: "New"))]
+        )
+        let beforeCapture = AccessibilityTrace.Capture(sequence: 1, interface: beforeInterface)
+        let afterCapture = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: afterInterface,
+            parentHash: beforeCapture.hash
+        )
+        let trace = AccessibilityTrace(captures: [beforeCapture, afterCapture])
+        let conflictingDelta: AccessibilityTrace.Delta = .screenChanged(.init(
+            elementCount: 0,
+            newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
+        ))
+
+        let metadata = RecordedMetadata(
+            accessibilityTrace: trace,
+            accessibilityDelta: conflictingDelta
+        )
+        let decoded = try JSONDecoder().decode(
+            RecordedMetadata.self,
+            from: try JSONEncoder().encode(metadata)
+        )
+
+        XCTAssertEqual(metadata.accessibilityDelta, trace.captureEndpointDelta)
+        XCTAssertEqual(decoded.accessibilityDelta, trace.captureEndpointDelta)
+        XCTAssertNotEqual(decoded.accessibilityDelta, conflictingDelta)
+        XCTAssertEqual(decoded.accessibilityDelta?.captureEdge?.before.hash, trace.captures.first?.hash)
+        XCTAssertEqual(decoded.accessibilityDelta?.captureEdge?.after.hash, trace.captures.last?.hash)
+    }
+
     func testCurrentVersionIsTwo() {
         XCTAssertEqual(HeistPlayback.currentVersion, 2)
     }

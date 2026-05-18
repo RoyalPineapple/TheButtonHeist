@@ -2335,6 +2335,55 @@ final class TheFenceTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testWaitForChangeBackgroundShortCircuitUsesTraceTransitionDelta() async throws {
+        let fence = TheFence(configuration: .init())
+        let interface = makeReceiptTestInterface([
+            makeReceiptTestElement(heistId: "settings", label: "Settings"),
+        ])
+        let beforeCapture = AccessibilityTrace.Capture(
+            sequence: 1,
+            interface: interface,
+            context: AccessibilityTrace.Context(screenId: "same")
+        )
+        let afterCapture = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: interface,
+            parentHash: beforeCapture.hash,
+            context: AccessibilityTrace.Context(screenId: "same"),
+            transition: AccessibilityTrace.Transition(screenChangeReason: "primaryHeaderChanged")
+        )
+        let trace = AccessibilityTrace(captures: [beforeCapture, afterCapture])
+        XCTAssertEqual(trace.captureEndpointDelta?.kindRawValue, "screenChanged")
+        XCTAssertEqual(
+            AccessibilityTrace.Delta.between(beforeCapture.interface, afterCapture.interface).kindRawValue,
+            "noChange",
+            "This fixture only proves the contract if interface-only recomputation would disagree."
+        )
+        fence.handoff.onBackgroundAccessibilityTrace?(trace)
+
+        let response = try await fence.execute(request: [
+            "command": "wait_for_change",
+            "expect": ["type": "screen_changed"],
+        ])
+
+        guard case .action(let result, let expectation) = response else {
+            return XCTFail("Expected action response, got \(response)")
+        }
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(result.accessibilityTrace, trace)
+        XCTAssertEqual(result.accessibilityDelta, trace.captureEndpointDelta)
+        XCTAssertEqual(result.effectiveAccessibilityDelta, trace.captureEndpointDelta)
+        XCTAssertEqual(expectation?.met, true)
+        guard case .screenChanged(let payload)? = result.accessibilityDelta else {
+            return XCTFail("Expected trace transition to project screenChanged, got \(String(describing: result.accessibilityDelta))")
+        }
+        XCTAssertEqual(payload.captureEdge?.before.hash, trace.captures.first?.hash)
+        XCTAssertEqual(payload.captureEdge?.after.hash, trace.captures.last?.hash)
+        XCTAssertEqual(payload.newInterface, interface)
+        XCTAssertNil(fence.drainBackgroundAccessibilityTrace())
+    }
+
+    @ButtonHeistActor
     func testQueuedBackgroundExpectationStillDispatchesAction() async throws {
         let (fence, mockConn) = makeConnectedFence()
         mockConn.autoResponse = { message in

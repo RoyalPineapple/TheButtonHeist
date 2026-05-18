@@ -42,7 +42,7 @@ CLI/MCP
             → TheStash.activate(element)       ← try accessibilityActivate() on the live object
             ↓ returns false?
             → TheSafecracker.tap(at: point)    ← fallback: UITouch + IOHIDEvent + sendEvent
-            → actionResultWithDelta(before:)   ← settle, re-parse, compute delta
+            → actionResultWithDelta(before:)   ← settle, capture trace, project delta
           ← ActionResult
         → TheGetaway.sendMessage(.actionResult) ← encode ResponseEnvelope, respond
 
