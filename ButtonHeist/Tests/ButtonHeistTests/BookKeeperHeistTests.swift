@@ -80,7 +80,7 @@ final class BookKeeperHeistTests: XCTestCase {
                 settled: true,
                 settleTimeMs: 12
             ),
-            interfaceCache: [:]
+            targetCapture: nil
         )
         let script = try bookKeeper.stopHeistRecording()
 
@@ -100,15 +100,11 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testRecordHeistEvidenceDerivesMatcherFromTraceCapture() async throws {
+    func testRecordHeistEvidenceDerivesMatcherFromTargetCaptureDuringScreenChange() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
 
-        let fallbackCache = [
-            "save": makeElement(heistId: "save", label: "Save", traits: [.button]),
-            "duplicate": makeElement(heistId: "duplicate", label: "Save", traits: [.button]),
-        ]
         let preActionInterface = Interface(
             timestamp: Date(timeIntervalSince1970: 0),
             tree: [
@@ -133,40 +129,39 @@ final class BookKeeperHeistTests: XCTestCase {
             ]
         )
         let preActionCapture = AccessibilityTrace.Capture(sequence: 1, interface: preActionInterface)
+        let postActionCapture = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: postActionInterface,
+            parentHash: preActionCapture.hash,
+            transition: AccessibilityTrace.Transition(screenChangeReason: "test navigation")
+        )
 
         try recordHeistEvidence(bookKeeper, command: .activate,
-            args: ["command": "activate", "heistId": "save"],
+            args: ["command": "activate", "heistId": "save", "label": "Stale Save"],
             actionResult: ActionResult(
                 success: true,
                 method: .activate,
                 accessibilityTrace: AccessibilityTrace(captures: [
                     preActionCapture,
-                    AccessibilityTrace.Capture(
-                        sequence: 2,
-                        interface: postActionInterface,
-                        parentHash: preActionCapture.hash
-                    ),
+                    postActionCapture,
                 ])
             ),
-            interfaceCache: fallbackCache
+            targetCapture: preActionCapture
         )
 
         let script = try bookKeeper.stopHeistRecording()
         XCTAssertEqual(script.steps[0].target?.identifier, "primary.save")
         XCTAssertNil(script.steps[0].ordinal)
         XCTAssertEqual(script.steps[0].recorded?.heistId, "save")
+        XCTAssertEqual(script.steps[0].recorded?.accessibilityDelta?.kindRawValue, "screenChanged")
     }
 
     @ButtonHeistActor
-    func testRecordHeistEvidenceDoesNotDeriveMatcherFromPostActionOnlyTrace() async throws {
+    func testRecordHeistEvidenceDoesNotInventMatcherWhenHeistIdMissingFromTargetCapture() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
 
-        let fallbackCache = [
-            "save": makeElement(heistId: "save", label: "Save", identifier: "fallback.save", traits: [.button]),
-            "duplicate": makeElement(heistId: "duplicate", label: "Save", traits: [.button]),
-        ]
         let preActionInterface = Interface(
             timestamp: Date(timeIntervalSince1970: 0),
             tree: [.element(makeElement(heistId: "cancel", label: "Cancel", traits: [.button]))]
@@ -198,12 +193,13 @@ final class BookKeeperHeistTests: XCTestCase {
                     ),
                 ])
             ),
-            interfaceCache: fallbackCache
+            targetCapture: preActionCapture
         )
 
         let script = try bookKeeper.stopHeistRecording()
-        XCTAssertEqual(script.steps[0].target?.identifier, "fallback.save")
+        XCTAssertNil(script.steps[0].target)
         XCTAssertNil(script.steps[0].ordinal)
+        XCTAssertNil(script.steps[0].recorded?.heistId)
     }
 
     @ButtonHeistActor
@@ -211,7 +207,7 @@ final class BookKeeperHeistTests: XCTestCase {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
-        try recordHeistEvidence(bookKeeper, command: .activate, args: ["command": "activate", "label": "Go"], interfaceCache: [:])
+        try recordHeistEvidence(bookKeeper, command: .activate, args: ["command": "activate", "label": "Go"], targetCapture: nil)
         _ = try bookKeeper.stopHeistRecording()
         try bookKeeper.startHeistRecording(app: "com.example.second")
         XCTAssertTrue(bookKeeper.isRecordingHeist)
@@ -235,10 +231,10 @@ final class BookKeeperHeistTests: XCTestCase {
             if command == .stopHeist {
                 args["output"] = "ignored.heist"
             }
-            try recordHeistEvidence(bookKeeper, command: command, args: args, interfaceCache: [:])
+            try recordHeistEvidence(bookKeeper, command: command, args: args, targetCapture: nil)
         }
 
-        try recordHeistEvidence(bookKeeper, command: .activate, args: ["command": "activate", "label": "Go"], interfaceCache: [:])
+        try recordHeistEvidence(bookKeeper, command: .activate, args: ["command": "activate", "label": "Go"], targetCapture: nil)
         let script = try bookKeeper.stopHeistRecording()
         XCTAssertEqual(script.steps.count, 1)
         XCTAssertEqual(script.steps[0].command, "activate")
@@ -248,7 +244,7 @@ final class BookKeeperHeistTests: XCTestCase {
     func testRecordingIgnoredWhenNotRecording() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
-        try recordHeistEvidence(bookKeeper, command: .activate, args: ["command": "activate", "label": "Go"], interfaceCache: [:])
+        try recordHeistEvidence(bookKeeper, command: .activate, args: ["command": "activate", "label": "Go"], targetCapture: nil)
         XCTAssertFalse(bookKeeper.isRecordingHeist)
     }
 
@@ -263,7 +259,7 @@ final class BookKeeperHeistTests: XCTestCase {
                 "label": "Submit",
                 "traits": ["button"],
             ],
-            interfaceCache: [:]
+            targetCapture: nil
         )
         let script = try bookKeeper.stopHeistRecording()
 
@@ -282,7 +278,7 @@ final class BookKeeperHeistTests: XCTestCase {
                 "text": "hello world",
                 "timeout": 30,
             ],
-            interfaceCache: [:]
+            targetCapture: nil
         )
         let script = try bookKeeper.stopHeistRecording()
 
@@ -311,7 +307,7 @@ final class BookKeeperHeistTests: XCTestCase {
                     "required": true,
                 ],
             ],
-            interfaceCache: [:]
+            targetCapture: nil
         )
         let script = try bookKeeper.stopHeistRecording()
 
@@ -347,12 +343,16 @@ final class BookKeeperHeistTests: XCTestCase {
         try bookKeeper.startHeistRecording(app: "com.example.app")
 
         let element = makeElement(heistId: "button_submit", label: "Submit", traits: [.button])
+        let capture = AccessibilityTrace.Capture(
+            sequence: 1,
+            interface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [.element(element)])
+        )
         try recordHeistEvidence(bookKeeper, command: .activate,
             args: [
                 "command": "activate",
                 "heistId": "button_submit",
             ],
-            interfaceCache: ["button_submit": element]
+            targetCapture: capture
         )
         let script = try bookKeeper.stopHeistRecording()
 
@@ -369,7 +369,17 @@ final class BookKeeperHeistTests: XCTestCase {
 
         let first = makeElement(heistId: "anonymous_1")
         let second = makeElement(heistId: "anonymous_2")
-        recordHeistEvidence(bookKeeper, command: .activate,
+        let capture = AccessibilityTrace.Capture(
+            sequence: 1,
+            interface: Interface(
+                timestamp: Date(timeIntervalSince1970: 0),
+                tree: [
+                    .element(first),
+                    .element(second),
+                ]
+            )
+        )
+        try recordHeistEvidence(bookKeeper, command: .activate,
             args: [
                 "command": "activate",
                 "heistId": "anonymous_2",
@@ -377,15 +387,9 @@ final class BookKeeperHeistTests: XCTestCase {
             actionResult: ActionResult(
                 success: true,
                 method: .activate,
-                accessibilityTrace: AccessibilityTrace(interface: Interface(
-                    timestamp: Date(timeIntervalSince1970: 0),
-                    tree: [
-                        .element(first),
-                        .element(second),
-                    ]
-                ))
+                accessibilityTrace: AccessibilityTrace(capture: capture)
             ),
-            interfaceCache: [:]
+            targetCapture: capture
         )
         let script = try bookKeeper.stopHeistRecording()
 
@@ -405,7 +409,7 @@ final class BookKeeperHeistTests: XCTestCase {
                 "x": 100.0,
                 "y": 200.0,
             ],
-            interfaceCache: [:]
+            targetCapture: nil
         )
         let script = try bookKeeper.stopHeistRecording()
 
@@ -446,11 +450,11 @@ final class BookKeeperHeistTests: XCTestCase {
                 message: "missing",
                 errorKind: .elementNotFound
             ),
-            interfaceCache: [:]
+            targetCapture: nil
         )
         try recordHeistEvidence(bookKeeper, command: .activate,
             args: ["command": "activate", "label": "Go"],
-            interfaceCache: [:]
+            targetCapture: nil
         )
 
         let heist = try bookKeeper.stopHeistRecording()
@@ -472,12 +476,12 @@ final class BookKeeperHeistTests: XCTestCase {
                 message: "missing",
                 errorKind: .elementNotFound
             ),
-            interfaceCache: [:]
+            targetCapture: nil
         )
 
         try recordHeistEvidence(bookKeeper, command: .activate,
             args: ["command": "activate", "label": "Go"],
-            interfaceCache: [:]
+            targetCapture: nil
         )
 
         let heist = try bookKeeper.stopHeistRecording()
@@ -493,7 +497,7 @@ final class BookKeeperHeistTests: XCTestCase {
 
         try recordHeistEvidence(bookKeeper, command: .activate,
             args: ["command": "activate", "label": "Go"],
-            interfaceCache: [:]
+            targetCapture: nil
         )
 
         let heist = try bookKeeper.stopHeistRecording()
@@ -534,7 +538,7 @@ final class BookKeeperHeistTests: XCTestCase {
         try bookKeeper.startHeistRecording(app: "com.example.app")
 
         // Write a good step through the normal path
-        try recordHeistEvidence(bookKeeper, command: .activate, args: ["command": "activate", "label": "Go"], interfaceCache: [:])
+        try recordHeistEvidence(bookKeeper, command: .activate, args: ["command": "activate", "label": "Go"], targetCapture: nil)
 
         // Inject a malformed line through the BookKeeper's own file handle. A second
         // FileHandle would track its own offset, and the next recorded step would
@@ -547,7 +551,7 @@ final class BookKeeperHeistTests: XCTestCase {
         recording.fileHandle.write(Data("this-is-not-json\n".utf8))
 
         // Record another good step via the book-keeper handle
-        try recordHeistEvidence(bookKeeper, command: .activate, args: ["command": "activate", "label": "Done"], interfaceCache: [:])
+        try recordHeistEvidence(bookKeeper, command: .activate, args: ["command": "activate", "label": "Done"], targetCapture: nil)
 
         // Sanity-check that the malformed bytes survived to disk, so the skip path
         // is actually exercised when stopHeistRecording reads the file.
@@ -570,7 +574,7 @@ final class BookKeeperHeistTests: XCTestCase {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "close-with-heist")
         try bookKeeper.startHeistRecording(app: "com.example.app")
-        try recordHeistEvidence(bookKeeper, command: .activate, args: ["command": "activate", "label": "Go"], interfaceCache: [:])
+        try recordHeistEvidence(bookKeeper, command: .activate, args: ["command": "activate", "label": "Go"], targetCapture: nil)
 
         // Locate the heist file before the phase advances
         guard case .active(let activeSession) = bookKeeper.phase else {
@@ -623,14 +627,14 @@ private func recordHeistEvidence(
     args: [String: Any],
     actionResult: ActionResult? = nil,
     expectation: ExpectationResult? = nil,
-    interfaceCache: [String: HeistElement]
+    targetCapture: AccessibilityTrace.Capture?
 ) throws {
     let parsed = try parsedRequest(command: command, args: args)
     bookKeeper.recordHeistEvidence(
         parsed,
         actionResult: actionResult,
         expectation: expectation,
-        interfaceCache: interfaceCache
+        targetCapture: targetCapture
     )
 }
 

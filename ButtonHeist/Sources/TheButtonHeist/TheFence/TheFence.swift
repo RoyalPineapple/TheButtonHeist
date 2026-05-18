@@ -701,8 +701,7 @@ public final class TheFence {
         recordHeistEvidence(
             parsed,
             dispatchedResponse: dispatched.response,
-            validatedResponse: validatedResponse,
-            cacheUpdate: postDispatch.cacheUpdate
+            validatedResponse: validatedResponse
         )
         return validatedResponse
     }
@@ -963,17 +962,18 @@ public final class TheFence {
 
     private func recordHeistEvidence(
         _ request: ParsedRequest,
-        dispatchedResponse _: FenceResponse,
-        validatedResponse: FenceResponse,
-        cacheUpdate: ResponseCacheUpdate
+        dispatchedResponse: FenceResponse,
+        validatedResponse: FenceResponse
     ) {
         guard case .idle = playbackPhase else { return }
         guard let finalReceipt = validatedResponse.heistRecordingReceipt, finalReceipt.shouldRecord else { return }
+        let targetCapture = dispatchedResponse.actionResult?.accessibilityTrace?.captures.first
+            ?? finalReceipt.actionResult.accessibilityTrace?.captures.first
         bookKeeper.recordHeistEvidence(
             request,
             actionResult: finalReceipt.actionResult,
             expectation: finalReceipt.expectation,
-            interfaceCache: cacheUpdate.evidenceCache ?? [:]
+            targetCapture: targetCapture
         )
     }
 
