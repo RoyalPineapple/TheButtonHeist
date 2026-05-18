@@ -48,7 +48,7 @@ CLI/MCP
 
                         ─── wire ───
 
-    ← TheHandoff.onActionResult                ← resolves PendingRequestTracker
+    ← TheHandoff.onServerMessage               ← TheFence resolves PendingRequestTracker
   ← FenceResponse.action(result:)
 ```
 

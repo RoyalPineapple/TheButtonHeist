@@ -41,54 +41,86 @@ final class TheHandoffMessageTests: XCTestCase {
     // MARK: - .interface
 
     @ButtonHeistActor
-    func testInterfacePushCallsInterfaceCallback() async {
+    func testInterfacePushForwardsServerMessage() async {
         let handoff = TheHandoff()
         connectMockHandoff(handoff)
-        var receivedPayload: Interface?
-        handoff.onInterface = { payload, _ in receivedPayload = payload }
+        var receivedMessage: ServerMessage?
+        var receivedRequestId: String?
+        handoff.onServerMessage = { message, requestId in
+            receivedMessage = message
+            receivedRequestId = requestId
+        }
 
-        let interface = Interface(timestamp: Date(), tree: [])
+        let interface = makeInterfacePayload()
         handoff.handleServerMessage(.interface(interface), requestId: nil)
 
-        XCTAssertNotNil(receivedPayload)
+        guard case .interface(let receivedPayload)? = receivedMessage else {
+            return XCTFail("Expected interface message, got \(String(describing: receivedMessage))")
+        }
+        XCTAssertEqual(receivedPayload, interface)
+        XCTAssertNil(receivedRequestId)
     }
 
     @ButtonHeistActor
-    func testInterfaceResponseCallsInterfaceCallback() async {
+    func testInterfaceResponseForwardsServerMessage() async {
         let handoff = TheHandoff()
         connectMockHandoff(handoff)
+        var receivedMessage: ServerMessage?
         var receivedRequestId: String?
-        handoff.onInterface = { _, requestId in receivedRequestId = requestId }
-        handoff.handleServerMessage(.interface(Interface(timestamp: Date(), tree: [])),
-                                    requestId: "req-1")
+        handoff.onServerMessage = { message, requestId in
+            receivedMessage = message
+            receivedRequestId = requestId
+        }
+        let interface = makeInterfacePayload()
+        handoff.handleServerMessage(.interface(interface), requestId: "req-1")
 
+        guard case .interface(let receivedPayload)? = receivedMessage else {
+            return XCTFail("Expected interface message, got \(String(describing: receivedMessage))")
+        }
+        XCTAssertEqual(receivedPayload, interface)
         XCTAssertEqual(receivedRequestId, "req-1")
     }
 
     // MARK: - .screen
 
     @ButtonHeistActor
-    func testScreenPushCallsScreenCallback() async {
+    func testScreenPushForwardsServerMessage() async {
         let handoff = TheHandoff()
         connectMockHandoff(handoff)
-        var receivedScreen: ScreenPayload?
-        handoff.onScreen = { payload, _ in receivedScreen = payload }
+        var receivedMessage: ServerMessage?
+        var receivedRequestId: String?
+        handoff.onServerMessage = { message, requestId in
+            receivedMessage = message
+            receivedRequestId = requestId
+        }
 
-        let screen = ScreenPayload(pngData: "abc", width: 390, height: 844)
+        let screen = makeScreenPayload()
         handoff.handleServerMessage(.screen(screen), requestId: nil)
 
-        XCTAssertNotNil(receivedScreen)
+        guard case .screen(let receivedScreen)? = receivedMessage else {
+            return XCTFail("Expected screen message, got \(String(describing: receivedMessage))")
+        }
+        assertScreenPayload(receivedScreen, equals: screen)
+        XCTAssertNil(receivedRequestId)
     }
 
     @ButtonHeistActor
-    func testScreenResponseCallsScreenCallback() async {
+    func testScreenResponseForwardsServerMessage() async {
         let handoff = TheHandoff()
         connectMockHandoff(handoff)
+        var receivedMessage: ServerMessage?
         var receivedRequestId: String?
-        handoff.onScreen = { _, requestId in receivedRequestId = requestId }
-        let screen = ScreenPayload(pngData: "abc", width: 390, height: 844)
+        handoff.onServerMessage = { message, requestId in
+            receivedMessage = message
+            receivedRequestId = requestId
+        }
+        let screen = makeScreenPayload()
         handoff.handleServerMessage(.screen(screen), requestId: "req-1")
 
+        guard case .screen(let receivedScreen)? = receivedMessage else {
+            return XCTFail("Expected screen message, got \(String(describing: receivedMessage))")
+        }
+        assertScreenPayload(receivedScreen, equals: screen)
         XCTAssertEqual(receivedRequestId, "req-1")
     }
 
@@ -171,17 +203,22 @@ final class TheHandoffMessageTests: XCTestCase {
     func testRequestScopedErrorDoesNotFailConnection() async {
         let handoff = TheHandoff()
         connectMockHandoff(handoff)
-        var requestError: (serverError: ServerError, requestId: String)?
-        handoff.onRequestError = { serverError, requestId in
-            requestError = (serverError, requestId)
+        var receivedMessage: ServerMessage?
+        var receivedRequestId: String?
+        handoff.onServerMessage = { message, requestId in
+            receivedMessage = message
+            receivedRequestId = requestId
         }
         handoff.handleServerMessage(.info(makeServerInfo()), requestId: nil)
 
         handoff.handleServerMessage(.error(ServerError(kind: .general, message: "Response too large")), requestId: "request-1")
 
-        XCTAssertEqual(requestError?.serverError.kind, .general)
-        XCTAssertEqual(requestError?.serverError.message, "Response too large")
-        XCTAssertEqual(requestError?.requestId, "request-1")
+        guard case .error(let requestError)? = receivedMessage else {
+            return XCTFail("Expected error message, got \(String(describing: receivedMessage))")
+        }
+        XCTAssertEqual(requestError.kind, .general)
+        XCTAssertEqual(requestError.message, "Response too large")
+        XCTAssertEqual(receivedRequestId, "request-1")
         if case .failed = handoff.connectionPhase {
             XCTFail("Request-scoped error should not fail the connection")
         }
@@ -432,5 +469,47 @@ final class TheHandoffMessageTests: XCTestCase {
             screenWidth: 390,
             screenHeight: 844
         )
+    }
+
+    private func makeInterfacePayload() -> Interface {
+        Interface(
+            timestamp: Date(timeIntervalSince1970: 1_234),
+            tree: [
+                .element(HeistElement(
+                    heistId: "continue_button",
+                    description: "Continue",
+                    label: "Continue",
+                    value: nil,
+                    identifier: "continue",
+                    traits: [.button],
+                    frameX: 0,
+                    frameY: 0,
+                    frameWidth: 120,
+                    frameHeight: 44,
+                    actions: []
+                )),
+            ]
+        )
+    }
+
+    private func makeScreenPayload() -> ScreenPayload {
+        ScreenPayload(
+            pngData: "base64png",
+            width: 390,
+            height: 844,
+            timestamp: Date(timeIntervalSince1970: 5_678)
+        )
+    }
+
+    private func assertScreenPayload(
+        _ received: ScreenPayload?,
+        equals expected: ScreenPayload,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        XCTAssertEqual(received?.pngData, expected.pngData, file: file, line: line)
+        XCTAssertEqual(received?.width, expected.width, file: file, line: line)
+        XCTAssertEqual(received?.height, expected.height, file: file, line: line)
+        XCTAssertEqual(received?.timestamp, expected.timestamp, file: file, line: line)
     }
 }
