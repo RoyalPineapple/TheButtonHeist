@@ -676,7 +676,7 @@ final class TheBookKeeper {
         expectation: ExpectationResult?
     ) -> RecordedMetadata? {
         let accessibilityTrace = actionResult?.accessibilityTrace
-        let accessibilityDelta = actionResult?.accessibilityDelta
+        let accessibilityDelta = actionResult?.effectiveAccessibilityDelta
         guard heistId != nil || frame != nil || coordinateOnly != nil || accessibilityTrace != nil || accessibilityDelta != nil || expectation != nil else {
             return nil
         }

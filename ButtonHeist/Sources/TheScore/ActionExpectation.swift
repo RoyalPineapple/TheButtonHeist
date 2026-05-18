@@ -39,7 +39,7 @@ public enum ActionExpectation: Sendable, Equatable {
     case elementsChanged
     /// Expected a property change on an element. All fields are optional filters —
     /// provide what you know, omit what you don't. Met when any entry in
-    /// `accessibilityDelta.elementEdits?.updated` matches all provided fields.
+    /// the result's trace-derived delta updates matches all provided fields.
     case elementUpdated(
         heistId: String? = nil, property: ElementProperty? = nil,
         oldValue: String? = nil, newValue: String? = nil
@@ -204,15 +204,15 @@ extension ActionExpectation {
     ) -> ExpectationResult {
         switch self {
         case .screenChanged:
-            let kindString = result.accessibilityDelta?.kindRawValue ?? "noChange"
+            let kindString = result.effectiveAccessibilityDelta?.kindRawValue ?? "noChange"
             return ExpectationResult(
-                met: result.accessibilityDelta?.isScreenChanged == true,
+                met: result.effectiveAccessibilityDelta?.isScreenChanged == true,
                 expectation: self,
                 actual: kindString
             )
         case .elementsChanged:
             // Superset rule: screen_changed implies elements_changed.
-            let delta = result.accessibilityDelta
+            let delta = result.effectiveAccessibilityDelta
             let kindString = delta?.kindRawValue ?? "noChange"
             let met: Bool = {
                 guard let delta else { return false }
@@ -267,7 +267,7 @@ extension ActionExpectation {
         oldValue: String?, newValue: String?,
         expectation: ActionExpectation, result: ActionResult
     ) -> ExpectationResult {
-        let updates = result.accessibilityDelta?.elementEdits?.updated ?? []
+        let updates = result.effectiveAccessibilityDelta?.elementEdits?.updated ?? []
         guard !updates.isEmpty else {
             return ExpectationResult(met: false, expectation: expectation, actual: "no element updates")
         }
@@ -302,7 +302,7 @@ extension ActionExpectation {
     private static func validateElementAppeared(
         matcher: ElementMatcher, expectation: ActionExpectation, result: ActionResult
     ) -> ExpectationResult {
-        let delta = result.accessibilityDelta
+        let delta = result.effectiveAccessibilityDelta
 
         // Normal path: check the added list from element-level diffs (or
         // post-screen-change post-edits).
@@ -342,7 +342,7 @@ extension ActionExpectation {
         result: ActionResult,
         preActionElements: [String: HeistElement]
     ) -> ExpectationResult {
-        let delta = result.accessibilityDelta
+        let delta = result.effectiveAccessibilityDelta
 
         // Normal path: check the removed list from element-level diffs (or
         // post-screen-change post-edits).

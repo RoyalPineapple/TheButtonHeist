@@ -14,6 +14,8 @@ extension TheFence {
     func handleRunBatch(_ request: RunBatchRequest) async throws -> FenceResponse {
         var results: [[String: Any]] = []
         var stepSummaries: [BatchStepSummary] = []
+        var stepAccessibilityTraces: [AccessibilityTrace] = []
+        var actionOutcomeCount = 0
         var failedIndex: Int?
         var expectationsMet = 0
         var expectationsChecked = 0
@@ -30,6 +32,12 @@ extension TheFence {
                 results.append(response.jsonDict() ?? ["status": "ok"])
 
                 let outcome = stepOutcome(response: response)
+                if outcome.hasActionResult {
+                    actionOutcomeCount += 1
+                    if let accessibilityTrace = outcome.accessibilityTrace {
+                        stepAccessibilityTraces.append(accessibilityTrace)
+                    }
+                }
 
                 // Count explicit tier expectations only — delivery failures have
                 // expectation.expectation == nil and should not inflate the count
@@ -79,6 +87,10 @@ extension TheFence {
         }
 
         let totalMs = Int((CFAbsoluteTimeGetCurrent() - batchStart) * 1000)
+        let accessibilityTrace = Self.batchAccessibilityTrace(
+            actionOutcomeCount: actionOutcomeCount,
+            stepAccessibilityTraces: stepAccessibilityTraces
+        )
         return .batch(
             results: results,
             completedSteps: results.count,
@@ -86,8 +98,19 @@ extension TheFence {
             totalTimingMs: totalMs,
             expectationsChecked: expectationsChecked,
             expectationsMet: expectationsMet,
-            stepSummaries: stepSummaries
+            stepSummaries: stepSummaries,
+            accessibilityTrace: accessibilityTrace
         )
+    }
+
+    private static func batchAccessibilityTrace(
+        actionOutcomeCount: Int,
+        stepAccessibilityTraces: [AccessibilityTrace]
+    ) -> AccessibilityTrace? {
+        guard actionOutcomeCount > 0,
+              stepAccessibilityTraces.count == actionOutcomeCount
+        else { return nil }
+        return AccessibilityTrace.captureEndpointTrace(from: stepAccessibilityTraces)
     }
 
     private static func normalizedBatchStep(
@@ -127,7 +150,9 @@ extension TheFence {
     // MARK: - Step Outcome
 
     private struct StepOutcome {
+        let hasActionResult: Bool
         let isFailed: Bool
+        let accessibilityTrace: AccessibilityTrace?
         /// Whether this step carried an explicit expectation that counts
         /// toward the batch's expectations-met/checked totals.
         let expectationCounted: Bool
@@ -144,19 +169,25 @@ extension TheFence {
             let met = counted ? result?.met : nil
             let failed = !actionResult.success || (result.map { !$0.met } ?? false)
             return StepOutcome(
+                hasActionResult: true,
                 isFailed: failed,
+                accessibilityTrace: actionResult.accessibilityTrace,
                 expectationCounted: counted,
                 expectationMet: met
             )
         case .error:
             return StepOutcome(
+                hasActionResult: false,
                 isFailed: true,
+                accessibilityTrace: nil,
                 expectationCounted: false,
                 expectationMet: nil
             )
         default:
             return StepOutcome(
+                hasActionResult: false,
                 isFailed: false,
+                accessibilityTrace: nil,
                 expectationCounted: false,
                 expectationMet: nil
             )
@@ -173,7 +204,7 @@ extension TheFence {
         case .action(let result, _):
             return BatchStepSummary(
                 command: commandName,
-                deltaKind: result.accessibilityDelta?.kindRawValue,
+                deltaKind: result.effectiveAccessibilityDelta?.kindRawValue,
                 screenName: result.screenName,
                 screenId: result.screenId,
                 expectationMet: expectationMet,

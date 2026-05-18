@@ -92,7 +92,8 @@ public enum FenceResponse {
     case batch(
         results: [[String: Any]], completedSteps: Int, failedIndex: Int?,
         totalTimingMs: Int, expectationsChecked: Int = 0, expectationsMet: Int = 0,
-        stepSummaries: [BatchStepSummary] = []
+        stepSummaries: [BatchStepSummary] = [],
+        accessibilityTrace: AccessibilityTrace? = nil
     )
     case sessionState(payload: [String: Any])
     case targets([String: TargetConfig], defaultTarget: String?)
@@ -123,7 +124,7 @@ public enum FenceResponse {
             return true
         case .action(let result, let expectation):
             return !result.success || expectation?.met == false
-        case .batch(_, _, let failedIndex, _, _, _, _):
+        case .batch(_, _, let failedIndex, _, _, _, _, _):
             return failedIndex != nil
         case .heistPlayback(_, let failedIndex, _, _, _):
             return failedIndex != nil
@@ -191,7 +192,7 @@ public enum FenceResponse {
             return formatRecordingHuman(path: path, payload: payload)
         case .recordingData(let payload):
             return formatRecordingDataHuman(payload)
-        case .batch(_, let completedSteps, let failedIndex, let totalTimingMs, let checked, let met, _):
+        case .batch(_, let completedSteps, let failedIndex, let totalTimingMs, let checked, let met, _, _):
             var text = "Batch: \(completedSteps) step(s) completed in \(totalTimingMs)ms"
             if let idx = failedIndex { text += " (failed at step \(idx))" }
             if checked > 0 { text += " [expectations: \(met)/\(checked) met]" }
@@ -402,7 +403,7 @@ public enum FenceResponse {
                     }
                 }
             }
-            if let delta = result.accessibilityDelta {
+            if let delta = result.effectiveAccessibilityDelta {
                 output += "  \(formatDelta(delta))"
             }
             if result.animating == true {
