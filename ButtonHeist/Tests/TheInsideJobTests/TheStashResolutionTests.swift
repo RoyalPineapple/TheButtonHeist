@@ -143,6 +143,21 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(resolved.element.label, "Save")
     }
 
+    func testMatcherHeistIdResolvesExactScreenElement() {
+        let save = element(label: "Save", traits: .button)
+        let cancel = element(label: "Cancel", traits: .button)
+        register(save, heistId: "button_save", index: 0)
+        register(cancel, heistId: "button_cancel", index: 1)
+
+        let result = bagman.resolveTarget(.matcher(ElementMatcher(heistId: "button_cancel")))
+        guard let resolved = result.resolved else {
+            XCTFail("Expected .resolved, got \(result)")
+            return
+        }
+        XCTAssertEqual(resolved.screenElement.heistId, "button_cancel")
+        XCTAssertEqual(resolved.element.label, "Cancel")
+    }
+
     func testMatcherAmbiguousReturnsCandidates() {
         let save1 = element(label: "Save", value: "draft")
         let save2 = element(label: "Save", value: "final")

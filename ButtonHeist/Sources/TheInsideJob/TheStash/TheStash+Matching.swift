@@ -191,13 +191,23 @@ extension TheStash {
         guard limit > 0 else { return [] }
         var matches: [ScreenElement] = []
         matches.reserveCapacity(limit)
-        for entry in selectElements(in: screen) where entry.element.matches(matcher, mode: .exact) {
+        for entry in selectElements(in: screen) where entry.matches(matcher, mode: .exact) {
             matches.append(entry)
             if matches.count == limit { break }
         }
         return matches
     }
 
+}
+
+private extension Screen.ScreenElement {
+    func matches(_ matcher: ElementMatcher, mode: MatchMode) -> Bool {
+        if let matchHeistId = matcher.heistId {
+            if matchHeistId.isEmpty { return false }
+            guard heistId == matchHeistId else { return false }
+        }
+        return element.matches(matcher, mode: mode)
+    }
 }
 
 #endif // DEBUG

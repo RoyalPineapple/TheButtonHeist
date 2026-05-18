@@ -94,6 +94,7 @@ private extension Dictionary where Key == String, Value == HeistValue {
     }
 
     mutating func appendMatcher(_ matcher: ElementMatcher) {
+        set(BookKeeperCommandArgumentKey.heistId, matcher.heistId)
         set(BookKeeperCommandArgumentKey.label, matcher.label)
         set(BookKeeperCommandArgumentKey.identifier, matcher.identifier)
         set(BookKeeperCommandArgumentKey.value, matcher.value)
@@ -259,6 +260,9 @@ private extension TheFence.GetInterfaceRequest {
         if detail != .summary {
             arguments.set("detail", detail)
         }
+        if let subtree {
+            arguments["subtree"] = subtree.bookKeeperValue
+        }
         if matcher.hasPredicates {
             arguments.appendMatcher(matcher)
         }
@@ -266,6 +270,36 @@ private extension TheFence.GetInterfaceRequest {
             arguments["elements"] = .array(elementIds.map { .string($0) })
         }
         return arguments
+    }
+}
+
+private extension SubtreeSelector {
+    var bookKeeperValue: HeistValue {
+        var payload: [String: HeistValue] = [:]
+        switch self {
+        case .element(let matcher, let ordinal):
+            var element: [String: HeistValue] = [:]
+            element.appendMatcher(matcher)
+            payload["element"] = .object(element)
+            payload.set("ordinal", ordinal)
+        case .container(let matcher, let ordinal):
+            payload["container"] = matcher.bookKeeperValue
+            payload.set("ordinal", ordinal)
+        }
+        return .object(payload)
+    }
+}
+
+private extension ContainerMatcher {
+    var bookKeeperValue: HeistValue {
+        var payload: [String: HeistValue] = [:]
+        payload.set("stableId", stableId)
+        payload.set("type", type)
+        payload.set("label", label)
+        payload.set("value", value)
+        payload.set("identifier", identifier)
+        payload.set("isModalBoundary", isModalBoundary)
+        return .object(payload)
     }
 }
 

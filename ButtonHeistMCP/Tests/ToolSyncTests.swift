@@ -243,6 +243,15 @@ struct ToolSyncTests {
         let getInterface = ToolDefinitions.all.first { $0.name == TheFence.Command.getInterface.rawValue }
         #expect(extractEnumValues(from: getInterface, property: "scope") == ["visible"])
         #expect(extractEnumValues(from: getInterface, property: "detail") == Set(InterfaceDetail.allCases.map(\.rawValue)))
+        if let subtreeSchema = getInterface.flatMap({ extractPropertySchema(from: $0, property: "subtree") }),
+           let subtreeProperties = extractObjectField(from: subtreeSchema, key: "properties"),
+           let containerSchema = extractObjectField(from: subtreeProperties, key: "container"),
+           let containerProperties = extractObjectField(from: containerSchema, key: "properties"),
+           let typeSchema = extractObjectField(from: containerProperties, key: "type") {
+            #expect(extractEnumValues(from: typeSchema) == Set(ContainerInfo.ContainerTypeName.allCases.map(\.rawValue)))
+        } else {
+            Issue.record("get_interface.subtree.container.type missing enum schema")
+        }
 
         let scroll = ToolDefinitions.all.first { $0.name == TheFence.Command.scroll.rawValue }
         #expect(extractEnumValues(from: scroll, property: "mode") == Set(ScrollMode.allCases.map(\.rawValue)))
@@ -297,11 +306,52 @@ struct ToolSyncTests {
         }
 
         let description = getInterface.description ?? ""
+        #expect(description.contains("Omit subtree for the whole hierarchy"))
+        #expect(description.contains("project the returned tree"))
         #expect(description.contains("Omit scope for the normal"))
         #expect(description.contains("app accessibility state"))
         #expect(description.contains("scope=visible only for fresh on-screen geometry diagnostics"))
         #expect(!description.contains("diagnostic on-screen reads"))
         #expect(!description.localizedCaseInsensitiveContains("viewport"))
+    }
+
+    @Test("get_interface subtree schema describes projection without viewport language")
+    func getInterfaceSubtreeSchemaDescribesProjectionWithoutViewportLanguage() {
+        guard let getInterface = ToolDefinitions.all.first(where: { $0.name == TheFence.Command.getInterface.rawValue }),
+              let subtreeSchema = extractPropertySchema(from: getInterface, property: "subtree"),
+              let subtreeProperties = extractObjectField(from: subtreeSchema, key: "properties") else {
+            Issue.record("get_interface.subtree missing property schema")
+            return
+        }
+
+        #expect(extractStringField(from: subtreeSchema, key: "type") == "object")
+        #expect(
+            extractPropertyKeys(from: subtreeSchema) == ["element", "container", "ordinal"]
+        )
+        #expect(extractStringField(from: subtreeSchema, key: "description")?.contains("Subtree selector") == true)
+        #expect(extractStringField(from: subtreeSchema, key: "description")?.contains("whole tree") == true)
+        #expect(!((extractStringField(from: subtreeSchema, key: "description") ?? "").localizedCaseInsensitiveContains("viewport")))
+        guard case .object(let elementSchema)? = subtreeProperties["element"],
+              case .object(let containerSchema)? = subtreeProperties["container"] else {
+            Issue.record("get_interface.subtree element/container schemas missing")
+            return
+        }
+        #expect(extractPropertyKeys(from: elementSchema) == ["heistId", "label", "value", "identifier", "traits", "excludeTraits"])
+        #expect(extractPropertyKeys(from: containerSchema) == ["stableId", "type", "label", "value", "identifier", "isModalBoundary"])
+        guard let containerProperties = extractObjectField(from: containerSchema, key: "properties") else {
+            Issue.record("get_interface.subtree.container missing properties")
+            return
+        }
+        if case .object(let stableIdSchema)? = containerProperties["stableId"] {
+            #expect(extractStringField(from: stableIdSchema, key: "type") == "string")
+        } else {
+            Issue.record("get_interface.subtree.container.stableId missing schema")
+        }
+        if case .object(let modalSchema)? = containerProperties["isModalBoundary"] {
+            #expect(extractStringField(from: modalSchema, key: "type") == "boolean")
+        } else {
+            Issue.record("get_interface.subtree.container.isModalBoundary missing schema")
+        }
     }
 
     @Test("Expect schema advertises Claude-compatible object form")

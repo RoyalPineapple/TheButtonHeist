@@ -91,6 +91,7 @@ public enum FenceParameterKey: String, CaseIterable, Sendable {
     case centerX
     case centerY
     case command
+    case container
     case count
     case cp1X
     case cp1Y
@@ -105,6 +106,7 @@ public enum FenceParameterKey: String, CaseIterable, Sendable {
     case direction
     case duration
     case edge
+    case element
     case elements
     case end
     case endX
@@ -117,6 +119,7 @@ public enum FenceParameterKey: String, CaseIterable, Sendable {
     case identifier
     case inactivityTimeout = "inactivity_timeout"
     case input
+    case isModalBoundary
     case label
     case matcher
     case maxDuration = "max_duration"
@@ -139,7 +142,9 @@ public enum FenceParameterKey: String, CaseIterable, Sendable {
     case start
     case startX
     case startY
+    case stableId
     case steps
+    case subtree
     case target
     case text
     case timeout
@@ -395,6 +400,70 @@ enum FenceParameterBlocks: Sendable {
         ),
     ]
 
+    /// Subtree projection selector for get_interface. Cuts the parsed interface tree
+    /// at one matched leaf or container node.
+    static let interfaceSubtree: FenceParameterSpec = .init(
+        key: "subtree", type: .object, optionalRole: .matcher,
+        description: """
+            Subtree selector within the parsed hierarchy. Omit for the whole tree. \
+            Pass exactly one of element or container. A leaf subtree is just that leaf; \
+            a container subtree includes the container and descendants. Ambiguous matches require ordinal.
+            """,
+        objectProperties: [
+            .init(
+                key: "element", type: .object, optionalRole: .matcher,
+                description: "Leaf selector using ElementMatcher fields",
+                objectProperties: [
+                    .init(
+                        key: "heistId", type: .string, optionalRole: .matcher,
+                        description: "Leaf element heistId returned by get_interface or an action delta"
+                    ),
+                    .init(key: "label", type: .string, optionalRole: .matcher, description: "Exact leaf label"),
+                    .init(key: "value", type: .string, optionalRole: .matcher, description: "Exact leaf value"),
+                    .init(key: "identifier", type: .string, optionalRole: .matcher, description: "Exact leaf accessibility identifier"),
+                    .init(
+                        key: "traits", type: .stringArray, optionalRole: .matcher,
+                        description: "Leaf traits that must all be present"
+                    ),
+                    .init(
+                        key: "excludeTraits", type: .stringArray, optionalRole: .matcher,
+                        description: "Leaf traits that must not be present"
+                    ),
+                ]
+            ),
+            .init(
+                key: "container", type: .object, optionalRole: .matcher,
+                description: "Container selector using ContainerMatcher fields",
+                objectProperties: [
+                    .init(
+                        key: "stableId", type: .string, optionalRole: .matcher,
+                        description: "Container stableId returned on container nodes"
+                    ),
+                    .init(
+                        key: "type", type: .string, optionalRole: .matcher,
+                        description: "Container type",
+                        enumValues: fenceEnumValues(ContainerInfo.ContainerTypeName.self)
+                    ),
+                    .init(key: "label", type: .string, optionalRole: .matcher, description: "Exact semantic container label"),
+                    .init(key: "value", type: .string, optionalRole: .matcher, description: "Exact semantic container value"),
+                    .init(
+                        key: "identifier", type: .string, optionalRole: .matcher,
+                        description: "Exact semantic container accessibility identifier"
+                    ),
+                    .init(
+                        key: "isModalBoundary", type: .boolean, optionalRole: .matcher,
+                        description: "Container modal-boundary flag"
+                    ),
+                ]
+            ),
+            .init(
+                key: "ordinal", type: .integer, optionalRole: .matcher,
+                description: "0-based candidate index to disambiguate multiple matching subtree candidates",
+                minimum: 0
+            ),
+        ]
+    )
+
     /// Inline expectation for action commands.
     static let expect: FenceParameterSpec = .init(
         key: "expect", type: .object, optionalRole: .behaviorSwitch,
@@ -624,8 +693,9 @@ extension TheFence.Command {
             return """
                 Read the app accessibility hierarchy. Call once on a new screen, then track changes via \
                 action deltas — re-fetch only when you need elements the delta didn't cover. \
-                Filter with matcher fields or heistId handle list. Omit scope for the normal \
-                app accessibility state; use scope=visible only for fresh on-screen geometry diagnostics.
+                Omit subtree for the whole hierarchy, or pass subtree to project the returned tree from \
+                a selected leaf or container node. Omit scope for the normal app accessibility state; \
+                use scope=visible only for fresh on-screen geometry diagnostics.
                 """
 
         case Self.getScreen.rawValue:
@@ -808,6 +878,7 @@ extension TheFence.Command {
         // MARK: Interface / observation
         case .getInterface:
             return filter + [
+                FenceParameterBlocks.interfaceSubtree,
                 .init(
                     key: "scope", type: .string, optionalRole: .behaviorSwitch,
                     description: """
@@ -827,7 +898,7 @@ extension TheFence.Command {
                 ),
                 .init(
                     key: "elements", type: .stringArray, optionalRole: .matcher,
-                    description: "Optional list of heistId handles to filter. Returns only matching elements. Omit for the app accessibility hierarchy."
+                    description: "Optional list of leaf heistId handles to project as subtrees. Omit for the app accessibility hierarchy."
                 ),
             ]
 
