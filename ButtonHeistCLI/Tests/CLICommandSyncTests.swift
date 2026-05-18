@@ -188,17 +188,40 @@ final class CLICommandSyncTests: XCTestCase {
 
     func testHumanParserNormalizesChangeExpectationShortcut() {
         let request = ReplSession.parseHumanInput("change expect=screen_changed")
-        let expect = request["expect"] as? [String: Any]
+        let expect = request[.expect] as? [String: Any]
 
-        XCTAssertEqual(request["command"] as? String, TheFence.Command.waitForChange.rawValue)
-        XCTAssertEqual(expect?["type"] as? String, "screen_changed")
+        XCTAssertEqual(request[.command] as? String, TheFence.Command.waitForChange.rawValue)
+        XCTAssertEqual(expect?[.type] as? String, "screen_changed")
     }
 
     func testHumanParserNormalizesChangeExpectationJsonObject() {
         let request = ReplSession.parseHumanInput(#"change expect='{"type":"elements_changed"}'"#)
-        let expect = request["expect"] as? [String: Any]
+        let expect = request[.expect] as? [String: Any]
 
-        XCTAssertEqual(expect?["type"] as? String, "elements_changed")
+        XCTAssertEqual(request[.command] as? String, TheFence.Command.waitForChange.rawValue)
+        XCTAssertEqual(expect?[.type] as? String, "elements_changed")
+    }
+
+    func testHumanParserMapsCompoundCopyAlias() {
+        let request = ReplSession.parseHumanInput("copy")
+
+        XCTAssertEqual(request[.command] as? String, TheFence.Command.editAction.rawValue)
+        XCTAssertEqual(request[.action] as? String, EditAction.copy.rawValue)
+    }
+
+    func testHumanParserMapsCoordinateTapAlias() {
+        let request = ReplSession.parseHumanInput("tap 100 200")
+
+        XCTAssertEqual(request[.command] as? String, TheFence.Command.oneFingerTap.rawValue)
+        XCTAssertEqual(request[.x] as? Double, 100)
+        XCTAssertEqual(request[.y] as? Double, 200)
+    }
+
+    func testHumanParserMapsHeistIdPositionalTarget() {
+        let request = ReplSession.parseHumanInput("activate button_save")
+
+        XCTAssertEqual(request[.command] as? String, TheFence.Command.activate.rawValue)
+        XCTAssertEqual(request[.heistId] as? String, "button_save")
     }
 
     private func topLevelCommandNames() -> [String] {

@@ -273,22 +273,77 @@ nonisolated extension ReplSession {
         .swipe, .scroll, .rotor,
     ]
 
+    private struct HumanCommandRequest {
+        let command: TheFence.Command?
+        let rawCommand: String
+        private var typedParameters: [FenceParameterKey: Any]
+        private var extraParameters: [(name: String, value: Any)]
+
+        init(command: TheFence.Command, parameters: [FenceParameterKey: Any] = [:]) {
+            self.command = command
+            self.rawCommand = command.rawValue
+            self.typedParameters = parameters
+            self.extraParameters = []
+        }
+
+        init(command: TheFence.Command, stringParameters: [FenceParameterKey: String]) {
+            self.command = command
+            self.rawCommand = command.rawValue
+            self.typedParameters = stringParameters.mapValues { $0 as Any }
+            self.extraParameters = []
+        }
+
+        init(rawCommand: String) {
+            self.command = nil
+            self.rawCommand = rawCommand
+            self.typedParameters = [:]
+            self.extraParameters = []
+        }
+
+        subscript(_ key: FenceParameterKey) -> Any? {
+            get { typedParameters[key] }
+            set { typedParameters[key] = newValue }
+        }
+
+        mutating func setParameter(named name: String, value: Any) {
+            if let key = FenceParameterKey(rawValue: name) {
+                self[key] = value
+            } else {
+                extraParameters.append((name, value))
+            }
+        }
+
+        func fenceRequest() -> [String: Any] {
+            var request: [String: Any]
+            if let command {
+                request = command.cliRequest(typedParameters)
+            } else {
+                request = FenceParameterKey.rawDictionary(typedParameters)
+                request[.command] = rawCommand
+            }
+            for parameter in extraParameters {
+                request[parameter.name] = parameter.value
+            }
+            return request
+        }
+    }
+
     static func parseHumanInput(_ line: String) -> [String: Any] {
         let tokens = tokenize(line)
         guard let first = tokens.first else { return [:] }
 
         let rawCommand = first.lowercased()
-        let command: TheFence.Command?
-        var result: [String: Any]
+        var request: HumanCommandRequest
         let args = Array(tokens.dropFirst())
 
         if let compound = compoundAliases[rawCommand] {
-            command = compound.command
-            result = compound.command.cliRequest()
-            for (key, value) in compound.params { result[key] = value }
+            request = HumanCommandRequest(command: compound.command, stringParameters: compound.params)
         } else {
-            command = commandAliases[rawCommand] ?? TheFence.Command(rawValue: rawCommand)
-            result = command?.cliRequest() ?? FenceParameterKey.rawDictionary([.command: rawCommand])
+            if let command = commandAliases[rawCommand] ?? TheFence.Command(rawValue: rawCommand) {
+                request = HumanCommandRequest(command: command)
+            } else {
+                request = HumanCommandRequest(rawCommand: rawCommand)
+            }
         }
 
         // Separate key=value pairs from positional tokens
@@ -299,11 +354,11 @@ nonisolated extension ReplSession {
                 let value = String(arg[arg.index(after: eqIndex)...])
                 // Auto-convert numeric values
                 if let intVal = Int(value) {
-                    result[key] = intVal
+                    request.setParameter(named: key, value: intVal)
                 } else if let dblVal = Double(value) {
-                    result[key] = dblVal
+                    request.setParameter(named: key, value: dblVal)
                 } else {
-                    result[key] = value
+                    request.setParameter(named: key, value: value)
                 }
             } else {
                 positional.append(arg)
@@ -311,54 +366,53 @@ nonisolated extension ReplSession {
         }
 
         // Interpret positional arguments based on command context
-        interpretPositionalArgs(command: command, positional: positional, into: &result)
-        normalizeExpectationArgument(in: &result)
+        interpretPositionalArgs(positional: positional, into: &request)
+        normalizeExpectationArgument(in: &request)
 
-        return result
+        return request.fenceRequest()
     }
 
-    private static func normalizeExpectationArgument(in result: inout [String: Any]) {
-        guard let rawExpectation = result[.expect] as? String,
+    private static func normalizeExpectationArgument(in request: inout HumanCommandRequest) {
+        guard let rawExpectation = request[.expect] as? String,
               let expectation = try? ExpectationArgumentParser.parse(rawExpectation) else {
             return
         }
-        result[.expect] = expectation
+        request[.expect] = expectation
     }
 
     private static func interpretPositionalArgs(
-        command: TheFence.Command?,
         positional: [String],
-        into result: inout [String: Any]
+        into request: inout HumanCommandRequest
     ) {
         guard !positional.isEmpty else { return }
 
-        switch command {
+        switch request.command {
         case .some(.typeText):
             // Everything after "type" is the text to type
-            if result[.text] == nil {
-                result[.text] = positional.joined(separator: " ")
+            if request[.text] == nil {
+                request[.text] = positional.joined(separator: " ")
             }
 
         case .some(.editAction):
-            if result[.action] == nil, let action = positional.first {
-                result[.action] = action
+            if request[.action] == nil, let action = positional.first {
+                request[.action] = action
             }
 
         case .some(.scrollToEdge):
             // First positional: edge or identifier; second: identifier
             var remaining = positional
             if let first = remaining.first, edgeWords.contains(first.lowercased()) {
-                result[.edge] = first.lowercased()
+                request[.edge] = first.lowercased()
                 remaining.removeFirst()
             }
-            applyElementTarget(remaining, into: &result)
+            applyElementTarget(remaining, into: &request)
 
         case .some(.performCustomAction):
             // First positional: identifier, rest: actionName
             if let first = positional.first {
-                applyElementTarget([first], into: &result)
+                applyElementTarget([first], into: &request)
                 if positional.count > 1 {
-                    result[.action] = positional.dropFirst().joined(separator: " ")
+                    request[.action] = positional.dropFirst().joined(separator: " ")
                 }
             }
 
@@ -367,9 +421,9 @@ nonisolated extension ReplSession {
             var remaining = positional
 
             // For direction commands, consume a direction word first
-            if let command, directionCommands.contains(command),
+            if let command = request.command, directionCommands.contains(command),
                let first = remaining.first, directionWords.contains(first.lowercased()) {
-                result[.direction] = first.lowercased()
+                request[.direction] = first.lowercased()
                 remaining.removeFirst()
             }
 
@@ -377,20 +431,20 @@ nonisolated extension ReplSession {
             if remaining.count >= 2,
                let x = Double(remaining[0]),
                let y = Double(remaining[1]) {
-                result[.x] = x
-                result[.y] = y
+                request[.x] = x
+                request[.y] = y
                 remaining.removeFirst(2)
             } else {
                 // Otherwise treat as element target
-                applyElementTarget(remaining, into: &result)
+                applyElementTarget(remaining, into: &request)
                 remaining = []
             }
         }
     }
 
-    private static func applyElementTarget(_ tokens: [String], into result: inout [String: Any]) {
+    private static func applyElementTarget(_ tokens: [String], into request: inout HumanCommandRequest) {
         guard let first = tokens.first else { return }
-        result[.heistId] = first
+        request[.heistId] = first
     }
 
     private static func tokenize(_ line: String) -> [String] {
