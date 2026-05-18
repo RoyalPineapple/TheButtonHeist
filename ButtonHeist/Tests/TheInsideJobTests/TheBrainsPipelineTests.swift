@@ -443,10 +443,29 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.errorKind, .unsupported)
-        XCTAssertEqual(result.method, .activate, "Non-action protocol commands fall back to .activate diagnostics")
+        XCTAssertEqual(result.method, .unsupportedCommand)
+        XCTAssertNotEqual(result.method, .activate)
         XCTAssertEqual(result.screenName, "Home")
         XCTAssertEqual(result.screenId, "home")
         XCTAssertEqual(result.message, "Unsupported command 'ping' in executeCommand")
+    }
+
+    func testControlDiagnosticsUseUnsupportedCommandMethod() {
+        let messages: [ClientMessage] = [
+            .clientHello,
+            .authenticate(AuthenticatePayload(token: "token")),
+            .requestInterface,
+            .ping,
+            .status,
+            .requestScreen,
+            .startRecording(RecordingConfig()),
+            .stopRecording,
+        ]
+
+        for message in messages {
+            XCTAssertEqual(TheBrains.diagnosticMethod(for: message), .unsupportedCommand)
+            XCTAssertNotEqual(TheBrains.diagnosticMethod(for: message), .activate)
+        }
     }
 
     // MARK: - Transient Suppression on Screen Change (PR #330 H2)
