@@ -404,6 +404,8 @@ final class TheHandoff {
     /// Non-lifecycle server messages delivered to TheFence for request-tracker
     /// resolution. TheHandoff forwards these without retaining semantic state.
     var onServerMessage: (@ButtonHeistActor (ServerMessage, String?) -> Void)?
+    /// Transport send failures reported after Network.framework processes an enqueued write.
+    var onSendFailure: (@ButtonHeistActor (DeviceSendFailure, String?) -> Void)?
     /// Recording lifecycle messages from the server. TheFence owns the
     /// client-side recording phase; TheHandoff only forwards typed messages.
     var onRecordingEvent: (@ButtonHeistActor (RecordingEvent) -> Void)?
@@ -638,6 +640,9 @@ final class TheHandoff {
                     }
                     self.reconnectPolicy = .enabled(filter: filter, reconnectTask: reconnectTask)
                 }
+            case .sendFailed(let failure, let requestId):
+                guard self.isCurrentOrTerminalConnectionAttempt(attemptID) else { return }
+                self.onSendFailure?(failure, requestId)
             case .message(let message, let requestId, let accessibilityTrace):
                 if self.isActiveConnectionAttempt(attemptID) {
                     self.handleServerMessage(

@@ -23,6 +23,7 @@ enum ServerSendOutcome: Equatable, Sendable {
 enum ServerSendFailure: Error, LocalizedError, Equatable, Sendable {
     case clientNotFound(Int)
     case transportUnavailable
+    case transportFailed(clientId: Int, message: String)
     case payloadTooLarge(byteCount: Int, maxBytes: Int)
     case sendBufferFull(pendingBytes: Int, byteCount: Int, maxBytes: Int)
 
@@ -32,6 +33,8 @@ enum ServerSendFailure: Error, LocalizedError, Equatable, Sendable {
             return "Client \(clientId) is no longer connected"
         case .transportUnavailable:
             return "Server transport is not available"
+        case .transportFailed(let clientId, let message):
+            return "Transport send to client \(clientId) failed: \(message)"
         case .payloadTooLarge(let byteCount, let maxBytes):
             return "Payload is too large to send (\(byteCount) bytes, max \(maxBytes))"
         case .sendBufferFull(let pendingBytes, let byteCount, let maxBytes):
@@ -97,6 +100,7 @@ actor SimpleSocketServer {
         var onClientConnected: (@Sendable (_ clientId: Int, _ remoteAddress: String?) -> Void)?
         var onClientDisconnected: (@Sendable (Int) -> Void)?
         var onDataReceived: DataHandler?
+        var onSendFailed: (@Sendable (_ clientId: Int, _ failure: ServerSendFailure) -> Void)?
         var onUnauthenticatedData: (@Sendable (_ clientId: Int, _ data: Data, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
         var onRateLimited: (@Sendable (_ clientId: Int, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
 
@@ -104,12 +108,14 @@ actor SimpleSocketServer {
             onClientConnected: (@Sendable (_ clientId: Int, _ remoteAddress: String?) -> Void)? = nil,
             onClientDisconnected: (@Sendable (Int) -> Void)? = nil,
             onDataReceived: DataHandler? = nil,
+            onSendFailed: (@Sendable (_ clientId: Int, _ failure: ServerSendFailure) -> Void)? = nil,
             onUnauthenticatedData: (@Sendable (_ clientId: Int, _ data: Data, _ respond: @escaping @Sendable (Data) -> Void) -> Void)? = nil,
             onRateLimited: (@Sendable (_ clientId: Int, _ respond: @escaping @Sendable (Data) -> Void) -> Void)? = nil
         ) {
             self.onClientConnected = onClientConnected
             self.onClientDisconnected = onClientDisconnected
             self.onDataReceived = onDataReceived
+            self.onSendFailed = onSendFailed
             self.onUnauthenticatedData = onUnauthenticatedData
             self.onRateLimited = onRateLimited
         }
@@ -121,9 +127,28 @@ actor SimpleSocketServer {
     private let allowedScopes: Set<ConnectionScope>
 
     private let queue = DispatchQueue(label: "com.buttonheist.thehandoff.server")
+    private var sendContent: (
+        @Sendable (
+            _ connection: NWConnection,
+            _ content: Data,
+            _ completion: NWConnection.SendCompletion
+        ) -> Void
+    ) = { connection, content, completion in
+        connection.send(content: content, completion: completion)
+    }
 
     init(allowedScopes: Set<ConnectionScope> = ConnectionScope.all) {
         self.allowedScopes = allowedScopes
+    }
+
+    func setSendContentForTesting(
+        _ sendContent: @escaping @Sendable (
+            _ connection: NWConnection,
+            _ content: Data,
+            _ completion: NWConnection.SendCompletion
+        ) -> Void
+    ) {
+        self.sendContent = sendContent
     }
 
     // MARK: - Public API (async, actor-isolated)
@@ -269,13 +294,13 @@ actor SimpleSocketServer {
         state.pendingBytes += byteCount
         clients[clientId] = state
 
-        state.connection.send(content: dataToSend, completion: .contentProcessed { [weak self] error in
+        sendContent(state.connection, dataToSend, .contentProcessed { [weak self] error in
             if let error {
                 logger.error("Send error to client \(clientId): \(error)")
             }
             guard let self else { return }
             self.spawnTrackedTask { server in
-                await server.completedSend(clientId: clientId, byteCount: byteCount)
+                await server.completedSend(clientId: clientId, byteCount: byteCount, error: error)
             }
         })
         return .enqueued
@@ -328,7 +353,7 @@ actor SimpleSocketServer {
         if !errorData.hasSuffix(Data([0x0A])) {
             errorData.append(0x0A)
         }
-        state.connection.send(content: errorData, completion: .contentProcessed { error in
+        sendContent(state.connection, errorData, .contentProcessed { error in
             if let error {
                 logger.error("Send error to client \(clientId): \(error)")
             }
@@ -336,10 +361,13 @@ actor SimpleSocketServer {
     }
 
     /// Called when NWConnection finishes processing a send.
-    private func completedSend(clientId: Int, byteCount: Int) {
+    private func completedSend(clientId: Int, byteCount: Int, error: NWError?) {
         guard var state = clients[clientId] else { return }
         state.pendingBytes = max(0, state.pendingBytes - byteCount)
         clients[clientId] = state
+        if let error {
+            callbacks.onSendFailed?(clientId, .transportFailed(clientId: clientId, message: error.localizedDescription))
+        }
     }
 
     /// Disconnect a client.

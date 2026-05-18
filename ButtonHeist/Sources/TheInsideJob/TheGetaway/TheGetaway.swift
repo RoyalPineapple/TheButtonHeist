@@ -221,6 +221,9 @@ final class TheGetaway {
 
         case .fastPathHandled(let clientId):
             await muscle.noteClientActivity(clientId)
+
+        case .sendFailed(let clientId, let failure):
+            insideJobLogger.error("Send to client \(clientId) failed: \(failure.localizedDescription)")
         }
     }
 

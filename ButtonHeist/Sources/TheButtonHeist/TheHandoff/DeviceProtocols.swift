@@ -11,6 +11,7 @@ enum DeviceSendOutcome: Equatable, Sendable {
 enum DeviceSendFailure: Error, LocalizedError, Equatable, Sendable {
     case notConnected
     case encodingFailed(String)
+    case transportFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -18,6 +19,8 @@ enum DeviceSendFailure: Error, LocalizedError, Equatable, Sendable {
             return "Connection is closed"
         case .encodingFailed(let message):
             return "Failed to encode request: \(message)"
+        case .transportFailed(let message):
+            return "Transport send failed: \(message)"
         }
     }
 }
@@ -27,6 +30,7 @@ enum ConnectionEvent {
     case transportReady
     case connected
     case disconnected(DisconnectReason)
+    case sendFailed(DeviceSendFailure, requestId: String?)
     case message(
         ServerMessage,
         requestId: String?,

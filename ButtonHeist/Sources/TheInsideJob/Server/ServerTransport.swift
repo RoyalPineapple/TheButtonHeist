@@ -31,6 +31,8 @@ enum TransportEvent: Sendable {
     /// queue by `syncDataInterceptor`. The consumer typically only needs to
     /// note client activity; the response has already been sent.
     case fastPathHandled(clientId: Int)
+    /// Network.framework reported that an enqueued server-to-client send failed.
+    case sendFailed(clientId: Int, failure: ServerSendFailure)
 }
 
 /// Server-side transport layer for TheInsideJob.
@@ -187,6 +189,9 @@ final class ServerTransport: NSObject {
                     return
                 }
                 continuation.yield(.dataReceived(clientId: clientId, data: data, respond: respond))
+            },
+            onSendFailed: { clientId, failure in
+                continuation.yield(.sendFailed(clientId: clientId, failure: failure))
             },
             onUnauthenticatedData: { clientId, data, respond in
                 continuation.yield(.unauthenticatedData(clientId: clientId, data: data, respond: respond))
