@@ -136,7 +136,6 @@ public enum FenceParameterKey: String, CaseIterable, Sendable {
     case rotorIndex
     case samplesPerSegment
     case scale
-    case scope
     case segments
     case spread
     case start
@@ -694,12 +693,14 @@ extension TheFence.Command {
                 Read the app accessibility hierarchy. Call once on a new screen, then track changes via \
                 action deltas — re-fetch only when you need elements the delta didn't cover. \
                 Omit subtree for the whole hierarchy, or pass subtree to project the returned tree from \
-                a selected leaf or container node. Omit scope for the normal app accessibility state; \
-                use scope=visible only for fresh on-screen geometry diagnostics.
+                a selected leaf or container node.
                 """
 
         case Self.getScreen.rawValue:
-            return "Capture a PNG screenshot from the connected device. Returns inline base64 PNG image data. Use 'output' to save to a file path instead."
+            return """
+                Capture a PNG screenshot from the connected device and include the fresh visible \
+                accessibility tree. Returns inline base64 PNG image data; use output to save the image to a file.
+                """
 
         case Self.waitForChange.rawValue:
             return """
@@ -879,14 +880,6 @@ extension TheFence.Command {
         case .getInterface:
             return filter + [
                 FenceParameterBlocks.interfaceSubtree,
-                .init(
-                    key: "scope", type: .string, optionalRole: .behaviorSwitch,
-                    description: """
-                        Optional diagnostic scope. Omit for the app accessibility state. \
-                        Use visible only when you need fresh on-screen geometry diagnostics.
-                        """,
-                    enumValues: [GetInterfaceScope.visible.rawValue]
-                ),
                 .init(
                     key: "detail", type: .string, optionalRole: .behaviorSwitch,
                     description: """

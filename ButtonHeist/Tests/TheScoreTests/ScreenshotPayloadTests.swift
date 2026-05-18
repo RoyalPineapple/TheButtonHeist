@@ -1,5 +1,5 @@
 import XCTest
- import TheScore
+import TheScore
 
 final class ScreenshotPayloadTests: XCTestCase {
 
@@ -32,10 +32,29 @@ final class ScreenshotPayloadTests: XCTestCase {
     }
 
     func testEncodingRoundTrip() throws {
+        let element = HeistElement(
+            heistId: "checkout_total",
+            description: "Total $12.34",
+            label: "Total",
+            value: "$12.34",
+            identifier: "total",
+            traits: [.staticText],
+            frameX: 12,
+            frameY: 680,
+            frameWidth: 240,
+            frameHeight: 32,
+            activationPointX: 132,
+            activationPointY: 696,
+            actions: []
+        )
         let payload = ScreenPayload(
             pngData: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
             width: 1206,
-            height: 2622
+            height: 2622,
+            interface: Interface(
+                timestamp: Date(timeIntervalSince1970: 123),
+                tree: [.element(element)]
+            )
         )
 
         let encoder = JSONEncoder()
@@ -49,6 +68,9 @@ final class ScreenshotPayloadTests: XCTestCase {
         XCTAssertEqual(payload.pngData, decoded.pngData)
         XCTAssertEqual(payload.width, decoded.width)
         XCTAssertEqual(payload.height, decoded.height)
+        XCTAssertEqual(decoded.interface.elements, [element])
+        XCTAssertEqual(decoded.interface.elements.first?.frameY, 680)
+        XCTAssertEqual(decoded.interface.elements.first?.activationPointY, 696)
     }
 
     func testLargeBase64Data() throws {

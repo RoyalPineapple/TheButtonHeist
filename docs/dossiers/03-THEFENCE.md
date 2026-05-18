@@ -56,7 +56,7 @@ graph TD
             DevList["devices([DiscoveredDevice])"]
             IFResp["interface(Interface, detail, filteredFrom?, explore?)"]
             Action["action(result: ActionResult, expectation: ExpectationResult?)"]
-            Screenshot["screenshot(path, width, height) / screenshotData(pngData, width, height)"]
+            Screenshot["screenshot(path, ScreenPayload) / screenshotData(ScreenPayload)"]
             Recording["recording(path, payload) / recordingData(payload)"]
             Targets["targets([String: TargetConfig], defaultTarget)"]
             Batch["batch(results, failedIndex?)"]

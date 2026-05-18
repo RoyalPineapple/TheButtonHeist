@@ -39,6 +39,11 @@ final class TheBrains {
 
     private var waitForChangePhase: WaitForChangePhase = .idle
 
+    enum InterfaceObservation {
+        case success(Interface)
+        case failure(String)
+    }
+
     init(tripwire: TheTripwire) {
         self.tripwire = tripwire
         let stash = TheStash(tripwire: tripwire)
@@ -398,6 +403,27 @@ final class TheBrains {
         Interface(timestamp: Date(), tree: stash.wireTree())
     }
 
+    /// Build the latest visible Interface payload from current state.
+    func currentVisibleInterface() -> Interface {
+        Interface(timestamp: Date(), tree: stash.wireTree())
+    }
+
+    func observeInterface(_ query: InterfaceQuery) async -> InterfaceObservation {
+        _ = await tripwire.waitForAllClear(timeout: 0.5)
+        clearPendingRotorResult()
+
+        guard refresh() != nil else {
+            return .failure("Could not access root view")
+        }
+
+        _ = await navigation.exploreAndPrune()
+        let projection = currentInterface().projecting(query)
+        if let error = projection.error {
+            return .failure(error)
+        }
+        return .success(projection.interface)
+    }
+
     // MARK: - Background Accessibility Trace
 
     /// Check if the accessibility tree changed since the last response and
@@ -413,8 +439,7 @@ final class TheBrains {
             || currentContext != sent.beforeState.capture.context
         else { return nil }
 
-        _ = await navigation.exploreAndPrune()
-        let current = captureSemanticState()
+        let current = await semanticStateAfterVisibleRefresh(baseline: sent.beforeState)
         guard current.capture.hash != sent.captureHash else { return nil }
 
         // Background edges carry classifier evidence inside the trace so
@@ -493,16 +518,18 @@ final class TheBrains {
         }
         defer { waitForChangePhase = .idle }
 
-        guard let initial = await refreshSemanticSnapshot() else {
-            return treeUnavailableResult(method: .waitForChange)
-        }
-
-        let baseline: BeforeState = {
+        let sentBaseline: BeforeState? = {
             if case .sent(let sent) = sentHistory, !sent.captureHash.isEmpty {
                 return sent.beforeState
             }
-            return initial
+            return nil
         }()
+
+        guard let initial = await refreshSemanticSnapshot(baseline: sentBaseline) else {
+            return treeUnavailableResult(method: .waitForChange)
+        }
+
+        let baseline = sentBaseline ?? initial
         let preWaitElements = Dictionary(
             uniqueKeysWithValues: TheStash.WireConversion.toWire(baseline.snapshot).map {
                 ($0.heistId, $0)
@@ -547,7 +574,7 @@ final class TheBrains {
 
         // Timeout
         let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
-        let current = await refreshSemanticSnapshot()
+        let current = await refreshSemanticSnapshot(baseline: baseline)
         let afterSnapshot = current?.snapshot ?? []
         let timeoutAccessibilityTrace = current.map {
             makeClassifiedAccessibilityTrace(after: $0, parent: baseline)
@@ -584,7 +611,7 @@ final class TheBrains {
             guard remaining > 0 else { break }
 
             guard let current = await waitForSettledSemanticSnapshot(
-                baselineTripwireSignal: settleBaseline.tripwireSignal,
+                baseline: settleBaseline,
                 timeout: min(remaining, 1.0)
             ) else { continue }
             round += 1
@@ -885,14 +912,16 @@ final class TheBrains {
         return makeAccessibilityTrace(afterCapture: capture, parentCapture: parent.capture)
     }
 
-    private func refreshSemanticSnapshot() async -> BeforeState? {
+    private func refreshSemanticSnapshot(baseline: BeforeState? = nil) async -> BeforeState? {
         guard refresh() != nil else { return nil }
-        _ = await navigation.exploreAndPrune()
+        if let baseline {
+            return await semanticStateAfterVisibleRefresh(baseline: baseline)
+        }
         return captureSemanticState()
     }
 
     private func waitForSettledSemanticSnapshot(
-        baselineTripwireSignal: TheTripwire.TripwireSignal,
+        baseline: BeforeState,
         timeout: TimeInterval
     ) async -> BeforeState? {
         let timeoutMs = max(1, Int(timeout * 1000))
@@ -903,12 +932,27 @@ final class TheBrains {
         )
         let settle = await settleSession.run(
             start: CFAbsoluteTimeGetCurrent(),
-            baselineTripwireSignal: baselineTripwireSignal
+            baselineTripwireSignal: baseline.tripwireSignal
         )
         guard settle.outcome.didSettleCleanly, let screen = settle.finalScreen else { return nil }
         stash.currentScreen = screen
+        return await semanticStateAfterVisibleRefresh(baseline: baseline)
+    }
+
+    /// A Tripwire tick is permission to parse visible state, not to tickle
+    /// scroll views. Full exploration is reserved for screen changes and
+    /// post-action cycles.
+    private func semanticStateAfterVisibleRefresh(baseline: BeforeState) async -> BeforeState {
+        var current = captureSemanticState()
+        let classification = ScreenClassifier.classify(
+            before: baseline.screenSnapshot,
+            after: current.screenSnapshot
+        )
+        guard classification.isScreenChange else { return current }
+
         _ = await navigation.exploreAndPrune()
-        return captureSemanticState()
+        current = captureSemanticState()
+        return current
     }
 
     // MARK: - Screen Capture

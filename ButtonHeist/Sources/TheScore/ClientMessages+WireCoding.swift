@@ -50,7 +50,7 @@ extension ClientMessage {
     fileprivate var wireRepresentation: (type: WireMessageType, payload: (any Encodable)?) {
         switch self {
         case .clientHello: return (.clientHello, nil)
-        case .requestInterface: return (.requestInterface, nil)
+        case .requestInterface(let payload): return (.requestInterface, payload)
         case .ping: return (.ping, nil)
         case .status: return (.status, nil)
         case .resignFirstResponder: return (.resignFirstResponder, nil)
@@ -96,7 +96,7 @@ extension ClientMessage {
         }
         switch type {
         case .clientHello: return .clientHello
-        case .requestInterface: return .requestInterface
+        case .requestInterface: return .requestInterface(try payloadDecoder.map(InterfaceQuery.init(from:)) ?? InterfaceQuery())
         case .ping: return .ping
         case .status: return .status
         case .resignFirstResponder: return .resignFirstResponder

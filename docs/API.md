@@ -471,8 +471,8 @@ Typed response enum with `humanFormatted() -> String`, `jsonDict() -> [String: A
 | `devices(_:)` | List of discovered devices |
 | `interface(_:)` | UI element state |
 | `action(result:expectation:)` | Action outcome with delta and optional expectation validation result |
-| `screenshot(path:width:height:)` | Screenshot saved to path |
-| `screenshotData(pngData:width:height:)` | Screenshot as base64 PNG |
+| `screenshot(path:payload:)` | Screenshot saved to path plus screen payload metadata |
+| `screenshotData(payload:)` | Screenshot as base64 PNG plus visible accessibility geometry |
 | `recording(path:payload:)` | Recording saved to path |
 | `recordingData(payload:)` | Recording as base64 video |
 | `batch(results:completedSteps:failedIndex:totalTimingMs:expectationsChecked:expectationsMet:)` | Batched command results with aggregate timing, optional failure index, and expectation stats |
@@ -801,7 +801,7 @@ Messages sent from client to server.
 - `waitForIdle(WaitForIdleTarget)` - Wait for animations to settle (internal)
 - `waitForChange(WaitForChangeTarget)` - Wait for UI to change, optionally matching an expectation
 - `waitFor(WaitForTarget)` - Wait for an element matching a predicate to appear or disappear
-- `requestScreen` - Request PNG screenshot
+- `requestScreen` - Request PNG screenshot plus visible accessibility geometry
 - `startRecording(RecordingConfig)` - Start screen recording (H.264/MP4)
 - `stopRecording` - Stop active screen recording
 - `status` - Lightweight status probe allowed after the hello handshake and before auth (identity + availability, no session claim)
@@ -1725,7 +1725,7 @@ This command is useful for persistent connections where multiple commands need t
 
 ### buttonheist get_screen
 
-Capture a screenshot from the connected device.
+Capture a screenshot from the connected device. JSON responses include the screenshot metadata and visible accessibility geometry; raw stdout remains PNG bytes.
 
 ```
 USAGE: buttonheist get_screen [OPTIONS]

@@ -12,7 +12,7 @@ The most common cause. You carried a heistId across a screen transition — a na
 
 ### The element is not currently on screen
 
-The default `get_interface` read returns the app accessibility state for the current screen. If you used `scope: "visible"`, you asked for fresh on-screen geometry diagnostics, so content below the fold may not appear in that response.
+`get_interface` returns the app accessibility state for the current screen. `get_screen` returns the screenshot plus fresh visible geometry when you need to confirm what is currently drawn.
 
 **Fix:** Use `element_search` with a matcher to find unseen content. If a `heistId` is still valid in the current hierarchy, use `scroll_to_visible` to bring that element into view. See the scrollable screens section in the Agent Guide.
 

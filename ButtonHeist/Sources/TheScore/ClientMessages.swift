@@ -40,8 +40,8 @@ public enum ClientMessage: Codable, Sendable {
     /// Authenticate with a token (sent after clientHello handshake completes)
     case authenticate(AuthenticatePayload)
 
-    /// Request current interface (UI element hierarchy)
-    case requestInterface
+    /// Request current semantic interface (app accessibility state)
+    case requestInterface(InterfaceQuery)
 
     /// Ping for keepalive
     case ping

@@ -8,16 +8,6 @@ public enum InterfaceDetail: String, CaseIterable, Sendable {
     case full
 }
 
-/// Capture scope for get_interface.
-///
-/// Omitted scope captures the app accessibility hierarchy. The only wire value
-/// is `visible`, the diagnostic on-screen parse.
-public enum GetInterfaceScope: String, CaseIterable, Sendable {
-    /// Internal default for omitted scope; not accepted as a wire value.
-    case full
-    case visible
-}
-
 /// Summary of a single step within a batch execution.
 ///
 /// Consumed by batch formatters to build per-step human/JSON rows. `deltaKind`
@@ -343,10 +333,10 @@ public enum FenceResponse {
     case interface(Interface, detail: InterfaceDetail = .summary, filteredFrom: Int? = nil, explore: ExploreResult? = nil)
     case action(result: ActionResult, expectation: ExpectationResult? = nil)
     /// Screenshot written to disk. `path` is the resolved filesystem location.
-    case screenshot(path: String, width: Double, height: Double)
+    case screenshot(path: String, payload: ScreenPayload)
     /// Screenshot held in memory as base64 PNG. Returned when no session is
     /// active and no explicit output path was requested.
-    case screenshotData(pngData: String, width: Double, height: Double)
+    case screenshotData(payload: ScreenPayload)
     /// Recording written to disk. `path` is the resolved filesystem location.
     case recording(path: String, payload: RecordingPayload)
     /// Recording held in memory. Returned when no session is active and no
@@ -446,10 +436,10 @@ public enum FenceResponse {
                 }
             }
             return text
-        case .screenshot(let path, let width, let height):
-            return "✓ Screenshot saved: \(path)  (\(Int(width)) × \(Int(height)))"
-        case .screenshotData(let pngData, let width, let height):
-            return "✓ Screenshot captured (\(Int(width)) × \(Int(height))) — base64 PNG follows\n\(pngData)"
+        case .screenshot(let path, let payload):
+            return "✓ Screenshot saved: \(path)  (\(Int(payload.width)) × \(Int(payload.height)))"
+        case .screenshotData(let payload):
+            return "✓ Screenshot captured (\(Int(payload.width)) × \(Int(payload.height))) — base64 PNG follows\n\(payload.pngData)"
         case .recording(let path, let payload):
             return formatRecordingHuman(path: path, payload: payload)
         case .recordingData(let payload):

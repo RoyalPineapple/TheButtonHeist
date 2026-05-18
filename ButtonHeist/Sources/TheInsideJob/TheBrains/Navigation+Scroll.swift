@@ -849,7 +849,7 @@ extension Navigation {
                 method,
                 message: "\(commandName) failed: target is not uniquely resolved in the visible hierarchy; "
                     + "\(diagnostics)\nNext: use \(ScrollMode.toVisible.canonicalCommand) with a heistId for a known off-screen "
-                    + "target, or retarget a visible element from get_interface(scope: \"visible\")."
+                    + "target, or retarget from get_screen's visible interface."
             )
         case .notFound(let diagnostics):
             return .failure(.elementNotFound, message: diagnostics)

@@ -458,14 +458,14 @@ Attach expectations to actions where you have a clear hypothesis. They cost noth
 
 ### Progressive disclosure
 
-Start with `get_interface` for the current screen. If you need less, filter by traits or labels. If a specific element is not currently on screen, use `element_search`; use `scroll_to_visible` to return to a known `heistId` while it is still valid in the current hierarchy. Use `scope: "visible"` only when you explicitly need fresh on-screen geometry diagnostics. Each level costs more time — escalate only when the cheaper option isn't enough.
+Start with `get_interface` for the current screen. If you need less, filter by traits, labels, or a subtree selector. If a specific element is not currently on screen, use `element_search`; use `scroll_to_visible` to return to a known `heistId` while it is still valid in the current hierarchy. Use `get_screen` when you explicitly need fresh on-screen geometry or pixels. Each level costs more time — escalate only when the cheaper option isn't enough.
 
 ## Quick Reference
 
 | Task | Tool | Key Parameters |
 |------|------|----------------|
 | Read app accessibility state | `get_interface` | `detail`, `label`, `traits` |
-| Fresh on-screen geometry diagnostic | `get_interface` | `scope: "visible"` |
+| Fresh on-screen geometry diagnostic | `get_screen` | none |
 | Find unseen element not currently on screen | `scroll mode=search` / `element_search` | `label`/`identifier` |
 | Return to known element not currently on screen | `scroll mode=to_visible` / `scroll_to_visible` | `heistId` |
 | Tap/activate a control | `activate` | `heistId`, `action` |

@@ -113,14 +113,19 @@ final class FenceResponseTests: XCTestCase {
     }
 
     func testScreenshotHumanFormatting() {
-        let response = FenceResponse.screenshot(path: "/tmp/screen.png", width: 393, height: 852)
+        let response = FenceResponse.screenshot(
+            path: "/tmp/screen.png",
+            payload: ScreenPayload(pngData: "abc123", width: 393, height: 852)
+        )
         let output = response.humanFormatted()
         XCTAssertTrue(output.contains("/tmp/screen.png"))
         XCTAssertTrue(output.contains("393 × 852"))
     }
 
     func testScreenshotDataHumanFormatting() {
-        let response = FenceResponse.screenshotData(pngData: "abc123", width: 393, height: 852)
+        let response = FenceResponse.screenshotData(
+            payload: ScreenPayload(pngData: "abc123", width: 393, height: 852)
+        )
         let output = response.humanFormatted()
         XCTAssertTrue(output.contains("393 × 852"))
         XCTAssertTrue(output.contains("abc123"))
@@ -382,7 +387,10 @@ final class FenceResponseTests: XCTestCase {
     }
 
     func testScreenshotJsonFormatting() {
-        let response = FenceResponse.screenshot(path: "/tmp/s.png", width: 393, height: 852)
+        let response = FenceResponse.screenshot(
+            path: "/tmp/s.png",
+            payload: ScreenPayload(pngData: "abc123", width: 393, height: 852)
+        )
         let dict = response.jsonDict()
         XCTAssertEqual(dict["status"] as? String, "ok")
         XCTAssertEqual(dict["path"] as? String, "/tmp/s.png")
@@ -391,7 +399,9 @@ final class FenceResponseTests: XCTestCase {
     }
 
     func testScreenshotDataJsonFormatting() {
-        let response = FenceResponse.screenshotData(pngData: "base64data", width: 393, height: 852)
+        let response = FenceResponse.screenshotData(
+            payload: ScreenPayload(pngData: "base64data", width: 393, height: 852)
+        )
         let dict = response.jsonDict()
         XCTAssertEqual(dict["status"] as? String, "ok")
         XCTAssertEqual(dict["pngData"] as? String, "base64data")

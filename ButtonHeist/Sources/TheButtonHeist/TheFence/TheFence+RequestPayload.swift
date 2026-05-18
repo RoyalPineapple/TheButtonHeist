@@ -31,11 +31,8 @@ extension TheFence {
     }
 
     struct GetInterfaceRequest {
-        let scope: GetInterfaceScope
         let detail: InterfaceDetail
-        let subtree: SubtreeSelector?
-        let matcher: ElementMatcher
-        let elementIds: [String]?
+        let query: InterfaceQuery
     }
 
     struct ArtifactRequest {

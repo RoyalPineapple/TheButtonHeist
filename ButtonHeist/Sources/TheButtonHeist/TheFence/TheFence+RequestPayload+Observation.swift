@@ -21,11 +21,12 @@ extension TheFence {
 
     private func decodeGetInterfaceRequest(_ request: [String: Any]) throws -> GetInterfaceRequest {
         GetInterfaceRequest(
-            scope: try decodeGetInterfaceScope(request),
             detail: try request.schemaEnum("detail", as: InterfaceDetail.self) ?? .summary,
-            subtree: try decodeInterfaceSubtreeSelector(request),
-            matcher: try elementMatcher(request),
-            elementIds: try request.schemaStringArray("elements")
+            query: InterfaceQuery(
+                subtree: try decodeInterfaceSubtreeSelector(request),
+                matcher: try elementMatcher(request),
+                elementIds: try request.schemaStringArray("elements")
+            )
         )
     }
 
@@ -45,31 +46,12 @@ extension TheFence {
             requestId: UUID().uuidString,
             originalRequest: ["command": Command.getInterface.rawValue],
             payload: .getInterface(GetInterfaceRequest(
-                scope: .full,
                 detail: .summary,
-                subtree: nil,
-                matcher: ElementMatcher(),
-                elementIds: nil
+                query: InterfaceQuery()
             )),
             expectationPayload: ExpectationPayload(expectation: nil, timeout: nil),
             immediateResponse: nil
         )
-    }
-
-    private func decodeGetInterfaceScope(_ request: [String: Any]) throws -> GetInterfaceScope {
-        if let rawScope = try request.schemaString("scope") {
-            switch rawScope {
-            case GetInterfaceScope.visible.rawValue:
-                return .visible
-            default:
-                throw SchemaValidationError(
-                    field: "scope",
-                    observed: rawScope as Any,
-                    expected: "omitted or visible"
-                )
-            }
-        }
-        return .full
     }
 
     private func decodeInterfaceSubtreeSelector(_ request: [String: Any]) throws -> SubtreeSelector? {

@@ -12,7 +12,7 @@ Button Heist drives iOS apps through the accessibility layer — the same interf
 
 ## Choosing Tools
 
-**Observing**: `get_interface` for element data, `get_screen` for visual context. Start with `get_interface`; by default it returns the app accessibility state for the current screen, including content Button Heist can discover in scroll views. Pass `subtree.element` to project from a leaf, or `subtree.container` to project from a container. Use `scope: "visible"` only for fresh on-screen geometry diagnostics. Reach for `get_screen` only when layout or visual state matters.
+**Observing**: `get_interface` for element data, `get_screen` for visual context plus fresh visible geometry. Start with `get_interface`; it returns the app accessibility state for the current screen, including content Button Heist can discover in scroll views. Pass `subtree.element` to project from a leaf, or `subtree.container` to project from a container. Reach for `get_screen` when layout, pixels, or the current viewport geometry matters.
 
 **Acting**: `activate` is your primary tool — it taps, toggles, follows links. Use `action: "increment"` or `"decrement"` for adjustable controls, with optional `count` to repeat 1...100 times. `type_text` for keyboard input. `gesture` with type "swipe" for directional gestures. `scroll` for paging through lists. Prefer `activate` over `gesture` — raw coordinates are fragile and don't record well.
 

@@ -35,10 +35,12 @@ extension FenceResponse {
             return interfaceJsonDict(interface, detail: detail, filteredFrom: filteredFrom, explore: explore)
         case .action(let result, let expectation):
             return actionWithExpectationJsonDict(result, expectation: expectation)
-        case .screenshot(let path, let width, let height):
-            return ["status": "ok", "path": path, "width": width, "height": height]
-        case .screenshotData(let pngData, let width, let height):
-            return ["status": "ok", "pngData": pngData, "width": width, "height": height]
+        case .screenshot(let path, let payload):
+            var dict = screenJsonDict(payload, includePNGData: false)
+            dict["path"] = path
+            return dict
+        case .screenshotData(let payload):
+            return screenJsonDict(payload, includePNGData: true)
         case .recording(let path, let payload):
             return recordingJsonDict(path: path, payload: payload)
         case .recordingData(let payload):
@@ -94,6 +96,19 @@ extension FenceResponse {
             "retryable": false,
             "hint": "Report this diagnostic with the command that produced it.",
         ]
+    }
+
+    private func screenJsonDict(_ payload: ScreenPayload, includePNGData: Bool) -> [String: Any] {
+        var dict: [String: Any] = [
+            "status": "ok",
+            "width": payload.width,
+            "height": payload.height,
+            "interface": interfaceDictionary(payload.interface, detail: .full),
+        ]
+        if includePNGData {
+            dict["pngData"] = payload.pngData
+        }
+        return dict
     }
 
     private func playbackFailureDict(_ failure: PlaybackFailure) -> [String: Any] {

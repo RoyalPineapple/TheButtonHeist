@@ -35,7 +35,7 @@ TheBrains keeps the post-action delta cycle, dispatch, wait handlers, response s
 
    **Wait handlers** — `executeWaitForIdle(timeout:)` and `executeWaitForChange(timeout:expectation:)` live here (not in TheGetaway) because they're accessibility-level work: refresh, settle, delta, expectation evaluation. Wait-for-change installs one server-side predicate, checks current state first, then watches settled changes until the expectation is true or the timeout clears it. In that wait-specific path, `element_disappeared` is current absence, not proof of a prior removal event.
 
-   **TheGetaway-facing methods** — `currentInterface()`, `broadcastInterfaceIfChanged()`, `computeBackgroundAccessibilityTrace()`, `captureScreen()`, `captureScreenForRecording()`, `screenName`, `screenId`, `stakeout`. These exist so TheGetaway and TheInsideJob never reach through to TheStash.
+   **TheGetaway-facing methods** — `observeInterface(_:)`, `currentVisibleInterface()`, `computeBackgroundAccessibilityTrace()`, `captureScreen()`, `captureScreenForRecording()`, `screenName`, `screenId`, `stakeout`. These exist so TheGetaway and TheInsideJob never reach through to TheStash. Observation policy lives here: `get_interface` requests can trigger exploration and projection, while `get_screen` performs a fresh visible parse and returns geometry with the screenshot.
 
 3. **`Actions.swift`** — Two generic pipelines and all `executeXxx` methods:
    - `performElementAction(target:method:action:)` — `navigation.ensureOnScreen` → `stash.resolveTarget` → checkInteractivity → action closure. Used by activate, increment, decrement, customAction.

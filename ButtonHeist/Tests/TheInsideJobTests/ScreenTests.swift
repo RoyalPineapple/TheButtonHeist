@@ -409,6 +409,30 @@ final class ScreenTests: XCTestCase {
         XCTAssertEqual(updated.findElement(heistId: "button_known")?.element.label, "Known")
     }
 
+    func testRefreshingVisibleStateSlotsVisibleUpdatesWithoutTouchingOffViewportElements() {
+        let counter = makeElement(label: "Total", value: "$4.00", traits: .staticText)
+        let knownOnly = makeElement(label: "Below Fold", value: "old", traits: .button)
+        let updatedCounter = makeElement(label: "Total", value: "$8.00", traits: .staticText)
+        let screen = Screen.makeForTests(
+            elements: [(counter, "total_staticText")],
+            offViewport: [
+                Screen.OffViewportEntry(
+                    knownOnly,
+                    heistId: "below_fold_button",
+                    contentSpaceOrigin: CGPoint(x: 0, y: 2_000)
+                )
+            ]
+        )
+        let refresh = Screen.makeForTests(elements: [(updatedCounter, "total_staticText")])
+
+        let updated = screen.refreshingVisibleState(with: refresh)
+
+        XCTAssertEqual(updated.findElement(heistId: "total_staticText")?.element.value, "$8.00")
+        XCTAssertEqual(updated.findElement(heistId: "below_fold_button")?.element.value, "old")
+        XCTAssertEqual(updated.visibleIds, ["total_staticText"])
+        XCTAssertEqual(updated.knownIds, ["below_fold_button", "total_staticText"])
+    }
+
     func testRefreshingVisibleStateDropsDisappearedVisibleNonScrollElements() {
         let disappearing = makeElement(label: "Disappearing", traits: .staticText)
         let visible = makeElement(label: "Visible", traits: .button)

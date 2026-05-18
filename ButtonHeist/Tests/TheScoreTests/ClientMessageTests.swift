@@ -14,7 +14,7 @@ final class ClientMessageTests: XCTestCase {
     }
 
     func testRequestSnapshotEncodeDecode() throws {
-        let message = ClientMessage.requestInterface
+        let message = ClientMessage.requestInterface(InterfaceQuery())
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 

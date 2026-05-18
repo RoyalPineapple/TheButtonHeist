@@ -2402,74 +2402,20 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(batch.summaries[1].error, "skipped: stop_on_error stopped batch after step 0")
     }
 
-    // MARK: - get_interface scope
+    // MARK: - get_interface
 
     @ButtonHeistActor
-    func testGetInterfaceDefaultSendsExploreMessage() async {
+    func testGetInterfaceDefaultSendsRequestInterfaceQuery() async {
         let (fence, mockConn) = makeConnectedFence()
         _ = try? await fence.execute(request: ["command": "get_interface"])
         guard let (message, _) = mockConn.sent.last,
-              case .explore = message else {
-            XCTFail("Expected explore message, got \(String(describing: mockConn.sent.last))")
-            return
-        }
-    }
-
-    @ButtonHeistActor
-    func testGetInterfaceScopeFullIsRejected() async {
-        await assertValidationError(
-            ["command": "get_interface", "scope": "full"],
-            equals: "schema validation failed for scope: observed string \"full\"; expected omitted or visible"
-        )
-    }
-
-    @ButtonHeistActor
-    func testGetInterfaceScopeVisibleRequestsFreshVisibleInterfaceWithGeometry() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-        let element = HeistElement(
-            heistId: "visible_button",
-            description: "Visible Button",
-            label: "Visible Button",
-            value: nil,
-            identifier: nil,
-            traits: [.button],
-            frameX: 10,
-            frameY: 20,
-            frameWidth: 120,
-            frameHeight: 44,
-            actions: [.activate]
-        )
-        mockConn.autoResponse = { message in
-            switch message {
-            case .requestInterface:
-                return .interface(Interface(timestamp: Date(), tree: [.element(element)]))
-            default:
-                return .actionResult(ActionResult(success: true, method: .activate))
-            }
-        }
-
-        let response = try await fence.execute(request: [
-            "command": "get_interface",
-            "scope": "visible",
-            "detail": "full",
-        ])
-
-        guard let (message, _) = mockConn.sent.last,
-              case .requestInterface = message else {
+              case .requestInterface(let query) = message else {
             XCTFail("Expected requestInterface message, got \(String(describing: mockConn.sent.last))")
             return
         }
-
-        let json = response.jsonDict()
-        let interface = json["interface"] as! [String: Any]
-        XCTAssertNil(json["explore"])
-        let tree = interface["tree"] as! [[String: Any]]
-        let visibleElement = tree[0]["element"] as! [String: Any]
-        XCTAssertEqual(visibleElement["heistId"] as? String, "visible_button")
-        XCTAssertEqual(visibleElement["frameX"] as? Double, 10)
-        XCTAssertEqual(visibleElement["frameY"] as? Double, 20)
-        XCTAssertEqual(visibleElement["frameWidth"] as? Double, 120)
-        XCTAssertEqual(visibleElement["frameHeight"] as? Double, 44)
+        XCTAssertNil(query.subtree)
+        XCTAssertFalse(query.matcher.hasPredicates)
+        XCTAssertNil(query.elementIds)
     }
 
     @ButtonHeistActor
@@ -2504,11 +2450,10 @@ final class TheFenceHandlerTests: XCTestCase {
     func testGetInterfaceDefaultNoSubtreeReturnsWholeHierarchy() async throws {
         let (fence, mockConn) = makeConnectedFence()
         let interfaceFixture = projectionTestInterface()
-        let exploreResponse = exploredActionResult(interface: interfaceFixture)
         mockConn.autoResponse = { message in
             switch message {
-            case .explore:
-                return .actionResult(exploreResponse)
+            case .requestInterface:
+                return .interface(interfaceFixture)
             default:
                 return .actionResult(ActionResult(success: true, method: .activate))
             }
@@ -2528,103 +2473,16 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testGetInterfaceDefaultFallsBackToExplorePayloadWhenTraceOnlyContainsVisiblePage() async throws {
+    func testGetInterfaceQueryIsProjectedByInsideJobBoundary() async throws {
         let (fence, mockConn) = makeConnectedFence()
-        let first = testElement("first", label: "First")
-        let second = testElement("second", label: "Second")
-        let visibleTrace = Interface(timestamp: Date(), tree: [.element(second)])
-        let exploreResponse = ActionResult(
-            success: true,
-            method: .explore,
-            payload: .explore(ExploreResult(
-                elements: [first, second],
-                scrollCount: 1,
-                containersExplored: 1,
-                explorationTime: 0.1
-            )),
-            accessibilityTrace: AccessibilityTrace(interface: visibleTrace)
-        )
         mockConn.autoResponse = { message in
             switch message {
-            case .explore:
-                return .actionResult(exploreResponse)
-            default:
-                return .actionResult(ActionResult(success: true, method: .activate))
-            }
-        }
-
-        let response = try await fence.execute(request: ["command": "get_interface"])
-
-        let interface = try XCTUnwrap(response.jsonDict()["interface"] as? [String: Any])
-        let tree = try XCTUnwrap(interface["tree"] as? [[String: Any]])
-        let ids = tree.compactMap { node in
-            (node["element"] as? [String: Any])?["heistId"] as? String
-        }
-        XCTAssertEqual(ids, ["first", "second"])
-    }
-
-    @ButtonHeistActor
-    func testGetInterfaceSubtreeByLeafHeistIdReturnsOnlyLeaf() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-        let exploreResponse = exploredActionResult(interface: projectionTestInterface())
-        mockConn.autoResponse = { message in
-            switch message {
-            case .explore:
-                return .actionResult(exploreResponse)
-            default:
-                return .actionResult(ActionResult(success: true, method: .activate))
-            }
-        }
-
-        let response = try await fence.execute(request: [
-            "command": "get_interface",
-            "subtree": ["element": ["heistId": "cancel"]],
-        ])
-
-        let json = response.jsonDict()
-        XCTAssertEqual(json["filteredFrom"] as? Int, 4)
-        let interface = json["interface"] as! [String: Any]
-        let tree = interface["tree"] as! [[String: Any]]
-        XCTAssertEqual(tree.count, 1)
-        XCTAssertNil(tree[0]["container"])
-        let element = tree[0]["element"] as! [String: Any]
-        XCTAssertEqual(element["heistId"] as? String, "cancel")
-    }
-
-    @ButtonHeistActor
-    func testGetInterfaceSubtreeByLeafMatcherReturnsOnlyLeaf() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-        let exploreResponse = exploredActionResult(interface: projectionTestInterface())
-        mockConn.autoResponse = { message in
-            switch message {
-            case .explore:
-                return .actionResult(exploreResponse)
-            default:
-                return .actionResult(ActionResult(success: true, method: .activate))
-            }
-        }
-
-        let response = try await fence.execute(request: [
-            "command": "get_interface",
-            "subtree": ["element": ["label": "Cancel", "traits": ["button"]]],
-        ])
-
-        let json = response.jsonDict()
-        let interface = json["interface"] as! [String: Any]
-        let tree = interface["tree"] as! [[String: Any]]
-        XCTAssertEqual(tree.count, 1)
-        let element = tree[0]["element"] as! [String: Any]
-        XCTAssertEqual(element["heistId"] as? String, "cancel")
-    }
-
-    @ButtonHeistActor
-    func testGetInterfaceSubtreeByContainerStableIdReturnsSubtree() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-        let exploreResponse = exploredActionResult(interface: projectionTestInterface())
-        mockConn.autoResponse = { message in
-            switch message {
-            case .explore:
-                return .actionResult(exploreResponse)
+            case .requestInterface(let query):
+                let projection = self.projectionTestInterface().projecting(query)
+                if let error = projection.error {
+                    return .error(ServerError(kind: .general, message: error))
+                }
+                return .interface(projection.interface)
             default:
                 return .actionResult(ActionResult(success: true, method: .activate))
             }
@@ -2635,8 +2493,14 @@ final class TheFenceHandlerTests: XCTestCase {
             "subtree": ["container": ["stableId": "semantic_actions__actions"]],
         ])
 
+        guard let (message, _) = mockConn.sent.last,
+              case .requestInterface(let query) = message else {
+            XCTFail("Expected requestInterface query, got \(String(describing: mockConn.sent.last))")
+            return
+        }
+        XCTAssertNotNil(query.subtree)
+
         let json = response.jsonDict()
-        XCTAssertEqual(json["filteredFrom"] as? Int, 4)
         let interface = json["interface"] as! [String: Any]
         let tree = interface["tree"] as! [[String: Any]]
         XCTAssertEqual(tree.count, 1)
@@ -2646,115 +2510,6 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(children.count, 2)
         XCTAssertEqual((children[0]["element"] as? [String: Any])?["heistId"] as? String, "submit")
         XCTAssertEqual((children[1]["element"] as? [String: Any])?["heistId"] as? String, "cancel")
-    }
-
-    @ButtonHeistActor
-    func testGetInterfaceSubtreeBySemanticGroupMetadataReturnsSubtree() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-        let exploreResponse = exploredActionResult(interface: projectionTestInterface())
-        mockConn.autoResponse = { message in
-            switch message {
-            case .explore:
-                return .actionResult(exploreResponse)
-            default:
-                return .actionResult(ActionResult(success: true, method: .activate))
-            }
-        }
-
-        let response = try await fence.execute(request: [
-            "command": "get_interface",
-            "subtree": ["container": ["type": "semanticGroup", "label": "Actions", "identifier": "actions"]],
-        ])
-
-        let json = response.jsonDict()
-        let interface = json["interface"] as! [String: Any]
-        let tree = interface["tree"] as! [[String: Any]]
-        XCTAssertEqual(tree.count, 1)
-        let container = tree[0]["container"] as! [String: Any]
-        XCTAssertEqual(container["stableId"] as? String, "semantic_actions__actions")
-        let children = container["children"] as! [[String: Any]]
-        XCTAssertEqual(children.count, 2)
-    }
-
-    @ButtonHeistActor
-    func testGetInterfaceAmbiguousSubtreeWithoutOrdinalErrors() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-        let exploreResponse = exploredActionResult(interface: projectionTestInterface(includeDuplicateGroup: true))
-        mockConn.autoResponse = { message in
-            switch message {
-            case .explore:
-                return .actionResult(exploreResponse)
-            default:
-                return .actionResult(ActionResult(success: true, method: .activate))
-            }
-        }
-
-        let response = try await fence.execute(request: [
-            "command": "get_interface",
-            "subtree": ["container": ["type": "semanticGroup", "label": "Actions"]],
-        ])
-
-        let json = response.jsonDict()
-        XCTAssertEqual(json["status"] as? String, "error")
-        let message = json["message"] as? String ?? ""
-        XCTAssertTrue(message.contains("subtree matched 2 nodes"), message)
-        XCTAssertTrue(message.contains("subtree.ordinal"), message)
-        XCTAssertTrue(message.contains("semantic_actions__actions"), message)
-        XCTAssertTrue(message.contains("semantic_actions__secondary_actions"), message)
-    }
-
-    @ButtonHeistActor
-    func testGetInterfaceSubtreeOrdinalDisambiguates() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-        let exploreResponse = exploredActionResult(interface: projectionTestInterface(includeDuplicateGroup: true))
-        mockConn.autoResponse = { message in
-            switch message {
-            case .explore:
-                return .actionResult(exploreResponse)
-            default:
-                return .actionResult(ActionResult(success: true, method: .activate))
-            }
-        }
-
-        let response = try await fence.execute(request: [
-            "command": "get_interface",
-            "subtree": ["container": ["type": "semanticGroup", "label": "Actions"], "ordinal": 1],
-        ])
-
-        let json = response.jsonDict()
-        let interface = json["interface"] as! [String: Any]
-        let tree = interface["tree"] as! [[String: Any]]
-        XCTAssertEqual(tree.count, 1)
-        let container = tree[0]["container"] as! [String: Any]
-        XCTAssertEqual(container["stableId"] as? String, "semantic_actions__secondary_actions")
-        let children = container["children"] as! [[String: Any]]
-        XCTAssertEqual(children.count, 1)
-        XCTAssertEqual((children[0]["element"] as? [String: Any])?["heistId"] as? String, "archive")
-    }
-
-    @ButtonHeistActor
-    func testGetInterfaceMissingSubtreeErrors() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-        let exploreResponse = exploredActionResult(interface: projectionTestInterface())
-        mockConn.autoResponse = { message in
-            switch message {
-            case .explore:
-                return .actionResult(exploreResponse)
-            default:
-                return .actionResult(ActionResult(success: true, method: .activate))
-            }
-        }
-
-        let response = try await fence.execute(request: [
-            "command": "get_interface",
-            "subtree": ["container": ["stableId": "missing"]],
-        ])
-
-        let json = response.jsonDict()
-        XCTAssertEqual(json["status"] as? String, "error")
-        let message = json["message"] as? String ?? ""
-        XCTAssertTrue(message.contains("subtree matched no nodes"), message)
-        XCTAssertTrue(message.contains("stableId"), message)
     }
 
     func testContainerStableIdAppearsInSummaryJsonAndCompactOutput() {
@@ -2775,15 +2530,15 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testGetInterfaceDefaultAppliesMatcherFilterAfterExplore() async throws {
+    func testGetInterfaceSendsMatcherInObservationQuery() async throws {
         let (fence, mockConn) = makeConnectedFence()
         let submit = testElement("submit", label: "Submit", traits: [.button])
         let cancel = testElement("cancel", label: "Cancel", traits: [.button])
-        let exploreResponse = exploredActionResult(elements: [submit, cancel])
+        let sourceInterface = Interface(timestamp: Date(), tree: [.element(submit), .element(cancel)])
         mockConn.autoResponse = { message in
             switch message {
-            case .explore:
-                return .actionResult(exploreResponse)
+            case .requestInterface(let query):
+                return .interface(sourceInterface.projecting(query).interface)
             default:
                 return .actionResult(ActionResult(success: true, method: .activate))
             }
@@ -2795,32 +2550,30 @@ final class TheFenceHandlerTests: XCTestCase {
         ])
 
         guard let (message, _) = mockConn.sent.last,
-              case .explore = message else {
-            XCTFail("Expected default get_interface to send explore, got \(String(describing: mockConn.sent.last))")
+              case .requestInterface(let query) = message else {
+            XCTFail("Expected requestInterface query, got \(String(describing: mockConn.sent.last))")
             return
         }
+        XCTAssertEqual(query.matcher.label, "Submit")
 
         let json = response.jsonDict()
-        XCTAssertEqual(json["filteredFrom"] as? Int, 2)
-        let explore = json["explore"] as? [String: Any]
-        XCTAssertEqual(explore?["elementCount"] as? Int, 2)
-        let interface = json["interface"] as! [String: Any]
-        let tree = interface["tree"] as! [[String: Any]]
+        let responseInterface = json["interface"] as! [String: Any]
+        let tree = responseInterface["tree"] as! [[String: Any]]
         XCTAssertEqual(tree.count, 1)
         let element = tree[0]["element"] as! [String: Any]
         XCTAssertEqual(element["heistId"] as? String, "submit")
     }
 
     @ButtonHeistActor
-    func testGetInterfaceDefaultAppliesElementsFilterAfterExplore() async throws {
+    func testGetInterfaceSendsElementIdsInObservationQuery() async throws {
         let (fence, mockConn) = makeConnectedFence()
         let first = testElement("first", label: "First")
         let second = testElement("second", label: "Second")
-        let exploreResponse = exploredActionResult(elements: [first, second])
+        let sourceInterface = Interface(timestamp: Date(), tree: [.element(first), .element(second)])
         mockConn.autoResponse = { message in
             switch message {
-            case .explore:
-                return .actionResult(exploreResponse)
+            case .requestInterface(let query):
+                return .interface(sourceInterface.projecting(query).interface)
             default:
                 return .actionResult(ActionResult(success: true, method: .activate))
             }
@@ -2829,132 +2582,42 @@ final class TheFenceHandlerTests: XCTestCase {
         let response = try await fence.execute(request: [
             "command": "get_interface",
             "elements": ["second"],
-        ])
-
-        let json = response.jsonDict()
-        XCTAssertEqual(json["filteredFrom"] as? Int, 2)
-        let interface = json["interface"] as! [String: Any]
-        let tree = interface["tree"] as! [[String: Any]]
-        XCTAssertEqual(tree.count, 1)
-        let element = tree[0]["element"] as! [String: Any]
-        XCTAssertEqual(element["heistId"] as? String, "second")
-    }
-
-    @ButtonHeistActor
-    func testGetInterfaceVisibleScopeProjectsMatcherLeaves() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-        let submit = testElement("submit", label: "Submit", traits: [.button])
-        let cancel = testElement("cancel", label: "Cancel", traits: [.button])
-        let group = ContainerInfo(
-            type: .semanticGroup(label: "Actions", value: nil, identifier: "actions"),
-            frameX: 0,
-            frameY: 0,
-            frameWidth: 200,
-            frameHeight: 100
-        )
-        mockConn.autoResponse = { message in
-            switch message {
-            case .requestInterface:
-                return .interface(Interface(
-                    timestamp: Date(),
-                    tree: [.container(group, children: [.element(submit), .element(cancel)])]
-                ))
-            default:
-                return .actionResult(ActionResult(success: true, method: .activate))
-            }
-        }
-
-        let response = try await fence.execute(request: [
-            "command": "get_interface",
-            "scope": "visible",
-            "label": "Cancel",
         ])
 
         guard let (message, _) = mockConn.sent.last,
-              case .requestInterface = message else {
-            XCTFail("Expected visible scope to send requestInterface, got \(String(describing: mockConn.sent.last))")
+              case .requestInterface(let query) = message else {
+            XCTFail("Expected requestInterface query, got \(String(describing: mockConn.sent.last))")
             return
         }
+        XCTAssertEqual(query.elementIds, ["second"])
 
         let json = response.jsonDict()
-        XCTAssertEqual(json["filteredFrom"] as? Int, 2)
-        let interface = json["interface"] as! [String: Any]
-        let tree = interface["tree"] as! [[String: Any]]
-        XCTAssertEqual(tree.count, 1)
-        let element = tree[0]["element"] as! [String: Any]
-        XCTAssertEqual(element["heistId"] as? String, "cancel")
-    }
-
-    @ButtonHeistActor
-    func testGetInterfaceElementsFilterProjectsLeafSubtrees() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-        let first = testElement("first", label: "First")
-        let second = testElement("second", label: "Second")
-        let group = ContainerInfo(
-            type: .semanticGroup(label: "Group", value: nil, identifier: nil),
-            frameX: 0,
-            frameY: 0,
-            frameWidth: 200,
-            frameHeight: 100
-        )
-        mockConn.autoResponse = { message in
-            switch message {
-            case .requestInterface:
-                return .interface(Interface(
-                    timestamp: Date(),
-                    tree: [.container(group, children: [.element(first), .element(second)])]
-                ))
-            default:
-                return .actionResult(ActionResult(success: true, method: .activate))
-            }
-        }
-
-        let response = try await fence.execute(request: [
-            "command": "get_interface",
-            "scope": "visible",
-            "elements": ["second"],
-        ])
-
-        let json = response.jsonDict()
-        XCTAssertEqual(json["filteredFrom"] as? Int, 2)
-        let interface = json["interface"] as! [String: Any]
-        let tree = interface["tree"] as! [[String: Any]]
+        let responseInterface = json["interface"] as! [String: Any]
+        let tree = responseInterface["tree"] as! [[String: Any]]
         XCTAssertEqual(tree.count, 1)
         let element = tree[0]["element"] as! [String: Any]
         XCTAssertEqual(element["heistId"] as? String, "second")
     }
 
     @ButtonHeistActor
-    func testGetInterfaceDetailDoesNotChangeScopeDispatch() async {
+    func testGetInterfaceDetailDoesNotChangeObservationDispatch() async {
         let (fullFence, fullMock) = makeConnectedFence()
         _ = try? await fullFence.execute(request: [
             "command": "get_interface",
             "detail": "full",
         ])
         guard let (fullMessage, _) = fullMock.sent.last,
-              case .explore = fullMessage else {
-            XCTFail("Expected detail=full on default get_interface to send explore, got \(String(describing: fullMock.sent.last))")
-            return
-        }
-
-        let (visibleFence, visibleMock) = makeConnectedFence()
-        _ = try? await visibleFence.execute(request: [
-            "command": "get_interface",
-            "scope": "visible",
-            "detail": "summary",
-        ])
-        guard let (visibleMessage, _) = visibleMock.sent.last,
-              case .requestInterface = visibleMessage else {
-            XCTFail("Expected detail=summary with scope=visible to send requestInterface, got \(String(describing: visibleMock.sent.last))")
+              case .requestInterface = fullMessage else {
+            XCTFail("Expected detail=full on get_interface to send requestInterface, got \(String(describing: fullMock.sent.last))")
             return
         }
     }
 
     @ButtonHeistActor
-    func testGetInterfaceInvalidScopeReturnsSchemaError() async {
+    func testGetInterfaceRejectsScopeParameter() async {
         await assertValidationError(
             ["command": "get_interface", "scope": "current"],
-            equals: "schema validation failed for scope: observed string \"current\"; expected omitted or visible"
+            equals: "schema validation failed for scope: observed string \"current\"; expected valid get_interface parameter"
         )
     }
 

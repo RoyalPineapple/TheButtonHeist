@@ -263,9 +263,9 @@ final class TheGetaway {
         // swiftlint:disable:next agent_wire_message_arm_no_op_break
         case .clientHello, .authenticate:
             break
-        case .requestInterface:
+        case .requestInterface(let query):
             insideJobLogger.debug("Interface requested by client \(clientId)")
-            await sendInterface(requestId: requestId, respond: respond)
+            await sendInterface(query: query, requestId: requestId, respond: respond)
         case .ping:
             await muscle.noteClientActivity(clientId)
             sendMessage(.pong, requestId: requestId, respond: respond)
@@ -493,25 +493,30 @@ final class TheGetaway {
         }
     }
 
-    func sendInterface(requestId: String? = nil, respond: @escaping (Data) -> Void) async {
-        _ = await tripwire.waitForAllClear(timeout: 0.5)
-        brains.clearPendingRotorResult()
-
-        guard brains.refresh() != nil else {
-            sendMessage(.error(ServerError(kind: .general, message: "Could not access root view")), requestId: requestId, respond: respond)
-            return
+    func sendInterface(
+        query: InterfaceQuery = InterfaceQuery(),
+        requestId: String? = nil,
+        respond: @escaping (Data) -> Void
+    ) async {
+        switch await brains.observeInterface(query) {
+        case .success(let payload):
+            insideJobLogger.info("Interface: \(payload.elements.count) elements")
+            sendMessage(.interface(payload), requestId: requestId, respond: respond)
+            brains.recordSentState()
+        case .failure(let message):
+            sendMessage(.error(ServerError(kind: .general, message: message)), requestId: requestId, respond: respond)
         }
-
-        let payload = brains.currentInterface()
-        insideJobLogger.info("Interface: \(payload.elements.count) visible elements")
-        sendMessage(.interface(payload), requestId: requestId, respond: respond)
-        brains.recordSentState(viewportHash: payload.tree.hashValue)
     }
 
     // MARK: - Screen Capture
 
     func handleScreen(requestId: String? = nil, respond: @escaping (Data) -> Void) {
         insideJobLogger.debug("Screen requested")
+
+        guard brains.refresh() != nil else {
+            sendMessage(.error(ServerError(kind: .general, message: "Could not access accessibility tree")), requestId: requestId, respond: respond)
+            return
+        }
 
         guard let (image, bounds) = brains.captureScreen() else {
             sendMessage(.error(ServerError(kind: .general, message: "Could not access app window")), requestId: requestId, respond: respond)
@@ -526,7 +531,8 @@ final class TheGetaway {
         let payload = ScreenPayload(
             pngData: pngData.base64EncodedString(),
             width: bounds.width,
-            height: bounds.height
+            height: bounds.height,
+            interface: brains.currentVisibleInterface()
         )
 
         sendMessage(.screen(payload), requestId: requestId, respond: respond)

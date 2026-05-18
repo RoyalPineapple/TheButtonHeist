@@ -254,19 +254,16 @@ private extension TheFence.RequestPayload {
 private extension TheFence.GetInterfaceRequest {
     var bookKeeperArguments: [String: HeistValue] {
         var arguments: [String: HeistValue] = [:]
-        if scope != .full {
-            arguments.set("scope", scope)
-        }
         if detail != .summary {
             arguments.set("detail", detail)
         }
-        if let subtree {
+        if let subtree = query.subtree {
             arguments["subtree"] = subtree.bookKeeperValue
         }
-        if matcher.hasPredicates {
-            arguments.appendMatcher(matcher)
+        if query.matcher.hasPredicates {
+            arguments.appendMatcher(query.matcher)
         }
-        if let elementIds {
+        if let elementIds = query.elementIds {
             arguments["elements"] = .array(elementIds.map { .string($0) })
         }
         return arguments

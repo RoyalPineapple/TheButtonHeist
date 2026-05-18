@@ -262,12 +262,45 @@ final class TheFenceTests: XCTestCase {
     }
 
     func testScreenshotResponseJSON() {
-        let response = FenceResponse.screenshot(path: "/tmp/shot.png", width: 390, height: 844)
+        let element = HeistElement(
+            heistId: "visible_total",
+            description: "Total $12.34",
+            label: "Total",
+            value: "$12.34",
+            identifier: "total",
+            traits: [.staticText],
+            frameX: 12,
+            frameY: 680,
+            frameWidth: 240,
+            frameHeight: 32,
+            activationPointX: 132,
+            activationPointY: 696,
+            actions: []
+        )
+        let response = FenceResponse.screenshot(
+            path: "/tmp/shot.png",
+            payload: ScreenPayload(
+                pngData: "",
+                width: 390,
+                height: 844,
+                interface: Interface(timestamp: Date(), tree: [.element(element)])
+            )
+        )
         let json = response.jsonDict()
         XCTAssertEqual(json["status"] as? String, "ok")
         XCTAssertEqual(json["path"] as? String, "/tmp/shot.png")
         XCTAssertEqual(json["width"] as? Double, 390)
         XCTAssertEqual(json["height"] as? Double, 844)
+        let interface = try? XCTUnwrap(json["interface"] as? [String: Any])
+        let tree = try? XCTUnwrap(interface?["tree"] as? [[String: Any]])
+        let node = try? XCTUnwrap(tree?.first?["element"] as? [String: Any])
+        XCTAssertEqual(node?["heistId"] as? String, "visible_total")
+        XCTAssertEqual(node?["frameX"] as? Double, 12)
+        XCTAssertEqual(node?["frameY"] as? Double, 680)
+        XCTAssertEqual(node?["frameWidth"] as? Double, 240)
+        XCTAssertEqual(node?["frameHeight"] as? Double, 32)
+        XCTAssertEqual(node?["activationPointX"] as? Double, 132)
+        XCTAssertEqual(node?["activationPointY"] as? Double, 696)
     }
 
     func testFullInterfaceJSONNestsElementsInContainers() {
@@ -902,7 +935,15 @@ final class TheFenceTests: XCTestCase {
     }
 
     func testJSONEncodingFailureReturnsDiagnosticErrorInsteadOfSuccess() {
-        let response = FenceResponse.screenshot(path: "/tmp/shot.png", width: .nan, height: 844)
+        let response = FenceResponse.screenshot(
+            path: "/tmp/shot.png",
+            payload: ScreenPayload(
+                pngData: "",
+                width: .nan,
+                height: 844,
+                interface: Interface(timestamp: Date(), tree: [])
+            )
+        )
 
         let json = response.jsonDict()
 
@@ -3116,26 +3157,14 @@ final class TheFenceTests: XCTestCase {
             identifier: "new.current",
             traits: [.button]
         )
-        func exploreResult(elements: [HeistElement]) -> ActionResult {
-            ActionResult(
-                success: true,
-                method: .explore,
-                payload: .explore(ExploreResult(
-                    elements: elements,
-                    scrollCount: 1,
-                    containersExplored: 1,
-                    explorationTime: 0.1
-                ))
-            )
-        }
-        var exploreResponses = [
-            exploreResult(elements: [stale]),
-            exploreResult(elements: [current]),
+        var interfaceResponses = [
+            Interface(timestamp: Date(), tree: [.element(stale)]),
+            Interface(timestamp: Date(), tree: [.element(current)]),
         ]
         mockConn.autoResponse = { message in
             switch message {
-            case .explore:
-                return .actionResult(exploreResponses.removeFirst())
+            case .requestInterface:
+                return .interface(interfaceResponses.removeFirst())
             case .activate:
                 return .actionResult(ActionResult(
                     success: true,

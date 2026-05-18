@@ -695,10 +695,29 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testScreenEncodeDecode() throws {
+        let element = HeistElement(
+            heistId: "visible_button",
+            description: "Pay",
+            label: "Pay",
+            value: nil,
+            identifier: "pay_button",
+            traits: [.button],
+            frameX: 20,
+            frameY: 700,
+            frameWidth: 160,
+            frameHeight: 48,
+            activationPointX: 100,
+            activationPointY: 724,
+            actions: [.activate]
+        )
         let payload = ScreenPayload(
             pngData: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
             width: 390,
-            height: 844
+            height: 844,
+            interface: Interface(
+                timestamp: Date(timeIntervalSince1970: 42),
+                tree: [.element(element)]
+            )
         )
         let message = ServerMessage.screen(payload)
 
@@ -714,6 +733,9 @@ final class ServerMessageTests: XCTestCase {
             XCTAssertEqual(decodedPayload.pngData, payload.pngData)
             XCTAssertEqual(decodedPayload.width, 390)
             XCTAssertEqual(decodedPayload.height, 844)
+            XCTAssertEqual(decodedPayload.interface.elements, [element])
+            XCTAssertEqual(decodedPayload.interface.elements.first?.frameX, 20)
+            XCTAssertEqual(decodedPayload.interface.elements.first?.activationPointX, 100)
         } else {
             XCTFail("Expected screen, got \(decoded)")
         }
