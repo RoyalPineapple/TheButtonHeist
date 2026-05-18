@@ -59,11 +59,6 @@ final class Navigation {
     /// returning a capped, non-exhaustive failure.
     static let scrollSearchMaxScrolls: Int = ScrollSearchProgress.defaultMaxScrolls
 
-    /// Settle window after `jumpToRecordedPosition` before reading geometry
-    /// for the comfort-zone check. Paired with `postJumpRealFrames` — the SPI
-    /// jump animates, this is the upper bound on waiting for it to land.
-    static let postJumpSettleTimeout: TimeInterval = 1.0
-
     /// Settle-loop pacing parameters. Two canned profiles: `.directionChange`
     /// is the conservative budget for reversals (spring/inertia takes longer);
     /// `.sameDirection` is the aggressive budget for continuing scrolls.

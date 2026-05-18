@@ -32,7 +32,9 @@ extension TheBrains {
             return await executeTouchGesture(message)
 
         case .typeText(let target):
-            return await performInteraction(command: message) { await self.actions.executeTypeText(target) }
+            return await performInteraction(command: message) { recordedScreen in
+                await self.actions.executeTypeText(target, recordedScreen: recordedScreen)
+            }
         case .scroll(let target):
             return await performInteraction(command: message) { await self.navigation.executeScroll(target) }
         case .scrollToVisible(let target):
@@ -59,11 +61,26 @@ extension TheBrains {
         command: ClientMessage,
         interaction: () async -> TheSafecracker.InteractionResult
     ) async -> ActionResult {
+        await performInteraction(command: command) { _ in
+            await interaction()
+        }
+    }
+
+    /// Standard interaction with an operation-local semantic snapshot preserved
+    /// across the live refresh. Targeted actions use the snapshot only when the
+    /// fresh visible parse still matches it, so offscreen recovery never reaches
+    /// through stale hierarchy memory.
+    func performInteraction(
+        command: ClientMessage,
+        interaction: (Screen?) async -> TheSafecracker.InteractionResult
+    ) async -> ActionResult {
+        let screenBeforeRefresh = stash.currentScreen
         guard refresh() != nil else {
             return treeUnavailableResult(method: Self.diagnosticMethod(for: command))
         }
+        let recordedScreen = recordedScreenIfFreshParseStillMatches(screenBeforeRefresh)
         let before = captureBeforeState()
-        let result = await interaction()
+        let result = await interaction(recordedScreen)
 
         return await actionResultWithDelta(
             success: result.success,
@@ -317,16 +334,24 @@ extension TheBrains {
     private func executeAccessibilityAction(_ message: ClientMessage) async -> ActionResult {
         switch message {
         case .activate(let target):
-            return await performInteraction(command: message) { await self.actions.executeActivate(target) }
+            return await performInteraction(command: message) { recordedScreen in
+                await self.actions.executeActivate(target, recordedScreen: recordedScreen)
+            }
         case .increment(let target):
-            return await performInteraction(command: message) { await self.actions.executeIncrement(target) }
+            return await performInteraction(command: message) { recordedScreen in
+                await self.actions.executeIncrement(target, recordedScreen: recordedScreen)
+            }
         case .decrement(let target):
-            return await performInteraction(command: message) { await self.actions.executeDecrement(target) }
+            return await performInteraction(command: message) { recordedScreen in
+                await self.actions.executeDecrement(target, recordedScreen: recordedScreen)
+            }
         case .performCustomAction(let target):
-            return await performInteraction(command: message) { await self.actions.executeCustomAction(target) }
+            return await performInteraction(command: message) { recordedScreen in
+                await self.actions.executeCustomAction(target, recordedScreen: recordedScreen)
+            }
         case .rotor(let target):
-            return await performInteraction(command: message) {
-                await self.actions.executeRotor(target)
+            return await performInteraction(command: message) { recordedScreen in
+                await self.actions.executeRotor(target, recordedScreen: recordedScreen)
             }
         case .editAction(let target):
             return await performInteraction(command: message) { await self.actions.executeEditAction(target) }
@@ -344,19 +369,33 @@ extension TheBrains {
     private func executeTouchGesture(_ message: ClientMessage) async -> ActionResult {
         switch message {
         case .touchTap(let target):
-            return await performInteraction(command: message) { await self.actions.executeTap(target) }
+            return await performInteraction(command: message) { recordedScreen in
+                await self.actions.executeTap(target, recordedScreen: recordedScreen)
+            }
         case .touchLongPress(let target):
-            return await performInteraction(command: message) { await self.actions.executeLongPress(target) }
+            return await performInteraction(command: message) { recordedScreen in
+                await self.actions.executeLongPress(target, recordedScreen: recordedScreen)
+            }
         case .touchSwipe(let target):
-            return await performInteraction(command: message) { await self.actions.executeSwipe(target) }
+            return await performInteraction(command: message) { recordedScreen in
+                await self.actions.executeSwipe(target, recordedScreen: recordedScreen)
+            }
         case .touchDrag(let target):
-            return await performInteraction(command: message) { await self.actions.executeDrag(target) }
+            return await performInteraction(command: message) { recordedScreen in
+                await self.actions.executeDrag(target, recordedScreen: recordedScreen)
+            }
         case .touchPinch(let target):
-            return await performInteraction(command: message) { await self.actions.executePinch(target) }
+            return await performInteraction(command: message) { recordedScreen in
+                await self.actions.executePinch(target, recordedScreen: recordedScreen)
+            }
         case .touchRotate(let target):
-            return await performInteraction(command: message) { await self.actions.executeRotate(target) }
+            return await performInteraction(command: message) { recordedScreen in
+                await self.actions.executeRotate(target, recordedScreen: recordedScreen)
+            }
         case .touchTwoFingerTap(let target):
-            return await performInteraction(command: message) { await self.actions.executeTwoFingerTap(target) }
+            return await performInteraction(command: message) { recordedScreen in
+                await self.actions.executeTwoFingerTap(target, recordedScreen: recordedScreen)
+            }
         case .touchDrawPath(let target):
             return await performInteraction(command: message) { await self.actions.executeDrawPath(target) }
         case .touchDrawBezier(let target):

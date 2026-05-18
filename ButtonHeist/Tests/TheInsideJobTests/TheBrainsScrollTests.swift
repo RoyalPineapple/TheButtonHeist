@@ -216,67 +216,58 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollDirection.previous), .previous)
     }
 
-    // MARK: - adaptDirection Cross-Axis Fallback
+    // MARK: - ScrollPlan Axis Matching
 
-    func testAdaptDirectionForwardVerticalToHorizontal() {
-        let horizontalOnly = Navigation.ScrollableTarget.swipeable(
-            frame: CGRect(x: 0, y: 0, width: 400, height: 200),
-            contentSize: CGSize(width: 2000, height: 200)
+    func testScrollPlanMovementReturnsNilForCrossAxisMismatch() {
+        let horizontalContainer = makeScrollableContainer(
+            contentSize: CGSize(width: 1_200, height: 200),
+            frame: CGRect(x: 0, y: 0, width: 320, height: 200)
         )
-        XCTAssertEqual(Navigation.adaptDirection(.down, for: horizontalOnly), .right,
-                       "Forward vertical request on horizontal-only → .right")
+        let horizontalTarget = Navigation.ScrollableTarget.swipeable(
+            frame: CGRect(x: 0, y: 0, width: 320, height: 200),
+            contentSize: CGSize(width: 1_200, height: 200)
+        )
+        let plan = Navigation.ScrollPlan(target: horizontalTarget, container: horizontalContainer)
+
+        XCTAssertNil(plan.movement(for: .down))
+        XCTAssertEqual(plan.movement(for: .right), .right)
     }
 
-    func testAdaptDirectionBackwardVerticalToHorizontal() {
-        let horizontalOnly = Navigation.ScrollableTarget.swipeable(
-            frame: CGRect(x: 0, y: 0, width: 400, height: 200),
-            contentSize: CGSize(width: 2000, height: 200)
+    func testScrollPlanMovementReturnsRequestedDirectionForMatchingAxis() {
+        let verticalContainer = makeScrollableContainer(
+            contentSize: CGSize(width: 320, height: 1_200),
+            frame: CGRect(x: 0, y: 0, width: 320, height: 200)
         )
-        XCTAssertEqual(Navigation.adaptDirection(.up, for: horizontalOnly), .left,
-                       "Backward vertical request on horizontal-only → .left")
+        let verticalTarget = Navigation.ScrollableTarget.swipeable(
+            frame: CGRect(x: 0, y: 0, width: 320, height: 200),
+            contentSize: CGSize(width: 320, height: 1_200)
+        )
+        let plan = Navigation.ScrollPlan(target: verticalTarget, container: verticalContainer)
+
+        XCTAssertEqual(plan.movement(for: .down), .down)
+        XCTAssertEqual(plan.movement(for: .up), .up)
     }
 
-    func testAdaptDirectionForwardHorizontalToVertical() {
-        let verticalOnly = Navigation.ScrollableTarget.swipeable(
-            frame: CGRect(x: 0, y: 0, width: 400, height: 200),
-            contentSize: CGSize(width: 400, height: 2000)
+    func testScrollPlanMovementSupportsBothAxes() {
+        let biaxialContainer = makeScrollableContainer(
+            contentSize: CGSize(width: 1_200, height: 1_200),
+            frame: CGRect(x: 0, y: 0, width: 320, height: 200)
         )
-        XCTAssertEqual(Navigation.adaptDirection(.right, for: verticalOnly), .down,
-                       "Forward horizontal request on vertical-only → .down")
-    }
+        let biaxialTarget = Navigation.ScrollableTarget.swipeable(
+            frame: CGRect(x: 0, y: 0, width: 320, height: 200),
+            contentSize: CGSize(width: 1_200, height: 1_200)
+        )
+        let plan = Navigation.ScrollPlan(target: biaxialTarget, container: biaxialContainer)
 
-    func testAdaptDirectionBackwardHorizontalToVertical() {
-        let verticalOnly = Navigation.ScrollableTarget.swipeable(
-            frame: CGRect(x: 0, y: 0, width: 400, height: 200),
-            contentSize: CGSize(width: 400, height: 2000)
-        )
-        XCTAssertEqual(Navigation.adaptDirection(.left, for: verticalOnly), .up,
-                       "Backward horizontal request on vertical-only → .up")
-    }
-
-    func testAdaptDirectionMatchingAxisPassesThrough() {
-        let verticalOnly = Navigation.ScrollableTarget.swipeable(
-            frame: CGRect(x: 0, y: 0, width: 400, height: 200),
-            contentSize: CGSize(width: 400, height: 2000)
-        )
-        XCTAssertEqual(Navigation.adaptDirection(.down, for: verticalOnly), .down)
-        XCTAssertEqual(Navigation.adaptDirection(.up, for: verticalOnly), .up)
-    }
-
-    func testAdaptDirectionBothAxesPassesThrough() {
-        let biaxial = Navigation.ScrollableTarget.swipeable(
-            frame: CGRect(x: 0, y: 0, width: 400, height: 200),
-            contentSize: CGSize(width: 2000, height: 2000)
-        )
-        XCTAssertEqual(Navigation.adaptDirection(.down, for: biaxial), .down)
-        XCTAssertEqual(Navigation.adaptDirection(.right, for: biaxial), .right)
-        XCTAssertEqual(Navigation.adaptDirection(.up, for: biaxial), .up)
-        XCTAssertEqual(Navigation.adaptDirection(.left, for: biaxial), .left)
+        XCTAssertEqual(plan.movement(for: .down), .down)
+        XCTAssertEqual(plan.movement(for: .right), .right)
+        XCTAssertEqual(plan.movement(for: .up), .up)
+        XCTAssertEqual(plan.movement(for: .left), .left)
     }
 
     // MARK: - Scroll Search Target Selection
 
-    func testFindScrollTargetPrefersRequestedAxisBeforeCrossAxisFallback() {
+    func testFindScrollTargetReturnsRequestedAxis() {
         let vertical = makeScrollableContainer(
             contentSize: CGSize(width: 320, height: 2000),
             frame: CGRect(x: 0, y: 0, width: 320, height: 400)
@@ -287,24 +278,24 @@ final class TheBrainsScrollTests: XCTestCase {
         )
         installScrollableContainers([vertical, horizontal])
 
-        let result = brains.navigation.findScrollTarget(preferredAxis: .horizontal)
+        let result = brains.navigation.findScrollTarget(requiredAxis: .horizontal)
 
         XCTAssertEqual(result?.container, horizontal)
     }
 
-    func testFindScrollTargetFallsBackWhenRequestedAxisIsUnavailable() {
+    func testFindScrollTargetReturnsNilWhenRequestedAxisIsUnavailable() {
         let vertical = makeScrollableContainer(
             contentSize: CGSize(width: 320, height: 2000),
             frame: CGRect(x: 0, y: 0, width: 320, height: 400)
         )
         installScrollableContainers([vertical])
 
-        let result = brains.navigation.findScrollTarget(preferredAxis: .horizontal)
+        let result = brains.navigation.findScrollTarget(requiredAxis: .horizontal)
 
-        XCTAssertEqual(result?.container, vertical)
+        XCTAssertNil(result)
     }
 
-    func testScrollSearchCandidatesKeepCrossAxisFallbacksAfterPreferredAxis() {
+    func testScrollSearchCandidatesFilterToRequiredAxis() {
         let vertical = makeScrollableContainer(
             contentSize: CGSize(width: 320, height: 2000),
             frame: CGRect(x: 0, y: 0, width: 320, height: 400)
@@ -315,12 +306,12 @@ final class TheBrainsScrollTests: XCTestCase {
         )
         installScrollableContainers([vertical, horizontal])
 
-        let candidates = brains.navigation.scrollSearchCandidates(preferredAxis: .horizontal)
+        let candidates = brains.navigation.scrollSearchCandidates(requiredAxis: .horizontal)
 
-        XCTAssertEqual(candidates.map(\.container), [horizontal, vertical])
+        XCTAssertEqual(candidates.map(\.container), [horizontal])
     }
 
-    func testScrollSearchCandidatesPreserveTreeOrderWithinPreferredAndFallbackGroups() {
+    func testScrollSearchCandidatesPreserveTreeOrderWithinRequiredAxis() {
         let horizontal = makeScrollableContainer(
             contentSize: CGSize(width: 1200, height: 200),
             frame: CGRect(x: 0, y: 0, width: 320, height: 200)
@@ -335,12 +326,12 @@ final class TheBrainsScrollTests: XCTestCase {
         )
         installScrollableContainers([horizontal, verticalOne, verticalTwo])
 
-        let candidates = brains.navigation.scrollSearchCandidates(preferredAxis: .vertical)
+        let candidates = brains.navigation.scrollSearchCandidates(requiredAxis: .vertical)
 
-        XCTAssertEqual(candidates.map(\.container), [verticalOne, verticalTwo, horizontal])
+        XCTAssertEqual(candidates.map(\.container), [verticalOne, verticalTwo])
     }
 
-    func testScrollPlanMovementUsesContainerAxisBeforeTargetAxis() {
+    func testScrollPlanMovementUsesContainerAxisToRejectMismatch() {
         let horizontalContainer = makeScrollableContainer(
             contentSize: CGSize(width: 1_200, height: 200),
             frame: CGRect(x: 0, y: 0, width: 320, height: 200)
@@ -351,7 +342,8 @@ final class TheBrainsScrollTests: XCTestCase {
         )
         let plan = Navigation.ScrollPlan(target: verticalTarget, container: horizontalContainer)
 
-        XCTAssertEqual(plan.movement(for: .down), .right)
+        XCTAssertNil(plan.movement(for: .down))
+        XCTAssertEqual(plan.movement(for: .right), .right)
     }
 
     func testFindScrollTargetUsesKnownSiblingAfterFirstContainerExhausted() {
@@ -366,7 +358,7 @@ final class TheBrainsScrollTests: XCTestCase {
         installScrollableContainers([first, sibling])
 
         let result = brains.navigation.findScrollTarget(
-            preferredAxis: .vertical,
+            requiredAxis: .vertical,
             excluding: [first]
         )
 
@@ -710,6 +702,79 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(message.contains("missing_button"))
         XCTAssertTrue(message.contains("1 known element"))
         XCTAssertTrue(message.contains("get_interface"))
+    }
+
+    func testEnsureOnScreenNamesKnownOffscreenRecoveryFailure() async {
+        let visible = makeElement(label: "Visible")
+        let offscreen = makeElement(label: "Offscreen")
+        installScreenWithOffViewportEntry(
+            liveHierarchy: [(visible, "visible_element")],
+            offViewport: [(offscreen, "offscreen_button", nil)]
+        )
+
+        let result = await brains.navigation.ensureOnScreen(for: .heistId("offscreen_button"))
+
+        guard case .failed(let failure) = result else {
+            return XCTFail("Expected ensure_on_screen failure, got \(result)")
+        }
+        XCTAssertNil(failure.method)
+        XCTAssertTrue(failure.message.contains("ensure_on_screen failed"))
+        XCTAssertTrue(failure.message.contains("has no recorded scroll position"))
+    }
+
+    func testElementActionsConsumeEnsureOnScreenFailureBeforeDispatch() async {
+        let visible = makeElement(label: "Visible")
+        let offscreen = makeElement(label: "Offscreen")
+        installScreenWithOffViewportEntry(
+            liveHierarchy: [(visible, "visible_element")],
+            offViewport: [(offscreen, "offscreen_button", nil)]
+        )
+        var didDispatch = false
+
+        let result = await brains.actions.performElementAction(
+            target: .heistId("offscreen_button"),
+            method: .activate,
+            requireInteractive: false
+        ) { _ in
+            didDispatch = true
+            return TheSafecracker.InteractionResult(success: true, method: .activate, message: nil, value: nil)
+        }
+
+        XCTAssertFalse(didDispatch)
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .activate)
+        XCTAssertTrue(result.message?.contains("ensure_on_screen failed") == true)
+    }
+
+    func testTargetedActionDoesNotRecoverFromStaleOffscreenSnapshotAfterFreshScreenChange() async throws {
+        let staleScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        staleScrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let staleVisible = makeElement(label: "Old Visible")
+        let staleOffscreen = makeElement(label: "Old Offscreen")
+        installScreenWithKnownOffscreen(
+            visible: (staleVisible, "old_visible"),
+            offscreen: (staleOffscreen, "old_offscreen", CGPoint(x: 0, y: 1_200), staleScrollView)
+        )
+
+        let rootView = UIView()
+        rootView.backgroundColor = .white
+        rootView.addSubview(makeButton(label: "Fresh Visible", frame: CGRect(x: 40, y: 120, width: 240, height: 44)))
+        let window = try installModalWindow(rootView: rootView)
+        defer {
+            window.rootViewController?.view.accessibilityViewIsModal = false
+            window.isHidden = true
+        }
+        await brains.tripwire.yieldFrames(3)
+
+        let result = await brains.executeCommand(.activate(.heistId("old_offscreen")))
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .elementNotFound)
+        XCTAssertEqual(staleScrollView.contentOffset, .zero)
+        XCTAssertFalse(
+            result.message?.contains("recorded-position recovery") ?? false,
+            "Stale offscreen memory must not drive operation-local recovery after a fresh screen change"
+        )
     }
 
     func testScrollReturnsReasonInsteadOfRevealingKnownOffscreenTarget() async {
