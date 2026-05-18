@@ -293,7 +293,7 @@ final class TargetConfigTests: XCTestCase {
             ],
             defaultTarget: "sim1"
         )
-        let json = response.jsonDict()!
+        let json = response.jsonDict()
         XCTAssertEqual(json["status"] as? String, "ok")
         XCTAssertEqual(json["default"] as? String, "sim1")
         let targets = json["targets"] as? [String: [String: Any]]
@@ -397,7 +397,7 @@ final class TargetConfigTests: XCTestCase {
             XCTFail("Expected sessionState response, got \(response)")
             return
         }
-        XCTAssertEqual(payload["connected"] as? Bool, true)
+        XCTAssertEqual(payload.connected, true)
         XCTAssertEqual(fence.config.deviceFilter, "127.0.0.1:1456")
         XCTAssertEqual(fence.config.token, "tok2")
         XCTAssertEqual(fence.handoff.reconnectPolicy, .enabled(filter: "127.0.0.1:1456", reconnectTask: nil))
@@ -417,7 +417,7 @@ final class TargetConfigTests: XCTestCase {
             XCTFail("Expected sessionState response, got \(response)")
             return
         }
-        XCTAssertEqual(payload["connected"] as? Bool, true)
+        XCTAssertEqual(payload.connected, true)
         XCTAssertEqual(fence.config.deviceFilter, "127.0.0.1:9999")
         XCTAssertEqual(fence.config.token, "direct-tok")
         XCTAssertEqual(fence.handoff.reconnectPolicy, .enabled(filter: "127.0.0.1:9999", reconnectTask: nil))

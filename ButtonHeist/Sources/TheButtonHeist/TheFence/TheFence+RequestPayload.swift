@@ -103,18 +103,11 @@ extension TheFence {
         let details: FailureDetails?
         let includeDetailsInResult: Bool
 
-        var resultDictionary: [String: Any] {
+        var resultResponse: FenceResponse {
             if includeDetailsInResult {
-                return FenceResponse.error(message, details: details).jsonDict() ?? fallbackResultDictionary
+                return .error(message, details: details)
             }
-            return fallbackResultDictionary
-        }
-
-        private var fallbackResultDictionary: [String: Any] {
-            [
-                "status": "error",
-                "message": message,
-            ]
+            return .error(message)
         }
     }
 

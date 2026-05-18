@@ -156,3 +156,58 @@ func makeBackgroundScreenChangedTrace(elementCount: Int) -> AccessibilityTrace {
         afterScreenId: "after"
     )
 }
+
+func makeBatchOutcome(
+    command: String = "test",
+    response: FenceResponse = .ok(message: "ok"),
+    stopsBatch: Bool = false
+) -> BatchStepOutcome {
+    BatchStepOutcome(command: command, response: response, stopsBatch: stopsBatch)
+}
+
+func makeExpectationBatchOutcome(
+    command: String = "activate",
+    met: Bool,
+    stopsBatch: Bool = false
+) -> BatchStepOutcome {
+    let expectation = ExpectationResult(
+        met: met,
+        expectation: .screenChanged,
+        actual: met ? nil : "noChange"
+    )
+    let result = ActionResult(success: true, method: .activate)
+    return BatchStepOutcome(
+        command: command,
+        response: .action(result: result, expectation: expectation),
+        stopsBatch: stopsBatch
+    )
+}
+
+struct BatchInspection {
+    let outcomes: [BatchStepOutcome]
+    let results: [[String: Any]]
+    let completedSteps: Int
+    let failedIndex: Int?
+    let totalTimingMs: Int
+    let expectationsChecked: Int
+    let expectationsMet: Int
+    let summaries: [BatchStepSummary]
+    let accessibilityTrace: AccessibilityTrace?
+}
+
+func inspectBatch(_ response: FenceResponse) -> BatchInspection? {
+    guard case .batch(let outcomes, let totalTimingMs, let accessibilityTrace) = response else {
+        return nil
+    }
+    return BatchInspection(
+        outcomes: outcomes,
+        results: outcomes.jsonResultRows,
+        completedSteps: outcomes.completedStepCount,
+        failedIndex: outcomes.stoppedFailedIndex,
+        totalTimingMs: totalTimingMs,
+        expectationsChecked: outcomes.expectationsChecked,
+        expectationsMet: outcomes.expectationsMet,
+        summaries: outcomes.stepSummaries,
+        accessibilityTrace: accessibilityTrace
+    )
+}

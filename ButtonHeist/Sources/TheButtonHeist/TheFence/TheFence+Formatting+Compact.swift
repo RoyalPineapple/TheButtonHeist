@@ -38,14 +38,14 @@ extension FenceResponse {
             return "recording: \(path) (\(String(format: "%.1f", payload.duration))s, \(payload.frameCount) frames)"
         case .recordingData(let payload):
             return "recording: \(String(format: "%.1f", payload.duration))s, \(payload.frameCount) frames"
-        case .batch(
-            _, let completedSteps, let failedIndex, let totalTimingMs,
-            let checked, let met, let stepSummaries, let accessibilityTrace
-        ):
+        case .batch(let outcomes, let totalTimingMs, let accessibilityTrace):
             return compactBatchFormatted(
-                completedSteps: completedSteps, failedIndex: failedIndex,
-                totalTimingMs: totalTimingMs, checked: checked, met: met,
-                stepSummaries: stepSummaries,
+                completedSteps: outcomes.completedStepCount,
+                failedIndex: outcomes.stoppedFailedIndex,
+                totalTimingMs: totalTimingMs,
+                checked: outcomes.expectationsChecked,
+                met: outcomes.expectationsMet,
+                stepSummaries: outcomes.stepSummaries,
                 netDelta: accessibilityTrace?.meaningfulCaptureEndpointDelta
             )
         case .sessionState(let payload):
@@ -75,37 +75,26 @@ extension FenceResponse {
         }
     }
 
-    private static func compactSessionState(_ payload: [String: Any]) -> String {
-        let phase = payload["phase"] as? String
-        let connected = payload["connected"] as? Bool ?? false
-        switch phase {
-        case "connected":
+    private static func compactSessionState(_ payload: SessionStatePayload) -> String {
+        switch payload.phase {
+        case .connected:
             return "session: connected"
-        case "connecting":
+        case .connecting:
             return "session: connecting"
-        case "failed":
-            return compactSessionStateFailure(payload, label: "failed") ?? "session: failed"
-        case "disconnected":
-            return compactSessionStateFailure(payload, label: "disconnected") ?? "session: not connected"
-        default:
-            return connected ? "session: connected" : "session: not connected"
+        case .failed:
+            return compactSessionStateFailure(payload.lastFailure, label: "failed") ?? "session: failed"
+        case .disconnected:
+            return compactSessionStateFailure(payload.lastFailure, label: "disconnected") ?? "session: not connected"
         }
     }
 
-    private static func compactSessionStateFailure(_ payload: [String: Any], label: String) -> String? {
-        guard let failure = payload["lastFailure"] as? [String: Any] else {
-            return nil
-        }
-        let code = failure["errorCode"] as? String
-        let hint = failure["hint"] as? String
-        let message = failure["message"] as? String
+    private static func compactSessionStateFailure(_ failure: SessionFailurePayload?, label: String) -> String? {
+        guard let failure else { return nil }
         var text = "session: \(label)"
-        if let code {
-            text += " (\(code))"
-        }
-        if let hint {
+        text += " (\(failure.errorCode))"
+        if let hint = failure.hint {
             text += ": \(hint)"
-        } else if let message {
+        } else if let message = failure.message {
             text += ": \(message)"
         }
         return text
