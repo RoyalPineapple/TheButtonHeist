@@ -136,7 +136,7 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertNil(decoded.recorded?.coordinateOnly)
     }
 
-    func testStepWithRecordedAccessibilityTrace() throws {
+    func testStepWithRecordedAccessibilityTraceDerivesDeltaWithoutEncodingIt() throws {
         let before = Interface(
             timestamp: Date(timeIntervalSince1970: 0),
             tree: [.element(makeElement(heistId: "before", label: "Before"))]
@@ -153,7 +153,6 @@ final class HeistPlaybackTests: XCTestCase {
                     after,
                     transition: .init(screenChangeReason: "explicitSignal")
                 ),
-                accessibilityDelta: .noChange(.init(elementCount: 999)),
                 expectation: ExpectationResult(
                     met: true,
                     expectation: .screenChanged,
@@ -163,6 +162,10 @@ final class HeistPlaybackTests: XCTestCase {
         )
 
         let data = try JSONEncoder().encode(step)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let recorded = try XCTUnwrap(json["_recorded"] as? [String: Any])
+        XCTAssertNil(recorded["accessibilityDelta"])
+
         let decoded = try JSONDecoder().decode(HeistEvidence.self, from: data)
 
         let change = try XCTUnwrap(decoded.recorded?.accessibilityTrace?.receipts.first)
@@ -173,7 +176,7 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertEqual(decoded.recorded?.expectation?.met, true)
     }
 
-    func testRecordedMetadataProjectsDeltaFromTraceOverLegacyDelta() throws {
+    func testRecordedMetadataIgnoresDecodedDeltaAndProjectsFromTrace() throws {
         let beforeInterface = Interface(
             timestamp: Date(timeIntervalSince1970: 0),
             tree: [.element(makeElement(heistId: "status", label: "Old"))]
@@ -193,21 +196,37 @@ final class HeistPlaybackTests: XCTestCase {
             elementCount: 0,
             newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
         ))
+        let traceJSON = try JSONSerialization.jsonObject(with: JSONEncoder().encode(trace))
+        let conflictingDeltaJSON = try JSONSerialization.jsonObject(with: JSONEncoder().encode(conflictingDelta))
+        let data = try JSONSerialization.data(withJSONObject: [
+            "accessibilityTrace": traceJSON,
+            "accessibilityDelta": conflictingDeltaJSON,
+        ])
 
-        let metadata = RecordedMetadata(
-            accessibilityTrace: trace,
-            accessibilityDelta: conflictingDelta
-        )
-        let decoded = try JSONDecoder().decode(
-            RecordedMetadata.self,
-            from: try JSONEncoder().encode(metadata)
-        )
+        let decoded = try JSONDecoder().decode(RecordedMetadata.self, from: data)
+        let reencoded = try JSONSerialization.jsonObject(
+            with: try JSONEncoder().encode(decoded)
+        ) as? [String: Any]
 
-        XCTAssertEqual(metadata.accessibilityDelta, trace.captureEndpointDelta)
         XCTAssertEqual(decoded.accessibilityDelta, trace.captureEndpointDelta)
         XCTAssertNotEqual(decoded.accessibilityDelta, conflictingDelta)
         XCTAssertEqual(decoded.accessibilityDelta?.captureEdge?.before.hash, trace.captures.first?.hash)
         XCTAssertEqual(decoded.accessibilityDelta?.captureEdge?.after.hash, trace.captures.last?.hash)
+        XCTAssertNil(reencoded?["accessibilityDelta"])
+    }
+
+    func testRecordedMetadataDropsDecodedDeltaWithoutTrace() throws {
+        let data = try JSONSerialization.data(withJSONObject: [
+            "accessibilityDelta": [
+                "kind": "noChange",
+                "elementCount": 999,
+            ],
+        ])
+
+        let decoded = try JSONDecoder().decode(RecordedMetadata.self, from: data)
+
+        XCTAssertNil(decoded.accessibilityTrace)
+        XCTAssertNil(decoded.accessibilityDelta)
     }
 
     func testCurrentVersionIsTwo() {

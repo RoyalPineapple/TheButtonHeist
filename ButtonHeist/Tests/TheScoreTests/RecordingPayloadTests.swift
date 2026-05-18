@@ -1,5 +1,5 @@
 import XCTest
- import TheScore
+import TheScore
 
 final class RecordingPayloadTests: XCTestCase {
 
@@ -291,10 +291,13 @@ final class RecordingPayloadTests: XCTestCase {
     func testRecordingPayloadWithInteractionLog() throws {
         let start = Date()
         let end = start.addingTimeInterval(5.0)
+        let before = makeInterface(label: "Before", timestamp: 0)
+        let after = makeInterface(label: "After", timestamp: 1)
+        let trace = AccessibilityTrace(first: before).appending(after)
         let event = InteractionEvent(
             timestamp: 1.0,
             command: .activate(.matcher(ElementMatcher(label: "element_3"))),
-            result: ActionResult(success: true, method: .activate, accessibilityDelta: .noChange(.init(elementCount: 0)))
+            result: ActionResult(success: true, method: .activate, accessibilityTrace: trace)
         )
         let payload = RecordingPayload(
             videoData: "AAAAIGZ0eXBpc29t",
@@ -316,6 +319,8 @@ final class RecordingPayloadTests: XCTestCase {
         XCTAssertNotNil(decoded.interactionLog)
         XCTAssertEqual(decoded.interactionLog?.count, 1)
         XCTAssertEqual(decoded.interactionLog?.first?.timestamp, 1.0)
+        XCTAssertEqual(decoded.interactionLog?.first?.result.accessibilityTrace, trace)
+        XCTAssertEqual(decoded.interactionLog?.first?.result.accessibilityDelta, trace.captureEndpointDelta)
     }
 
     func testRecordingPayloadNilInteractionLog() throws {
@@ -361,5 +366,26 @@ final class RecordingPayloadTests: XCTestCase {
         XCTAssertEqual(decoded.videoData, "AAAAIGZ0eXBpc29t")
         XCTAssertEqual(decoded.width, 390)
         XCTAssertNil(decoded.interactionLog)
+    }
+
+    private func makeInterface(label: String, timestamp: TimeInterval) -> Interface {
+        Interface(
+            timestamp: Date(timeIntervalSince1970: timestamp),
+            tree: [
+                .element(HeistElement(
+                    heistId: label.lowercased(),
+                    description: label,
+                    label: label,
+                    value: nil,
+                    identifier: nil,
+                    traits: [.button],
+                    frameX: 0,
+                    frameY: 0,
+                    frameWidth: 100,
+                    frameHeight: 44,
+                    actions: [.activate]
+                )),
+            ]
+        )
     }
 }
