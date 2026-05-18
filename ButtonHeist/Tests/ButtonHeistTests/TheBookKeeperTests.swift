@@ -45,6 +45,19 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testActiveSessionTimingDerivesFromManifest() async throws {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        try bookKeeper.beginSession(identifier: "test-active-timing")
+        guard case .active(let session) = bookKeeper.phase else {
+            return XCTFail("Expected active phase")
+        }
+
+        XCTAssertEqual(session.startTime, session.manifest.startTime)
+        XCTAssertNil(session.manifest.endTime)
+        XCTAssertHasNoStoredPhaseTimingMirrors(session)
+    }
+
+    @ButtonHeistActor
     func testBeginSessionCreatesDirectory() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-dir")
@@ -79,6 +92,44 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testClosedSessionTimingDerivesFromManifest() async throws {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        try bookKeeper.beginSession(identifier: "test-closed-timing")
+        let activeManifest = try XCTUnwrap(bookKeeper.manifest)
+
+        try await bookKeeper.closeSession()
+
+        guard case .closed(let session) = bookKeeper.phase else {
+            return XCTFail("Expected closed phase")
+        }
+        let manifestEndTime = try XCTUnwrap(session.manifest.endTime)
+        let manifestPath = session.directory.appendingPathComponent("manifest.json")
+        let manifestData = try Data(contentsOf: manifestPath)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let writtenManifest = try decoder.decode(SessionManifest.self, from: manifestData)
+        let snapshot = try XCTUnwrap(bookKeeper.sessionLogSnapshot())
+
+        XCTAssertEqual(session.manifest.startTime, activeManifest.startTime)
+        XCTAssertEqual(session.startTime, session.manifest.startTime)
+        XCTAssertEqual(session.endTime, manifestEndTime)
+        XCTAssertEqual(writtenManifest.formatVersion, session.manifest.formatVersion)
+        XCTAssertEqual(writtenManifest.sessionId, session.manifest.sessionId)
+        XCTAssertEqual(
+            writtenManifest.startTime.timeIntervalSince1970,
+            session.manifest.startTime.timeIntervalSince1970,
+            accuracy: 1
+        )
+        XCTAssertEqual(
+            try XCTUnwrap(writtenManifest.endTime).timeIntervalSince1970,
+            manifestEndTime.timeIntervalSince1970,
+            accuracy: 1
+        )
+        XCTAssertEqual(snapshot.manifest, session.manifest)
+        XCTAssertHasNoStoredPhaseTimingMirrors(session)
+    }
+
+    @ButtonHeistActor
     func testCloseSessionCompressesLog() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-compress")
@@ -100,8 +151,12 @@ final class TheBookKeeperTests: XCTestCase {
         try await bookKeeper.closeSession()
         let (archivePath, snapshot) = try await bookKeeper.archiveSession(deleteSource: false)
         if case .archived(let session) = bookKeeper.phase {
+            let manifestEndTime = try XCTUnwrap(session.manifest.endTime)
             XCTAssertEqual(session.archivePath, archivePath)
             XCTAssertEqual(session.manifest, snapshot.manifest)
+            XCTAssertEqual(session.startTime, session.manifest.startTime)
+            XCTAssertEqual(session.endTime, manifestEndTime)
+            XCTAssertHasNoStoredPhaseTimingMirrors(session)
             XCTAssertTrue(archivePath.path.hasSuffix(".tar.gz"))
             XCTAssertEqual(snapshot.counts.commandCount, 1)
         } else {
@@ -861,4 +916,14 @@ private func parsedRequest(
     request["command"] = command.rawValue
     request["requestId"] = requestId
     return try TheFence(configuration: .init()).parseRequest(command: command, request: request)
+}
+
+private func XCTAssertHasNoStoredPhaseTimingMirrors<T>(
+    _ value: T,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) {
+    let storedLabels = Set(Mirror(reflecting: value).children.compactMap(\.label))
+    XCTAssertFalse(storedLabels.contains("startTime"), file: file, line: line)
+    XCTAssertFalse(storedLabels.contains("endTime"), file: file, line: line)
 }

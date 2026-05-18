@@ -34,10 +34,13 @@ struct ActiveSession: @unchecked Sendable { // swiftlint:disable:this agent_unch
     let sessionId: String
     let directory: URL
     let logHandle: FileHandle
-    var manifest: SessionManifest
-    let startTime: Date
+    let manifest: SessionManifest
     var nextSequenceNumber: Int
     var heistRecording: HeistRecordingPhase = .idle
+
+    var startTime: Date {
+        manifest.startTime
+    }
 }
 
 /// Heist recording handle. Marked `@unchecked Sendable` because `fileHandle`
@@ -53,9 +56,18 @@ struct HeistRecording: @unchecked Sendable { // swiftlint:disable:this agent_unc
 struct ClosingSession: Sendable {
     let sessionId: String
     let directory: URL
-    var manifest: SessionManifest
-    let startTime: Date
-    let endTime: Date
+    let manifest: SessionManifest
+
+    var startTime: Date {
+        manifest.startTime
+    }
+
+    var endTime: Date {
+        guard let endTime = manifest.endTime else {
+            preconditionFailure("Closing session manifest must have an endTime")
+        }
+        return endTime
+    }
 }
 
 struct ClosedSession: Sendable {
@@ -63,15 +75,33 @@ struct ClosedSession: Sendable {
     let directory: URL
     let compressedLogPath: URL
     let manifest: SessionManifest
-    let startTime: Date
-    let endTime: Date
+
+    var startTime: Date {
+        manifest.startTime
+    }
+
+    var endTime: Date {
+        guard let endTime = manifest.endTime else {
+            preconditionFailure("Closed session manifest must have an endTime")
+        }
+        return endTime
+    }
 }
 
 struct ArchivedSession: Sendable {
     let archivePath: URL
     let manifest: SessionManifest
-    let startTime: Date
-    let endTime: Date
+
+    var startTime: Date {
+        manifest.startTime
+    }
+
+    var endTime: Date {
+        guard let endTime = manifest.endTime else {
+            preconditionFailure("Archived session manifest must have an endTime")
+        }
+        return endTime
+    }
 }
 
 // MARK: - BookKeeper Errors
@@ -181,7 +211,6 @@ final class TheBookKeeper {
             directory: directory,
             logHandle: logHandle,
             manifest: manifest,
-            startTime: startTime,
             nextSequenceNumber: 1
         ))
     }
@@ -198,19 +227,16 @@ final class TheBookKeeper {
     }
 
     func closeSession() async throws {
-        guard case .active(var session) = phase else {
+        guard case .active(let session) = phase else {
             throw BookKeeperError.invalidPhase(expected: "active", actual: phaseName)
         }
-        let endTime = Date()
-        session.manifest.endTime = endTime
-        try flushManifest(session: session)
+        let closedManifest = session.manifest.closed(at: Date())
+        try flushManifest(manifest: closedManifest, directory: session.directory)
 
         let closingSession = ClosingSession(
             sessionId: session.sessionId,
             directory: session.directory,
-            manifest: session.manifest,
-            startTime: session.startTime,
-            endTime: endTime
+            manifest: closedManifest
         )
         phase = .closing(closingSession)
         session.logHandle.closeFile()
@@ -228,9 +254,7 @@ final class TheBookKeeper {
             sessionId: session.sessionId,
             directory: session.directory,
             compressedLogPath: compressedPath,
-            manifest: session.manifest,
-            startTime: session.startTime,
-            endTime: endTime
+            manifest: closedManifest
         ))
     }
 
@@ -248,9 +272,7 @@ final class TheBookKeeper {
 
         phase = .archived(ArchivedSession(
             archivePath: archivePath,
-            manifest: snapshot.manifest,
-            startTime: session.startTime,
-            endTime: session.endTime
+            manifest: snapshot.manifest
         ))
 
         return (archivePath, snapshot)
@@ -704,12 +726,12 @@ final class TheBookKeeper {
         return formatter.string(from: Date())
     }
 
-    private func flushManifest(session: ActiveSession) throws {
+    private func flushManifest(manifest: SessionManifest, directory: URL) throws {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        let data = try encoder.encode(session.manifest)
-        let manifestPath = session.directory.appendingPathComponent("manifest.json")
+        let data = try encoder.encode(manifest)
+        let manifestPath = directory.appendingPathComponent("manifest.json")
         try data.write(to: manifestPath, options: .atomic)
     }
 
