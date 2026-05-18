@@ -8,8 +8,8 @@ public extension AccessibilityTrace {
     /// Payload for `.noChange`.
     struct NoChange: Sendable, Equatable {
         public let elementCount: Int
-        /// Capture edge this delta was derived from. nil only for legacy
-        /// delta-only payloads and compatibility/test constructors.
+        /// Capture edge this delta was derived from. nil for manually
+        /// constructed or historically decoded compact deltas.
         public let captureEdge: CaptureEdge?
         /// Compatibility projection of `Capture.transition.transient` for
         /// older clients that read only `accessibilityDelta`.
@@ -30,8 +30,8 @@ public extension AccessibilityTrace {
     struct ElementsChanged: Sendable, Equatable {
         public let elementCount: Int
         public let edits: ElementEdits
-        /// Capture edge this delta was derived from. nil only for legacy
-        /// delta-only payloads and compatibility/test constructors.
+        /// Capture edge this delta was derived from. nil for manually
+        /// constructed or historically decoded compact deltas.
         public let captureEdge: CaptureEdge?
         /// Compatibility projection of `Capture.transition.transient` for
         /// older clients that read only `accessibilityDelta`.
@@ -53,20 +53,11 @@ public extension AccessibilityTrace {
     /// Payload for `.screenChanged`.
     struct ScreenChanged: Sendable, Equatable {
         public let elementCount: Int
-        /// Capture edge this delta was derived from. nil only for legacy
-        /// delta-only payloads and compatibility/test constructors.
+        /// Capture edge this delta was derived from. nil for manually
+        /// constructed or historically decoded compact deltas.
         public let captureEdge: CaptureEdge?
-        /// Best-effort interface snapshot after the screen change and any
-        /// folded-in `postEdits`. `newInterface.tree` reflects element-level
-        /// swaps and added-at-root, but does not apply the structural
-        /// `treeInserted`/`treeRemoved`/`treeMoved` entries from `postEdits`.
-        /// Those are descriptive diff metadata, not reconstruction
-        /// instructions. When tree structure matters, `postEdits` is
-        /// authoritative.
+        /// Interface snapshot after the screen change.
         public let newInterface: Interface
-        /// Element edits that happened *after* the screen change in legacy
-        /// batch projections. nil for capture-derived action deltas.
-        public let postEdits: ElementEdits?
         /// Compatibility projection of `Capture.transition.transient` for
         /// older clients that read only `accessibilityDelta`.
         public let transient: [HeistElement]
@@ -75,13 +66,11 @@ public extension AccessibilityTrace {
             elementCount: Int,
             captureEdge: CaptureEdge? = nil,
             newInterface: Interface,
-            postEdits: ElementEdits? = nil,
             transient: [HeistElement] = []
         ) {
             self.elementCount = elementCount
             self.captureEdge = captureEdge
             self.newInterface = newInterface
-            self.postEdits = postEdits
             self.transient = transient
         }
     }
@@ -105,7 +94,6 @@ public extension AccessibilityTrace {
         case elementsChanged(ElementsChanged)
 
         /// View controller identity changed — a brand new interface tree.
-        /// May carry post-edit element changes from legacy batch projections.
         case screenChanged(ScreenChanged)
 
         // MARK: - Cross-Case Accessors
@@ -145,8 +133,8 @@ public extension AccessibilityTrace {
         }
 
         /// Capture edge this delta was derived from, when emitted by a
-        /// capture-backed factory. nil indicates a legacy delta-only payload
-        /// or compatibility/test construction.
+        /// capture-backed factory. nil indicates a manually constructed or
+        /// historically decoded compact delta.
         public var captureEdge: CaptureEdge? {
             switch self {
             case .noChange(let payload): return payload.captureEdge
@@ -155,18 +143,14 @@ public extension AccessibilityTrace {
             }
         }
 
-        /// Element edits carried by this delta, regardless of case. For
-        /// `.elementsChanged` returns the case's edits; for `.screenChanged`
-        /// returns the optional `postEdits` from legacy batch projections;
-        /// nil for `.noChange`.
+        /// Element edits carried by this delta. Only `.elementsChanged`
+        /// carries edit lists; `.screenChanged` carries a full new interface.
         public var elementEdits: ElementEdits? {
             switch self {
-            case .noChange:
+            case .noChange, .screenChanged:
                 return nil
             case .elementsChanged(let payload):
                 return payload.edits
-            case .screenChanged(let payload):
-                return payload.postEdits
             }
         }
 
@@ -190,7 +174,6 @@ public extension AccessibilityTrace {
                     elementCount: payload.elementCount,
                     captureEdge: edge,
                     newInterface: payload.newInterface,
-                    postEdits: payload.postEdits,
                     transient: payload.transient
                 ))
             }
@@ -216,7 +199,6 @@ public extension AccessibilityTrace {
                     elementCount: payload.elementCount,
                     captureEdge: payload.captureEdge,
                     newInterface: payload.newInterface,
-                    postEdits: payload.postEdits,
                     transient: transient
                 ))
             }
@@ -226,9 +208,8 @@ public extension AccessibilityTrace {
 
 // MARK: - Element Edits
 
-/// The per-edit payload shared between `.elementsChanged` and
-/// `.screenChanged.postEdits`. Empty collections mean "no changes of that
-/// flavour"; on the wire, empty collections are omitted.
+/// The per-edit payload for `.elementsChanged`. Empty collections mean
+/// "no changes of that flavour"; on the wire, empty collections are omitted.
 public struct ElementEdits: Sendable, Equatable {
     public let added: [HeistElement]
     public let removed: [String]
@@ -297,7 +278,6 @@ extension AccessibilityTrace.Delta: Codable {
         case transient
         case edits
         case newInterface
-        case postEdits
     }
 
     public init(from decoder: Decoder) throws {
@@ -326,12 +306,10 @@ extension AccessibilityTrace.Delta: Codable {
 
         case .screenChanged:
             let newInterface = try container.decode(Interface.self, forKey: .newInterface)
-            let postEdits = try container.decodeIfPresent(ElementEdits.self, forKey: .postEdits)
             self = .screenChanged(AccessibilityTrace.ScreenChanged(
                 elementCount: elementCount,
                 captureEdge: captureEdge,
                 newInterface: newInterface,
-                postEdits: postEdits,
                 transient: transient
             ))
         }
@@ -364,9 +342,6 @@ extension AccessibilityTrace.Delta: Codable {
             try container.encode(payload.elementCount, forKey: .elementCount)
             try container.encodeIfPresent(payload.captureEdge, forKey: .captureEdge)
             try container.encode(payload.newInterface, forKey: .newInterface)
-            if let postEdits = payload.postEdits, !postEdits.isEmpty {
-                try container.encode(postEdits, forKey: .postEdits)
-            }
             if !payload.transient.isEmpty {
                 try container.encode(payload.transient, forKey: .transient)
             }

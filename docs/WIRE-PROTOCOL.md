@@ -1238,7 +1238,7 @@ A point in unit coordinates (0–1) relative to an element's accessibility frame
 | `message` | `String?` | Additional context or error description |
 | `errorKind` | `String?` | Typed error classification: `"elementNotFound"`, `"timeout"`, `"unsupported"`, `"inputError"`, `"validationError"`, `"actionFailed"`, `"authFailure"`, `"recording"`, `"general"`. Nil on success. |
 | `payload` | `ResultPayload?` | Command-specific payload as a tagged union: `{"kind": "value", "data": "..."}` for `typeText` / `setPasteboard` / `getPasteboard`; `{"kind": "scrollSearch", "data": {...}}` for `elementSearch`; `{"kind": "explore", "data": {...}}` for `explore`. Omitted when no command-specific payload applies. |
-| `accessibilityDelta` | `AccessibilityTrace.Delta?` | Compact delta describing what changed after the action |
+| `accessibilityDelta` | `AccessibilityTrace.Delta?` | Compact delta projected from the action's `accessibilityTrace` |
 | `animating` | `Bool?` | `true` if UI was still animating when result was produced; `nil` means idle |
 | `screenName` | `String?` | Label of the first header element in the post-action snapshot (screen name hint) |
 | `screenId` | `String?` | Slugified screen name for machine use (e.g. `"controls_demo"`) |
@@ -1324,9 +1324,9 @@ Case-specific fields:
 |--------|-------------------|-------|
 | `noChange` | (none) | The hierarchy did not change. May still carry `transient`. |
 | `elementsChanged` | `edits?` | Element-level edits within the same screen, nested as an `ElementEdits` sub-object. Omitted when empty; a missing key decodes as an empty `ElementEdits`. |
-| `screenChanged` | `newInterface`, `postEdits?` | View controller identity changed. `postEdits` is an optional `ElementEdits` sub-object for producers that explicitly carry post-screen-change edit detail. Omitted when empty. |
+| `screenChanged` | `newInterface` | View controller identity changed. The full post-change interface is carried on the delta. |
 
-`ElementEdits` shape (used by both `elementsChanged.edits` and `screenChanged.postEdits`):
+`ElementEdits` shape (used by `elementsChanged.edits`):
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -1700,6 +1700,6 @@ The current shape, beyond what is described in the message reference above:
   (`{"type": "element_updated", …}`) rather than Swift-synthesized Codable.
   The `expect` field accepts the object form only.
 - `AccessibilityTrace.Delta` is a discriminated union with cases `noChange` /
-  `elementsChanged` / `screenChanged`. `elementsChanged.edits` and
-  `screenChanged.postEdits` both nest the same `ElementEdits` object;
-  empty edits/postEdits are omitted and missing keys decode as empty.
+  `elementsChanged` / `screenChanged`. `elementsChanged.edits` nests an
+  `ElementEdits` object; empty edits are omitted and missing keys decode as
+  empty.

@@ -252,7 +252,6 @@ classDiagram
     class ScreenChanged {
         +Int elementCount
         +Interface newInterface
-        +ElementEdits? postEdits
         +[HeistElement] transient
     }
 

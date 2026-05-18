@@ -11,10 +11,8 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             ElementEdits.between(before, after),
             ElementEdits.between([InterfaceNode.element(before)], [InterfaceNode.element(after)])
         )
-        XCTAssertEqual(
-            AccessibilityTrace.Delta.between(before, after),
-            AccessibilityTrace.Delta.between([InterfaceNode.element(before)], [InterfaceNode.element(after)])
-        )
+        let delta = captureDelta(beforeTree: [.element(before)], afterTree: [.element(after)])
+        XCTAssertEqual(delta.elementEdits, ElementEdits.between(before, after))
     }
 
     func testNodeDiffIsTreeDiff() {
@@ -26,7 +24,8 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         ])
 
         XCTAssertEqual(ElementEdits.between(before, after), ElementEdits.between([before], [after]))
-        XCTAssertEqual(AccessibilityTrace.Delta.between(before, after), AccessibilityTrace.Delta.between([before], [after]))
+        let delta = captureDelta(beforeTree: [before], afterTree: [after])
+        XCTAssertEqual(delta.elementEdits, ElementEdits.between(before, after))
     }
 
     func testTreeInterfaceAndCaptureDiffsShareTheSameEdits() {
@@ -48,14 +47,8 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         let afterCapture = AccessibilityTrace.Capture(sequence: 2, interface: afterInterface, parentHash: beforeCapture.hash)
 
         XCTAssertEqual(ElementEdits.between(beforeTree, afterTree), ElementEdits.between(beforeInterface, afterInterface))
-        XCTAssertEqual(
-            AccessibilityTrace.Delta.between(beforeTree, afterTree),
-            AccessibilityTrace.Delta.between(beforeInterface, afterInterface)
-        )
-        XCTAssertEqualIgnoringCaptureEdge(
-            AccessibilityTrace.Delta.between(beforeInterface, afterInterface),
-            AccessibilityTrace.Delta.between(beforeCapture, afterCapture)
-        )
+        let delta = AccessibilityTrace.Delta.between(beforeCapture, afterCapture)
+        XCTAssertEqual(delta.elementEdits, ElementEdits.between(beforeInterface, afterInterface))
     }
 
     func testCaptureBackedNoChangeDeltaCarriesSourceEdgeAndDerivesFromTrace() throws {
@@ -259,35 +252,24 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         XCTAssertEqual(delta, AccessibilityTrace.Delta.between(before, after), file: file, line: line)
     }
 
-    private func XCTAssertEqualIgnoringCaptureEdge(
-        _ lhs: AccessibilityTrace.Delta,
-        _ rhs: AccessibilityTrace.Delta,
+    private func captureDelta(
+        beforeTree: [InterfaceNode],
+        afterTree: [InterfaceNode],
         file: StaticString = #filePath,
         line: UInt = #line
-    ) {
-        XCTAssertEqual(stripCaptureEdge(lhs), stripCaptureEdge(rhs), file: file, line: line)
+    ) -> AccessibilityTrace.Delta {
+        let before = AccessibilityTrace.Capture(
+            sequence: 1,
+            interface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: beforeTree)
+        )
+        let after = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: Interface(timestamp: Date(timeIntervalSince1970: 1), tree: afterTree),
+            parentHash: before.hash
+        )
+        let delta = AccessibilityTrace.Delta.between(before, after)
+        XCTAssertNotNil(delta.captureEdge, file: file, line: line)
+        return delta
     }
 
-    private func stripCaptureEdge(_ delta: AccessibilityTrace.Delta) -> AccessibilityTrace.Delta {
-        switch delta {
-        case .noChange(let payload):
-            return .noChange(AccessibilityTrace.NoChange(
-                elementCount: payload.elementCount,
-                transient: payload.transient
-            ))
-        case .elementsChanged(let payload):
-            return .elementsChanged(AccessibilityTrace.ElementsChanged(
-                elementCount: payload.elementCount,
-                edits: payload.edits,
-                transient: payload.transient
-            ))
-        case .screenChanged(let payload):
-            return .screenChanged(AccessibilityTrace.ScreenChanged(
-                elementCount: payload.elementCount,
-                newInterface: payload.newInterface,
-                postEdits: payload.postEdits,
-                transient: payload.transient
-            ))
-        }
-    }
 }

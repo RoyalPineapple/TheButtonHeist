@@ -26,7 +26,7 @@ extension TheStash {
     /// Convert internal accessibility types (`AccessibilityElement`,
     /// `AccessibilityHierarchy`, `Screen`) to their wire representations
     /// (`HeistElement`, `InterfaceNode`, `ContainerInfo`). Pure transform —
-    /// no stored state. Sibling `InterfaceDiff` consumes the wire forms.
+    /// no stored state. Delta projection is capture-backed in TheScore.
     @MainActor enum WireConversion { // swiftlint:disable:this agent_main_actor_value_type
 
     // MARK: - Trait Names

@@ -304,8 +304,7 @@ extension ActionExpectation {
     ) -> ExpectationResult {
         let delta = result.effectiveAccessibilityDelta
 
-        // Normal path: check the added list from element-level diffs (or
-        // post-screen-change post-edits).
+        // Normal path: check the added list from element-level diffs.
         let added = delta?.elementEdits?.added ?? []
         if !added.isEmpty {
             if added.contains(where: { $0.matches(matcher) }) {
@@ -344,8 +343,7 @@ extension ActionExpectation {
     ) -> ExpectationResult {
         let delta = result.effectiveAccessibilityDelta
 
-        // Normal path: check the removed list from element-level diffs (or
-        // post-screen-change post-edits).
+        // Normal path: check the removed list from element-level diffs.
         let removed = delta?.elementEdits?.removed ?? []
         if !removed.isEmpty {
             let matched = removed.contains { heistId in

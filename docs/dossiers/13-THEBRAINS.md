@@ -108,8 +108,8 @@ flowchart TD
 
     H --> I["navigation.exploreAndPrune()<br/>(semantic re-explore + restore)"]
     I --> J["stash.selectElements()"]
-    J --> K["InterfaceDiff.computeDelta(before, after, afterTree)"]
-    K --> L["Return ActionResult<br/>with delta + explore stats"]
+    J --> K["AccessibilityTrace capture endpoints"]
+    K --> L["Return ActionResult<br/>with trace-derived delta + explore stats"]
 ```
 
 ## Instance State
