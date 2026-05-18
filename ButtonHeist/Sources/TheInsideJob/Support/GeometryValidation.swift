@@ -1,7 +1,6 @@
 #if canImport(UIKit)
 #if DEBUG
 import UIKit
-import TheScore
 
 @MainActor enum GeometryValidation { // swiftlint:disable:this agent_main_actor_value_type
 
@@ -20,16 +19,6 @@ import TheScore
             if let error = validateScreenPoint(point, field: "\(field)[\(index)]") {
                 return error
             }
-        }
-        return nil
-    }
-
-    static func validateUnitPoint(_ point: UnitPoint, field: String) -> String? {
-        guard point.x.isFinite, point.y.isFinite else {
-            return "\(field) must contain finite coordinates"
-        }
-        guard (0...1).contains(point.x), (0...1).contains(point.y) else {
-            return "\(field) must be inside the unit rectangle 0...1"
         }
         return nil
     }
