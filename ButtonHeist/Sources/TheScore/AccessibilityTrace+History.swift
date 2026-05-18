@@ -24,10 +24,13 @@ public extension AccessibilityTrace {
 
     /// Append-only accessibility capture history between explicit prune points.
     ///
-    /// `captures` is the only stored truth. Refs, traces, and deltas are
-    /// projections over the retained captures and are rebuilt on demand.
+    /// `captures` is the source truth. Pending cursors and the delivered ref
+    /// are explicit delivery boundaries over that capture chain. Traces,
+    /// deltas, and element lookup maps are rebuilt as projections on demand.
     struct History: Sendable, Equatable {
         public private(set) var captures: [AccessibilityTrace.Capture]
+        private var pendingCursors: [AccessibilityTrace.Cursor]
+        public private(set) var deliveredRef: AccessibilityTrace.CaptureRef?
         public var retention: AccessibilityTraceRetention
 
         public init(
@@ -35,6 +38,8 @@ public extension AccessibilityTrace {
             captures: [AccessibilityTrace.Capture] = []
         ) {
             self.captures = []
+            self.pendingCursors = []
+            self.deliveredRef = nil
             self.retention = retention
             for capture in captures {
                 append(capture)
@@ -51,6 +56,10 @@ public extension AccessibilityTrace {
 
         public var latestCaptureRef: AccessibilityTrace.CaptureRef? {
             latestRef
+        }
+
+        public var pendingCursorCount: Int {
+            pendingCursors.count
         }
 
         @discardableResult
@@ -104,6 +113,20 @@ public extension AccessibilityTrace {
             return refs.isEmpty ? nil : AccessibilityTrace.Cursor(captureRefs: refs)
         }
 
+        @discardableResult
+        public mutating func ingestPending(
+            _ trace: AccessibilityTrace,
+            limit: Int? = nil
+        ) -> AccessibilityTrace.Cursor? {
+            guard let cursor = ingest(trace) else { return nil }
+            pendingCursors.append(cursor)
+            if let limit, pendingCursors.count > limit {
+                pendingCursors.removeFirst(pendingCursors.count - limit)
+            }
+            prune()
+            return cursor
+        }
+
         public func capture(ref: AccessibilityTrace.CaptureRef) -> AccessibilityTrace.Capture? {
             captures.first { $0.sequence == ref.sequence && $0.hash == ref.hash }
         }
@@ -112,6 +135,39 @@ public extension AccessibilityTrace {
             let cursorCaptures = cursor.captureRefs.compactMap { capture(ref: $0) }
             guard cursorCaptures.count == cursor.captureRefs.count else { return nil }
             return AccessibilityTrace(captures: cursorCaptures)
+        }
+
+        public func pendingCursor(at index: Int) -> AccessibilityTrace.Cursor? {
+            guard pendingCursors.indices.contains(index) else { return nil }
+            return pendingCursors[index]
+        }
+
+        public func pendingCursors(startingAt startIndex: Int = 0) -> [(index: Int, cursor: AccessibilityTrace.Cursor)] {
+            let boundedStartIndex = min(max(startIndex, 0), pendingCursors.count)
+            return pendingCursors.indices.dropFirst(boundedStartIndex).map { index in
+                (index, pendingCursors[index])
+            }
+        }
+
+        @discardableResult
+        public mutating func removePendingCursor(at index: Int) -> AccessibilityTrace.Cursor? {
+            guard pendingCursors.indices.contains(index) else { return nil }
+            return pendingCursors.remove(at: index)
+        }
+
+        public mutating func drainPendingTrace() -> AccessibilityTrace? {
+            guard let cursor = removePendingCursor(at: pendingCursors.startIndex) else { return nil }
+            let pendingTrace = trace(cursor: cursor)
+            markDelivered(through: cursor.last)
+            return pendingTrace
+        }
+
+        public mutating func drainPendingTraces() -> [AccessibilityTrace] {
+            let cursors = pendingCursors
+            let traces = cursors.compactMap { trace(cursor: $0) }
+            pendingCursors.removeAll()
+            markDelivered(through: cursors.last?.last)
+            return traces
         }
 
         public func trace(
@@ -148,23 +204,15 @@ public extension AccessibilityTrace {
         }
 
         public mutating func markDelivered(through ref: AccessibilityTrace.CaptureRef?) {
-            guard retention == .dropAfterDelivery, !captures.isEmpty else { return }
-
-            let keepStartIndex: [AccessibilityTrace.Capture].Index
-            if let ref {
-                guard let index = index(of: ref) else { return }
-                keepStartIndex = index
-            } else {
-                keepStartIndex = captures.index(before: captures.endIndex)
-            }
-
-            captures = Self.relinked(Array(captures[keepStartIndex...]))
+            deliveredRef = ref
+            prune()
         }
 
         public mutating func markDelivered(
             _ ref: AccessibilityTrace.CaptureRef?,
             retaining retainedRefs: Set<AccessibilityTrace.CaptureRef> = []
         ) {
+            deliveredRef = ref
             var refs = retainedRefs
             if let ref {
                 refs.insert(ref)
@@ -172,21 +220,22 @@ public extension AccessibilityTrace {
             prune(retaining: refs)
         }
 
-        public mutating func prune(retaining retainedRefs: Set<AccessibilityTrace.CaptureRef>) {
+        public mutating func prune(retaining retainedRefs: Set<AccessibilityTrace.CaptureRef> = []) {
             guard retention == .dropAfterDelivery else { return }
-            var refs = retainedRefs
-            if let latestRef {
-                refs.insert(latestRef)
-            }
+            let refs = retentionRefs(union: retainedRefs)
             captures = Self.relinked(captures.filter { refs.contains(AccessibilityTrace.CaptureRef(capture: $0)) })
         }
 
         public mutating func reset() {
             captures.removeAll()
+            pendingCursors.removeAll()
+            deliveredRef = nil
         }
 
         public mutating func removeAll(keepingCapacity keepCapacity: Bool = false) {
             captures.removeAll(keepingCapacity: keepCapacity)
+            pendingCursors.removeAll(keepingCapacity: keepCapacity)
+            deliveredRef = nil
         }
 
         private func index(of ref: AccessibilityTrace.CaptureRef) -> [AccessibilityTrace.Capture].Index? {
@@ -195,6 +244,22 @@ public extension AccessibilityTrace {
 
         private var nextSequence: Int {
             (captures.map(\.sequence).max() ?? 0) + 1
+        }
+
+        private func retentionRefs(
+            union retainedRefs: Set<AccessibilityTrace.CaptureRef>
+        ) -> Set<AccessibilityTrace.CaptureRef> {
+            var refs = retainedRefs
+            if let latestRef {
+                refs.insert(latestRef)
+            }
+            if let deliveredRef {
+                refs.insert(deliveredRef)
+            }
+            for cursor in pendingCursors {
+                refs.formUnion(cursor.captureRefs)
+            }
+            return refs
         }
 
         private static func relinked(

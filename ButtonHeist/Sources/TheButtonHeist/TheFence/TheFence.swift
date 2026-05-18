@@ -446,7 +446,6 @@ public final class TheFence {
     /// source of truth; element lookup dictionaries are derived locally from a
     /// specific capture when validation or recording needs one.
     private var accessibilityHistory = AccessibilityTrace.History(retention: .dropAfterDelivery)
-    private var lastDeliveredCaptureRef: AccessibilityTrace.CaptureRef?
 
     // MARK: - Pending Request Tracking
 
@@ -559,10 +558,8 @@ public final class TheFence {
     }
 
     func clearClientSessionState(error: Error) {
-        backgroundAccessibilityCursors.removeAll()
         accessibilityHistory.removeAll()
         accessibilityHistory.retention = .dropAfterDelivery
-        lastDeliveredCaptureRef = nil
         lastActionHistory = .unrun
         lastLatencyMs = 0
         recordingPhase = .idle
@@ -587,40 +584,20 @@ public final class TheFence {
         }
     }
 
-    /// Bounded FIFO of background accessibility trace cursors received from the server.
-    ///
-    /// Expectation checks derive a compact delta from each cursor at the match
-    /// edge and acknowledge only the trace whose delta matches. This prevents a
-    /// mismatched expectation from destroying the only evidence of a background
-    /// change.
-    private var backgroundAccessibilityCursors: [AccessibilityTrace.Cursor] = []
     private static let maxBackgroundAccessibilityCursors = 20
 
     private func enqueueBackgroundAccessibilityTrace(_ trace: AccessibilityTrace) {
-        guard let cursor = accessibilityHistory.ingest(trace) else { return }
-        backgroundAccessibilityCursors.append(cursor)
-        if backgroundAccessibilityCursors.count > Self.maxBackgroundAccessibilityCursors {
-            backgroundAccessibilityCursors.removeFirst(backgroundAccessibilityCursors.count - Self.maxBackgroundAccessibilityCursors)
-        }
-        pruneAccessibilityHistory()
+        accessibilityHistory.ingestPending(trace, limit: Self.maxBackgroundAccessibilityCursors)
     }
 
     /// Return and clear the oldest queued background accessibility trace, if any.
     public func drainBackgroundAccessibilityTrace() -> AccessibilityTrace? {
-        guard !backgroundAccessibilityCursors.isEmpty else { return nil }
-        let cursor = backgroundAccessibilityCursors.removeFirst()
-        let trace = accessibilityHistory.trace(cursor: cursor)
-        finishAccessibilityDelivery(cursor.last)
-        return trace
+        accessibilityHistory.drainPendingTrace()
     }
 
     /// Return and clear all queued background accessibility traces in arrival order.
     public func drainBackgroundAccessibilityTraces() -> [AccessibilityTrace] {
-        let cursors = backgroundAccessibilityCursors
-        let traces = cursors.compactMap { accessibilityHistory.trace(cursor: $0) }
-        backgroundAccessibilityCursors.removeAll()
-        finishAccessibilityDelivery(cursors.last?.last)
-        return traces
+        accessibilityHistory.drainPendingTraces()
     }
 
     /// Connect to a device and optionally enable auto-reconnect.
@@ -690,7 +667,7 @@ public final class TheFence {
             return backgroundResponse.response
         }
 
-        let preDispatchBackgroundCount = backgroundAccessibilityCursors.count
+        let preDispatchBackgroundCount = accessibilityHistory.pendingCursorCount
         let preDispatchCaptureRef = accessibilityHistory.latestCaptureRef
         let dispatched = try await dispatchCommand(parsed)
         lastLatencyMs = dispatched.durationMs
@@ -886,11 +863,9 @@ public final class TheFence {
         startingAt startIndex: Int = 0
     ) -> BackgroundExpectationResponse? {
         guard let expectation else { return nil }
-        let boundedStartIndex = min(max(startIndex, 0), backgroundAccessibilityCursors.count)
 
         var matched: (index: Int, result: ActionResult, validation: ExpectationResult)?
-        for index in backgroundAccessibilityCursors.indices.dropFirst(boundedStartIndex) {
-            let cursor = backgroundAccessibilityCursors[index]
+        for (index, cursor) in accessibilityHistory.pendingCursors(startingAt: startIndex) {
             guard let trace = accessibilityHistory.trace(cursor: cursor) else { continue }
             guard trace.backgroundDelta != nil else { continue }
             let syntheticResult = ActionResult(
@@ -910,10 +885,10 @@ public final class TheFence {
         }
 
         guard let matched else { return nil }
-        let cursor = backgroundAccessibilityCursors.remove(at: matched.index)
+        let cursor = accessibilityHistory.removePendingCursor(at: matched.index)
         let response = FenceResponse.action(result: matched.result, expectation: matched.validation)
         logResponse(requestId: requestId, response: response, durationMs: 0)
-        return BackgroundExpectationResponse(response: response, deliveredCaptureRef: cursor.last)
+        return BackgroundExpectationResponse(response: response, deliveredCaptureRef: cursor?.last)
     }
 
     private func ensureConnectedIfNeeded(for command: Command) async throws {
@@ -1115,18 +1090,7 @@ public final class TheFence {
     }
 
     private func finishAccessibilityDelivery(_ captureRef: AccessibilityTrace.CaptureRef?) {
-        if let captureRef {
-            lastDeliveredCaptureRef = captureRef
-        }
-        pruneAccessibilityHistory()
-    }
-
-    private func pruneAccessibilityHistory() {
-        var retainedRefs = Set(backgroundAccessibilityCursors.flatMap(\.captureRefs))
-        if let lastDeliveredCaptureRef {
-            retainedRefs.insert(lastDeliveredCaptureRef)
-        }
-        accessibilityHistory.prune(retaining: retainedRefs)
+        accessibilityHistory.markDelivered(through: captureRef)
     }
 
     func beginRecordingAccessibilityHistoryRetention() {
@@ -1135,7 +1099,7 @@ public final class TheFence {
 
     func endRecordingAccessibilityHistoryRetention() {
         accessibilityHistory.retention = .dropAfterDelivery
-        pruneAccessibilityHistory()
+        accessibilityHistory.prune()
     }
 
     private func connect() async throws {

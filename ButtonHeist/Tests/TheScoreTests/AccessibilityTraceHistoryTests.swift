@@ -151,13 +151,73 @@ final class AccessibilityTraceHistoryTests: XCTestCase {
         XCTAssertEqual(history.capture(ref: latestRef), history.captures[1])
     }
 
+    func testPendingCursorIsDrainedAsProjectionAndMarksDelivered() throws {
+        var history = AccessibilityTrace.History(retention: .dropAfterDelivery)
+        let pendingTrace = AccessibilityTrace(captures: [
+            AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Loading")),
+            AccessibilityTrace.Capture(
+                sequence: 2,
+                interface: makeInterface(label: "Done"),
+                transition: AccessibilityTrace.Transition(screenChangeReason: "primaryHeaderChanged")
+            ),
+        ])
+
+        let cursor = try XCTUnwrap(history.ingestPending(pendingTrace))
+        let drained = try XCTUnwrap(history.drainPendingTrace())
+
+        XCTAssertEqual(drained.captures.map(\.hash), cursor.captureRefs.map(\.hash))
+        XCTAssertEqual(history.pendingCursorCount, 0)
+        XCTAssertEqual(history.deliveredRef, cursor.last)
+        XCTAssertEqual(history.captures.map(\.hash), [try XCTUnwrap(cursor.last).hash])
+    }
+
+    func testPruneRetainsPendingCursorRefsWithoutExternalRetainedSet() throws {
+        var history = AccessibilityTrace.History(retention: .dropAfterDelivery)
+        let pendingTrace = AccessibilityTrace(captures: [
+            AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu")),
+            AccessibilityTrace.Capture(
+                sequence: 2,
+                interface: makeInterface(label: "Checkout"),
+                transition: AccessibilityTrace.Transition(screenChangeReason: "primaryHeaderChanged")
+            ),
+        ])
+
+        let cursor = try XCTUnwrap(history.ingestPending(pendingTrace))
+        history.prune()
+        let projectedTrace = try XCTUnwrap(history.trace(cursor: cursor))
+
+        XCTAssertEqual(projectedTrace.captures.map(\.hash), cursor.captureRefs.map(\.hash))
+        XCTAssertEqual(history.pendingCursorCount, 1)
+        XCTAssertEqual(history.pendingCursors(startingAt: 0).map(\.index), [0])
+    }
+
+    func testPendingCursorLimitDropsOldestBoundary() throws {
+        var history = AccessibilityTrace.History(retention: .dropAfterDelivery)
+        let firstCursor = try XCTUnwrap(history.ingestPending(
+            AccessibilityTrace(first: makeInterface(label: "First")),
+            limit: 1
+        ))
+        let secondCursor = try XCTUnwrap(history.ingestPending(
+            AccessibilityTrace(first: makeInterface(label: "Second")),
+            limit: 1
+        ))
+
+        XCTAssertEqual(history.pendingCursorCount, 1)
+        XCTAssertNil(history.trace(cursor: firstCursor))
+        XCTAssertNotNil(history.trace(cursor: secondCursor))
+    }
+
     func testResetClearsEverything() {
         var history = AccessibilityTrace.History()
         let ref = history.append(interface: makeInterface(label: "Home"))
+        _ = history.ingestPending(AccessibilityTrace(first: makeInterface(label: "Pending")))
+        history.markDelivered(through: ref)
 
         history.reset()
 
         XCTAssertTrue(history.captures.isEmpty)
+        XCTAssertEqual(history.pendingCursorCount, 0)
+        XCTAssertNil(history.deliveredRef)
         XCTAssertNil(history.latestCapture)
         XCTAssertNil(history.latestRef)
         XCTAssertNil(history.capture(ref: ref))
