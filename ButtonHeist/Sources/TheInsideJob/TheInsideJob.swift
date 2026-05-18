@@ -214,8 +214,7 @@ public final class TheInsideJob {
 
     /// Recording phase lives on TheGetaway — convenience accessors for tests.
     var recordingPhase: TheGetaway.RecordingPhase {
-        get { getaway.recordingPhase }
-        set { getaway.recordingPhase = newValue }
+        getaway.recordingPhase
     }
 
     var stakeout: TheStakeout? { getaway.stakeout }

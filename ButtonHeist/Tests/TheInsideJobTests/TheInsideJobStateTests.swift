@@ -295,7 +295,7 @@ final class TheInsideJobStateTests: XCTestCase {
     func testRecordingPhaseExposesStakeout() {
         let job = TheInsideJob()
         let recorder = TheStakeout(captureFrame: { nil })
-        job.recordingPhase = .recording(stakeout: recorder)
+        job.getaway.installRecordingRouteStateForTest(.recording(stakeout: recorder, ownerClientId: nil))
 
         XCTAssertTrue(job.stakeout === recorder)
     }
@@ -303,9 +303,9 @@ final class TheInsideJobStateTests: XCTestCase {
     func testIdleRecordingPhaseHidesStakeout() {
         let job = TheInsideJob()
         let recorder = TheStakeout(captureFrame: { nil })
-        job.recordingPhase = .recording(stakeout: recorder)
+        job.getaway.installRecordingRouteStateForTest(.recording(stakeout: recorder, ownerClientId: nil))
 
-        job.recordingPhase = .idle
+        job.getaway.installRecordingRouteStateForTest(.idle)
 
         XCTAssertNil(job.stakeout)
     }

@@ -114,8 +114,8 @@ actor TheStakeout {
 
     /// Completion handler — called when recording finishes for any reason.
     /// Writes are actor-isolated; reads happen on MainActor inside the closure.
-    /// Use ``setOnRecordingComplete(_:)`` to assign — the property is read-only externally.
-    private(set) var onRecordingComplete: (@MainActor @Sendable (Result<RecordingPayload, Error>) -> Void)?
+    /// Use ``setOnRecordingComplete(_:)`` to assign.
+    private var onRecordingComplete: (@MainActor @Sendable (Result<RecordingPayload, Error>) -> Void)?
 
     private var stakeoutPhase: StakeoutPhase = .idle
 

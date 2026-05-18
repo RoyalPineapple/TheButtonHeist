@@ -243,7 +243,7 @@ final class TheGetawayTests: XCTestCase {
                 scale: 1.0
             )
         )
-        getaway.recordingRouteState = .recording(stakeout: stakeout, ownerClientId: nil)
+        getaway.installRecordingRouteStateForTest(.recording(stakeout: stakeout, ownerClientId: nil))
 
         // Wait long enough that the recording would be near the first inactivity
         // check, then process a settled hierarchy change through TheGetaway.
@@ -281,7 +281,7 @@ final class TheGetawayTests: XCTestCase {
             XCTFail("Expected .none completedRecording before deliver, got \(getaway.completedRecording)")
         }
         let stubStakeout = TheStakeout(captureFrame: { @MainActor in nil })
-        getaway.recordingRouteState = .recording(stakeout: stubStakeout, ownerClientId: nil)
+        getaway.installRecordingRouteStateForTest(.recording(stakeout: stubStakeout, ownerClientId: nil))
 
         let payload = RecordingPayload(
             videoData: "AAAA",
@@ -314,11 +314,11 @@ final class TheGetawayTests: XCTestCase {
 
         var receivedData: Data?
         let stubStakeout = TheStakeout(captureFrame: { @MainActor in nil })
-        getaway.recordingRouteState = .stopping(stakeout: stubStakeout, waiter: .init(
+        getaway.installRecordingRouteStateForTest(.stopping(stakeout: stubStakeout, waiter: .init(
             requestId: "stop-1",
             ownerClientId: 7,
             respond: { data in receivedData = data }
-        ))
+        )))
 
         let payload = RecordingPayload(
             videoData: "AAAA",
@@ -364,7 +364,7 @@ final class TheGetawayTests: XCTestCase {
         await muscle.installAuthenticatedClientForTest(7)
         await muscle.installAuthenticatedClientForTest(8)
         let stubStakeout = TheStakeout(captureFrame: { @MainActor in nil })
-        getaway.recordingRouteState = .recording(stakeout: stubStakeout, ownerClientId: 7)
+        getaway.installRecordingRouteStateForTest(.recording(stakeout: stubStakeout, ownerClientId: 7))
 
         let payload = RecordingPayload(
             videoData: "AAAA",
@@ -416,7 +416,7 @@ final class TheGetawayTests: XCTestCase {
         )
         await muscle.installAuthenticatedClientForTest(7)
         let stubStakeout = TheStakeout(captureFrame: { @MainActor in nil })
-        getaway.recordingRouteState = .recording(stakeout: stubStakeout, ownerClientId: 7)
+        getaway.installRecordingRouteStateForTest(.recording(stakeout: stubStakeout, ownerClientId: 7))
         let payload = RecordingPayload(
             videoData: "AAAA",
             width: 100, height: 200,
@@ -547,10 +547,10 @@ final class TheGetawayTests: XCTestCase {
             startTime: Date(), endTime: Date(),
             stopReason: .maxDuration
         )
-        getaway.recordingRouteState = .completed(.init(
+        getaway.installRecordingRouteStateForTest(.completed(.init(
             outcome: .succeeded(payload),
             cachePolicy: .originatorOnly(7)
-        ))
+        )))
 
         getaway.invalidateRecordingForDisconnect(clientId: 7)
 
@@ -572,10 +572,10 @@ final class TheGetawayTests: XCTestCase {
             startTime: Date(), endTime: Date(),
             stopReason: .maxDuration
         )
-        getaway.recordingRouteState = .completed(.init(
+        getaway.installRecordingRouteStateForTest(.completed(.init(
             outcome: .succeeded(payload),
             cachePolicy: .originatorOnly(7)
-        ))
+        )))
 
         getaway.invalidateRecordingForDisconnect(clientId: 99)
 
@@ -593,11 +593,11 @@ final class TheGetawayTests: XCTestCase {
         let (getaway, _, _) = await makeGetaway()
         var deliveriesAfterDisconnect = 0
         let stubStakeout = TheStakeout(captureFrame: { @MainActor in nil })
-        getaway.recordingRouteState = .stopping(stakeout: stubStakeout, waiter: .init(
+        getaway.installRecordingRouteStateForTest(.stopping(stakeout: stubStakeout, waiter: .init(
             requestId: "stop-1",
             ownerClientId: 3,
             respond: { _ in deliveriesAfterDisconnect += 1 }
-        ))
+        )))
 
         getaway.invalidateRecordingForDisconnect(clientId: 3)
 
@@ -618,10 +618,10 @@ final class TheGetawayTests: XCTestCase {
             startTime: Date(), endTime: Date(),
             stopReason: .maxDuration
         )
-        getaway.recordingRouteState = .completed(.init(
+        getaway.installRecordingRouteStateForTest(.completed(.init(
             outcome: .succeeded(payload),
             cachePolicy: .originatorOnly(7)
-        ))
+        )))
 
         getaway.invalidateRecordingForSessionRelease()
 
@@ -639,7 +639,7 @@ final class TheGetawayTests: XCTestCase {
     func testOriginatorDisconnectMidRecordingDoesNotCachePayloadForNewClient() async {
         let (getaway, _, _) = await makeGetaway()
         let stubStakeout = TheStakeout(captureFrame: { @MainActor in nil })
-        getaway.recordingRouteState = .recording(stakeout: stubStakeout, ownerClientId: 99)
+        getaway.installRecordingRouteStateForTest(.recording(stakeout: stubStakeout, ownerClientId: 99))
         getaway.invalidateRecordingForDisconnect(clientId: 99)
         let payload = RecordingPayload(
             videoData: "AAAA",
@@ -688,10 +688,10 @@ final class TheGetawayTests: XCTestCase {
             startTime: Date(), endTime: Date(),
             stopReason: .maxDuration
         )
-        getaway.recordingRouteState = .completed(.init(
+        getaway.installRecordingRouteStateForTest(.completed(.init(
             outcome: .succeeded(payload),
             cachePolicy: .originatorOnly(7)
-        ))
+        )))
 
         await getaway.handleStopRecording(clientId: 7, requestId: "stop-from-a") { _ in }
 
@@ -710,10 +710,10 @@ final class TheGetawayTests: XCTestCase {
             startTime: Date(), endTime: Date(),
             stopReason: .maxDuration
         )
-        getaway.recordingRouteState = .completed(.init(
+        getaway.installRecordingRouteStateForTest(.completed(.init(
             outcome: .succeeded(payload),
             cachePolicy: .anySessionClient
-        ))
+        )))
 
         var stopResponse: Data?
         await getaway.handleStopRecording(clientId: 42, requestId: "anonymous-cache") { data in
@@ -751,7 +751,7 @@ final class TheGetawayTests: XCTestCase {
         // `stopRecording` is a no-op on the idle phase. That lets us park
         // a waiter without driving a real recording-complete callback.
         let stubStakeout = TheStakeout(captureFrame: { @MainActor in nil })
-        getaway.recordingRouteState = .recording(stakeout: stubStakeout, ownerClientId: 7)
+        getaway.installRecordingRouteStateForTest(.recording(stakeout: stubStakeout, ownerClientId: 7))
         // No cache — force the function past the .succeeded/.failed early
         // returns and into the rebind + park branch.
 
@@ -786,7 +786,7 @@ final class TheGetawayTests: XCTestCase {
         await muscle.installAuthenticatedClientForTest(7)
         await muscle.clearSendToClientForTest()
         let stubStakeout = TheStakeout(captureFrame: { @MainActor in nil })
-        getaway.recordingRouteState = .recording(stakeout: stubStakeout, ownerClientId: 7)
+        getaway.installRecordingRouteStateForTest(.recording(stakeout: stubStakeout, ownerClientId: 7))
 
         let payload = RecordingPayload(
             videoData: "AAAA",
@@ -821,7 +821,7 @@ final class TheGetawayTests: XCTestCase {
         )
         await muscle.installAuthenticatedClientForTest(7)
         let stubStakeout = TheStakeout(captureFrame: { @MainActor in nil })
-        getaway.recordingRouteState = .recording(stakeout: stubStakeout, ownerClientId: 7)
+        getaway.installRecordingRouteStateForTest(.recording(stakeout: stubStakeout, ownerClientId: 7))
 
         let payload = RecordingPayload(
             videoData: "AAAA",
