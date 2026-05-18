@@ -651,6 +651,7 @@ extension Navigation {
         case alreadyUsable
         case adjustedVisibleTarget
         case recoveredKnownOffscreen
+        case operationLocalRotorResult
         case failed(EnsureOnScreenFailure)
 
         var succeeded: Bool {
@@ -686,6 +687,10 @@ extension Navigation {
     }
 
     func ensureOnScreen(for target: ElementTarget, recordedScreen: Screen? = nil) async -> EnsureOnScreenResult {
+        if stash.activePendingRotorResult(for: target) != nil {
+            return .operationLocalRotorResult
+        }
+
         let visibleResolution = stash.resolveVisibleTarget(target)
         if let visible = visibleResolution.resolved {
             return await ensureVisibleResolvedTarget(visible)
