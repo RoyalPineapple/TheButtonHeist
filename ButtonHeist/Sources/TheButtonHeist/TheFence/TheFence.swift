@@ -500,31 +500,12 @@ public final class TheFence {
     }
 
     private func wireUpResponseCallbacks() {
-        handoff.onInterface = { [weak self] payload, requestId in
-            guard let self, let requestId else { return }
-            self.interfaceTracker.resolve(requestId: requestId, result: .success(payload))
-        }
-
-        handoff.onActionResult = { [weak self] result, requestId in
-            guard let self, let requestId else { return }
-            self.actionTracker.resolve(requestId: requestId, result: .success(result))
-        }
-
-        handoff.onScreen = { [weak self] payload, requestId in
-            guard let self, let requestId else { return }
-            self.screenTracker.resolve(requestId: requestId, result: .success(payload))
+        handoff.onServerMessage = { [weak self] message, requestId in
+            self?.handleServerMessage(message, requestId: requestId)
         }
 
         handoff.onRecordingEvent = { [weak self] event in
             self?.handleRecordingEvent(event)
-        }
-
-        handoff.onRequestError = { [weak self] serverError, requestId in
-            guard let self else { return }
-            let error = FenceError.serverError(serverError)
-            self.actionTracker.resolve(requestId: requestId, result: .failure(error))
-            self.interfaceTracker.resolve(requestId: requestId, result: .failure(error))
-            self.screenTracker.resolve(requestId: requestId, result: .failure(error))
         }
 
         handoff.onBackgroundAccessibilityTrace = { [weak self] trace in
@@ -533,6 +514,25 @@ public final class TheFence {
 
         handoff.onConnectionStateChanged = { [weak self] state in
             self?.handleHandoffConnectionStateChanged(state)
+        }
+    }
+
+    private func handleServerMessage(_ message: ServerMessage, requestId: String?) {
+        guard let requestId else { return }
+        switch message {
+        case .interface(let payload):
+            interfaceTracker.resolve(requestId: requestId, result: .success(payload))
+        case .actionResult(let result):
+            actionTracker.resolve(requestId: requestId, result: .success(result))
+        case .screen(let payload):
+            screenTracker.resolve(requestId: requestId, result: .success(payload))
+        case .error(let serverError):
+            let error = FenceError.serverError(serverError)
+            actionTracker.resolve(requestId: requestId, result: .failure(error))
+            interfaceTracker.resolve(requestId: requestId, result: .failure(error))
+            screenTracker.resolve(requestId: requestId, result: .failure(error))
+        default:
+            break
         }
     }
 

@@ -995,10 +995,10 @@ final class TheHandoffStateTests: XCTestCase {
         mock.connectEventsOverride = []
         handoff.makeConnection = { _, _, _ in mock }
 
-        var receivedError: ServerError?
+        var receivedMessage: ServerMessage?
         var receivedRequestID: String?
-        handoff.onRequestError = { error, requestID in
-            receivedError = error
+        handoff.onServerMessage = { message, requestID in
+            receivedMessage = message
             receivedRequestID = requestID
         }
 
@@ -1017,8 +1017,72 @@ final class TheHandoffStateTests: XCTestCase {
             accessibilityTrace: nil
         ))
 
-        XCTAssertEqual(receivedError?.message, "request failed")
+        guard case .error(let receivedError)? = receivedMessage else {
+            return XCTFail("Expected error message, got \(String(describing: receivedMessage))")
+        }
+        XCTAssertEqual(receivedError.message, "request failed")
         XCTAssertEqual(receivedRequestID, "request-1")
+        assertFailed(handoff.connectionPhase, failure: .connectionFailed("connection failed"))
+    }
+
+    @ButtonHeistActor
+    func testTerminalAttemptDeliversRequestScopedObservationPayloads() async {
+        let handoff = TheHandoff()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mock = MockConnection()
+        mock.connectEventsOverride = []
+        handoff.makeConnection = { _, _, _ in mock }
+
+        var receivedMessages: [(message: ServerMessage, requestID: String?)] = []
+        handoff.onServerMessage = { message, requestID in
+            receivedMessages.append((message, requestID))
+        }
+
+        handoff.connect(to: device)
+        mock.onEvent?(.connected)
+        mock.onEvent?(.message(
+            .error(ServerError(kind: .general, message: "connection failed")),
+            requestId: nil,
+            accessibilityTrace: nil
+        ))
+        assertFailed(handoff.connectionPhase, failure: .connectionFailed("connection failed"))
+
+        let interface = Interface(
+            timestamp: Date(timeIntervalSince1970: 100),
+            tree: [.element(makeReceiptTestElement(heistId: "title", label: "Title"))]
+        )
+        mock.onEvent?(.message(
+            .interface(interface),
+            requestId: "interface-1",
+            accessibilityTrace: nil
+        ))
+
+        let screen = ScreenPayload(
+            pngData: "base64png",
+            width: 390,
+            height: 844,
+            timestamp: Date(timeIntervalSince1970: 200)
+        )
+        mock.onEvent?(.message(
+            .screen(screen),
+            requestId: "screen-1",
+            accessibilityTrace: nil
+        ))
+
+        XCTAssertEqual(receivedMessages.count, 2)
+        guard case .interface(let receivedInterface) = receivedMessages[0].message else {
+            return XCTFail("Expected interface message, got \(receivedMessages[0].message)")
+        }
+        XCTAssertEqual(receivedInterface, interface)
+        XCTAssertEqual(receivedMessages[0].requestID, "interface-1")
+        guard case .screen(let receivedScreen) = receivedMessages[1].message else {
+            return XCTFail("Expected screen message, got \(receivedMessages[1].message)")
+        }
+        XCTAssertEqual(receivedScreen.pngData, screen.pngData)
+        XCTAssertEqual(receivedScreen.width, screen.width)
+        XCTAssertEqual(receivedScreen.height, screen.height)
+        XCTAssertEqual(receivedScreen.timestamp, screen.timestamp)
+        XCTAssertEqual(receivedMessages[1].requestID, "screen-1")
         assertFailed(handoff.connectionPhase, failure: .connectionFailed("connection failed"))
     }
 

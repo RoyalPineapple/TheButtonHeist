@@ -100,9 +100,12 @@ final class TheHandoff {
     }
 
     /// State carried while connected: device, keepalive task, and the
-    /// session-scoped data that only makes sense during a live connection.
+    /// lifecycle-scoped data that only makes sense during a live connection.
     /// Bundling these into the phase makes "connected but no server info" a
     /// transient inner state rather than a sibling-of-phase race.
+    ///
+    /// Interface and screen payloads are forwarded as delivered server messages;
+    /// this session does not mirror semantic accessibility state.
     ///
     /// `missedPongCount` lives here (and not as a top-level TheHandoff field)
     /// because it is meaningful only while a connection is live. Tying it to
@@ -398,17 +401,12 @@ final class TheHandoff {
     /// Emits after each connection phase transition. Consumers derive lifecycle
     /// side effects from this state stream instead of one-off lifecycle hooks.
     var onConnectionStateChanged: (@ButtonHeistActor (ConnectionPhase) -> Void)?
-    /// A `get_interface` response arrived. The trailing `String?` is the originating requestId (nil for unsolicited pushes).
-    var onInterface: (@ButtonHeistActor (Interface, String?) -> Void)?
-    /// An action command (tap, swipe, type, etc.) produced a result. Trailing `String?` is the originating requestId.
-    var onActionResult: (@ButtonHeistActor (ActionResult, String?) -> Void)?
-    /// A `get_screen` response arrived. Trailing `String?` is the originating requestId.
-    var onScreen: (@ButtonHeistActor (ScreenPayload, String?) -> Void)?
+    /// Non-lifecycle server messages delivered to TheFence for request-tracker
+    /// resolution. TheHandoff forwards these without retaining semantic state.
+    var onServerMessage: (@ButtonHeistActor (ServerMessage, String?) -> Void)?
     /// Recording lifecycle messages from the server. TheFence owns the
     /// client-side recording phase; TheHandoff only forwards typed messages.
     var onRecordingEvent: (@ButtonHeistActor (RecordingEvent) -> Void)?
-    /// Error response for a specific in-flight request.
-    var onRequestError: (@ButtonHeistActor (ServerError, String) -> Void)?
     /// Auth approved. The parameter is the approved token, or nil when reusing a persistent session.
     var onAuthApproved: (@ButtonHeistActor (String?) -> Void)?
     /// Background UI-change evidence attached to explicit command responses.
@@ -660,14 +658,8 @@ final class TheHandoff {
 
     private func handleTerminalRequestMessage(_ message: ServerMessage, requestId: String) {
         switch message {
-        case .interface(let payload):
-            onInterface?(payload, requestId)
-        case .actionResult(let result):
-            onActionResult?(result, requestId)
-        case .screen(let payload):
-            onScreen?(payload, requestId)
-        case .error(let serverError):
-            onRequestError?(serverError, requestId)
+        case .interface, .actionResult, .screen, .error:
+            forwardServerMessage(message, requestId: requestId)
         // Terminal request recovery only completes request-scoped trackers; state-mutating messages are consumed while active.
         // swiftlint:disable:next agent_wire_message_arm_no_op_break
         case .info, .recordingStarted, .recording, .authApproved, .sessionLocked, .status,
@@ -685,12 +677,8 @@ final class TheHandoff {
         switch message {
         case .info(let info):
             mutateConnectedSession { $0.serverInfo = info }
-        case .interface(let payload):
-            onInterface?(payload, requestId)
-        case .actionResult(let result):
-            onActionResult?(result, requestId)
-        case .screen(let payload):
-            onScreen?(payload, requestId)
+        case .interface, .actionResult, .screen:
+            forwardServerMessage(message, requestId: requestId)
         case .recordingStarted:
             emitRecordingEvent(.started)
         case .recording(let payload):
@@ -703,7 +691,7 @@ final class TheHandoff {
                 transitionToFailed(.disconnected(.authFailed(serverError.message)))
             default:
                 if let requestId {
-                    onRequestError?(serverError, requestId)
+                    forwardServerMessage(message, requestId: requestId)
                 } else {
                     transitionToFailed(.connectionFailed(serverError.message))
                 }
@@ -727,6 +715,10 @@ final class TheHandoff {
         case .serverHello, .authRequired, .interaction:
             break
         }
+    }
+
+    private func forwardServerMessage(_ message: ServerMessage, requestId: String?) {
+        onServerMessage?(message, requestId)
     }
 
     private func emitRecordingEvent(_ event: RecordingEvent) {
