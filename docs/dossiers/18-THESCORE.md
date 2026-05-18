@@ -8,7 +8,7 @@
 
 TheScore is the shared playbook. It defines:
 
-1. **All client-to-server messages** (`ClientMessage` — 37 cases)
+1. **All client-to-server messages** (`ClientMessage` — 35 cases)
 2. **All server-to-client messages** (`ServerMessage` — 18 cases, including `status(StatusPayload)`)
 3. **Request/response envelopes** (`RequestEnvelope`, `ResponseEnvelope`) for correlation
 4. **UI element types** (`HeistElement`, `Interface`, `InterfaceNode`, `ElementAction`, `ContainerInfo`, `HeistCustomContent`)
@@ -18,19 +18,18 @@ TheScore is the shared playbook. It defines:
 8. **Media payloads** (`ScreenPayload`, `RecordingPayload`)
 9. **Interaction events** (`InteractionEvent`) — wire-level command/result recording
 10. **Status types** (`StatusPayload`, `StatusIdentity`, `StatusSession`) — server identity and session state
-11. **Watch payload** (`WatchPayload`) — legacy watch payload retained for wire decoding
-12. **Server info** (`ServerInfo`)
-13. **Protocol constants** (service type, version)
-14. **`ButtonHeistActor`** — dedicated global actor for the host-side control plane
-15. **Connection scope types** (`ConnectionScope`) — configurable connection source filtering (simulator, USB, network) with address classification
-16. **Unit-point geometry** (`UnitPoint`) — element-relative coordinates for gestures
+11. **Server info** (`ServerInfo`)
+12. **Protocol constants** (service type, version)
+13. **`ButtonHeistActor`** — dedicated global actor for the host-side control plane
+14. **Connection scope types** (`ConnectionScope`) — configurable connection source filtering (simulator, USB, network) with address classification
+15. **Unit-point geometry** (`UnitPoint`) — element-relative coordinates for gestures
 
 ## Source Files
 
 | File | Contents |
 |------|----------|
-| `Messages.swift` | `buttonHeistServiceType`, `buttonHeistVersion` (CalVer), `WireMessageType` (51 cases), `ButtonHeistActor`, `EnvironmentKey` |
-| `ClientMessages.swift` | `RequestEnvelope`, `ClientMessage` (37 cases), all action target structs, `UnitPoint`, `RecordingConfig` |
+| `Messages.swift` | `buttonHeistServiceType`, `buttonHeistVersion` (CalVer), `WireMessageType` (50 cases), `ButtonHeistActor`, `EnvironmentKey` |
+| `ClientMessages.swift` | `RequestEnvelope`, `ClientMessage` (35 cases), all action target structs, `UnitPoint`, `RecordingConfig` |
 | `ClientMessages+TouchTargets.swift` | Touch-specific target structs (`TapTarget`, `SwipeTarget`, `DragTarget`, `PinchTarget`, `RotateTarget`, `TwoFingerTapTarget`, `DrawPathTarget`, `DrawBezierTarget`, `LongPressTarget`) |
 | `ServerMessages.swift` | `ResponseEnvelope`, `ServerMessage` (18 cases), `ActionResult`, `ErrorKind`, `StatusPayload`, `ScreenPayload`, `RecordingPayload`, `InteractionEvent`, `ServerInfo` |
 | `AccessibilityTrace+Delta.swift` | `AccessibilityTrace.Delta` enum, `NoChange`, `ElementsChanged`, `ScreenChanged`, `ElementEdits`, `ElementUpdate`, `PropertyChange`, `ElementProperty`, `TreeInsertion`/`TreeRemoval`/`TreeMove` |
@@ -58,8 +57,8 @@ The UIKit-bitmask projections live in TheInsideJob as `AccessibilityPolicy+UIKit
 ```mermaid
 graph TD
     subgraph TheScore["TheScore (Cross-Platform)"]
-        Messages["Messages.swift — serviceType, buttonHeistVersion, WireMessageType (51 cases)"]
-        Client["ClientMessages.swift — RequestEnvelope, ClientMessage (37 cases), UnitPoint"]
+        Messages["Messages.swift — serviceType, buttonHeistVersion, WireMessageType (50 cases)"]
+        Client["ClientMessages.swift — RequestEnvelope, ClientMessage (35 cases), UnitPoint"]
         Server["ServerMessages.swift — ResponseEnvelope, ServerMessage (18 cases), StatusPayload"]
         Elements["Elements.swift — HeistElement, Interface, ElementTarget, ElementMatcher"]
         Policy["AccessibilityPolicy.swift — trait policy (transient / interactive / synthesis priority)"]
@@ -80,10 +79,9 @@ graph TD
 
 ```mermaid
 graph TD
-    subgraph ClientMessages["ClientMessage (37 cases)"]
+    subgraph ClientMessages["ClientMessage (35 cases)"]
         Hello["clientHello"]
         Auth["authenticate(AuthenticatePayload)"]
-        Sub["subscribe / unsubscribe<br/>(legacy unsupported)"]
         Ping["ping / status"]
         Query["requestInterface / requestScreen / waitForIdle"]
         Actions["activate / increment / decrement / performCustomAction"]
@@ -92,7 +90,6 @@ graph TD
         Text["typeText / editAction / resignFirstResponder"]
         Pasteboard["setPasteboard / getPasteboard"]
         Recording["startRecording / stopRecording"]
-        Watch["watch(WatchPayload)<br/>(legacy unsupported)"]
         Explore["explore"]
         WaitFor["waitFor"]
     end

@@ -43,12 +43,6 @@ public enum ClientMessage: Codable, Sendable {
     /// Request current interface (UI element hierarchy)
     case requestInterface
 
-    /// Subscribe to automatic updates
-    case subscribe
-
-    /// Unsubscribe from automatic updates
-    case unsubscribe
-
     /// Ping for keepalive
     case ping
 
@@ -155,11 +149,6 @@ public enum ClientMessage: Codable, Sendable {
     /// Stop an in-progress recording
     case stopRecording
 
-    // MARK: - Watch (Observer) Commands
-
-    /// Connect as a read-only observer (no session lock)
-    case watch(WatchPayload)
-
     /// Canonical snake-case wire name for this message, suitable for log
     /// output and command-name diagnostics. Stable across the codebase: the
     /// same string the CLI accepts on argv and MCP tools advertise as their
@@ -169,8 +158,6 @@ public enum ClientMessage: Codable, Sendable {
         case .clientHello: return "client_hello"
         case .authenticate: return "authenticate"
         case .requestInterface: return "request_interface"
-        case .subscribe: return "subscribe"
-        case .unsubscribe: return "unsubscribe"
         case .ping: return "ping"
         case .status: return "status"
         case .requestScreen: return "request_screen"
@@ -203,7 +190,6 @@ public enum ClientMessage: Codable, Sendable {
         case .explore: return "explore"
         case .startRecording: return "start_recording"
         case .stopRecording: return "stop_recording"
-        case .watch: return "watch"
         }
     }
 
@@ -646,16 +632,6 @@ public struct SessionLockedPayload: Codable, Sendable {
     public init(message: String, activeConnections: Int) {
         self.message = message
         self.activeConnections = activeConnections
-    }
-}
-
-/// Payload for watch (observer) connections
-public struct WatchPayload: Codable, Sendable {
-    /// Optional auth token. When empty and server allows open watch, auto-approved.
-    /// When empty and server restricts watch, triggers UI approval prompt.
-    public let token: String
-    public init(token: String = "") {
-        self.token = token
     }
 }
 

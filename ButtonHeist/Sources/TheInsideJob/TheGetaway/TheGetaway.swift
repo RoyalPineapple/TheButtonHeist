@@ -268,12 +268,6 @@ final class TheGetaway {
             sendMessage(.pong, requestId: requestId, respond: respond)
         case .status:
             sendMessage(.status(await makeStatusPayload()), requestId: requestId, respond: respond)
-        case .subscribe, .unsubscribe, .watch:
-            sendMessage(
-                .error(ServerError(kind: .unsupported, message: "Runtime UI subscriptions are no longer supported.")),
-                requestId: requestId,
-                respond: respond
-            )
 
         // Observation
         case .requestScreen:
@@ -568,8 +562,6 @@ private extension ClientMessage {
         case .clientHello,
              .authenticate,
              .requestInterface,
-             .subscribe,
-             .unsubscribe,
              .ping,
              .status,
              .touchDrawPath,
@@ -584,8 +576,7 @@ private extension ClientMessage {
              .requestScreen,
              .explore,
              .startRecording,
-             .stopRecording,
-             .watch:
+             .stopRecording:
             return false
         }
     }

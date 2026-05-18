@@ -67,8 +67,7 @@ timer releases the session.
 
 Transport supports multiple TCP connections because one-shot CLI/MCP calls may
 connect, run, and disconnect repeatedly, but session ownership remains singular.
-Runtime watcher/subscription messages are legacy wire cases and are not a public
-driver surface.
+Runtime subscriptions are not a public driver surface.
 
 ### Screen Classification Is Typed
 

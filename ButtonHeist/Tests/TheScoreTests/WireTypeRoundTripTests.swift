@@ -290,23 +290,6 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(target.startPoint, CGPoint(x: 42, y: 99))
     }
 
-    // MARK: - WatchPayload
-
-    func testWatchPayloadRoundTrip() throws {
-        let payload = WatchPayload(token: "my-token")
-        let data = try encoder.encode(payload)
-        let decoded = try decoder.decode(WatchPayload.self, from: data)
-        XCTAssertEqual(decoded.token, "my-token")
-    }
-
-    func testWatchPayloadDefaultToken() throws {
-        let payload = WatchPayload()
-        XCTAssertEqual(payload.token, "")
-        let data = try encoder.encode(payload)
-        let decoded = try decoder.decode(WatchPayload.self, from: data)
-        XCTAssertEqual(decoded.token, "")
-    }
-
     // MARK: - WaitForIdleTarget
 
     func testWaitForIdleTargetRoundTrip() throws {

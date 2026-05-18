@@ -51,8 +51,6 @@ extension ClientMessage {
         switch self {
         case .clientHello: return (.clientHello, nil)
         case .requestInterface: return (.requestInterface, nil)
-        case .subscribe: return (.subscribe, nil)
-        case .unsubscribe: return (.unsubscribe, nil)
         case .ping: return (.ping, nil)
         case .status: return (.status, nil)
         case .resignFirstResponder: return (.resignFirstResponder, nil)
@@ -68,7 +66,6 @@ extension ClientMessage {
         case .rotor(let payload): return (.rotor, payload)
         case .editAction(let payload): return (.editAction, payload)
         case .setPasteboard(let payload): return (.setPasteboard, payload)
-        case .watch(let payload): return (.watch, payload)
         case .touchTap(let payload): return (.touchTap, payload)
         case .touchLongPress(let payload): return (.touchLongPress, payload)
         case .touchSwipe(let payload): return (.touchSwipe, payload)
@@ -100,8 +97,6 @@ extension ClientMessage {
         switch type {
         case .clientHello: return .clientHello
         case .requestInterface: return .requestInterface
-        case .subscribe: return .subscribe
-        case .unsubscribe: return .unsubscribe
         case .ping: return .ping
         case .status: return .status
         case .resignFirstResponder: return .resignFirstResponder
@@ -117,7 +112,6 @@ extension ClientMessage {
         case .rotor: return .rotor(try RotorTarget(from: try payload()))
         case .editAction: return .editAction(try EditActionTarget(from: try payload()))
         case .setPasteboard: return .setPasteboard(try SetPasteboardTarget(from: try payload()))
-        case .watch: return .watch(try WatchPayload(from: try payload()))
         case .touchTap: return .touchTap(try TouchTapTarget(from: try payload()))
         case .touchLongPress: return .touchLongPress(try LongPressTarget(from: try payload()))
         case .touchSwipe: return .touchSwipe(try SwipeTarget(from: try payload()))

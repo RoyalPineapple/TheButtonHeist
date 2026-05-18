@@ -25,8 +25,6 @@ public enum WireMessageType: String, Codable, CaseIterable, Sendable {
     case info
     case requestInterface
     case interface
-    case subscribe
-    case unsubscribe
     case ping
     case pong
     case status
@@ -68,7 +66,6 @@ public enum WireMessageType: String, Codable, CaseIterable, Sendable {
     case waitFor
     case waitForChange
     case interaction
-    case watch
 }
 
 // MARK: - TXT Record Keys
@@ -101,7 +98,6 @@ public enum EnvironmentKey: String, Sendable {
     case insideJobPollingInterval = "INSIDEJOB_POLLING_INTERVAL"
     case insideJobId = "INSIDEJOB_ID"
     case insideJobScope = "INSIDEJOB_SCOPE"
-    case insideJobRestrictWatchers = "INSIDEJOB_RESTRICT_WATCHERS"
     case insideJobSessionTimeout = "INSIDEJOB_SESSION_TIMEOUT"
 }
 

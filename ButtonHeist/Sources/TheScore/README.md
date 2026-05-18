@@ -4,7 +4,7 @@ Shared wire protocol. Every type that crosses the TCP boundary lives here. No UI
 
 ## Reading order
 
-1. **`Messages.swift`** — Start here. `WireMessageType` is a 54-case `String` enum — every JSON message has a `"type"` key whose value is one of these raw strings. Also defines `TXTRecordKey` (Bonjour record keys), `EnvironmentKey` (all env vars in one place), and `buttonHeistVersion` — the single product version checked for exact equality at handshake time.
+1. **`Messages.swift`** — Start here. `WireMessageType` is a 50-case `String` enum — every JSON message has a `"type"` key whose value is one of these raw strings. Also defines `TXTRecordKey` (Bonjour record keys), `EnvironmentKey` (all env vars in one place), and `buttonHeistVersion` — the single product version checked for exact equality at handshake time.
 
 2. **`Elements.swift`** — The element model. Nearly everything else references these types.
    - `HeistElement` — wire representation of one accessibility element (heistId, label, value, traits, frame, actions, etc.)
@@ -14,7 +14,7 @@ Shared wire protocol. Every type that crosses the TCP boundary lives here. No UI
    - `Interface` — timestamp + canonical `[InterfaceNode]` tree. Computed properties derive the flat element list, `screenName`, `screenId`, and `navigation` context from that tree.
    - `ElementAction` — four cases with dual encoding: built-in actions are bare strings, `.custom(String)` is `{"custom": "name"}`.
 
-3. **`ClientMessages.swift`** — What clients send. `RequestEnvelope` wraps `buttonHeistVersion`, `requestId`, and a `ClientMessage` (37 cases). Each action case carries a typed target struct (`TouchTapTarget`, `SwipeTarget`, `ScrollTarget`, etc.). `RecordingConfig` validates fps/scale ranges during deserialization, not after.
+3. **`ClientMessages.swift`** — What clients send. `RequestEnvelope` wraps `buttonHeistVersion`, `requestId`, and a `ClientMessage` (35 cases). Each action case carries a typed target struct (`TouchTapTarget`, `SwipeTarget`, `ScrollTarget`, etc.). `RecordingConfig` validates fps/scale ranges during deserialization, not after.
 
 4. **`ServerMessages.swift`** — What the server sends back. `ResponseEnvelope` carries `accessibilityTrace: AccessibilityTrace?` as the source-of-truth accessibility record for UI changes observed while the client was processing the previous response. Background deltas are not stored on the envelope; clients derive compact views from the trace at formatting or expectation edges.
    - `ActionResult` — the richest payload: success/failure, method, message, value, accessibilityDelta, element metadata, scroll/explore results.

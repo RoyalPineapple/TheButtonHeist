@@ -235,23 +235,6 @@ final class TheMuscleTests: XCTestCase {
         XCTAssertEqual(authFailure?.message, "Authentication required before ping.")
     }
 
-    func testRemovedWatchMessageReturnsAuthFailureWithoutAuthenticating() async {
-        await muscle.registerClientAddress(1, address: "127.0.0.1")
-        await performHello(clientId: 1, respond: respondSink())
-
-        let data = Data(#"{"buttonHeistVersion":"\#(buttonHeistVersion)","type":"watch","payload":{"token":"test-token"}}"#.utf8)
-        let (respond, responses) = collectResponses()
-        await muscle.handleUnauthenticatedMessage(1, data: data, respond: respond)
-
-        let serverMessages = responses().compactMap { decodeServerMessage($0) }
-        let authFailure = serverMessages.compactMap { message -> ServerError? in
-            guard case .error(let error) = message, error.kind == .authFailure else { return nil }
-            return error
-        }.first
-        XCTAssertEqual(authFailure?.message, "Authentication required before watch.")
-        XCTAssertFalse(markedAuthenticated.contains(1))
-    }
-
     // MARK: - Session Rules Tests
 
     func testNoSessionValidTokenAcquires() async throws {

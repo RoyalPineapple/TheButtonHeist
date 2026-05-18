@@ -36,25 +36,30 @@ final class DocumentationDriftTests: XCTestCase {
         }
     }
 
-    func testObserverDocsMatchRestrictedDefault() throws {
+    func testProtocolDocsDoNotMentionRemovedClientMessages() throws {
         let docs = try readDocs(named: [
             "docs/API.md",
             "docs/AUTH.md",
             "docs/WIRE-PROTOCOL.md",
+            "ButtonHeist/Sources/TheScore/README.md",
         ])
 
-        let staleObserverPhrases = [
-            "Does not require a token by default",
-            "only needed if server requires INSIDEJOB_RESTRICT_WATCHERS",
-            "Empty string for default open access",
-            "Required when `INSIDEJOB_RESTRICT_WATCHERS=1`",
+        let removedClientMessagePhrases = [
+            "### subscribe",
+            "### unsubscribe",
+            "### watch",
+            "\"type\":\"subscribe\"",
+            "\"type\":\"unsubscribe\"",
+            "\"type\":\"watch\"",
+            "WatchPayload",
+            "INSIDEJOB_RESTRICT_WATCHERS",
         ]
 
         for (path, content) in docs {
-            for phrase in staleObserverPhrases {
+            for phrase in removedClientMessagePhrases {
                 XCTAssertFalse(
                     content.contains(phrase),
-                    "\(path) contains stale observer auth phrase '\(phrase)'"
+                    "\(path) documents removed client protocol phrase '\(phrase)'"
                 )
             }
         }

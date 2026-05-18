@@ -155,10 +155,10 @@ public struct StatusIdentity: Codable, Sendable {
 public struct StatusSession: Codable, Sendable {
     /// Whether a driver session is currently active on this instance.
     public let active: Bool
-    /// Whether additional watcher connections are allowed for this active session.
-    /// When `active == false`, this is always false (no watching inactive sessions).
+    /// Whether additional observer connections are allowed for this active session.
+    /// This is always false: a session has one active driver connection.
     public let watchersAllowed: Bool
-    /// Number of active connections in the session (driver + watchers).
+    /// Number of active connections in the session.
     public let activeConnections: Int
 
     public init(
