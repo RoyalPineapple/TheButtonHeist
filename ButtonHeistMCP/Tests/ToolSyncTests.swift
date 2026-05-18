@@ -550,12 +550,17 @@ struct ToolSyncTests {
         }
     }
 
-    @Test("Every MCP tool has an explicit adapter description")
-    func everyMCPToolHasExplicitAdapterDescription() {
-        for tool in ToolDefinitions.all {
+    @Test("Every MCP tool contract has an explicit description")
+    func everyMCPToolContractHasExplicitDescription() {
+        let toolsByName = Dictionary(uniqueKeysWithValues: ToolDefinitions.all.map { ($0.name, $0) })
+        for contract in TheFence.Command.mcpToolContracts {
             #expect(
-                tool.description != "Execute the \(tool.name) Button Heist tool.",
-                "\(tool.name) is using the generic description fallback"
+                !contract.description.hasPrefix("Execute the"),
+                "\(contract.name) is using the generic description fallback"
+            )
+            #expect(
+                toolsByName[contract.name]?.description == contract.description,
+                "\(contract.name) rendered description should come from MCPToolContract"
             )
         }
     }
