@@ -1325,6 +1325,29 @@ final class TheFenceTests: XCTestCase {
         }
     }
 
+    @ButtonHeistActor
+    func testAsyncTransportSendFailureFailsPendingActionWithoutWaitingForTimeout() async {
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mockConnection = MockConnection()
+        mockConnection.connectEventsOverride = [.connected]
+        mockConnection.asyncSendFailure = .transportFailed("socket write failed")
+        let fence = TheFence(configuration: .init())
+        fence.handoff.makeConnection = { _, _, _ in mockConnection }
+        fence.handoff.connect(to: device)
+
+        do {
+            _ = try await fence.sendAndAwaitAction(.activate(.heistId("write-fails")), timeout: 10)
+            XCTFail("Expected async send failure")
+        } catch FenceError.actionFailed(let message) {
+            XCTAssertTrue(message.contains("Transport send failed"))
+            XCTAssertTrue(message.contains("socket write failed"))
+        } catch FenceError.actionTimeout {
+            XCTFail("Async transport send failure must fail the pending tracker instead of timing out")
+        } catch {
+            XCTFail("Expected actionFailed, got \(error)")
+        }
+    }
+
     func testNoMatchingDeviceError() {
         let error = FenceError.noMatchingDevice(filter: "MyApp", available: ["OtherApp"])
         XCTAssertTrue(error.errorDescription?.contains("MyApp") ?? false)

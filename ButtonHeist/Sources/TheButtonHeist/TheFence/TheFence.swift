@@ -362,6 +362,8 @@ extension FenceError {
             self = .notConnected
         case .encodingFailed(let message):
             self = .actionFailed("Failed to send request: \(message)")
+        case .transportFailed(let message):
+            self = .actionFailed("Transport send failed: \(message)")
         }
     }
 }
@@ -504,6 +506,10 @@ public final class TheFence {
             self?.handleServerMessage(message, requestId: requestId)
         }
 
+        handoff.onSendFailure = { [weak self] failure, requestId in
+            self?.handleSendFailure(failure, requestId: requestId)
+        }
+
         handoff.onRecordingEvent = { [weak self] event in
             self?.handleRecordingEvent(event)
         }
@@ -534,6 +540,14 @@ public final class TheFence {
         default:
             break
         }
+    }
+
+    private func handleSendFailure(_ failure: DeviceSendFailure, requestId: String?) {
+        guard let requestId else { return }
+        let error = FenceError(failure)
+        actionTracker.resolve(requestId: requestId, result: .failure(error))
+        interfaceTracker.resolve(requestId: requestId, result: .failure(error))
+        screenTracker.resolve(requestId: requestId, result: .failure(error))
     }
 
     private func handleHandoffConnectionStateChanged(_ state: TheHandoff.ConnectionPhase) {

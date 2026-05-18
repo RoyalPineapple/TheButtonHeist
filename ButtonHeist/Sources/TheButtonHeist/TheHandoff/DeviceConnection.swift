@@ -217,6 +217,15 @@ final class DeviceConnection: DeviceConnecting {
     var onEvent: (@ButtonHeistActor (ConnectionEvent) -> Void)?
     var autoRespondToAuthRequired = true
     var onSend: (@ButtonHeistActor (ClientMessage, String?) -> Void)?
+    var sendContent: (
+        @Sendable (
+            _ connection: NWConnection,
+            _ content: Data,
+            _ completion: NWConnection.SendCompletion
+        ) -> Void
+    ) = { connection, content, completion in
+        connection.send(content: content, completion: completion)
+    }
 
     /// Driver identity for session locking (set via BUTTONHEIST_DRIVER_ID)
     var driverId: String?
@@ -329,9 +338,13 @@ final class DeviceConnection: DeviceConnecting {
             return .failed(.encodingFailed(error.localizedDescription))
         }
 
-        active.connection.send(content: data, completion: .contentProcessed { error in
+        let connection = active.connection
+        sendContent(connection, data, .contentProcessed { [weak self] error in
             if let error {
                 logger.error("Send error: \(error)")
+                Task { @ButtonHeistActor [weak self] in
+                    self?.handleSendFailure(error, requestId: requestId, connection: connection)
+                }
             }
         })
         return .enqueued
@@ -347,6 +360,13 @@ final class DeviceConnection: DeviceConnecting {
         case .connected(let active): return active.connection
         case .disconnected: return nil
         }
+    }
+
+    private func handleSendFailure(_ error: NWError, requestId: String?, connection: NWConnection) {
+        if let current = currentConnection, current !== connection {
+            return
+        }
+        onEvent?(.sendFailed(.transportFailed(error.localizedDescription), requestId: requestId))
     }
 
     /// Internal for testing: state updates are normally dispatched by the

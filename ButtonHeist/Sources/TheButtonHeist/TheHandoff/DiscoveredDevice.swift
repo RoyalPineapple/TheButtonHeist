@@ -249,6 +249,8 @@ extension DiscoveredDevice {
                 break
             case .message:
                 break
+            case .sendFailed:
+                break
             case .disconnected:
                 resolver.resolve(false)
             }

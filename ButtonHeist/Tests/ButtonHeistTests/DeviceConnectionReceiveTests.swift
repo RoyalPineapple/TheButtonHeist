@@ -168,6 +168,37 @@ final class DeviceConnectionReceiveTests: XCTestCase {
         }
     }
 
+    @ButtonHeistActor
+    func testAsyncSendCompletionFailureEmitsTypedSendFailure() async {
+        let activeConnection = NWConnection(host: "127.0.0.1", port: 1111, using: .tcp)
+        let connection = DeviceConnection(device: makeDummyDevice())
+        connection.connectionState = .connected(.init(connection: activeConnection))
+        connection.sendContent = { _, _, completion in
+            if case .contentProcessed(let handler) = completion {
+                handler(.posix(.ECONNRESET))
+            }
+        }
+
+        var observedFailure: DeviceSendFailure?
+        var observedRequestId: String?
+        connection.onEvent = { event in
+            if case .sendFailed(let failure, let requestId) = event {
+                observedFailure = failure
+                observedRequestId = requestId
+            }
+        }
+
+        let outcome = connection.send(.ping, requestId: "request-1")
+        await Task.yield()
+
+        XCTAssertEqual(outcome, .enqueued)
+        XCTAssertEqual(observedRequestId, "request-1")
+        guard case .transportFailed(let message) = observedFailure else {
+            return XCTFail("Expected transportFailed send failure, got \(String(describing: observedFailure))")
+        }
+        XCTAssertFalse(message.isEmpty)
+    }
+
     private func makeDummyDevice() -> DiscoveredDevice {
         DiscoveredDevice(
             id: "test-device",

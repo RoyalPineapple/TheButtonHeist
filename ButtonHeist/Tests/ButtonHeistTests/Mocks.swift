@@ -98,6 +98,7 @@ final class MockConnection: DeviceConnecting {
     var emitTransportReadyOnConnect = false
     var connectEventsOverride: [ConnectionEvent]?
     var sendOutcome: DeviceSendOutcome = .enqueued
+    var asyncSendFailure: DeviceSendFailure?
 
     var serverInfo: ServerInfo?
 
@@ -127,6 +128,11 @@ final class MockConnection: DeviceConnecting {
     func send(_ message: ClientMessage, requestId: String?) -> DeviceSendOutcome {
         guard sendOutcome == .enqueued else { return sendOutcome }
         sent.append((message, requestId))
+        if let asyncSendFailure {
+            Task { @ButtonHeistActor [self] in
+                self.onEvent?(.sendFailed(asyncSendFailure, requestId: requestId))
+            }
+        }
         if let handler = autoResponse {
             let response = handler(message)
             Task { @ButtonHeistActor [self] in
