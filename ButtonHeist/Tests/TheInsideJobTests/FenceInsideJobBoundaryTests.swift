@@ -81,9 +81,9 @@ final class FenceInsideJobBoundaryTests: XCTestCase {
             ) else {
                 continue
             }
-            for case let fileURL as URL in enumerator {
+            for case let fileURL as URL in enumerator where fileURL.pathExtension == "swift" {
                 let resourceValues = try fileURL.resourceValues(forKeys: [.isRegularFileKey])
-                if resourceValues.isRegularFile == true && fileURL.pathExtension == "swift" {
+                if resourceValues.isRegularFile == true {
                     files.append(fileURL)
                 }
             }
@@ -92,11 +92,7 @@ final class FenceInsideJobBoundaryTests: XCTestCase {
     }
 
     private func firstLineNumber(containing token: String, in contents: String) -> Int {
-        for (index, line) in contents.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
-            if line.contains(token) {
-                return index + 1
-            }
-        }
-        return 1
+        let lines = contents.split(separator: "\n", omittingEmptySubsequences: false)
+        return (lines.firstIndex { $0.contains(token) } ?? 0) + 1
     }
 }
