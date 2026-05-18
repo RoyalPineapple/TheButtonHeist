@@ -226,6 +226,47 @@ final class TheGetawayTests: XCTestCase {
 
     // MARK: - Recording auto-finish
 
+    func testSettledScreenChangePreventsRecordingInactivityAutoStop() async throws {
+        let (getaway, _, _) = await makeGetaway()
+        let (window, button) = try installRecordingActivityWindow(title: "Initial")
+        defer { window.isHidden = true }
+        await getaway.brains.tripwire.yieldFrames(3)
+        guard getaway.brains.interfaceChangedSinceLastSettledCheck() else {
+            throw XCTSkip("No live hierarchy available for recording inactivity regression test")
+        }
+
+        let stakeout = TheStakeout(captureFrame: { @MainActor in nil })
+        try await stakeout.startRecording(
+            config: RecordingConfig(inactivityTimeout: 1.0, maxDuration: 5.0),
+            screen: TheStakeout.ScreenInfo(
+                bounds: CGRect(x: 0, y: 0, width: 100, height: 100),
+                scale: 1.0
+            )
+        )
+        getaway.recordingRouteState = .recording(stakeout: stakeout, ownerClientId: nil)
+
+        // Wait long enough that the recording would be near the first inactivity
+        // check, then process a settled hierarchy change through TheGetaway.
+        // swiftlint:disable:next agent_test_task_sleep
+        try await Task.sleep(for: .milliseconds(350))
+        button.setTitle("Loaded", for: .normal)
+        button.accessibilityLabel = "Loaded"
+        window.layoutIfNeeded()
+        await getaway.brains.tripwire.yieldFrames(3)
+        await getaway.noteSettledChangeIfNeeded()
+
+        // Total elapsed time is now beyond the 1s inactivity timeout from start.
+        // The recording should remain active because the settled change bumped
+        // `lastActivityTime`; without the Getaway -> Stakeout notification, the
+        // first inactivity monitor tick stops it.
+        // swiftlint:disable:next agent_test_task_sleep
+        try await Task.sleep(for: .milliseconds(900))
+        let isRecording = await stakeout.isRecording
+        XCTAssertTrue(isRecording)
+
+        await stakeout.stopRecording(reason: .manual)
+    }
+
     /// Regression: when a recording auto-finishes (max duration, file-size
     /// cap, inactivity) there is no `stop_recording` waiter on the server.
     /// With no originator known, the payload is cached in `completedRecording`
@@ -834,6 +875,36 @@ final class TheGetawayTests: XCTestCase {
             return (element, entry.heistId)
         }
         brains.stash.currentScreen = .makeForTests(elements: pairs)
+    }
+
+    private func installRecordingActivityWindow(title: String) throws -> (UIWindow, UIButton) {
+        guard let scene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
+        else {
+            throw XCTSkip("No foreground-active UIWindowScene available in test host")
+        }
+
+        let button = UIButton(type: .system)
+        button.setTitle(title, for: .normal)
+        button.accessibilityLabel = title
+        button.frame = CGRect(x: 40, y: 120, width: 240, height: 44)
+
+        let rootView = UIView(frame: UIScreen.main.bounds)
+        rootView.backgroundColor = .white
+        rootView.accessibilityViewIsModal = true
+        rootView.addSubview(button)
+
+        let viewController = UIViewController()
+        viewController.view = rootView
+
+        let window = UIWindow(windowScene: scene)
+        window.windowLevel = .alert + 30
+        window.rootViewController = viewController
+        window.frame = UIScreen.main.bounds
+        window.isHidden = false
+        window.layoutIfNeeded()
+
+        return (window, button)
     }
 
     private func screenChangedBackgroundTrace() -> AccessibilityTrace {

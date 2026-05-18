@@ -491,7 +491,7 @@ final class TheGetaway {
         hierarchyInvalidated = false
 
         if let stakeout {
-            Task { await stakeout.noteScreenChange() }
+            await stakeout.noteScreenChange()
         }
     }
 
