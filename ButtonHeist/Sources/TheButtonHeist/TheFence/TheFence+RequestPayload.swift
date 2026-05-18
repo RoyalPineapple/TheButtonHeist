@@ -457,20 +457,6 @@ extension TheFence {
     }
 
     private func decodeTypeTextTarget(_ request: [String: Any]) throws -> TypeTextTarget {
-        if let deleteCount = request["deleteCount"] {
-            throw SchemaValidationError(
-                field: "deleteCount",
-                observed: deleteCount,
-                expected: "unsupported by type_text; use edit_action delete for destructive edits"
-            )
-        }
-        if let clearFirst = request["clearFirst"] {
-            throw SchemaValidationError(
-                field: "clearFirst",
-                observed: clearFirst,
-                expected: "unsupported by type_text; use edit_action selectAll then edit_action delete"
-            )
-        }
         return TypeTextTarget(
             text: try request.requiredSchemaString("text"),
             elementTarget: try elementTarget(request)

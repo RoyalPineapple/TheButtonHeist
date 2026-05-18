@@ -153,28 +153,6 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         await teardownKeyboard(textField: textField)
     }
 
-    func testDeleteTextFromTextField() async throws {
-        let textField = UITextField()
-        textField.frame = CGRect(x: 50, y: 400, width: 200, height: 44)
-        textField.text = "world"
-        window.addSubview(textField)
-
-        textField.becomeFirstResponder()
-        try await waitForActiveTextInput()
-
-        let deleted = await safecracker.deleteText(count: 5)
-        XCTAssertTrue(deleted, "deleteText should succeed")
-        XCTAssertEqual(textField.text, "")
-
-        await teardownKeyboard(textField: textField)
-    }
-
-    func testDeleteZeroCountReturnsTrue() async {
-        // deleteText(count: 0) should return true immediately regardless of keyboard state
-        let result = await safecracker.deleteText(count: 0)
-        XCTAssertTrue(result)
-    }
-
     func testActiveTextInputRequiresFocusedEditableResponder() async throws {
         let textField = UITextField()
         textField.frame = CGRect(x: 50, y: 400, width: 200, height: 44)

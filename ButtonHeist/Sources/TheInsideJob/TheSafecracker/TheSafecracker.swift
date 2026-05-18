@@ -341,31 +341,6 @@ final class TheSafecracker {
         return true
     }
 
-    /// Delete characters by sending backspace events to the active keyboard.
-    /// Routes through KeyboardBridge → UIKeyboardImpl.deleteFromInput per character.
-    func deleteText(count: Int, interKeyDelay: UInt64 = TheSafecracker.defaultInterKeyDelay) async -> Bool {
-        guard count > 0 else { return true }
-        guard let keyboard = activeKeyboardInput() else { return false }
-        for _ in 0..<count {
-            keyboard.deleteBackward()
-            guard await Task.cancellableSleep(nanoseconds: interKeyDelay) else { break }
-        }
-        return true
-    }
-
-    /// Clear all text in the focused text input using select-all + delete.
-    /// Routes through the responder chain — no view hierarchy walk needed.
-    func clearText() async -> Bool {
-        // Select all via responder chain
-        UIApplication.shared.sendAction(#selector(UIResponderStandardEditActions.selectAll), to: nil, from: nil, for: nil)
-        guard await Task.cancellableSleep(for: Self.selectionSettleDelay) else { return false }
-
-        // Delete via keyboard bridge (preferred) or responder chain
-        guard let keyboard = activeKeyboardInput() else { return false }
-        keyboard.deleteBackward()
-        return true
-    }
-
     // MARK: - Edit Actions (via Responder Chain)
 
     /// Perform a standard edit action on the current first responder.

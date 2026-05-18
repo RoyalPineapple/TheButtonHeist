@@ -163,9 +163,7 @@ graph LR
 
     subgraph Text["Text & Pasteboard"]
         Type["typeText via KeyboardBridge"]
-        Delete["deleteText(count:)"]
-        Clear["clearText()"]
-        Edit["editAction (copy/paste/cut/select/selectAll)"]
+        Edit["editAction (copy/paste/cut/select/selectAll/delete)"]
         Dismiss["resignFirstResponder()"]
         SetPB["executeSetPasteboard()"]
         GetPB["executeGetPasteboard()"]
