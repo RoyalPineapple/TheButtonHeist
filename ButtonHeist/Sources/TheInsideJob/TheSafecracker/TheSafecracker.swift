@@ -33,6 +33,8 @@ final class TheSafecracker {
     /// keyboard notifications — no polling needed.
     private(set) var keyboardVisibleFlag = false
 
+    var keyboardBridgeProvider: () -> KeyboardBridge? = { KeyboardBridge.shared() }
+
     func startKeyboardObservation() {
         let center = NotificationCenter.default
         center.addObserver(self, selector: #selector(keyboardFrameDidChange),
@@ -352,13 +354,25 @@ final class TheSafecracker {
 
     /// Type text by injecting characters into the active keyboard.
     /// Routes through KeyboardBridge → UIKeyboardImpl.addInputString: per character.
-    func typeText(_ text: String, interKeyDelay: UInt64 = TheSafecracker.defaultInterKeyDelay) async -> Bool {
-        guard let keyboard = activeKeyboardInput() else { return false }
-        for char in text {
-            keyboard.type(char)
-            guard await Task.cancellableSleep(nanoseconds: interKeyDelay) else { break }
+    func typeText(
+        _ text: String,
+        interKeyDelay: UInt64 = TheSafecracker.defaultInterKeyDelay
+    ) async -> KeyboardTextInjectionResult {
+        guard let keyboard = activeKeyboardInput() else {
+            return .failed(.noActiveInput(strategy: UIKeyboardImplTextInjection.strategyName))
         }
-        return true
+        var iterator = text.makeIterator()
+        guard var character = iterator.next() else { return .dispatched }
+
+        while true {
+            let result = keyboard.type(character)
+            if case .failed = result { return result }
+            guard let nextCharacter = iterator.next() else { return .dispatched }
+            guard await Task.cancellableSleep(nanoseconds: interKeyDelay) else {
+                return .failed(.cancelled(strategy: UIKeyboardImplTextInjection.strategyName))
+            }
+            character = nextCharacter
+        }
     }
 
     // MARK: - Edit Actions (via Responder Chain)
@@ -384,7 +398,7 @@ final class TheSafecracker {
     }
 
     private func activeKeyboardInput() -> KeyboardBridge? {
-        guard let keyboard = KeyboardBridge.shared(), keyboard.hasActiveInput else {
+        guard let keyboard = keyboardBridgeProvider(), keyboard.hasActiveInput else {
             return nil
         }
         return keyboard

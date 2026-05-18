@@ -694,16 +694,9 @@ final class Actions {
         if let failure = await focusTextInput(target.elementTarget, recordedScreen: recordedScreen) { return failure }
 
         let interKeyDelay = min(TheSafecracker.defaultInterKeyDelay, TheSafecracker.maxInterKeyDelay)
-        guard await safecracker.typeText(target.text, interKeyDelay: interKeyDelay) else {
-            return .failure(
-                .typeText,
-                message: ActionCapabilityDiagnostic.textEntryFailed(
-                    operation: "typing",
-                    stash: stash,
-                    safecracker: safecracker,
-                    suggestion: "focus an editable text field before typing"
-                )
-            )
+        let typingResult = await safecracker.typeText(target.text, interKeyDelay: interKeyDelay)
+        if let diagnostic = typingResult.diagnostic {
+            return .failure(.typeText, message: typeTextInjectionFailureMessage(for: diagnostic))
         }
 
         guard await Task.cancellableSleep(for: TheSafecracker.keyboardPollInterval) else { return .failure(.typeText, message: "Cancelled") }
@@ -717,6 +710,16 @@ final class Actions {
         }
 
         return .success(method: .typeText, payload: fieldValue.map(ResultPayload.value))
+    }
+
+    private func typeTextInjectionFailureMessage(for diagnostic: KeyboardTextInjectionDiagnostic) -> String {
+        guard diagnostic.reason == .noActiveInput else { return diagnostic.message }
+        return "\(diagnostic.message); " + ActionCapabilityDiagnostic.textEntryFailed(
+            operation: "typing",
+            stash: stash,
+            safecracker: safecracker,
+            suggestion: "focus an editable text field before typing"
+        )
     }
 
     private func focusTextInput(
