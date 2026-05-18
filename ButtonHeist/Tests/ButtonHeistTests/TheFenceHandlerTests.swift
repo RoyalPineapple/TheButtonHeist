@@ -2528,6 +2528,42 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testGetInterfaceDefaultFallsBackToExplorePayloadWhenTraceOnlyContainsVisiblePage() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        let first = testElement("first", label: "First")
+        let second = testElement("second", label: "Second")
+        let visibleTrace = Interface(timestamp: Date(), tree: [.element(second)])
+        let exploreResponse = ActionResult(
+            success: true,
+            method: .explore,
+            payload: .explore(ExploreResult(
+                elements: [first, second],
+                scrollCount: 1,
+                containersExplored: 1,
+                explorationTime: 0.1
+            )),
+            accessibilityTrace: AccessibilityTrace(interface: visibleTrace)
+        )
+        mockConn.autoResponse = { message in
+            switch message {
+            case .explore:
+                return .actionResult(exploreResponse)
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+
+        let response = try await fence.execute(request: ["command": "get_interface"])
+
+        let interface = try XCTUnwrap(response.jsonDict()["interface"] as? [String: Any])
+        let tree = try XCTUnwrap(interface["tree"] as? [[String: Any]])
+        let ids = tree.compactMap { node in
+            (node["element"] as? [String: Any])?["heistId"] as? String
+        }
+        XCTAssertEqual(ids, ["first", "second"])
+    }
+
+    @ButtonHeistActor
     func testGetInterfaceSubtreeByLeafHeistIdReturnsOnlyLeaf() async throws {
         let (fence, mockConn) = makeConnectedFence()
         let exploreResponse = exploredActionResult(interface: projectionTestInterface())

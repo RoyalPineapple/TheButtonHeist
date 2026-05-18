@@ -816,12 +816,13 @@ final class TheStash {
         )
     }
 
-    /// Parse and commit in one step. Most callers use this — exploration
-    /// is the one place that wants the value back to merge before committing.
+    /// Parse and commit in one step. Most callers use this. A visible refresh
+    /// updates live interaction evidence without dropping known semantic
+    /// elements when it is still observing the same screen.
     @discardableResult
     func refresh() -> Screen? {
         guard let screen = parse() else { return nil }
-        currentScreen = screen
+        currentScreen = currentScreen.refreshingVisibleState(with: screen)
         return screen
     }
 

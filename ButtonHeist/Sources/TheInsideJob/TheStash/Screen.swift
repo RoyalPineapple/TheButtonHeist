@@ -298,6 +298,33 @@ struct Screen: Equatable {
             scrollableContainerViews: other.scrollableContainerViews
         )
     }
+
+    /// Apply a fresh visible parse. If the visible ids are already known, keep
+    /// explored offscreen memory and replace only the live interaction snapshot.
+    /// Previously visible non-scroll elements that disappear are dropped; empty
+    /// or unknown refreshes replace the screen.
+    func refreshingVisibleState(with visibleRefresh: Screen) -> Screen {
+        guard !visibleRefresh.visibleIds.isEmpty,
+              visibleRefresh.visibleIds.isSubset(of: knownIds) else {
+            return visibleRefresh
+        }
+        let disappearedVisibleIds = visibleIds.subtracting(visibleRefresh.visibleIds)
+        let staleVisibleIds = disappearedVisibleIds.filter {
+            elements[$0]?.contentSpaceOrigin == nil
+        }
+        guard !staleVisibleIds.isEmpty else {
+            return merging(visibleRefresh)
+        }
+        let refreshed = merging(visibleRefresh)
+        return Screen(
+            elements: refreshed.elements.filter { !staleVisibleIds.contains($0.key) },
+            hierarchy: refreshed.hierarchy,
+            containerStableIds: refreshed.containerStableIds,
+            heistIdByElement: refreshed.heistIdByElement,
+            firstResponderHeistId: refreshed.firstResponderHeistId,
+            scrollableContainerViews: refreshed.scrollableContainerViews
+        )
+    }
 }
 
 #endif // DEBUG
