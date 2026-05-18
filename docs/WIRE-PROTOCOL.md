@@ -1488,7 +1488,7 @@ A single recorded interaction event captured during a Stakeout recording.
 {"buttonHeistVersion":"<calver>","type":"typeText","payload":{"text":"Hello World","elementTarget":{"identifier":"nameField"}}}
 
 # Server confirms with current field value
-{"buttonHeistVersion":"<calver>","type":"actionResult","payload":{"success":true,"method":"typeText","payload":{"kind":"value","data":"Hello World"}}}
+{"buttonHeistVersion":"<calver>","type":"actionResult","payload":{"success":true,"method":"typeText","payload":{"kind":"value","data":"World"}}}
 
 # Client replaces the current field contents explicitly
 {"buttonHeistVersion":"<calver>","type":"activate","payload":{"identifier":"nameField"}}
