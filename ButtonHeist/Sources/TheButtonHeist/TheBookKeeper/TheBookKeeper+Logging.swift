@@ -760,13 +760,17 @@ extension TheBookKeeper {
     }
 
     /// Derive metadata projections from the append-only session log.
-    func sessionLogProjection(in directory: URL) throws -> (counts: SessionLogCounts, artifacts: [ArtifactEntry]) {
+    func sessionLogProjection(
+        in directory: URL
+    ) throws -> (counts: SessionLogCounts, artifacts: [ArtifactEntry], status: SessionLogProjectionStatus) {
         let data = try sessionLogData(in: directory)
         return Self.sessionLogProjection(in: data)
     }
 
     /// Derive metadata projections from the session log stored in an archive.
-    func sessionLogProjection(inArchive archivePath: URL) throws -> (counts: SessionLogCounts, artifacts: [ArtifactEntry]) {
+    func sessionLogProjection(
+        inArchive archivePath: URL
+    ) throws -> (counts: SessionLogCounts, artifacts: [ArtifactEntry], status: SessionLogProjectionStatus) {
         let data = try Self.archivedSessionLogData(from: archivePath)
         return Self.sessionLogProjection(in: data)
     }
@@ -789,14 +793,68 @@ extension TheBookKeeper {
         ])
     }
 
-    private static func sessionLogProjection(in data: Data) -> (counts: SessionLogCounts, artifacts: [ArtifactEntry]) {
+    private static func sessionLogProjection(
+        in data: Data
+    ) -> (counts: SessionLogCounts, artifacts: [ArtifactEntry], status: SessionLogProjectionStatus) {
         var commandCount = 0
         var errorCount = 0
         var artifacts: [ArtifactEntry] = []
+        var malformedLineCount = 0
+        var firstMalformedLineNumber: Int?
+        var firstMalformedLineCause: String?
+        var malformedArtifactCount = 0
 
-        for line in data.split(separator: 0x0A) {
-            guard let entry = try? JSONSerialization.jsonObject(with: Data(line)) as? [String: Any],
-                  let type = entry["type"] as? String else { continue }
+        let lines = data.split(separator: 0x0A, omittingEmptySubsequences: false)
+        for (lineOffset, line) in lines.enumerated() {
+            let lineNumber = lineOffset + 1
+            if line.isEmpty {
+                if lineOffset == lines.count - 1 && data.last == 0x0A {
+                    continue
+                }
+                recordMalformedLine(
+                    lineNumber: lineNumber,
+                    cause: "empty line",
+                    malformedLineCount: &malformedLineCount,
+                    firstMalformedLineNumber: &firstMalformedLineNumber,
+                    firstMalformedLineCause: &firstMalformedLineCause
+                )
+                continue
+            }
+
+            let entry: [String: Any]
+            do {
+                guard let parsedEntry = try JSONSerialization.jsonObject(with: Data(line)) as? [String: Any] else {
+                    recordMalformedLine(
+                        lineNumber: lineNumber,
+                        cause: "expected JSON object",
+                        malformedLineCount: &malformedLineCount,
+                        firstMalformedLineNumber: &firstMalformedLineNumber,
+                        firstMalformedLineCause: &firstMalformedLineCause
+                    )
+                    continue
+                }
+                entry = parsedEntry
+            } catch {
+                recordMalformedLine(
+                    lineNumber: lineNumber,
+                    cause: "invalid JSON: \(error.localizedDescription)",
+                    malformedLineCount: &malformedLineCount,
+                    firstMalformedLineNumber: &firstMalformedLineNumber,
+                    firstMalformedLineCause: &firstMalformedLineCause
+                )
+                continue
+            }
+
+            guard let type = entry["type"] as? String else {
+                recordMalformedLine(
+                    lineNumber: lineNumber,
+                    cause: "missing type",
+                    malformedLineCount: &malformedLineCount,
+                    firstMalformedLineNumber: &firstMalformedLineNumber,
+                    firstMalformedLineCause: &firstMalformedLineCause
+                )
+                continue
+            }
 
             switch type {
             case "command":
@@ -806,6 +864,8 @@ extension TheBookKeeper {
             case "artifact":
                 if let artifact = artifactEntry(from: entry) {
                     artifacts.append(artifact)
+                } else {
+                    malformedArtifactCount += 1
                 }
             default:
                 continue
@@ -813,7 +873,26 @@ extension TheBookKeeper {
         }
 
         let counts = SessionLogCounts(commandCount: commandCount, errorCount: errorCount)
-        return (counts: counts, artifacts: artifacts)
+        let status = SessionLogProjectionStatus(
+            malformedLineCount: malformedLineCount,
+            firstMalformedLineNumber: firstMalformedLineNumber,
+            firstMalformedLineCause: firstMalformedLineCause,
+            malformedArtifactCount: malformedArtifactCount
+        )
+        return (counts: counts, artifacts: artifacts, status: status)
+    }
+
+    private static func recordMalformedLine(
+        lineNumber: Int,
+        cause: String,
+        malformedLineCount: inout Int,
+        firstMalformedLineNumber: inout Int?,
+        firstMalformedLineCause: inout String?
+    ) {
+        malformedLineCount += 1
+        guard firstMalformedLineNumber == nil else { return }
+        firstMalformedLineNumber = lineNumber
+        firstMalformedLineCause = cause
     }
 
     private static func artifactEntry(from entry: [String: Any]) -> ArtifactEntry? {

@@ -375,6 +375,34 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testSessionLogSnapshotReportsMalformedJSONLLine() async throws {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        try bookKeeper.beginSession(identifier: "test-malformed-line")
+        try logCommand(bookKeeper, requestId: "r1", command: .status, arguments: [:])
+        guard case .active(let session) = bookKeeper.phase else {
+            return XCTFail("Expected active phase")
+        }
+        session.logHandle.write(Data("{not-json\n".utf8))
+        try bookKeeper.logResponse(requestId: "r2", status: .error, durationMilliseconds: 5, error: "boom")
+
+        let snapshot = try XCTUnwrap(bookKeeper.sessionLogSnapshot())
+        XCTAssertEqual(snapshot.counts.commandCount, 1)
+        XCTAssertEqual(snapshot.counts.errorCount, 1)
+        XCTAssertTrue(snapshot.projectionStatus.isDegraded)
+        XCTAssertEqual(snapshot.projectionStatus.malformedLineCount, 1)
+        XCTAssertEqual(snapshot.projectionStatus.firstMalformedLineNumber, 3)
+        XCTAssertNotNil(snapshot.projectionStatus.firstMalformedLineCause)
+        XCTAssertEqual(snapshot.projectionStatus.malformedArtifactCount, 0)
+
+        let json = try XCTUnwrap(FenceResponse.sessionLog(snapshot: snapshot).jsonDict())
+        let projectionStatus = try XCTUnwrap(json["projectionStatus"] as? [String: Any])
+        XCTAssertEqual(projectionStatus["degraded"] as? Bool, true)
+        XCTAssertEqual(projectionStatus["malformedLineCount"] as? Int, 1)
+        XCTAssertEqual(projectionStatus["firstMalformedLineNumber"] as? Int, 3)
+        XCTAssertEqual(projectionStatus["malformedArtifactCount"] as? Int, 0)
+    }
+
+    @ButtonHeistActor
     func testLogCommandUsesTypedFenceRequestArguments() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-typed-args")
@@ -816,6 +844,56 @@ final class TheBookKeeperTests: XCTestCase {
         let snapshot = try XCTUnwrap(bookKeeper.sessionLogSnapshot())
         XCTAssertEqual(snapshot.counts.commandCount, 1)
         try? FileManager.default.removeItem(at: archivePath)
+    }
+
+    @ButtonHeistActor
+    func testArchiveSnapshotReportsMalformedArtifactEntry() async throws {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        try bookKeeper.beginSession(identifier: "test-bad-artifact")
+        let testData = Data([0x89, 0x50, 0x4E, 0x47])
+        _ = try bookKeeper.writeScreenshot(
+            base64Data: testData.base64EncodedString(),
+            requestId: "r1",
+            command: .getScreen,
+            metadata: ScreenshotMetadata(width: 390, height: 844)
+        )
+        guard case .active(let session) = bookKeeper.phase else {
+            return XCTFail("Expected active phase")
+        }
+        let malformedArtifact: [String: Any] = [
+            "type": "artifact",
+            "artifactType": "screenshot",
+            "size": 4,
+            "t": "2026-01-01T00:00:00.000Z",
+            "requestId": "bad",
+            "command": "get_screen",
+        ]
+        var malformedArtifactData = try JSONSerialization.data(withJSONObject: malformedArtifact, options: [.sortedKeys])
+        malformedArtifactData.append(contentsOf: [0x0A])
+        session.logHandle.write(malformedArtifactData)
+
+        try await bookKeeper.closeSession()
+        let (archivePath, archiveSnapshot) = try await bookKeeper.archiveSession(deleteSource: false)
+        defer { try? FileManager.default.removeItem(at: archivePath) }
+
+        XCTAssertEqual(archiveSnapshot.artifacts.count, 1)
+        XCTAssertEqual(archiveSnapshot.artifacts.first?.path, "screenshots/001-get_screen.png")
+        XCTAssertTrue(archiveSnapshot.projectionStatus.isDegraded)
+        XCTAssertEqual(archiveSnapshot.projectionStatus.malformedLineCount, 0)
+        XCTAssertEqual(archiveSnapshot.projectionStatus.malformedArtifactCount, 1)
+
+        let json = try XCTUnwrap(
+            FenceResponse.archiveResult(path: archivePath.path, snapshot: archiveSnapshot).jsonDict()
+        )
+        XCTAssertEqual(json["artifactCount"] as? Int, 1)
+        let projectionStatus = try XCTUnwrap(json["projectionStatus"] as? [String: Any])
+        XCTAssertEqual(projectionStatus["degraded"] as? Bool, true)
+        XCTAssertEqual(projectionStatus["malformedLineCount"] as? Int, 0)
+        XCTAssertEqual(projectionStatus["malformedArtifactCount"] as? Int, 1)
+
+        let human = FenceResponse.archiveResult(path: archivePath.path, snapshot: archiveSnapshot).humanFormatted()
+        XCTAssertTrue(human.contains("Projection: degraded"))
+        XCTAssertTrue(human.contains("malformed artifact"))
     }
 
     // MARK: - Artifact Orchestration

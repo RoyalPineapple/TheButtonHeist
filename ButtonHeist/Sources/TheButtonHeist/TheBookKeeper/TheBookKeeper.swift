@@ -737,11 +737,21 @@ final class TheBookKeeper {
 
     private func sessionLogSnapshot(manifest: SessionManifest, directory: URL) throws -> SessionLogSnapshot {
         let projection = try sessionLogProjection(in: directory)
-        return SessionLogSnapshot(manifest: manifest, counts: projection.counts, artifacts: projection.artifacts)
+        return SessionLogSnapshot(
+            manifest: manifest,
+            counts: projection.counts,
+            artifacts: projection.artifacts,
+            projectionStatus: projection.status
+        )
     }
 
     private func sessionLogSnapshot(manifest: SessionManifest, archivePath: URL) throws -> SessionLogSnapshot {
         let projection = try sessionLogProjection(inArchive: archivePath)
-        return SessionLogSnapshot(manifest: manifest, counts: projection.counts, artifacts: projection.artifacts)
+        return SessionLogSnapshot(
+            manifest: manifest,
+            counts: projection.counts,
+            artifacts: projection.artifacts,
+            projectionStatus: projection.status
+        )
     }
 }

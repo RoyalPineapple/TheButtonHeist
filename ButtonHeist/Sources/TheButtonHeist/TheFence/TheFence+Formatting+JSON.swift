@@ -142,6 +142,9 @@ extension FenceResponse {
         if let endTime = manifest.endTime {
             dict["endTime"] = formatter.string(from: endTime)
         }
+        if snapshot.projectionStatus.isDegraded {
+            dict["projectionStatus"] = projectionStatusJsonDict(snapshot.projectionStatus)
+        }
         dict["artifacts"] = snapshot.artifacts.map { artifact -> [String: Any] in
             var entry: [String: Any] = [
                 "type": artifact.type.rawValue,
@@ -154,6 +157,21 @@ extension FenceResponse {
                 entry["metadata"] = artifact.metadata
             }
             return entry
+        }
+        return dict
+    }
+
+    private func projectionStatusJsonDict(_ status: SessionLogProjectionStatus) -> [String: Any] {
+        var dict: [String: Any] = [
+            "degraded": true,
+            "malformedLineCount": status.malformedLineCount,
+            "malformedArtifactCount": status.malformedArtifactCount,
+        ]
+        if let firstMalformedLineNumber = status.firstMalformedLineNumber {
+            dict["firstMalformedLineNumber"] = firstMalformedLineNumber
+        }
+        if let firstMalformedLineCause = status.firstMalformedLineCause {
+            dict["firstMalformedLineCause"] = firstMalformedLineCause
         }
         return dict
     }

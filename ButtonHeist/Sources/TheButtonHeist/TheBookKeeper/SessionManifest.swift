@@ -82,16 +82,47 @@ public struct SessionLogCounts: Sendable, Equatable {
     }
 }
 
+/// Diagnostic status for projections derived from append-only session logs.
+public struct SessionLogProjectionStatus: Sendable, Equatable {
+    public let malformedLineCount: Int
+    public let firstMalformedLineNumber: Int?
+    public let firstMalformedLineCause: String?
+    public let malformedArtifactCount: Int
+
+    public var isDegraded: Bool {
+        malformedLineCount > 0 || malformedArtifactCount > 0
+    }
+
+    public init(
+        malformedLineCount: Int = 0,
+        firstMalformedLineNumber: Int? = nil,
+        firstMalformedLineCause: String? = nil,
+        malformedArtifactCount: Int = 0
+    ) {
+        self.malformedLineCount = malformedLineCount
+        self.firstMalformedLineNumber = firstMalformedLineNumber
+        self.firstMalformedLineCause = firstMalformedLineCause
+        self.malformedArtifactCount = malformedArtifactCount
+    }
+}
+
 /// Durable session boundary information plus projections derived from its session log.
 public struct SessionLogSnapshot: Sendable, Equatable {
     public let manifest: SessionManifest
     public let counts: SessionLogCounts
     public let artifacts: [ArtifactEntry]
+    public let projectionStatus: SessionLogProjectionStatus
 
-    public init(manifest: SessionManifest, counts: SessionLogCounts, artifacts: [ArtifactEntry] = []) {
+    public init(
+        manifest: SessionManifest,
+        counts: SessionLogCounts,
+        artifacts: [ArtifactEntry] = [],
+        projectionStatus: SessionLogProjectionStatus = SessionLogProjectionStatus()
+    ) {
         self.manifest = manifest
         self.counts = counts
         self.artifacts = artifacts
+        self.projectionStatus = projectionStatus
     }
 }
 
