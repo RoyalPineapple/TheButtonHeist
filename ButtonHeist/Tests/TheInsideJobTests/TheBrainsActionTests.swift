@@ -645,6 +645,29 @@ final class TheBrainsActionTests: XCTestCase {
         ])
     }
 
+    func testExecuteRotorDiagnosticsUseSystemRotorDisplayName() async {
+        let heistId = "rotor_host"
+        let liveObject = UIView()
+        liveObject.accessibilityCustomRotors = [
+            UIAccessibilityCustomRotor(systemType: .link) { _ in nil },
+        ]
+        registerScreenElement(
+            heistId: heistId,
+            element: makeElement(label: "Rotor host", traits: .button),
+            object: liveObject
+        )
+
+        let result = await brains.actions.executeRotor(
+            RotorTarget(elementTarget: .heistId(heistId), rotor: "Errors")
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertDiagnostic(result.message, contains: [
+            "availableRotors=[\"Links\"]",
+            "try use one of available rotors [\"Links\"]",
+        ])
+    }
+
     // MARK: - clearCache
 
     func testClearCacheResetsStash() {

@@ -336,7 +336,7 @@ final class TheStash {
         let rotors = object.accessibilityCustomRotors ?? []
         guard !rotors.isEmpty else { return .noRotors }
 
-        let availableNames = rotors.map(\.name)
+        let availableNames = rotors.map { $0.bhInvocableName(locale: object.accessibilityLanguage) }
         let selection: UIAccessibilityCustomRotor
         if let rotorIndex = target.rotorIndex {
             guard rotors.indices.contains(rotorIndex) else {
@@ -344,7 +344,9 @@ final class TheStash {
             }
             selection = rotors[rotorIndex]
         } else if let rotorName = target.rotor {
-            let matches = rotors.enumerated().filter { $0.element.name == rotorName }
+            let matches = rotors.enumerated().filter {
+                $0.element.bhInvocableName(locale: object.accessibilityLanguage) == rotorName
+            }
             switch matches.count {
             case 0:
                 return .noSuchRotor(available: availableNames)
@@ -381,7 +383,7 @@ final class TheStash {
             return .currentTextRangeUnavailable
         }
 
-        let rotorName = selection.name
+        let rotorName = selection.bhInvocableName(locale: object.accessibilityLanguage)
         guard let result = selection.itemSearchBlock(predicate) else {
             return .noResult(rotorName)
         }
@@ -855,6 +857,64 @@ private extension RotorDirection {
         case .previous:
             return .previous
         }
+    }
+}
+
+extension UIAccessibilityCustomRotor {
+    func bhInvocableName(locale: String?) -> String {
+        guard name.isEmpty else { return name }
+
+        switch systemRotorType {
+        case .none:
+            return localizedRotorName(defaultValue: "None", key: "rotor.none.description", locale: locale)
+        case .link:
+            return localizedRotorName(defaultValue: "Links", key: "rotor.link.description", locale: locale)
+        case .visitedLink:
+            return localizedRotorName(defaultValue: "Visited Links", key: "rotor.visited_link.description", locale: locale)
+        case .heading:
+            return localizedRotorName(defaultValue: "Headings", key: "rotor.heading.description", locale: locale)
+        case .headingLevel1:
+            return localizedRotorName(defaultValue: "Heading 1", key: "rotor.heading_level1.description", locale: locale)
+        case .headingLevel2:
+            return localizedRotorName(defaultValue: "Heading 2", key: "rotor.heading_level2.description", locale: locale)
+        case .headingLevel3:
+            return localizedRotorName(defaultValue: "Heading 3", key: "rotor.heading_level3.description", locale: locale)
+        case .headingLevel4:
+            return localizedRotorName(defaultValue: "Heading 4", key: "rotor.heading_level4.description", locale: locale)
+        case .headingLevel5:
+            return localizedRotorName(defaultValue: "Heading 5", key: "rotor.heading_level5.description", locale: locale)
+        case .headingLevel6:
+            return localizedRotorName(defaultValue: "Heading 6", key: "rotor.heading_level6.description", locale: locale)
+        case .boldText:
+            return localizedRotorName(defaultValue: "Bold Text", key: "rotor.bold_text.description", locale: locale)
+        case .italicText:
+            return localizedRotorName(defaultValue: "Italic Text", key: "rotor.italic_text.description", locale: locale)
+        case .underlineText:
+            return localizedRotorName(defaultValue: "Underlined Text", key: "rotor.underline_text.description", locale: locale)
+        case .misspelledWord:
+            return localizedRotorName(defaultValue: "Misspelled Words", key: "rotor.misspelled_word.description", locale: locale)
+        case .image:
+            return localizedRotorName(defaultValue: "Images", key: "rotor.image.description", locale: locale)
+        case .textField:
+            return localizedRotorName(defaultValue: "Text Fields", key: "rotor.text_field.description", locale: locale)
+        case .table:
+            return localizedRotorName(defaultValue: "Tables", key: "rotor.table.description", locale: locale)
+        case .list:
+            return localizedRotorName(defaultValue: "Lists", key: "rotor.list.description", locale: locale)
+        case .landmark:
+            return localizedRotorName(defaultValue: "Landmarks", key: "rotor.landmark.description", locale: locale)
+        @unknown default:
+            let format = localizedRotorName(
+                defaultValue: "Unknown Rotor Type, Raw value: %lld",
+                key: "rotor.unknown.description_format",
+                locale: locale
+            )
+            return String(format: format, systemRotorType.rawValue)
+        }
+    }
+
+    private func localizedRotorName(defaultValue: String, key: String, locale: String?) -> String {
+        StringLocalization.preferredBundle(for: locale).localizedString(forKey: key, value: defaultValue, table: nil)
     }
 }
 

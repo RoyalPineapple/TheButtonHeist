@@ -226,7 +226,7 @@ import AccessibilitySnapshotParser
     static func availableRotors(for screenElement: TheStash.ScreenElement) -> [String] {
         var names = screenElement.element.customRotors.map(\.name).filter { !$0.isEmpty }
         let liveNames = screenElement.object?.accessibilityCustomRotors?
-            .map(\.name)
+            .map { $0.bhInvocableName(locale: screenElement.object?.accessibilityLanguage) }
             .filter { !$0.isEmpty } ?? []
         appendUnique(liveNames, to: &names)
         return names
