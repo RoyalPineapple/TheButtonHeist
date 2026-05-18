@@ -409,6 +409,112 @@ final class ServerMessageTests: XCTestCase {
         XCTAssertNil(decoded.effectiveAccessibilityDelta)
     }
 
+    func testActionResultScreenContextProjectsFromTrace() throws {
+        let before = interfaceWithHeader("Before", heistId: "before-title")
+        let after = interfaceWithHeader("Trace Screen", heistId: "trace-title", timestamp: 1)
+        let trace = AccessibilityTrace(first: before).appending(
+            after,
+            context: AccessibilityTrace.Context(screenId: "trace_screen")
+        )
+
+        let result = ActionResult(
+            success: true,
+            method: .activate,
+            accessibilityTrace: trace,
+            screenName: "stored screen",
+            screenId: "stored_screen"
+        )
+
+        XCTAssertEqual(result.screenName, "Trace Screen")
+        XCTAssertEqual(result.screenId, "trace_screen")
+    }
+
+    func testActionResultScreenContextRoundTripsTraceProjection() throws {
+        let before = interfaceWithHeader("Before", heistId: "before-title")
+        let after = interfaceWithHeader("Trace Screen", heistId: "trace-title", timestamp: 1)
+        let trace = AccessibilityTrace(first: before).appending(
+            after,
+            context: AccessibilityTrace.Context(screenId: "trace_screen")
+        )
+        let result = ActionResult(
+            success: true,
+            method: .activate,
+            accessibilityTrace: trace,
+            screenName: "stored screen",
+            screenId: "stored_screen"
+        )
+
+        let data = try JSONEncoder().encode(result)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
+
+        XCTAssertEqual(json["screenName"] as? String, "Trace Screen")
+        XCTAssertEqual(json["screenId"] as? String, "trace_screen")
+        XCTAssertEqual(decoded.screenName, "Trace Screen")
+        XCTAssertEqual(decoded.screenId, "trace_screen")
+    }
+
+    func testActionResultScreenContextDoesNotFallbackWhenTraceProjectsNil() throws {
+        let before = interfaceWithHeader("Before", heistId: "before-title")
+        let trace = AccessibilityTrace(first: before).appending(interfaceWithoutHeader(timestamp: 1))
+        let result = ActionResult(
+            success: true,
+            method: .activate,
+            accessibilityTrace: trace,
+            screenName: "stored screen",
+            screenId: "stored_screen"
+        )
+
+        XCTAssertNil(result.screenName)
+        XCTAssertNil(result.screenId)
+    }
+
+    func testActionResultScreenContextFallsBackWithoutTrace() throws {
+        let result = ActionResult(
+            success: true,
+            method: .activate,
+            screenName: "Legacy Screen",
+            screenId: "legacy_screen"
+        )
+
+        XCTAssertEqual(result.screenName, "Legacy Screen")
+        XCTAssertEqual(result.screenId, "legacy_screen")
+    }
+
+    func testActionResultDecodedScreenContextProjectsFromTrace() throws {
+        let before = interfaceWithHeader("Before", heistId: "before-title")
+        let after = interfaceWithHeader("Trace Screen", heistId: "trace-title", timestamp: 1)
+        let trace = AccessibilityTrace(first: before).appending(
+            after,
+            context: AccessibilityTrace.Context(screenId: "trace_screen")
+        )
+        let traceJSON = try JSONSerialization.jsonObject(with: JSONEncoder().encode(trace))
+        let json: [String: Any] = [
+            "success": true,
+            "method": "activate",
+            "screenName": "stored screen",
+            "screenId": "stored_screen",
+            "accessibilityTrace": traceJSON,
+        ]
+        let data = try JSONSerialization.data(withJSONObject: json)
+
+        let result = try JSONDecoder().decode(ActionResult.self, from: data)
+
+        XCTAssertEqual(result.screenName, "Trace Screen")
+        XCTAssertEqual(result.screenId, "trace_screen")
+    }
+
+    func testActionResultDecodedScreenContextFallsBackWithoutTrace() throws {
+        let json = """
+        {"success":true,"method":"activate","screenName":"Legacy Screen","screenId":"legacy_screen"}
+        """
+
+        let result = try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8))
+
+        XCTAssertEqual(result.screenName, "Legacy Screen")
+        XCTAssertEqual(result.screenId, "legacy_screen")
+    }
+
     func testActionResultPayloadDecodesFromExplicitJSON() throws {
         let json = """
         {"type":"actionResult","payload":{"success":true,"method":"typeText","payload":{"kind":"value","data":"Hello"}}}
@@ -611,5 +717,51 @@ final class ServerMessageTests: XCTestCase {
         } else {
             XCTFail("Expected screen, got \(decoded)")
         }
+    }
+
+    private func interfaceWithHeader(
+        _ label: String,
+        heistId: String,
+        timestamp: TimeInterval = 0
+    ) -> Interface {
+        Interface(
+            timestamp: Date(timeIntervalSince1970: timestamp),
+            tree: [
+                .element(HeistElement(
+                    heistId: heistId,
+                    description: label,
+                    label: label,
+                    value: nil,
+                    identifier: nil,
+                    traits: [.header],
+                    frameX: 0,
+                    frameY: 0,
+                    frameWidth: 100,
+                    frameHeight: 44,
+                    actions: []
+                )),
+            ]
+        )
+    }
+
+    private func interfaceWithoutHeader(timestamp: TimeInterval = 0) -> Interface {
+        Interface(
+            timestamp: Date(timeIntervalSince1970: timestamp),
+            tree: [
+                .element(HeistElement(
+                    heistId: "button-only",
+                    description: "Continue",
+                    label: "Continue",
+                    value: nil,
+                    identifier: nil,
+                    traits: [.button],
+                    frameX: 0,
+                    frameY: 0,
+                    frameWidth: 100,
+                    frameHeight: 44,
+                    actions: []
+                )),
+            ]
+        )
     }
 }

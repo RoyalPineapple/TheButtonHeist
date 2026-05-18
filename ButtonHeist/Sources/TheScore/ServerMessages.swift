@@ -278,19 +278,24 @@ public struct ActionResult: Codable, Sendable {
     public var errorKind: ErrorKind?
     /// Command-specific payload. At most one variant per result.
     public var payload: ResultPayload?
-    /// Derived compact view describing what changed in the hierarchy after the action.
-    /// When `accessibilityTrace` is present, constructed and decoded results
-    /// project this field from the trace, even when the trace projects nil.
+    /// Compatibility compact view describing what changed in the hierarchy
+    /// after the action. When `accessibilityTrace` is present, constructed and
+    /// decoded results project this field from the trace, even when the trace
+    /// projects nil.
     public private(set) var accessibilityDelta: AccessibilityTrace.Delta?
     /// Source-of-truth accessibility capture receipt for this action.
-    public var accessibilityTrace: AccessibilityTrace?
+    public private(set) var accessibilityTrace: AccessibilityTrace?
     /// Whether the UI was still animating when this result was produced.
     /// nil means idle (no animations detected).
     public var animating: Bool?
-    /// Label of the first header element in the post-action snapshot (screen name hint)
-    public var screenName: String?
-    /// Slugified screen name for machine use (e.g. "controls_demo")
-    public var screenId: String?
+    /// Compatibility screen name projection. When `accessibilityTrace` is
+    /// present, constructed and decoded results project this field from the
+    /// final capture.
+    public private(set) var screenName: String?
+    /// Compatibility screen id projection. When `accessibilityTrace` is
+    /// present, constructed and decoded results project this field from the
+    /// final capture context/interface.
+    public private(set) var screenId: String?
     /// True when the response represents a settled UI state — either the
     /// AX tree reached multi-cycle stability, or a screen transition
     /// preempted the settle loop and the new screen has been observed via
@@ -328,8 +333,13 @@ public struct ActionResult: Codable, Sendable {
             legacyDeltaOnlyBridge: accessibilityDelta
         )
         self.animating = animating
-        self.screenName = screenName
-        self.screenId = screenId
+        if let accessibilityTrace {
+            self.screenName = accessibilityTrace.captureEndpointScreenName
+            self.screenId = accessibilityTrace.captureEndpointScreenId
+        } else {
+            self.screenName = screenName
+            self.screenId = screenId
+        }
         self.settled = settled
         self.settleTimeMs = settleTimeMs
     }

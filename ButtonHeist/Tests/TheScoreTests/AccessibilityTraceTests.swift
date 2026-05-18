@@ -90,6 +90,16 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertEqual(trace.captures[1].parentHash, trace.captures[0].hash)
     }
 
+    func testTraceProjectsEndpointScreenContext() throws {
+        let trace = AccessibilityTrace(first: makeInterface(label: "Home")).appending(
+            makeInterface(label: "Settings"),
+            context: AccessibilityTrace.Context(screenId: "settings_context")
+        )
+
+        XCTAssertEqual(trace.captureEndpointScreenName, "Settings")
+        XCTAssertEqual(trace.captureEndpointScreenId, "settings_context")
+    }
+
     func testTraceConstructionNormalizesToSingleLinkedList() throws {
         let first = AccessibilityTrace.Capture(
             sequence: 99,
