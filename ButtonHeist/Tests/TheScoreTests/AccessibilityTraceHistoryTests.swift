@@ -180,6 +180,21 @@ final class AccessibilityTraceHistoryTests: XCTestCase {
         XCTAssertEqual(history.captures.map(\.hash), [try XCTUnwrap(pendingTrace.lastRef).hash])
     }
 
+    func testMarkDeliveredDoesNotRegressDeliveredBoundary() throws {
+        var history = AccessibilityTrace.History(retention: .dropAfterDelivery)
+        let pendingTrace = try XCTUnwrap(history.enqueuePendingTrace(makeTrace(before: "Menu", after: "Checkout")))
+        let latestRef = history.append(interface: makeInterface(label: "Receipt"))
+
+        history.markDelivered(through: latestRef)
+        _ = history.removePendingTrace(at: 0)
+        history.markDelivered(through: pendingTrace.firstRef)
+
+        XCTAssertNil(pendingTrace.firstRef.flatMap { history.capture(ref: $0) })
+        XCTAssertNil(pendingTrace.lastRef.flatMap { history.capture(ref: $0) })
+        XCTAssertEqual(history.capture(ref: latestRef), history.latestCapture)
+        XCTAssertEqual(history.captures.map(\.hash), [latestRef.hash])
+    }
+
     func testRetentionRetainsPendingTraceRefsWithoutExternalRetainedSet() throws {
         var history = AccessibilityTrace.History(retention: .dropAfterDelivery)
         let sourceTrace = AccessibilityTrace(captures: [

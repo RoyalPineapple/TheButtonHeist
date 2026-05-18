@@ -148,7 +148,7 @@ public extension AccessibilityTrace {
         }
 
         public func capture(ref: AccessibilityTrace.CaptureRef) -> AccessibilityTrace.Capture? {
-            captures.first { $0.sequence == ref.sequence && $0.hash == ref.hash }
+            index(of: ref).map { captures[$0] }
         }
 
         public func elementLookup(
@@ -247,7 +247,9 @@ public extension AccessibilityTrace {
         public mutating func markDelivered(through ref: AccessibilityTrace.CaptureRef?) {
             if let ref {
                 guard capture(ref: ref) != nil else { return }
-                deliveredRef = ref
+                if shouldAdvanceDeliveredRef(to: ref) {
+                    deliveredRef = ref
+                }
             }
             pruneToRetentionPolicy()
         }
@@ -259,7 +261,31 @@ public extension AccessibilityTrace {
         }
 
         private func index(of ref: AccessibilityTrace.CaptureRef) -> [AccessibilityTrace.Capture].Index? {
-            captures.firstIndex { $0.sequence == ref.sequence && $0.hash == ref.hash }
+            var lowerBound = captures.startIndex
+            var upperBound = captures.endIndex
+            while lowerBound < upperBound {
+                let distance = captures.distance(from: lowerBound, to: upperBound)
+                let midpoint = captures.index(lowerBound, offsetBy: distance / 2)
+                if captures[midpoint].sequence < ref.sequence {
+                    lowerBound = captures.index(after: midpoint)
+                } else {
+                    upperBound = midpoint
+                }
+            }
+
+            guard lowerBound < captures.endIndex else { return nil }
+            let capture = captures[lowerBound]
+            guard capture.sequence == ref.sequence && capture.hash == ref.hash else { return nil }
+            return lowerBound
+        }
+
+        private func shouldAdvanceDeliveredRef(to ref: AccessibilityTrace.CaptureRef) -> Bool {
+            guard let deliveredRef,
+                  let deliveredIndex = index(of: deliveredRef),
+                  let nextIndex = index(of: ref) else {
+                return true
+            }
+            return nextIndex >= deliveredIndex
         }
 
         private func cursor(from bounds: AccessibilityTracePendingTraceBounds) -> AccessibilityTrace.Cursor? {
