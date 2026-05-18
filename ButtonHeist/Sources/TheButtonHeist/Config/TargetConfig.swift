@@ -33,6 +33,52 @@ struct ButtonHeistFileConfig: Codable, Sendable, Equatable {
     }
 }
 
+/// Diagnostic failure produced when an explicit user-provided config path cannot be loaded.
+public struct TargetConfigLoadError: Error, LocalizedError, Sendable {
+    /// High-level loading phase that failed.
+    public enum Kind: String, Sendable {
+        case readFailed = "read_failed"
+        case decodeFailed = "decode_failed"
+
+        /// Stable diagnostic error code for this load failure kind.
+        public var errorCode: String {
+            switch self {
+            case .readFailed:
+                return "config.read_failed"
+            case .decodeFailed:
+                return "config.decode_failed"
+            }
+        }
+    }
+
+    /// Expanded filesystem path that failed to load.
+    public let path: String
+    /// Load failure kind used for diagnostics and machine-readable error codes.
+    public let kind: Kind
+    /// Human-readable description of the underlying file or JSON error.
+    public let underlyingDescription: String
+
+    /// User-facing diagnostic message.
+    public var errorDescription: String? {
+        switch kind {
+        case .readFailed:
+            return "Failed to read explicit config at \(path): \(underlyingDescription)"
+        case .decodeFailed:
+            return "Failed to decode explicit config at \(path): \(underlyingDescription)"
+        }
+    }
+
+    /// Machine-readable failure metadata for formatted diagnostics.
+    public var failureDetails: FailureDetails {
+        FailureDetails(
+            errorCode: kind.errorCode,
+            phase: .setup,
+            retryable: false,
+            hint: "Verify the explicit config path points to a readable JSON file matching the Button Heist config schema."
+        )
+    }
+}
+
 /// Resolves connection parameters from config files and environment variables.
 /// Resolution order: env vars > config file targets.
 enum TargetConfigResolver {
@@ -43,33 +89,19 @@ enum TargetConfigResolver {
         "~/.config/buttonheist/config.json",
     ]
 
-    /// Load and parse the first config file found in the search paths.
-    static func loadConfig(from explicitPath: String? = nil) -> ButtonHeistFileConfig? {
-        let paths: [String]
-        if let explicitPath {
-            paths = [explicitPath]
-        } else {
-            paths = searchPaths
-        }
+    /// Load and parse the first config file found in the standard search paths.
+    static func loadConfig() -> ButtonHeistFileConfig? {
+        loadConfig(searchPaths: searchPaths)
+    }
 
-        let fm = FileManager.default
+    /// Load and parse the first config file found in the provided default search paths.
+    static func loadConfig(searchPaths paths: [String]) -> ButtonHeistFileConfig? {
         for path in paths {
-            let expanded = NSString(string: path).expandingTildeInPath
-            let url: URL
-            if expanded.hasPrefix("/") {
-                url = URL(fileURLWithPath: expanded)
-            } else {
-                url = URL(fileURLWithPath: fm.currentDirectoryPath)
-                    .appendingPathComponent(expanded)
-            }
-
+            let url = configURL(for: path)
             let data: Data
             do {
                 data = try Data(contentsOf: url)
             } catch {
-                if explicitPath != nil {
-                    logger.error("Failed to read config at \(url.path): \(error)")
-                }
                 continue
             }
             let config: ButtonHeistFileConfig
@@ -82,6 +114,31 @@ enum TargetConfigResolver {
             return config
         }
         return nil
+    }
+
+    /// Load and parse a user-provided config path.
+    static func loadConfig(from explicitPath: String) throws -> ButtonHeistFileConfig {
+        let url = configURL(for: explicitPath)
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            throw TargetConfigLoadError(
+                path: url.path,
+                kind: .readFailed,
+                underlyingDescription: error.localizedDescription
+            )
+        }
+
+        do {
+            return try JSONDecoder().decode(ButtonHeistFileConfig.self, from: data)
+        } catch {
+            throw TargetConfigLoadError(
+                path: url.path,
+                kind: .decodeFailed,
+                underlyingDescription: error.localizedDescription
+            )
+        }
     }
 
     /// Resolve connection parameters with full precedence:
@@ -111,5 +168,14 @@ enum TargetConfigResolver {
             target = TargetConfig(device: target.device, token: envToken, certFingerprint: target.certFingerprint)
         }
         return target
+    }
+
+    private static func configURL(for path: String) -> URL {
+        let expanded = NSString(string: path).expandingTildeInPath
+        if expanded.hasPrefix("/") {
+            return URL(fileURLWithPath: expanded)
+        }
+        return URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent(expanded)
     }
 }

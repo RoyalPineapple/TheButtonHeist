@@ -80,4 +80,18 @@ final class EnvironmentConfigTests: XCTestCase {
         let config = EnvironmentConfig.resolve(env: env)
         XCTAssertEqual(config.sessionTimeout, 60.0)
     }
+
+    func testExplicitConfigPathFailurePropagatesDiagnosticError() {
+        let path = "/nonexistent/path/.buttonheist.json"
+
+        XCTAssertThrowsError(try EnvironmentConfig.resolve(configPath: path, env: [:])) { error in
+            guard let error = error as? TargetConfigLoadError else {
+                XCTFail("Expected TargetConfigLoadError, got \(type(of: error))")
+                return
+            }
+            XCTAssertEqual(error.kind, .readFailed)
+            XCTAssertEqual(error.path, path)
+            XCTAssertEqual(error.failureDetails.errorCode, "config.read_failed")
+        }
+    }
 }

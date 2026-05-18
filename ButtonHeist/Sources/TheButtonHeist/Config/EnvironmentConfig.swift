@@ -35,10 +35,83 @@ public struct EnvironmentConfig: Sendable {
         sessionTimeout: TimeInterval? = nil,
         connectionTimeout: TimeInterval? = nil,
         autoReconnect: Bool = true,
-        configPath: String? = nil,
         env: [String: String] = ProcessInfo.processInfo.environment
     ) -> EnvironmentConfig {
-        let fileConfig = TargetConfigResolver.loadConfig(from: configPath)
+        resolve(
+            deviceFilter: deviceFilter,
+            token: token,
+            sessionTimeout: sessionTimeout,
+            connectionTimeout: connectionTimeout,
+            autoReconnect: autoReconnect,
+            fileConfig: TargetConfigResolver.loadConfig(),
+            env: env
+        )
+    }
+
+    /// Resolve configuration with an optional config path from a caller-owned source.
+    /// A nil path uses the default search paths; a non-nil path is an explicit config path.
+    public static func resolve(
+        deviceFilter: String? = nil,
+        token: String? = nil,
+        sessionTimeout: TimeInterval? = nil,
+        connectionTimeout: TimeInterval? = nil,
+        autoReconnect: Bool = true,
+        configPath: String?,
+        env: [String: String] = ProcessInfo.processInfo.environment
+    ) throws -> EnvironmentConfig {
+        guard let configPath else {
+            return resolve(
+                deviceFilter: deviceFilter,
+                token: token,
+                sessionTimeout: sessionTimeout,
+                connectionTimeout: connectionTimeout,
+                autoReconnect: autoReconnect,
+                env: env
+            )
+        }
+        return try resolve(
+            deviceFilter: deviceFilter,
+            token: token,
+            sessionTimeout: sessionTimeout,
+            connectionTimeout: connectionTimeout,
+            autoReconnect: autoReconnect,
+            configPath: configPath,
+            env: env
+        )
+    }
+
+    /// Resolve configuration with an explicit user-provided config path.
+    /// Missing or malformed explicit config files are diagnostic failures, not search fallbacks.
+    public static func resolve(
+        deviceFilter: String? = nil,
+        token: String? = nil,
+        sessionTimeout: TimeInterval? = nil,
+        connectionTimeout: TimeInterval? = nil,
+        autoReconnect: Bool = true,
+        configPath: String,
+        env: [String: String] = ProcessInfo.processInfo.environment
+    ) throws -> EnvironmentConfig {
+        let fileConfig = try TargetConfigResolver.loadConfig(from: configPath)
+        return resolve(
+            deviceFilter: deviceFilter,
+            token: token,
+            sessionTimeout: sessionTimeout,
+            connectionTimeout: connectionTimeout,
+            autoReconnect: autoReconnect,
+            fileConfig: fileConfig,
+            env: env
+        )
+    }
+
+    private static func resolve(
+        deviceFilter: String?,
+        token: String?,
+        sessionTimeout: TimeInterval?,
+        connectionTimeout: TimeInterval?,
+        autoReconnect: Bool,
+        fileConfig: ButtonHeistFileConfig?,
+        env: [String: String]
+    ) -> EnvironmentConfig {
 
         let envDevice = env[EnvironmentKey.buttonheistDevice.rawValue]
         let envToken = env[EnvironmentKey.buttonheistToken.rawValue]
