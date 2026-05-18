@@ -253,7 +253,6 @@ public final class TheHandoff
 |----------|------|-------------|
 | `onDeviceFound` | `((DiscoveredDevice) -> Void)?` | New device discovered |
 | `onDeviceLost` | `((DiscoveredDevice) -> Void)?` | Device no longer available |
-| `onConnected` | `((ServerInfo) -> Void)?` | Connection established |
 | `onDisconnected` | `((DisconnectReason) -> Void)?` | Connection closed |
 | `onInterface` | `((Interface, String?) -> Void)?` | Hierarchy received (with optional requestId) |
 | `onActionResult` | `((ActionResult, String?) -> Void)?` | Action result received (with optional requestId) |
@@ -261,7 +260,6 @@ public final class TheHandoff
 | `onRecordingStarted` | `(() -> Void)?` | Recording has begun |
 | `onRecording` | `((RecordingPayload) -> Void)?` | Completed recording received |
 | `onRecordingError` | `((String) -> Void)?` | Recording failed |
-| `onError` | `((String) -> Void)?` | General error |
 | `onAuthApproved` | `((String?) -> Void)?` | Auth approved (token provided) |
 | `onSessionLocked` | `((SessionLockedPayload) -> Void)?` | Session locked by another driver |
 | `onAuthFailed` | `((String) -> Void)?` | Auth rejected |
@@ -1852,10 +1850,6 @@ class Inspector {
         handoff.onDeviceFound = { [weak self] device in
             print("Found: \(device.name)")
             self?.handoff.connect(to: device)
-        }
-
-        handoff.onConnected = { info in
-            print("Connected to \(info.appName) on \(info.deviceName)")
         }
 
         handoff.onInterface = { iface, _ in

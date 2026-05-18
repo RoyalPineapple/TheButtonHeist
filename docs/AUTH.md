@@ -243,7 +243,7 @@ The real access control is the `ConnectionScope` filter that restricts which net
 | **TheMuscle** | Token resolution, validation, UI approval, and session locking. Presents `UIAlertController` for Allow/Deny approval. Owns `authToken`, `pendingApprovalClients`, and authenticated client/session state. |
 | **SimpleSocketServer** | Tracks per-client auth state via `ClientPhase` enum (`.unauthenticated` / `.authenticated`). Routes messages to `onDataReceived` (authenticated) or `onUnauthenticatedData` (not yet authenticated). |
 | **TheInsideJob** | Wires TheMuscle callbacks to the socket server. Owns the server lifecycle. |
-| **DeviceConnection** | Client-side handshake and auth handling. Verifies `buttonHeistVersion`, sends `clientHello` after `serverHello`, sends token on `authRequired`, stores token from `authApproved`, fires `onConnected` only after receiving `info` (post-auth). |
+| **DeviceConnection** | Client-side handshake and auth handling. Verifies `buttonHeistVersion`, sends `clientHello` after `serverHello`, sends token on `authRequired`, stores token from `authApproved`, and emits the connected event only after receiving `info` (post-auth). |
 | **TheHandoff** | Passes `token` to DeviceConnection. Stores approved tokens via `onAuthApproved` callback. Tracks `connectionPhase` (including `.failed(.authFailed)` or `.failed(.sessionLocked)` via `ConnectionError`). |
 
 ## TLS Certificate Lifecycle

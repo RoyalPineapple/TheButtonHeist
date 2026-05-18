@@ -26,7 +26,7 @@ graph TD
     subgraph TheHandoff["TheHandoff (@ButtonHeistActor)"]
         DiscState["Discovery State\ndiscoveredDevices, isDiscovering"]
         ConnState["Connection State\nconnectionPhase, serverInfo"]
-        Callbacks["Typed Callbacks\nonDeviceFound/Lost, onConnected/Disconnected,\nonInterface, onActionResult, onScreen,\nonRecording*, onError, onAuth*,\nonSessionLocked, onStatus"]
+        Callbacks["Typed Callbacks\nonDeviceFound/Lost, onDisconnected,\nonInterface, onActionResult, onScreen,\nonRecording*, onAuth*,\nonSessionLocked, onStatus"]
         Config["Configuration\ntoken, driverId"]
 
         subgraph Factories["Injectable Closures (mock boundary)"]
