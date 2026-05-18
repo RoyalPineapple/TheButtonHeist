@@ -52,7 +52,31 @@ final class RecordingPayloadTests: XCTestCase {
             fps: 8,
             startTime: start,
             endTime: end,
-            stopReason: .manual
+            stopReason: .manual,
+            evidence: RecordingPayloadEvidence(
+                requestedConfig: RecordingConfigurationEvidence(fps: 30, scale: 2.0, inactivityTimeout: 0.25, maxDuration: 0.5),
+                appliedConfig: RecordingConfigurationEvidence(fps: 15, scale: 1.0, inactivityTimeout: 1.0, maxDuration: 1.0),
+                caps: [
+                    RecordedInputCap(
+                        name: "fps",
+                        requested: .int(30),
+                        applied: .int(15),
+                        minimum: .int(1),
+                        maximum: .int(15),
+                        reason: "recording fps is capped to the encoder-supported range"
+                    ),
+                ],
+                unsupportedInputs: [
+                    RecordedUnsupportedInput(
+                        name: "codec",
+                        valueType: "String",
+                        reason: "not supported by this recorder"
+                    ),
+                ],
+                interactionLogLimit: 500,
+                droppedInteractionCount: 2,
+                fileSizeLimitBytes: 7_000_000
+            )
         )
 
         let encoder = JSONEncoder()
@@ -70,6 +94,13 @@ final class RecordingPayloadTests: XCTestCase {
         XCTAssertEqual(decoded.frameCount, 40)
         XCTAssertEqual(decoded.fps, 8)
         XCTAssertEqual(decoded.stopReason, .manual)
+        XCTAssertEqual(decoded.evidence?.requestedConfig?.fps, 30)
+        XCTAssertEqual(decoded.evidence?.appliedConfig?.scale, 1.0)
+        XCTAssertEqual(decoded.evidence?.caps?.first?.name, "fps")
+        XCTAssertEqual(decoded.evidence?.unsupportedInputs?.first?.name, "codec")
+        XCTAssertEqual(decoded.evidence?.interactionLogLimit, 500)
+        XCTAssertEqual(decoded.evidence?.droppedInteractionCount, 2)
+        XCTAssertEqual(decoded.evidence?.fileSizeLimitBytes, 7_000_000)
     }
 
     // MARK: - StopReason
