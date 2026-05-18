@@ -568,6 +568,19 @@ final class TheFenceTests: XCTestCase {
         XCTAssertEqual(text, "checkout | waitFor: error[timeout]: Timed out after 2.0s waiting for element")
     }
 
+    func testCompactUnsupportedCommandUsesDiagnosticMethod() {
+        let result = ActionResult(
+            success: false,
+            method: .unsupportedCommand,
+            message: "Unsupported command 'ping' in executeCommand",
+            errorKind: .unsupported
+        )
+
+        let text = FenceResponse.action(result: result).compactFormatted()
+
+        XCTAssertEqual(text, "unsupportedCommand: error[unsupported]: Unsupported command 'ping' in executeCommand")
+    }
+
     func testCompactTreeUnavailableActionUsesLocalDiagnosticCode() {
         let result = ActionResult(
             success: false,

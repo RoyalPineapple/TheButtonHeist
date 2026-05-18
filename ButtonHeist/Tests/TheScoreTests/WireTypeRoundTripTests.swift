@@ -642,7 +642,7 @@ final class WireTypeRoundTripTests: XCTestCase {
             .typeText, .customAction, .editAction, .resignFirstResponder,
             .setPasteboard, .getPasteboard, .rotor, .waitForIdle,
             .scroll, .scrollToVisible, .elementSearch, .scrollToEdge,
-            .waitFor, .explore, .elementNotFound, .elementDeallocated,
+            .waitFor, .explore, .unsupportedCommand, .elementNotFound, .elementDeallocated,
         ]
         for method in allMethods {
             let data = try encoder.encode(method)

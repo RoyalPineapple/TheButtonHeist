@@ -419,7 +419,7 @@ extension TheBrains {
     }
 
     /// Map a ClientMessage to the ActionMethod that best identifies it for diagnostic output.
-    /// Handshake/control messages have no natural ActionMethod and fall back to `.activate`.
+    /// Handshake/control messages have no natural executor and use a diagnostic-only method.
     static func diagnosticMethod(for message: ClientMessage) -> ActionMethod {
         switch message {
         case .activate: return .activate
@@ -451,7 +451,7 @@ extension TheBrains {
         case .clientHello, .authenticate, .requestInterface,
              .ping, .status, .requestScreen,
              .startRecording, .stopRecording:
-            return .activate
+            return .unsupportedCommand
         }
     }
 

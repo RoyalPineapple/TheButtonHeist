@@ -249,6 +249,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
             .resignFirstResponder,
             .rotor,
             .waitForIdle,
+            .unsupportedCommand,
             .elementNotFound,
             .elementDeallocated,
         ]

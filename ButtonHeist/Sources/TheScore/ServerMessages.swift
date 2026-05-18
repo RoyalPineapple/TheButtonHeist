@@ -823,6 +823,7 @@ public enum ActionMethod: String, Codable, Sendable {
     case scrollToEdge
     case waitFor
     case explore
+    case unsupportedCommand
     case elementNotFound
     case elementDeallocated
 }
