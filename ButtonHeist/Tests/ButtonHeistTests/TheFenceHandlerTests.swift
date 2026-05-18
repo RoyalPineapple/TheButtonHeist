@@ -167,6 +167,53 @@ final class TheFenceHandlerTests: XCTestCase {
         )
     }
 
+    private func exploredActionResult(interface: Interface) -> ActionResult {
+        ActionResult(
+            success: true,
+            method: .explore,
+            payload: .explore(ExploreResult(
+                elements: interface.elements,
+                scrollCount: 1,
+                containersExplored: 1,
+                explorationTime: 0.1
+            )),
+            accessibilityTrace: AccessibilityTrace(interface: interface)
+        )
+    }
+
+    private func projectionTestInterface(includeDuplicateGroup: Bool = false) -> Interface {
+        let header = testElement("title", label: "Menu", traits: [.header])
+        let submit = testElement("submit", label: "Submit", traits: [.button])
+        let cancel = testElement("cancel", label: "Cancel", traits: [.button])
+        let footer = testElement("footer", label: "Footer")
+        let primaryGroup = ContainerInfo(
+            type: .semanticGroup(label: "Actions", value: nil, identifier: "actions"),
+            stableId: "semantic_actions__actions",
+            frameX: 0,
+            frameY: 40,
+            frameWidth: 200,
+            frameHeight: 100
+        )
+        var tree: [InterfaceNode] = [
+            .element(header),
+            .container(primaryGroup, children: [.element(submit), .element(cancel)]),
+            .element(footer),
+        ]
+        if includeDuplicateGroup {
+            let archive = testElement("archive", label: "Archive", traits: [.button])
+            let secondaryGroup = ContainerInfo(
+                type: .semanticGroup(label: "Actions", value: nil, identifier: "secondary_actions"),
+                stableId: "semantic_actions__secondary_actions",
+                frameX: 0,
+                frameY: 160,
+                frameWidth: 200,
+                frameHeight: 60
+            )
+            tree.insert(.container(secondaryGroup, children: [.element(archive)]), at: 2)
+        }
+        return Interface(timestamp: Date(), tree: tree)
+    }
+
     // MARK: - Connect
 
     @ButtonHeistActor
@@ -2454,6 +2501,244 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testGetInterfaceDefaultNoRootReturnsWholeHierarchy() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        let interfaceFixture = projectionTestInterface()
+        let exploreResponse = exploredActionResult(interface: interfaceFixture)
+        mockConn.autoResponse = { message in
+            switch message {
+            case .explore:
+                return .actionResult(exploreResponse)
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+
+        let response = try await fence.execute(request: ["command": "get_interface"])
+
+        let json = response.jsonDict()!
+        XCTAssertNil(json["filteredFrom"])
+        let interface = json["interface"] as! [String: Any]
+        let tree = interface["tree"] as! [[String: Any]]
+        XCTAssertEqual(tree.count, 3)
+        let container = tree[1]["container"] as! [String: Any]
+        XCTAssertEqual(container["stableId"] as? String, "semantic_actions__actions")
+        let children = container["children"] as! [[String: Any]]
+        XCTAssertEqual(children.count, 2)
+    }
+
+    @ButtonHeistActor
+    func testGetInterfaceRootByLeafHeistIdReturnsOnlyLeaf() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        let exploreResponse = exploredActionResult(interface: projectionTestInterface())
+        mockConn.autoResponse = { message in
+            switch message {
+            case .explore:
+                return .actionResult(exploreResponse)
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "get_interface",
+            "root": ["heistId": "cancel"],
+        ])
+
+        let json = response.jsonDict()!
+        XCTAssertEqual(json["filteredFrom"] as? Int, 4)
+        let interface = json["interface"] as! [String: Any]
+        let tree = interface["tree"] as! [[String: Any]]
+        XCTAssertEqual(tree.count, 1)
+        XCTAssertNil(tree[0]["container"])
+        let element = tree[0]["element"] as! [String: Any]
+        XCTAssertEqual(element["heistId"] as? String, "cancel")
+    }
+
+    @ButtonHeistActor
+    func testGetInterfaceRootByLeafMatcherReturnsOnlyLeaf() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        let exploreResponse = exploredActionResult(interface: projectionTestInterface())
+        mockConn.autoResponse = { message in
+            switch message {
+            case .explore:
+                return .actionResult(exploreResponse)
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "get_interface",
+            "root": ["label": "Cancel", "traits": ["button"]],
+        ])
+
+        let json = response.jsonDict()!
+        let interface = json["interface"] as! [String: Any]
+        let tree = interface["tree"] as! [[String: Any]]
+        XCTAssertEqual(tree.count, 1)
+        let element = tree[0]["element"] as! [String: Any]
+        XCTAssertEqual(element["heistId"] as? String, "cancel")
+    }
+
+    @ButtonHeistActor
+    func testGetInterfaceRootByContainerStableIdReturnsSubtree() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        let exploreResponse = exploredActionResult(interface: projectionTestInterface())
+        mockConn.autoResponse = { message in
+            switch message {
+            case .explore:
+                return .actionResult(exploreResponse)
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "get_interface",
+            "root": ["stableId": "semantic_actions__actions"],
+        ])
+
+        let json = response.jsonDict()!
+        XCTAssertEqual(json["filteredFrom"] as? Int, 4)
+        let interface = json["interface"] as! [String: Any]
+        let tree = interface["tree"] as! [[String: Any]]
+        XCTAssertEqual(tree.count, 1)
+        let container = tree[0]["container"] as! [String: Any]
+        XCTAssertEqual(container["stableId"] as? String, "semantic_actions__actions")
+        let children = container["children"] as! [[String: Any]]
+        XCTAssertEqual(children.count, 2)
+        XCTAssertEqual((children[0]["element"] as? [String: Any])?["heistId"] as? String, "submit")
+        XCTAssertEqual((children[1]["element"] as? [String: Any])?["heistId"] as? String, "cancel")
+    }
+
+    @ButtonHeistActor
+    func testGetInterfaceRootBySemanticGroupMetadataReturnsSubtree() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        let exploreResponse = exploredActionResult(interface: projectionTestInterface())
+        mockConn.autoResponse = { message in
+            switch message {
+            case .explore:
+                return .actionResult(exploreResponse)
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "get_interface",
+            "root": ["type": "semanticGroup", "label": "Actions", "identifier": "actions"],
+        ])
+
+        let json = response.jsonDict()!
+        let interface = json["interface"] as! [String: Any]
+        let tree = interface["tree"] as! [[String: Any]]
+        XCTAssertEqual(tree.count, 1)
+        let container = tree[0]["container"] as! [String: Any]
+        XCTAssertEqual(container["stableId"] as? String, "semantic_actions__actions")
+        let children = container["children"] as! [[String: Any]]
+        XCTAssertEqual(children.count, 2)
+    }
+
+    @ButtonHeistActor
+    func testGetInterfaceAmbiguousRootWithoutOrdinalErrors() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        let exploreResponse = exploredActionResult(interface: projectionTestInterface(includeDuplicateGroup: true))
+        mockConn.autoResponse = { message in
+            switch message {
+            case .explore:
+                return .actionResult(exploreResponse)
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "get_interface",
+            "root": ["type": "semanticGroup", "label": "Actions"],
+        ])
+
+        let json = response.jsonDict()!
+        XCTAssertEqual(json["status"] as? String, "error")
+        let message = json["message"] as? String ?? ""
+        XCTAssertTrue(message.contains("root matched 2 nodes"), message)
+        XCTAssertTrue(message.contains("root.ordinal"), message)
+        XCTAssertTrue(message.contains("semantic_actions__actions"), message)
+        XCTAssertTrue(message.contains("semantic_actions__secondary_actions"), message)
+    }
+
+    @ButtonHeistActor
+    func testGetInterfaceRootOrdinalDisambiguates() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        let exploreResponse = exploredActionResult(interface: projectionTestInterface(includeDuplicateGroup: true))
+        mockConn.autoResponse = { message in
+            switch message {
+            case .explore:
+                return .actionResult(exploreResponse)
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "get_interface",
+            "root": ["type": "semanticGroup", "label": "Actions", "ordinal": 1],
+        ])
+
+        let json = response.jsonDict()!
+        let interface = json["interface"] as! [String: Any]
+        let tree = interface["tree"] as! [[String: Any]]
+        XCTAssertEqual(tree.count, 1)
+        let container = tree[0]["container"] as! [String: Any]
+        XCTAssertEqual(container["stableId"] as? String, "semantic_actions__secondary_actions")
+        let children = container["children"] as! [[String: Any]]
+        XCTAssertEqual(children.count, 1)
+        XCTAssertEqual((children[0]["element"] as? [String: Any])?["heistId"] as? String, "archive")
+    }
+
+    @ButtonHeistActor
+    func testGetInterfaceMissingRootErrors() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        let exploreResponse = exploredActionResult(interface: projectionTestInterface())
+        mockConn.autoResponse = { message in
+            switch message {
+            case .explore:
+                return .actionResult(exploreResponse)
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "get_interface",
+            "root": ["stableId": "missing"],
+        ])
+
+        let json = response.jsonDict()!
+        XCTAssertEqual(json["status"] as? String, "error")
+        let message = json["message"] as? String ?? ""
+        XCTAssertTrue(message.contains("root matched no nodes"), message)
+        XCTAssertTrue(message.contains("stableId"), message)
+    }
+
+    func testContainerStableIdAppearsInSummaryJsonAndCompactOutput() {
+        let response = FenceResponse.interface(projectionTestInterface(), detail: .summary)
+
+        let json = response.jsonDict()!
+        let interface = json["interface"] as! [String: Any]
+        let tree = interface["tree"] as! [[String: Any]]
+        let container = tree[1]["container"] as! [String: Any]
+        XCTAssertEqual(container["stableId"] as? String, "semantic_actions__actions")
+        XCTAssertNil(container["frameX"], "summary should expose identity, not geometry")
+
+        let compact = response.compactFormatted()
+        XCTAssertTrue(
+            compact.contains("semanticGroup stableId=\"semantic_actions__actions\" id=\"actions\" \"Actions\""),
+            compact
+        )
+    }
+
+    @ButtonHeistActor
     func testGetInterfaceDefaultAppliesMatcherFilterAfterExplore() async throws {
         let (fence, mockConn) = makeConnectedFence()
         let submit = testElement("submit", label: "Submit", traits: [.button])
@@ -2520,7 +2805,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testGetInterfaceVisibleScopeStillAppliesMatcherFilter() async throws {
+    func testGetInterfaceVisibleScopeProjectsMatcherLeaves() async throws {
         let (fence, mockConn) = makeConnectedFence()
         let submit = testElement("submit", label: "Submit", traits: [.button])
         let cancel = testElement("cancel", label: "Cancel", traits: [.button])
@@ -2560,16 +2845,12 @@ final class TheFenceHandlerTests: XCTestCase {
         let interface = json["interface"] as! [String: Any]
         let tree = interface["tree"] as! [[String: Any]]
         XCTAssertEqual(tree.count, 1)
-        let container = tree[0]["container"] as! [String: Any]
-        XCTAssertEqual(container["type"] as? String, "semanticGroup")
-        let children = container["children"] as! [[String: Any]]
-        XCTAssertEqual(children.count, 1)
-        let element = children[0]["element"] as! [String: Any]
+        let element = tree[0]["element"] as! [String: Any]
         XCTAssertEqual(element["heistId"] as? String, "cancel")
     }
 
     @ButtonHeistActor
-    func testGetInterfaceElementsFilterPreservesContainerShape() async throws {
+    func testGetInterfaceElementsFilterProjectsLeafRoots() async throws {
         let (fence, mockConn) = makeConnectedFence()
         let first = testElement("first", label: "First")
         let second = testElement("second", label: "Second")
@@ -2603,10 +2884,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let interface = json["interface"] as! [String: Any]
         let tree = interface["tree"] as! [[String: Any]]
         XCTAssertEqual(tree.count, 1)
-        let container = tree[0]["container"] as! [String: Any]
-        let children = container["children"] as! [[String: Any]]
-        XCTAssertEqual(children.count, 1)
-        let element = children[0]["element"] as! [String: Any]
+        let element = tree[0]["element"] as! [String: Any]
         XCTAssertEqual(element["heistId"] as? String, "second")
     }
 

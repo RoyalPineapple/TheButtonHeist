@@ -161,6 +161,14 @@ extension Dictionary where Key == String, Value == Any {
         return strings
     }
 
+    func schemaDictionary(_ key: String) throws -> [String: Any]? {
+        guard let value = self[key] else { return nil }
+        guard let dictionary = value as? [String: Any] else {
+            throw SchemaValidationError(field: key, observed: value, expected: "object")
+        }
+        return dictionary
+    }
+
     func schemaDictionaryArray(_ key: String) throws -> [[String: Any]]? {
         guard let value = self[key] else { return nil }
         guard let array = value as? [Any] else {

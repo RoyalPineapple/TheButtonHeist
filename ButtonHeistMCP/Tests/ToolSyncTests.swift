@@ -243,6 +243,13 @@ struct ToolSyncTests {
         let getInterface = ToolDefinitions.all.first { $0.name == TheFence.Command.getInterface.rawValue }
         #expect(extractEnumValues(from: getInterface, property: "scope") == ["visible"])
         #expect(extractEnumValues(from: getInterface, property: "detail") == Set(InterfaceDetail.allCases.map(\.rawValue)))
+        if let rootSchema = getInterface.flatMap({ extractPropertySchema(from: $0, property: "root") }),
+           let rootProperties = extractObjectField(from: rootSchema, key: "properties"),
+           let typeSchema = extractObjectField(from: rootProperties, key: "type") {
+            #expect(extractEnumValues(from: typeSchema) == Set(InterfaceRootContainerType.allCases.map(\.rawValue)))
+        } else {
+            Issue.record("get_interface.root.type missing enum schema")
+        }
 
         let scroll = ToolDefinitions.all.first { $0.name == TheFence.Command.scroll.rawValue }
         #expect(extractEnumValues(from: scroll, property: "mode") == Set(ScrollMode.allCases.map(\.rawValue)))
@@ -297,11 +304,42 @@ struct ToolSyncTests {
         }
 
         let description = getInterface.description ?? ""
+        #expect(description.contains("Omit root for the whole hierarchy"))
+        #expect(description.contains("project the returned tree"))
         #expect(description.contains("Omit scope for the normal"))
         #expect(description.contains("app accessibility state"))
         #expect(description.contains("scope=visible only for fresh on-screen geometry diagnostics"))
         #expect(!description.contains("diagnostic on-screen reads"))
         #expect(!description.localizedCaseInsensitiveContains("viewport"))
+    }
+
+    @Test("get_interface root schema describes projection without viewport language")
+    func getInterfaceRootSchemaDescribesProjectionWithoutViewportLanguage() {
+        guard let getInterface = ToolDefinitions.all.first(where: { $0.name == TheFence.Command.getInterface.rawValue }),
+              let rootSchema = extractPropertySchema(from: getInterface, property: "root"),
+              let rootProperties = extractObjectField(from: rootSchema, key: "properties") else {
+            Issue.record("get_interface.root missing property schema")
+            return
+        }
+
+        #expect(extractStringField(from: rootSchema, key: "type") == "object")
+        #expect(
+            extractPropertyKeys(from: rootSchema) ==
+                ["heistId", "stableId", "type", "label", "value", "identifier", "traits", "excludeTraits", "modal", "ordinal"]
+        )
+        #expect(extractStringField(from: rootSchema, key: "description")?.contains("Projection root") == true)
+        #expect(extractStringField(from: rootSchema, key: "description")?.contains("whole tree") == true)
+        #expect(!((extractStringField(from: rootSchema, key: "description") ?? "").localizedCaseInsensitiveContains("viewport")))
+        if case .object(let stableIdSchema)? = rootProperties["stableId"] {
+            #expect(extractStringField(from: stableIdSchema, key: "type") == "string")
+        } else {
+            Issue.record("get_interface.root.stableId missing schema")
+        }
+        if case .object(let modalSchema)? = rootProperties["modal"] {
+            #expect(extractStringField(from: modalSchema, key: "type") == "boolean")
+        } else {
+            Issue.record("get_interface.root.modal missing schema")
+        }
     }
 
     @Test("Expect schema advertises Claude-compatible object form")

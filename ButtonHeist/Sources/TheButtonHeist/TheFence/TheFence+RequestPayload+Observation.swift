@@ -23,6 +23,7 @@ extension TheFence {
         GetInterfaceRequest(
             scope: try decodeGetInterfaceScope(request),
             detail: try request.schemaEnum("detail", as: InterfaceDetail.self) ?? .summary,
+            root: try decodeInterfaceRootSelector(request),
             matcher: try elementMatcher(request),
             elementIds: try request.schemaStringArray("elements")
         )
@@ -46,6 +47,7 @@ extension TheFence {
             payload: .getInterface(GetInterfaceRequest(
                 scope: .full,
                 detail: .summary,
+                root: nil,
                 matcher: ElementMatcher(),
                 elementIds: nil
             )),
@@ -68,5 +70,41 @@ extension TheFence {
             }
         }
         return .full
+    }
+
+    private func decodeInterfaceRootSelector(_ request: [String: Any]) throws -> InterfaceRootSelector? {
+        guard let root = try request.schemaDictionary("root") else { return nil }
+        try validateInterfaceRootKeys(root)
+        let ordinal = try root.schemaInteger("ordinal")
+        if let ordinal, ordinal < 0 {
+            throw SchemaValidationError(field: "root.ordinal", observed: ordinal, expected: "integer >= 0")
+        }
+        let selector = InterfaceRootSelector(
+            heistId: try root.schemaString("heistId"),
+            stableId: try root.schemaString("stableId"),
+            type: try root.schemaEnum("type", as: InterfaceRootContainerType.self),
+            matcher: try elementMatcher(root),
+            modal: try root.schemaBoolean("modal"),
+            ordinal: ordinal
+        )
+        guard selector.hasPredicates else {
+            throw SchemaValidationError(field: "root", observed: root, expected: "non-empty root projection selector")
+        }
+        return selector
+    }
+
+    private func validateInterfaceRootKeys(_ root: [String: Any]) throws {
+        let allowedKeys: Set<String> = [
+            "heistId", "stableId", "type", "label", "value", "identifier",
+            "traits", "excludeTraits", "modal", "ordinal",
+        ]
+        guard let unexpectedKey = root.keys.sorted().first(where: { !allowedKeys.contains($0) }) else {
+            return
+        }
+        throw SchemaValidationError(
+            field: "root.\(unexpectedKey)",
+            observed: root[unexpectedKey],
+            expected: "valid get_interface root parameter"
+        )
     }
 }

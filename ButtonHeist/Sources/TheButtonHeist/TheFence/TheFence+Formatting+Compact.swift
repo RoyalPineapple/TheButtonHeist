@@ -408,19 +408,25 @@ extension FenceResponse {
         switch info.type {
         case .semanticGroup(let label, let value, let identifier):
             parts = ["semanticGroup"]
+            if let stableId = info.stableId, !stableId.isEmpty { parts.append("stableId=\"\(stableId)\"") }
             if let identifier, !identifier.isEmpty { parts.append("id=\"\(identifier)\"") }
             if let label, !label.isEmpty { parts.append("\"\(label)\"") }
             if let value, !value.isEmpty { parts.append("= \"\(value)\"") }
         case .list:
             parts = ["list"]
+            if let stableId = info.stableId, !stableId.isEmpty { parts.append("stableId=\"\(stableId)\"") }
         case .landmark:
             parts = ["landmark"]
+            if let stableId = info.stableId, !stableId.isEmpty { parts.append("stableId=\"\(stableId)\"") }
         case .dataTable(let rowCount, let columnCount):
             parts = ["dataTable", "\(rowCount)x\(columnCount)"]
+            if let stableId = info.stableId, !stableId.isEmpty { parts.append("stableId=\"\(stableId)\"") }
         case .tabBar:
             parts = ["tabBar"]
+            if let stableId = info.stableId, !stableId.isEmpty { parts.append("stableId=\"\(stableId)\"") }
         case .scrollable(let contentWidth, let contentHeight):
             parts = ["scrollable", "= \"\(Int(contentWidth))x\(Int(contentHeight))\""]
+            if let stableId = info.stableId, !stableId.isEmpty { parts.append("stableId=\"\(stableId)\"") }
         }
         if info.isModalBoundary {
             parts.append("modal")

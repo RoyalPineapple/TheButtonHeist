@@ -121,6 +121,7 @@ public enum FenceParameterKey: String, CaseIterable, Sendable {
     case matcher
     case maxDuration = "max_duration"
     case mode
+    case modal
     case newValue
     case oldValue
     case ordinal
@@ -129,6 +130,7 @@ public enum FenceParameterKey: String, CaseIterable, Sendable {
     case policy
     case property
     case radius
+    case root
     case rotor
     case rotorIndex
     case samplesPerSegment
@@ -139,6 +141,7 @@ public enum FenceParameterKey: String, CaseIterable, Sendable {
     case start
     case startX
     case startY
+    case stableId
     case steps
     case target
     case text
@@ -395,6 +398,47 @@ enum FenceParameterBlocks: Sendable {
         ),
     ]
 
+    /// Root projection selector for get_interface. Cuts the parsed interface tree
+    /// at one matched leaf or container node.
+    static let interfaceRoot: FenceParameterSpec = .init(
+        key: "root", type: .object, optionalRole: .matcher,
+        description: """
+            Projection root within the parsed hierarchy. Omit for the whole tree. \
+            heistId selects a leaf element; stableId selects a container; type/label/value/identifier/modal \
+            can select containers; label/value/identifier/traits/excludeTraits can select leaves. \
+            Ambiguous roots require ordinal.
+            """,
+        objectProperties: [
+            .init(
+                key: "heistId", type: .string, optionalRole: .matcher,
+                description: "Leaf element heistId returned by get_interface or an action delta"
+            ),
+            .init(
+                key: "stableId", type: .string, optionalRole: .matcher,
+                description: "Container stableId returned on container nodes"
+            ),
+            .init(
+                key: "type", type: .string, optionalRole: .matcher,
+                description: "Container type",
+                enumValues: fenceEnumValues(InterfaceRootContainerType.self)
+            ),
+            .init(key: "label", type: .string, optionalRole: .matcher, description: "Exact label for a leaf or container"),
+            .init(key: "value", type: .string, optionalRole: .matcher, description: "Exact value for a leaf or container"),
+            .init(key: "identifier", type: .string, optionalRole: .matcher, description: "Exact accessibility identifier for a leaf or semantic container"),
+            .init(
+                key: "traits", type: .stringArray, optionalRole: .matcher,
+                description: "Leaf traits that must all be present"
+            ),
+            .init(key: "excludeTraits", type: .stringArray, optionalRole: .matcher, description: "Leaf traits that must not be present"),
+            .init(key: "modal", type: .boolean, optionalRole: .matcher, description: "Container modal-boundary flag"),
+            .init(
+                key: "ordinal", type: .integer, optionalRole: .matcher,
+                description: "0-based candidate index to disambiguate multiple matching roots",
+                minimum: 0
+            ),
+        ]
+    )
+
     /// Inline expectation for action commands.
     static let expect: FenceParameterSpec = .init(
         key: "expect", type: .object, optionalRole: .behaviorSwitch,
@@ -624,8 +668,9 @@ extension TheFence.Command {
             return """
                 Read the app accessibility hierarchy. Call once on a new screen, then track changes via \
                 action deltas — re-fetch only when you need elements the delta didn't cover. \
-                Filter with matcher fields or heistId handle list. Omit scope for the normal \
-                app accessibility state; use scope=visible only for fresh on-screen geometry diagnostics.
+                Omit root for the whole hierarchy, or pass root to project the returned tree from \
+                a selected leaf or container node. Omit scope for the normal app accessibility state; \
+                use scope=visible only for fresh on-screen geometry diagnostics.
                 """
 
         case Self.getScreen.rawValue:
@@ -808,6 +853,7 @@ extension TheFence.Command {
         // MARK: Interface / observation
         case .getInterface:
             return filter + [
+                FenceParameterBlocks.interfaceRoot,
                 .init(
                     key: "scope", type: .string, optionalRole: .behaviorSwitch,
                     description: """
@@ -827,7 +873,7 @@ extension TheFence.Command {
                 ),
                 .init(
                     key: "elements", type: .stringArray, optionalRole: .matcher,
-                    description: "Optional list of heistId handles to filter. Returns only matching elements. Omit for the app accessibility hierarchy."
+                    description: "Optional list of leaf heistId handles to project as roots. Omit for the app accessibility hierarchy."
                 ),
             ]
 

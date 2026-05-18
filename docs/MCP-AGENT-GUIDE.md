@@ -12,7 +12,7 @@ Button Heist drives iOS apps through the accessibility layer — the same interf
 
 ## Choosing Tools
 
-**Observing**: `get_interface` for element data, `get_screen` for visual context. Start with `get_interface`; by default it returns the app accessibility state for the current screen, including content Button Heist can discover in scroll views. Use `scope: "visible"` only for fresh on-screen geometry diagnostics. Reach for `get_screen` only when layout or visual state matters.
+**Observing**: `get_interface` for element data, `get_screen` for visual context. Start with `get_interface`; by default it returns the app accessibility state for the current screen, including content Button Heist can discover in scroll views. Pass `root` to project the returned hierarchy from a selected leaf (`heistId` or matcher) or container (`stableId`, `type`, `label`, `identifier`). Use `scope: "visible"` only for fresh on-screen geometry diagnostics. Reach for `get_screen` only when layout or visual state matters.
 
 **Acting**: `activate` is your primary tool — it taps, toggles, follows links. Use `action: "increment"` or `"decrement"` for adjustable controls, with optional `count` to repeat 1...100 times. `type_text` for keyboard input. `gesture` with type "swipe" for directional gestures. `scroll` for paging through lists. Prefer `activate` over `gesture` — raw coordinates are fragile and don't record well.
 
@@ -136,4 +136,4 @@ Each level narrows what counts as success. The more specific, the more a failure
 
 ## Efficiency
 
-Read the delta first — skip `get_interface` when the delta already told you what changed. Use heistIds on the current screen, matchers after navigation. Filter with matcher fields or heistId lists when you only need a subset of elements.
+Read the delta first — skip `get_interface` when the delta already told you what changed. Use heistIds on the current screen, matchers after navigation. Pass `root` when you only need one subtree or one leaf from the current hierarchy.

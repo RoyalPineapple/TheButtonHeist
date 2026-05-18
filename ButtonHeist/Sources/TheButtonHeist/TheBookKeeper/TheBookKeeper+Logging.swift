@@ -259,6 +259,9 @@ private extension TheFence.GetInterfaceRequest {
         if detail != .summary {
             arguments.set("detail", detail)
         }
+        if let root {
+            arguments["root"] = root.bookKeeperValue
+        }
         if matcher.hasPredicates {
             arguments.appendMatcher(matcher)
         }
@@ -266,6 +269,19 @@ private extension TheFence.GetInterfaceRequest {
             arguments["elements"] = .array(elementIds.map { .string($0) })
         }
         return arguments
+    }
+}
+
+private extension TheFence.InterfaceRootSelector {
+    var bookKeeperValue: HeistValue {
+        var payload: [String: HeistValue] = [:]
+        payload.set("heistId", heistId)
+        payload.set("stableId", stableId)
+        payload.set("type", type)
+        payload.appendMatcher(matcher)
+        payload.set("modal", modal)
+        payload.set("ordinal", ordinal)
+        return .object(payload)
     }
 }
 

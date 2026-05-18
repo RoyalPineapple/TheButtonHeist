@@ -625,6 +625,9 @@ extension FenceResponse {
         if info.isModalBoundary {
             payload["isModalBoundary"] = true
         }
+        if let stableId = info.stableId {
+            payload["stableId"] = stableId
+        }
         if detail == .full {
             payload["frameX"] = info.frameX
             payload["frameY"] = info.frameY

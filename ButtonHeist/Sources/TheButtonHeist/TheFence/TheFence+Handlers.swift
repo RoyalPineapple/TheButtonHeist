@@ -6,25 +6,183 @@ import TheScore
 private let logger = Logger(subsystem: "com.buttonheist.fence", category: "handlers")
 private let accessibilityAdjustmentCountRange = 1...100
 
+private struct InterfaceRootCandidate {
+    let node: InterfaceNode
+    let summary: String
+}
+
 private extension Interface {
-    func retainingElements(withIds heistIds: Set<String>) -> Interface {
+    func projectingLeafRoots(matching matcher: ElementMatcher) -> Interface {
         Interface(
             timestamp: timestamp,
-            tree: tree.compactMap { $0.retainingElements(withIds: heistIds) }
+            tree: tree.flatMap { $0.leafRootNodes(matching: matcher) }
         )
+    }
+
+    func projectingLeafRoots(withIds heistIds: Set<String>) -> Interface {
+        Interface(
+            timestamp: timestamp,
+            tree: tree.flatMap { $0.leafRootNodes(withIds: heistIds) }
+        )
+    }
+
+    func rootCandidates(matching selector: TheFence.InterfaceRootSelector) -> [InterfaceRootCandidate] {
+        tree.flatMap { $0.rootCandidates(matching: selector) }
+    }
+
+    func projecting(root candidate: InterfaceRootCandidate) -> Interface {
+        Interface(timestamp: timestamp, tree: [candidate.node])
+    }
+}
+
+private extension InterfaceRootContainerType {
+    init(_ type: ContainerInfo.ContainerType) {
+        switch type {
+        case .semanticGroup:
+            self = .semanticGroup
+        case .list:
+            self = .list
+        case .landmark:
+            self = .landmark
+        case .dataTable:
+            self = .dataTable
+        case .tabBar:
+            self = .tabBar
+        case .scrollable:
+            self = .scrollable
+        }
+    }
+}
+
+private extension ContainerInfo {
+    func matchesRootSelector(_ selector: TheFence.InterfaceRootSelector) -> Bool {
+        guard selector.heistId == nil, !selector.matcher.hasTraitPredicates else { return false }
+        if let stableId = selector.stableId {
+            guard !stableId.isEmpty, self.stableId == stableId else { return false }
+        }
+        if let type = selector.type {
+            guard InterfaceRootContainerType(self.type) == type else { return false }
+        }
+        if let label = selector.label {
+            guard !label.isEmpty, ElementMatcher.stringEquals(containerLabel ?? "", label) else { return false }
+        }
+        if let value = selector.value {
+            guard !value.isEmpty, ElementMatcher.stringEquals(containerValue ?? "", value) else { return false }
+        }
+        if let identifier = selector.identifier {
+            guard !identifier.isEmpty, ElementMatcher.stringEquals(containerIdentifier ?? "", identifier) else { return false }
+        }
+        if let modal = selector.modal {
+            guard isModalBoundary == modal else { return false }
+        }
+        return true
+    }
+
+    var containerLabel: String? {
+        if case .semanticGroup(let label, _, _) = type { return label }
+        return nil
+    }
+
+    var containerValue: String? {
+        if case .semanticGroup(_, let value, _) = type { return value }
+        return nil
+    }
+
+    var containerIdentifier: String? {
+        if case .semanticGroup(_, _, let identifier) = type { return identifier }
+        return nil
+    }
+
+    var typeName: String {
+        InterfaceRootContainerType(type).rawValue
+    }
+
+    var rootCandidateSummary: String {
+        var parts = ["container", "type=\"\(typeName)\""]
+        if let stableId { parts.append("stableId=\"\(stableId)\"") }
+        if let identifier = containerIdentifier, !identifier.isEmpty {
+            parts.append("identifier=\"\(identifier)\"")
+        }
+        if let label = containerLabel, !label.isEmpty {
+            parts.append("label=\"\(label)\"")
+        }
+        if let value = containerValue, !value.isEmpty {
+            parts.append("value=\"\(value)\"")
+        }
+        if isModalBoundary {
+            parts.append("modal=true")
+        }
+        return parts.joined(separator: " ")
+    }
+}
+
+private extension HeistElement {
+    func matchesRootSelector(_ selector: TheFence.InterfaceRootSelector) -> Bool {
+        guard selector.stableId == nil, selector.type == nil, selector.modal == nil else { return false }
+        if let heistId = selector.heistId {
+            guard !heistId.isEmpty, self.heistId == heistId else { return false }
+        }
+        return matches(selector.matcher)
+    }
+
+    var rootCandidateSummary: String {
+        var parts = ["element", "heistId=\"\(heistId)\""]
+        if let identifier, !identifier.isEmpty {
+            parts.append("identifier=\"\(identifier)\"")
+        }
+        if let label, !label.isEmpty {
+            parts.append("label=\"\(label)\"")
+        }
+        if let value, !value.isEmpty {
+            parts.append("value=\"\(value)\"")
+        }
+        if !traits.isEmpty {
+            parts.append("traits=\"\(traits.map(\.rawValue).joined(separator: ","))\"")
+        }
+        return parts.joined(separator: " ")
     }
 }
 
 private extension InterfaceNode {
-    func retainingElements(withIds heistIds: Set<String>) -> InterfaceNode? {
+    func leafRootNodes(matching matcher: ElementMatcher) -> [InterfaceNode] {
         switch self {
         case .element(let element):
-            return heistIds.contains(element.heistId) ? self : nil
-        case .container(let info, let children):
-            let filteredChildren = children.compactMap { $0.retainingElements(withIds: heistIds) }
-            guard !filteredChildren.isEmpty else { return nil }
-            return .container(info, children: filteredChildren)
+            return element.matches(matcher) ? [self] : []
+        case .container(_, let children):
+            return children.flatMap { $0.leafRootNodes(matching: matcher) }
         }
+    }
+
+    func leafRootNodes(withIds heistIds: Set<String>) -> [InterfaceNode] {
+        switch self {
+        case .element(let element):
+            return heistIds.contains(element.heistId) ? [self] : []
+        case .container(_, let children):
+            return children.flatMap { $0.leafRootNodes(withIds: heistIds) }
+        }
+    }
+
+    func rootCandidates(matching selector: TheFence.InterfaceRootSelector) -> [InterfaceRootCandidate] {
+        switch self {
+        case .element(let element):
+            guard element.matchesRootSelector(selector) else { return [] }
+            return [InterfaceRootCandidate(node: self, summary: element.rootCandidateSummary)]
+        case .container(let info, let children):
+            var candidates: [InterfaceRootCandidate] = []
+            if info.matchesRootSelector(selector) {
+                candidates.append(InterfaceRootCandidate(node: self, summary: info.rootCandidateSummary))
+            }
+            candidates.append(contentsOf: children.flatMap { $0.rootCandidates(matching: selector) })
+            return candidates
+        }
+    }
+}
+
+private extension Array where Element == InterfaceRootCandidate {
+    var diagnosticList: String {
+        enumerated().map { index, candidate in
+            "[\(index)] \(candidate.summary)"
+        }.joined(separator: "; ")
     }
 }
 
@@ -42,41 +200,81 @@ extension TheFence {
                 return .error("Explore failed: \(result.message ?? "unknown error")")
             }
             let interface = Interface(
-                timestamp: Date(),
-                tree: exploreResult.elements.map { .element($0) }
+                timestamp: result.accessibilityTrace?.captures.last?.interface.timestamp ?? Date(),
+                tree: result.accessibilityTrace?.captures.last?.interface.tree ??
+                    exploreResult.elements.map { .element($0) }
             )
-            let filtered = filteredInterface(interface, request: request)
+            let projected = projectedInterface(interface, request: request)
+            if let error = projected.error { return .error(error) }
             return .interface(
-                filtered.interface,
+                projected.interface,
                 detail: request.detail,
-                filteredFrom: filtered.filteredFrom,
+                filteredFrom: projected.filteredFrom,
                 explore: exploreResult
             )
         }
 
         let interface = try await sendAndAwaitInterface(.requestInterface, timeout: Timeouts.actionSeconds)
-        let filtered = filteredInterface(interface, request: request)
-        return .interface(filtered.interface, detail: request.detail, filteredFrom: filtered.filteredFrom)
+        let projected = projectedInterface(interface, request: request)
+        if let error = projected.error { return .error(error) }
+        return .interface(projected.interface, detail: request.detail, filteredFrom: projected.filteredFrom)
     }
 
-    private func filteredInterface(
+    private func projectedInterface(
         _ interface: Interface,
         request: GetInterfaceRequest
-    ) -> (interface: Interface, filteredFrom: Int?) {
-        // Matcher-based filtering takes precedence over heistId list
+    ) -> (interface: Interface, filteredFrom: Int?, error: String?) {
+        if let root = request.root {
+            return projectedInterface(interface, root: root)
+        }
+
+        // Legacy flat matcher/list filters now project matching leaves as roots
+        // instead of retaining ancestor wrappers around them.
         if request.matcher.hasPredicates {
             let total = interface.elements.count
-            let matchingIds = Set(interface.elements.filter { $0.matches(request.matcher) }.map(\.heistId))
-            let filteredInterface = interface.retainingElements(withIds: matchingIds)
-            return (filteredInterface, total)
+            return (interface.projectingLeafRoots(matching: request.matcher), total, nil)
         }
 
         if let filterIds = request.elementIds, !filterIds.isEmpty {
             let filterSet = Set(filterIds)
-            let filteredInterface = interface.retainingElements(withIds: filterSet)
-            return (filteredInterface, interface.elements.count)
+            return (interface.projectingLeafRoots(withIds: filterSet), interface.elements.count, nil)
         }
-        return (interface, nil)
+        return (interface, nil, nil)
+    }
+
+    private func projectedInterface(
+        _ interface: Interface,
+        root: InterfaceRootSelector
+    ) -> (interface: Interface, filteredFrom: Int?, error: String?) {
+        let candidates = interface.rootCandidates(matching: root)
+        guard !candidates.isEmpty else {
+            return (
+                interface,
+                nil,
+                "get_interface root matched no nodes; refine root using a container stableId/type/label/identifier or a leaf heistId/matcher from get_interface."
+            )
+        }
+
+        if let ordinal = root.ordinal {
+            guard candidates.indices.contains(ordinal) else {
+                let range = candidates.count == 1 ? "0" : "0...\(candidates.count - 1)"
+                return (
+                    interface,
+                    nil,
+                    "get_interface root ordinal \(ordinal) is out of range for \(candidates.count) matches; use \(range) or refine root. Candidates: \(candidates.diagnosticList)"
+                )
+            }
+            return (interface.projecting(root: candidates[ordinal]), interface.elements.count, nil)
+        }
+
+        guard candidates.count == 1 else {
+            return (
+                interface,
+                nil,
+                "get_interface root matched \(candidates.count) nodes; add root.ordinal 0...\(candidates.count - 1) or refine root. Candidates: \(candidates.diagnosticList)"
+            )
+        }
+        return (interface.projecting(root: candidates[0]), interface.elements.count, nil)
     }
 
     // MARK: - Handler: Screen

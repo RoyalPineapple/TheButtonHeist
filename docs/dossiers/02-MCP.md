@@ -72,8 +72,9 @@ ButtonHeistMCP exposes 24 tools. The authoritative list and parameter schemas li
 
 ### `get_interface`
 - `scope`: omit for the app accessibility state; `"visible"` requests fresh on-screen geometry diagnostics
+- `root`: optional projection selector. `heistId` selects one leaf; `stableId`, `type`, `label`, `value`, `identifier`, or `modal` can select a container. Ambiguous roots require `ordinal`.
 - `detail`: `"summary"` (default — identity fields, traits, and actions only) or `"full"` (adds VoiceOver hint, customContent, frame, and activation point)
-- `elements`: optional `[String]` — heistIds to filter; omit for the app accessibility hierarchy
+- `elements`: optional `[String]` — leaf heistIds to project as roots; omit for the app accessibility hierarchy
 - `readOnlyHint: true`, `idempotentHint: true`
 
 ### Shared `expect` Property

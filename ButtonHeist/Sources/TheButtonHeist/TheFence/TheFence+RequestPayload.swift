@@ -33,8 +33,27 @@ extension TheFence {
     struct GetInterfaceRequest {
         let scope: GetInterfaceScope
         let detail: InterfaceDetail
+        let root: InterfaceRootSelector?
         let matcher: ElementMatcher
         let elementIds: [String]?
+    }
+
+    struct InterfaceRootSelector {
+        let heistId: String?
+        let stableId: String?
+        let type: InterfaceRootContainerType?
+        let matcher: ElementMatcher
+        let modal: Bool?
+        let ordinal: Int?
+
+        var hasPredicates: Bool {
+            stableId?.isEmpty == false || type != nil || matcher.hasPredicates ||
+                heistId?.isEmpty == false || modal != nil
+        }
+
+        var label: String? { matcher.label }
+        var value: String? { matcher.value }
+        var identifier: String? { matcher.identifier }
     }
 
     struct ArtifactRequest {

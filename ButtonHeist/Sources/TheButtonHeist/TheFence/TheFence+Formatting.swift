@@ -8,6 +8,16 @@ public enum InterfaceDetail: String, CaseIterable, Sendable {
     case full
 }
 
+/// Container type names accepted by get_interface root projection selectors.
+public enum InterfaceRootContainerType: String, CaseIterable, Sendable {
+    case semanticGroup
+    case list
+    case landmark
+    case dataTable
+    case tabBar
+    case scrollable
+}
+
 /// Capture scope for get_interface.
 ///
 /// Omitted scope captures the app accessibility hierarchy. The only wire value
