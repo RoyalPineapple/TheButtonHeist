@@ -2,7 +2,40 @@ import Foundation
 
 extension TheFence {
 
-    func decodeRecordingConfig(_ request: [String: Any]) throws -> RecordingConfig {
+    func decodeSessionPayload(
+        command: Command,
+        request: [String: Any]
+    ) throws -> RequestPayload {
+        switch command {
+        case .startRecording:
+            return .startRecording(try decodeRecordingConfig(request))
+        case .runBatch:
+            return .runBatch(try decodeRunBatchRequest(request))
+        case .connect:
+            return .connect(try decodeConnectRequest(request))
+        case .archiveSession:
+            return .archiveSession(ArchiveSessionRequest(
+                deleteSource: try request.schemaBoolean("delete_source") ?? false
+            ))
+        case .startHeist:
+            return .startHeist(StartHeistRequest(
+                app: try request.schemaString("app") ?? "com.buttonheist.testapp",
+                identifier: try request.schemaString("identifier") ?? "heist"
+            ))
+        case .stopHeist:
+            return .stopHeist(StopHeistRequest(
+                outputPath: try request.requiredSchemaString("output")
+            ))
+        case .playHeist:
+            return .playHeist(PlayHeistRequest(
+                inputPath: try request.requiredSchemaString("input")
+            ))
+        default:
+            throw FenceError.invalidRequest("Unexpected session command: \(command.rawValue)")
+        }
+    }
+
+    private func decodeRecordingConfig(_ request: [String: Any]) throws -> RecordingConfig {
         let fps = try request.schemaInteger("fps")
         if let fps, fps < 1 || fps > 15 {
             throw SchemaValidationError(field: "fps", observed: fps, expected: "integer in 1...15")
@@ -19,7 +52,7 @@ extension TheFence {
         )
     }
 
-    func decodeRunBatchRequest(_ request: [String: Any]) throws -> RunBatchRequest {
+    private func decodeRunBatchRequest(_ request: [String: Any]) throws -> RunBatchRequest {
         let rawSteps = try request.requiredSchemaDictionaryArray("steps")
         guard !rawSteps.isEmpty else {
             throw SchemaValidationError(
@@ -36,7 +69,7 @@ extension TheFence {
         )
     }
 
-    func decodeConnectRequest(_ request: [String: Any]) throws -> ConnectRequest {
+    private func decodeConnectRequest(_ request: [String: Any]) throws -> ConnectRequest {
         ConnectRequest(
             targetName: try request.schemaString("target"),
             device: try request.schemaString("device"),

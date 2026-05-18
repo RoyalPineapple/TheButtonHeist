@@ -4,7 +4,24 @@ import TheScore
 
 extension TheFence {
 
-    func decodeGetInterfaceRequest(_ request: [String: Any]) throws -> GetInterfaceRequest {
+    func decodeObservationPayload(
+        command: Command,
+        request: [String: Any],
+        requestId: String
+    ) throws -> RequestPayload {
+        switch command {
+        case .getInterface:
+            return .getInterface(try decodeGetInterfaceRequest(request))
+        case .getScreen, .stopRecording:
+            return .artifact(try decodeArtifactRequest(request, requestId: requestId))
+        case .waitForChange:
+            return .waitForChange(try parseExpectationPayload(request))
+        default:
+            throw FenceError.invalidRequest("Unexpected observation command: \(command.rawValue)")
+        }
+    }
+
+    private func decodeGetInterfaceRequest(_ request: [String: Any]) throws -> GetInterfaceRequest {
         GetInterfaceRequest(
             scope: try decodeGetInterfaceScope(request),
             detail: try request.schemaEnum("detail", as: InterfaceDetail.self) ?? .summary,
@@ -13,7 +30,7 @@ extension TheFence {
         )
     }
 
-    func decodeArtifactRequest(
+    private func decodeArtifactRequest(
         _ request: [String: Any],
         requestId: String
     ) throws -> ArtifactRequest {

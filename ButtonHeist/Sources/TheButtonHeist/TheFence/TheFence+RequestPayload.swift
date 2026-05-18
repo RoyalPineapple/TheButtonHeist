@@ -154,56 +154,18 @@ extension TheFence {
         case .help, .status, .quit, .exit, .listDevices, .getPasteboard,
              .dismissKeyboard, .getSessionState, .listTargets, .getSessionLog:
             return .none
-        case .getInterface:
-            return .getInterface(try decodeGetInterfaceRequest(request))
-        case .getScreen, .stopRecording:
-            return .artifact(try decodeArtifactRequest(request, requestId: requestId))
-        case .waitForChange:
-            return .waitForChange(try parseExpectationPayload(request))
+        case .getInterface, .getScreen, .stopRecording, .waitForChange:
+            return try decodeObservationPayload(command: command, request: request, requestId: requestId)
         case .oneFingerTap, .longPress, .swipe, .drag, .pinch, .rotate,
              .twoFingerTap, .drawPath, .drawBezier:
-            return .gesture(try decodeGesturePayload(command: command, request: request))
-        case .scroll, .scrollToVisible, .elementSearch, .scrollToEdge:
-            return .scroll(try decodeScrollPayload(command: command, request: request))
-        case .activate, .increment, .decrement, .performCustomAction:
-            return .accessibility(try decodeAccessibilityPayload(command: command, request: request))
-        case .rotor:
-            return .rotor(try decodeRotorTarget(request))
-        case .typeText:
-            return .typeText(try decodeTypeTextTarget(request))
-        case .editAction:
-            return .editAction(EditActionTarget(
-                action: try request.requiredSchemaEnum("action", as: EditAction.self)
-            ))
-        case .setPasteboard:
-            return .setPasteboard(SetPasteboardTarget(
-                text: try request.requiredSchemaString("text")
-            ))
-        case .waitFor:
-            return .waitFor(try decodeWaitForTarget(request))
-        case .startRecording:
-            return .startRecording(try decodeRecordingConfig(request))
-        case .runBatch:
-            return .runBatch(try decodeRunBatchRequest(request))
-        case .connect:
-            return .connect(try decodeConnectRequest(request))
-        case .archiveSession:
-            return .archiveSession(ArchiveSessionRequest(
-                deleteSource: try request.schemaBoolean("delete_source") ?? false
-            ))
-        case .startHeist:
-            return .startHeist(StartHeistRequest(
-                app: try request.schemaString("app") ?? "com.buttonheist.testapp",
-                identifier: try request.schemaString("identifier") ?? "heist"
-            ))
-        case .stopHeist:
-            return .stopHeist(StopHeistRequest(
-                outputPath: try request.requiredSchemaString("output")
-            ))
-        case .playHeist:
-            return .playHeist(PlayHeistRequest(
-                inputPath: try request.requiredSchemaString("input")
-            ))
+            return try decodeGestureRequestPayload(command: command, request: request)
+        case .scroll, .scrollToVisible, .elementSearch, .scrollToEdge,
+             .activate, .increment, .decrement, .performCustomAction,
+             .rotor, .typeText, .editAction, .setPasteboard, .waitFor:
+            return try decodeElementActionPayload(command: command, request: request)
+        case .startRecording, .runBatch, .connect, .archiveSession, .startHeist,
+             .stopHeist, .playHeist:
+            return try decodeSessionPayload(command: command, request: request)
         }
     }
 }

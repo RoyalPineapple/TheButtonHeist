@@ -4,7 +4,35 @@ import TheScore
 
 extension TheFence {
 
-    func decodeScrollPayload(
+    func decodeElementActionPayload(
+        command: Command,
+        request: [String: Any]
+    ) throws -> RequestPayload {
+        switch command {
+        case .scroll, .scrollToVisible, .elementSearch, .scrollToEdge:
+            return .scroll(try decodeScrollPayload(command: command, request: request))
+        case .activate, .increment, .decrement, .performCustomAction:
+            return .accessibility(try decodeAccessibilityPayload(command: command, request: request))
+        case .rotor:
+            return .rotor(try decodeRotorTarget(request))
+        case .typeText:
+            return .typeText(try decodeTypeTextTarget(request))
+        case .editAction:
+            return .editAction(EditActionTarget(
+                action: try request.requiredSchemaEnum("action", as: EditAction.self)
+            ))
+        case .setPasteboard:
+            return .setPasteboard(SetPasteboardTarget(
+                text: try request.requiredSchemaString("text")
+            ))
+        case .waitFor:
+            return .waitFor(try decodeWaitForTarget(request))
+        default:
+            throw FenceError.invalidRequest("Unexpected element action command: \(command.rawValue)")
+        }
+    }
+
+    private func decodeScrollPayload(
         command: Command,
         request: [String: Any]
     ) throws -> ScrollPayload {
@@ -35,7 +63,7 @@ extension TheFence {
         }
     }
 
-    func decodeAccessibilityPayload(
+    private func decodeAccessibilityPayload(
         command: Command,
         request: [String: Any]
     ) throws -> AccessibilityPayload {
@@ -68,7 +96,7 @@ extension TheFence {
         }
     }
 
-    func decodeRotorTarget(_ request: [String: Any]) throws -> RotorTarget {
+    private func decodeRotorTarget(_ request: [String: Any]) throws -> RotorTarget {
         guard let target = try elementTarget(request) else {
             throw MissingElementTarget(command: Command.rotor.rawValue)
         }
@@ -107,7 +135,7 @@ extension TheFence {
         )
     }
 
-    func decodeTypeTextTarget(_ request: [String: Any]) throws -> TypeTextTarget {
+    private func decodeTypeTextTarget(_ request: [String: Any]) throws -> TypeTextTarget {
         let text = try request.requiredSchemaString("text")
         if text.isEmpty {
             throw SchemaValidationError(field: "text", observed: text as Any, expected: "non-empty string")
@@ -118,7 +146,7 @@ extension TheFence {
         )
     }
 
-    func decodeWaitForTarget(_ request: [String: Any]) throws -> WaitForTarget {
+    private func decodeWaitForTarget(_ request: [String: Any]) throws -> WaitForTarget {
         guard let target = try elementTarget(request) else {
             throw MissingElementTarget(command: Command.waitFor.rawValue)
         }
