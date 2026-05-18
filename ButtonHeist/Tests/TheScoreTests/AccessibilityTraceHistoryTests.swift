@@ -133,27 +133,37 @@ final class AccessibilityTraceHistoryTests: XCTestCase {
         XCTAssertEqual(history.captures[2].parentHash, history.captures[1].hash)
     }
 
-    func testPruneRetainingRefsRelinksRetainedCapturesWithoutInvalidatingRefs() {
+    func testPendingTraceViewsAreDerivedFromRetainedCaptures() throws {
         var history = AccessibilityTrace.History(retention: .dropAfterDelivery)
-        _ = history.append(interface: makeInterface(label: "Home"))
-        let retainedRef = history.append(interface: makeInterface(label: "Menu"))
-        let droppedRef = history.append(interface: makeInterface(label: "Review"))
-        let latestRef = history.append(interface: makeInterface(label: "Checkout"))
+        let sourceTrace = makeTrace(before: "Menu", after: "Checkout")
 
-        history.prune(retaining: [retainedRef])
+        let pending = try XCTUnwrap(history.enqueuePendingTrace(sourceTrace, limit: 20))
 
-        XCTAssertEqual(history.captures.map(\.hash), [retainedRef.hash, latestRef.hash])
-        XCTAssertEqual(history.captures.map(\.sequence), [retainedRef.sequence, latestRef.sequence])
-        XCTAssertNil(history.captures[0].parentHash)
-        XCTAssertEqual(history.captures[1].parentHash, history.captures[0].hash)
-        XCTAssertEqual(history.capture(ref: retainedRef), history.captures[0])
-        XCTAssertNil(history.capture(ref: droppedRef))
-        XCTAssertEqual(history.capture(ref: latestRef), history.captures[1])
+        XCTAssertEqual(history.pendingTraceCount, 1)
+        XCTAssertEqual(pending.index, 0)
+        XCTAssertEqual(pending.cursor, history.pendingCursor(at: 0))
+        XCTAssertEqual(pending.trace, history.pendingTrace(at: 0)?.trace)
+        XCTAssertEqual(pending.delta, pending.trace.backgroundDelta)
+        XCTAssertEqual(pending.trace.captures.map(\.hash), sourceTrace.captures.map(\.hash))
+        XCTAssertEqual(history.elementLookup(captureRef: pending.firstRef)["title"]?.label, "Menu")
     }
 
-    func testPendingCursorIsDrainedAsProjectionAndMarksDelivered() throws {
+    func testPendingTraceLimitDropsOldestButRetainsLatestPendingTrace() throws {
         var history = AccessibilityTrace.History(retention: .dropAfterDelivery)
-        let pendingTrace = AccessibilityTrace(captures: [
+        let first = try XCTUnwrap(history.enqueuePendingTrace(makeTrace(before: "Home", after: "Menu"), limit: 1))
+        let second = try XCTUnwrap(history.enqueuePendingTrace(makeTrace(before: "Review", after: "Checkout"), limit: 1))
+
+        XCTAssertEqual(history.pendingTraceCount, 1)
+        XCTAssertNil(first.firstRef.flatMap { history.capture(ref: $0) })
+        XCTAssertNil(first.lastRef.flatMap { history.capture(ref: $0) })
+        XCTAssertEqual(history.pendingTrace(at: 0)?.trace.captures.map(\.hash), second.trace.captures.map(\.hash))
+        XCTAssertEqual(history.latestRef, second.lastRef)
+        XCTAssertEqual(history.captures.map(\.hash), second.trace.captures.map(\.hash))
+    }
+
+    func testPendingTraceIsDrainedAsProjectionAndMarksDelivered() throws {
+        var history = AccessibilityTrace.History(retention: .dropAfterDelivery)
+        let sourceTrace = AccessibilityTrace(captures: [
             AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Loading")),
             AccessibilityTrace.Capture(
                 sequence: 2,
@@ -162,18 +172,17 @@ final class AccessibilityTraceHistoryTests: XCTestCase {
             ),
         ])
 
-        let cursor = try XCTUnwrap(history.ingestPending(pendingTrace))
+        let pendingTrace = try XCTUnwrap(history.enqueuePendingTrace(sourceTrace))
         let drained = try XCTUnwrap(history.drainPendingTrace())
 
-        XCTAssertEqual(drained.captures.map(\.hash), cursor.captureRefs.map(\.hash))
-        XCTAssertEqual(history.pendingCursorCount, 0)
-        XCTAssertEqual(history.deliveredRef, cursor.last)
-        XCTAssertEqual(history.captures.map(\.hash), [try XCTUnwrap(cursor.last).hash])
+        XCTAssertEqual(drained.captures.map(\.hash), pendingTrace.cursor.captureRefs.map(\.hash))
+        XCTAssertEqual(history.pendingTraceCount, 0)
+        XCTAssertEqual(history.captures.map(\.hash), [try XCTUnwrap(pendingTrace.lastRef).hash])
     }
 
-    func testPruneRetainsPendingCursorRefsWithoutExternalRetainedSet() throws {
+    func testRetentionRetainsPendingTraceRefsWithoutExternalRetainedSet() throws {
         var history = AccessibilityTrace.History(retention: .dropAfterDelivery)
-        let pendingTrace = AccessibilityTrace(captures: [
+        let sourceTrace = AccessibilityTrace(captures: [
             AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu")),
             AccessibilityTrace.Capture(
                 sequence: 2,
@@ -182,42 +191,40 @@ final class AccessibilityTraceHistoryTests: XCTestCase {
             ),
         ])
 
-        let cursor = try XCTUnwrap(history.ingestPending(pendingTrace))
-        history.prune()
-        let projectedTrace = try XCTUnwrap(history.trace(cursor: cursor))
+        let pendingTrace = try XCTUnwrap(history.enqueuePendingTrace(sourceTrace))
+        let projectedTrace = try XCTUnwrap(history.trace(cursor: pendingTrace.cursor))
 
-        XCTAssertEqual(projectedTrace.captures.map(\.hash), cursor.captureRefs.map(\.hash))
-        XCTAssertEqual(history.pendingCursorCount, 1)
-        XCTAssertEqual(history.pendingCursors(startingAt: 0).map(\.index), [0])
+        XCTAssertEqual(projectedTrace.captures.map(\.hash), pendingTrace.cursor.captureRefs.map(\.hash))
+        XCTAssertEqual(history.pendingTraceCount, 1)
+        XCTAssertEqual(history.pendingTraces(startingAt: 0).map(\.index), [0])
     }
 
-    func testPendingCursorLimitDropsOldestBoundary() throws {
+    func testPendingTraceLimitDropsOldestBoundary() throws {
         var history = AccessibilityTrace.History(retention: .dropAfterDelivery)
-        let firstCursor = try XCTUnwrap(history.ingestPending(
+        let firstPendingTrace = try XCTUnwrap(history.enqueuePendingTrace(
             AccessibilityTrace(first: makeInterface(label: "First")),
             limit: 1
         ))
-        let secondCursor = try XCTUnwrap(history.ingestPending(
+        let secondPendingTrace = try XCTUnwrap(history.enqueuePendingTrace(
             AccessibilityTrace(first: makeInterface(label: "Second")),
             limit: 1
         ))
 
-        XCTAssertEqual(history.pendingCursorCount, 1)
-        XCTAssertNil(history.trace(cursor: firstCursor))
-        XCTAssertNotNil(history.trace(cursor: secondCursor))
+        XCTAssertEqual(history.pendingTraceCount, 1)
+        XCTAssertNil(history.trace(cursor: firstPendingTrace.cursor))
+        XCTAssertNotNil(history.trace(cursor: secondPendingTrace.cursor))
     }
 
     func testResetClearsEverything() {
         var history = AccessibilityTrace.History()
         let ref = history.append(interface: makeInterface(label: "Home"))
-        _ = history.ingestPending(AccessibilityTrace(first: makeInterface(label: "Pending")))
+        _ = history.enqueuePendingTrace(AccessibilityTrace(first: makeInterface(label: "Pending")))
         history.markDelivered(through: ref)
 
         history.reset()
 
         XCTAssertTrue(history.captures.isEmpty)
-        XCTAssertEqual(history.pendingCursorCount, 0)
-        XCTAssertNil(history.deliveredRef)
+        XCTAssertEqual(history.pendingTraceCount, 0)
         XCTAssertNil(history.latestCapture)
         XCTAssertNil(history.latestRef)
         XCTAssertNil(history.capture(ref: ref))
@@ -244,6 +251,13 @@ final class AccessibilityTraceHistoryTests: XCTestCase {
         Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [
             .element(makeElement(heistId: "title", label: label, traits: [.header])),
             .element(makeElement(heistId: "save", label: "Save")),
+        ])
+    }
+
+    private func makeTrace(before: String, after: String) -> AccessibilityTrace {
+        AccessibilityTrace(captures: [
+            AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: before)),
+            AccessibilityTrace.Capture(sequence: 2, interface: makeInterface(label: after)),
         ])
     }
 

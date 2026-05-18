@@ -443,8 +443,8 @@ public final class TheFence {
     var playbackPhase: PlaybackPhase = .idle
 
     /// Fence-owned accessibility capture history. Captures are the retained
-    /// source of truth; element lookup dictionaries are derived locally from a
-    /// specific capture when validation or recording needs one.
+    /// source of truth; pending trace and lookup views are derived locally from
+    /// retained captures when validation or recording needs them.
     private var accessibilityHistory = AccessibilityTrace.History(retention: .dropAfterDelivery)
 
     // MARK: - Pending Request Tracking
@@ -558,7 +558,7 @@ public final class TheFence {
     }
 
     func clearClientSessionState(error: Error) {
-        accessibilityHistory.removeAll()
+        accessibilityHistory.reset()
         accessibilityHistory.retention = .dropAfterDelivery
         lastActionHistory = .unrun
         lastLatencyMs = 0
@@ -584,10 +584,17 @@ public final class TheFence {
         }
     }
 
+    /// Bounded FIFO of background accessibility trace boundaries received from the server.
+    ///
+    /// `AccessibilityTrace.History` owns the refs. `TheFence` asks for pending
+    /// trace projections when draining or checking expectations.
     private static let maxBackgroundAccessibilityCursors = 20
 
     private func enqueueBackgroundAccessibilityTrace(_ trace: AccessibilityTrace) {
-        accessibilityHistory.ingestPending(trace, limit: Self.maxBackgroundAccessibilityCursors)
+        accessibilityHistory.enqueuePendingTrace(
+            trace,
+            limit: Self.maxBackgroundAccessibilityCursors
+        )
     }
 
     /// Return and clear the oldest queued background accessibility trace, if any.
@@ -667,8 +674,8 @@ public final class TheFence {
             return backgroundResponse.response
         }
 
-        let preDispatchBackgroundCount = accessibilityHistory.pendingCursorCount
-        let preDispatchCaptureRef = accessibilityHistory.latestCaptureRef
+        let preDispatchBackgroundCount = accessibilityHistory.pendingTraceCount
+        let preDispatchCaptureRef = accessibilityHistory.latestRef
         let dispatched = try await dispatchCommand(parsed)
         lastLatencyMs = dispatched.durationMs
         logResponse(requestId: parsed.requestId, response: dispatched.response, durationMs: dispatched.durationMs)
@@ -807,7 +814,7 @@ public final class TheFence {
         preDispatchCaptureRef: AccessibilityTrace.CaptureRef?
     ) -> PostDispatchOutcome {
         if let fullInterface = fullInterfaceCapture(from: response, parsed: parsed) {
-            let captureRef = accessibilityHistory.append(fullInterface)
+            let captureRef = accessibilityHistory.append(interface: fullInterface)
             return PostDispatchOutcome(
                 preActionCaptureRef: nil,
                 recordingLookupCaptureRef: nil,
@@ -864,9 +871,9 @@ public final class TheFence {
     ) -> BackgroundExpectationResponse? {
         guard let expectation else { return nil }
 
-        var matched: (index: Int, result: ActionResult, validation: ExpectationResult)?
-        for (index, cursor) in accessibilityHistory.pendingCursors(startingAt: startIndex) {
-            guard let trace = accessibilityHistory.trace(cursor: cursor) else { continue }
+        var matched: (pendingTrace: AccessibilityTrace.PendingTrace, result: ActionResult, validation: ExpectationResult)?
+        for pendingTrace in accessibilityHistory.pendingTraces(startingAt: startIndex) {
+            let trace = pendingTrace.trace
             guard trace.backgroundDelta != nil else { continue }
             let syntheticResult = ActionResult(
                 success: true,
@@ -876,19 +883,21 @@ public final class TheFence {
             )
             let validation = expectation.validate(
                 against: syntheticResult,
-                preActionElements: elementLookup(captureRef: cursor.first)
+                preActionElements: accessibilityHistory.elementLookup(captureRef: pendingTrace.firstRef)
             )
             if validation.met {
-                matched = (index, syntheticResult, validation)
+                matched = (pendingTrace, syntheticResult, validation)
                 break
             }
         }
 
         guard let matched else { return nil }
-        let cursor = accessibilityHistory.removePendingCursor(at: matched.index)
+        guard let pendingTrace = accessibilityHistory.removePendingTrace(at: matched.pendingTrace.index) else {
+            return nil
+        }
         let response = FenceResponse.action(result: matched.result, expectation: matched.validation)
         logResponse(requestId: requestId, response: response, durationMs: 0)
-        return BackgroundExpectationResponse(response: response, deliveredCaptureRef: cursor?.last)
+        return BackgroundExpectationResponse(response: response, deliveredCaptureRef: pendingTrace.lastRef)
     }
 
     private func ensureConnectedIfNeeded(for command: Command) async throws {
@@ -984,7 +993,7 @@ public final class TheFence {
                         deliveredCaptureRef: nil
                     )
                 }
-                let preActionElements = elementLookup(captureRef: preActionCaptureRef)
+                let preActionElements = accessibilityHistory.elementLookup(captureRef: preActionCaptureRef)
                 let validation = expectation.validate(
                     against: actionResult, preActionElements: preActionElements
                 )
@@ -1077,18 +1086,6 @@ public final class TheFence {
         return accessibilityHistory.ingest(trace)
     }
 
-    private func elementLookup(
-        captureRef: AccessibilityTrace.CaptureRef?
-    ) -> [String: HeistElement] {
-        guard let captureRef,
-              let capture = accessibilityHistory.capture(ref: captureRef) else {
-            return [:]
-        }
-        return capture.interface.elements.reduce(into: [String: HeistElement]()) { partialResult, element in
-            partialResult[element.heistId] = element
-        }
-    }
-
     private func finishAccessibilityDelivery(_ captureRef: AccessibilityTrace.CaptureRef?) {
         accessibilityHistory.markDelivered(through: captureRef)
     }
@@ -1099,7 +1096,6 @@ public final class TheFence {
 
     func endRecordingAccessibilityHistoryRetention() {
         accessibilityHistory.retention = .dropAfterDelivery
-        accessibilityHistory.prune()
     }
 
     private func connect() async throws {
