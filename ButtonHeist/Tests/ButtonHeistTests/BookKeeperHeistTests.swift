@@ -379,8 +379,7 @@ final class BookKeeperHeistTests: XCTestCase {
 
         let first = makeElement(heistId: "anonymous_1")
         let second = makeElement(heistId: "anonymous_2")
-        bookKeeper.recordHeistEvidence(
-            command: .activate,
+        recordHeistEvidence(bookKeeper, command: .activate,
             args: [
                 "command": "activate",
                 "heistId": "anonymous_2",
