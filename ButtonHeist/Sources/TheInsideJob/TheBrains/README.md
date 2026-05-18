@@ -49,7 +49,7 @@ TheBrains keeps the post-action delta cycle, dispatch, wait handlers, response s
 
 6. **`Navigation+Explore.swift`** — `exploreAndPrune()` builds a local `var union: Screen`, runs `exploreScreen()`, then writes `stash.currentScreen = union`. Per container: scrolls to leading edge → pages through accumulating elements via `reconcilePage` → restores visual origin for `UIScrollView` targets. Exploration uses `ScrollableTarget` so non-`UIScrollView` containers use swipe fallback. `ScreenManifest` bookkeeping lives in `Navigation.swift`.
 
-7. **`ActionResultBuilder.swift`** — Assembles `ActionResult` from method + snapshot. Two init paths (from `[ScreenElement]` or explicit screenName/Id). Two terminal methods: `success(scrollSearchResult:exploreResult:)` and `failure(errorKind:)`.
+7. **`ActionResultBuilder.swift`** — Assembles `ActionResult` from method + snapshot/capture. Three init paths (from `[ScreenElement]`, `AccessibilityTrace.Capture`, or explicit screenName/Id). Two terminal methods: `success(payload:)` and `failure(errorKind:payload:)`.
 
 > Full dossier: [`docs/dossiers/13-THEBRAINS.md`](../../../../docs/dossiers/13-THEBRAINS.md)
 

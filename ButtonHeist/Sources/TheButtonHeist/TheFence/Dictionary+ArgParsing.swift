@@ -55,7 +55,7 @@ public struct SchemaValidationError: Error, LocalizedError, Equatable, Sendable 
 }
 
 /// Type-safe accessors for `[String: Any]` dictionaries from CLI/MCP argument parsing.
-/// Converts loosely-typed JSON values (String, Int, Double, Bool) at the system boundary.
+/// Keeps JSON types strict at the system boundary so hostile coercions fail closed.
 extension Dictionary where Key == String, Value == Any {
 
     func string(_ key: String) -> String? {
@@ -63,16 +63,19 @@ extension Dictionary where Key == String, Value == Any {
     }
 
     func integer(_ key: String) -> Int? {
-        if let value = self[key] as? Int { return value }
-        if let value = self[key] as? Double { return Int(value) }
-        if let value = self[key] as? String { return Int(value) }
+        guard let value = self[key] else { return nil }
+        if value is Bool { return nil }
+        if let value = value as? Int { return value }
+        if let value = value as? Double,
+           value.isFinite,
+           let intValue = Int(exactly: value) {
+            return intValue
+        }
         return nil
     }
 
     func boolean(_ key: String) -> Bool? {
         if let value = self[key] as? Bool { return value }
-        if let value = self[key] as? Int { return value != 0 }
-        if let value = self[key] as? String { return value == "true" || value == "1" }
         return nil
     }
 
@@ -81,9 +84,9 @@ extension Dictionary where Key == String, Value == Any {
     }
 
     func number(_ value: Any?) -> Double? {
-        if let value = value as? Double { return value }
+        if value is Bool { return nil }
+        if let value = value as? Double, value.isFinite { return value }
         if let value = value as? Int { return Double(value) }
-        if let value = value as? String { return Double(value) }
         return nil
     }
 
@@ -91,6 +94,7 @@ extension Dictionary where Key == String, Value == Any {
         guard let dictionary = self[key] as? [String: Any],
               let x = dictionary.number("x"),
               let y = dictionary.number("y") else { return nil }
+        guard (0...1).contains(x), (0...1).contains(y) else { return nil }
         return UnitPoint(x: x, y: y)
     }
 
@@ -190,6 +194,12 @@ extension Dictionary where Key == String, Value == Any {
         }
         guard let y = try dictionary.schemaNumber("y") else {
             throw SchemaValidationError(field: "\(key).y", observed: nil, expected: "number")
+        }
+        guard (0...1).contains(x) else {
+            throw SchemaValidationError(field: "\(key).x", observed: x, expected: "number in 0...1")
+        }
+        guard (0...1).contains(y) else {
+            throw SchemaValidationError(field: "\(key).y", observed: y, expected: "number in 0...1")
         }
         return UnitPoint(x: x, y: y)
     }

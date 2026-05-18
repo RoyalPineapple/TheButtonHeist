@@ -22,22 +22,22 @@ struct CommandReceipt {
                   let accessibilityDelta = settle.accessibilityDelta else {
                 var builder = ActionResultBuilder(method: attempt.method, snapshot: before.snapshot)
                 builder.message = attempt.message
-                builder.value = attempt.value
-                return builder.failure(errorKind: .actionFailed)
+                return builder.failure(errorKind: .actionFailed, payload: attempt.payload)
             }
             var builder = ActionResultBuilder(method: attempt.method, capture: postCapture)
             builder.message = attempt.message
-            builder.value = attempt.value
             builder.accessibilityDelta = accessibilityDelta
             builder.accessibilityTrace = settle.accessibilityTrace
             builder.settled = settle.didSettle
             builder.settleTimeMs = settle.timeMs
-            return builder.success(rotorResult: attempt.rotorResult)
+            return builder.success(payload: attempt.payload)
         case .failed, .skipped:
             var builder = ActionResultBuilder(method: attempt.method, snapshot: before.snapshot)
             builder.message = attempt.message
-            builder.value = attempt.value
-            return builder.failure(errorKind: attempt.errorKind ?? Self.defaultFailureKind(for: attempt.method))
+            return builder.failure(
+                errorKind: attempt.errorKind ?? Self.defaultFailureKind(for: attempt.method),
+                payload: attempt.payload
+            )
         }
     }
 
@@ -57,22 +57,19 @@ struct CommandAttempt {
     let deliveryPhase: DeliveryPhase
     let method: ActionMethod
     let message: String?
-    let value: String?
-    let rotorResult: RotorResult?
+    let payload: ResultPayload?
     let errorKind: ErrorKind?
 
     static func delivered(
         method: ActionMethod,
         message: String? = nil,
-        value: String? = nil,
-        rotorResult: RotorResult? = nil
+        payload: ResultPayload? = nil
     ) -> CommandAttempt {
         CommandAttempt(
             deliveryPhase: .delivered,
             method: method,
             message: message,
-            value: value,
-            rotorResult: rotorResult,
+            payload: payload,
             errorKind: nil
         )
     }
@@ -80,15 +77,14 @@ struct CommandAttempt {
     static func failed(
         method: ActionMethod,
         message: String? = nil,
-        value: String? = nil,
+        payload: ResultPayload? = nil,
         errorKind: ErrorKind? = nil
     ) -> CommandAttempt {
         CommandAttempt(
             deliveryPhase: .failed,
             method: method,
             message: message,
-            value: value,
-            rotorResult: nil,
+            payload: payload,
             errorKind: errorKind
         )
     }
@@ -96,15 +92,14 @@ struct CommandAttempt {
     static func skipped(
         method: ActionMethod,
         message: String? = nil,
-        value: String? = nil,
+        payload: ResultPayload? = nil,
         errorKind: ErrorKind? = nil
     ) -> CommandAttempt {
         CommandAttempt(
             deliveryPhase: .skipped,
             method: method,
             message: message,
-            value: value,
-            rotorResult: nil,
+            payload: payload,
             errorKind: errorKind
         )
     }

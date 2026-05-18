@@ -143,8 +143,7 @@ final class TheBrains {
         success: Bool,
         method: ActionMethod,
         message: String? = nil,
-        value: String? = nil,
-        rotorResult: RotorResult? = nil,
+        payload: ResultPayload? = nil,
         errorKind: ErrorKind? = nil,
         before: BeforeState
     ) async -> ActionResult {
@@ -154,8 +153,7 @@ final class TheBrains {
                     ? .elementNotFound : .actionFailed)
             var builder = ActionResultBuilder(method: method, snapshot: before.snapshot)
             builder.message = message
-            builder.value = value
-            return builder.failure(errorKind: kind)
+            return builder.failure(errorKind: kind, payload: payload)
         }
 
         let start = CFAbsoluteTimeGetCurrent()
@@ -168,10 +166,9 @@ final class TheBrains {
         if case .cancelled(let cancelMs) = settleResult.outcome {
             var builder = ActionResultBuilder(method: method, snapshot: before.snapshot)
             builder.message = "cancelled after \(cancelMs)ms"
-            builder.value = value
             builder.settled = false
             builder.settleTimeMs = cancelMs
-            return builder.failure(errorKind: .actionFailed)
+            return builder.failure(errorKind: .actionFailed, payload: payload)
         }
         logSettleOutcome(settleResult.outcome, events: settleResult.events)
 
@@ -229,8 +226,7 @@ final class TheBrains {
             attempt: .delivered(
                 method: method,
                 message: message,
-                value: value,
-                rotorResult: rotorResult
+                payload: payload
             ),
             settle: SettleReceipt(
                 outcome: settleResult.outcome,

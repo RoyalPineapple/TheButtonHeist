@@ -86,8 +86,8 @@ extension TheBrains {
             success: result.success,
             method: result.method,
             message: result.message,
-            value: result.value,
-            rotorResult: result.rotorResult,
+            payload: result.payload,
+            errorKind: Self.actionErrorKind(for: result),
             before: before
         )
     }
@@ -111,7 +111,8 @@ extension TheBrains {
             success: result.success,
             method: result.method,
             message: result.message,
-            value: result.value,
+            payload: result.payload,
+            errorKind: Self.actionErrorKind(for: result),
             before: before
         )
     }
@@ -127,18 +128,14 @@ extension TheBrains {
         let before = captureBeforeState()
         let result = await navigation.executeElementSearch(target)
 
-        var enriched = await actionResultWithDelta(
+        return await actionResultWithDelta(
             success: result.success,
             method: result.method,
             message: result.message,
-            value: result.value,
+            payload: result.payload,
             errorKind: result.success ? nil : .elementNotFound,
             before: before
         )
-        if let scrollSearch = result.scrollSearchResult {
-            enriched.payload = .scrollSearch(scrollSearch)
-        }
-        return enriched
     }
 
     private func recordedScreenIfFreshParseStillMatches(_ screenBeforeRefresh: Screen) -> Screen? {
@@ -166,6 +163,7 @@ extension TheBrains {
             success: result.success,
             method: .waitFor,
             message: result.message,
+            payload: result.payload,
             errorKind: errorKind,
             before: before
         )
@@ -214,19 +212,14 @@ extension TheBrains {
     ) -> TheSafecracker.InteractionResult? {
         switch (absent, resolution) {
         case (true, .notFound):
-            return .init(
-                success: true,
-                method: .waitFor,
-                message: "absent confirmed after \(elapsed ?? "0.0")s",
-                value: nil
-            )
+            return .success(method: .waitFor, message: "absent confirmed after \(elapsed ?? "0.0")s")
         case (true, .ambiguous(_, let diagnostics)):
             return .failure(.waitFor, message: diagnostics)
         case (true, .resolved):
             return nil
         case (false, .resolved):
             let message = elapsed.map { "matched after \($0)s" } ?? "matched immediately"
-            return .init(success: true, method: .waitFor, message: message, value: nil)
+            return .success(method: .waitFor, message: message)
         case (false, .ambiguous(_, let diagnostics)):
             return .failure(.waitFor, message: diagnostics)
         case (false, .notFound):
@@ -282,8 +275,26 @@ extension TheBrains {
             return .actionFailed
         case .timeout:
             return .timeout
+        case .inputValidation:
+            return .validationError
         case .none:
             return .elementNotFound
+        }
+    }
+
+    static func actionErrorKind(for result: TheSafecracker.InteractionResult) -> ErrorKind? {
+        guard !result.success else { return nil }
+        switch result.failureKind {
+        case .treeUnavailable:
+            return .actionFailed
+        case .timeout:
+            return .timeout
+        case .inputValidation:
+            return .validationError
+        case .none:
+            return (result.method == .elementNotFound || result.method == .elementDeallocated)
+                ? .elementNotFound
+                : .actionFailed
         }
     }
 
@@ -320,12 +331,12 @@ extension TheBrains {
         builder.accessibilityDelta = delta
         builder.accessibilityTrace = accessibilityTrace
         return builder.success(
-            exploreResult: ExploreResult(
+            payload: .explore(ExploreResult(
                 elements: exploreElements,
                 scrollCount: manifest.scrollCount,
                 containersExplored: manifest.exploredContainers.count,
                 explorationTime: manifest.explorationTime
-            )
+            ))
         )
     }
 

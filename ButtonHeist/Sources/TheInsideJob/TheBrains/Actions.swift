@@ -96,6 +96,9 @@ final class Actions {
         case .failure(let result):
             return result
         case .success(let point):
+            if let failure = geometryFailure(method: method, field: "point", point: point) {
+                return failure
+            }
             let success = await action(point)
             if success { safecracker.showFingerprint(at: point) }
             let message = success ? nil : ActionCapabilityDiagnostic.gestureDispatchFailed(
@@ -103,7 +106,9 @@ final class Actions {
                 point: point,
                 receiver: safecracker.tapReceiverDiagnostic(at: point)
             )
-            return TheSafecracker.InteractionResult(success: success, method: method, message: message, value: nil)
+            return success
+                ? .success(method: method)
+                : .failure(method, message: message ?? "\(method.rawValue) failed")
         }
     }
 
@@ -117,7 +122,11 @@ final class Actions {
             guard let xCoord = pointX, let yCoord = pointY else {
                 return .failure(.failure(.elementNotFound, message: "No target specified"))
             }
-            return .success(CGPoint(x: xCoord, y: yCoord))
+            let point = CGPoint(x: xCoord, y: yCoord)
+            if let failure = geometryFailure(method: method, field: "point", point: point) {
+                return .failure(failure)
+            }
+            return .success(point)
         }
         let resolution = stash.resolveTarget(elementTarget)
         guard let resolved = resolution.resolved else {
@@ -132,6 +141,9 @@ final class Actions {
                     isVisible: stash.visibleIds.contains(resolved.screenElement.heistId)
                 )
             ))
+        }
+        if let failure = geometryFailure(method: method, field: "activationPoint", point: point) {
+            return .failure(failure)
         }
         return .success(point)
     }
@@ -159,7 +171,40 @@ final class Actions {
                 )
             ))
         }
+        if let message = GeometryValidation.validateRect(frame, field: "frame") {
+            return .failure(.failure(
+                method,
+                message: "\(method.rawValue) failed: \(message)",
+                failureKind: .inputValidation
+            ))
+        }
         return .success(frame)
+    }
+
+    private func geometryFailure(
+        method: ActionMethod,
+        field: String,
+        point: CGPoint
+    ) -> TheSafecracker.InteractionResult? {
+        guard let message = GeometryValidation.validateScreenPoint(point, field: field) else { return nil }
+        return .failure(
+            method,
+            message: "\(method.rawValue) failed: \(message)",
+            failureKind: .inputValidation
+        )
+    }
+
+    private func geometryFailure(
+        method: ActionMethod,
+        field: String,
+        points: [CGPoint]
+    ) -> TheSafecracker.InteractionResult? {
+        guard let message = GeometryValidation.validateScreenPoints(points, field: field) else { return nil }
+        return .failure(
+            method,
+            message: "\(method.rawValue) failed: \(message)",
+            failureKind: .inputValidation
+        )
     }
 
     // MARK: - Accessibility Actions
@@ -170,7 +215,7 @@ final class Actions {
             let firstOutcome = self.stash.activate(resolved.screenElement)
             if firstOutcome == .success {
                 self.safecracker.showFingerprint(at: resolved.element.activationPoint.cgPoint)
-                return TheSafecracker.InteractionResult(success: true, method: .activate, message: nil, value: nil)
+                return .success(method: .activate)
             }
 
             // Retry once after a refresh + ensureOnScreen cycle. Cell reuse during
@@ -187,7 +232,7 @@ final class Actions {
             let retryOutcome = self.stash.activate(retryResolved.screenElement)
             if retryOutcome == .success {
                 self.safecracker.showFingerprint(at: retryResolved.element.activationPoint.cgPoint)
-                return TheSafecracker.InteractionResult(success: true, method: .activate, message: nil, value: nil)
+                return .success(method: .activate)
             }
 
             // Synthetic tap fallback at the post-retry activation point.
@@ -203,7 +248,7 @@ final class Actions {
             }
             if await self.safecracker.tap(at: tapPoint) {
                 self.safecracker.showFingerprint(at: tapPoint)
-                return TheSafecracker.InteractionResult(success: true, method: .syntheticTap, message: nil, value: nil)
+                return .success(method: .syntheticTap)
             }
 
             // All paths exhausted — build a fact-only diagnostic from what we
@@ -245,7 +290,7 @@ final class Actions {
                 )
             }
             self.safecracker.showFingerprint(at: resolved.element.activationPoint.cgPoint)
-            return TheSafecracker.InteractionResult(success: true, method: .increment, message: nil, value: nil)
+            return .success(method: .increment)
         }
     }
 
@@ -270,7 +315,7 @@ final class Actions {
                 )
             }
             self.safecracker.showFingerprint(at: resolved.element.activationPoint.cgPoint)
-            return TheSafecracker.InteractionResult(success: true, method: .decrement, message: nil, value: nil)
+            return .success(method: .decrement)
         }
     }
 
@@ -309,9 +354,7 @@ final class Actions {
                     )
                 )
             case .succeeded:
-                return TheSafecracker.InteractionResult(
-                    success: true, method: .customAction, message: nil, value: nil
-                )
+                return .success(method: .customAction)
             }
         }
     }
@@ -345,36 +388,36 @@ final class Actions {
             stash: stash,
             safecracker: safecracker
         )
-        return TheSafecracker.InteractionResult(success: success, method: .editAction, message: message, value: nil)
+        return success
+            ? .success(method: .editAction)
+            : .failure(.editAction, message: message ?? "edit action failed")
     }
 
     func executeSetPasteboard(_ target: SetPasteboardTarget) async -> TheSafecracker.InteractionResult {
         await navigation.ensureFirstResponderOnScreen()
         UIPasteboard.general.string = target.text
-        return TheSafecracker.InteractionResult(
-            success: true, method: .setPasteboard, message: nil, value: target.text
-        )
+        return .success(method: .setPasteboard, payload: .value(target.text))
     }
 
     func executeGetPasteboard() -> TheSafecracker.InteractionResult {
         let text = UIPasteboard.general.string
-        return TheSafecracker.InteractionResult(
-            success: true, method: .getPasteboard,
+        return .success(
+            method: .getPasteboard,
             message: text == nil ? "Pasteboard is empty or contains non-text data" : nil,
-            value: text
+            payload: text.map(ResultPayload.value)
         )
     }
 
     func executeResignFirstResponder() async -> TheSafecracker.InteractionResult {
         await navigation.ensureFirstResponderOnScreen()
         let success = safecracker.resignFirstResponder()
-        return TheSafecracker.InteractionResult(
-            success: success, method: .resignFirstResponder,
-            message: success ? nil : ActionCapabilityDiagnostic.resignFirstResponderFailed(
+        if success { return .success(method: .resignFirstResponder) }
+        return .failure(
+            .resignFirstResponder,
+            message: ActionCapabilityDiagnostic.resignFirstResponderFailed(
                 stash: stash,
                 safecracker: safecracker
-            ),
-            value: nil
+            )
         )
     }
 
@@ -452,6 +495,9 @@ final class Actions {
                 x: frame.origin.x + unitEnd.x * frame.width,
                 y: frame.origin.y + unitEnd.y * frame.height
             )
+            if let failure = geometryFailure(method: .syntheticSwipe, field: "swipe point", points: [startPoint, endPoint]) {
+                return failure
+            }
             let duration = clampDuration(target.duration ?? 0.15)
             let success = await safecracker.swipe(from: startPoint, to: endPoint, duration: duration)
             let message = success ? nil : ActionCapabilityDiagnostic.gestureDispatchFailed(
@@ -459,12 +505,9 @@ final class Actions {
                 point: startPoint,
                 receiver: safecracker.tapReceiverDiagnostic(at: startPoint)
             )
-            return TheSafecracker.InteractionResult(
-                success: success,
-                method: .syntheticSwipe,
-                message: message,
-                value: nil
-            )
+            return success
+                ? .success(method: .syntheticSwipe)
+                : .failure(.syntheticSwipe, message: message ?? "synthetic swipe failed")
         }
 
         // Absolute-point swipe: resolve start point, compute end from direction or explicit coords
@@ -501,6 +544,9 @@ final class Actions {
                         + "try providing endX/endY or direction."
                 )
             }
+            if let failure = geometryFailure(method: .syntheticSwipe, field: "swipe point", points: [startPoint, endPoint]) {
+                return failure
+            }
             let duration = clampDuration(target.duration ?? 0.15)
             let success = await safecracker.swipe(from: startPoint, to: endPoint, duration: duration)
             let message = success ? nil : ActionCapabilityDiagnostic.gestureDispatchFailed(
@@ -508,12 +554,9 @@ final class Actions {
                 point: startPoint,
                 receiver: safecracker.tapReceiverDiagnostic(at: startPoint)
             )
-            return TheSafecracker.InteractionResult(
-                success: success,
-                method: .syntheticSwipe,
-                message: message,
-                value: nil
-            )
+            return success
+                ? .success(method: .syntheticSwipe)
+                : .failure(.syntheticSwipe, message: message ?? "synthetic swipe failed")
         }
     }
 
@@ -521,6 +564,9 @@ final class Actions {
         _ target: DragTarget,
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
+        if let failure = geometryFailure(method: .syntheticDrag, field: "endPoint", point: target.endPoint) {
+            return failure
+        }
         let duration = clampDuration(target.duration ?? 0.5)
         return await performPointAction(
             elementTarget: target.elementTarget, pointX: target.startX, pointY: target.startY,
@@ -589,6 +635,9 @@ final class Actions {
         guard cgPoints.count >= 2 else {
             return .failure(.syntheticDrawPath, message: "Path requires at least 2 points")
         }
+        if let failure = geometryFailure(method: .syntheticDrawPath, field: "path point", points: cgPoints) {
+            return failure
+        }
         let duration = resolveDuration(target.duration, velocity: target.velocity, points: cgPoints)
         let success = await safecracker.drawPath(points: cgPoints, duration: duration)
         let message = success ? nil : ActionCapabilityDiagnostic.gestureDispatchFailed(
@@ -596,12 +645,9 @@ final class Actions {
             point: cgPoints[0],
             receiver: safecracker.tapReceiverDiagnostic(at: cgPoints[0])
         )
-        return TheSafecracker.InteractionResult(
-            success: success,
-            method: .syntheticDrawPath,
-            message: message,
-            value: nil
-        )
+        return success
+            ? .success(method: .syntheticDrawPath)
+            : .failure(.syntheticDrawPath, message: message ?? "synthetic draw path failed")
     }
 
     func executeDrawBezier(_ target: DrawBezierTarget) async -> TheSafecracker.InteractionResult {
@@ -621,6 +667,9 @@ final class Actions {
         guard cgPoints.count >= 2 else {
             return .failure(.syntheticDrawPath, message: "Sampled bezier produced fewer than 2 points")
         }
+        if let failure = geometryFailure(method: .syntheticDrawPath, field: "bezier point", points: cgPoints) {
+            return failure
+        }
         let duration = resolveDuration(target.duration, velocity: target.velocity, points: cgPoints)
         let success = await safecracker.drawPath(points: cgPoints, duration: duration)
         let message = success ? nil : ActionCapabilityDiagnostic.gestureDispatchFailed(
@@ -628,12 +677,9 @@ final class Actions {
             point: cgPoints[0],
             receiver: safecracker.tapReceiverDiagnostic(at: cgPoints[0])
         )
-        return TheSafecracker.InteractionResult(
-            success: success,
-            method: .syntheticDrawPath,
-            message: message,
-            value: nil
-        )
+        return success
+            ? .success(method: .syntheticDrawPath)
+            : .failure(.syntheticDrawPath, message: message ?? "synthetic draw path failed")
     }
 
     // MARK: - Text Entry
@@ -670,7 +716,7 @@ final class Actions {
             }
         }
 
-        return TheSafecracker.InteractionResult(success: true, method: .typeText, message: nil, value: fieldValue)
+        return .success(method: .typeText, payload: fieldValue.map(ResultPayload.value))
     }
 
     private func focusTextInput(
@@ -819,17 +865,15 @@ final class Actions {
         if let textRange = hit.textRange {
             message += " text range \(textRange.rangeDescription)"
         }
-        return TheSafecracker.InteractionResult(
-            success: true,
+        return .success(
             method: .rotor,
             message: message,
-            value: nil,
-            rotorResult: RotorResult(
+            payload: .rotor(RotorResult(
                 rotor: hit.rotor,
                 direction: direction,
                 foundElement: found,
                 textRange: hit.textRange
-            )
+            ))
         )
     }
 
@@ -893,14 +937,15 @@ final class Actions {
     static let defaultSwipeDistance: CGFloat = 200
 
     func clampDuration(_ value: Double?) -> Double {
-        min(max(value ?? Self.defaultGestureDuration, Self.minGestureDuration), Self.maxGestureDuration)
+        guard let value, value.isFinite else { return Self.defaultGestureDuration }
+        return min(max(value, Self.minGestureDuration), Self.maxGestureDuration)
     }
 
     func resolveDuration(_ duration: Double?, velocity: Double?, points: [CGPoint]) -> TimeInterval {
         let result: Double
-        if let resolvedDuration = duration {
+        if let resolvedDuration = duration, resolvedDuration.isFinite, resolvedDuration > 0 {
             result = resolvedDuration
-        } else if let velocity = velocity, velocity > 0 {
+        } else if let velocity = velocity, velocity.isFinite, velocity > 0 {
             let totalLength = zip(points, points.dropFirst()).reduce(0.0) { runningTotal, pair in
                 runningTotal + hypot(pair.1.x - pair.0.x, pair.1.y - pair.0.y)
             }

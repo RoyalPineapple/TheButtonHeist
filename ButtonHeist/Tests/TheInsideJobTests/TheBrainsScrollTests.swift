@@ -737,7 +737,7 @@ final class TheBrainsScrollTests: XCTestCase {
             requireInteractive: false
         ) { _ in
             didDispatch = true
-            return TheSafecracker.InteractionResult(success: true, method: .activate, message: nil, value: nil)
+            return .success(method: .activate)
         }
 
         XCTAssertFalse(didDispatch)
