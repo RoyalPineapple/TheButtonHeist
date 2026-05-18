@@ -36,7 +36,7 @@ graph TD
 
         subgraph Commands["Command Catalog (43)"]
             Conn["help, status, quit, exit, list_devices"]
-            IF["get_interface (full mode for explore), get_screen, wait_for_change"]
+            IF["get_interface (default product state), get_screen, wait_for_change"]
             Access["activate (with optional action param), - increment, decrement, - perform_custom_action"]
             Gesture["one_finger_tap, long_press, swipe, drag, - pinch, rotate, two_finger_tap, - draw_path, draw_bezier"]
             Scroll["scroll, scroll_to_visible, scroll_to_edge"]
@@ -150,7 +150,7 @@ stateDiagram-v2
 | Screenshot | 30s | `Timeouts.longActionSeconds` |
 | Recording | 30s | `TheFence.handleStopRecording` |
 | Interface request | 10s | `TheFence.handleGetInterface` |
-| Explore (full interface) | 60s | `Timeouts.exploreSeconds` |
+| Explore (default product state) | 60s | `Timeouts.exploreSeconds` |
 
 ## Items Flagged for Review
 

@@ -469,7 +469,7 @@ Typed response enum with `humanFormatted() -> String`, `jsonDict() -> [String: A
 | `help(commands:)` | List of supported commands |
 | `status(connected:deviceName:)` | Connection status |
 | `devices(_:)` | List of discovered devices |
-| `interface(_:)` | UI element snapshot |
+| `interface(_:)` | UI element state |
 | `action(result:expectation:)` | Action outcome with delta and optional expectation validation result |
 | `screenshot(path:width:height:)` | Screenshot saved to path |
 | `screenshotData(pngData:width:height:)` | Screenshot as base64 PNG |
@@ -774,7 +774,7 @@ Messages sent from client to server.
 
 - `clientHello` - Version-negotiation hello sent immediately after `serverHello`
 - `authenticate(AuthenticatePayload)` - Authenticate with a token (sent after `clientHello` / `authRequired`)
-- `requestInterface` - Request current app accessibility state
+- `requestInterface` - Request fresh on-screen accessibility parse
 - `subscribe` / `unsubscribe` - Legacy runtime subscription messages. They are retained for wire compatibility and return `unsupported`.
 - `ping` - Keepalive
 - `activate(ActionTarget)` - Activate element (VoiceOver double-tap)
@@ -823,7 +823,7 @@ Messages sent from server to client.
 - `authFailed(String)` - Authentication failed (sent before disconnect)
 - `authApproved(AuthApprovedPayload)` - Connection approved via on-device UI (contains token for future use). See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md#ui-approval-flow) for details.
 - `info(ServerInfo)` - Device/app metadata (sent after successful auth)
-- `interface(Interface)` - UI element snapshot
+- `interface(Interface)` - UI element state
 - `pong` - Ping response
 - `error(String)` - Error description
 - `actionResult(ActionResult)` - Action outcome

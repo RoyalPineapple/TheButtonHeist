@@ -40,7 +40,7 @@ Without `--device`, direct commands expect exactly one reachable target. No gues
 | `rotor` | Move through a VoiceOver rotor |
 | `type_text` | Type non-empty text via keyboard injection |
 | `get_screen` | Capture a PNG screenshot |
-| `get_interface` | Fetch the current app accessibility state |
+| `get_interface` | Read the app accessibility state |
 | `wait_for_change` | Wait for the UI hierarchy to change |
 | `wait_for` | Wait for an element to appear or disappear |
 | `start_recording` | Start MP4 screen recording |
@@ -130,7 +130,7 @@ Flags: `-t/--timeout` (default 3s), `-f/--format` (auto/human/json).
 
 ### get_interface
 
-Fetch the current app accessibility state.
+Read the app accessibility state.
 
 ```bash
 buttonheist get_interface
@@ -138,7 +138,7 @@ buttonheist get_interface --format json
 buttonheist get_interface --scope visible
 ```
 
-Flags: `--scope visible` for a diagnostic on-screen parse, `-f/--format`, `-t/--timeout` (default 10s).
+Flags: `--scope visible` for fresh on-screen geometry diagnostics, `-f/--format`, `-t/--timeout` (default 10s).
 
 ### scroll / scroll_to_visible / scroll_to_edge
 

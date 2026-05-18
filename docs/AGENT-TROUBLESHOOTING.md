@@ -12,7 +12,7 @@ The most common cause. You carried a heistId across a screen transition — a na
 
 ### The element is not currently on screen
 
-The default `get_interface` read returns the app accessibility state for the current screen. If you used `scope: "visible"`, you asked for a diagnostic on-screen parse, so content below the fold may not appear in that response.
+The default `get_interface` read returns the app accessibility state for the current screen. If you used `scope: "visible"`, you asked for fresh on-screen geometry diagnostics, so content below the fold may not appear in that response.
 
 **Fix:** Use `element_search` with a matcher to find unseen content. If a `heistId` is still valid in the current hierarchy, use `scroll_to_visible` to bring that element into view. See the scrollable screens section in the Agent Guide.
 
@@ -26,7 +26,7 @@ HeistIds are assigned by the system — never construct or guess one. `"login-bu
 
 The control may not be on this screen, may be conditionally hidden, or may require a prior action (e.g., expanding a section, switching a tab) before it appears.
 
-**Fix:** Use `wait_for` if you expect it to appear after an async operation. Otherwise, call `get_interface` to see what's actually on screen and adjust your plan.
+**Fix:** Use `wait_for` if you expect it to appear after an async operation. Otherwise, call `get_interface` to read the app accessibility state and adjust your plan.
 
 ### Reading "element not found" diagnostics
 
@@ -34,7 +34,7 @@ The error message itself contains the recovery signal — read it carefully befo
 
 - **heistId miss with similar IDs:** `Element not found: "submit-btn"\nsimilar: submit-button, submit-label` — the ID you used is close but wrong. Use the suggested similar ID.
 - **Matcher near-miss:** `No match for: label="Submit" traits=[button]\nnear miss: matched all fields except value — actual value=Disabled` — the element exists but one predicate is wrong. Fix the named field.
-- **Total miss with screen dump:** `No match for: label="Submit"\n12 elements on screen:\n  label="Cancel" [button]\n  ...` — the element isn't on screen. Use the listed elements to reformulate your query.
+- **Total miss with diagnostic dump:** `No match for: label="Submit"\n12 elements observed:\n  label="Cancel" [button]\n  ...` — the element was not found in the current lookup. Use the listed elements to reformulate your query.
 - **Ambiguous match:** `3 elements match: label="OK"\n  "OK" id=ok-button\n  "OK" id=dialog-ok` — multiple elements match your predicate. Add `identifier` or `traits` to disambiguate.
 
 These diagnostics give you enough to self-correct without calling `get_interface` again.
@@ -222,9 +222,9 @@ A single command took longer than the action timeout (15s for most actions, 30s 
 
 When something goes wrong:
 
-1. **Read the error message.** Diagnostic messages include near-misses, similar IDs, screen dumps, and exact field mismatches. The recovery signal is in the error text itself.
+1. **Read the error message.** Diagnostic messages include near-misses, similar IDs, observed-element dumps, and exact field mismatches. The recovery signal is in the error text itself.
 2. **Read the delta.** It tells you what actually happened, not what you expected.
-3. **Call `get_interface`.** See what's actually on screen right now.
+3. **Call `get_interface`.** Read the current app accessibility state.
 4. **Check the heistId lifetime.** Did a screen change invalidate your IDs?
 5. **Check element traits and actions.** Is the element actually interactive? Does it have the `textEntry` trait for text input? The `notEnabled` trait for disabled state?
 6. **Check which simulator you're connected to.** Auth errors mean wrong target, not wrong credentials.

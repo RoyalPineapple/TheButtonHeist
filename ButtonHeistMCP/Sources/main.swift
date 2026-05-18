@@ -30,8 +30,9 @@ struct ButtonHeistMCPServer {
     static let instructions = """
         Button Heist drives iOS apps through the accessibility layer — the same interface \
         VoiceOver uses. Target elements by heistId, label, value, and traits, not by screen \
-        coordinates. The core loop is: `get_interface` to see, then `activate`/`type_text`/\
-        `scroll`/`gesture` to act with an `expect` attached. Every response carries a \
+        coordinates. The core loop is: `get_interface` to read the app accessibility state, \
+        then `activate`/`type_text`/`scroll`/`gesture` to act with an `expect` attached. \
+        Every response carries a \
         `[background: ...]` block describing what changed since your last call — read it \
         before deciding to re-fetch. When an action produces a transient state (spinner, \
         loading overlay), call `wait_for_change` with the same expectation to ride through \
