@@ -826,27 +826,25 @@ final class TheStash {
         return screen
     }
 
-    // MARK: - Tree Read Helpers
+    // MARK: - Interface Read Helpers
 
-    /// Convert the current screen's hierarchy to canonical wire form. Every
-    /// element on screen appears at its tree position; containers carry
-    /// stable ids derived once during parse.
+    /// Current parser hierarchy plus Button Heist annotations.
     ///
-    /// Thin reader over `WireConversion.toWireTree` — exists because callers
-    /// need the tree of the *current* screen, not an arbitrary one.
-    func wireTree() -> [InterfaceNode] {
-        WireConversion.toWireTree(from: currentScreen)
+    /// Thin reader over `WireConversion.toInterface` — exists because callers
+    /// need the interface of the *current* screen, not an arbitrary one.
+    func interface(timestamp: Date = Date()) -> Interface {
+        WireConversion.toInterface(from: currentScreen, timestamp: timestamp)
     }
 
-    func wireTreeHash() -> Int {
-        wireTree().hashValue
+    func interfaceHash() -> String {
+        AccessibilityTrace.Capture.hash(interface())
     }
 
-    /// Single-walk variant: returns the tree alongside its hash so callers
-    /// that need both don't pay for two walks.
-    func wireTreeWithHash() -> (tree: [InterfaceNode], hash: Int) {
-        let tree = wireTree()
-        return (tree, tree.hashValue)
+    /// Single-build variant: returns the interface alongside its hash so callers
+    /// that need both don't pay for two projection passes.
+    func interfaceWithHash(timestamp: Date = Date()) -> (interface: Interface, hash: String) {
+        let interface = interface(timestamp: timestamp)
+        return (interface, AccessibilityTrace.Capture.hash(interface))
     }
 }
 

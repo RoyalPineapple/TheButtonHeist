@@ -24,9 +24,9 @@ extension CGFloat {
 extension TheStash {
 
     /// Convert internal accessibility types (`AccessibilityElement`,
-    /// `AccessibilityHierarchy`, `Screen`) to their wire representations
-    /// (`HeistElement`, `InterfaceNode`, `ContainerInfo`). Pure transform —
-    /// no stored state. Delta projection is capture-backed in TheScore.
+    /// `AccessibilityHierarchy`, `Screen`) to their wire-facing projections.
+    /// Pure transform — no stored state. Delta projection is capture-backed in
+    /// TheScore.
     @MainActor enum WireConversion { // swiftlint:disable:this agent_main_actor_value_type
 
     // MARK: - Trait Names
@@ -42,11 +42,7 @@ extension TheStash {
 
     // MARK: - Element Conversion
 
-    static func convert(_ element: AccessibilityElement, object: NSObject? = nil) -> HeistElement {
-        convert(element, heistId: "", object: object)
-    }
-
-    static func convert(_ element: AccessibilityElement, heistId: String, object: NSObject? = nil) -> HeistElement {
+    static func convert(_ element: AccessibilityElement, heistId: String = "", object: NSObject? = nil) -> HeistElement {
         let frame = element.shape.frame
         return HeistElement(
             heistId: heistId,
@@ -98,68 +94,62 @@ extension TheStash {
         entries.map { toWire($0) }
     }
 
-    // MARK: - Tree Conversion (Screen → wire)
+    // MARK: - Interface Conversion
 
-    /// Convert a Screen's hierarchy to canonical wire form. Elements are
-    /// looked up by their assigned heistId; containers carry the stable id
-    /// computed once during parse.
-    static func toWireTree(from screen: Screen) -> [InterfaceNode] {
-        screen.hierarchy.map { node in
-            convertNode(node, screen: screen)
-        }
+    /// Convert a Screen into the canonical interface capture. The parser
+    /// hierarchy remains the tree; Button Heist metadata is attached as
+    /// annotations keyed by parser traversal index and tree path.
+    static func toInterface(from screen: Screen, timestamp: Date = Date()) -> Interface {
+        Interface(
+            timestamp: timestamp,
+            tree: screen.hierarchy,
+            annotations: InterfaceAnnotations(
+                elements: elementAnnotations(from: screen),
+                containers: containerAnnotations(from: screen)
+            )
+        )
     }
 
     // MARK: - Private Helpers
 
-    private static func convertNode(_ node: AccessibilityHierarchy, screen: Screen) -> InterfaceNode {
-        switch node {
-        case .element(let element, _):
-            if let heistId = screen.heistIdByElement[element],
-               let entry = screen.elements[heistId] {
-                return .element(toWire(entry))
+    private static func elementAnnotations(from screen: Screen) -> [InterfaceElementAnnotation] {
+        screen.hierarchy.elements.map { element, traversalIndex in
+            guard let heistId = screen.heistIdByElement[element] else {
+                wireConversionLogger.error("Hierarchy leaf with no heistId in screen; annotating without id")
+                return InterfaceElementAnnotation(
+                    traversalIndex: traversalIndex,
+                    heistId: "",
+                    actions: buildActions(for: element)
+                )
             }
-            // Construction invariant: every leaf in `screen.hierarchy` also
-            // appears in `screen.heistIdByElement`/`screen.elements` because
-            // both maps are built from the same parse pass (TheBurglar zips
-            // `hierarchy.sortedElements` with `resolvedHeistIds`). Log and fall back to
-            // an id-less wire node so we'd notice if the invariant ever broke.
-            wireConversionLogger.error("Hierarchy leaf with no heistId in screen; emitting wire node without id")
-            return .element(convert(element))
-        case .container(let container, let children):
-            let stableId = screen.containerStableIds[container]
-            let info = toContainerInfo(container, stableId: stableId)
-            return .container(info, children: children.map { convertNode($0, screen: screen) })
+
+            return InterfaceElementAnnotation(
+                traversalIndex: traversalIndex,
+                heistId: heistId,
+                actions: buildActions(for: element, object: screen.elements[heistId]?.object)
+            )
         }
     }
 
-    private static func toContainerInfo(_ container: AccessibilityContainer, stableId: String?) -> ContainerInfo {
-        let type: ContainerInfo.ContainerType
-        switch container.type {
-        case let .semanticGroup(label, value, identifier):
-            type = .semanticGroup(label: label, value: value, identifier: identifier)
-        case .list:
-            type = .list
-        case .landmark:
-            type = .landmark
-        case let .dataTable(rowCount, columnCount):
-            type = .dataTable(rowCount: rowCount, columnCount: columnCount)
-        case .tabBar:
-            type = .tabBar
-        case .scrollable(let contentSize):
-            type = .scrollable(
-                contentWidth: Double(contentSize.width.sanitizedForJSON),
-                contentHeight: Double(contentSize.height.sanitizedForJSON)
-            )
+    private static func containerAnnotations(from screen: Screen) -> [InterfaceContainerAnnotation] {
+        var annotations: [InterfaceContainerAnnotation] = []
+
+        func walk(_ node: AccessibilityHierarchy, path: TreePath) {
+            guard case let .container(container, children) = node else { return }
+            annotations.append(InterfaceContainerAnnotation(
+                path: path,
+                stableId: screen.containerStableIds[container]
+            ))
+            for (index, child) in children.enumerated() {
+                walk(child, path: path.appending(index))
+            }
         }
-        return ContainerInfo(
-            type: type,
-            stableId: stableId,
-            isModalBoundary: container.isModalBoundary,
-            frameX: Double(container.frame.origin.x.sanitizedForJSON),
-            frameY: Double(container.frame.origin.y.sanitizedForJSON),
-            frameWidth: Double(container.frame.size.width.sanitizedForJSON),
-            frameHeight: Double(container.frame.size.height.sanitizedForJSON)
-        )
+
+        for (index, root) in screen.hierarchy.enumerated() {
+            walk(root, path: TreePath([index]))
+        }
+
+        return annotations
     }
     }
 }

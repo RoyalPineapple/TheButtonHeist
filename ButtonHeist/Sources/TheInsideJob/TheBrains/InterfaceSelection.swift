@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 import Foundation
 
+import AccessibilitySnapshotModel
 import TheScore
 
 enum InterfaceSelectionError: Error, Equatable {
@@ -56,21 +57,62 @@ struct InterfaceSelector {
     }
 
     private func selectLeafSubtrees(matching matcher: ElementMatcher) -> Interface {
+        let annotations = interface.annotations.elementByTraversalIndex
         Interface(
             timestamp: interface.timestamp,
-            tree: interface.tree.flatMap { $0.leafSubtreeNodes(matching: matcher) }
+            tree: interface.tree.subtrees { node, _ in
+                guard case .element(let element, let traversalIndex) = node else { return false }
+                return HeistElement(
+                    accessibilityElement: element,
+                    annotation: annotations[traversalIndex]
+                ).matches(matcher)
+            },
+            annotations: interface.annotations
         )
     }
 
     private func selectLeafSubtrees(withIds heistIds: Set<String>) -> Interface {
+        let annotations = interface.annotations.elementByTraversalIndex
         Interface(
             timestamp: interface.timestamp,
-            tree: interface.tree.flatMap { $0.leafSubtreeNodes(withIds: heistIds) }
+            tree: interface.tree.subtrees { node, _ in
+                guard case .element(_, let traversalIndex) = node,
+                      let annotation = annotations[traversalIndex]
+                else { return false }
+                return heistIds.contains(annotation.heistId)
+            },
+            annotations: interface.annotations
         )
     }
 
     private func select(_ subtree: SubtreeSelector) throws(InterfaceSelectionError) -> Interface {
-        let candidates = interface.tree.flatMap { $0.subtreeCandidates(matching: subtree) }
+        let elementAnnotations = interface.annotations.elementByTraversalIndex
+        let containerAnnotations = interface.annotations.containerByPath
+        let candidates = interface.tree.compactMapSubtrees { node, path -> InterfaceSubtreeCandidate? in
+            switch node {
+            case .element(let element, let traversalIndex):
+                let projected = HeistElement(
+                    accessibilityElement: element,
+                    annotation: elementAnnotations[traversalIndex]
+                )
+                guard case .element(let matcher, _) = subtree, projected.matches(matcher) else { return nil }
+                return InterfaceSubtreeCandidate(
+                    node: node,
+                    originalPath: path,
+                    summary: projected.subtreeCandidateSummary
+                )
+            case .container(let container, _):
+                let annotation = containerAnnotations[path]
+                guard case .container(let matcher, _) = subtree,
+                      container.matches(matcher, annotation: annotation)
+                else { return nil }
+                return InterfaceSubtreeCandidate(
+                    node: node,
+                    originalPath: path,
+                    summary: container.subtreeCandidateSummary(annotation: annotation)
+                )
+            }
+        }
         guard !candidates.isEmpty else {
             throw .subtreeNotFound
         }
@@ -83,7 +125,7 @@ struct InterfaceSelector {
                     candidates: candidates.map(\.summary)
                 )
             }
-            return Interface(timestamp: interface.timestamp, tree: [candidates[ordinal].node])
+            return selectedInterface(for: candidates[ordinal])
         }
 
         guard candidates.count == 1 else {
@@ -93,61 +135,101 @@ struct InterfaceSelector {
             )
         }
 
-        return Interface(timestamp: interface.timestamp, tree: [candidates[0].node])
+        return selectedInterface(for: candidates[0])
+    }
+
+    private func selectedInterface(for candidate: InterfaceSubtreeCandidate) -> Interface {
+        Interface(
+            timestamp: interface.timestamp,
+            tree: [candidate.node],
+            annotations: annotations(for: candidate)
+        )
+    }
+
+    private func annotations(for candidate: InterfaceSubtreeCandidate) -> InterfaceAnnotations {
+        interface.annotations(
+            forSubtree: candidate.node,
+            originalPath: candidate.originalPath,
+            rootPath: TreePath([0])
+        )
     }
 }
 
 private struct InterfaceSubtreeCandidate {
-    let node: InterfaceNode
+    let node: AccessibilityHierarchy
+    let originalPath: TreePath
     let summary: String
 }
 
-private extension InterfaceNode {
-    func leafSubtreeNodes(matching matcher: ElementMatcher) -> [InterfaceNode] {
-        switch self {
-        case .element(let element):
-            return element.matches(matcher) ? [self] : []
-        case .container(_, let children):
-            return children.flatMap { $0.leafSubtreeNodes(matching: matcher) }
-        }
-    }
-
-    func leafSubtreeNodes(withIds heistIds: Set<String>) -> [InterfaceNode] {
-        switch self {
-        case .element(let element):
-            return heistIds.contains(element.heistId) ? [self] : []
-        case .container(_, let children):
-            return children.flatMap { $0.leafSubtreeNodes(withIds: heistIds) }
-        }
-    }
-
-    func subtreeCandidates(matching selector: SubtreeSelector) -> [InterfaceSubtreeCandidate] {
-        switch self {
-        case .element(let element):
-            guard case .element(let matcher, _) = selector, element.matches(matcher) else { return [] }
-            return [InterfaceSubtreeCandidate(node: self, summary: element.subtreeCandidateSummary)]
-        case .container(let info, let children):
-            var candidates: [InterfaceSubtreeCandidate] = []
-            if case .container(let matcher, _) = selector, info.matches(matcher) {
-                candidates.append(InterfaceSubtreeCandidate(node: self, summary: info.subtreeCandidateSummary))
-            }
-            candidates.append(contentsOf: children.flatMap { $0.subtreeCandidates(matching: selector) })
-            return candidates
-        }
-    }
-}
-
-private extension ContainerInfo {
-    var subtreeCandidateSummary: String {
+private extension AccessibilityContainer {
+    func subtreeCandidateSummary(annotation: InterfaceContainerAnnotation?) -> String {
         [
             "container",
             subtreeSummaryRequiredField("type", typeName.rawValue),
-            subtreeSummaryField("stableId", stableId),
+            subtreeSummaryField("stableId", annotation?.stableId),
             subtreeSummaryField("identifier", containerIdentifier),
             subtreeSummaryField("label", containerLabel),
             subtreeSummaryField("value", containerValue),
             isModalBoundary ? "isModalBoundary=true" : nil,
         ].compactMap { $0 }.joined(separator: " ")
+    }
+
+    var typeName: ContainerTypeName {
+        switch type {
+        case .semanticGroup:
+            return .semanticGroup
+        case .list:
+            return .list
+        case .landmark:
+            return .landmark
+        case .dataTable:
+            return .dataTable
+        case .tabBar:
+            return .tabBar
+        case .scrollable:
+            return .scrollable
+        }
+    }
+
+    var containerLabel: String? {
+        if case .semanticGroup(let label, _, _) = type { return label }
+        return nil
+    }
+
+    var containerValue: String? {
+        if case .semanticGroup(_, let value, _) = type { return value }
+        return nil
+    }
+
+    var containerIdentifier: String? {
+        if case .semanticGroup(_, _, let identifier) = type { return identifier }
+        return nil
+    }
+
+    func matches(_ matcher: ContainerMatcher, annotation: InterfaceContainerAnnotation?) -> Bool {
+        if let stableId = matcher.stableId {
+            if stableId.isEmpty { return false }
+            guard annotation?.stableId == stableId else { return false }
+        }
+        if let type = matcher.type {
+            guard typeName == type else { return false }
+        }
+        if let label = matcher.label {
+            if label.isEmpty { return false }
+            guard ElementMatcher.stringEquals(containerLabel ?? "", label) else { return false }
+        }
+        if let value = matcher.value {
+            if value.isEmpty { return false }
+            guard ElementMatcher.stringEquals(containerValue ?? "", value) else { return false }
+        }
+        if let identifier = matcher.identifier {
+            if identifier.isEmpty { return false }
+            guard ElementMatcher.stringEquals(containerIdentifier ?? "", identifier) else { return false }
+        }
+        if let isModalBoundary = matcher.isModalBoundary {
+            guard self.isModalBoundary == isModalBoundary else { return false }
+        }
+        return true
     }
 }
 

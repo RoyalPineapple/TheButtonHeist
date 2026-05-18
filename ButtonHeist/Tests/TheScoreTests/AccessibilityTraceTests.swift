@@ -133,10 +133,13 @@ final class AccessibilityTraceTests: XCTestCase {
     }
 
     private func makeInterface(label: String = "Settings", timestamp: Date = Date(timeIntervalSince1970: 0)) -> Interface {
-        Interface(timestamp: timestamp, tree: [
-            .element(makeElement(heistId: "title", label: label, traits: [.header])),
-            .element(makeElement(heistId: "save", label: "Save")),
-        ])
+        makeTestInterface(
+            elements: [
+                makeElement(heistId: "title", label: label, traits: [.header]),
+                makeElement(heistId: "save", label: "Save"),
+            ],
+            timestamp: timestamp
+        )
     }
 
     private func makeElement(

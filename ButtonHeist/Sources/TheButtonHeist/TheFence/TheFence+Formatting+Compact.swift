@@ -1,5 +1,6 @@
 import Foundation
 
+import AccessibilitySnapshotModel
 import TheScore
 
 extension FenceResponse {
@@ -367,33 +368,58 @@ extension FenceResponse {
         detail: InterfaceDetail
     ) -> [String] {
         let counter = LineIndexCounter()
-        // Fold each node to a list of un-indented lines; the parent prepends
-        // two spaces per nesting level on the way back up. Sharing
-        // `InterfaceNode.folded` keeps this walker structurally identical to
-        // the JSON encoder's walk.
-        return interface.tree.flatMap { node in
-            indented(
-                lines: node.folded(
-                    onElement: { element in
-                        let index = counter.value
-                        counter.value += 1
-                        return [compactElementLine(element, displayIndex: index, detail: detail)]
-                    },
-                    onContainer: { info, childGroups in
-                        let header = "<\(compactContainerLine(info, detail: detail))>"
-                        let body = childGroups.flatMap { indented(lines: $0) }
-                        return [header] + body
-                    }
-                ),
-                by: 0
+        let elementAnnotations = interface.annotations.elementByTraversalIndex
+        let containerAnnotations = interface.annotations.containerByPath
+        return interface.tree.enumerated().flatMap { index, node in
+            compactTreeLines(
+                node,
+                path: TreePath([index]),
+                detail: detail,
+                counter: counter,
+                elementAnnotations: elementAnnotations,
+                containerAnnotations: containerAnnotations
             )
         }
     }
 
     /// Reference counter used by `compactTreeLines` to thread display indices
-    /// through `InterfaceNode.folded` without inout state in the closures.
+    /// through the parser hierarchy recursion.
     private final class LineIndexCounter {
         var value: Int = 0
+    }
+
+    private static func compactTreeLines(
+        _ node: AccessibilityHierarchy,
+        path: TreePath,
+        detail: InterfaceDetail,
+        counter: LineIndexCounter,
+        elementAnnotations: [Int: InterfaceElementAnnotation],
+        containerAnnotations: [TreePath: InterfaceContainerAnnotation]
+    ) -> [String] {
+        switch node {
+        case .element(let element, let traversalIndex):
+            let projected = HeistElement(
+                accessibilityElement: element,
+                annotation: elementAnnotations[traversalIndex]
+            )
+            let index = counter.value
+            counter.value += 1
+            return [compactElementLine(projected, displayIndex: index, detail: detail)]
+
+        case .container(let container, let children):
+            let header = "<\(compactContainerLine(container, annotation: containerAnnotations[path], detail: detail))>"
+            let body = children.enumerated().flatMap { index, child in
+                indented(lines: compactTreeLines(
+                    child,
+                    path: path.appending(index),
+                    detail: detail,
+                    counter: counter,
+                    elementAnnotations: elementAnnotations,
+                    containerAnnotations: containerAnnotations
+                ))
+            }
+            return [header] + body
+        }
     }
 
     private static func indented(lines: [String], by depth: Int = 1) -> [String] {
@@ -402,36 +428,40 @@ extension FenceResponse {
         return lines.map { prefix + $0 }
     }
 
-    private static func compactContainerLine(_ info: ContainerInfo, detail: InterfaceDetail) -> String {
+    private static func compactContainerLine(
+        _ container: AccessibilityContainer,
+        annotation: InterfaceContainerAnnotation?,
+        detail: InterfaceDetail
+    ) -> String {
         var parts: [String]
-        switch info.type {
+        switch container.type {
         case .semanticGroup(let label, let value, let identifier):
             parts = ["semanticGroup"]
-            if let stableId = info.stableId, !stableId.isEmpty { parts.append("stableId=\"\(stableId)\"") }
+            if let stableId = annotation?.stableId, !stableId.isEmpty { parts.append("stableId=\"\(stableId)\"") }
             if let identifier, !identifier.isEmpty { parts.append("id=\"\(identifier)\"") }
             if let label, !label.isEmpty { parts.append("\"\(label)\"") }
             if let value, !value.isEmpty { parts.append("= \"\(value)\"") }
         case .list:
             parts = ["list"]
-            if let stableId = info.stableId, !stableId.isEmpty { parts.append("stableId=\"\(stableId)\"") }
+            if let stableId = annotation?.stableId, !stableId.isEmpty { parts.append("stableId=\"\(stableId)\"") }
         case .landmark:
             parts = ["landmark"]
-            if let stableId = info.stableId, !stableId.isEmpty { parts.append("stableId=\"\(stableId)\"") }
+            if let stableId = annotation?.stableId, !stableId.isEmpty { parts.append("stableId=\"\(stableId)\"") }
         case .dataTable(let rowCount, let columnCount):
             parts = ["dataTable", "\(rowCount)x\(columnCount)"]
-            if let stableId = info.stableId, !stableId.isEmpty { parts.append("stableId=\"\(stableId)\"") }
+            if let stableId = annotation?.stableId, !stableId.isEmpty { parts.append("stableId=\"\(stableId)\"") }
         case .tabBar:
             parts = ["tabBar"]
-            if let stableId = info.stableId, !stableId.isEmpty { parts.append("stableId=\"\(stableId)\"") }
-        case .scrollable(let contentWidth, let contentHeight):
-            parts = ["scrollable", "= \"\(Int(contentWidth))x\(Int(contentHeight))\""]
-            if let stableId = info.stableId, !stableId.isEmpty { parts.append("stableId=\"\(stableId)\"") }
+            if let stableId = annotation?.stableId, !stableId.isEmpty { parts.append("stableId=\"\(stableId)\"") }
+        case .scrollable(let contentSize):
+            parts = ["scrollable", "= \"\(Int(contentSize.width))x\(Int(contentSize.height))\""]
+            if let stableId = annotation?.stableId, !stableId.isEmpty { parts.append("stableId=\"\(stableId)\"") }
         }
-        if info.isModalBoundary {
+        if container.isModalBoundary {
             parts.append("modal")
         }
         if detail == .full {
-            parts.append("frame=(\(Int(info.frameX)),\(Int(info.frameY)),\(Int(info.frameWidth)),\(Int(info.frameHeight)))")
+            parts.append("frame=(\(Int(container.frame.origin.x)),\(Int(container.frame.origin.y)),\(Int(container.frame.size.width)),\(Int(container.frame.size.height)))")
         }
         return parts.joined(separator: " ")
     }

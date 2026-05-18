@@ -317,8 +317,7 @@ extension TheBrains {
         let manifest = await navigation.exploreAndPrune()
         let afterSnapshot = stash.selectElements()
         let exploreElements = TheStash.WireConversion.toWire(afterSnapshot)
-        let afterTree = exploreElements.map(InterfaceNode.element)
-        let accessibilityTrace = makeAccessibilityTrace(afterTree: afterTree, parentCapture: before.capture)
+        let accessibilityTrace = makeAccessibilityTrace(afterInterface: stash.interface(), parentCapture: before.capture)
 
         var builder = ActionResultBuilder(method: .explore, snapshot: afterSnapshot)
         builder.accessibilityTrace = accessibilityTrace

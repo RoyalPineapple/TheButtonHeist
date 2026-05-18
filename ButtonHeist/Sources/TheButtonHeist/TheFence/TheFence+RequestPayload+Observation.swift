@@ -142,7 +142,7 @@ extension TheFence {
     private func subtreeContainerMatcher(_ container: [String: Any]) throws -> ContainerMatcher {
         ContainerMatcher(
             stableId: try container.schemaString("stableId"),
-            type: try container.schemaEnum("type", as: ContainerInfo.ContainerTypeName.self),
+            type: try container.schemaEnum("type", as: ContainerTypeName.self),
             label: try container.schemaString("label"),
             value: try container.schemaString("value"),
             identifier: try container.schemaString("identifier"),

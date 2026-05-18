@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 import XCTest
 
+import AccessibilitySnapshotModel
 import TheScore
 @testable import TheInsideJob
 
@@ -35,7 +36,7 @@ final class InterfaceSelectorTests: XCTestCase {
     func testAmbiguousSubtreeReportsTypedCandidates() {
         XCTAssertThrowsError(try select(
             InterfaceQuery(subtree: .container(ContainerMatcher(label: "Actions"))),
-            in: makeInterface(includeDuplicateGroup: true)
+            in: Self.makeInterface(includeDuplicateGroup: true)
         )) { error in
             guard case InterfaceSelectionError.ambiguousSubtree(let count, let candidates) = error else {
                 XCTFail("Expected ambiguousSubtree, got \(error)")
@@ -51,7 +52,7 @@ final class InterfaceSelectorTests: XCTestCase {
     func testOrdinalDisambiguatesSubtreeCandidates() throws {
         let interface = try select(
             InterfaceQuery(subtree: .container(ContainerMatcher(label: "Actions"), ordinal: 1)),
-            in: makeInterface(includeDuplicateGroup: true)
+            in: Self.makeInterface(includeDuplicateGroup: true)
         )
         XCTAssertEqual(interface.elements.map(\.heistId), ["archive"])
     }
@@ -78,29 +79,92 @@ final class InterfaceSelectorTests: XCTestCase {
         let footer = makeElement("footer", label: "Footer")
         let primaryGroup = makeActionsContainer(stableId: "semantic_actions__actions")
 
-        var tree: [InterfaceNode] = [
+        var nodes: [TestInterfaceNode] = [
             .element(header),
-            .container(primaryGroup, children: [.element(submit), .element(cancel)]),
+            .container(primaryGroup, stableId: "semantic_actions__actions", children: [.element(submit), .element(cancel)]),
             .element(footer),
         ]
 
         if includeDuplicateGroup {
             let archive = makeElement("archive", label: "Archive", identifier: "archive_button", traits: [.button])
             let secondaryGroup = makeActionsContainer(stableId: "semantic_actions__secondary_actions", y: 160)
-            tree.insert(.container(secondaryGroup, children: [.element(archive)]), at: 2)
+            nodes.insert(.container(secondaryGroup, stableId: "semantic_actions__secondary_actions", children: [.element(archive)]), at: 2)
         }
 
-        return Interface(timestamp: Date(timeIntervalSince1970: 0), tree: tree)
+        return makeInterface(nodes: nodes)
     }
 
-    private static func makeActionsContainer(stableId: String, y: Double = 40) -> ContainerInfo {
-        ContainerInfo(
+    private static func makeActionsContainer(stableId _: String, y: Double = 40) -> AccessibilityContainer {
+        AccessibilityContainer(
             type: .semanticGroup(label: "Actions", value: nil, identifier: "actions"),
-            stableId: stableId,
-            frameX: 0,
-            frameY: y,
-            frameWidth: 200,
-            frameHeight: 100
+            frame: AccessibilityRect(x: 0, y: y, width: 200, height: 100)
+        )
+    }
+
+    private enum TestInterfaceNode {
+        case element(HeistElement)
+        case container(AccessibilityContainer, stableId: String, children: [TestInterfaceNode])
+    }
+
+    private static func makeInterface(nodes: [TestInterfaceNode]) -> Interface {
+        var traversalIndex = 0
+        var elementAnnotations: [InterfaceElementAnnotation] = []
+        var containerAnnotations: [InterfaceContainerAnnotation] = []
+
+        func convert(_ node: TestInterfaceNode, path: TreePath) -> AccessibilityHierarchy {
+            switch node {
+            case .element(let element):
+                let index = traversalIndex
+                traversalIndex += 1
+                elementAnnotations.append(InterfaceElementAnnotation(
+                    traversalIndex: index,
+                    heistId: element.heistId,
+                    actions: element.actions
+                ))
+                return .element(makeAccessibilityElement(element), traversalIndex: index)
+            case .container(let container, let stableId, let children):
+                containerAnnotations.append(InterfaceContainerAnnotation(path: path, stableId: stableId))
+                return .container(
+                    container,
+                    children: children.enumerated().map { offset, child in
+                        convert(child, path: path.appending(offset))
+                    }
+                )
+            }
+        }
+
+        let tree = nodes.enumerated().map { offset, node in
+            convert(node, path: TreePath([offset]))
+        }
+        return Interface(
+            timestamp: Date(timeIntervalSince1970: 0),
+            tree: tree,
+            annotations: InterfaceAnnotations(elements: elementAnnotations, containers: containerAnnotations)
+        )
+    }
+
+    private static func makeAccessibilityElement(_ element: HeistElement) -> AccessibilityElement {
+        AccessibilityElement(
+            description: element.description,
+            label: element.label,
+            value: element.value,
+            traits: AccessibilityTraits.fromNames(element.traits.map(\.rawValue)),
+            identifier: element.identifier,
+            hint: nil,
+            userInputLabels: nil,
+            shape: .frame(AccessibilityRect(
+                x: element.frameX,
+                y: element.frameY,
+                width: element.frameWidth,
+                height: element.frameHeight
+            )),
+            activationPoint: AccessibilityPoint(x: element.activationPointX, y: element.activationPointY),
+            usesDefaultActivationPoint: true,
+            customActions: [],
+            customContent: [],
+            customRotors: [],
+            accessibilityLanguage: nil,
+            respondsToUserInteraction: true
         )
     }
 

@@ -51,10 +51,7 @@ final class ScreenshotPayloadTests: XCTestCase {
             pngData: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
             width: 1206,
             height: 2622,
-            interface: Interface(
-                timestamp: Date(timeIntervalSince1970: 123),
-                tree: [.element(element)]
-            )
+            interface: makeTestInterface(elements: [element], timestamp: Date(timeIntervalSince1970: 123))
         )
 
         let encoder = JSONEncoder()

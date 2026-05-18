@@ -54,7 +54,7 @@ final class MessageIntegrationTests: XCTestCase {
             )
         }
 
-        let payload = Interface(timestamp: Date(), tree: elements.map { .element($0) })
+        let payload = makeTestInterface(elements: elements, timestamp: Date())
         let message = ServerMessage.interface(payload)
 
         let encoder = JSONEncoder()
@@ -158,7 +158,7 @@ final class MessageIntegrationTests: XCTestCase {
                 frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
                 actions: []
             )
-            let payload = Interface(timestamp: Date(), tree: [.element(element)])
+            let payload = makeTestInterface(elements: [element], timestamp: Date())
             let msg = ServerMessage.interface(payload)
 
             let data = try encoder.encode(msg)

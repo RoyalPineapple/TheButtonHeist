@@ -934,7 +934,8 @@ not duplicated on `ServerInfo`.
 |-------|------|-------------|
 | `screenDescription` | `String` | Deterministic one-line screen summary (e.g. `"Sign In — 1 text field, 1 password field, 3 buttons"`) |
 | `timestamp` | `ISO8601 Date` | When interface was captured |
-| `tree` | `[InterfaceNode]` | Canonical tree of leaf elements and grouping containers. Every element appears exactly once at its tree position; there is no parallel flat array on the wire. |
+| `tree` | `[AccessibilityHierarchy]` | Canonical full-fidelity parser hierarchy. Every accessibility node appears at its tree position; Button Heist metadata is attached through `annotations`. |
+| `annotations` | `InterfaceAnnotations` | Button Heist element/container metadata keyed by parser traversal index and tree path. |
 
 ### HeistElement
 
@@ -955,34 +956,26 @@ not duplicated on `ServerInfo`.
 | `customContent` | `[HeistCustomContent]?` | Custom accessibility content (full detail only) |
 | `actions` | `[ElementAction]?` | Non-obvious actions only. Omitted when all actions are implied by traits (`activate` for buttons, `increment`/`decrement` for adjustable). Custom actions always included. |
 
-### InterfaceNode
+### AccessibilityHierarchy
 
-Recursive node in the canonical interface tree. Each node is a singleton object whose key discriminates the case:
+Recursive node in the canonical interface tree. This is the parser model carried over the wire without converting into a Button Heist-specific tree:
 
-- `{"element":{...HeistElement}}` — Leaf node carrying a full `HeistElement` payload (no `order`, no parallel flat array — the leaf's tree position is its order).
-- `{"container":{type, …ContainerInfo, "children":[InterfaceNode]}}` — Container node carrying `ContainerInfo` fields (type discriminator + payload + frame) inline alongside `children`.
+- `{"element":{"_0":{...AccessibilityElement}, "traversalIndex": Int}}` — Leaf node carrying the parser element and traversal index.
+- `{"container":{"_0":{...AccessibilityContainer}, "children":[AccessibilityHierarchy]}}` — Container node carrying the parser container and nested children.
 
-### ContainerInfo
+### InterfaceAnnotations
 
-The container payload is a flat object keyed by the discriminator `type`. Type-specific fields live at the same level alongside the frame:
+Button Heist metadata is deliberately separate from the parser hierarchy so the tree stays full-fidelity:
 
 | Field | Type | Always present | Description |
 |-------|------|----------------|-------------|
-| `type` | `String` | Yes | Discriminator; one of the container types listed below |
-| `stableId` | `String?` | When available | Stable container identity used by tree deltas |
-| `isModalBoundary` | `Bool` | Only when `true` | Parser-reported accessibility modal boundary marker |
-| `frameX` | `Double` | Yes | Frame origin X in points |
-| `frameY` | `Double` | Yes | Frame origin Y in points |
-| `frameWidth` | `Double` | Yes | Frame width in points |
-| `frameHeight` | `Double` | Yes | Frame height in points |
-| `children` | `[InterfaceNode]` | Yes (inside `InterfaceNode.container`) | Child nodes |
-| `label` | `String?` | `semanticGroup` only | Container label |
-| `value` | `String?` | `semanticGroup` only | Container value |
-| `identifier` | `String?` | `semanticGroup` only | Container identifier |
-| `contentWidth` | `Double` | `scrollable` only | Scroll content size width |
-| `contentHeight` | `Double` | `scrollable` only | Scroll content size height |
-| `rowCount` | `Int` | `dataTable` only | Number of rows |
-| `columnCount` | `Int` | `dataTable` only | Number of columns |
+| `elements` | `[InterfaceElementAnnotation]` | Yes | Element annotations keyed by parser traversal index |
+| `containers` | `[InterfaceContainerAnnotation]` | Yes | Container annotations keyed by tree path |
+| `traversalIndex` | `Int` | Element annotation | Parser traversal index |
+| `heistId` | `String` | Element annotation | Current-hierarchy Button Heist handle |
+| `actions` | `[ElementAction]` | Element annotation | Supported Button Heist actions |
+| `path` | `TreePath` | Container annotation | Root-relative child-index path |
+| `stableId` | `String?` | Container annotation | Capture-local container identity used by subtree targeting and tree deltas |
 
 Container types:
 - `"semanticGroup"` — Semantic grouping (with optional `label`/`value`/`identifier`)
@@ -1693,9 +1686,8 @@ The current shape, beyond what is described in the message reference above:
   `recordingError` wire types are gone; their categories live in
   `ErrorKind` (`authFailure`, `recording`, `general`, plus the existing
   action-result kinds).
-- `Interface` ships a single canonical `tree: [InterfaceNode]` with
-  `HeistElement` payloads at the leaves. `Interface.elements` is a computed
-  flatten for source compat but does not appear on the wire.
+- `Interface` ships `tree: [AccessibilityHierarchy]` plus `annotations`.
+  `Interface.elements` is a computed projection and does not appear on the wire.
 - `ActionExpectation` uses an explicit `type` discriminator
   (`{"type": "element_updated", …}`) rather than Swift-synthesized Codable.
   The `expect` field accepts the object form only.

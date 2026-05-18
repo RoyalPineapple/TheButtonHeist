@@ -1,4 +1,5 @@
 import XCTest
+import AccessibilitySnapshotModel
 @testable import ButtonHeist
 import TheScore
 
@@ -283,7 +284,7 @@ final class TheFenceTests: XCTestCase {
                 pngData: "",
                 width: 390,
                 height: 844,
-                interface: Interface(timestamp: Date(), tree: [.element(element)])
+                interface: makeReceiptTestInterface([element])
             )
         )
         let json = response.jsonDict()
@@ -331,18 +332,13 @@ final class TheFenceTests: XCTestCase {
             frameHeight: 44,
             actions: [.activate]
         )
-        let containerInfo = ContainerInfo(
-            type: .list,
-            frameX: 0,
-            frameY: 44,
-            frameWidth: 390,
-            frameHeight: 600
-        )
-        let interface = Interface(
-            timestamp: Date(),
-            tree: [
+        let interface = makeReceiptTestInterface(
+            nodes: [
                 .element(title),
-                .container(containerInfo, children: [.element(wifi)]),
+                .container(
+                    makeReceiptTestContainer(type: .list, frameX: 0, frameY: 44, frameWidth: 390, frameHeight: 600),
+                    children: [.element(wifi)]
+                ),
             ]
         )
 
@@ -391,16 +387,20 @@ final class TheFenceTests: XCTestCase {
             ],
             actions: [.activate]
         )
-        let containerInfo = ContainerInfo(
-            type: .scrollable(contentWidth: 390, contentHeight: 1200),
-            frameX: 0,
-            frameY: 44,
-            frameWidth: 390,
-            frameHeight: 600
-        )
-        let interface = Interface(
-            timestamp: Date(),
-            tree: [.container(containerInfo, children: [.element(element)])]
+        let interface = makeReceiptTestInterface(
+            nodes: [
+                .container(
+                    makeReceiptTestScrollableContainer(
+                        contentWidth: 390,
+                        contentHeight: 1200,
+                        frameX: 0,
+                        frameY: 44,
+                        frameWidth: 390,
+                        frameHeight: 600
+                    ),
+                    children: [.element(element)]
+                ),
+            ]
         )
 
         let response = FenceResponse.interface(interface, detail: .summary)
@@ -447,7 +447,7 @@ final class TheFenceTests: XCTestCase {
             ],
             actions: [.activate]
         )
-        let interface = Interface(timestamp: Date(), tree: [.element(element)])
+        let interface = makeReceiptTestInterface([element])
 
         let response = FenceResponse.interface(interface, detail: .full)
         let json = response.jsonDict()
@@ -478,16 +478,20 @@ final class TheFenceTests: XCTestCase {
             frameHeight: 44,
             actions: [.activate]
         )
-        let containerInfo = ContainerInfo(
-            type: .scrollable(contentWidth: 390, contentHeight: 1200),
-            frameX: 0,
-            frameY: 44,
-            frameWidth: 390,
-            frameHeight: 600
-        )
-        let interface = Interface(
-            timestamp: Date(),
-            tree: [.container(containerInfo, children: [.element(element)])]
+        let interface = makeReceiptTestInterface(
+            nodes: [
+                .container(
+                    makeReceiptTestScrollableContainer(
+                        contentWidth: 390,
+                        contentHeight: 1200,
+                        frameX: 0,
+                        frameY: 44,
+                        frameWidth: 390,
+                        frameHeight: 600
+                    ),
+                    children: [.element(element)]
+                ),
+            ]
         )
 
         let text = FenceResponse.interface(interface, detail: .summary).compactFormatted()
@@ -513,16 +517,20 @@ final class TheFenceTests: XCTestCase {
             activationPointY: 66,
             actions: [.activate]
         )
-        let containerInfo = ContainerInfo(
-            type: .scrollable(contentWidth: 390, contentHeight: 1200),
-            frameX: 0,
-            frameY: 44,
-            frameWidth: 390,
-            frameHeight: 600
-        )
-        let interface = Interface(
-            timestamp: Date(),
-            tree: [.container(containerInfo, children: [.element(element)])]
+        let interface = makeReceiptTestInterface(
+            nodes: [
+                .container(
+                    makeReceiptTestScrollableContainer(
+                        contentWidth: 390,
+                        contentHeight: 1200,
+                        frameX: 0,
+                        frameY: 44,
+                        frameWidth: 390,
+                        frameHeight: 600
+                    ),
+                    children: [.element(element)]
+                ),
+            ]
         )
 
         let text = FenceResponse.interface(interface, detail: .full).compactFormatted()
@@ -1071,7 +1079,7 @@ final class TheFenceTests: XCTestCase {
     /// Tree insertions are serialized at summary detail: identity fields are
     /// kept, heavy semantics (hint, customContent) and geometry are dropped,
     /// and nested containers recurse through the same fold.
-    func testActionResultDeltaInsertionPreservesNodeShape() {
+    func testActionResultDeltaInsertionPreservesNodeShape() throws {
         let leafElement = HeistElement(
             heistId: "child_leaf",
             description: "Leaf",
@@ -1089,33 +1097,39 @@ final class TheFenceTests: XCTestCase {
             ],
             actions: [.custom("Inspect")]
         )
-        let nestedContainerInfo = ContainerInfo(
-            type: .list,
-            frameX: 0,
-            frameY: 0,
-            frameWidth: 200,
-            frameHeight: 400
-        )
-        let outerContainerInfo = ContainerInfo(
-            type: .semanticGroup(label: "Outer", value: nil, identifier: nil),
-            frameX: 0,
-            frameY: 0,
-            frameWidth: 300,
-            frameHeight: 500
-        )
-        let outerNode: InterfaceNode = .container(outerContainerInfo, children: [
-            .element(leafElement),
-            .container(nestedContainerInfo, children: [
+        let insertedInterface = makeReceiptTestInterface(nodes: [
+            .container(makeReceiptTestSemanticContainer(
+                label: "Outer",
+                frameX: 0,
+                frameY: 0,
+                frameWidth: 300,
+                frameHeight: 500
+            ), stableId: nil, children: [
                 .element(leafElement),
+                .container(makeReceiptTestContainer(
+                    type: .list,
+                    frameX: 0,
+                    frameY: 0,
+                    frameWidth: 200,
+                    frameHeight: 400
+                ), stableId: nil, children: [
+                    .element(leafElement),
+                ]),
             ]),
         ])
+        let outerNode = try XCTUnwrap(insertedInterface.tree.first)
 
         let delta: AccessibilityTrace.Delta = .elementsChanged(.init(
             elementCount: 3,
             edits: ElementEdits(treeInserted: [
                 TreeInsertion(
                     location: TreeLocation(parentId: nil, index: 0),
-                    node: outerNode
+                    node: outerNode,
+                    annotations: insertedInterface.annotations(
+                        forSubtree: outerNode,
+                        originalPath: TreePath([0]),
+                        rootPath: .root
+                    )
                 ),
             ])
         ))
@@ -2490,7 +2504,7 @@ final class TheFenceTests: XCTestCase {
             description: "Button", label: "New Order", value: nil, identifier: nil,
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44, actions: [.activate]
         )
-        let fullInterface = Interface(timestamp: Date(), tree: [.element(element)])
+        let fullInterface = makeReceiptTestInterface([element])
         let trace = makeReceiptTestTrace(
             before: makeReceiptTestInterface(elementCount: 0),
             after: fullInterface,
@@ -2930,9 +2944,8 @@ final class TheFenceTests: XCTestCase {
                     accessibilityTrace: makeReceiptTestTrace(before: loadingInterface, after: loadingInterface)
                 ))
             case .waitForChange:
-                let doneInterface = Interface(
-                    timestamp: Date(timeIntervalSince1970: 1),
-                    tree: [.element(HeistElement(
+                let doneInterface = makeReceiptTestInterface(
+                    [HeistElement(
                         heistId: "done",
                         description: "Done",
                         label: "Done",
@@ -2944,7 +2957,8 @@ final class TheFenceTests: XCTestCase {
                         frameWidth: 100,
                         frameHeight: 44,
                         actions: []
-                    ))]
+                    )],
+                    timestamp: Date(timeIntervalSince1970: 1)
                 )
                 return .actionResult(ActionResult(
                     success: true,
@@ -3158,8 +3172,8 @@ final class TheFenceTests: XCTestCase {
             traits: [.button]
         )
         var interfaceResponses = [
-            Interface(timestamp: Date(), tree: [.element(stale)]),
-            Interface(timestamp: Date(), tree: [.element(current)]),
+            makeReceiptTestInterface([stale]),
+            makeReceiptTestInterface([current]),
         ]
         mockConn.autoResponse = { message in
             switch message {

@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import AccessibilitySnapshotModel
 
 // MARK: - Element Actions
 
@@ -160,22 +161,114 @@ extension HeistTrait: Codable {
 
 // MARK: - Interface
 
+/// Position of a node in an accessibility hierarchy forest.
+///
+/// Paths are root-relative child indexes. The first root is `[0]`; its second
+/// child is `[0, 1]`. They are capture-local, not durable identities.
+public struct TreePath: Codable, Equatable, Hashable, Sendable {
+    public let indices: [Int]
+
+    public init(_ indices: [Int]) {
+        self.indices = indices
+    }
+
+    public static let root = TreePath([])
+
+    public func appending(_ index: Int) -> TreePath {
+        TreePath(indices + [index])
+    }
+}
+
+extension TreePath: Comparable {
+    public static func < (lhs: TreePath, rhs: TreePath) -> Bool {
+        for (left, right) in zip(lhs.indices, rhs.indices) where left != right {
+            return left < right
+        }
+        return lhs.indices.count < rhs.indices.count
+    }
+}
+
+/// Button Heist metadata attached to one parser element.
+///
+/// `AccessibilityElement` is the accessibility fact. These annotations are
+/// BH affordances derived from a parse: targeting handle plus supported action
+/// names. They are keyed by parser traversal index so the accessibility tree
+/// itself stays full-fidelity and unmodified.
+public struct InterfaceElementAnnotation: Codable, Equatable, Hashable, Sendable {
+    public let traversalIndex: Int
+    public let heistId: String
+    public let actions: [ElementAction]
+
+    public init(traversalIndex: Int, heistId: String, actions: [ElementAction]) {
+        self.traversalIndex = traversalIndex
+        self.heistId = heistId
+        self.actions = actions
+    }
+}
+
+/// Button Heist metadata attached to one parser container.
+///
+/// Container type, modal state, and geometry live on `AccessibilityContainer`.
+/// The only BH addition is the capture-local stable id used for subtree
+/// targeting and tree-diff references.
+public struct InterfaceContainerAnnotation: Codable, Equatable, Hashable, Sendable {
+    public let path: TreePath
+    public let stableId: String?
+
+    public init(path: TreePath, stableId: String?) {
+        self.path = path
+        self.stableId = stableId
+    }
+}
+
+/// Button Heist annotations for an `AccessibilityHierarchy` capture.
+public struct InterfaceAnnotations: Codable, Equatable, Hashable, Sendable {
+    public static let empty = InterfaceAnnotations()
+
+    public let elements: [InterfaceElementAnnotation]
+    public let containers: [InterfaceContainerAnnotation]
+
+    public init(
+        elements: [InterfaceElementAnnotation] = [],
+        containers: [InterfaceContainerAnnotation] = []
+    ) {
+        self.elements = elements
+        self.containers = containers
+    }
+
+    public var elementByTraversalIndex: [Int: InterfaceElementAnnotation] {
+        Dictionary(uniqueKeysWithValues: elements.map { ($0.traversalIndex, $0) })
+    }
+
+    public var containerByPath: [TreePath: InterfaceContainerAnnotation] {
+        Dictionary(uniqueKeysWithValues: containers.map { ($0.path, $0) })
+    }
+}
+
 /// A snapshot of the current accessibility interface returned by the server.
 ///
-/// The wire shape carries a single canonical tree of `InterfaceNode` values
-/// with `HeistElement` payloads at the leaves. There is no parallel flat
-/// element array on the wire; `elements` is a depth-first flatten for source
-/// compatibility with the few callers that want a flat list.
+/// The wire shape carries the parser's full-fidelity `AccessibilityHierarchy`
+/// plus Button Heist annotations. There is no parallel lossy tree on the wire;
+/// `elements` is a projection for matching and formatting.
 public struct Interface: Codable, Equatable, Sendable {
     public let timestamp: Date
-    public let tree: [InterfaceNode]
+    public let tree: [AccessibilityHierarchy]
+    public let annotations: InterfaceAnnotations
 
     // MARK: - Computed Properties
 
-    /// Depth-first flatten of the tree. Returns every leaf element in
-    /// VoiceOver traversal order. Computed; not stored on the wire.
+    /// Button Heist element projection in VoiceOver traversal order.
+    ///
+    /// Computed from `tree + annotations`; not stored as a second source of
+    /// truth on the wire.
     public var elements: [HeistElement] {
-        tree.flatten()
+        let annotationsByIndex = annotations.elementByTraversalIndex
+        return tree.indexedElements.map { element, traversalIndex in
+            HeistElement(
+                accessibilityElement: element,
+                annotation: annotationsByIndex[traversalIndex]
+            )
+        }
     }
 
     /// Deterministic one-line screen summary built from element metadata.
@@ -200,9 +293,34 @@ public struct Interface: Codable, Equatable, Sendable {
         Self.buildNavigation(from: elements)
     }
 
-    public init(timestamp: Date, tree: [InterfaceNode]) {
+    public init(
+        timestamp: Date,
+        tree: [AccessibilityHierarchy],
+        annotations: InterfaceAnnotations = .empty
+    ) {
         self.timestamp = timestamp
         self.tree = tree
+        self.annotations = annotations
+    }
+
+    public func annotations(
+        forSubtree node: AccessibilityHierarchy,
+        originalPath: TreePath,
+        rootPath: TreePath
+    ) -> InterfaceAnnotations {
+        let traversalIndices = Set(node.indexedElements.map(\.traversalIndex))
+        let elements = annotations.elements.filter { traversalIndices.contains($0.traversalIndex) }
+        let containersByPath = annotations.containerByPath
+        let containers = node.compactMapSubtrees(path: rootPath) { node, newPath -> InterfaceContainerAnnotation? in
+            guard case .container = node else { return nil }
+            let relativePath = Array(newPath.indices.dropFirst(rootPath.indices.count))
+            let oldPath = TreePath(originalPath.indices + relativePath)
+            return InterfaceContainerAnnotation(
+                path: newPath,
+                stableId: containersByPath[oldPath]?.stableId
+            )
+        }
+        return InterfaceAnnotations(elements: elements, containers: containers)
     }
 
     // MARK: - Navigation Context
@@ -360,86 +478,116 @@ public func isStableIdentifier(_ identifier: String) -> Bool {
                      options: .regularExpression) == nil
 }
 
-// MARK: - Interface Tree (canonical wire shape)
+// MARK: - Parser Hierarchy Algebra
 
-/// Container metadata for the canonical interface tree. Mirrors the parser's
-/// `AccessibilityContainer` data that is useful at client boundaries, while
-/// living in TheScore so CLI/MCP don't pull UIKit. Created by the iOS server
-/// when converting the parser hierarchy to wire format.
-public struct ContainerInfo: Equatable, Hashable, Sendable {
-    public enum ContainerTypeName: String, Codable, CaseIterable, Sendable {
-        case semanticGroup
-        case list
-        case landmark
-        case dataTable
-        case tabBar
-        case scrollable
-    }
-
-    public enum ContainerType: Equatable, Hashable, Sendable {
-        case semanticGroup(label: String?, value: String?, identifier: String?)
-        case list
-        case landmark
-        case dataTable(rowCount: Int, columnCount: Int)
-        case tabBar
-        case scrollable(contentWidth: Double, contentHeight: Double)
-    }
-
-    public let type: ContainerType
-    public let stableId: String?
-    /// True when the parser identified this container as an accessibility
-    /// modal boundary. Omitted from JSON when false for backward-compatible
-    /// wire output.
-    public let isModalBoundary: Bool
-    public let frameX: Double
-    public let frameY: Double
-    public let frameWidth: Double
-    public let frameHeight: Double
-
-    public var typeName: ContainerTypeName {
-        switch type {
-        case .semanticGroup:
-            return .semanticGroup
-        case .list:
-            return .list
-        case .landmark:
-            return .landmark
-        case .dataTable:
-            return .dataTable
-        case .tabBar:
-            return .tabBar
-        case .scrollable:
-            return .scrollable
+public extension AccessibilityHierarchy {
+    var indexedElements: [(element: AccessibilityElement, traversalIndex: Int)] {
+        switch self {
+        case .element(let element, let traversalIndex):
+            return [(element, traversalIndex)]
+        case .container(_, let children):
+            return children.flatMap(\.indexedElements)
         }
     }
 
-    public init(
-        type: ContainerType,
-        stableId: String? = nil,
-        isModalBoundary: Bool = false,
-        frameX: Double,
-        frameY: Double,
-        frameWidth: Double,
-        frameHeight: Double
-    ) {
-        self.type = type
-        self.stableId = stableId
-        self.isModalBoundary = isModalBoundary
-        self.frameX = frameX
-        self.frameY = frameY
-        self.frameWidth = frameWidth
-        self.frameHeight = frameHeight
+    func folded<Result>(
+        onElement: (AccessibilityElement, Int) -> Result,
+        onContainer: (AccessibilityContainer, [Result]) -> Result
+    ) -> Result {
+        switch self {
+        case .element(let element, let traversalIndex):
+            return onElement(element, traversalIndex)
+        case .container(let container, let children):
+            return onContainer(
+                container,
+                children.map { $0.folded(onElement: onElement, onContainer: onContainer) }
+            )
+        }
+    }
+
+    func compactMapSubtrees<Result>(
+        path: TreePath = .root,
+        _ transform: (AccessibilityHierarchy, TreePath) -> Result?
+    ) -> [Result] {
+        var results: [Result] = []
+        if let result = transform(self, path) {
+            results.append(result)
+        }
+        if case .container(_, let children) = self {
+            for (index, child) in children.enumerated() {
+                results.append(contentsOf: child.compactMapSubtrees(path: path.appending(index), transform))
+            }
+        }
+        return results
+    }
+
+    func subtrees(where predicate: (AccessibilityHierarchy, TreePath) -> Bool) -> [AccessibilityHierarchy] {
+        compactMapSubtrees { node, path in predicate(node, path) ? node : nil }
     }
 }
 
-/// Exact selector for `ContainerInfo` nodes in an interface tree.
+public extension Array where Element == AccessibilityHierarchy {
+    var indexedElements: [(element: AccessibilityElement, traversalIndex: Int)] {
+        flatMap(\.indexedElements).sorted { $0.traversalIndex < $1.traversalIndex }
+    }
+
+    func compactMapSubtrees<Result>(
+        _ transform: (AccessibilityHierarchy, TreePath) -> Result?
+    ) -> [Result] {
+        enumerated().flatMap { index, root in
+            root.compactMapSubtrees(path: TreePath([index]), transform)
+        }
+    }
+
+    func subtrees(where predicate: (AccessibilityHierarchy, TreePath) -> Bool) -> [AccessibilityHierarchy] {
+        var results: [AccessibilityHierarchy] = []
+        for (index, root) in enumerated() {
+            results.append(contentsOf: root.subtrees { node, path in
+                predicate(node, TreePath([index] + path.indices))
+            })
+        }
+        return results
+    }
+}
+
+public extension AccessibilityTraits {
+    var heistTraits: [HeistTrait] {
+        namesIncludingUnknownBits.map { HeistTrait(rawValue: $0) ?? .unknown($0) }
+    }
+
+    var namesIncludingUnknownBits: [String] {
+        var result = traitNames
+        var remaining = rawValue
+        for (trait, _) in Self.knownTraits where contains(trait) {
+            remaining &= ~trait.rawValue
+        }
+        if remaining != 0 {
+            result.append("unknown(0x\(String(remaining, radix: 16)))")
+        }
+        return result
+    }
+}
+
+// MARK: - Container Matching
+
+/// Stable names for parser accessibility container categories.
+public enum ContainerTypeName: String, Codable, CaseIterable, Sendable {
+    case semanticGroup
+    case list
+    case landmark
+    case dataTable
+    case tabBar
+    case scrollable
+}
+
+/// Exact selector for container nodes in an interface tree.
 ///
 /// This is intentionally separate from `ElementMatcher`: elements and
 /// containers have different identity fields and are matched in different tree
 /// positions.
 public struct ContainerMatcher: Codable, Sendable, Equatable {
     public let stableId: String?
-    public let type: ContainerInfo.ContainerTypeName?
+    public let type: ContainerTypeName?
     public let label: String?
     public let value: String?
     public let identifier: String?
@@ -447,7 +595,7 @@ public struct ContainerMatcher: Codable, Sendable, Equatable {
 
     public init(
         stableId: String? = nil,
-        type: ContainerInfo.ContainerTypeName? = nil,
+        type: ContainerTypeName? = nil,
         label: String? = nil,
         value: String? = nil,
         identifier: String? = nil,
@@ -464,244 +612,6 @@ public struct ContainerMatcher: Codable, Sendable, Equatable {
     public var hasPredicates: Bool {
         stableId?.isEmpty == false || type != nil || label?.isEmpty == false ||
             value?.isEmpty == false || identifier?.isEmpty == false || isModalBoundary != nil
-    }
-}
-
-/// Coding keys shared by `ContainerInfo` and `InterfaceNode`'s container case
-/// so the discriminator + payload + frame all live at one level on the wire,
-/// matching the documented protocol shape.
-private enum ContainerCodingKey: String, CodingKey {
-    case type
-    case stableId
-    case isModalBoundary
-    case label, value, identifier
-    case contentWidth, contentHeight
-    case rowCount, columnCount
-    case frameX, frameY, frameWidth, frameHeight
-    case children
-}
-
-extension ContainerInfo: Codable {
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: ContainerCodingKey.self)
-        try Self.encodeShape(self, into: &container)
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: ContainerCodingKey.self)
-        self = try Self.decodeShape(from: container)
-    }
-
-    fileprivate static func encodeShape(
-        _ info: ContainerInfo,
-        into container: inout KeyedEncodingContainer<ContainerCodingKey>
-    ) throws {
-        switch info.type {
-        case let .semanticGroup(label, value, identifier):
-            try container.encode("semanticGroup", forKey: .type)
-            try container.encodeIfPresent(label, forKey: .label)
-            try container.encodeIfPresent(value, forKey: .value)
-            try container.encodeIfPresent(identifier, forKey: .identifier)
-        case .list:
-            try container.encode("list", forKey: .type)
-        case .landmark:
-            try container.encode("landmark", forKey: .type)
-        case let .dataTable(rowCount, columnCount):
-            try container.encode("dataTable", forKey: .type)
-            try container.encode(rowCount, forKey: .rowCount)
-            try container.encode(columnCount, forKey: .columnCount)
-        case .tabBar:
-            try container.encode("tabBar", forKey: .type)
-        case let .scrollable(contentWidth, contentHeight):
-            try container.encode("scrollable", forKey: .type)
-            try container.encode(contentWidth, forKey: .contentWidth)
-            try container.encode(contentHeight, forKey: .contentHeight)
-        }
-        try container.encodeIfPresent(info.stableId, forKey: .stableId)
-        if info.isModalBoundary {
-            try container.encode(true, forKey: .isModalBoundary)
-        }
-        try container.encode(info.frameX, forKey: .frameX)
-        try container.encode(info.frameY, forKey: .frameY)
-        try container.encode(info.frameWidth, forKey: .frameWidth)
-        try container.encode(info.frameHeight, forKey: .frameHeight)
-    }
-
-    fileprivate static func decodeShape(
-        from container: KeyedDecodingContainer<ContainerCodingKey>
-    ) throws -> ContainerInfo {
-        let typeName = try container.decode(String.self, forKey: .type)
-        let type: ContainerType
-        switch typeName {
-        case "semanticGroup":
-            type = .semanticGroup(
-                label: try container.decodeIfPresent(String.self, forKey: .label),
-                value: try container.decodeIfPresent(String.self, forKey: .value),
-                identifier: try container.decodeIfPresent(String.self, forKey: .identifier)
-            )
-        case "list":
-            type = .list
-        case "landmark":
-            type = .landmark
-        case "dataTable":
-            type = .dataTable(
-                rowCount: try container.decode(Int.self, forKey: .rowCount),
-                columnCount: try container.decode(Int.self, forKey: .columnCount)
-            )
-        case "tabBar":
-            type = .tabBar
-        case "scrollable":
-            type = .scrollable(
-                contentWidth: try container.decode(Double.self, forKey: .contentWidth),
-                contentHeight: try container.decode(Double.self, forKey: .contentHeight)
-            )
-        default:
-            throw DecodingError.dataCorruptedError(
-                forKey: ContainerCodingKey.type,
-                in: container,
-                debugDescription: "Unknown container type: \(typeName)"
-            )
-        }
-        return ContainerInfo(
-            type: type,
-            stableId: try container.decodeIfPresent(String.self, forKey: .stableId),
-            isModalBoundary: try container.decodeIfPresent(Bool.self, forKey: .isModalBoundary) ?? false,
-            frameX: try container.decode(Double.self, forKey: .frameX),
-            frameY: try container.decode(Double.self, forKey: .frameY),
-            frameWidth: try container.decode(Double.self, forKey: .frameWidth),
-            frameHeight: try container.decode(Double.self, forKey: .frameHeight)
-        )
-    }
-}
-
-extension ContainerInfo {
-    public var containerLabel: String? {
-        if case .semanticGroup(let label, _, _) = type { return label }
-        return nil
-    }
-
-    public var containerValue: String? {
-        if case .semanticGroup(_, let value, _) = type { return value }
-        return nil
-    }
-
-    public var containerIdentifier: String? {
-        if case .semanticGroup(_, _, let identifier) = type { return identifier }
-        return nil
-    }
-
-    public func matches(_ matcher: ContainerMatcher) -> Bool {
-        if let stableId = matcher.stableId {
-            if stableId.isEmpty { return false }
-            guard self.stableId == stableId else { return false }
-        }
-        if let type = matcher.type {
-            guard typeName == type else { return false }
-        }
-        if let label = matcher.label {
-            if label.isEmpty { return false }
-            guard ElementMatcher.stringEquals(containerLabel ?? "", label) else { return false }
-        }
-        if let value = matcher.value {
-            if value.isEmpty { return false }
-            guard ElementMatcher.stringEquals(containerValue ?? "", value) else { return false }
-        }
-        if let identifier = matcher.identifier {
-            if identifier.isEmpty { return false }
-            guard ElementMatcher.stringEquals(containerIdentifier ?? "", identifier) else { return false }
-        }
-        if let isModalBoundary = matcher.isModalBoundary {
-            guard self.isModalBoundary == isModalBoundary else { return false }
-        }
-        return true
-    }
-}
-
-/// A node in the canonical interface tree. Leaves carry the full
-/// `HeistElement` payload — the tree is self-contained and there is no
-/// parallel flat array on the wire.
-public indirect enum InterfaceNode: Equatable, Hashable, Sendable {
-    case element(HeistElement)
-    case container(ContainerInfo, children: [InterfaceNode])
-}
-
-extension InterfaceNode: Codable {
-    private enum NodeDiscriminator: String, CodingKey {
-        case element
-        case container
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var outer = encoder.container(keyedBy: NodeDiscriminator.self)
-        switch self {
-        case .element(let element):
-            try outer.encode(element, forKey: .element)
-        case .container(let info, let children):
-            var inner = outer.nestedContainer(keyedBy: ContainerCodingKey.self, forKey: .container)
-            try ContainerInfo.encodeShape(info, into: &inner)
-            try inner.encode(children, forKey: .children)
-        }
-    }
-
-    public init(from decoder: Decoder) throws {
-        let outer = try decoder.container(keyedBy: NodeDiscriminator.self)
-        if outer.contains(.element) {
-            self = .element(try outer.decode(HeistElement.self, forKey: .element))
-        } else if outer.contains(.container) {
-            let inner = try outer.nestedContainer(keyedBy: ContainerCodingKey.self, forKey: .container)
-            let info = try ContainerInfo.decodeShape(from: inner)
-            let children = try inner.decode([InterfaceNode].self, forKey: .children)
-            self = .container(info, children: children)
-        } else {
-            throw DecodingError.dataCorruptedError(
-                forKey: NodeDiscriminator.element,
-                in: outer,
-                debugDescription: "InterfaceNode must be either .element or .container"
-            )
-        }
-    }
-}
-
-public extension InterfaceNode {
-    /// Depth-first flatten yielding every leaf element in traversal order.
-    func flatten() -> [HeistElement] {
-        switch self {
-        case .element(let element):
-            return [element]
-        case .container(_, let children):
-            return children.flatMap { $0.flatten() }
-        }
-    }
-
-    /// Catamorphism over the interface tree: recurse once, transform per-node.
-    ///
-    /// Walks the tree depth-first, left-to-right, applying `onElement` at every
-    /// leaf and `onContainer` at every container with its children already
-    /// folded. The leaves are visited in DFS pre-order — closures that capture
-    /// a counter by reference see elements in the same order they appear in
-    /// the canonical traversal index.
-    ///
-    /// Consumers that produce different representations of the same walk
-    /// (compact text, JSON dictionaries, delta encodings) share this single
-    /// recursion instead of each reimplementing the switch.
-    func folded<T>(
-        onElement: (HeistElement) -> T,
-        onContainer: (ContainerInfo, [T]) -> T
-    ) -> T {
-        switch self {
-        case .element(let element):
-            return onElement(element)
-        case .container(let info, let children):
-            let foldedChildren = children.map { $0.folded(onElement: onElement, onContainer: onContainer) }
-            return onContainer(info, foldedChildren)
-        }
-    }
-}
-
-public extension Array where Element == InterfaceNode {
-    /// Depth-first flatten across a forest.
-    func flatten() -> [HeistElement] {
-        flatMap { $0.flatten() }
     }
 }
 
@@ -771,6 +681,42 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
         self.actions = actions
     }
 
+}
+
+public extension HeistElement {
+    init(
+        accessibilityElement element: AccessibilityElement,
+        annotation: InterfaceElementAnnotation? = nil
+    ) {
+        let frame = element.shape.frame
+        let validCustomContent = element.customContent.filter { !$0.label.isEmpty || !$0.value.isEmpty }
+        let validRotors = element.customRotors.filter { !$0.name.isEmpty }
+        self.init(
+            heistId: annotation?.heistId ?? "",
+            description: element.description,
+            label: element.label,
+            value: element.value,
+            identifier: element.identifier,
+            hint: element.hint,
+            traits: element.traits.heistTraits,
+            frameX: sanitizedDouble(frame.origin.x),
+            frameY: sanitizedDouble(frame.origin.y),
+            frameWidth: sanitizedDouble(frame.size.width),
+            frameHeight: sanitizedDouble(frame.size.height),
+            activationPointX: sanitizedDouble(element.activationPoint.x),
+            activationPointY: sanitizedDouble(element.activationPoint.y),
+            respondsToUserInteraction: element.respondsToUserInteraction,
+            customContent: validCustomContent.isEmpty ? nil : validCustomContent.map {
+                HeistCustomContent(label: $0.label, value: $0.value, isImportant: $0.isImportant)
+            },
+            rotors: validRotors.isEmpty ? nil : validRotors.map { HeistRotor(name: $0.name) },
+            actions: annotation?.actions ?? []
+        )
+    }
+}
+
+private func sanitizedDouble(_ value: CGFloat) -> Double {
+    value.isFinite ? Double(value) : 0
 }
 
 /// Rotor metadata attached to a HeistElement.
@@ -868,7 +814,7 @@ public struct ElementMatcher: Codable, Sendable, Equatable {
 /// Selector for projecting an `Interface` to one matched node.
 ///
 /// `.element` searches leaf `HeistElement` nodes with `ElementMatcher`.
-/// `.container` searches `ContainerInfo` nodes with `ContainerMatcher`.
+/// `.container` searches parser container nodes with `ContainerMatcher`.
 /// `ordinal` is applied after collecting matches in stable tree order.
 public enum SubtreeSelector: Codable, Sendable, Equatable {
     case element(ElementMatcher, ordinal: Int? = nil)

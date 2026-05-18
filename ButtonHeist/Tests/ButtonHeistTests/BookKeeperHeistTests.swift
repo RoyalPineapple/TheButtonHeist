@@ -140,28 +140,28 @@ final class BookKeeperHeistTests: XCTestCase {
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
 
-        let preActionInterface = Interface(
-            timestamp: Date(timeIntervalSince1970: 0),
-            tree: [
-                .element(makeElement(
+        let preActionInterface = makeReceiptTestInterface(
+            [
+                makeElement(
                     heistId: "save",
                     label: "Save",
                     identifier: "primary.save",
                     traits: [.button]
-                )),
-                .element(makeElement(heistId: "cancel", label: "Cancel", traits: [.button])),
-            ]
+                ),
+                makeElement(heistId: "cancel", label: "Cancel", traits: [.button]),
+            ],
+            timestamp: Date(timeIntervalSince1970: 0)
         )
-        let postActionInterface = Interface(
-            timestamp: Date(timeIntervalSince1970: 1),
-            tree: [
-                .element(makeElement(
+        let postActionInterface = makeReceiptTestInterface(
+            [
+                makeElement(
                     heistId: "save",
                     label: "Save",
                     identifier: "post-action.save",
                     traits: [.button]
-                )),
-            ]
+                ),
+            ],
+            timestamp: Date(timeIntervalSince1970: 1)
         )
         let preActionCapture = AccessibilityTrace.Capture(sequence: 1, interface: preActionInterface)
         let postActionCapture = AccessibilityTrace.Capture(
@@ -197,20 +197,20 @@ final class BookKeeperHeistTests: XCTestCase {
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
 
-        let preActionInterface = Interface(
-            timestamp: Date(timeIntervalSince1970: 0),
-            tree: [.element(makeElement(heistId: "cancel", label: "Cancel", traits: [.button]))]
+        let preActionInterface = makeReceiptTestInterface(
+            [makeElement(heistId: "cancel", label: "Cancel", traits: [.button])],
+            timestamp: Date(timeIntervalSince1970: 0)
         )
-        let postActionInterface = Interface(
-            timestamp: Date(timeIntervalSince1970: 1),
-            tree: [
-                .element(makeElement(
+        let postActionInterface = makeReceiptTestInterface(
+            [
+                makeElement(
                     heistId: "save",
                     label: "Save",
                     identifier: "post-action.save",
                     traits: [.button]
-                )),
-            ]
+                ),
+            ],
+            timestamp: Date(timeIntervalSince1970: 1)
         )
         let preActionCapture = AccessibilityTrace.Capture(sequence: 1, interface: preActionInterface)
 
@@ -380,7 +380,7 @@ final class BookKeeperHeistTests: XCTestCase {
         let element = makeElement(heistId: "button_submit", label: "Submit", traits: [.button])
         let capture = AccessibilityTrace.Capture(
             sequence: 1,
-            interface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [.element(element)])
+            interface: makeReceiptTestInterface([element], timestamp: Date(timeIntervalSince1970: 0))
         )
         try recordHeistEvidence(bookKeeper, command: .activate,
             args: [
@@ -406,13 +406,7 @@ final class BookKeeperHeistTests: XCTestCase {
         let second = makeElement(heistId: "anonymous_2")
         let capture = AccessibilityTrace.Capture(
             sequence: 1,
-            interface: Interface(
-                timestamp: Date(timeIntervalSince1970: 0),
-                tree: [
-                    .element(first),
-                    .element(second),
-                ]
-            )
+            interface: makeReceiptTestInterface([first, second], timestamp: Date(timeIntervalSince1970: 0))
         )
         try recordHeistEvidence(bookKeeper, command: .activate,
             args: [

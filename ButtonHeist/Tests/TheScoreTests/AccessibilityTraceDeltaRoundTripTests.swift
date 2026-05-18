@@ -1,4 +1,5 @@
 import XCTest
+import AccessibilitySnapshotModel
 @testable import TheScore
 
 // MARK: - AccessibilityTrace.Delta Round-Trip Tests
@@ -139,7 +140,7 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
             )],
             treeInserted: [TreeInsertion(
                 location: TreeLocation(parentId: nil, index: 0),
-                node: .element(added)
+                node: .element(makeTestAccessibilityElement(added), traversalIndex: 0)
             )],
             treeRemoved: [TreeRemoval(
                 ref: TreeNodeRef(id: "old", kind: .element),
@@ -211,7 +212,7 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
         XCTAssertEqual(payload.transient.map(\.heistId), ["spin"])
     }
 
-    func testScreenChangedDoesNotCarryLegacyPostEdits() throws {
+    func testScreenChangedRejectsLegacyInterfaceShape() {
         let json = """
         {
           "kind": "screenChanged",
@@ -232,12 +233,10 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
           }
         }
         """
-        let decoded = try decoder.decode(AccessibilityTrace.Delta.self, from: Data(json.utf8))
-        XCTAssertNil(decoded.elementEdits)
-
-        let encoded = try encoder.encode(decoded)
-        let encodedJSON = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
-        XCTAssertNil(encodedJSON["postEdits"])
+        XCTAssertThrowsError(
+            try decoder.decode(AccessibilityTrace.Delta.self, from: Data(json.utf8)),
+            "Legacy screenChanged payloads without interface annotations are no longer accepted"
+        )
     }
 
     // MARK: - Cross-Case Accessors

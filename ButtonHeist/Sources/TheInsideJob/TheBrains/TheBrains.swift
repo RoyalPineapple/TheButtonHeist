@@ -106,8 +106,8 @@ final class TheBrains {
         let snapshot: [Screen.ScreenElement]
         let elements: [AccessibilityElement]
         let hierarchy: [AccessibilityHierarchy]
-        let tree: [InterfaceNode]
-        let treeHash: Int
+        let interface: Interface
+        let interfaceHash: String
         let capture: AccessibilityTrace.Capture
         let tripwireSignal: TheTripwire.TripwireSignal
         let screenSnapshot: ScreenClassifier.Snapshot
@@ -117,15 +117,15 @@ final class TheBrains {
     /// Capture the current state for delta computation before an action.
     /// Caller must have called `refresh()` already this frame.
     func captureBeforeState() -> BeforeState {
-        let (tree, treeHash) = stash.wireTreeWithHash()
+        let (interface, interfaceHash) = stash.interfaceWithHash()
         let tripwireSignal = tripwire.tripwireSignal()
-        let capture = makeTraceCapture(tree: tree, sequence: 0, tripwireSignal: tripwireSignal)
+        let capture = makeTraceCapture(interface: interface, sequence: 0, tripwireSignal: tripwireSignal)
         return BeforeState(
             snapshot: stash.selectElements(),
             elements: stash.currentHierarchy.sortedElements,
             hierarchy: stash.currentHierarchy,
-            tree: tree,
-            treeHash: treeHash,
+            interface: interface,
+            interfaceHash: interfaceHash,
             capture: capture,
             tripwireSignal: tripwireSignal,
             screenSnapshot: ScreenClassifier.snapshot(of: stash.currentScreen),
@@ -133,21 +133,21 @@ final class TheBrains {
         )
     }
 
-    /// Capture the known semantic state as a flat wire tree. Exploration unions
-    /// off-viewport entries into `currentScreen.elements`, while `wireTree()`
-    /// intentionally follows the latest live hierarchy. Change predicates use
-    /// this semantic tree so viewport position is not mistaken for state.
+    /// Capture the known semantic state from the current parser hierarchy plus
+    /// Button Heist annotations. Exploration may update known targetable
+    /// elements, but the interface capture remains the parser tree rather than
+    /// a second flattened wire tree.
     func captureSemanticState() -> BeforeState {
         let snapshot = stash.selectElements()
-        let tree = TheStash.WireConversion.toWire(snapshot).map(InterfaceNode.element)
+        let (interface, interfaceHash) = stash.interfaceWithHash()
         let tripwireSignal = tripwire.tripwireSignal()
-        let capture = makeTraceCapture(tree: tree, sequence: 0, tripwireSignal: tripwireSignal)
+        let capture = makeTraceCapture(interface: interface, sequence: 0, tripwireSignal: tripwireSignal)
         return BeforeState(
             snapshot: snapshot,
             elements: snapshot.map(\.element),
             hierarchy: stash.currentHierarchy,
-            tree: tree,
-            treeHash: tree.hashValue,
+            interface: interface,
+            interfaceHash: interfaceHash,
             capture: capture,
             tripwireSignal: tripwireSignal,
             screenSnapshot: ScreenClassifier.snapshot(of: stash.currentScreen),
@@ -215,7 +215,7 @@ final class TheBrains {
         }
 
         _ = await navigation.exploreAndPrune()
-        let afterTree = stash.wireTree()
+        let afterInterface = stash.interface()
         let transientElements = Self.shouldSuppressTransient(
             settleEvents: settleResult.events,
             isScreenChange: isScreenChange
@@ -231,7 +231,7 @@ final class TheBrains {
             transient: transientElements.map { TheStash.WireConversion.convert($0) }
         )
         let postCapture = makeTraceCapture(
-            tree: afterTree,
+            interface: afterInterface,
             sequence: 2,
             parentHash: before.capture.hash,
             transition: transition
@@ -338,15 +338,15 @@ final class TheBrains {
         stash.clearCache()
         navigation.clearCache()
         sentHistory = .fresh
-        lastSettledHierarchyHash = 0
+        lastSettledInterfaceHash = nil
     }
 
     // MARK: - Response State Tracking
 
     /// State captured after each response sent to the driver.
     struct SentState {
-        let treeHash: Int
-        let viewportHash: Int
+        let interfaceHash: String
+        let viewportHash: String
         let captureHash: String
         let beforeState: BeforeState
         let screenId: String?
@@ -366,7 +366,7 @@ final class TheBrains {
     /// Hash of the last hierarchy observed by settled-change tracking.
     /// This is recording inactivity memory, not accessibility belief, so it
     /// lives with TheBrains instead of TheStash's committed Screen state.
-    private var lastSettledHierarchyHash: Int = 0
+    private var lastSettledInterfaceHash: String?
 
     /// The state of the last response sent to the driver, if any.
     var lastSentState: SentState? {
@@ -378,8 +378,8 @@ final class TheBrains {
     func recordSentState() {
         let state = captureSemanticState()
         sentHistory = .sent(SentState(
-            treeHash: state.treeHash,
-            viewportHash: stash.wireTreeHash(),
+            interfaceHash: state.interfaceHash,
+            viewportHash: stash.interfaceHash(),
             captureHash: state.capture.hash,
             beforeState: state,
             screenId: state.screenId
@@ -388,9 +388,14 @@ final class TheBrains {
 
     /// Record sent state when the caller already has the current viewport hash.
     func recordSentState(viewportHash: Int) {
+        recordSentState(viewportHash: String(viewportHash))
+    }
+
+    /// Record sent state when the caller already has the current viewport hash.
+    func recordSentState(viewportHash: String) {
         let state = captureSemanticState()
         sentHistory = .sent(SentState(
-            treeHash: state.treeHash,
+            interfaceHash: state.interfaceHash,
             viewportHash: viewportHash,
             captureHash: state.capture.hash,
             beforeState: state,
@@ -400,21 +405,21 @@ final class TheBrains {
 
     // MARK: - Settled Change Tracking
 
-    /// Refresh and report whether the wire tree changed since the last settled check.
+    /// Refresh and report whether the interface capture changed since the last settled check.
     func interfaceChangedSinceLastSettledCheck() -> Bool {
         guard refresh() != nil else { return false }
 
-        let currentHash = stash.wireTreeHash()
+        let currentHash = stash.interfaceHash()
 
-        guard currentHash != lastSettledHierarchyHash else { return false }
-        lastSettledHierarchyHash = currentHash
+        guard currentHash != lastSettledInterfaceHash else { return false }
+        lastSettledInterfaceHash = currentHash
 
         return true
     }
 
     /// Build an Interface payload from the current semantic state.
     func currentInterface() -> Interface {
-        Interface(timestamp: Date(), tree: stash.wireTree())
+        stash.interface()
     }
 
     func observeInterface(_ query: InterfaceQuery) async -> InterfaceObservation {
@@ -440,10 +445,10 @@ final class TheBrains {
     /// return the public accessibility trace.
     func computeBackgroundAccessibilityTrace() async -> AccessibilityTrace? {
         guard case .sent(let sent) = sentHistory,
-              sent.treeHash != 0,
-              sent.viewportHash != 0 else { return nil }
+              !sent.interfaceHash.isEmpty,
+              !sent.viewportHash.isEmpty else { return nil }
         guard refresh() != nil else { return nil }
-        let currentViewportHash = stash.wireTreeHash()
+        let currentViewportHash = stash.interfaceHash()
         let currentContext = makeCaptureContext()
         guard currentViewportHash != sent.viewportHash
             || currentContext != sent.beforeState.capture.context
@@ -843,7 +848,7 @@ final class TheBrains {
     // MARK: - Private Helpers
 
     func makeTraceCapture(
-        tree: [InterfaceNode],
+        interface: Interface,
         sequence: Int = 1,
         parentHash: String? = nil,
         tripwireSignal: TheTripwire.TripwireSignal? = nil,
@@ -851,7 +856,7 @@ final class TheBrains {
     ) -> AccessibilityTrace.Capture {
         AccessibilityTrace.Capture(
             sequence: sequence,
-            interface: Interface(timestamp: Date(), tree: tree),
+            interface: interface,
             parentHash: parentHash,
             context: makeCaptureContext(tripwireSignal: tripwireSignal),
             transition: transition
@@ -876,12 +881,12 @@ final class TheBrains {
     }
 
     func makeAccessibilityTrace(
-        afterTree: [InterfaceNode],
+        afterInterface: Interface,
         parentCapture: AccessibilityTrace.Capture? = nil,
         transition: AccessibilityTrace.Transition = .empty
     ) -> AccessibilityTrace {
         let capture = makeTraceCapture(
-            tree: afterTree,
+            interface: afterInterface,
             sequence: parentCapture == nil ? 1 : 2,
             parentHash: parentCapture?.hash,
             transition: transition

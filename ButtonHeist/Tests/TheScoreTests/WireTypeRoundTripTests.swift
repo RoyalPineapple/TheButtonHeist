@@ -1,4 +1,5 @@
 import XCTest
+import AccessibilitySnapshotModel
 @testable import TheScore
 
 // MARK: - Wire Type Codable Round-Trip Tests
@@ -356,61 +357,41 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded.clientButtonHeistVersion, "2026.05.08")
     }
 
-    // MARK: - ContainerInfo
+    // MARK: - AccessibilityContainer
 
-    func testContainerInfoRoundTrip() throws {
-        let info = ContainerInfo(
-            type: .scrollable(contentWidth: 390, contentHeight: 1000),
-            frameX: 0, frameY: 100, frameWidth: 390, frameHeight: 700
+    func testAccessibilityContainerRoundTrip() throws {
+        let container = makeTestAccessibilityContainer(
+            type: .scrollable(contentSize: AccessibilitySize(width: 390, height: 1000)),
+            frameY: 100,
+            frameWidth: 390,
+            frameHeight: 700
         )
-        let data = try encoder.encode(info)
-        let decoded = try decoder.decode(ContainerInfo.self, from: data)
-        XCTAssertEqual(decoded, info)
+        let data = try encoder.encode(container)
+        let decoded = try decoder.decode(AccessibilityContainer.self, from: data)
+        XCTAssertEqual(decoded, container)
     }
 
-    func testContainerInfoSemanticGroupRoundTrip() throws {
-        let info = ContainerInfo(
+    func testAccessibilityContainerSemanticGroupRoundTrip() throws {
+        let container = makeTestAccessibilityContainer(
             type: .semanticGroup(label: "Settings", value: nil, identifier: "settings"),
-            frameX: 0, frameY: 0, frameWidth: 390, frameHeight: 100
+            frameWidth: 390,
+            frameHeight: 100
         )
-        let data = try encoder.encode(info)
-        let decoded = try decoder.decode(ContainerInfo.self, from: data)
-        XCTAssertEqual(decoded, info)
+        let data = try encoder.encode(container)
+        let decoded = try decoder.decode(AccessibilityContainer.self, from: data)
+        XCTAssertEqual(decoded, container)
     }
 
-    func testContainerInfoDataTableRoundTrip() throws {
-        let info = ContainerInfo(
-            type: .dataTable(rowCount: 4, columnCount: 3),
-            frameX: 0, frameY: 0, frameWidth: 200, frameHeight: 200
-        )
-        let data = try encoder.encode(info)
-        let decoded = try decoder.decode(ContainerInfo.self, from: data)
-        XCTAssertEqual(decoded, info)
-    }
-
-    func testContainerInfoModalBoundaryRoundTrip() throws {
-        let info = ContainerInfo(
+    func testAccessibilityContainerModalBoundaryRoundTrip() throws {
+        let container = makeTestAccessibilityContainer(
             type: .semanticGroup(label: "Alert", value: nil, identifier: nil),
-            isModalBoundary: true,
-            frameX: 0, frameY: 0, frameWidth: 390, frameHeight: 300
+            frameWidth: 390,
+            frameHeight: 300,
+            isModalBoundary: true
         )
-        let data = try encoder.encode(info)
-        let decoded = try decoder.decode(ContainerInfo.self, from: data)
-        XCTAssertEqual(decoded, info)
-    }
-
-    func testContainerInfoLegacyPayloadDefaultsModalBoundaryFalse() throws {
-        let json = """
-        {
-          "type": "list",
-          "frameX": 0,
-          "frameY": 0,
-          "frameWidth": 390,
-          "frameHeight": 300
-        }
-        """
-        let decoded = try decoder.decode(ContainerInfo.self, from: Data(json.utf8))
-        XCTAssertFalse(decoded.isModalBoundary)
+        let data = try encoder.encode(container)
+        let decoded = try decoder.decode(AccessibilityContainer.self, from: data)
+        XCTAssertEqual(decoded, container)
     }
 
     // MARK: - SubtreeSelector
@@ -449,21 +430,21 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(try decoder.decode(SubtreeSelector.self, from: data), selector)
     }
 
-    // MARK: - InterfaceNode
+    // MARK: - AccessibilityHierarchy
 
-    func testInterfaceNodeLeafRoundTrip() throws {
+    func testAccessibilityHierarchyLeafRoundTrip() throws {
         let element = HeistElement(
             heistId: "btn",
             description: "Button", label: "OK", value: nil, identifier: nil,
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44, actions: [.activate]
         )
-        let node = InterfaceNode.element(element)
+        let node = AccessibilityHierarchy.element(makeTestAccessibilityElement(element), traversalIndex: 0)
         let data = try encoder.encode(node)
-        let decoded = try decoder.decode(InterfaceNode.self, from: data)
+        let decoded = try decoder.decode(AccessibilityHierarchy.self, from: data)
         XCTAssertEqual(decoded, node)
     }
 
-    func testInterfaceNodeContainerRoundTrip() throws {
+    func testAccessibilityHierarchyContainerRoundTrip() throws {
         let elementA = HeistElement(
             heistId: "a", description: "A", label: "A", value: nil, identifier: nil,
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44, actions: []
@@ -472,19 +453,22 @@ final class WireTypeRoundTripTests: XCTestCase {
             heistId: "b", description: "B", label: "B", value: nil, identifier: nil,
             frameX: 0, frameY: 50, frameWidth: 100, frameHeight: 44, actions: []
         )
-        let outer = ContainerInfo(
-            type: .list, frameX: 0, frameY: 0, frameWidth: 390, frameHeight: 600
+        let outer = makeTestAccessibilityContainer(
+            type: .list,
+            frameWidth: 390,
+            frameHeight: 600
         )
-        let inner = ContainerInfo(
+        let inner = makeTestAccessibilityContainer(
             type: .semanticGroup(label: nil, value: nil, identifier: nil),
-            frameX: 0, frameY: 0, frameWidth: 390, frameHeight: 44
+            frameWidth: 390,
+            frameHeight: 44
         )
-        let node = InterfaceNode.container(outer, children: [
-            .element(elementA),
-            .container(inner, children: [.element(elementB)]),
+        let node = AccessibilityHierarchy.container(outer, children: [
+            .element(makeTestAccessibilityElement(elementA), traversalIndex: 0),
+            .container(inner, children: [.element(makeTestAccessibilityElement(elementB), traversalIndex: 1)]),
         ])
         let data = try encoder.encode(node)
-        let decoded = try decoder.decode(InterfaceNode.self, from: data)
+        let decoded = try decoder.decode(AccessibilityHierarchy.self, from: data)
         XCTAssertEqual(decoded, node)
     }
 

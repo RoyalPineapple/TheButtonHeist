@@ -1047,9 +1047,9 @@ final class TheHandoffStateTests: XCTestCase {
         ))
         assertFailed(handoff.connectionPhase, failure: .connectionFailed("connection failed"))
 
-        let interface = Interface(
-            timestamp: Date(timeIntervalSince1970: 100),
-            tree: [.element(makeReceiptTestElement(heistId: "title", label: "Title"))]
+        let interface = makeReceiptTestInterface(
+            [makeReceiptTestElement(heistId: "title", label: "Title")],
+            timestamp: Date(timeIntervalSince1970: 100)
         )
         mock.onEvent?(.message(
             .interface(interface),

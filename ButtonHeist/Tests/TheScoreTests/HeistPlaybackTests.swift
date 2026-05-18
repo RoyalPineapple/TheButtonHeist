@@ -137,13 +137,13 @@ final class HeistPlaybackTests: XCTestCase {
     }
 
     func testStepWithRecordedAccessibilityTraceDerivesDeltaWithoutEncodingIt() throws {
-        let before = Interface(
-            timestamp: Date(timeIntervalSince1970: 0),
-            tree: [.element(makeElement(heistId: "before", label: "Before"))]
+        let before = makeTestInterface(
+            elements: [makeElement(heistId: "before", label: "Before")],
+            timestamp: Date(timeIntervalSince1970: 0)
         )
-        let after = Interface(
-            timestamp: Date(timeIntervalSince1970: 1),
-            tree: [.element(makeElement(heistId: "continue", label: "Continue"))]
+        let after = makeTestInterface(
+            elements: [makeElement(heistId: "continue", label: "Continue")],
+            timestamp: Date(timeIntervalSince1970: 1)
         )
         let step = HeistEvidence(
             command: "activate",
@@ -177,13 +177,13 @@ final class HeistPlaybackTests: XCTestCase {
     }
 
     func testRecordedMetadataIgnoresDecodedDeltaAndProjectsFromTrace() throws {
-        let beforeInterface = Interface(
-            timestamp: Date(timeIntervalSince1970: 0),
-            tree: [.element(makeElement(heistId: "status", label: "Old"))]
+        let beforeInterface = makeTestInterface(
+            elements: [makeElement(heistId: "status", label: "Old")],
+            timestamp: Date(timeIntervalSince1970: 0)
         )
-        let afterInterface = Interface(
-            timestamp: Date(timeIntervalSince1970: 0),
-            tree: [.element(makeElement(heistId: "status", label: "New"))]
+        let afterInterface = makeTestInterface(
+            elements: [makeElement(heistId: "status", label: "New")],
+            timestamp: Date(timeIntervalSince1970: 0)
         )
         let beforeCapture = AccessibilityTrace.Capture(sequence: 1, interface: beforeInterface)
         let afterCapture = AccessibilityTrace.Capture(

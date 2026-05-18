@@ -441,7 +441,7 @@ enum FenceParameterBlocks: Sendable {
                     .init(
                         key: "type", type: .string, optionalRole: .matcher,
                         description: "Container type",
-                        enumValues: fenceEnumValues(ContainerInfo.ContainerTypeName.self)
+                        enumValues: fenceEnumValues(ContainerTypeName.self)
                     ),
                     .init(key: "label", type: .string, optionalRole: .matcher, description: "Exact semantic container label"),
                     .init(key: "value", type: .string, optionalRole: .matcher, description: "Exact semantic container value"),

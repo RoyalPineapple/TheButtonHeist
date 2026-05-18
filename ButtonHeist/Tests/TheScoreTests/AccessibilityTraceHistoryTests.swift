@@ -263,9 +263,9 @@ final class AccessibilityTraceHistoryTests: XCTestCase {
     }
 
     private func makeInterface(label: String) -> Interface {
-        Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [
-            .element(makeElement(heistId: "title", label: label, traits: [.header])),
-            .element(makeElement(heistId: "save", label: "Save")),
+        makeTestInterface(elements: [
+            makeElement(heistId: "title", label: label, traits: [.header]),
+            makeElement(heistId: "save", label: "Save"),
         ])
     }
 

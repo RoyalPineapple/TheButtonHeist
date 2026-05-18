@@ -1120,54 +1120,39 @@ Container for UI element interface data.
 #### Properties
 
 - `timestamp: Date` — When the hierarchy was captured
-- `tree: [InterfaceNode]` — Canonical tree of leaf elements and grouping containers. Every element appears exactly once at its tree position; there is no parallel flat array on the wire.
-- `elements: [HeistElement]` — Computed depth-first flatten of `tree`. Provided for source compatibility with callers that want a flat list.
+- `tree: [AccessibilityHierarchy]` — Canonical full-fidelity parser hierarchy. Button Heist metadata is attached through `annotations`.
+- `annotations: InterfaceAnnotations` — Element and container metadata keyed by parser traversal index and tree path.
+- `elements: [HeistElement]` — Computed projection of `tree + annotations`. Provided for callers that want a flat list.
 - `screenDescription: String` — Deterministic one-line screen summary (e.g. `"Sign In — 1 text field, 1 password field, 3 buttons"`)
 - `screenId: String?` — Slugified screen name for machine use (e.g. `"controls_demo"`), derived from the first header element's label
 
-### InterfaceNode
+### AccessibilityHierarchy
 
 ```swift
-public indirect enum InterfaceNode: Codable, Equatable, Sendable
+public enum AccessibilityHierarchy: Codable, Equatable, Sendable
 ```
 
-Recursive node in the canonical interface tree. Leaves carry the full `HeistElement` payload — the tree is self-contained and there is no parallel flat array on the wire. Custom `Codable` produces the documented discriminator-keyed wire shape (`{"element": {...HeistElement...}}` / `{"container": {...ContainerInfo, "children":[...]}}`).
+Recursive node in the canonical interface tree, supplied by `AccessibilitySnapshotModel`. It carries parser `AccessibilityElement` / `AccessibilityContainer` values directly; Button Heist handles and stable container IDs live in `InterfaceAnnotations`.
 
 #### Cases
 
-- `element(HeistElement)` — Leaf node carrying a full element payload
-- `container(ContainerInfo, children: [InterfaceNode])` — Container grouping nested nodes
+- `element(AccessibilityElement, traversalIndex: Int)` — Leaf parser element
+- `container(AccessibilityContainer, children: [AccessibilityHierarchy])` — Container grouping nested nodes
 
-### ContainerInfo
+### InterfaceAnnotations
 
 ```swift
-public struct ContainerInfo: Codable, Equatable, Hashable, Sendable
+public struct InterfaceAnnotations: Codable, Equatable, Hashable, Sendable
 ```
 
-Container metadata for the canonical interface tree. Mirrors parser container fields that are useful at client boundaries while keeping UIKit out of TheScore. The container `type` is itself an enum carrying the type-specific payload; on the wire the discriminator and payload are flattened to one level.
+Button Heist metadata for a parser hierarchy capture.
 
 #### Properties
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `type` | `ContainerInfo.ContainerType` | Container type with type-specific payload |
-| `stableId` | `String?` | Stable container identity when available |
-| `isModalBoundary` | `Bool` | True when the parser identified an accessibility modal boundary; omitted from JSON when false |
-| `frameX` | `Double` | Frame X origin |
-| `frameY` | `Double` | Frame Y origin |
-| `frameWidth` | `Double` | Frame width |
-| `frameHeight` | `Double` | Frame height |
-
-#### ContainerInfo.ContainerType
-
-| Case | Payload |
-|------|---------|
-| `semanticGroup(label:value:identifier:)` | Optional `String` label, value, identifier |
-| `list` | (none) |
-| `landmark` | (none) |
-| `dataTable(rowCount:columnCount:)` | `Int` row and column counts |
-| `tabBar` | (none) |
-| `scrollable(contentWidth:contentHeight:)` | `Double` content width and height |
+| `elements` | `[InterfaceElementAnnotation]` | Element heistId/action metadata keyed by traversal index |
+| `containers` | `[InterfaceContainerAnnotation]` | Container stable IDs keyed by tree path |
 
 ### HeistElement
 

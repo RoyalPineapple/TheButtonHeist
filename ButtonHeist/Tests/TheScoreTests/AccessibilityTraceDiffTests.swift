@@ -1,4 +1,5 @@
 import XCTest
+import AccessibilitySnapshotModel
 @testable import TheScore
 
 final class AccessibilityTraceDiffTests: XCTestCase {
@@ -6,47 +7,60 @@ final class AccessibilityTraceDiffTests: XCTestCase {
     func testElementDiffIsSingleElementHierarchyDiff() {
         let before = makeElement(heistId: "total", label: "Total", value: "$5.00", traits: [.staticText])
         let after = makeElement(heistId: "total", label: "Total", value: "$7.00", traits: [.staticText])
+        let beforeInterface = makeTestInterface(elements: [before])
+        let afterInterface = makeTestInterface(elements: [after])
 
         XCTAssertEqual(
             ElementEdits.between(before, after),
-            ElementEdits.between([InterfaceNode.element(before)], [InterfaceNode.element(after)])
+            ElementEdits.between(beforeInterface, afterInterface)
         )
-        let delta = captureDelta(beforeTree: [.element(before)], afterTree: [.element(after)])
+        let delta = captureDelta(before: beforeInterface, after: afterInterface)
         XCTAssertEqual(delta.elementEdits, ElementEdits.between(before, after))
     }
 
     func testNodeDiffIsTreeDiff() {
-        let before = InterfaceNode.container(makeContainer(stableId: "section"), children: [
-            .element(makeElement(heistId: "title", label: "Menu", traits: [.header])),
+        let before = makeTestInterface(nodes: [
+            testContainer(makeContainer(), stableId: "section", children: [
+                testElement(makeElement(heistId: "title", label: "Menu", traits: [.header])),
+            ]),
         ])
-        let after = InterfaceNode.container(makeContainer(stableId: "section"), children: [
-            .element(makeElement(heistId: "title", label: "Checkout", traits: [.header])),
+        let after = makeTestInterface(nodes: [
+            testContainer(makeContainer(), stableId: "section", children: [
+                testElement(makeElement(heistId: "title", label: "Checkout", traits: [.header])),
+            ]),
         ])
 
-        XCTAssertEqual(ElementEdits.between(before, after), ElementEdits.between([before], [after]))
-        let delta = captureDelta(beforeTree: [before], afterTree: [after])
-        XCTAssertEqual(delta.elementEdits, ElementEdits.between(before, after))
+        let edits = ElementEdits.between(before, after)
+        let delta = captureDelta(before: before, after: after)
+        XCTAssertEqual(delta.elementEdits, edits)
     }
 
     func testTreeInterfaceAndCaptureDiffsShareTheSameEdits() {
-        let beforeTree: [InterfaceNode] = [
-            .container(makeContainer(stableId: "main"), children: [
-                .element(makeElement(heistId: "title", label: "Menu", traits: [.header])),
-                .element(makeElement(heistId: "total", label: "Total", value: "$5.00", traits: [.staticText])),
-            ]),
-        ]
-        let afterTree: [InterfaceNode] = [
-            .container(makeContainer(stableId: "main"), children: [
-                .element(makeElement(heistId: "title", label: "Menu", traits: [.header])),
-                .element(makeElement(heistId: "total", label: "Total", value: "$7.00", traits: [.staticText])),
-            ]),
-        ]
-        let beforeInterface = Interface(timestamp: Date(timeIntervalSince1970: 1), tree: beforeTree)
-        let afterInterface = Interface(timestamp: Date(timeIntervalSince1970: 2), tree: afterTree)
+        let beforeInterface = makeTestInterface(
+            nodes: [
+                testContainer(makeContainer(), stableId: "main", children: [
+                    testElement(makeElement(heistId: "title", label: "Menu", traits: [.header])),
+                    testElement(makeElement(heistId: "total", label: "Total", value: "$5.00", traits: [.staticText])),
+                ]),
+            ],
+            timestamp: Date(timeIntervalSince1970: 1)
+        )
+        let afterInterface = makeTestInterface(
+            nodes: [
+                testContainer(makeContainer(), stableId: "main", children: [
+                    testElement(makeElement(heistId: "title", label: "Menu", traits: [.header])),
+                    testElement(makeElement(heistId: "total", label: "Total", value: "$7.00", traits: [.staticText])),
+                ]),
+            ],
+            timestamp: Date(timeIntervalSince1970: 2)
+        )
         let beforeCapture = AccessibilityTrace.Capture(sequence: 1, interface: beforeInterface)
         let afterCapture = AccessibilityTrace.Capture(sequence: 2, interface: afterInterface, parentHash: beforeCapture.hash)
 
-        XCTAssertEqual(ElementEdits.between(beforeTree, afterTree), ElementEdits.between(beforeInterface, afterInterface))
+        XCTAssertEqual(
+            ElementEdits.between(beforeInterface.elements, afterInterface.elements).updated,
+            ElementEdits.between(beforeInterface, afterInterface).updated
+        )
         let delta = AccessibilityTrace.Delta.between(beforeCapture, afterCapture)
         XCTAssertEqual(delta.elementEdits, ElementEdits.between(beforeInterface, afterInterface))
     }
@@ -199,21 +213,14 @@ final class AccessibilityTraceDiffTests: XCTestCase {
     }
 
     private func makeInterface(label: String) -> Interface {
-        Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [
-            .element(makeElement(heistId: "title", label: label, traits: [.header])),
-            .element(makeElement(heistId: "total", label: "Total", value: "$5.00", traits: [.staticText])),
+        makeTestInterface(elements: [
+            makeElement(heistId: "title", label: label, traits: [.header]),
+            makeElement(heistId: "total", label: "Total", value: "$5.00", traits: [.staticText]),
         ])
     }
 
-    private func makeContainer(stableId: String) -> ContainerInfo {
-        ContainerInfo(
-            type: .semanticGroup(label: nil, value: nil, identifier: nil),
-            stableId: stableId,
-            frameX: 0,
-            frameY: 0,
-            frameWidth: 100,
-            frameHeight: 100
-        )
+    private func makeContainer() -> AccessibilityContainer {
+        makeTestAccessibilityContainer()
     }
 
     private func makeElement(
@@ -253,18 +260,18 @@ final class AccessibilityTraceDiffTests: XCTestCase {
     }
 
     private func captureDelta(
-        beforeTree: [InterfaceNode],
-        afterTree: [InterfaceNode],
+        before beforeInterface: Interface,
+        after afterInterface: Interface,
         file: StaticString = #filePath,
         line: UInt = #line
     ) -> AccessibilityTrace.Delta {
         let before = AccessibilityTrace.Capture(
             sequence: 1,
-            interface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: beforeTree)
+            interface: beforeInterface
         )
         let after = AccessibilityTrace.Capture(
             sequence: 2,
-            interface: Interface(timestamp: Date(timeIntervalSince1970: 1), tree: afterTree),
+            interface: afterInterface,
             parentHash: before.hash
         )
         let delta = AccessibilityTrace.Delta.between(before, after)

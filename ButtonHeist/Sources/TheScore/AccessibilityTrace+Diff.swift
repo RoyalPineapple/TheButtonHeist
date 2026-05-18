@@ -1,11 +1,14 @@
 import Foundation
+import AccessibilitySnapshotModel
 
 // MARK: - Accessibility Trace Diff
 
-private struct WireTreeRecord {
+private struct AccessibilityHierarchyRecord {
     let ref: TreeNodeRef
     let location: TreeLocation
-    let node: InterfaceNode
+    let path: TreePath
+    let node: AccessibilityHierarchy
+    let element: HeistElement?
     let ancestors: [String]
 }
 
@@ -166,23 +169,18 @@ public extension ElementEdits {
 
     /// Compare two single-element hierarchies.
     static func between(_ before: HeistElement, _ after: HeistElement) -> ElementEdits {
-        between(InterfaceNode.element(before), InterfaceNode.element(after))
+        between(beforeElements: [before], afterElements: [after])
     }
 
     /// Compare two flat root element lists.
     static func between(_ before: [HeistElement], _ after: [HeistElement]) -> ElementEdits {
-        between(before.map(InterfaceNode.element), after.map(InterfaceNode.element))
+        between(beforeElements: before, afterElements: after)
     }
 
-    /// Compare two single-node hierarchies.
-    static func between(_ before: InterfaceNode, _ after: InterfaceNode) -> ElementEdits {
-        between([before], [after])
-    }
-
-    /// Compare two interface root-node lists.
-    static func between(_ beforeTree: [InterfaceNode], _ afterTree: [InterfaceNode]) -> ElementEdits {
-        let elementEdits = between(beforeElements: beforeTree.flatten(), afterElements: afterTree.flatten())
-        let treeEdits = between(beforeTree: beforeTree, afterTree: afterTree)
+    /// Compare two full interfaces.
+    static func between(_ before: Interface, _ after: Interface) -> ElementEdits {
+        let elementEdits = between(beforeElements: before.elements, afterElements: after.elements)
+        let treeEdits = betweenTrees(before: before, after: after)
         return ElementEdits(
             added: elementEdits.added,
             removed: elementEdits.removed,
@@ -191,11 +189,6 @@ public extension ElementEdits {
             treeRemoved: treeEdits.treeRemoved,
             treeMoved: treeEdits.treeMoved
         )
-    }
-
-    /// Compare two full interfaces.
-    static func between(_ before: Interface, _ after: Interface) -> ElementEdits {
-        between(before.tree, after.tree)
     }
 
     static func between(
@@ -227,12 +220,9 @@ public extension ElementEdits {
         )
     }
 
-    static func between(
-        beforeTree: [InterfaceNode],
-        afterTree: [InterfaceNode]
-    ) -> ElementEdits {
-        let oldRecords = indexTree(beforeTree)
-        let newRecords = indexTree(afterTree)
+    static func betweenTrees(before: Interface, after: Interface) -> ElementEdits {
+        let oldRecords = indexTree(before)
+        let newRecords = indexTree(after)
         let oldIds = Set(oldRecords.keys)
         let newIds = Set(newRecords.keys)
 
@@ -254,7 +244,15 @@ public extension ElementEdits {
             }
             .compactMap { identifier -> TreeInsertion? in
                 guard let record = newRecords[identifier] else { return nil }
-                return TreeInsertion(location: record.location, node: record.node)
+                return TreeInsertion(
+                    location: record.location,
+                    node: record.node,
+                    annotations: after.annotations(
+                        forSubtree: record.node,
+                        originalPath: record.path,
+                        rootPath: .root
+                    )
+                )
             }
             .sorted(by: treeInsertionOrder)
 
@@ -334,8 +332,8 @@ private func suppressFunctionalMoveElementChurn(
 // MARK: - Functional-Move Pairing
 
 private func inferFunctionalTreePairs(
-    oldRecords: [String: WireTreeRecord],
-    newRecords: [String: WireTreeRecord],
+    oldRecords: [String: AccessibilityHierarchyRecord],
+    newRecords: [String: AccessibilityHierarchyRecord],
     removedIds: Set<String>,
     insertedIds: Set<String>
 ) -> [(removedId: String, insertedId: String)] {
@@ -363,8 +361,8 @@ private func inferFunctionalHeistElementPairs(
 }
 
 private func inferFunctionalTreeRecordPairs(
-    removedById: [String: WireTreeRecord],
-    addedById: [String: WireTreeRecord]
+    removedById: [String: AccessibilityHierarchyRecord],
+    addedById: [String: AccessibilityHierarchyRecord]
 ) -> [(removedId: String, insertedId: String)] {
     let removed = removedById.compactMap { identifier, record -> (String, ElementPairingSignature)? in
         pairingSignature(for: record).map { (identifier, $0) }
@@ -407,9 +405,8 @@ private func inferFunctionalPairs(
 
 // MARK: - Signatures
 
-private func pairingSignature(for record: WireTreeRecord) -> ElementPairingSignature? {
-    guard case .element(let element) = record.node else { return nil }
-    return pairingSignature(for: element)
+private func pairingSignature(for record: AccessibilityHierarchyRecord) -> ElementPairingSignature? {
+    record.element.map(pairingSignature(for:))
 }
 
 private func pairingSignature(for element: HeistElement) -> ElementPairingSignature {
@@ -453,14 +450,19 @@ private func normalizedTraits(_ traits: [HeistTrait]) -> [HeistTrait] {
 
 // MARK: - Tree Indexing
 
-private func indexTree(_ roots: [InterfaceNode]) -> [String: WireTreeRecord] {
-    var result: [String: WireTreeRecord] = [:]
-    for (index, node) in roots.enumerated() {
+private func indexTree(_ interface: Interface) -> [String: AccessibilityHierarchyRecord] {
+    let elementAnnotations = interface.annotations.elementByTraversalIndex
+    let containerAnnotations = interface.annotations.containerByPath
+    var result: [String: AccessibilityHierarchyRecord] = [:]
+    for (index, node) in interface.tree.enumerated() {
         collectTreeRecords(
             node,
+            path: TreePath([index]),
             parentId: nil,
             index: index,
             ancestors: [],
+            elementAnnotations: elementAnnotations,
+            containerAnnotations: containerAnnotations,
             into: &result
         )
     }
@@ -468,35 +470,78 @@ private func indexTree(_ roots: [InterfaceNode]) -> [String: WireTreeRecord] {
 }
 
 private func collectTreeRecords(
-    _ node: InterfaceNode,
+    _ node: AccessibilityHierarchy,
+    path: TreePath,
     parentId: String?,
     index: Int,
     ancestors: [String],
-    into result: inout [String: WireTreeRecord]
+    elementAnnotations: [Int: InterfaceElementAnnotation],
+    containerAnnotations: [TreePath: InterfaceContainerAnnotation],
+    into result: inout [String: AccessibilityHierarchyRecord]
 ) {
-    guard let ref = treeRef(for: node) else { return }
+    let projection = elementProjection(for: node, annotations: elementAnnotations)
+    let ref = treeRef(for: node, path: path, element: projection, containerAnnotations: containerAnnotations)
     let location = TreeLocation(parentId: parentId, index: index)
-    result[ref.id] = WireTreeRecord(ref: ref, location: location, node: node, ancestors: ancestors)
+    let childParentId: String?
+    let childAncestors: [String]
+    if let ref {
+        result[ref.id] = AccessibilityHierarchyRecord(
+            ref: ref,
+            location: location,
+            path: path,
+            node: node,
+            element: projection,
+            ancestors: ancestors
+        )
+        childParentId = ref.id
+        childAncestors = ancestors + [ref.id]
+    } else {
+        childParentId = parentId
+        childAncestors = ancestors
+    }
 
     guard case .container(_, let children) = node else { return }
-    let childAncestors = ancestors + [ref.id]
     for (childIndex, child) in children.enumerated() {
         collectTreeRecords(
             child,
-            parentId: ref.id,
+            path: path.appending(childIndex),
+            parentId: childParentId,
             index: childIndex,
             ancestors: childAncestors,
+            elementAnnotations: elementAnnotations,
+            containerAnnotations: containerAnnotations,
             into: &result
         )
     }
 }
 
-private func treeRef(for node: InterfaceNode) -> TreeNodeRef? {
+private func elementProjection(
+    for node: AccessibilityHierarchy,
+    annotations: [Int: InterfaceElementAnnotation]
+) -> HeistElement? {
     switch node {
-    case .element(let element):
+    case .element(let element, let traversalIndex):
+        return HeistElement(
+            accessibilityElement: element,
+            annotation: annotations[traversalIndex]
+        )
+    case .container:
+        return nil
+    }
+}
+
+private func treeRef(
+    for node: AccessibilityHierarchy,
+    path: TreePath,
+    element: HeistElement?,
+    containerAnnotations: [TreePath: InterfaceContainerAnnotation]
+) -> TreeNodeRef? {
+    switch node {
+    case .element:
+        guard let element, !element.heistId.isEmpty else { return nil }
         return TreeNodeRef(id: element.heistId, kind: .element)
-    case .container(let info, _):
-        guard let stableId = info.stableId else { return nil }
+    case .container:
+        guard let stableId = containerAnnotations[path]?.stableId else { return nil }
         return TreeNodeRef(id: stableId, kind: .container)
     }
 }

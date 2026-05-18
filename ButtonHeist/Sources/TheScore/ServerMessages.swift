@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import AccessibilitySnapshotModel
 
 // MARK: - Response Envelope
 
@@ -522,11 +523,17 @@ public struct TreeLocation: Codable, Sendable, Equatable {
 /// A node inserted into `Interface.tree`.
 public struct TreeInsertion: Codable, Sendable, Equatable {
     public let location: TreeLocation
-    public let node: InterfaceNode
+    public let node: AccessibilityHierarchy
+    public let annotations: InterfaceAnnotations
 
-    public init(location: TreeLocation, node: InterfaceNode) {
+    public init(
+        location: TreeLocation,
+        node: AccessibilityHierarchy,
+        annotations: InterfaceAnnotations = .empty
+    ) {
         self.location = location
         self.node = node
+        self.annotations = annotations
     }
 }
 

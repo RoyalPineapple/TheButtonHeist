@@ -1,5 +1,5 @@
 import XCTest
- import TheScore
+import TheScore
 
 final class ServerMessageTests: XCTestCase {
 
@@ -63,7 +63,7 @@ final class ServerMessageTests: XCTestCase {
             frameX: 10, frameY: 20, frameWidth: 100, frameHeight: 44,
             actions: [.activate]
         )
-        let payload = Interface(timestamp: Date(), tree: [.element(element)])
+        let payload = makeTestInterface(elements: [element], timestamp: Date())
         let message = ServerMessage.interface(payload)
 
         let encoder = JSONEncoder()
@@ -219,10 +219,9 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testActionResultAccessibilityTraceWireShape() throws {
-        let interface = Interface(
-            timestamp: Date(timeIntervalSince1970: 0),
-            tree: [
-                .element(HeistElement(
+        let interface = makeTestInterface(
+            elements: [
+                HeistElement(
                     heistId: "submit",
                     description: "Submit",
                     label: "Submit",
@@ -234,7 +233,7 @@ final class ServerMessageTests: XCTestCase {
                     frameWidth: 100,
                     frameHeight: 44,
                     actions: [.activate]
-                )),
+                ),
             ]
         )
         let trace = AccessibilityTrace(first: interface).appending(interface)
@@ -254,10 +253,9 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testActionResultAccessibilityDeltaProjectsFromTrace() throws {
-        let before = Interface(
-            timestamp: Date(timeIntervalSince1970: 0),
-            tree: [
-                .element(HeistElement(
+        let before = makeTestInterface(
+            elements: [
+                HeistElement(
                     heistId: "before-title",
                     description: "Before",
                     label: "Before",
@@ -269,13 +267,13 @@ final class ServerMessageTests: XCTestCase {
                     frameWidth: 100,
                     frameHeight: 44,
                     actions: []
-                )),
-            ]
+                ),
+            ],
+            timestamp: Date(timeIntervalSince1970: 0)
         )
-        let after = Interface(
-            timestamp: Date(timeIntervalSince1970: 1),
-            tree: [
-                .element(HeistElement(
+        let after = makeTestInterface(
+            elements: [
+                HeistElement(
                     heistId: "after-title",
                     description: "After",
                     label: "After",
@@ -287,8 +285,9 @@ final class ServerMessageTests: XCTestCase {
                     frameWidth: 100,
                     frameHeight: 44,
                     actions: []
-                )),
-            ]
+                ),
+            ],
+            timestamp: Date(timeIntervalSince1970: 1)
         )
         let trace = AccessibilityTrace(first: before).appending(after)
         let conflictingDelta = AccessibilityTrace.Delta.noChange(.init(elementCount: 999))
@@ -306,10 +305,9 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testActionResultDecodedAccessibilityDeltaProjectsFromTrace() throws {
-        let before = Interface(
-            timestamp: Date(timeIntervalSince1970: 0),
-            tree: [
-                .element(HeistElement(
+        let before = makeTestInterface(
+            elements: [
+                HeistElement(
                     heistId: "before-title",
                     description: "Before",
                     label: "Before",
@@ -321,13 +319,13 @@ final class ServerMessageTests: XCTestCase {
                     frameWidth: 100,
                     frameHeight: 44,
                     actions: []
-                )),
-            ]
+                ),
+            ],
+            timestamp: Date(timeIntervalSince1970: 0)
         )
-        let after = Interface(
-            timestamp: Date(timeIntervalSince1970: 1),
-            tree: [
-                .element(HeistElement(
+        let after = makeTestInterface(
+            elements: [
+                HeistElement(
                     heistId: "after-title",
                     description: "After",
                     label: "After",
@@ -339,8 +337,9 @@ final class ServerMessageTests: XCTestCase {
                     frameWidth: 100,
                     frameHeight: 44,
                     actions: []
-                )),
-            ]
+                ),
+            ],
+            timestamp: Date(timeIntervalSince1970: 1)
         )
         let trace = AccessibilityTrace(first: before).appending(after)
         let conflictingDelta = AccessibilityTrace.Delta.noChange(.init(elementCount: 999))
@@ -362,10 +361,9 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testActionResultTraceWithoutEndpointDropsIndependentDelta() throws {
-        let interface = Interface(
-            timestamp: Date(timeIntervalSince1970: 0),
-            tree: [
-                .element(HeistElement(
+        let interface = makeTestInterface(
+            elements: [
+                HeistElement(
                     heistId: "title",
                     description: "Title",
                     label: "Title",
@@ -377,8 +375,9 @@ final class ServerMessageTests: XCTestCase {
                     frameWidth: 100,
                     frameHeight: 44,
                     actions: []
-                )),
-            ]
+                ),
+            ],
+            timestamp: Date(timeIntervalSince1970: 0)
         )
         let trace = AccessibilityTrace(interface: interface)
         let independentDelta = AccessibilityTrace.Delta.noChange(.init(elementCount: 999))
@@ -606,8 +605,8 @@ final class ServerMessageTests: XCTestCase {
 
     func testResponseEnvelopeCarriesBackgroundAccessibilityTraceOnly() throws {
         let before = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
-        let after = Interface(timestamp: Date(timeIntervalSince1970: 1), tree: [
-            .element(HeistElement(
+        let after = makeTestInterface(elements: [
+            HeistElement(
                 heistId: "done",
                 description: "Done",
                 label: "Done",
@@ -619,8 +618,8 @@ final class ServerMessageTests: XCTestCase {
                 frameWidth: 100,
                 frameHeight: 44,
                 actions: [.activate]
-            )),
-        ])
+            ),
+        ], timestamp: Date(timeIntervalSince1970: 1))
         let first = AccessibilityTrace.Capture(sequence: 1, interface: before, context: AccessibilityTrace.Context(screenId: "before"))
         let last = AccessibilityTrace.Capture(
             sequence: 2,
@@ -714,10 +713,7 @@ final class ServerMessageTests: XCTestCase {
             pngData: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
             width: 390,
             height: 844,
-            interface: Interface(
-                timestamp: Date(timeIntervalSince1970: 42),
-                tree: [.element(element)]
-            )
+            interface: makeTestInterface(elements: [element], timestamp: Date(timeIntervalSince1970: 42))
         )
         let message = ServerMessage.screen(payload)
 
@@ -746,10 +742,9 @@ final class ServerMessageTests: XCTestCase {
         heistId: String,
         timestamp: TimeInterval = 0
     ) -> Interface {
-        Interface(
-            timestamp: Date(timeIntervalSince1970: timestamp),
-            tree: [
-                .element(HeistElement(
+        makeTestInterface(
+            elements: [
+                HeistElement(
                     heistId: heistId,
                     description: label,
                     label: label,
@@ -761,16 +756,16 @@ final class ServerMessageTests: XCTestCase {
                     frameWidth: 100,
                     frameHeight: 44,
                     actions: []
-                )),
-            ]
+                ),
+            ],
+            timestamp: Date(timeIntervalSince1970: timestamp)
         )
     }
 
     private func interfaceWithoutHeader(timestamp: TimeInterval = 0) -> Interface {
-        Interface(
-            timestamp: Date(timeIntervalSince1970: timestamp),
-            tree: [
-                .element(HeistElement(
+        makeTestInterface(
+            elements: [
+                HeistElement(
                     heistId: "button-only",
                     description: "Continue",
                     label: "Continue",
@@ -782,8 +777,9 @@ final class ServerMessageTests: XCTestCase {
                     frameWidth: 100,
                     frameHeight: 44,
                     actions: []
-                )),
-            ]
+                ),
+            ],
+            timestamp: Date(timeIntervalSince1970: timestamp)
         )
     }
 }

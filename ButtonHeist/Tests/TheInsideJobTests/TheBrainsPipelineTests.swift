@@ -127,7 +127,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             (button, "button_done"),
         ])
         let postCapture = brains.makeTraceCapture(
-            tree: brains.stash.wireTree(),
+            interface: brains.stash.interface(),
             sequence: 2,
             parentHash: before.capture.hash
         )
@@ -329,7 +329,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     func testRecordSentStatePopulatesAllFields() {
         seedScreen(elements: [("Home", .header, "home_header"), ("A", .button, "button_a")])
-        let viewportHash = brains.stash.wireTreeHash()
+        let viewportHash = brains.stash.interfaceHash()
 
         brains.recordSentState()
 
@@ -357,7 +357,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             elements: [(visible, "button_visible")],
             offViewport: [.init(offViewport, heistId: "button_below_fold")]
         )
-        let liveViewportHash = brains.stash.wireTreeHash()
+        let liveViewportHash = brains.stash.interfaceHash()
 
         brains.recordSentState()
 

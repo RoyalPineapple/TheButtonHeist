@@ -186,32 +186,41 @@ final class TheFenceHandlerTests: XCTestCase {
         let submit = testElement("submit", label: "Submit", traits: [.button])
         let cancel = testElement("cancel", label: "Cancel", traits: [.button])
         let footer = testElement("footer", label: "Footer")
-        let primaryGroup = ContainerInfo(
-            type: .semanticGroup(label: "Actions", value: nil, identifier: "actions"),
-            stableId: "semantic_actions__actions",
-            frameX: 0,
-            frameY: 40,
-            frameWidth: 200,
-            frameHeight: 100
-        )
-        var tree: [InterfaceNode] = [
+        var nodes: [ReceiptTestInterfaceNode] = [
             .element(header),
-            .container(primaryGroup, children: [.element(submit), .element(cancel)]),
+            .container(
+                makeReceiptTestSemanticContainer(
+                    label: "Actions",
+                    identifier: "actions",
+                    frameX: 0,
+                    frameY: 40,
+                    frameWidth: 200,
+                    frameHeight: 100
+                ),
+                stableId: "semantic_actions__actions",
+                children: [.element(submit), .element(cancel)]
+            ),
             .element(footer),
         ]
         if includeDuplicateGroup {
             let archive = testElement("archive", label: "Archive", traits: [.button])
-            let secondaryGroup = ContainerInfo(
-                type: .semanticGroup(label: "Actions", value: nil, identifier: "secondary_actions"),
-                stableId: "semantic_actions__secondary_actions",
-                frameX: 0,
-                frameY: 160,
-                frameWidth: 200,
-                frameHeight: 60
+            nodes.insert(
+                .container(
+                    makeReceiptTestSemanticContainer(
+                        label: "Actions",
+                        identifier: "secondary_actions",
+                        frameX: 0,
+                        frameY: 160,
+                        frameWidth: 200,
+                        frameHeight: 60
+                    ),
+                    stableId: "semantic_actions__secondary_actions",
+                    children: [.element(archive)]
+                ),
+                at: 2
             )
-            tree.insert(.container(secondaryGroup, children: [.element(archive)]), at: 2)
         }
-        return Interface(timestamp: Date(), tree: tree)
+        return makeReceiptTestInterface(nodes: nodes)
     }
 
     // MARK: - Connect
@@ -2478,7 +2487,16 @@ final class TheFenceHandlerTests: XCTestCase {
             switch message {
             case .requestInterface:
                 let source = self.selectionTestInterface()
-                return .interface(Interface(timestamp: source.timestamp, tree: [source.tree[1]]))
+                let selectedNode = source.tree[1]
+                return .interface(Interface(
+                    timestamp: source.timestamp,
+                    tree: [selectedNode],
+                    annotations: source.annotations(
+                        forSubtree: selectedNode,
+                        originalPath: TreePath([1]),
+                        rootPath: TreePath([0])
+                    )
+                ))
             default:
                 return .actionResult(ActionResult(success: true, method: .activate))
             }
@@ -2532,7 +2550,7 @@ final class TheFenceHandlerTests: XCTestCase {
         mockConn.autoResponse = { message in
             switch message {
             case .requestInterface:
-                return .interface(Interface(timestamp: Date(), tree: [.element(submit)]))
+                return .interface(makeReceiptTestInterface([submit]))
             default:
                 return .actionResult(ActionResult(success: true, method: .activate))
             }
@@ -2565,7 +2583,7 @@ final class TheFenceHandlerTests: XCTestCase {
         mockConn.autoResponse = { message in
             switch message {
             case .requestInterface:
-                return .interface(Interface(timestamp: Date(), tree: [.element(second)]))
+                return .interface(makeReceiptTestInterface([second]))
             default:
                 return .actionResult(ActionResult(success: true, method: .activate))
             }

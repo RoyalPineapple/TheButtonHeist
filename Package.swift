@@ -24,6 +24,9 @@ let package = Package(
     targets: [
         .target(
             name: "TheScore",
+            dependencies: [
+                .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotBH"),
+            ],
             path: "ButtonHeist/Sources/TheScore",
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
@@ -54,6 +57,7 @@ let package = Package(
             name: "ButtonHeist",
             dependencies: [
                 "TheScore",
+                .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotBH"),
                 .product(name: "Crypto", package: "swift-crypto"),
             ],
             path: "ButtonHeist/Sources/TheButtonHeist",
