@@ -149,15 +149,73 @@ final class TargetConfigTests: XCTestCase {
         """
         try json.write(to: configFile, atomically: true, encoding: .utf8)
 
-        let config = TargetConfigResolver.loadConfig(from: configFile.path)
-        XCTAssertNotNil(config)
-        XCTAssertEqual(config?.targets["test"]?.device, "127.0.0.1:1455")
-        XCTAssertEqual(config?.targets["test"]?.token, "test-token")
-        XCTAssertEqual(config?.defaultTarget, "test")
+        let config = try TargetConfigResolver.loadConfig(from: configFile.path)
+        XCTAssertEqual(config.targets["test"]?.device, "127.0.0.1:1455")
+        XCTAssertEqual(config.targets["test"]?.token, "test-token")
+        XCTAssertEqual(config.defaultTarget, "test")
     }
 
-    func testLoadConfigMissingFileReturnsNil() {
-        let config = TargetConfigResolver.loadConfig(from: "/nonexistent/path/.buttonheist.json")
+    func testExplicitMissingConfigPathThrowsDiagnosticError() {
+        let path = "/nonexistent/path/.buttonheist.json"
+
+        XCTAssertThrowsError(try TargetConfigResolver.loadConfig(from: path)) { error in
+            guard let error = error as? TargetConfigLoadError else {
+                XCTFail("Expected TargetConfigLoadError, got \(type(of: error))")
+                return
+            }
+            XCTAssertEqual(error.kind, .readFailed)
+            XCTAssertEqual(error.path, path)
+            XCTAssertTrue(error.localizedDescription.contains("Failed to read explicit config"))
+            XCTAssertEqual(error.failureDetails.errorCode, "config.read_failed")
+            XCTAssertEqual(error.failureDetails.phase, .setup)
+        }
+    }
+
+    func testExplicitUnreadableConfigPathThrowsDiagnosticError() throws {
+        let tmpDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        XCTAssertThrowsError(try TargetConfigResolver.loadConfig(from: tmpDir.path)) { error in
+            guard let error = error as? TargetConfigLoadError else {
+                XCTFail("Expected TargetConfigLoadError, got \(type(of: error))")
+                return
+            }
+            XCTAssertEqual(error.kind, .readFailed)
+            XCTAssertEqual(error.path, tmpDir.path)
+            XCTAssertTrue(error.localizedDescription.contains("Failed to read explicit config"))
+            XCTAssertEqual(error.failureDetails.errorCode, "config.read_failed")
+        }
+    }
+
+    func testExplicitMalformedConfigPathThrowsDiagnosticError() throws {
+        let tmpDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        let configFile = tmpDir.appendingPathComponent(".buttonheist.json")
+        try "not json".write(to: configFile, atomically: true, encoding: .utf8)
+
+        XCTAssertThrowsError(try TargetConfigResolver.loadConfig(from: configFile.path)) { error in
+            guard let error = error as? TargetConfigLoadError else {
+                XCTFail("Expected TargetConfigLoadError, got \(type(of: error))")
+                return
+            }
+            XCTAssertEqual(error.kind, .decodeFailed)
+            XCTAssertEqual(error.path, configFile.path)
+            XCTAssertTrue(error.localizedDescription.contains("Failed to decode explicit config"))
+            XCTAssertEqual(error.failureDetails.errorCode, "config.decode_failed")
+            XCTAssertEqual(error.failureDetails.phase, .setup)
+        }
+    }
+
+    func testAbsentDefaultConfigReturnsNil() {
+        let config = TargetConfigResolver.loadConfig(searchPaths: [
+            "/nonexistent/default/.buttonheist.json",
+            "/nonexistent/default/config.json",
+        ])
         XCTAssertNil(config)
     }
 
