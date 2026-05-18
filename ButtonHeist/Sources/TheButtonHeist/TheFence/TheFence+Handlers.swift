@@ -438,11 +438,11 @@ extension TheFence {
 
     // MARK: - Handler: BookKeeper
 
-    func handleGetSessionLog() -> FenceResponse {
-        guard let manifest = bookKeeper.manifest else {
+    func handleGetSessionLog() throws -> FenceResponse {
+        guard let snapshot = try bookKeeper.sessionLogSnapshot() else {
             return .error("No active session")
         }
-        return .sessionLog(manifest: manifest)
+        return .sessionLog(snapshot: snapshot)
     }
 
     func handleArchiveSession(_ request: ArchiveSessionRequest) async throws -> FenceResponse {
@@ -463,8 +463,8 @@ extension TheFence {
         case .closed, .archived:
             break
         }
-        let (archiveURL, manifest) = try await bookKeeper.archiveSession(deleteSource: request.deleteSource)
-        return .archiveResult(path: archiveURL.path, manifest: manifest)
+        let (archiveURL, snapshot) = try await bookKeeper.archiveSession(deleteSource: request.deleteSource)
+        return .archiveResult(path: archiveURL.path, snapshot: snapshot)
     }
 
     func handleStartHeist(_ request: StartHeistRequest) throws -> FenceResponse {

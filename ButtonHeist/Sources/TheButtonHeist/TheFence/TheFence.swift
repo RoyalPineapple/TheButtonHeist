@@ -1233,7 +1233,7 @@ public final class TheFence {
         case (.listTargets, _):
             return handleListTargets()
         case (.getSessionLog, _):
-            return handleGetSessionLog()
+            return try handleGetSessionLog()
         case (.archiveSession, .archiveSession(let request)):
             return try await handleArchiveSession(request)
         case (.startHeist, .startHeist(let request)):

@@ -97,8 +97,8 @@ public enum FenceResponse {
     )
     case sessionState(payload: [String: Any])
     case targets([String: TargetConfig], defaultTarget: String?)
-    case sessionLog(manifest: SessionManifest)
-    case archiveResult(path: String, manifest: SessionManifest)
+    case sessionLog(snapshot: SessionLogSnapshot)
+    case archiveResult(path: String, snapshot: SessionLogSnapshot)
     case heistStarted
     case heistStopped(path: String, stepCount: Int)
     case heistPlayback(completedSteps: Int, failedIndex: Int?, totalTimingMs: Int, failure: PlaybackFailure? = nil, report: HeistPlaybackReport? = nil)
@@ -201,10 +201,10 @@ public enum FenceResponse {
             return Self.formatSessionStateHuman(payload)
         case .targets(let targets, let defaultTarget):
             return formatTargetList(targets, defaultTarget: defaultTarget)
-        case .sessionLog(let manifest):
-            return formatSessionLogHuman(manifest)
-        case .archiveResult(let path, let manifest):
-            return "Session archived: \(path) (\(manifest.artifacts.count) artifacts, \(manifest.commandCount) commands)"
+        case .sessionLog(let snapshot):
+            return formatSessionLogHuman(snapshot)
+        case .archiveResult(let path, let snapshot):
+            return "Session archived: \(path) (\(snapshot.artifacts.count) artifacts, \(snapshot.counts.commandCount) commands)"
         case .heistStarted:
             return "Heist recording started"
         case .heistStopped(let path, let stepCount):
@@ -270,20 +270,23 @@ public enum FenceResponse {
         }
     }
 
-    private func formatSessionLogHuman(_ manifest: SessionManifest) -> String {
+    private func formatSessionLogHuman(_ snapshot: SessionLogSnapshot) -> String {
+        let manifest = snapshot.manifest
+        let counts = snapshot.counts
+        let artifacts = snapshot.artifacts
         let formatter = ISO8601DateFormatter()
         var text = "Session: \(manifest.sessionId)\n"
         text += "  Started: \(formatter.string(from: manifest.startTime))\n"
         if let endTime = manifest.endTime {
             text += "  Ended: \(formatter.string(from: endTime))\n"
         }
-        text += "  Commands: \(manifest.commandCount)"
-        if manifest.errorCount > 0 {
-            text += " (\(manifest.errorCount) errors)"
+        text += "  Commands: \(counts.commandCount)"
+        if counts.errorCount > 0 {
+            text += " (\(counts.errorCount) errors)"
         }
-        text += "\n  Artifacts: \(manifest.artifacts.count)"
-        let screenshots = manifest.artifacts.count(where: { $0.type == .screenshot })
-        let recordings = manifest.artifacts.count(where: { $0.type == .recording })
+        text += "\n  Artifacts: \(artifacts.count)"
+        let screenshots = artifacts.count(where: { $0.type == .screenshot })
+        let recordings = artifacts.count(where: { $0.type == .recording })
         if screenshots > 0 && recordings > 0 {
             text += " (\(screenshots) screenshots, \(recordings) recordings)"
         } else if screenshots > 0 {

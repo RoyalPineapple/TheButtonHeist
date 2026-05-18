@@ -98,11 +98,12 @@ final class TheBookKeeperTests: XCTestCase {
         try bookKeeper.beginSession(identifier: "test-archive")
         try logCommand(bookKeeper, requestId: "r1", command: .status, arguments: [:])
         try await bookKeeper.closeSession()
-        let (archivePath, archiveManifest) = try await bookKeeper.archiveSession(deleteSource: false)
+        let (archivePath, snapshot) = try await bookKeeper.archiveSession(deleteSource: false)
         if case .archived(let session) = bookKeeper.phase {
             XCTAssertEqual(session.archivePath, archivePath)
-            XCTAssertEqual(session.manifest, archiveManifest)
+            XCTAssertEqual(session.manifest, snapshot.manifest)
             XCTAssertTrue(archivePath.path.hasSuffix(".tar.gz"))
+            XCTAssertEqual(snapshot.counts.commandCount, 1)
         } else {
             XCTFail("Expected archived phase")
         }
@@ -133,7 +134,7 @@ final class TheBookKeeperTests: XCTestCase {
         do {
             try bookKeeper.beginSession(identifier: "test")
             _ = try await bookKeeper.archiveSession()
-            // archiveSession() returns (URL, SessionManifest) but we only care about the error here
+            // archiveSession() returns session details, but we only care about the error here.
             XCTFail("Expected error")
         } catch let error as BookKeeperError {
             if case .invalidPhase = error {
@@ -297,23 +298,25 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testLogResponseWithErrorIncrementsErrorCount() async throws {
+    func testSessionLogCountsDeriveErrorsFromResponseEvents() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-errors")
         try bookKeeper.logResponse(requestId: "r1", status: .error, durationMilliseconds: 10, error: "boom")
         try bookKeeper.logResponse(requestId: "r2", status: .ok, durationMilliseconds: 5)
         try bookKeeper.logResponse(requestId: "r3", status: .error, durationMilliseconds: 8, error: "bang")
-        XCTAssertEqual(bookKeeper.manifest?.errorCount, 2)
+        let snapshot = try XCTUnwrap(bookKeeper.sessionLogSnapshot())
+        XCTAssertEqual(snapshot.counts.errorCount, 2)
     }
 
     @ButtonHeistActor
-    func testLogCommandIncrementsCommandCount() async throws {
+    func testSessionLogCountsDeriveCommandsFromCommandEvents() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-count")
         try logCommand(bookKeeper, requestId: "r1", command: .status, arguments: [:])
         try logCommand(bookKeeper, requestId: "r2", command: .listDevices, arguments: [:])
         try logCommand(bookKeeper, requestId: "r3", command: .getSessionState, arguments: [:])
-        XCTAssertEqual(bookKeeper.manifest?.commandCount, 3)
+        let snapshot = try XCTUnwrap(bookKeeper.sessionLogSnapshot())
+        XCTAssertEqual(snapshot.counts.commandCount, 3)
     }
 
     @ButtonHeistActor
@@ -452,9 +455,8 @@ final class TheBookKeeperTests: XCTestCase {
         let manifest = bookKeeper.manifest
         XCTAssertNotNil(manifest)
         XCTAssertEqual(manifest?.formatVersion, SessionFormatVersion.current)
-        XCTAssertEqual(manifest?.artifacts.count, 0)
-        XCTAssertEqual(manifest?.commandCount, 0)
-        XCTAssertEqual(manifest?.errorCount, 0)
+        let snapshot = try XCTUnwrap(bookKeeper.sessionLogSnapshot())
+        XCTAssertEqual(snapshot.artifacts, [])
     }
 
     @ButtonHeistActor
@@ -462,24 +464,15 @@ final class TheBookKeeperTests: XCTestCase {
         let manifest = SessionManifest(
             sessionId: "test-roundtrip",
             startTime: Date(timeIntervalSince1970: 1_000_000),
-            endTime: Date(timeIntervalSince1970: 1_000_100),
-            artifacts: [
-                ArtifactEntry(
-                    type: .screenshot,
-                    path: "screenshots/001-get_screen.png",
-                    size: 1024,
-                    timestamp: Date(timeIntervalSince1970: 1_000_050),
-                    requestId: "r1",
-                    command: "get_screen",
-                    metadata: ["width": 390.0, "height": 844.0]
-                ),
-            ],
-            commandCount: 5,
-            errorCount: 1
+            endTime: Date(timeIntervalSince1970: 1_000_100)
         )
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         let data = try encoder.encode(manifest)
+        let encoded = try XCTUnwrap(String(data: data, encoding: .utf8))
+        XCTAssertFalse(encoded.contains("commandCount"))
+        XCTAssertFalse(encoded.contains("errorCount"))
+        XCTAssertFalse(encoded.contains("artifacts"))
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let decoded = try decoder.decode(SessionManifest.self, from: data)
@@ -547,7 +540,7 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testWriteScreenshotUpdatesManifest() async throws {
+    func testWriteScreenshotIndexesArtifactInSessionLog() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-manifest-update")
         let testData = Data([0x89, 0x50, 0x4E, 0x47])
@@ -558,9 +551,11 @@ final class TheBookKeeperTests: XCTestCase {
             command: .getScreen,
             metadata: ScreenshotMetadata(width: 390, height: 844)
         )
-        XCTAssertEqual(bookKeeper.manifest?.artifacts.count, 1)
-        XCTAssertEqual(bookKeeper.manifest?.artifacts.first?.type, .screenshot)
-        XCTAssertEqual(bookKeeper.manifest?.artifacts.first?.path, "screenshots/001-get_screen.png")
+        let snapshot = try XCTUnwrap(bookKeeper.sessionLogSnapshot())
+        let artifact = try XCTUnwrap(snapshot.artifacts.first)
+        XCTAssertEqual(snapshot.artifacts.count, 1)
+        XCTAssertEqual(artifact.type, .screenshot)
+        XCTAssertEqual(artifact.path, "screenshots/001-get_screen.png")
     }
 
     @ButtonHeistActor
@@ -694,7 +689,7 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testWriteRecordingUpdatesManifestWithMetadata() async throws {
+    func testWriteRecordingIndexesArtifactMetadataInSessionLog() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-rec-manifest")
         let testData = Data([0x00, 0x00, 0x00, 0x1C])
@@ -705,14 +700,15 @@ final class TheBookKeeperTests: XCTestCase {
             command: .stopRecording,
             metadata: RecordingMetadata(width: 393, height: 852, duration: 12.5, fps: 8, frameCount: 100)
         )
-        let artifact = bookKeeper.manifest?.artifacts.first
-        XCTAssertEqual(artifact?.type, .recording)
-        XCTAssertEqual(artifact?.path, "recordings/001-stop_recording.mp4")
-        XCTAssertEqual(artifact?.metadata["width"], 393.0)
-        XCTAssertEqual(artifact?.metadata["height"], 852.0)
-        XCTAssertEqual(artifact?.metadata["duration"], 12.5)
-        XCTAssertEqual(artifact?.metadata["fps"], 8.0)
-        XCTAssertEqual(artifact?.metadata["frameCount"], 100.0)
+        let snapshot = try XCTUnwrap(bookKeeper.sessionLogSnapshot())
+        let artifact = try XCTUnwrap(snapshot.artifacts.first)
+        XCTAssertEqual(artifact.type, .recording)
+        XCTAssertEqual(artifact.path, "recordings/001-stop_recording.mp4")
+        XCTAssertEqual(artifact.metadata["width"], 393.0)
+        XCTAssertEqual(artifact.metadata["height"], 852.0)
+        XCTAssertEqual(artifact.metadata["duration"], 12.5)
+        XCTAssertEqual(artifact.metadata["fps"], 8.0)
+        XCTAssertEqual(artifact.metadata["frameCount"], 100.0)
     }
 
     @ButtonHeistActor
@@ -738,7 +734,8 @@ final class TheBookKeeperTests: XCTestCase {
         XCTAssertTrue(screenshot.lastPathComponent.hasPrefix("001-"))
         XCTAssertTrue(recording.lastPathComponent.hasPrefix("002-"))
         XCTAssertTrue(screenshot2.lastPathComponent.hasPrefix("003-"))
-        XCTAssertEqual(bookKeeper.manifest?.artifacts.count, 3)
+        let snapshot = try XCTUnwrap(bookKeeper.sessionLogSnapshot())
+        XCTAssertEqual(snapshot.artifacts.count, 3)
     }
 
     // MARK: - Archive Deletion
@@ -753,13 +750,16 @@ final class TheBookKeeperTests: XCTestCase {
         }
         let sessionDirectory = activeSession.directory
         try await bookKeeper.closeSession()
-        let (archivePath, _) = try await bookKeeper.archiveSession(deleteSource: true)
+        let (archivePath, archiveSnapshot) = try await bookKeeper.archiveSession(deleteSource: true)
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: archivePath.path))
         XCTAssertFalse(
             FileManager.default.fileExists(atPath: sessionDirectory.path),
             "Source directory should be removed when deleteSource is true"
         )
+        XCTAssertEqual(archiveSnapshot.counts.commandCount, 1)
+        let snapshot = try XCTUnwrap(bookKeeper.sessionLogSnapshot())
+        XCTAssertEqual(snapshot.counts.commandCount, 1)
         try? FileManager.default.removeItem(at: archivePath)
     }
 
@@ -800,7 +800,8 @@ final class TheBookKeeperTests: XCTestCase {
 
         XCTAssertNotNil(result)
         XCTAssertTrue(result?.lastPathComponent.hasPrefix("001-") == true)
-        XCTAssertEqual(bookKeeper.manifest?.artifacts.count, 1)
+        let snapshot = try XCTUnwrap(bookKeeper.sessionLogSnapshot())
+        XCTAssertEqual(snapshot.artifacts.count, 1)
     }
 
     @ButtonHeistActor
@@ -835,7 +836,8 @@ final class TheBookKeeperTests: XCTestCase {
 
         XCTAssertTrue(result?.lastPathComponent.hasSuffix(".mp4") == true)
         XCTAssertTrue(result?.path.contains("recordings/") == true)
-        XCTAssertEqual(bookKeeper.manifest?.artifacts.first?.type, .recording)
+        let snapshot = try XCTUnwrap(bookKeeper.sessionLogSnapshot())
+        XCTAssertEqual(snapshot.artifacts.first?.type, .recording)
     }
 }
 

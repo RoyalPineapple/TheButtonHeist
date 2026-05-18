@@ -71,30 +71,45 @@ public struct ArtifactEntry: Codable, Sendable, Equatable {
 
 // MARK: - Session Manifest
 
-/// Durable index of a BookKeeper session — commands, artifacts, and timing.
+/// Counts derived from authoritative session log events.
+public struct SessionLogCounts: Sendable, Equatable {
+    public let commandCount: Int
+    public let errorCount: Int
+
+    public init(commandCount: Int = 0, errorCount: Int = 0) {
+        self.commandCount = commandCount
+        self.errorCount = errorCount
+    }
+}
+
+/// Durable session boundary information plus projections derived from its session log.
+public struct SessionLogSnapshot: Sendable, Equatable {
+    public let manifest: SessionManifest
+    public let counts: SessionLogCounts
+    public let artifacts: [ArtifactEntry]
+
+    public init(manifest: SessionManifest, counts: SessionLogCounts, artifacts: [ArtifactEntry] = []) {
+        self.manifest = manifest
+        self.counts = counts
+        self.artifacts = artifacts
+    }
+}
+
+/// Durable session boundary information.
 public struct SessionManifest: Codable, Sendable, Equatable {
     public let formatVersion: String
     public let sessionId: String
     public let startTime: Date
     public var endTime: Date?
-    public var artifacts: [ArtifactEntry]
-    public var commandCount: Int
-    public var errorCount: Int
 
     public init(
         sessionId: String,
         startTime: Date,
-        endTime: Date? = nil,
-        artifacts: [ArtifactEntry] = [],
-        commandCount: Int = 0,
-        errorCount: Int = 0
+        endTime: Date? = nil
     ) {
         self.formatVersion = SessionFormatVersion.current
         self.sessionId = sessionId
         self.startTime = startTime
         self.endTime = endTime
-        self.artifacts = artifacts
-        self.commandCount = commandCount
-        self.errorCount = errorCount
     }
 }
