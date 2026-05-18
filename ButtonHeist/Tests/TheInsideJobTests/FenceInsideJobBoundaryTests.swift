@@ -1,6 +1,7 @@
 import Foundation
 import XCTest
 
+/// Guards that InsideJob execution sources stay independent of Fence request payload shapes.
 final class FenceInsideJobBoundaryTests: XCTestCase {
 
     func testExecutionSourcesDoNotReferenceFenceRequestPayloadTypes() throws {
@@ -75,11 +76,14 @@ final class FenceInsideJobBoundaryTests: XCTestCase {
         let fileManager = FileManager.default
         var files: [URL] = []
         for directory in directories {
+            guard fileManager.fileExists(atPath: directory.path) else {
+                throw BoundaryGuardError.missingDirectory(directory.path)
+            }
             guard let enumerator = fileManager.enumerator(
                 at: directory,
                 includingPropertiesForKeys: [.isRegularFileKey]
             ) else {
-                continue
+                throw BoundaryGuardError.unreadableDirectory(directory.path)
             }
             for case let fileURL as URL in enumerator where fileURL.pathExtension == "swift" {
                 let resourceValues = try fileURL.resourceValues(forKeys: [.isRegularFileKey])
@@ -88,11 +92,32 @@ final class FenceInsideJobBoundaryTests: XCTestCase {
                 }
             }
         }
+        guard !files.isEmpty else {
+            let paths = directories.map(\.path).joined(separator: ", ")
+            throw BoundaryGuardError.noSwiftFiles(paths)
+        }
         return files.sorted { $0.path < $1.path }
     }
 
     private func firstLineNumber(containing token: String, in contents: String) -> Int {
         let lines = contents.split(separator: "\n", omittingEmptySubsequences: false)
         return (lines.firstIndex { $0.contains(token) } ?? 0) + 1
+    }
+
+    private enum BoundaryGuardError: LocalizedError {
+        case missingDirectory(String)
+        case unreadableDirectory(String)
+        case noSwiftFiles(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .missingDirectory(let path):
+                return "Guarded source directory does not exist: \(path)"
+            case .unreadableDirectory(let path):
+                return "Guarded source directory cannot be enumerated: \(path)"
+            case .noSwiftFiles(let paths):
+                return "Expected Swift files in guarded source directories: \(paths)"
+            }
+        }
     }
 }
