@@ -2516,7 +2516,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let response = try await fence.execute(request: ["command": "get_interface"])
 
-        let json = response.jsonDict()!
+        let json = response.jsonDict()
         XCTAssertNil(json["filteredFrom"])
         let interface = json["interface"] as! [String: Any]
         let tree = interface["tree"] as! [[String: Any]]
@@ -2545,7 +2545,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "subtree": ["element": ["heistId": "cancel"]],
         ])
 
-        let json = response.jsonDict()!
+        let json = response.jsonDict()
         XCTAssertEqual(json["filteredFrom"] as? Int, 4)
         let interface = json["interface"] as! [String: Any]
         let tree = interface["tree"] as! [[String: Any]]
@@ -2573,7 +2573,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "subtree": ["element": ["label": "Cancel", "traits": ["button"]]],
         ])
 
-        let json = response.jsonDict()!
+        let json = response.jsonDict()
         let interface = json["interface"] as! [String: Any]
         let tree = interface["tree"] as! [[String: Any]]
         XCTAssertEqual(tree.count, 1)
@@ -2599,7 +2599,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "subtree": ["container": ["stableId": "semantic_actions__actions"]],
         ])
 
-        let json = response.jsonDict()!
+        let json = response.jsonDict()
         XCTAssertEqual(json["filteredFrom"] as? Int, 4)
         let interface = json["interface"] as! [String: Any]
         let tree = interface["tree"] as! [[String: Any]]
@@ -2630,7 +2630,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "subtree": ["container": ["type": "semanticGroup", "label": "Actions", "identifier": "actions"]],
         ])
 
-        let json = response.jsonDict()!
+        let json = response.jsonDict()
         let interface = json["interface"] as! [String: Any]
         let tree = interface["tree"] as! [[String: Any]]
         XCTAssertEqual(tree.count, 1)
@@ -2658,7 +2658,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "subtree": ["container": ["type": "semanticGroup", "label": "Actions"]],
         ])
 
-        let json = response.jsonDict()!
+        let json = response.jsonDict()
         XCTAssertEqual(json["status"] as? String, "error")
         let message = json["message"] as? String ?? ""
         XCTAssertTrue(message.contains("subtree matched 2 nodes"), message)
@@ -2685,7 +2685,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "subtree": ["container": ["type": "semanticGroup", "label": "Actions"], "ordinal": 1],
         ])
 
-        let json = response.jsonDict()!
+        let json = response.jsonDict()
         let interface = json["interface"] as! [String: Any]
         let tree = interface["tree"] as! [[String: Any]]
         XCTAssertEqual(tree.count, 1)
@@ -2714,7 +2714,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "subtree": ["container": ["stableId": "missing"]],
         ])
 
-        let json = response.jsonDict()!
+        let json = response.jsonDict()
         XCTAssertEqual(json["status"] as? String, "error")
         let message = json["message"] as? String ?? ""
         XCTAssertTrue(message.contains("subtree matched no nodes"), message)
@@ -2724,7 +2724,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testContainerStableIdAppearsInSummaryJsonAndCompactOutput() {
         let response = FenceResponse.interface(projectionTestInterface(), detail: .summary)
 
-        let json = response.jsonDict()!
+        let json = response.jsonDict()
         let interface = json["interface"] as! [String: Any]
         let tree = interface["tree"] as! [[String: Any]]
         let container = tree[1]["container"] as! [String: Any]
