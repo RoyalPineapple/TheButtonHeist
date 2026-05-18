@@ -516,7 +516,7 @@ final class TheBookKeeper {
     ///   - expectation: Final expectation evidence for the command. Failed expectations are skipped.
     ///   - interfaceCache: Snapshot of currently visible elements keyed by
     ///     heistId. The recorder uses this to resolve `heistId` arguments to
-    ///     stable matchers. Caller is responsible for supplying the cache —
+    ///     minimum matchers. Caller is responsible for supplying the cache —
     ///     TheBookKeeper does not maintain its own copy.
     func recordHeistEvidence(
         _ record: BookKeeperCommandRecord,

@@ -352,7 +352,10 @@ enum FenceParameterBlocks: Sendable {
     static let elementTarget: [FenceParameterSpec] = [
         .init(
             key: "heistId", type: .string, optionalRole: .matcher,
-            description: "Current-hierarchy heistId handle returned by get_interface or an action delta. Use matchers for durable flows."
+            description: """
+                Current-hierarchy heistId handle returned by get_interface or an action delta. \
+                Recordings persist minimum matchers for durable replay.
+                """
         ),
         .init(key: "label", type: .string, optionalRole: .matcher, description: "Accessibility label — the text VoiceOver reads (e.g. \"Sign In\")"),
         .init(key: "value", type: .string, optionalRole: .matcher, description: "Accessibility value — current state or placeholder (e.g. \"50%\")"),
@@ -361,13 +364,17 @@ enum FenceParameterBlocks: Sendable {
             description: "Required traits (role qualifiers like button, header, selected). All must match."
         ),
         .init(key: "excludeTraits", type: .stringArray, optionalRole: .matcher, description: "Traits that must NOT be present"),
-        .init(key: "identifier", type: .string, optionalRole: .matcher, description: "accessibilityIdentifier (escape hatch — prefer label/value/traits)"),
+        .init(
+            key: "identifier", type: .string, optionalRole: .matcher,
+            description: "accessibilityIdentifier; preferred when developer-assigned and stable"
+        ),
         .init(
             key: "ordinal", type: .integer, optionalRole: .matcher,
             description: """
-                0-based index to disambiguate when multiple elements match. \
-                0 = first match, 1 = second, etc. in the returned hierarchy order. \
-                Omit to require a unique match — ambiguity errors show the valid range.
+                0-based index to disambiguate when multiple elements match, or as \
+                the fallback target when no matcher predicates exist. 0 = first \
+                match, 1 = second, etc. in the returned hierarchy order. Omit to \
+                require a unique match — ambiguity errors show the valid range.
                 """
         ),
     ]
@@ -382,7 +389,10 @@ enum FenceParameterBlocks: Sendable {
             description: "Required traits (role qualifiers like button, header, selected). All must match."
         ),
         .init(key: "excludeTraits", type: .stringArray, optionalRole: .matcher, description: "Traits that must NOT be present"),
-        .init(key: "identifier", type: .string, optionalRole: .matcher, description: "accessibilityIdentifier (escape hatch — prefer label/value/traits)"),
+        .init(
+            key: "identifier", type: .string, optionalRole: .matcher,
+            description: "accessibilityIdentifier; preferred when developer-assigned and stable"
+        ),
     ]
 
     /// Inline expectation for action commands.
@@ -754,7 +764,7 @@ extension TheFence.Command {
         case Self.startHeist.rawValue:
             return """
                 Start recording a heist. Successful commands become steps in a .heist file; \
-                use matcher fields (label, identifier, traits) for durable element targeting, not heistId. \
+                the recorder derives minimum matcher fields for durable element targeting; heistId remains recording evidence only. \
                 Attach 'expect' to validate outcomes during playback.
                 """
 

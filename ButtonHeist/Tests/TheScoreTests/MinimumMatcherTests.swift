@@ -166,6 +166,34 @@ final class MinimumMatcherTests: XCTestCase {
         XCTAssertEqual(resolve(minimumMatcher, in: capture), first)
     }
 
+    func testAnonymousElementsUseOrdinalFallbackAcrossTheCapture() {
+        let first = makeElement(heistId: "anonymous_1")
+        let named = makeElement(heistId: "save", label: "Save", traits: [.button])
+        let second = makeElement(heistId: "anonymous_2")
+        let capture = makeCapture([first, named, second])
+
+        let firstMatcher = MinimumMatcher.build(element: first, in: capture)
+        let secondMatcher = MinimumMatcher.build(element: second, in: capture)
+
+        XCTAssertFalse(firstMatcher.matcher.hasPredicates)
+        XCTAssertEqual(firstMatcher.ordinal, 0)
+        XCTAssertEqual(resolve(firstMatcher, in: capture), first)
+        XCTAssertFalse(secondMatcher.matcher.hasPredicates)
+        XCTAssertEqual(secondMatcher.ordinal, 2)
+        XCTAssertEqual(resolve(secondMatcher, in: capture), second)
+    }
+
+    func testSingleAnonymousElementStillCarriesOrdinalForPlayback() {
+        let element = makeElement(heistId: "anonymous")
+        let capture = makeCapture([element])
+
+        let minimumMatcher = MinimumMatcher.build(element: element, in: capture)
+
+        XCTAssertFalse(minimumMatcher.matcher.hasPredicates)
+        XCTAssertEqual(minimumMatcher.ordinal, 0)
+        XCTAssertEqual(resolve(minimumMatcher, in: capture), element)
+    }
+
     private func resolve(_ minimumMatcher: MinimumMatcher, in capture: AccessibilityTrace.Capture) -> HeistElement? {
         let matches = capture.interface.elements.filter { $0.matches(minimumMatcher.matcher) }
         return matches[safe: minimumMatcher.ordinal ?? 0]

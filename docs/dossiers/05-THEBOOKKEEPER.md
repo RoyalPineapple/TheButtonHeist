@@ -388,7 +388,7 @@ Real filesystem I/O against a temp directory created in `setUp` and deleted in `
 | Path validation | `..` rejection, empty path, simple relative, absolute, embedded traversal |
 | Artifact storage | screenshot/recording file creation, manifest updates, sequence numbering, base64 failure, `writeToPath` traversal guard, `writeToPath` success, `archiveSession(deleteSource: true)` deletes the source directory, orchestration routes for all three sinks |
 | Heist recording | start/stop lifecycle, excluded commands, error skipping, coordinate-only flagging, binary stripping, interface cache resolution |
-| Minimal matcher | identifier-first, label+traits fallback, value never used, state traits filtered, ambiguity → ordinal |
+| Minimum matcher | identifier, label, semantic traits, value, stateful traits / excludeTraits, then ordinal fallback |
 | Heist file I/O | round-trip write/read preserves version, app, steps; malformed JSONL line is logged and skipped, not fatal |
 | Recovery | abandoned session compressed with recovery manifest, clean sessions skipped, heist evidence preserved, corrupt manifest regenerated, empty base directory no-op |
 

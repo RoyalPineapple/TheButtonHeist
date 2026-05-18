@@ -396,7 +396,7 @@ Directions: `"up"`, `"down"`, `"left"`, `"right"`, `"next"`, `"previous"`.
 
 Scroll a known element into view. Use this for elements returned by the current hierarchy or a recent action delta. For iterative discovery of an unseen or stale element, use `element_search`.
 
-**Target fields:** `heistId`, or flat matcher fields `label`, `identifier`, `value`, `traits`, `excludeTraits`. Use `heistId` for known current-hierarchy elements. Matcher fields are decoded at the payload root and only resolve elements already present in the current hierarchy; there is no nested `match` object.
+**Target fields:** `heistId`, flat matcher fields `label`, `identifier`, `value`, `traits`, `excludeTraits`, and optional `ordinal`. Use `heistId` for known current-hierarchy elements. Matcher fields are decoded at the payload root and only resolve elements already present in the current hierarchy; there is no nested `match` object. `ordinal` is a fallback when matcher predicates are ambiguous, or when no matcher predicates exist.
 
 **By heistId:**
 ```json
@@ -970,7 +970,7 @@ not duplicated on `ServerInfo`.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `heistId` | `String` | Current-hierarchy element handle returned by Button Heist. Use it for immediate follow-up actions; use matcher fields for durable flows and recordings. |
+| `heistId` | `String` | Current-hierarchy element handle returned by Button Heist. Use it for immediate follow-up actions; recordings persist minimum matcher fields for durable replay. |
 | `label` | `String?` | Label |
 | `value` | `String?` | Current value (for controls) |
 | `identifier` | `String?` | Identifier |
@@ -1028,9 +1028,9 @@ Container types:
 |-------|------|-------------|
 | `heistId` | `String?` | Current-hierarchy element handle returned by `get_interface` or an action delta |
 | `label` / `identifier` / `value` / `traits` / `excludeTraits` | matcher fields | Predicate matcher fields for accessibility-based resolution, decoded flat at the target root |
-| `ordinal` | `Int?` | 0-based index to select among multiple matcher results. Without ordinal, multiple matches return an ambiguity error. |
+| `ordinal` | `Int?` | 0-based index to select among matcher results. Without ordinal, multiple matches return an ambiguity error. Ordinal can stand alone only as the all-elements fallback used by minimum matcher recording. |
 
-Two resolution strategies. Resolution priority: `heistId` > matcher fields. Use handles for the current hierarchy; use matcher fields for durable flows. At least one identity field should be provided.
+Two resolution strategies. Resolution priority: `heistId` > matcher fields. Use handles for the current hierarchy; use minimum matcher fields for durable flows. At least one identity field or ordinal fallback should be provided.
 
 ### TouchTapTarget
 
@@ -1211,6 +1211,7 @@ Predicate for matching elements in the accessibility tree. All specified fields 
 |-------|------|-------------|
 | `heistId` | `String?` | Known current-hierarchy handle to scroll into view |
 | `label` / `identifier` / `value` / `traits` / `excludeTraits` | matcher fields | Flat matcher fields for elements already present in the current hierarchy |
+| `ordinal` | `Int?` | 0-based fallback index among matcher results |
 
 ### ScrollSearchDirection
 

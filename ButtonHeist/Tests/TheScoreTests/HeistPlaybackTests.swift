@@ -84,6 +84,24 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertEqual(step.arguments["text"], .string("hello"))
     }
 
+    func testStepWithOrdinalOnlyTargetRoundTripsAsEmptyMatcherFallback() throws {
+        let json: [String: Any] = [
+            "command": "activate",
+            "ordinal": 0,
+        ]
+        let data = try JSONSerialization.data(withJSONObject: json)
+        let step = try JSONDecoder().decode(HeistEvidence.self, from: data)
+
+        XCTAssertEqual(step.command, "activate")
+        XCTAssertFalse(try XCTUnwrap(step.target).hasPredicates)
+        XCTAssertEqual(step.ordinal, 0)
+
+        let encoded = try JSONSerialization.jsonObject(with: JSONEncoder().encode(step)) as? [String: Any]
+        XCTAssertEqual(encoded?["ordinal"] as? Int, 0)
+        XCTAssertNil(encoded?["label"])
+        XCTAssertNil(encoded?["target"])
+    }
+
     func testStepWithRecordedMetadata() throws {
         let step = HeistEvidence(
             command: "activate",

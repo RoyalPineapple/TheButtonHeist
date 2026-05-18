@@ -262,16 +262,16 @@ public enum ClientMessage: Codable, Sendable {
 // MARK: - Action Targets
 
 /// Target for element actions.
-/// Two resolution strategies: heistId (assigned token from get_interface) or
-/// match (describe the element by accessibility properties). HeistId takes
-/// priority when both are present.
-/// How to target an element: by stable heistId or by predicate matcher.
-/// HeistId is preferred when available (fast, exact). Matcher fields use
-/// case-insensitive equality with typography folding — exact-or-miss.
+/// Two resolution strategies: heistId (current-hierarchy token from
+/// get_interface) or matcher (describe the element by accessibility
+/// properties). HeistId takes priority when both are present.
+/// Use heistId for immediate follow-up actions in the current capture; use
+/// minimum matchers for durable replay. Matcher fields use case-insensitive
+/// equality with typography folding — exact-or-miss.
 /// On miss, the resolver returns structured suggestions; there is no
 /// substring fallback.
 public enum ElementTarget: Sendable, Equatable {
-    /// Stable ID assigned by get_interface — fast O(1) lookup.
+    /// Current-hierarchy handle assigned by get_interface — fast O(1) lookup.
     case heistId(String)
     /// Predicate matcher: label, identifier, value, traits, excludeTraits.
     /// `ordinal` is a 0-based selection index into the list of matches
@@ -281,13 +281,15 @@ public enum ElementTarget: Sendable, Equatable {
     case matcher(ElementMatcher, ordinal: Int? = nil)
 
     /// Convenience: build from optional fields. HeistId wins if present.
-    /// Returns nil if both are empty.
+    /// Returns nil if both matcher and ordinal are empty.
     public init?(heistId: String? = nil, matcher: ElementMatcher, ordinal: Int? = nil) {
         if let heistId {
             assert(ordinal == nil, "ordinal is ignored when heistId is present — pass one or the other")
             self = .heistId(heistId)
         } else if let match = matcher.nonEmpty {
             self = .matcher(match, ordinal: ordinal)
+        } else if ordinal != nil {
+            self = .matcher(matcher, ordinal: ordinal)
         } else {
             return nil
         }
@@ -303,11 +305,9 @@ extension ElementTarget: Codable {
         case ordinal
 
         /// The matcher / heistId keys whose presence in a parent container
-        /// indicates an `ElementTarget` is flattened at that level. Excludes
-        /// `ordinal` because ordinal alone (without any matcher) isn't a
-        /// valid target.
+        /// indicates an `ElementTarget` is flattened at that level.
         static let allInlineKeys: [CodingKeys] = [
-            .heistId, .label, .identifier, .value, .traits, .excludeTraits,
+            .heistId, .label, .identifier, .value, .traits, .excludeTraits, .ordinal,
         ]
     }
 
@@ -317,7 +317,7 @@ extension ElementTarget: Codable {
     /// `ElementSearchTarget`) that flatten an `ElementTarget` alongside their
     /// own fields.
     public static let inlineWireKeys: [String] = [
-        "heistId", "label", "identifier", "value", "traits", "excludeTraits",
+        "heistId", "label", "identifier", "value", "traits", "excludeTraits", "ordinal",
     ]
 
     /// Decode an optional `ElementTarget` flattened into the same JSON object
@@ -353,10 +353,12 @@ extension ElementTarget: Codable {
         }
         if let match = matcher.nonEmpty {
             self = .matcher(match, ordinal: ordinal)
+        } else if ordinal != nil {
+            self = .matcher(matcher, ordinal: ordinal)
         } else {
             throw DecodingError.dataCorrupted(.init(
                 codingPath: decoder.codingPath,
-                debugDescription: "ElementTarget requires heistId or at least one matcher field (label, identifier, value, traits, excludeTraits)"
+                debugDescription: "ElementTarget requires heistId, ordinal, or at least one matcher field (label, identifier, value, traits, excludeTraits)"
             ))
         }
     }

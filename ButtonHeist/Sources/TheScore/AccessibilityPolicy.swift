@@ -29,8 +29,8 @@ public enum AccessibilityPolicy {
     /// Consumed by:
     /// - `TheBurglar.hasSameMinimumMatcher` (content-space disambiguation)
     /// - `AccessibilityTrace.Delta.between` (functional-move pairing)
-    /// - `MinimumMatcher` (recording and repair matcher construction —
-    ///   adds state only when semantic predicates remain ambiguous)
+    /// - `MinimumMatcher` (recording matcher construction — adds state only
+    ///   when semantic predicates remain ambiguous)
     public static let transientTraits: Set<HeistTrait> = [
         .selected,
         .notEnabled,

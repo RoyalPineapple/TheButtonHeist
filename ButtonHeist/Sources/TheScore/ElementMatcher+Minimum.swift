@@ -4,9 +4,9 @@ import Foundation
 
 /// The smallest durable matcher that identifies one element within a capture.
 ///
-/// Recording and replay repair both need the same rule: derive a matcher from
-/// the full accessibility state, never from viewport accidents, and include an
-/// ordinal only when the durable predicates are still ambiguous.
+/// Recording uses this rule to derive a replay target from the full
+/// accessibility state, never from viewport accidents. If a later capture
+/// introduces a conflict, run a fresh minimum-matcher pass for that capture.
 public struct MinimumMatcher: Sendable, Equatable {
     public let element: HeistElement
     public let matcher: ElementMatcher
@@ -205,7 +205,9 @@ public struct MinimumMatcher: Sendable, Equatable {
     }
 
     /// Find the 0-based index of `element` among all elements matching `matcher`.
-    /// Returns nil if the element is the only match.
+    /// Returns nil if the element is the only match, unless the matcher has no
+    /// predicates. Empty matchers need an explicit ordinal to survive the flat
+    /// playback wire format.
     private static func ordinalOf(
         _ element: HeistElement,
         matching matcher: ElementMatcher,
@@ -221,7 +223,7 @@ public struct MinimumMatcher: Sendable, Equatable {
             index += 1
             totalMatches += 1
         }
-        guard totalMatches > 1 else { return nil }
+        guard totalMatches > 1 || !matcher.hasPredicates else { return nil }
         return found
     }
 }

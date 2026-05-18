@@ -106,7 +106,7 @@ public extension AccessibilityTrace.Delta {
     /// writing `after.transition.screenChangeReason`. When the transition
     /// reason is present it is authoritative, so `isScreenChange: false` can
     /// still produce `.screenChanged`. The diff then carries exactly the
-    /// evidence needed for expectations, replay diagnostics, and future repair.
+    /// evidence needed for expectations and replay diagnostics.
     static func between(
         _ before: AccessibilityTrace.Capture,
         _ after: AccessibilityTrace.Capture,

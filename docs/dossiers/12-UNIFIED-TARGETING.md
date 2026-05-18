@@ -9,7 +9,7 @@ Unified targeting turns a caller's intent ("tap the Submit button") into a concr
 
 There are exactly **two targeting strategies**, encoded as cases of the `ElementTarget` enum:
 
-1. **`.heistId(String)`** — "you gave me this token, I hand it back." Assigned by `get_interface`, presumed stable while the element is in `currentScreen`. O(1) lookup into `currentScreen.elements`.
+1. **`.heistId(String)`** — "you gave me this token, I hand it back." Assigned by `get_interface`, valid as a current-screen handle while the element is in `currentScreen`. O(1) lookup into `currentScreen.elements`.
 2. **`.matcher(ElementMatcher)`** — "I'm describing the element by its accessibility properties." A predicate-based search on label, identifier, value, and traits with **case-insensitive equality** (typography-folded — smart quotes, dashes, ellipsis fold to ASCII) and exact trait bitmask comparison. Matching is **exact or miss** — there is no substring fallback. On a miss the resolver returns structured suggestions through the diagnostic path. Callers can embed expectations (e.g. `value="6"`) so stale state fails early instead of acting on the wrong element.
 
 A single method, `TheStash.resolveTarget(_:)`, implements this and returns a `TargetResolution` enum (`.resolved(ResolvedTarget)`, `.notFound(diagnostics:)`, `.ambiguous(candidates:diagnostics:)`). `ResolvedTarget` has a single field: `screenElement: ScreenElement`. Every action executor calls this method — there are no alternative resolution paths.
@@ -91,7 +91,7 @@ enum ElementTarget: Codable, Sendable {
 }
 ```
 
-Exactly one strategy per target — no invalid states. Custom flat-wire Codable preserves backward compatibility with JSON like `{"heistId": "btn"}` or `{"label": "Submit", "traits": ["button"]}`. The optional `ordinal` (0-based) selects among multiple matches; without it, multiple matches return an ambiguity error.
+Exactly one strategy per target — no invalid states. Custom flat-wire Codable preserves JSON like `{"heistId": "btn"}`, `{"label": "Submit", "traits": ["button"]}`, or the minimum-matcher fallback `{"ordinal": 0}`. The optional `ordinal` (0-based) selects among matcher results; without it, multiple matches return an ambiguity error.
 
 ### ElementMatcher (TheScore/Elements.swift)
 
@@ -234,7 +234,7 @@ These commands do not resolve exactly one live element through `resolveTarget()`
 2. **Single resolution path** — `resolveTarget()` is the only way to go from `ElementTarget` to a live element. No alternative code paths that could fall out of sync.
 3. **Exact matching only** — no fuzzy resolution, no partial matches. Miss → progressive diagnostic that answers the next question.
 4. **Expectations in the search** — embed value/trait expectations in the matcher so stale state fails early. A slider at value "8" won't match a search for value "6" — you'll know immediately something changed.
-5. **heistId always wins** — fastest path (snapshot lookup by stable ID), deterministic. When a caller has a heistId, they know exactly which element they want.
+5. **heistId wins for live actions** — fastest path (snapshot lookup by current-screen handle), deterministic. When a caller has a heistId from the current capture, they know exactly which element they want. Replay records should persist minimum matchers, not heistIds.
 6. **Matching on canonical types** — `ElementMatcher` predicates resolve against `AccessibilityElement` (parser types with real `UIAccessibilityTraits`), not wire types (`HeistElement` with string trait arrays). This avoids lossy string round-trips.
 7. **Progressive disclosure on failure** — errors go from "here's what changed" to "here's what's on screen" depending on how close the miss was. Every error answers the obvious next question.
 
@@ -253,6 +253,12 @@ These commands do not resolve exactly one live element through `resolveTarget()`
 | `--ordinal` | `ElementTarget` ordinal (0-based index among matches) |
 
 `WaitForCommand` is the exception: it builds an `ElementMatcher` directly (no `--heist-id`, since `wait_for` polls by predicate, not by assigned token).
+
+## Minimum Matcher for Replay
+
+Heist recording uses `MinimumMatcher` to turn the element observed in an `AccessibilityTrace.Capture` into the least-specific replay selector that resolves back to that same element in the capture. The ordering is identifier, label, semantic traits, value, stateful traits / `excludeTraits`, then ordinal. Ordinal is the last resort, including anonymous elements where no matcher predicates exist.
+
+If a new capture introduces a conflict for an old matcher, the supported 0.3.7 behavior is to run a fresh minimum-matcher pass against the new capture. Playback does not self-heal or auto-repair stale steps.
 
 ## Current Element State
 
