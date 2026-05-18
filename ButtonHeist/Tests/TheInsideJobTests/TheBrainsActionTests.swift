@@ -414,6 +414,22 @@ final class TheBrainsActionTests: XCTestCase {
         ])
     }
 
+    func testExecuteTypeTextReportsKeyboardInjectionFailure() async {
+        let keyboardImpl = KeyboardInjectionKeyboardImpl()
+        brains.safecracker.keyboardBridgeProvider = { keyboardImpl.bridge(missingSelector: "addInputString:") }
+
+        let result = await brains.actions.executeTypeText(TypeTextTarget(text: "hello"))
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .typeText)
+        XCTAssertDiagnostic(result.message, contains: [
+            "UIKeyboardImplTextInjection failed",
+            "missing selector addInputString:",
+            "while typing \"h\"",
+        ])
+        XCTAssertTrue(keyboardImpl.inputStrings.isEmpty)
+    }
+
     func testExecuteTypeTextRejectsEmptyTextBeforeFocusCheck() async {
         let result = await brains.actions.executeTypeText(TypeTextTarget(text: ""))
 

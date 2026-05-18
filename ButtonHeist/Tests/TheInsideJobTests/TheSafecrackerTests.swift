@@ -3,6 +3,69 @@ import XCTest
 @testable import TheInsideJob
 
 @MainActor
+final class KeyboardInjectionTextInputDelegate: NSObject, UIKeyInput {
+    private(set) var insertedText: [String] = []
+    private(set) var deleteBackwardCount = 0
+
+    var hasText: Bool { !insertedText.isEmpty }
+
+    func insertText(_ text: String) {
+        insertedText.append(text)
+    }
+
+    func deleteBackward() {
+        deleteBackwardCount += 1
+    }
+}
+
+@MainActor
+final class KeyboardInjectionTaskQueue: NSObject {
+    private(set) var waitCount = 0
+
+    @objc(waitUntilAllTasksAreFinished)
+    func waitUntilAllTasksAreFinished() {
+        waitCount += 1
+    }
+}
+
+@MainActor
+final class KeyboardInjectionKeyboardImpl: NSObject {
+    let inputDelegate = KeyboardInjectionTextInputDelegate()
+    var taskQueueObject: KeyboardInjectionTaskQueue? = KeyboardInjectionTaskQueue()
+    private(set) var inputStrings: [String] = []
+    private(set) var deleteFromInputCount = 0
+
+    @objc(delegate)
+    func delegate() -> AnyObject? {
+        inputDelegate
+    }
+
+    @objc(addInputString:)
+    func addInputString(_ text: NSString) {
+        inputStrings.append(text as String)
+    }
+
+    @objc(taskQueue)
+    func taskQueue() -> AnyObject? {
+        taskQueueObject
+    }
+
+    @objc(deleteFromInput)
+    func deleteFromInput() {
+        deleteFromInputCount += 1
+    }
+
+    @MainActor
+    func bridge(missingSelector selector: String? = nil) -> KeyboardBridge {
+        let injection = UIKeyboardImplTextInjection(impl: self) { name, target in
+            guard name != selector else { return nil }
+            return ObjCRuntime.message(name, to: target)
+        }
+        return KeyboardBridge(impl: self, textInjection: injection)
+    }
+}
+
+@MainActor
 final class TheSafecrackerTests: XCTestCase {
 
     private var tripwire: TheTripwire!
@@ -115,6 +178,81 @@ final class TheSafecrackerTests: XCTestCase {
             userInfo: [UIResponder.keyboardFrameEndUserInfoKey: hiddenFrame]
         )
         XCTAssertFalse(safecracker.isKeyboardVisible())
+    }
+
+    // MARK: - Text Injection
+
+    func testTextInjectionReportsMissingAddInputStringSelector() {
+        let keyboardImpl = KeyboardInjectionKeyboardImpl()
+        let injection = UIKeyboardImplTextInjection(impl: keyboardImpl) { name, target in
+            guard name != "addInputString:" else { return nil }
+            return ObjCRuntime.message(name, to: target)
+        }
+
+        let result = injection.type("h")
+
+        XCTAssertEqual(
+            result.diagnostic,
+            KeyboardTextInjectionDiagnostic.missingSelector(
+                "addInputString:",
+                strategy: UIKeyboardImplTextInjection.strategyName,
+                character: "h"
+            )
+        )
+        XCTAssertTrue(keyboardImpl.inputStrings.isEmpty)
+    }
+
+    func testTextInjectionReportsMissingDrainSelectorAfterDispatch() {
+        let keyboardImpl = KeyboardInjectionKeyboardImpl()
+        let injection = UIKeyboardImplTextInjection(impl: keyboardImpl) { name, target in
+            guard name != "waitUntilAllTasksAreFinished" else { return nil }
+            return ObjCRuntime.message(name, to: target)
+        }
+
+        let result = injection.type("h")
+
+        XCTAssertEqual(keyboardImpl.inputStrings, ["h"])
+        XCTAssertEqual(
+            result.diagnostic,
+            KeyboardTextInjectionDiagnostic.missingSelector(
+                "waitUntilAllTasksAreFinished",
+                strategy: UIKeyboardImplTextInjection.strategyName,
+                character: "h"
+            )
+        )
+    }
+
+    func testTextInjectionReportsUnavailableTaskQueueAfterDispatch() {
+        let keyboardImpl = KeyboardInjectionKeyboardImpl()
+        keyboardImpl.taskQueueObject = nil
+        let injection = UIKeyboardImplTextInjection(impl: keyboardImpl)
+
+        let result = injection.type("h")
+
+        XCTAssertEqual(keyboardImpl.inputStrings, ["h"])
+        XCTAssertEqual(
+            result.diagnostic,
+            KeyboardTextInjectionDiagnostic.unavailableTaskQueue(
+                strategy: UIKeyboardImplTextInjection.strategyName,
+                character: "h"
+            )
+        )
+    }
+
+    func testTypeTextReturnsKeyboardInjectionDiagnostic() async {
+        let keyboardImpl = KeyboardInjectionKeyboardImpl()
+        safecracker.keyboardBridgeProvider = { keyboardImpl.bridge(missingSelector: "addInputString:") }
+
+        let result = await safecracker.typeText("hello")
+
+        XCTAssertEqual(
+            result.diagnostic,
+            KeyboardTextInjectionDiagnostic.missingSelector(
+                "addInputString:",
+                strategy: UIKeyboardImplTextInjection.strategyName,
+                character: "h"
+            )
+        )
     }
 }
 #endif

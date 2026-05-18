@@ -147,7 +147,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         try await waitForActiveTextInput()
 
         let result = await safecracker.typeText("hello")
-        XCTAssertTrue(result, "typeText should succeed when keyboard is active")
+        XCTAssertEqual(result, .dispatched, "typeText should succeed when keyboard is active")
         XCTAssertEqual(textField.text, "hello")
 
         await teardownKeyboard(textField: textField)

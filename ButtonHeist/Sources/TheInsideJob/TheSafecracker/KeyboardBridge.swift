@@ -2,6 +2,118 @@
 #if DEBUG
 import UIKit
 
+enum KeyboardTextInjectionResult: Equatable {
+    case dispatched
+    case failed(KeyboardTextInjectionDiagnostic)
+
+    var diagnostic: KeyboardTextInjectionDiagnostic? {
+        guard case .failed(let diagnostic) = self else { return nil }
+        return diagnostic
+    }
+}
+
+enum KeyboardTextInjectionFailureReason: Equatable {
+    case missingSelector(String)
+    case unavailableTaskQueue
+    case noActiveInput
+    case cancelled
+}
+
+struct KeyboardTextInjectionDiagnostic: Equatable {
+    let strategy: String
+    let reason: KeyboardTextInjectionFailureReason
+    let character: String?
+
+    var message: String {
+        var details: String
+        switch reason {
+        case .missingSelector(let selector):
+            details = "missing selector \(selector)"
+        case .unavailableTaskQueue:
+            details = "taskQueue unavailable"
+        case .noActiveInput:
+            details = "no active UIKeyInput delegate"
+        case .cancelled:
+            details = "cancelled before text dispatch completed"
+        }
+        if let character {
+            details += " while typing \"\(character)\""
+        }
+        return "\(strategy) failed: \(details)"
+    }
+
+    static func missingSelector(_ selector: String, strategy: String, character: String?) -> KeyboardTextInjectionDiagnostic {
+        KeyboardTextInjectionDiagnostic(
+            strategy: strategy,
+            reason: .missingSelector(selector),
+            character: character
+        )
+    }
+
+    static func unavailableTaskQueue(strategy: String, character: String?) -> KeyboardTextInjectionDiagnostic {
+        KeyboardTextInjectionDiagnostic(
+            strategy: strategy,
+            reason: .unavailableTaskQueue,
+            character: character
+        )
+    }
+
+    static func noActiveInput(strategy: String) -> KeyboardTextInjectionDiagnostic {
+        KeyboardTextInjectionDiagnostic(
+            strategy: strategy,
+            reason: .noActiveInput,
+            character: nil
+        )
+    }
+
+    static func cancelled(strategy: String) -> KeyboardTextInjectionDiagnostic {
+        KeyboardTextInjectionDiagnostic(
+            strategy: strategy,
+            reason: .cancelled,
+            character: nil
+        )
+    }
+}
+
+final class UIKeyboardImplTextInjection {
+
+    static let strategyName = "UIKeyboardImplTextInjection"
+
+    private let impl: AnyObject
+    private let resolveMessage: (String, AnyObject) -> ObjCRuntime.Message?
+
+    init(
+        impl: AnyObject,
+        resolveMessage: @escaping (String, AnyObject) -> ObjCRuntime.Message? = { ObjCRuntime.message($0, to: $1) }
+    ) {
+        self.impl = impl
+        self.resolveMessage = resolveMessage
+    }
+
+    func type(_ character: Character) -> KeyboardTextInjectionResult {
+        let text = String(character)
+        guard let addInputString = resolveMessage("addInputString:", impl) else {
+            return .failed(.missingSelector("addInputString:", strategy: Self.strategyName, character: text))
+        }
+        addInputString.call(text as AnyObject)
+        return drainTaskQueue(character: text)
+    }
+
+    func drainTaskQueue(character: String?) -> KeyboardTextInjectionResult {
+        guard let taskQueueMessage = resolveMessage("taskQueue", impl) else {
+            return .failed(.missingSelector("taskQueue", strategy: Self.strategyName, character: character))
+        }
+        guard let taskQueue: AnyObject = taskQueueMessage.call() else {
+            return .failed(.unavailableTaskQueue(strategy: Self.strategyName, character: character))
+        }
+        guard let waitUntilAllTasksAreFinished = resolveMessage("waitUntilAllTasksAreFinished", taskQueue) else {
+            return .failed(.missingSelector("waitUntilAllTasksAreFinished", strategy: Self.strategyName, character: character))
+        }
+        waitUntilAllTasksAreFinished.call()
+        return .dispatched
+    }
+}
+
 /// Type-safe wrapper around `UIKeyboardImpl` private API.
 ///
 /// All keyboard text injection in Button Heist routes through this bridge.
@@ -17,6 +129,12 @@ import UIKit
 @MainActor struct KeyboardBridge { // swiftlint:disable:this agent_main_actor_value_type
 
     private let impl: AnyObject
+    private let textInjection: UIKeyboardImplTextInjection
+
+    init(impl: AnyObject, textInjection: UIKeyboardImplTextInjection? = nil) {
+        self.impl = impl
+        self.textInjection = textInjection ?? UIKeyboardImplTextInjection(impl: impl)
+    }
 
     /// Resolve the UIKeyboardImpl singleton. Returns nil if the class or
     /// selector is missing (should never happen on supported iOS versions).
@@ -42,36 +160,21 @@ import UIKit
     /// Routes through UIKeyboardImpl's internal input processing, which
     /// means the character lands via the normal `UIKeyInput.insertText(_:)`
     /// pathway with all responder-chain delegate callbacks.
-    func type(_ character: Character) {
-        addInputString?.call(String(character) as AnyObject)
-        drainTaskQueue()
+    func type(_ character: Character) -> KeyboardTextInjectionResult {
+        textInjection.type(character)
     }
 
     /// Send a single backspace event to the focused text field.
     func deleteBackward() {
         deleteFromInput?.call()
-        drainTaskQueue()
+        _ = textInjection.drainTaskQueue(character: nil)
     }
 
     // MARK: - Private
 
-    /// Message for `addInputString:` — resolved per access.
-    private var addInputString: ObjCRuntime.Message? {
-        ObjCRuntime.message("addInputString:", to: impl)
-    }
-
     /// Message for `deleteFromInput` — resolved per access.
     private var deleteFromInput: ObjCRuntime.Message? {
         ObjCRuntime.message("deleteFromInput", to: impl)
-    }
-
-    /// Drain UIKeyboardImpl's internal task queue after each keystroke.
-    /// Without this, rapid character injection can outpace the keyboard's
-    /// processing, causing dropped or reordered characters. This is a
-    /// direct port of KIF's `[taskQueue waitUntilAllTasksAreFinished]`.
-    private func drainTaskQueue() {
-        guard let taskQueue: AnyObject = ObjCRuntime.message("taskQueue", to: impl)?.call() else { return }
-        ObjCRuntime.message("waitUntilAllTasksAreFinished", to: taskQueue)?.call()
     }
 }
 
