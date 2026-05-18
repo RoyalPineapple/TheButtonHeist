@@ -18,7 +18,7 @@ public struct HeistPlayback: Codable, Sendable, Equatable {
     /// Bundle identifier of the app that was running during recording.
     public let app: String
     /// Ordered list of commands to replay.
-    public var steps: [HeistEvidence]
+    public let steps: [HeistEvidence]
 
     public init(
         version: Int = HeistPlayback.currentVersion,

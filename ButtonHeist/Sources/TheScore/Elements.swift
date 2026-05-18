@@ -609,25 +609,25 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
     /// Stable, deterministic identifier for targeting this element.
     /// Developer-provided `accessibilityIdentifier` if present, otherwise synthesized
     /// from traits + label (or value as fallback). Unique within a snapshot.
-    public var heistId: String
-    public var description: String
-    public var label: String?
-    public var value: String?
-    public var identifier: String?
+    public let heistId: String
+    public let description: String
+    public let label: String?
+    public let value: String?
+    public let identifier: String?
     /// Read by VoiceOver after the label/value.
-    public var hint: String?
-    public var traits: [HeistTrait]
-    public var frameX: Double
-    public var frameY: Double
-    public var frameWidth: Double
-    public var frameHeight: Double
+    public let hint: String?
+    public let traits: [HeistTrait]
+    public let frameX: Double
+    public let frameY: Double
+    public let frameWidth: Double
+    public let frameHeight: Double
     /// Where VoiceOver would tap, in screen coordinates. May fall outside `frame`.
-    public var activationPointX: Double
-    public var activationPointY: Double
-    public var respondsToUserInteraction: Bool
-    public var customContent: [HeistCustomContent]?
-    public var rotors: [HeistRotor]?
-    public var actions: [ElementAction]
+    public let activationPointX: Double
+    public let activationPointY: Double
+    public let respondsToUserInteraction: Bool
+    public let customContent: [HeistCustomContent]?
+    public let rotors: [HeistRotor]?
+    public let actions: [ElementAction]
 
     public init(
         heistId: String = "",
@@ -675,7 +675,7 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
 /// live through a command because rotor movement is contextual and can be
 /// direction-dependent or unbounded.
 public struct HeistRotor: Codable, Equatable, Hashable, Sendable {
-    public var name: String
+    public let name: String
 
     public init(name: String) {
         self.name = name
@@ -684,9 +684,9 @@ public struct HeistRotor: Codable, Equatable, Hashable, Sendable {
 
 /// Custom content attached to a HeistElement (maps to AccessibilityElement.CustomContent)
 public struct HeistCustomContent: Codable, Equatable, Hashable, Sendable {
-    public var label: String
-    public var value: String
-    public var isImportant: Bool
+    public let label: String
+    public let value: String
+    public let isImportant: Bool
 
     public init(label: String, value: String, isImportant: Bool) {
         self.label = label

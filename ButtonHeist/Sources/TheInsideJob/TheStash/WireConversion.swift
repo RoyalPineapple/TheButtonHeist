@@ -43,8 +43,13 @@ extension TheStash {
     // MARK: - Element Conversion
 
     static func convert(_ element: AccessibilityElement, object: NSObject? = nil) -> HeistElement {
+        convert(element, heistId: "", object: object)
+    }
+
+    static func convert(_ element: AccessibilityElement, heistId: String, object: NSObject? = nil) -> HeistElement {
         let frame = element.shape.frame
         return HeistElement(
+            heistId: heistId,
             description: element.description,
             label: element.label,
             value: element.value,
@@ -85,9 +90,7 @@ extension TheStash {
     // MARK: - Wire Output
 
     static func toWire(_ entry: ScreenElement) -> HeistElement {
-        var wire = convert(entry.element, object: entry.object)
-        wire.heistId = entry.heistId
-        return wire
+        convert(entry.element, heistId: entry.heistId, object: entry.object)
     }
 
     /// Convert a snapshot to wire format. Use at serialization boundaries.
