@@ -21,60 +21,76 @@ extension TheFence {
         var expectationsChecked = 0
         let batchStart = CFAbsoluteTimeGetCurrent()
 
-        for (index, step) in request.steps.enumerated() {
-            let originalCommandName = step["command"] as? String ?? "?"
-            var normalizedCommand: Command?
-            do {
-                let operation = try Self.normalizedBatchStep(step, index: index)
-                let command = operation.command
-                normalizedCommand = command
-                let response = try await execute(request: operation.requestDictionary)
-                results.append(response.jsonDict() ?? ["status": "ok"])
+        stepLoop: for (index, step) in request.steps.enumerated() {
+            switch step {
+            case .decoded(let parsedRequest):
+                let command = parsedRequest.command
+                do {
+                    let response = try await execute(parsed: parsedRequest)
+                    results.append(response.jsonDict() ?? ["status": "ok"])
 
-                let outcome = stepOutcome(response: response)
-                if outcome.hasActionResult {
-                    actionOutcomeCount += 1
-                    if let accessibilityTrace = outcome.accessibilityTrace {
-                        stepAccessibilityTraces.append(accessibilityTrace)
+                    let outcome = stepOutcome(response: response)
+                    if outcome.hasActionResult {
+                        actionOutcomeCount += 1
+                        if let accessibilityTrace = outcome.accessibilityTrace {
+                            stepAccessibilityTraces.append(accessibilityTrace)
+                        }
+                    }
+
+                    // Count explicit tier expectations only — delivery failures have
+                    // expectation.expectation == nil and should not inflate the count
+                    if outcome.expectationCounted {
+                        expectationsChecked += 1
+                        if outcome.expectationMet == true { expectationsMet += 1 }
+                    }
+
+                    stepSummaries.append(makeStepSummary(
+                        command: command, response: response,
+                        expectationMet: outcome.expectationCounted ? outcome.expectationMet : nil
+                    ))
+
+                    if outcome.isFailed, request.policy == .stopOnError {
+                        failedIndex = index
+                        break stepLoop
+                    }
+                } catch {
+                    let errorDict: [String: Any] = [
+                        "status": "error",
+                        "message": error.localizedDescription,
+                    ]
+                    let failureDetails = (error as? FenceError)?.failureDetails
+                    results.append(errorDict)
+                    stepSummaries.append(BatchStepSummary(
+                        command: command.rawValue,
+                        deltaKind: nil,
+                        screenName: nil,
+                        screenId: nil,
+                        expectationMet: nil, elementCount: nil, error: error.localizedDescription,
+                        errorCode: failureDetails?.errorCode,
+                        phase: failureDetails?.phase.rawValue,
+                        nextCommand: Self.batchNextCommand(from: failureDetails)
+                    ))
+                    if request.policy == .stopOnError {
+                        failedIndex = index
+                        break stepLoop
                     }
                 }
 
-                // Count explicit tier expectations only — delivery failures have
-                // expectation.expectation == nil and should not inflate the count
-                if outcome.expectationCounted {
-                    expectationsChecked += 1
-                    if outcome.expectationMet == true { expectationsMet += 1 }
-                }
-
-                stepSummaries.append(makeStepSummary(
-                    command: command, response: response,
-                    expectationMet: outcome.expectationCounted ? outcome.expectationMet : nil
-                ))
-
-                if outcome.isFailed, request.policy == .stopOnError {
-                    failedIndex = index
-                    break
-                }
-            } catch {
-                let errorDict: [String: Any] = [
-                    "status": "error",
-                    "message": error.localizedDescription,
-                ]
-                let failureDetails = (error as? FenceError)?.failureDetails
-                results.append(errorDict)
+            case .invalid(let commandName, let failure):
+                results.append(failure.resultDictionary)
                 stepSummaries.append(BatchStepSummary(
-                    command: normalizedCommand?.rawValue ?? originalCommandName,
+                    command: commandName,
                     deltaKind: nil,
                     screenName: nil,
                     screenId: nil,
-                    expectationMet: nil, elementCount: nil, error: error.localizedDescription,
-                    errorCode: failureDetails?.errorCode,
-                    phase: failureDetails?.phase.rawValue,
-                    nextCommand: Self.batchNextCommand(from: failureDetails)
+                    expectationMet: nil, elementCount: nil, error: failure.message,
+                    errorCode: failure.details?.errorCode,
+                    phase: failure.details?.phase.rawValue,
+                    nextCommand: Self.batchNextCommand(from: failure.details)
                 ))
                 if request.policy == .stopOnError {
                     failedIndex = index
-                    break
+                    break stepLoop
                 }
             }
         }
@@ -113,30 +129,12 @@ extension TheFence {
         return AccessibilityTrace.captureEndpointTrace(from: stepAccessibilityTraces)
     }
 
-    private static func normalizedBatchStep(
-        _ step: [String: Any],
-        index: Int
-    ) throws -> NormalizedOperation {
-        switch FenceOperationCatalog.normalizeBatchStep(step) {
-        case .success(let operation):
-            return operation
-        case .failure(let error):
-            throw FenceError.invalidRequest("run_batch step \(index): \(error.message)")
-        }
-    }
-
     private func skippedStepSummaries(
-        steps: [[String: Any]], afterFailedIndex failedIndex: Int
+        steps: [RunBatchStepRequest], afterFailedIndex failedIndex: Int
     ) -> [BatchStepSummary] {
         steps.dropFirst(failedIndex + 1).map { step in
-            let command = switch FenceOperationCatalog.normalizeBatchStep(step) {
-            case .success(let operation):
-                operation.command.rawValue
-            case .failure:
-                step["command"] as? String ?? "?"
-            }
             return BatchStepSummary(
-                command: command,
+                command: step.commandName,
                 deltaKind: nil,
                 screenName: nil,
                 screenId: nil,

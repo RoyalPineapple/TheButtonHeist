@@ -2246,6 +2246,44 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testBatchSchemaValidationFailureDoesNotDispatchInvalidStep() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        mockConn.autoResponse = { message in
+            switch message {
+            case .activate:
+                return .actionResult(ActionResult(success: true, method: .activate, message: "ran"))
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "run_batch",
+            "policy": "continue_on_error",
+            "steps": [
+                ["command": "start_recording", "fps": "5"],
+                ["command": "activate", "identifier": "btn"],
+            ] as [[String: Any]],
+        ])
+
+        guard case .batch(let results, _, let failedIndex, _, _, _, let summaries, _) = response else {
+            XCTFail("Expected batch response, got \(response)")
+            return
+        }
+        let expectedError = "schema validation failed for fps: observed string \"5\"; expected integer"
+        XCTAssertNil(failedIndex)
+        XCTAssertEqual(results.count, 2)
+        XCTAssertEqual(results[0]["message"] as? String, expectedError)
+        XCTAssertEqual(results[1]["message"] as? String, "ran")
+        XCTAssertEqual(summaries.map(\.command), ["start_recording", "activate"])
+        XCTAssertEqual(summaries[0].error, expectedError)
+        XCTAssertFalse(mockConn.sent.contains { sent in
+            if case .startRecording = sent.0 { return true }
+            return false
+        })
+    }
+
+    @ButtonHeistActor
     func testBatchReportsUnknownCanonicalCommandWithStepIndex() async throws {
         let (fence, mockConn) = makeConnectedFence()
         mockConn.autoResponse = { _ in
