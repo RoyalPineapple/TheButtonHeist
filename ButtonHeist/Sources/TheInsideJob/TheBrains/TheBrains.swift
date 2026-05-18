@@ -40,7 +40,7 @@ final class TheBrains {
     private var waitForChangePhase: WaitForChangePhase = .idle
 
     enum InterfaceObservation {
-        case success(Interface)
+        case success(InterfaceProjection)
         case failure(String)
     }
 
@@ -398,13 +398,8 @@ final class TheBrains {
         return true
     }
 
-    /// Build a full Interface payload from current state.
+    /// Build an Interface payload from the current semantic state.
     func currentInterface() -> Interface {
-        Interface(timestamp: Date(), tree: stash.wireTree())
-    }
-
-    /// Build the latest visible Interface payload from current state.
-    func currentVisibleInterface() -> Interface {
         Interface(timestamp: Date(), tree: stash.wireTree())
     }
 
@@ -421,7 +416,7 @@ final class TheBrains {
         if let error = projection.error {
             return .failure(error)
         }
-        return .success(projection.interface)
+        return .success(projection)
     }
 
     // MARK: - Background Accessibility Trace

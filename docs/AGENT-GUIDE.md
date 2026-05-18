@@ -113,24 +113,13 @@ When you need to interact with content that is not currently on screen, choose t
 
 This is the right choice when you know what you're looking for but don't know where it is. The response tells you how many scrolls it took and returns the element's heistId once found.
 
-**Read the current accessibility state.** If you need an inventory before acting, call `get_interface` without a scope:
+**Read the current accessibility state.** If you need an inventory before acting, call `get_interface`:
 
 ```json
 {"tool": "get_interface", "arguments": {}}
 ```
 
-The response may include summary stats when scrollable content was explored:
-
-```json
-{
-  "explore": {
-    "elementCount": 147,
-    "scrollCount": 12,
-    "containersExplored": 2,
-    "explorationTime": 3.4
-  }
-}
-```
+The app owns refresh and exploration policy. `get_interface` returns the current app state; `get_screen` returns the screenshot plus fresh visible geometry.
 
 Use the default `get_interface` read when you need to understand the current screen before acting — surveying a long form, counting items in a list, or planning a multi-step interaction across elements that are not all on screen at once.
 

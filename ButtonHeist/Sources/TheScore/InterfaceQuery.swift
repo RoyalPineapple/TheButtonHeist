@@ -154,41 +154,38 @@ private extension InterfaceNode {
 
 private extension ContainerInfo {
     var subtreeCandidateSummary: String {
-        var parts = ["container", "type=\"\(typeName.rawValue)\""]
-        if let stableId { parts.append("stableId=\"\(stableId)\"") }
-        if let identifier = containerIdentifier, !identifier.isEmpty {
-            parts.append("identifier=\"\(identifier)\"")
-        }
-        if let label = containerLabel, !label.isEmpty {
-            parts.append("label=\"\(label)\"")
-        }
-        if let value = containerValue, !value.isEmpty {
-            parts.append("value=\"\(value)\"")
-        }
-        if isModalBoundary {
-            parts.append("isModalBoundary=true")
-        }
-        return parts.joined(separator: " ")
+        [
+            "container",
+            subtreeSummaryRequiredField("type", typeName.rawValue),
+            subtreeSummaryField("stableId", stableId),
+            subtreeSummaryField("identifier", containerIdentifier),
+            subtreeSummaryField("label", containerLabel),
+            subtreeSummaryField("value", containerValue),
+            isModalBoundary ? "isModalBoundary=true" : nil,
+        ].compactMap { $0 }.joined(separator: " ")
     }
 }
 
 private extension HeistElement {
     var subtreeCandidateSummary: String {
-        var parts = ["element", "heistId=\"\(heistId)\""]
-        if let identifier, !identifier.isEmpty {
-            parts.append("identifier=\"\(identifier)\"")
-        }
-        if let label, !label.isEmpty {
-            parts.append("label=\"\(label)\"")
-        }
-        if let value, !value.isEmpty {
-            parts.append("value=\"\(value)\"")
-        }
-        if !traits.isEmpty {
-            parts.append("traits=\"\(traits.map(\.rawValue).joined(separator: ","))\"")
-        }
-        return parts.joined(separator: " ")
+        [
+            "element",
+            subtreeSummaryRequiredField("heistId", heistId),
+            subtreeSummaryField("identifier", identifier),
+            subtreeSummaryField("label", label),
+            subtreeSummaryField("value", value),
+            traits.isEmpty ? nil : subtreeSummaryRequiredField("traits", traits.map(\.rawValue).joined(separator: ",")),
+        ].compactMap { $0 }.joined(separator: " ")
     }
+}
+
+private func subtreeSummaryField(_ name: String, _ value: String?) -> String? {
+    guard let value, !value.isEmpty else { return nil }
+    return subtreeSummaryRequiredField(name, value)
+}
+
+private func subtreeSummaryRequiredField(_ name: String, _ value: String) -> String {
+    "\(name)=\"\(value)\""
 }
 
 private extension Array where Element == InterfaceSubtreeCandidate {

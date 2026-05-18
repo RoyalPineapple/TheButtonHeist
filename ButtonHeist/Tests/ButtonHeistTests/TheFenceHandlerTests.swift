@@ -2482,7 +2482,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 if let error = projection.error {
                     return .error(ServerError(kind: .general, message: error))
                 }
-                return .interface(projection.interface)
+                return .interface(projection.interface, filteredFrom: projection.filteredFrom)
             default:
                 return .actionResult(ActionResult(success: true, method: .activate))
             }
@@ -2501,6 +2501,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertNotNil(query.subtree)
 
         let json = response.jsonDict()
+        XCTAssertEqual(json["filteredFrom"] as? Int, 4)
         let interface = json["interface"] as! [String: Any]
         let tree = interface["tree"] as! [[String: Any]]
         XCTAssertEqual(tree.count, 1)
@@ -2538,7 +2539,8 @@ final class TheFenceHandlerTests: XCTestCase {
         mockConn.autoResponse = { message in
             switch message {
             case .requestInterface(let query):
-                return .interface(sourceInterface.projecting(query).interface)
+                let projection = sourceInterface.projecting(query)
+                return .interface(projection.interface, filteredFrom: projection.filteredFrom)
             default:
                 return .actionResult(ActionResult(success: true, method: .activate))
             }
@@ -2557,6 +2559,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(query.matcher.label, "Submit")
 
         let json = response.jsonDict()
+        XCTAssertEqual(json["filteredFrom"] as? Int, 2)
         let responseInterface = json["interface"] as! [String: Any]
         let tree = responseInterface["tree"] as! [[String: Any]]
         XCTAssertEqual(tree.count, 1)
@@ -2573,7 +2576,8 @@ final class TheFenceHandlerTests: XCTestCase {
         mockConn.autoResponse = { message in
             switch message {
             case .requestInterface(let query):
-                return .interface(sourceInterface.projecting(query).interface)
+                let projection = sourceInterface.projecting(query)
+                return .interface(projection.interface, filteredFrom: projection.filteredFrom)
             default:
                 return .actionResult(ActionResult(success: true, method: .activate))
             }
@@ -2592,6 +2596,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(query.elementIds, ["second"])
 
         let json = response.jsonDict()
+        XCTAssertEqual(json["filteredFrom"] as? Int, 2)
         let responseInterface = json["interface"] as! [String: Any]
         let tree = responseInterface["tree"] as! [[String: Any]]
         XCTAssertEqual(tree.count, 1)

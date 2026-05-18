@@ -166,7 +166,7 @@ extension BatchStepOutcome {
                 elementCount: nil,
                 error: result.success ? nil : result.message
             )
-        case .interface(let iface, _, _, _):
+        case .interface(let iface, _, _):
             return BatchStepSummary(
                 command: command, deltaKind: nil, screenName: nil, screenId: nil,
                 expectationMet: nil, elementCount: iface.elements.count, error: nil
@@ -330,7 +330,7 @@ public enum FenceResponse {
     case help(commands: [String])
     case status(connected: Bool, deviceName: String?)
     case devices([DiscoveredDevice])
-    case interface(Interface, detail: InterfaceDetail = .summary, filteredFrom: Int? = nil, explore: ExploreResult? = nil)
+    case interface(Interface, detail: InterfaceDetail = .summary, filteredFrom: Int? = nil)
     case action(result: ActionResult, expectation: ExpectationResult? = nil)
     /// Screenshot written to disk. `path` is the resolved filesystem location.
     case screenshot(path: String, payload: ScreenPayload)
@@ -423,7 +423,7 @@ public enum FenceResponse {
             return "Not connected"
         case .devices(let devices):
             return formatDeviceList(devices)
-        case .interface(let interface, _, _, _):
+        case .interface(let interface, _, _):
             return formatInterface(interface)
         case .action(let result, let expectation):
             var text = formatActionResult(result)

@@ -54,7 +54,7 @@ final class TheHandoffMessageTests: XCTestCase {
         let interface = makeInterfacePayload()
         handoff.handleServerMessage(.interface(interface), requestId: nil)
 
-        guard case .interface(let receivedPayload)? = receivedMessage else {
+        guard case .interface(let receivedPayload, _)? = receivedMessage else {
             return XCTFail("Expected interface message, got \(String(describing: receivedMessage))")
         }
         XCTAssertEqual(receivedPayload, interface)
@@ -74,7 +74,7 @@ final class TheHandoffMessageTests: XCTestCase {
         let interface = makeInterfacePayload()
         handoff.handleServerMessage(.interface(interface), requestId: "req-1")
 
-        guard case .interface(let receivedPayload)? = receivedMessage else {
+        guard case .interface(let receivedPayload, _)? = receivedMessage else {
             return XCTFail("Expected interface message, got \(String(describing: receivedMessage))")
         }
         XCTAssertEqual(receivedPayload, interface)

@@ -22,7 +22,7 @@ extension FenceResponse {
             if devices.isEmpty { return "no devices" }
             return devices.map { "\($0.appName) (\($0.deviceName)) [\($0.connectionType.rawValue)]" }
                 .joined(separator: "\n")
-        case .interface(let interface, let detail, let filteredFrom, _):
+        case .interface(let interface, let detail, let filteredFrom):
             var header = "\(interface.elements.count) elements"
             if let filteredFrom { header += " (filtered from \(filteredFrom))" }
             var lines: [String] = [interface.screenDescription, header]

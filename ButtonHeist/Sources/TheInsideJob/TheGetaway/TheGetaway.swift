@@ -499,9 +499,13 @@ final class TheGetaway {
         respond: @escaping (Data) -> Void
     ) async {
         switch await brains.observeInterface(query) {
-        case .success(let payload):
-            insideJobLogger.info("Interface: \(payload.elements.count) elements")
-            sendMessage(.interface(payload), requestId: requestId, respond: respond)
+        case .success(let projection):
+            insideJobLogger.info("Interface: \(projection.interface.elements.count) elements")
+            sendMessage(
+                .interface(projection.interface, filteredFrom: projection.filteredFrom),
+                requestId: requestId,
+                respond: respond
+            )
             brains.recordSentState()
         case .failure(let message):
             sendMessage(.error(ServerError(kind: .general, message: message)), requestId: requestId, respond: respond)
@@ -532,7 +536,7 @@ final class TheGetaway {
             pngData: pngData.base64EncodedString(),
             width: bounds.width,
             height: bounds.height,
-            interface: brains.currentVisibleInterface()
+            interface: brains.currentInterface()
         )
 
         sendMessage(.screen(payload), requestId: requestId, respond: respond)

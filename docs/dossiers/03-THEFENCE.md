@@ -54,7 +54,7 @@ graph TD
             Help["help([String])"]
             Status["status(connected, deviceName)"]
             DevList["devices([DiscoveredDevice])"]
-            IFResp["interface(Interface, detail, filteredFrom?, explore?)"]
+            IFResp["interface(Interface, detail, filteredFrom?)"]
             Action["action(result: ActionResult, expectation: ExpectationResult?)"]
             Screenshot["screenshot(path, ScreenPayload) / screenshotData(ScreenPayload)"]
             Recording["recording(path, payload) / recordingData(payload)"]
