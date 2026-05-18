@@ -600,7 +600,6 @@ final class TheBookKeeper {
                 heistId: recordedHeistId,
                 frame: recordedFrame,
                 coordinateOnly: coordinateOnly,
-                unsupportedArguments: [],
                 actionResult: actionResult,
                 expectation: expectation
             )
@@ -631,17 +630,14 @@ final class TheBookKeeper {
         heistId: String?,
         frame: RecordedFrame?,
         coordinateOnly: Bool?,
-        unsupportedArguments: [RecordedUnsupportedInput],
         actionResult: ActionResult?,
         expectation: ExpectationResult?
     ) -> RecordedMetadata? {
         let accessibilityTrace = actionResult?.accessibilityTrace
         let accessibilityDelta = actionResult?.effectiveAccessibilityDelta
-        let unsupportedArguments = unsupportedArguments.isEmpty ? nil : unsupportedArguments
         guard heistId != nil ||
             frame != nil ||
             coordinateOnly != nil ||
-            unsupportedArguments != nil ||
             accessibilityTrace != nil ||
             accessibilityDelta != nil ||
             expectation != nil else {
@@ -651,7 +647,6 @@ final class TheBookKeeper {
             heistId: heistId,
             frame: frame,
             coordinateOnly: coordinateOnly,
-            unsupportedArguments: unsupportedArguments,
             accessibilityTrace: accessibilityTrace,
             accessibilityDelta: accessibilityDelta,
             expectation: expectation

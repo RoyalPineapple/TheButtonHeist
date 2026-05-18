@@ -25,12 +25,16 @@ enum BookKeeperCommandArgumentKey {
 }
 
 private extension HeistValue {
-    static func encoded<T: Encodable>(_ value: T) -> HeistValue? {
+    static func encoded<T: Encodable>(_ value: T) -> HeistValue {
         do {
             let data = try JSONEncoder().encode(value)
             return try JSONDecoder().decode(HeistValue.self, from: data)
         } catch {
-            return nil
+            assertionFailure("Failed to encode \(T.self) as HeistValue: \(error)")
+            return .object([
+                "type": .string("encoding_failed"),
+                "error": .string(String(describing: error)),
+            ])
         }
     }
 
@@ -113,8 +117,8 @@ private extension Dictionary where Key == String, Value == HeistValue {
     }
 
     mutating func appendExpectation(_ expectation: ActionExpectation?, timeout: Double?) {
-        if let expectation, let value = HeistValue.encoded(expectation) {
-            self["expect"] = value
+        if let expectation {
+            self["expect"] = HeistValue.encoded(expectation)
         }
         set("timeout", timeout)
     }
