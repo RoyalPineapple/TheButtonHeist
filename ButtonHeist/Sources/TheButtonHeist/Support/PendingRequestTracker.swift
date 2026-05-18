@@ -7,9 +7,25 @@ import os
 /// via `wait(requestId:timeout:)`, and the corresponding response arrives later via
 /// `resolve(requestId:result:)`. If no response arrives within the timeout, the
 /// continuation resumes with `FenceError.actionTimeout`.
+enum PendingRequestTrackerError: Error, Equatable, LocalizedError {
+    case duplicateRequestId(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .duplicateRequestId(let requestId):
+            return "Request ID '\(requestId)' already has a pending waiter"
+        }
+    }
+}
+
 @ButtonHeistActor
 final class PendingRequestTracker<T: Sendable> {
-    private var pending: [String: @Sendable (Result<T, Error>) -> Void] = [:]
+    private struct PendingRequest: Sendable {
+        let owner: UUID
+        let callback: @Sendable (Result<T, Error>) -> Void
+    }
+
+    private var pending: [String: PendingRequest] = [:]
 
     var pendingCount: Int { pending.count }
 
@@ -17,16 +33,24 @@ final class PendingRequestTracker<T: Sendable> {
     ///
     /// The caller is suspended until either `resolve(requestId:result:)` is called
     /// with a matching `requestId`, or `timeout` seconds elapse. Double-resume is
-    /// prevented by an `OSAllocatedUnfairLock<Bool>` guard.
+    /// prevented by an `OSAllocatedUnfairLock<Bool>` guard. A duplicate
+    /// `requestId` fails immediately without replacing the existing waiter.
     func wait(
         requestId: String,
         timeout: TimeInterval,
         afterRegister: (() -> Void)? = nil
     ) async throws -> T {
-        try await withTaskCancellationHandler {
+        let owner = UUID()
+
+        return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 if Task.isCancelled {
                     continuation.resume(throwing: CancellationError())
+                    return
+                }
+
+                guard pending[requestId] == nil else {
+                    continuation.resume(throwing: PendingRequestTrackerError.duplicateRequestId(requestId))
                     return
                 }
 
@@ -34,18 +58,12 @@ final class PendingRequestTracker<T: Sendable> {
 
                 let timeoutTask = Task {
                     guard await Task.cancellableSleep(for: .seconds(timeout)) else { return }
-                    let shouldResume = didResume.withLock { flag -> Bool in
-                        guard !flag else { return false }
-                        flag = true
-                        return true
-                    }
-                    if shouldResume {
-                        self.pending.removeValue(forKey: requestId)
-                        continuation.resume(throwing: FenceError.actionTimeout)
+                    if let callback = self.removePendingRequest(requestId: requestId, owner: owner) {
+                        callback(.failure(FenceError.actionTimeout))
                     }
                 }
 
-                pending[requestId] = { result in
+                pending[requestId] = PendingRequest(owner: owner) { result in
                     let shouldResume = didResume.withLock { flag -> Bool in
                         guard !flag else { return false }
                         flag = true
@@ -60,10 +78,13 @@ final class PendingRequestTracker<T: Sendable> {
             }
         } onCancel: {
             // Safe in every ordering: if the entry was never registered (early
-            // Task.isCancelled path) or was already removed by a normal resolve/timeout,
-            // `resolve` below finds no match and no-ops.
+            // Task.isCancelled path, duplicate rejection) or was already removed
+            // by a normal resolve/timeout, owner-scoped removal finds no match
+            // and no-ops.
             Task { @ButtonHeistActor [weak self] in
-                self?.resolve(requestId: requestId, result: .failure(CancellationError()))
+                if let callback = self?.removePendingRequest(requestId: requestId, owner: owner) {
+                    callback(.failure(CancellationError()))
+                }
             }
         }
     }
@@ -72,17 +93,26 @@ final class PendingRequestTracker<T: Sendable> {
     ///
     /// If no pending request matches (e.g., it already timed out), this is a no-op.
     func resolve(requestId: String, result: Result<T, Error>) {
-        if let callback = pending.removeValue(forKey: requestId) {
-            callback(result)
+        if let request = pending.removeValue(forKey: requestId) {
+            request.callback(result)
         }
     }
 
     /// Cancel all pending requests by resuming each with the given error.
     func cancelAll(error: Error) {
-        let callbacks = pending
+        let requests = pending
         pending.removeAll()
-        for (_, callback) in callbacks {
-            callback(.failure(error))
+        for (_, request) in requests {
+            request.callback(.failure(error))
         }
+    }
+
+    private func removePendingRequest(
+        requestId: String,
+        owner: UUID
+    ) -> (@Sendable (Result<T, Error>) -> Void)? {
+        guard let request = pending[requestId], request.owner == owner else { return nil }
+        pending.removeValue(forKey: requestId)
+        return request.callback
     }
 }
