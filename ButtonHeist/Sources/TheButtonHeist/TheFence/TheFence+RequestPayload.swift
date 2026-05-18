@@ -173,13 +173,6 @@ extension TheFence {
     }
 
     private func decodeGetInterfaceScope(_ request: [String: Any]) throws -> GetInterfaceScope {
-        if let legacyFull = request["full"] {
-            throw SchemaValidationError(
-                field: "full",
-                observed: legacyFull,
-                expected: "removed; omit scope for the full hierarchy or use scope=visible"
-            )
-        }
         if let rawScope = try request.schemaString("scope") {
             switch rawScope {
             case GetInterfaceScope.visible.rawValue:

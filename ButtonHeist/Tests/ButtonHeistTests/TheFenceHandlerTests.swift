@@ -901,7 +901,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testPerformCustomActionRejectsActionNameKey() async {
         await assertValidationError(
             ["command": "perform_custom_action", "identifier": "myElement", "actionName": "doSomething"],
-            equals: "schema validation failed for action: observed missing; expected string"
+            equals: "schema validation failed for actionName: observed string \"doSomething\"; expected valid perform_custom_action parameter"
         )
     }
 
@@ -2242,14 +2242,44 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testGetInterfaceFullAliasIsRejected() async {
+    func testUnexpectedParameterIsRejectedByCommandContract() async {
+        await assertValidationError(
+            ["command": "activate", "identifier": "save", "mode": "tap"],
+            equals: "schema validation failed for mode: observed string \"tap\"; expected valid activate parameter"
+        )
+    }
+
+    @ButtonHeistActor
+    func testTimeoutIsAcceptedAsRequestControl() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        mockConn.autoResponse = { message in
+            switch message {
+            case .explore:
+                return .actionResult(self.exploredActionResult(elements: [
+                    self.testElement("visible_button", label: "Visible", traits: [.button]),
+                ]))
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "get_interface",
+            "timeout": 15,
+        ])
+
+        XCTAssertFalse(response.isFailure)
+    }
+
+    @ButtonHeistActor
+    func testGetInterfaceFullAliasUsesCommandContractRejection() async {
         await assertValidationError(
             ["command": "get_interface", "full": false],
-            equals: "schema validation failed for full: observed boolean false; expected removed; omit scope for the full hierarchy or use scope=visible"
+            equals: "schema validation failed for full: observed boolean false; expected valid get_interface parameter"
         )
         await assertValidationError(
             ["command": "get_interface", "full": true],
-            equals: "schema validation failed for full: observed boolean true; expected removed; omit scope for the full hierarchy or use scope=visible"
+            equals: "schema validation failed for full: observed boolean true; expected valid get_interface parameter"
         )
     }
 
