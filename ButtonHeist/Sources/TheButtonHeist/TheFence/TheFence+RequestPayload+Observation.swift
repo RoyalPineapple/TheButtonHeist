@@ -23,7 +23,7 @@ extension TheFence {
         GetInterfaceRequest(
             scope: try decodeGetInterfaceScope(request),
             detail: try request.schemaEnum("detail", as: InterfaceDetail.self) ?? .summary,
-            root: try decodeInterfaceRootSelector(request),
+            subtree: try decodeInterfaceSubtreeSelector(request),
             matcher: try elementMatcher(request),
             elementIds: try request.schemaStringArray("elements")
         )
@@ -47,7 +47,7 @@ extension TheFence {
             payload: .getInterface(GetInterfaceRequest(
                 scope: .full,
                 detail: .summary,
-                root: nil,
+                subtree: nil,
                 matcher: ElementMatcher(),
                 elementIds: nil
             )),
@@ -72,39 +72,99 @@ extension TheFence {
         return .full
     }
 
-    private func decodeInterfaceRootSelector(_ request: [String: Any]) throws -> InterfaceRootSelector? {
-        guard let root = try request.schemaDictionary("root") else { return nil }
-        try validateInterfaceRootKeys(root)
-        let ordinal = try root.schemaInteger("ordinal")
+    private func decodeInterfaceSubtreeSelector(_ request: [String: Any]) throws -> SubtreeSelector? {
+        guard let subtree = try request.schemaDictionary("subtree") else { return nil }
+        try validateInterfaceSubtreeKeys(subtree)
+        let ordinal = try subtree.schemaInteger("ordinal")
         if let ordinal, ordinal < 0 {
-            throw SchemaValidationError(field: "root.ordinal", observed: ordinal, expected: "integer >= 0")
+            throw SchemaValidationError(field: "subtree.ordinal", observed: ordinal, expected: "integer >= 0")
         }
-        let selector = InterfaceRootSelector(
-            heistId: try root.schemaString("heistId"),
-            stableId: try root.schemaString("stableId"),
-            type: try root.schemaEnum("type", as: InterfaceRootContainerType.self),
-            matcher: try elementMatcher(root),
-            modal: try root.schemaBoolean("modal"),
-            ordinal: ordinal
-        )
+
+        let elementDictionary = try subtree.schemaDictionary("element")
+        let containerDictionary = try subtree.schemaDictionary("container")
+        guard (elementDictionary == nil) != (containerDictionary == nil) else {
+            throw SchemaValidationError(
+                field: "subtree",
+                observed: subtree,
+                expected: "exactly one of element or container"
+            )
+        }
+
+        let selector: SubtreeSelector
+        if let elementDictionary {
+            try validateInterfaceSubtreeElementKeys(elementDictionary)
+            let matcher = try subtreeElementMatcher(elementDictionary)
+            selector = .element(matcher, ordinal: ordinal)
+        } else if let containerDictionary {
+            try validateInterfaceSubtreeContainerKeys(containerDictionary)
+            let matcher = try subtreeContainerMatcher(containerDictionary)
+            selector = .container(matcher, ordinal: ordinal)
+        } else {
+            throw SchemaValidationError(field: "subtree", observed: subtree, expected: "element or container selector")
+        }
+
         guard selector.hasPredicates else {
-            throw SchemaValidationError(field: "root", observed: root, expected: "non-empty root projection selector")
+            throw SchemaValidationError(field: "subtree", observed: subtree, expected: "non-empty subtree projection selector")
         }
         return selector
     }
 
-    private func validateInterfaceRootKeys(_ root: [String: Any]) throws {
-        let allowedKeys: Set<String> = [
-            "heistId", "stableId", "type", "label", "value", "identifier",
-            "traits", "excludeTraits", "modal", "ordinal",
-        ]
-        guard let unexpectedKey = root.keys.sorted().first(where: { !allowedKeys.contains($0) }) else {
+    private func validateInterfaceSubtreeKeys(_ subtree: [String: Any]) throws {
+        let allowedKeys: Set<String> = ["element", "container", "ordinal"]
+        guard let unexpectedKey = subtree.keys.sorted().first(where: { !allowedKeys.contains($0) }) else {
             return
         }
         throw SchemaValidationError(
-            field: "root.\(unexpectedKey)",
-            observed: root[unexpectedKey],
-            expected: "valid get_interface root parameter"
+            field: "subtree.\(unexpectedKey)",
+            observed: subtree[unexpectedKey],
+            expected: "valid get_interface subtree parameter"
+        )
+    }
+
+    private func validateInterfaceSubtreeElementKeys(_ element: [String: Any]) throws {
+        let allowedKeys: Set<String> = ["heistId", "label", "value", "identifier", "traits", "excludeTraits"]
+        guard let unexpectedKey = element.keys.sorted().first(where: { !allowedKeys.contains($0) }) else {
+            return
+        }
+        throw SchemaValidationError(
+            field: "subtree.element.\(unexpectedKey)",
+            observed: element[unexpectedKey],
+            expected: "valid get_interface subtree element parameter"
+        )
+    }
+
+    private func validateInterfaceSubtreeContainerKeys(_ container: [String: Any]) throws {
+        let allowedKeys: Set<String> = ["stableId", "type", "label", "value", "identifier", "isModalBoundary"]
+        guard let unexpectedKey = container.keys.sorted().first(where: { !allowedKeys.contains($0) }) else {
+            return
+        }
+        throw SchemaValidationError(
+            field: "subtree.container.\(unexpectedKey)",
+            observed: container[unexpectedKey],
+            expected: "valid get_interface subtree container parameter"
+        )
+    }
+
+    private func subtreeElementMatcher(_ element: [String: Any]) throws -> ElementMatcher {
+        let matcher = try elementMatcher(element)
+        return ElementMatcher(
+            heistId: try element.schemaString("heistId"),
+            label: matcher.label,
+            identifier: matcher.identifier,
+            value: matcher.value,
+            traits: matcher.traits,
+            excludeTraits: matcher.excludeTraits
+        )
+    }
+
+    private func subtreeContainerMatcher(_ container: [String: Any]) throws -> ContainerMatcher {
+        ContainerMatcher(
+            stableId: try container.schemaString("stableId"),
+            type: try container.schemaEnum("type", as: ContainerInfo.ContainerTypeName.self),
+            label: try container.schemaString("label"),
+            value: try container.schemaString("value"),
+            identifier: try container.schemaString("identifier"),
+            isModalBoundary: try container.schemaBoolean("isModalBoundary")
         )
     }
 }

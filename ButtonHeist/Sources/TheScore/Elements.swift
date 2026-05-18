@@ -367,6 +367,15 @@ public func isStableIdentifier(_ identifier: String) -> Bool {
 /// living in TheScore so CLI/MCP don't pull UIKit. Created by the iOS server
 /// when converting the parser hierarchy to wire format.
 public struct ContainerInfo: Equatable, Hashable, Sendable {
+    public enum ContainerTypeName: String, Codable, CaseIterable, Sendable {
+        case semanticGroup
+        case list
+        case landmark
+        case dataTable
+        case tabBar
+        case scrollable
+    }
+
     public enum ContainerType: Equatable, Hashable, Sendable {
         case semanticGroup(label: String?, value: String?, identifier: String?)
         case list
@@ -387,6 +396,23 @@ public struct ContainerInfo: Equatable, Hashable, Sendable {
     public let frameWidth: Double
     public let frameHeight: Double
 
+    public var typeName: ContainerTypeName {
+        switch type {
+        case .semanticGroup:
+            return .semanticGroup
+        case .list:
+            return .list
+        case .landmark:
+            return .landmark
+        case .dataTable:
+            return .dataTable
+        case .tabBar:
+            return .tabBar
+        case .scrollable:
+            return .scrollable
+        }
+    }
+
     public init(
         type: ContainerType,
         stableId: String? = nil,
@@ -403,6 +429,41 @@ public struct ContainerInfo: Equatable, Hashable, Sendable {
         self.frameY = frameY
         self.frameWidth = frameWidth
         self.frameHeight = frameHeight
+    }
+}
+
+/// Exact selector for `ContainerInfo` nodes in an interface tree.
+///
+/// This is intentionally separate from `ElementMatcher`: elements and
+/// containers have different identity fields and are matched in different tree
+/// positions.
+public struct ContainerMatcher: Codable, Sendable, Equatable {
+    public let stableId: String?
+    public let type: ContainerInfo.ContainerTypeName?
+    public let label: String?
+    public let value: String?
+    public let identifier: String?
+    public let isModalBoundary: Bool?
+
+    public init(
+        stableId: String? = nil,
+        type: ContainerInfo.ContainerTypeName? = nil,
+        label: String? = nil,
+        value: String? = nil,
+        identifier: String? = nil,
+        isModalBoundary: Bool? = nil
+    ) {
+        self.stableId = stableId
+        self.type = type
+        self.label = label
+        self.value = value
+        self.identifier = identifier
+        self.isModalBoundary = isModalBoundary
+    }
+
+    public var hasPredicates: Bool {
+        stableId?.isEmpty == false || type != nil || label?.isEmpty == false ||
+            value?.isEmpty == false || identifier?.isEmpty == false || isModalBoundary != nil
     }
 }
 
@@ -510,6 +571,49 @@ extension ContainerInfo: Codable {
             frameWidth: try container.decode(Double.self, forKey: .frameWidth),
             frameHeight: try container.decode(Double.self, forKey: .frameHeight)
         )
+    }
+}
+
+extension ContainerInfo {
+    public var containerLabel: String? {
+        if case .semanticGroup(let label, _, _) = type { return label }
+        return nil
+    }
+
+    public var containerValue: String? {
+        if case .semanticGroup(_, let value, _) = type { return value }
+        return nil
+    }
+
+    public var containerIdentifier: String? {
+        if case .semanticGroup(_, _, let identifier) = type { return identifier }
+        return nil
+    }
+
+    public func matches(_ matcher: ContainerMatcher) -> Bool {
+        if let stableId = matcher.stableId {
+            if stableId.isEmpty { return false }
+            guard self.stableId == stableId else { return false }
+        }
+        if let type = matcher.type {
+            guard typeName == type else { return false }
+        }
+        if let label = matcher.label {
+            if label.isEmpty { return false }
+            guard ElementMatcher.stringEquals(containerLabel ?? "", label) else { return false }
+        }
+        if let value = matcher.value {
+            if value.isEmpty { return false }
+            guard ElementMatcher.stringEquals(containerValue ?? "", value) else { return false }
+        }
+        if let identifier = matcher.identifier {
+            if identifier.isEmpty { return false }
+            guard ElementMatcher.stringEquals(containerIdentifier ?? "", identifier) else { return false }
+        }
+        if let isModalBoundary = matcher.isModalBoundary {
+            guard self.isModalBoundary == isModalBoundary else { return false }
+        }
+        return true
     }
 }
 
@@ -700,10 +804,11 @@ public struct HeistCustomContent: Codable, Equatable, Hashable, Sendable {
 /// Composable predicate for scanning the accessibility tree.
 /// All non-nil fields must match (AND semantics).
 ///
-/// Matching is **exact or miss**: string fields (`label`, `identifier`, `value`)
-/// must equal the matcher value, compared case-insensitively after typography
-/// folding (smart quotes/dashes/ellipsis fold to ASCII; emoji, accents, and
-/// CJK pass through). Trait fields use exact bitmask comparison.
+/// Matching is **exact or miss**: `heistId` must equal the current leaf handle;
+/// string fields (`label`, `identifier`, `value`) must equal the matcher value,
+/// compared case-insensitively after typography folding (smart quotes/dashes/
+/// ellipsis fold to ASCII; emoji, accents, and CJK pass through). Trait fields
+/// use exact bitmask comparison.
 ///
 /// There is no substring fallback. On miss, the resolver returns `.notFound`
 /// with structured suggestions ("did you mean 'Save Draft' or 'Save All'?")
@@ -714,6 +819,8 @@ public struct HeistCustomContent: Codable, Equatable, Hashable, Sendable {
 /// The hierarchy-level matcher bridges these to UIAccessibilityTraits bitmasks
 /// via AccessibilitySnapshotParser's knownTraits.
 public struct ElementMatcher: Codable, Sendable, Equatable {
+    /// Exact match against the Button Heist leaf element handle
+    public let heistId: String?
     /// Case-insensitive equality match against element label (typography-folded)
     public let label: String?
     /// Case-insensitive equality match against accessibility identifier (typography-folded)
@@ -726,12 +833,14 @@ public struct ElementMatcher: Codable, Sendable, Equatable {
     public let excludeTraits: [HeistTrait]?
 
     public init(
+        heistId: String? = nil,
         label: String? = nil,
         identifier: String? = nil,
         value: String? = nil,
         traits: [HeistTrait]? = nil,
         excludeTraits: [HeistTrait]? = nil
     ) {
+        self.heistId = heistId
         self.label = label
         self.identifier = identifier
         self.value = value
@@ -743,16 +852,43 @@ public struct ElementMatcher: Codable, Sendable, Equatable {
         (traits?.isEmpty == false) || (excludeTraits?.isEmpty == false)
     }
 
-    /// Whether any property predicate is set (label, identifier, value, traits, or excludeTraits).
+    /// Whether any property predicate is set (heistId, label, identifier, value, traits, or excludeTraits).
     /// Empty strings are treated as unset — they match nothing rather than everything.
     public var hasPredicates: Bool {
-        label?.isEmpty == false || identifier?.isEmpty == false || value?.isEmpty == false || hasTraitPredicates
+        heistId?.isEmpty == false || label?.isEmpty == false || identifier?.isEmpty == false ||
+            value?.isEmpty == false || hasTraitPredicates
     }
 
     /// Returns `self` when at least one predicate field is set, else `nil`.
     /// Useful for chaining: an empty matcher shouldn't be sent over the wire,
     /// so callers can drop it with `matcher.nonEmpty`.
     public var nonEmpty: Self? { hasPredicates ? self : nil }
+}
+
+/// Selector for projecting an `Interface` to one matched node.
+///
+/// `.element` searches leaf `HeistElement` nodes with `ElementMatcher`.
+/// `.container` searches `ContainerInfo` nodes with `ContainerMatcher`.
+/// `ordinal` is applied after collecting matches in stable tree order.
+public enum SubtreeSelector: Codable, Sendable, Equatable {
+    case element(ElementMatcher, ordinal: Int? = nil)
+    case container(ContainerMatcher, ordinal: Int? = nil)
+
+    public var ordinal: Int? {
+        switch self {
+        case .element(_, let ordinal), .container(_, let ordinal):
+            return ordinal
+        }
+    }
+
+    public var hasPredicates: Bool {
+        switch self {
+        case .element(let matcher, _):
+            return matcher.hasPredicates
+        case .container(let matcher, _):
+            return matcher.hasPredicates
+        }
+    }
 }
 
 // MARK: - Convenience Extensions
@@ -783,6 +919,10 @@ extension HeistElement {
     /// and for action-expectation matchers (`elementAppeared`, `elementDisappeared`).
     /// Unknown traits in `traits` or `excludeTraits` cause a miss (fail-safe).
     public func matches(_ matcher: ElementMatcher) -> Bool {
+        if let matchHeistId = matcher.heistId {
+            if matchHeistId.isEmpty { return false }
+            guard heistId == matchHeistId else { return false }
+        }
         if let matchLabel = matcher.label {
             if matchLabel.isEmpty { return false }
             guard let label, ElementMatcher.stringEquals(label, matchLabel) else { return false }

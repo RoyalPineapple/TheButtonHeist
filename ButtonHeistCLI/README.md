@@ -140,7 +140,7 @@ buttonheist get_interface --scope visible
 
 Flags: `--scope visible` for fresh on-screen geometry diagnostics, `-f/--format`.
 
-MCP and session JSON requests can pass `root` to project the returned hierarchy from a selected leaf or container, for example `{"command":"get_interface","root":{"stableId":"semantic_actions__actions"}}`.
+MCP and session JSON requests can pass `subtree` to project the returned hierarchy from a selected leaf or container, for example `{"command":"get_interface","subtree":{"container":{"stableId":"semantic_actions__actions"}}}`.
 
 ### scroll / scroll_to_visible / scroll_to_edge
 

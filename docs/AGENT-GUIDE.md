@@ -159,12 +159,12 @@ You don't always need every element. Filter by heistId list, or by matcher predi
 {"tool": "get_interface", "arguments": {"elements": ["login-button", "email-field"]}}
 ```
 
-Use `root` when you want a projection cut from one selected node: a leaf by `heistId` or matcher, or a container by `stableId` or semantic metadata.
+Use `subtree` when you want a projection cut from one selected node: a leaf by `heistId` or matcher, or a container by `stableId` or semantic metadata.
 
 ```json
-{"tool": "get_interface", "arguments": {"root": {"heistId": "login-button"}}}
-{"tool": "get_interface", "arguments": {"root": {"stableId": "semantic_actions__actions"}}}
-{"tool": "get_interface", "arguments": {"root": {"type": "semanticGroup", "label": "Actions"}}}
+{"tool": "get_interface", "arguments": {"subtree": {"element": {"heistId": "login-button"}}}}
+{"tool": "get_interface", "arguments": {"subtree": {"container": {"stableId": "semantic_actions__actions"}}}}
+{"tool": "get_interface", "arguments": {"subtree": {"container": {"type": "semanticGroup", "label": "Actions"}}}}
 ```
 
 ### Detail levels

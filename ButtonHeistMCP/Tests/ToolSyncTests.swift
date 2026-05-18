@@ -243,12 +243,14 @@ struct ToolSyncTests {
         let getInterface = ToolDefinitions.all.first { $0.name == TheFence.Command.getInterface.rawValue }
         #expect(extractEnumValues(from: getInterface, property: "scope") == ["visible"])
         #expect(extractEnumValues(from: getInterface, property: "detail") == Set(InterfaceDetail.allCases.map(\.rawValue)))
-        if let rootSchema = getInterface.flatMap({ extractPropertySchema(from: $0, property: "root") }),
-           let rootProperties = extractObjectField(from: rootSchema, key: "properties"),
-           let typeSchema = extractObjectField(from: rootProperties, key: "type") {
-            #expect(extractEnumValues(from: typeSchema) == Set(InterfaceRootContainerType.allCases.map(\.rawValue)))
+        if let subtreeSchema = getInterface.flatMap({ extractPropertySchema(from: $0, property: "subtree") }),
+           let subtreeProperties = extractObjectField(from: subtreeSchema, key: "properties"),
+           let containerSchema = extractObjectField(from: subtreeProperties, key: "container"),
+           let containerProperties = extractObjectField(from: containerSchema, key: "properties"),
+           let typeSchema = extractObjectField(from: containerProperties, key: "type") {
+            #expect(extractEnumValues(from: typeSchema) == Set(ContainerInfo.ContainerTypeName.allCases.map(\.rawValue)))
         } else {
-            Issue.record("get_interface.root.type missing enum schema")
+            Issue.record("get_interface.subtree.container.type missing enum schema")
         }
 
         let scroll = ToolDefinitions.all.first { $0.name == TheFence.Command.scroll.rawValue }
@@ -304,7 +306,7 @@ struct ToolSyncTests {
         }
 
         let description = getInterface.description ?? ""
-        #expect(description.contains("Omit root for the whole hierarchy"))
+        #expect(description.contains("Omit subtree for the whole hierarchy"))
         #expect(description.contains("project the returned tree"))
         #expect(description.contains("Omit scope for the normal"))
         #expect(description.contains("app accessibility state"))
@@ -313,32 +315,42 @@ struct ToolSyncTests {
         #expect(!description.localizedCaseInsensitiveContains("viewport"))
     }
 
-    @Test("get_interface root schema describes projection without viewport language")
-    func getInterfaceRootSchemaDescribesProjectionWithoutViewportLanguage() {
+    @Test("get_interface subtree schema describes projection without viewport language")
+    func getInterfaceSubtreeSchemaDescribesProjectionWithoutViewportLanguage() {
         guard let getInterface = ToolDefinitions.all.first(where: { $0.name == TheFence.Command.getInterface.rawValue }),
-              let rootSchema = extractPropertySchema(from: getInterface, property: "root"),
-              let rootProperties = extractObjectField(from: rootSchema, key: "properties") else {
-            Issue.record("get_interface.root missing property schema")
+              let subtreeSchema = extractPropertySchema(from: getInterface, property: "subtree"),
+              let subtreeProperties = extractObjectField(from: subtreeSchema, key: "properties") else {
+            Issue.record("get_interface.subtree missing property schema")
             return
         }
 
-        #expect(extractStringField(from: rootSchema, key: "type") == "object")
+        #expect(extractStringField(from: subtreeSchema, key: "type") == "object")
         #expect(
-            extractPropertyKeys(from: rootSchema) ==
-                ["heistId", "stableId", "type", "label", "value", "identifier", "traits", "excludeTraits", "modal", "ordinal"]
+            extractPropertyKeys(from: subtreeSchema) == ["element", "container", "ordinal"]
         )
-        #expect(extractStringField(from: rootSchema, key: "description")?.contains("Projection root") == true)
-        #expect(extractStringField(from: rootSchema, key: "description")?.contains("whole tree") == true)
-        #expect(!((extractStringField(from: rootSchema, key: "description") ?? "").localizedCaseInsensitiveContains("viewport")))
-        if case .object(let stableIdSchema)? = rootProperties["stableId"] {
+        #expect(extractStringField(from: subtreeSchema, key: "description")?.contains("Subtree selector") == true)
+        #expect(extractStringField(from: subtreeSchema, key: "description")?.contains("whole tree") == true)
+        #expect(!((extractStringField(from: subtreeSchema, key: "description") ?? "").localizedCaseInsensitiveContains("viewport")))
+        guard case .object(let elementSchema)? = subtreeProperties["element"],
+              case .object(let containerSchema)? = subtreeProperties["container"] else {
+            Issue.record("get_interface.subtree element/container schemas missing")
+            return
+        }
+        #expect(extractPropertyKeys(from: elementSchema) == ["heistId", "label", "value", "identifier", "traits", "excludeTraits"])
+        #expect(extractPropertyKeys(from: containerSchema) == ["stableId", "type", "label", "value", "identifier", "isModalBoundary"])
+        guard let containerProperties = extractObjectField(from: containerSchema, key: "properties") else {
+            Issue.record("get_interface.subtree.container missing properties")
+            return
+        }
+        if case .object(let stableIdSchema)? = containerProperties["stableId"] {
             #expect(extractStringField(from: stableIdSchema, key: "type") == "string")
         } else {
-            Issue.record("get_interface.root.stableId missing schema")
+            Issue.record("get_interface.subtree.container.stableId missing schema")
         }
-        if case .object(let modalSchema)? = rootProperties["modal"] {
+        if case .object(let modalSchema)? = containerProperties["isModalBoundary"] {
             #expect(extractStringField(from: modalSchema, key: "type") == "boolean")
         } else {
-            Issue.record("get_interface.root.modal missing schema")
+            Issue.record("get_interface.subtree.container.isModalBoundary missing schema")
         }
     }
 
@@ -821,7 +833,7 @@ struct ToolSyncTests {
     ) {
         guard case .object(let rootSchema) = tool.inputSchema,
               let properties = extractObjectField(from: rootSchema, key: "properties") else {
-            Issue.record("\(tool.name) missing root properties")
+            Issue.record("\(tool.name) missing subtree properties")
             return
         }
 
@@ -1121,12 +1133,12 @@ private enum ToolSchemaLint {
 
     private static func lintRootSchema(_ schema: Value, path: String) -> [String] {
         guard case .object(let object) = schema else {
-            return ["\(path) root schema is not an object"]
+            return ["\(path) subtree schema is not an object"]
         }
 
         var violations: [String] = []
         if object["additionalProperties"] != .bool(false) {
-            violations.append("\(path) root schema must set additionalProperties: false")
+            violations.append("\(path) subtree schema must set additionalProperties: false")
         }
         violations += lint(schema, path: path)
         return violations
