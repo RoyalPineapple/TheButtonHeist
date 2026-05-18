@@ -51,14 +51,18 @@ struct ElementTargetOptions: ParsableArguments {
     }
 
     func requireTarget() throws -> ElementTarget {
-        guard let elementTarget = ElementTarget(
-            heistId: try resolvedHeistId,
-            matcher: try parsedMatcher() ?? ElementMatcher(),
-            ordinal: ordinal
-        ) else {
+        guard let elementTarget = try parsedTarget() else {
             throw ValidationError("Must specify a heistId, -id, or -l")
         }
         return elementTarget
+    }
+
+    func parsedTarget() throws -> ElementTarget? {
+        ElementTarget(
+            heistId: try resolvedHeistId,
+            matcher: try parsedMatcher() ?? ElementMatcher(),
+            ordinal: ordinal
+        )
     }
 
     private func parseTraits(_ names: [String], label: String) throws -> [HeistTrait]? {
@@ -83,9 +87,10 @@ struct ElementTargetOptions: ParsableArguments {
         if let ordinal { request[.ordinal] = ordinal }
     }
 
-    /// Returns true if any targeting option is specified.
+    /// Returns true when the supplied options construct a valid ElementTarget.
     var hasTarget: Bool {
-        target != nil || heistId != nil || identifier != nil || label != nil || value != nil
-            || !traits.isEmpty || !excludeTraits.isEmpty
+        get throws {
+            try parsedTarget() != nil
+        }
     }
 }

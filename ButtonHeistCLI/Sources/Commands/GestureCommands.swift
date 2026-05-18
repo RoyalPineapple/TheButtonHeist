@@ -34,7 +34,7 @@ struct TapSubcommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        guard element.hasTarget || (x != nil && y != nil) else {
+        guard (try element.hasTarget) || (x != nil && y != nil) else {
             throw ValidationError("Must specify a heistId, -id, or --x/--y coordinates")
         }
 
@@ -75,7 +75,7 @@ struct LongPressSubcommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        guard element.hasTarget || (x != nil && y != nil) else {
+        guard (try element.hasTarget) || (x != nil && y != nil) else {
             throw ValidationError("Must specify a heistId, -id, or --x/--y coordinates")
         }
 
@@ -145,11 +145,11 @@ struct SwipeSubcommand: AsyncParsableCommand, CLICommandContract {
         }
 
         if hasUnitStart {
-            guard element.hasTarget else {
+            guard try element.hasTarget else {
                 throw ValidationError("Unit-point swipe requires an element target (heistId, -id, or -l)")
             }
         } else {
-            guard element.hasTarget || (fromX != nil && fromY != nil) else {
+            guard (try element.hasTarget) || (fromX != nil && fromY != nil) else {
                 throw ValidationError("Must specify a heistId, -id, --from-x/--from-y, or --start-x/--start-y unit points")
             }
             guard (toX != nil && toY != nil) || direction != nil else {
@@ -216,7 +216,7 @@ struct DragSubcommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        guard element.hasTarget || (fromX != nil && fromY != nil) else {
+        guard (try element.hasTarget) || (fromX != nil && fromY != nil) else {
             throw ValidationError("Must specify a heistId, -id, or --from-x/--from-y coordinates")
         }
 
@@ -267,7 +267,7 @@ struct PinchSubcommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        guard element.hasTarget || (centerX != nil && centerY != nil) else {
+        guard (try element.hasTarget) || (centerX != nil && centerY != nil) else {
             throw ValidationError("Must specify a heistId, -id, or --center-x/--center-y coordinates")
         }
 
@@ -316,7 +316,7 @@ struct RotateSubcommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        guard element.hasTarget || (centerX != nil && centerY != nil) else {
+        guard (try element.hasTarget) || (centerX != nil && centerY != nil) else {
             throw ValidationError("Must specify a heistId, -id, or --center-x/--center-y coordinates")
         }
 
@@ -359,7 +359,7 @@ struct TwoFingerTapSubcommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        guard element.hasTarget || (centerX != nil && centerY != nil) else {
+        guard (try element.hasTarget) || (centerX != nil && centerY != nil) else {
             throw ValidationError("Must specify a heistId, -id, or --center-x/--center-y coordinates")
         }
 
