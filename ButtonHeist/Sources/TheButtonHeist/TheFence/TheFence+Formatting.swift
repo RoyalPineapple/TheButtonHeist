@@ -204,7 +204,7 @@ public enum FenceResponse {
         case .sessionLog(let snapshot):
             return formatSessionLogHuman(snapshot)
         case .archiveResult(let path, let snapshot):
-            return "Session archived: \(path) (\(snapshot.artifacts.count) artifacts, \(snapshot.counts.commandCount) commands)"
+            return formatArchiveResultHuman(path: path, snapshot: snapshot)
         case .heistStarted:
             return "Heist recording started"
         case .heistStopped(let path, let stepCount):
@@ -294,7 +294,38 @@ public enum FenceResponse {
         } else if recordings > 0 {
             text += " (\(recordings) recordings)"
         }
+        if snapshot.projectionStatus.isDegraded {
+            text += "\n  Projection: degraded"
+            text += " (\(projectionStatusSummary(snapshot.projectionStatus)))"
+        }
         return text
+    }
+
+    private func formatArchiveResultHuman(path: String, snapshot: SessionLogSnapshot) -> String {
+        var text = "Session archived: \(path) (\(snapshot.artifacts.count) artifacts, "
+        text += "\(snapshot.counts.commandCount) commands)"
+        if snapshot.projectionStatus.isDegraded {
+            text += "\n  Projection: degraded"
+            text += " (\(projectionStatusSummary(snapshot.projectionStatus)))"
+        }
+        return text
+    }
+
+    private func projectionStatusSummary(_ status: SessionLogProjectionStatus) -> String {
+        var details: [String] = []
+        if status.malformedLineCount > 0 {
+            details.append("\(status.malformedLineCount) malformed log line(s)")
+        }
+        if status.malformedArtifactCount > 0 {
+            details.append("\(status.malformedArtifactCount) malformed artifact entry/entries")
+        }
+        if let lineNumber = status.firstMalformedLineNumber {
+            details.append("first malformed line \(lineNumber)")
+        }
+        if let cause = status.firstMalformedLineCause {
+            details.append(cause)
+        }
+        return details.joined(separator: ", ")
     }
 
     private func formatTargetList(_ targets: [String: TargetConfig], defaultTarget: String?) -> String {
