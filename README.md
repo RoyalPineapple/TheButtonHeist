@@ -138,9 +138,9 @@ Button Heist keeps the live accessibility hierarchy in reach. It resolves semant
 
 That changes the loop. Every action goes through the contract. Every result comes back as evidence.
 
-### 1. Deltas: evidence after every action
+### 1. Results: trace-backed evidence after every action
 
-After every command, Button Heist diffs the accessibility hierarchy and returns an **interface delta**. Tap "Login" and the response shows what left and what arrived:
+After every command, Button Heist returns one typed result payload. Accessibility traces are the source receipt; deltas are compact projections used for expectations and formatting. Tap "Login" and the response shows what left and what arrived:
 
 ```json
 {
@@ -158,13 +158,13 @@ After every command, Button Heist diffs the accessibility hierarchy and returns 
 }
 ```
 
-The agent does not need to re-read the screen to understand the result. Value updates include the element, property, old value, and new value. When nothing changes, the delta says `"noChange"`.
+The agent does not need to re-read the screen to understand the result. Value updates include the element, property, old value, and new value. When nothing changes, the delta projection says `"noChange"`.
 
 When the screen changes while the agent is thinking, the next response uses the same capture/delta contract to report that background change before any stale action runs.
 
 ### 2. Expectations: assertions on the contract
 
-Each command can declare what should happen with `expect`. Button Heist checks the delta against that expectation and reports pass/fail inline:
+Each command can declare what should happen with `expect`. Button Heist checks the delta projection against that expectation and reports pass/fail inline:
 
 ```json
 {
