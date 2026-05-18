@@ -462,7 +462,19 @@ struct ToolSyncTests {
             "ToolDefinitions.swift should not render command names through rawValue references"
         )
 
-        let literalMirrors = Self.stringLiterals(in: Self.removingLineComments(from: source))
+        let sourceForLiteralScan = Self.removingLineComments(from: source)
+        let literalCounts = Self.stringLiteralCounts(in: sourceForLiteralScan)
+        for (literal, expectedCount) in Self.expectedSchemaRendererCatalogLiteralCounts {
+            #expect(
+                literalCounts[literal] == expectedCount,
+                """
+                ToolDefinitions.swift contains \(literalCounts[literal] ?? 0) occurrences of the \
+                catalog literal \(literal), expected \(expectedCount) schema-renderer occurrences
+                """
+            )
+        }
+
+        let literalMirrors = Set(literalCounts.keys)
             .intersection(Self.fenceCatalogLiterals)
             .subtracting(Self.allowedSchemaRendererLiterals)
         #expect(
@@ -627,6 +639,10 @@ struct ToolSyncTests {
         "type",
     ]
 
+    private static let expectedSchemaRendererCatalogLiteralCounts: [String: Int] = [
+        "type": 5,
+    ]
+
     private static var fenceCatalogLiterals: Set<String> {
         var literals = Set(TheFence.Command.allCases.map(\.rawValue))
         literals.formUnion(TheFence.Command.mcpToolContracts.map(\.name))
@@ -659,14 +675,19 @@ struct ToolSyncTests {
     }
 
     private static func stringLiterals(in source: String) -> Set<String> {
+        Set(stringLiteralCounts(in: source).keys)
+    }
+
+    private static func stringLiteralCounts(in source: String) -> [String: Int] {
         guard let regex = try? NSRegularExpression(pattern: #""((?:\\.|[^"\\])*)""#) else {
-            return []
+            return [:]
         }
         let range = NSRange(source.startIndex..<source.endIndex, in: source)
-        return Set(regex.matches(in: source, range: range).compactMap { match in
+        let literals: [String] = regex.matches(in: source, range: range).compactMap { match in
             guard let literalRange = Range(match.range(at: 1), in: source) else { return nil }
             return String(source[literalRange])
-        })
+        }
+        return Dictionary(literals.map { ($0, 1) }, uniquingKeysWith: +)
     }
 
     private func readRepositoryFile(_ path: String) throws -> String {
