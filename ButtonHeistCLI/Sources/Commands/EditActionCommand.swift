@@ -8,12 +8,13 @@ struct EditActionCommand: AsyncParsableCommand, CLICommandContract {
         commandName: Self.cliCommandName,
         abstract: "Perform an edit menu action on the current first responder",
         discussion: """
-            Triggers copy, paste, cut, select, or selectAll on the element \
+            Triggers copy, paste, cut, select, selectAll, or delete on the element \
             that currently has focus.
 
             Examples:
               buttonheist edit_action copy
               buttonheist edit_action paste
+              buttonheist edit_action delete
               buttonheist edit_action selectAll
             """
     )

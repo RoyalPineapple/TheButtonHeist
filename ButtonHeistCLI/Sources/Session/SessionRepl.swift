@@ -219,7 +219,7 @@ nonisolated extension ReplSession {
           rotor <id> rotor=Errors     Move to next rotor result
           rotor previous <id>         Move to previous rotor result
           type "hello world"          Type text
-          copy / paste / cut          Edit actions
+          copy / paste / cut / delete Edit actions
           select / select_all         Selection actions
           dismiss_keyboard            Dismiss keyboard
 
@@ -256,6 +256,7 @@ nonisolated extension ReplSession {
         "copy": (.editAction, ["action": EditAction.copy.rawValue]),
         "paste": (.editAction, ["action": EditAction.paste.rawValue]),
         "cut": (.editAction, ["action": EditAction.cut.rawValue]),
+        "delete": (.editAction, ["action": EditAction.delete.rawValue]),
         "select": (.editAction, ["action": EditAction.select.rawValue]),
         "select_all": (.editAction, ["action": EditAction.selectAll.rawValue]),
     ]

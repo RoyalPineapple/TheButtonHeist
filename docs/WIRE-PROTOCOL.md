@@ -331,33 +331,16 @@ Invoke a named custom action on an element. The action name must match one of th
 
 ### typeText
 
-Type text character-by-character by injecting into the keyboard input system (via UIKeyboardImpl.sharedInstance), and/or delete characters. Returns the current text field value in the `actionResult`. Works in both software and hardware keyboard modes.
+Type non-empty text character-by-character by injecting into the keyboard input system (via UIKeyboardImpl.sharedInstance). Returns the current text field value in the `actionResult`. Works in both software and hardware keyboard modes. Destructive edits are explicit `editAction` operations, not `typeText` side effects.
 
 **Type text into a field (taps element to focus first):**
 ```json
 {"buttonHeistVersion":"<calver>","type":"typeText","payload":{"text":"Hello","elementTarget":{"identifier":"nameField"}}}
 ```
 
-**Delete 3 characters:**
-```json
-{"buttonHeistVersion":"<calver>","type":"typeText","payload":{"deleteCount":3,"elementTarget":{"identifier":"nameField"}}}
-```
-
-**Delete then retype (correction):**
-```json
-{"buttonHeistVersion":"<calver>","type":"typeText","payload":{"deleteCount":4,"text":"orld","elementTarget":{"identifier":"nameField"}}}
-```
-
-**Clear existing text then type new text:**
-```json
-{"buttonHeistVersion":"<calver>","type":"typeText","payload":{"clearFirst":true,"text":"replacement","elementTarget":{"identifier":"nameField"}}}
-```
-
 | Field | Type | Description |
 |-------|------|-------------|
-| `text` | `String?` | Text to type character-by-character |
-| `deleteCount` | `Int?` | Number of delete key taps before typing |
-| `clearFirst` | `Bool?` | Clear all existing text before typing (select-all + delete) |
+| `text` | `String` | Non-empty text to type character-by-character |
 | `elementTarget` | `ActionTarget?` | Element to tap for focus (also reads value back) |
 
 ### requestScreen
@@ -491,7 +474,7 @@ Perform a standard edit action via the responder chain.
 {"buttonHeistVersion":"<calver>","type":"editAction","payload":{"action":"copy"}}
 ```
 
-Valid actions: `"copy"`, `"paste"`, `"cut"`, `"select"`, `"selectAll"`.
+Valid actions: `"copy"`, `"paste"`, `"cut"`, `"select"`, `"selectAll"`, `"delete"`.
 
 ### setPasteboard
 
@@ -1163,11 +1146,10 @@ Two resolution strategies. Resolution priority: `heistId` > matcher fields. Use 
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `text` | `String?` | Text to type character-by-character |
-| `deleteCount` | `Int?` | Number of delete key taps before typing |
+| `text` | `String` | Non-empty text to type character-by-character |
 | `elementTarget` | `ActionTarget?` | Element to tap for focus and value readback |
 
-At least `text` or `deleteCount` must be provided. If `elementTarget` is provided, it is tapped first to bring up the keyboard, and its value is read back after the operation.
+`text` is required and must be non-empty. If `elementTarget` is provided, it is tapped first to bring up the keyboard, and its value is read back after the operation. Use `editAction` for destructive edits such as delete or select-all/delete replacement.
 
 ### CustomActionTarget
 
@@ -1180,7 +1162,7 @@ At least `text` or `deleteCount` must be provided. If `elementTarget` is provide
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `action` | `String` | Edit action: `"copy"`, `"paste"`, `"cut"`, `"select"`, `"selectAll"` |
+| `action` | `String` | Edit action: `"copy"`, `"paste"`, `"cut"`, `"select"`, `"selectAll"`, `"delete"` |
 
 ### ScrollDirection
 
@@ -1506,10 +1488,13 @@ A single recorded interaction event captured during a Stakeout recording.
 {"buttonHeistVersion":"<calver>","type":"typeText","payload":{"text":"Hello World","elementTarget":{"identifier":"nameField"}}}
 
 # Server confirms with current field value
-{"buttonHeistVersion":"<calver>","type":"actionResult","payload":{"success":true,"method":"typeText","payload":{"kind":"value","data":"Hello World"}}}
+{"buttonHeistVersion":"<calver>","type":"actionResult","payload":{"success":true,"method":"typeText","payload":{"kind":"value","data":"World"}}}
 
-# Client corrects a typo (delete 5 chars, retype)
-{"buttonHeistVersion":"<calver>","type":"typeText","payload":{"deleteCount":5,"text":"World","elementTarget":{"identifier":"nameField"}}}
+# Client replaces the current field contents explicitly
+{"buttonHeistVersion":"<calver>","type":"activate","payload":{"identifier":"nameField"}}
+{"buttonHeistVersion":"<calver>","type":"editAction","payload":{"action":"selectAll"}}
+{"buttonHeistVersion":"<calver>","type":"editAction","payload":{"action":"delete"}}
+{"buttonHeistVersion":"<calver>","type":"typeText","payload":{"text":"World","elementTarget":{"identifier":"nameField"}}}
 
 # Server confirms correction
 {"buttonHeistVersion":"<calver>","type":"actionResult","payload":{"success":true,"method":"typeText","payload":{"kind":"value","data":"Hello World"}}}
