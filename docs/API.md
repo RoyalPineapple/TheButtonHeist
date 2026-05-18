@@ -478,8 +478,8 @@ Typed response enum with `humanFormatted() -> String`, `jsonDict() -> [String: A
 | `batch(results:completedSteps:failedIndex:totalTimingMs:expectationsChecked:expectationsMet:)` | Batched command results with aggregate timing, optional failure index, and expectation stats |
 | `sessionState(payload:)` | Read-only client-side session summary for `get_session_state` |
 | `targets(_:defaultTarget:)` | Named targets from config file with optional default |
-| `sessionLog(manifest:)` | Current session manifest for `get_session_log` |
-| `archiveResult(path:manifest:)` | Archive path and final manifest for `archive_session` |
+| `sessionLog(snapshot:)` | Current session log snapshot for `get_session_log` |
+| `archiveResult(path:snapshot:)` | Archive path and final session log snapshot for `archive_session` |
 | `heistStarted(message:)` | Heist recording started confirmation |
 | `heistStopped(path:stepCount:)` | Heist recording stopped with file path and step count |
 | `heistPlayback(completedSteps:failedIndex:totalTimingMs:failure:report:)` | Heist playback result with pass/fail, timing, and per-step report |

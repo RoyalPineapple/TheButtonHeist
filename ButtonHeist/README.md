@@ -42,7 +42,7 @@ ButtonHeist/
     └─────────┘                     └─────────┘
 ```
 
-TheScore is the shared contract. Client encodes `ClientMessage` (37 cases), server decodes it, processes it, encodes `ServerMessage` (18 cases), client decodes the response. Wire format: newline-delimited JSON over TLS 1.3.
+TheScore is the shared contract. Client encodes `ClientMessage` (35 cases), server decodes it, processes it, encodes `ServerMessage` (18 cases), client decodes the response. Wire format: newline-delimited JSON over TLS 1.3.
 
 ## Where to start
 

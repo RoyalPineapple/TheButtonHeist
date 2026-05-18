@@ -239,6 +239,52 @@ final class TheSafecrackerTests: XCTestCase {
         )
     }
 
+    func testDeleteBackwardRoutesThroughKeyboardInjection() {
+        let keyboardImpl = KeyboardInjectionKeyboardImpl()
+        let bridge = keyboardImpl.bridge()
+
+        let result = bridge.deleteBackward()
+
+        XCTAssertEqual(result, .dispatched)
+        XCTAssertEqual(keyboardImpl.deleteFromInputCount, 1)
+        XCTAssertEqual(keyboardImpl.taskQueueObject?.waitCount, 1)
+    }
+
+    func testDeleteBackwardReportsMissingSelector() {
+        let keyboardImpl = KeyboardInjectionKeyboardImpl()
+        let bridge = keyboardImpl.bridge(missingSelector: "deleteFromInput")
+
+        let result = bridge.deleteBackward()
+
+        XCTAssertEqual(
+            result.diagnostic,
+            KeyboardTextInjectionDiagnostic.missingSelector(
+                "deleteFromInput",
+                strategy: UIKeyboardImplTextInjection.strategyName,
+                character: nil
+            )
+        )
+        XCTAssertEqual(keyboardImpl.deleteFromInputCount, 0)
+        XCTAssertEqual(keyboardImpl.taskQueueObject?.waitCount, 0)
+    }
+
+    func testDeleteBackwardReportsMissingDrainSelectorAfterDispatch() {
+        let keyboardImpl = KeyboardInjectionKeyboardImpl()
+        let bridge = keyboardImpl.bridge(missingSelector: "waitUntilAllTasksAreFinished")
+
+        let result = bridge.deleteBackward()
+
+        XCTAssertEqual(keyboardImpl.deleteFromInputCount, 1)
+        XCTAssertEqual(
+            result.diagnostic,
+            KeyboardTextInjectionDiagnostic.missingSelector(
+                "waitUntilAllTasksAreFinished",
+                strategy: UIKeyboardImplTextInjection.strategyName,
+                character: nil
+            )
+        )
+    }
+
     func testTypeTextReturnsKeyboardInjectionDiagnostic() async {
         let keyboardImpl = KeyboardInjectionKeyboardImpl()
         safecracker.keyboardBridgeProvider = { keyboardImpl.bridge(missingSelector: "addInputString:") }

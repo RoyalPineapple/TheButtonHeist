@@ -7,7 +7,7 @@ struct SessionLogCommand: AsyncParsableCommand, CLICommandContract {
 
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
-        abstract: "Show the current session manifest and stats"
+        abstract: "Show the current session log snapshot and stats"
     )
 
     @OptionGroup var connection: ConnectionOptions

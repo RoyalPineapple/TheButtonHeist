@@ -65,7 +65,7 @@ Without `--device`, direct commands expect exactly one reachable target. No gues
 | `run_batch` | Execute multiple commands in one request |
 | `get_session_state` | Inspect client connection/session state |
 | `list_targets` | List named targets from Button Heist config |
-| `get_session_log` | Return the current session manifest |
+| `get_session_log` | Return the current session log snapshot |
 | `archive_session` | Close and archive the current session directory |
 | `start_heist` | Start recording a replayable `.heist` script |
 | `stop_heist` | Stop and save a `.heist` script |

@@ -9,9 +9,9 @@
 TheBookKeeper owns all filesystem I/O on the macOS side:
 
 1. **Session log** — append-only JSONL file recording every command dispatched through TheFence and every response returned, with timestamps and request IDs
-2. **Artifact storage** — writes screenshots (PNG) and videos (MP4) to organized session directories with deterministic, sequence-numbered filenames
+2. **Artifact storage** — writes screenshots (PNG) and videos (MP4) to organized session directories with deterministic, sequence-numbered filenames, then appends artifact events to the session log
 3. **Path validation** — single entry point for output path safety checks (rejects `..` components, resolves via `.standardized`)
-4. **Manifest tracking** — maintains a `manifest.json` listing every artifact written during the session, with type, size, timestamp, and the command that produced it
+4. **Session manifest** — writes `manifest.json` for durable session boundary data (`formatVersion`, `sessionId`, `startTime`, `endTime`); artifact and count summaries are projected from the append-only session log
 5. **Compression** — gzips session logs on close via `/usr/bin/gzip`; bundles a completed session directory into a `.tar.gz` archive on demand via `/usr/bin/tar`
 6. **Lifecycle** — creates session directory on `beginSession`, closes and compresses on `closeSession`, archives on `archiveSession`
 7. **Heist recording** — records agent sessions as replayable `.heist` scripts. Builds minimal `ElementMatcher` for each targeted element (smallest matcher that uniquely identifies it), filters out state traits and UUID-containing identifiers, falls back to ordinal when no unique matcher exists. Manages `HeistRecording` state within `ActiveSession`, writes `HeistPlayback` (envelope) and `HeistEvidence` (individual steps) to disk. Malformed evidence lines are logged and skipped on stop, not allowed to destroy the whole recording
@@ -29,13 +29,14 @@ graph TD
         Writer["Artifact Writer<br/>PNG, MP4, JSON"]
         Validator["Path Validator<br/>traversal checks"]
         Compressor["Compressor<br/>gzip, tar.gz"]
-        Manifest["Manifest<br/>artifact index"]
+        Manifest["Manifest<br/>session boundary"]
     end
 
     TheFence["TheFence"] -->|"logCommand / logResponse"| Logger
     TheFence -->|"writeScreenshot / writeRecording"| Writer
     TheFence -->|"writeToPath / validateOutputPath"| Validator
-    Writer --> Manifest
+    Writer -->|"artifact events"| Logger
+    Session -->|"close / recovery"| Manifest
     Logger -->|"closeSession"| Compressor
     TheFence -->|"archiveSession"| Compressor
 ```
@@ -69,7 +70,7 @@ struct ActiveSession {
     let sessionId: String              // "{identifier}-{YYYY-MM-dd-HHmmss}"
     let directory: URL                 // base/sessions/{sessionId}/
     let logHandle: FileHandle          // session.jsonl (append mode)
-    var manifest: SessionManifest      // in-memory, flushed on each artifact write
+    var manifest: SessionManifest      // in-memory session boundary data
     let startTime: Date
     var nextSequenceNumber: Int        // monotonic counter for artifact filenames
 }
@@ -136,7 +137,7 @@ enum BookKeeperError: Error, LocalizedError {
 $XDG_DATA_HOME/buttonheist/sessions/
 └── accra-scroll-detection-2026-04-02-143022/
     ├── session.jsonl.gz          # compressed session log
-    ├── manifest.json             # artifact index
+    ├── manifest.json             # session boundary data
     ├── screenshots/
     │   ├── 001-get_screen.png
     │   ├── 002-get_screen.png
@@ -147,7 +148,7 @@ $XDG_DATA_HOME/buttonheist/sessions/
 ```
 
 - Session directory name: `{identifier}-{YYYY-MM-dd-HHmmss}` — self-documenting, matches the simulator naming convention.
-- Artifacts use a zero-padded 3-digit sequence number prefix + the command raw value that produced them (`001-get_screen.png`). Sequence numbers are monotonic and never collide; timestamps are in the manifest.
+- Artifacts use a zero-padded 3-digit sequence number prefix + the command raw value that produced them (`001-get_screen.png`). Sequence numbers are monotonic and never collide; timestamps are in artifact log events and snapshot projections.
 - Base directory resolution follows XDG Base Directory conventions:
   1. `BUTTONHEIST_SESSIONS_DIR` env var (explicit override, highest priority)
   2. `$XDG_DATA_HOME/buttonheist/sessions/` (XDG-compliant)
@@ -173,10 +174,11 @@ Append-only JSONL. One JSON object per line. The first line is always a header; 
 {"duration_ms":441,"requestId":"abc-123","status":"ok","t":"2026-04-02T14:30:22.892Z","type":"response"}
 {"command":"get_screen","requestId":"def-456","t":"2026-04-02T14:30:25.100Z","type":"command"}
 {"artifact":"screenshots/001-get_screen.png","duration_ms":580,"requestId":"def-456","status":"ok","t":"2026-04-02T14:30:25.680Z","type":"response"}
+{"artifactType":"screenshot","command":"get_screen","metadata":{"height":852.0,"width":393.0},"path":"screenshots/001-get_screen.png","requestId":"def-456","size":245760,"t":"2026-04-02T14:30:25.681Z","type":"artifact"}
 ```
 
 Fields:
-- `type` — `"header"`, `"command"`, or `"response"`
+- `type` — `"header"`, `"command"`, `"response"`, or `"artifact"`
 - `formatVersion` — SemVer string (header only)
 - `sessionId` — session identifier (header only)
 - `t` — ISO 8601 timestamp with fractional seconds
@@ -187,6 +189,7 @@ Fields:
 - `duration_ms` — wall-clock time from command to response (response records only)
 - `artifact` — relative path to any file written (response records only, when applicable)
 - `error` — error message (response records only, when status is `"error"`)
+- `artifactType`, `path`, `size`, `metadata` — durable artifact index fields (artifact records only)
 
 Binary data exclusion: keys in the `binaryKeys` set (`pngData`, `videoData`) are stripped. String values longer than 1000 characters are replaced with a `<N chars>` placeholder. JSON keys are sorted for deterministic output.
 
@@ -197,7 +200,33 @@ Binary data exclusion: keys in the `binaryKeys` set (`pngData`, `videoData`) are
     "formatVersion": "0.1.0",
     "sessionId": "accra-scroll-detection-2026-04-02-143022",
     "startTime": "2026-04-02T14:30:22Z",
+    "endTime": "2026-04-02T14:31:45Z"
+}
+```
+
+The manifest is intentionally small: it records the durable session boundary only. It does not carry artifact arrays, command counts, or error counts; those are reconstructed from session log events so `session.jsonl` stays the source of truth. The manifest is written atomically (via `Data.write(to:options:.atomic)`) on close and during abandoned-session recovery.
+
+## Session Log Snapshots
+
+`get_session_log` and `archive_session` return a `SessionLogSnapshot`, not a raw manifest. The snapshot combines:
+
+- `manifest` — durable boundary data from `SessionManifest`
+- `counts` — `SessionLogCounts`, derived from command records and error response records
+- `artifacts` — `ArtifactEntry` values projected from `type: "artifact"` log records
+- `projectionStatus` — `SessionLogProjectionStatus`, reporting malformed JSONL lines and malformed artifact records
+
+Formatted responses flatten the healthy snapshot for callers:
+
+```json
+{
+    "status": "ok",
+    "formatVersion": "0.1.0",
+    "sessionId": "accra-scroll-detection-2026-04-02-143022",
+    "startTime": "2026-04-02T14:30:22Z",
     "endTime": "2026-04-02T14:31:45Z",
+    "commandCount": 47,
+    "errorCount": 2,
+    "artifactCount": 2,
     "artifacts": [
         {
             "type": "screenshot",
@@ -217,13 +246,11 @@ Binary data exclusion: keys in the `binaryKeys` set (`pngData`, `videoData`) are
             "command": "stop_recording",
             "metadata": { "width": 393, "height": 852, "duration": 12.5, "fps": 8, "frameCount": 100 }
         }
-    ],
-    "commandCount": 47,
-    "errorCount": 2
+    ]
 }
 ```
 
-The manifest is flushed to disk atomically (via `Data.write(to:options:.atomic)`) after every artifact write and on session close. It uses pretty-printed JSON with sorted keys.
+When the projection is degraded, formatted output adds `projectionStatus` with `malformedLineCount`, `malformedArtifactCount`, and the first malformed line/cause when available. Healthy snapshots omit that diagnostic object.
 
 ## Compression
 
@@ -263,8 +290,8 @@ Four local-only commands dispatch to TheBookKeeper without sending anything to t
 
 | Command | Enum case | Behavior |
 |---------|-----------|----------|
-| `get_session_log` | `.getSessionLog` | Returns the current `SessionManifest` as a `.sessionLog` response |
-| `archive_session` | `.archiveSession` | Auto-closes an active session (if needed), then archives it and returns `.archiveResult` with the archive path |
+| `get_session_log` | `.getSessionLog` | Returns the current `SessionLogSnapshot` as a `.sessionLog` response |
+| `archive_session` | `.archiveSession` | Auto-closes an active session (if needed), then archives it and returns `.archiveResult` with the archive path and `SessionLogSnapshot` |
 | `start_heist` | `.startHeist` | Begins heist recording for the current session (auto-starts a session if needed) |
 | `stop_heist` | `.stopHeist` | Stops heist recording and writes the `.heist` file to the specified output path |
 | `play_heist` | `.playHeist` | Reads a `.heist` file, then replays steps sequentially via `execute(request:)` against the connected app. CLI supports `--junit <path>` to write a JUnit XML report |
@@ -274,8 +301,8 @@ All are in the no-connection-required guard alongside `get_session_state`, `list
 ### FenceResponse cases
 
 ```swift
-case sessionLog(manifest: SessionManifest)
-case archiveResult(path: String, manifest: SessionManifest)
+case sessionLog(snapshot: SessionLogSnapshot)
+case archiveResult(path: String, snapshot: SessionLogSnapshot)
 case heistStarted
 case heistStopped(path: String, stepCount: Int)
 case heistPlayback(completedSteps: Int, failedIndex: Int?, totalTimingMs: Int, failure: PlaybackFailure? = nil, report: HeistPlaybackReport? = nil)
@@ -293,7 +320,7 @@ TheFence's `execute(request:)` wraps every dispatch with `logCommand` (before) a
 
 TheFence handlers `handleGetScreen` and `handleStopRecording` delegate file writes to TheBookKeeper via the single orchestration entry point `writeArtifactIfSinkAvailable(base64Data:outputPath:requestId:command:metadata:)`:
 - **Explicit `--output` path**: routes to `writeToPath`, which validates path safety (rejects `..` components). `BookKeeperError.unsafePath` is caught and converted to `.error()` for the caller.
-- **Active session, no explicit path**: auto-persists to the session directory via `writeScreenshot`/`writeRecording`, which tracks the artifact in the manifest with sequence-numbered filenames and metadata. Returns a `.screenshot`/`.recording` response with the file path.
+- **Active session, no explicit path**: auto-persists to the session directory via `writeScreenshot`/`writeRecording`, which appends an artifact event with sequence-numbered filenames and metadata. Returns a `.screenshot`/`.recording` response with the file path.
 - **No session, no explicit path**: `writeArtifactIfSinkAvailable` returns `nil`, and the caller returns raw base64 data over the wire (unchanged behavior).
 
 The `ArtifactMetadata` enum (`.screenshot(ScreenshotMetadata) | .recording(RecordingMetadata)`) routes the request to the correct typed write path.
@@ -301,7 +328,7 @@ The `ArtifactMetadata` enum (`.screenshot(ScreenshotMetadata) | .recording(Recor
 ## CLI Commands
 
 ```
-buttonheist session-log              # Print session manifest and stats
+buttonheist session-log              # Print session log snapshot and stats
 buttonheist archive-session          # Close + archive current session → prints archive path
   --delete-source                    # Remove session directory after archiving
 buttonheist start-heist              # Begin heist recording
@@ -319,7 +346,7 @@ All accept `--format` (human/json/compact) and standard `ConnectionOptions`.
 ```json
 {
     "name": "get_session_log",
-    "description": "Get the current session manifest showing all commands executed and artifacts produced during this session.",
+    "description": "Get the current session log snapshot showing all commands executed and artifacts produced during this session.",
     "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
 }
 ```
@@ -367,7 +394,7 @@ One-shot CLI commands (`buttonheist get_screen --output shot.png`) don't need se
 
 ### Why sequence numbers instead of timestamps in filenames?
 
-Timestamps can collide (two screenshots in the same second). Sequence numbers are monotonic and sort naturally. The timestamp is in the manifest and the log.
+Timestamps can collide (two screenshots in the same second). Sequence numbers are monotonic and sort naturally. The timestamp is in the artifact log event and snapshot output.
 
 ### Why not compress recordings?
 
@@ -384,9 +411,9 @@ Real filesystem I/O against a temp directory created in `setUp` and deleted in `
 |-------|-----------------|
 | Session phase | idle→active→closing→closed→archived transitions, invalid transitions throw, new session from closed/archived, directory/log file creation, path traversal/slash rejection in identifiers |
 | Session log | JSONL line format, command/response fields, error/command count, binary data exclusion, silent no-op when idle |
-| Manifest | starts empty with zero counts, Codable round-trip equality |
+| Manifest / snapshot | manifest Codable round-trip equality, snapshot projections start empty |
 | Path validation | `..` rejection, empty path, simple relative, absolute, embedded traversal |
-| Artifact storage | screenshot/recording file creation, manifest updates, sequence numbering, base64 failure, `writeToPath` traversal guard, `writeToPath` success, `archiveSession(deleteSource: true)` deletes the source directory, orchestration routes for all three sinks |
+| Artifact storage | screenshot/recording file creation, artifact log events, sequence numbering, base64 failure, `writeToPath` traversal guard, `writeToPath` success, `archiveSession(deleteSource: true)` deletes the source directory, orchestration routes for all three sinks |
 | Heist recording | start/stop lifecycle, excluded commands, error skipping, coordinate-only flagging, binary stripping, interface cache resolution |
 | Minimum matcher | identifier, label, semantic traits, value, stateful traits / excludeTraits, then ordinal fallback |
 | Heist file I/O | round-trip write/read preserves version, app, steps; malformed JSONL line is logged and skipped, not fatal |
@@ -399,7 +426,7 @@ Real filesystem I/O against a temp directory created in `setUp` and deleted in `
 | `ButtonHeist/Sources/TheButtonHeist/TheBookKeeper/TheBookKeeper.swift` | State machine, session lifecycle, artifact storage, path validation, heist recording, recovery, public API |
 | `ButtonHeist/Sources/TheButtonHeist/TheBookKeeper/TheBookKeeper+Logging.swift` | JSONL log writing, binary data exclusion, command/response serialization |
 | `ButtonHeist/Sources/TheButtonHeist/TheBookKeeper/TheBookKeeper+Compression.swift` | `/usr/bin/gzip` for logs, `/usr/bin/tar czf` for archives |
-| `ButtonHeist/Sources/TheButtonHeist/TheBookKeeper/SessionManifest.swift` | `SessionManifest`, `ArtifactEntry`, `ArtifactType`, `ScreenshotMetadata`, `RecordingMetadata`, `ResponseStatus`, `SessionFormatVersion` |
+| `ButtonHeist/Sources/TheButtonHeist/TheBookKeeper/SessionManifest.swift` | `SessionManifest`, `SessionLogSnapshot`, `SessionLogCounts`, `SessionLogProjectionStatus`, `ArtifactEntry`, `ArtifactType`, `ScreenshotMetadata`, `RecordingMetadata`, `ResponseStatus`, `SessionFormatVersion` |
 | `ButtonHeist/Sources/TheButtonHeist/TheBookKeeper/PlaybackFailure.swift` | `PlaybackFailure` enum with `.fenceError`, `.actionFailed`, `.thrown` cases for heist playback diagnostics |
 | `ButtonHeist/Sources/TheButtonHeist/TheBookKeeper/README.md` | In-module reading-order guide |
 | `ButtonHeist/Sources/TheButtonHeist/Support/String+PathValidation.swift` | `validatedOutputURL()` — the single path-safety check consumed by `validateOutputPath` |

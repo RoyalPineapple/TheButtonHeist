@@ -34,7 +34,7 @@ Touch injection, text input, and gesture synthesis. Receives screen coordinates 
 
 8. **`TheSafecracker+Bezier.swift`** — `BezierSampler.sampleBezierPath(startPoint:segments:samplesPerSegment:)` evaluates cubic bezier curves at evenly-spaced t values.
 
-9. **`KeyboardBridge.swift`** — Wraps `UIKeyboardImpl` private API. `shared()` resolves via `ObjCRuntime.classMessage("sharedInstance", on: "UIKeyboardImpl")`. `type(_:)` calls `addInputString:` then `drainTaskQueue()` (waits on the impl's task queue to prevent character drops). `deleteBackward()` calls `deleteFromInput`. `hasActiveInput` checks `delegate is UIKeyInput`.
+9. **`KeyboardBridge.swift`** — Wraps `UIKeyboardImpl` private API. `shared()` resolves via `ObjCRuntime.classMessage("sharedInstance", on: "UIKeyboardImpl")`. `type(_:)` calls `addInputString:` then `drainTaskQueue()` (waits on the impl's task queue to prevent character drops). `deleteBackward()` calls `deleteFromInput` through the same injection helper and task-queue drain. `hasActiveInput` checks `delegate is UIKeyInput`.
 
 10. **`TheFingerprints.swift`** — Visual feedback overlay. `FingerprintWindow` is a passthrough UIWindow at `.statusBar + 100` filtered out of accessibility traversal and hit-testing via `is FingerprintWindow` checks. `showFingerprint(at:)` creates a 40pt white circle, holds 0.5s, fades 0.5s. `beginTrackingFingerprints` / `updateTrackingFingerprints` / `endTrackingFingerprints` manage continuous gesture indicators. Disabled via `INSIDEJOB_DISABLE_FINGERPRINTS` env var.
 
