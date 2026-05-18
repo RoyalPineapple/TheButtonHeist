@@ -102,6 +102,21 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertNil(encoded?["target"])
     }
 
+    func testStepRejectsNegativeOrdinal() throws {
+        let json: [String: Any] = [
+            "command": "activate",
+            "ordinal": -1,
+        ]
+        let data = try JSONSerialization.data(withJSONObject: json)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistEvidence.self, from: data)) { error in
+            guard case DecodingError.dataCorrupted(let context) = error else {
+                return XCTFail("Expected dataCorrupted, got \(error)")
+            }
+            XCTAssertTrue(context.debugDescription.contains("ordinal must be non-negative"))
+        }
+    }
+
     func testStepWithRecordedMetadata() throws {
         let step = HeistEvidence(
             command: "activate",

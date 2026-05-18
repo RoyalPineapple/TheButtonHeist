@@ -98,7 +98,15 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
             traits: try container.decodeIfPresent([HeistTrait].self, forKey: .traits),
             excludeTraits: try container.decodeIfPresent([HeistTrait].self, forKey: .excludeTraits)
         )
-        ordinal = try container.decodeIfPresent(Int.self, forKey: .ordinal)
+        let decodedOrdinal = try container.decodeIfPresent(Int.self, forKey: .ordinal)
+        if let decodedOrdinal, decodedOrdinal < 0 {
+            throw DecodingError.dataCorruptedError(
+                forKey: .ordinal,
+                in: container,
+                debugDescription: "ordinal must be non-negative, got \(decodedOrdinal)"
+            )
+        }
+        ordinal = decodedOrdinal
         target = matcher.nonEmpty ?? (ordinal != nil ? matcher : nil)
 
         recorded = try container.decodeIfPresent(RecordedMetadata.self, forKey: .recorded)

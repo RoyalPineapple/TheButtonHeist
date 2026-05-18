@@ -258,6 +258,8 @@ These commands do not resolve exactly one live element through `resolveTarget()`
 
 Heist recording uses `MinimumMatcher` to turn the element observed in an `AccessibilityTrace.Capture` into the least-specific replay selector that resolves back to that same element in the capture. The ordering is identifier, label, semantic traits, value, stateful traits / `excludeTraits`, then ordinal. Ordinal is the last resort, including anonymous elements where no matcher predicates exist.
 
+Ordinal-only replay targets are intentionally fragile. They exist so anonymous elements remain replayable, but they should be treated as a fallback because a reordered hierarchy can still make the same ordinal point at a different element.
+
 If a new capture introduces a conflict for an old matcher, the supported 0.3.7 behavior is to run a fresh minimum-matcher pass against the new capture. Playback does not self-heal or auto-repair stale steps.
 
 ## Current Element State

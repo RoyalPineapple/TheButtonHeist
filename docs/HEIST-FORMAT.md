@@ -102,7 +102,9 @@ Each step is a flat JSON object using the same command names and argument fields
 
 Minimum matcher is the recording primitive. Given an element in an accessibility capture, Button Heist records the least-specific matcher that uniquely resolves that element in the same capture. HeistIds remain useful, readable current-screen handles, but replay durability comes from the derived matcher fields and ordinal.
 
-When recording a heist, it is fine to target a live action by heistId if that is the handle you were handed. The recorder resolves that heistId against the action trace or interface cache, derives a minimum matcher, and stores the matcher on the step. `_recorded.heistId` is evidence only.
+When recording a heist, it is fine to target a live action by heistId if that is the handle you were handed. The recorder resolves that heistId against the action trace or retained capture, derives a minimum matcher, and stores the matcher on the step. `_recorded.heistId` is evidence only.
+
+Ordinal-only steps are the least durable replay target. They are reserved for anonymous elements that have no identifier, label, value, or useful traits; if element order changes, they can target a different element without producing a matcher miss.
 
 **Workflow**: Call `get_interface` before recording actions so the recorder has current element data. Durable heist steps should be the interactions and waits you want to replay; inspection calls help the recorder build good matchers but are not themselves replay steps.
 
