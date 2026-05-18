@@ -56,12 +56,13 @@ extension FenceResponse {
                 let isDefault = name == defaultTarget ? " *" : ""
                 return "\(name): \(target.device)\(isDefault)"
             }.joined(separator: "\n")
-        case .sessionLog(let manifest):
-            var text = "session: \(manifest.sessionId), \(manifest.commandCount) commands, \(manifest.artifacts.count) artifacts"
-            if manifest.errorCount > 0 { text += ", \(manifest.errorCount) errors" }
+        case .sessionLog(let snapshot):
+            var text = "session: \(snapshot.manifest.sessionId), " +
+                "\(snapshot.counts.commandCount) commands, \(snapshot.artifacts.count) artifacts"
+            if snapshot.counts.errorCount > 0 { text += ", \(snapshot.counts.errorCount) errors" }
             return text
-        case .archiveResult(let path, let manifest):
-            return "archived: \(path) (\(manifest.artifacts.count) artifacts, \(manifest.commandCount) commands)"
+        case .archiveResult(let path, let snapshot):
+            return "archived: \(path) (\(snapshot.artifacts.count) artifacts, \(snapshot.counts.commandCount) commands)"
         case .heistStarted:
             return "heist recording started"
         case .heistStopped(let path, let stepCount):

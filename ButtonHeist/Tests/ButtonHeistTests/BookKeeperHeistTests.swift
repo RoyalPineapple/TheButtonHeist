@@ -62,6 +62,41 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testStopHeistAcceptsEvidenceWrittenDirectlyToFile() async throws {
+        let bookKeeper = makeBookKeeper()
+        try bookKeeper.beginSession(identifier: "direct-evidence")
+        try bookKeeper.startHeistRecording(app: "com.example.app")
+
+        try appendEvidenceLine(
+            HeistEvidence(command: "activate", target: ElementMatcher(label: "Direct", traits: [.button])),
+            to: bookKeeper
+        )
+
+        let heist = try bookKeeper.stopHeistRecording()
+        XCTAssertEqual(heist.steps.count, 1)
+        XCTAssertEqual(heist.steps[0].target?.label, "Direct")
+    }
+
+    @ButtonHeistActor
+    func testStopHeistRejectsFileWithNoValidEvidence() async throws {
+        let bookKeeper = makeBookKeeper()
+        try bookKeeper.beginSession(identifier: "invalid-evidence")
+        try bookKeeper.startHeistRecording(app: "com.example.app")
+
+        guard case .active(let session) = bookKeeper.phase,
+              case .recording(let recording) = session.heistRecording else {
+            return XCTFail("Expected active heist recording")
+        }
+        recording.fileHandle.write(Data("not-json\n".utf8))
+
+        XCTAssertThrowsError(try bookKeeper.stopHeistRecording()) { error in
+            guard case BookKeeperError.noStepsRecorded = error else {
+                return XCTFail("Expected noStepsRecorded, got \(error)")
+            }
+        }
+    }
+
+    @ButtonHeistActor
     func testRecordAndStopProducesHeist() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
@@ -643,4 +678,19 @@ private func parsedRequest(
     request["command"] = command.rawValue
     request["requestId"] = "test"
     return try TheFence(configuration: .init()).parseRequest(command: command, request: request)
+}
+
+@ButtonHeistActor
+private func appendEvidenceLine(_ evidence: HeistEvidence, to bookKeeper: TheBookKeeper) throws {
+    guard case .active(let session) = bookKeeper.phase,
+          case .recording(let recording) = session.heistRecording else {
+        throw BookKeeperError.notRecordingHeist
+    }
+
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .iso8601
+    encoder.outputFormatting = [.sortedKeys]
+    var data = try encoder.encode(evidence)
+    data.append(contentsOf: [0x0A])
+    recording.fileHandle.write(data)
 }

@@ -57,10 +57,10 @@ extension FenceResponse {
             var result: [String: Any] = ["status": "ok", "targets": info]
             if let defaultTarget { result["default"] = defaultTarget }
             return result
-        case .sessionLog(let manifest):
-            return sessionLogJsonDict(manifest)
-        case .archiveResult(let path, let manifest):
-            var dict = sessionLogJsonDict(manifest)
+        case .sessionLog(let snapshot):
+            return sessionLogJsonDict(snapshot)
+        case .archiveResult(let path, let snapshot):
+            var dict = sessionLogJsonDict(snapshot)
             dict["path"] = path
             return dict
         case .heistStarted:
@@ -127,21 +127,22 @@ extension FenceResponse {
         return dict
     }
 
-    private func sessionLogJsonDict(_ manifest: SessionManifest) -> [String: Any] {
+    private func sessionLogJsonDict(_ snapshot: SessionLogSnapshot) -> [String: Any] {
+        let manifest = snapshot.manifest
         let formatter = ISO8601DateFormatter()
         var dict: [String: Any] = [
             "status": "ok",
             "formatVersion": manifest.formatVersion,
             "sessionId": manifest.sessionId,
             "startTime": formatter.string(from: manifest.startTime),
-            "commandCount": manifest.commandCount,
-            "errorCount": manifest.errorCount,
-            "artifactCount": manifest.artifacts.count,
+            "commandCount": snapshot.counts.commandCount,
+            "errorCount": snapshot.counts.errorCount,
+            "artifactCount": snapshot.artifacts.count,
         ]
         if let endTime = manifest.endTime {
             dict["endTime"] = formatter.string(from: endTime)
         }
-        dict["artifacts"] = manifest.artifacts.map { artifact -> [String: Any] in
+        dict["artifacts"] = snapshot.artifacts.map { artifact -> [String: Any] in
             var entry: [String: Any] = [
                 "type": artifact.type.rawValue,
                 "path": artifact.path,

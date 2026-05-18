@@ -723,6 +723,24 @@ extension TheBookKeeper {
         return entry
     }
 
+    /// Build an artifact event. This is the durable artifact index source;
+    /// session responses derive artifact summaries from these append-only events.
+    func buildArtifactLogEntry(_ artifact: ArtifactEntry) -> [String: Any] {
+        var entry: [String: Any] = [
+            "t": iso8601String(from: artifact.timestamp),
+            "type": "artifact",
+            "artifactType": artifact.type.rawValue,
+            "path": artifact.path,
+            "size": artifact.size,
+            "requestId": artifact.requestId,
+            "command": artifact.command,
+        ]
+        if !artifact.metadata.isEmpty {
+            entry["metadata"] = artifact.metadata
+        }
+        return entry
+    }
+
     /// Serialize a log entry as JSON and append it to the session log file.
     func appendLogLine(_ entry: [String: Any], to handle: FileHandle) throws {
         let jsonData = try JSONSerialization.data(withJSONObject: entry, options: [.sortedKeys])
@@ -731,11 +749,208 @@ extension TheBookKeeper {
         try handle.write(contentsOf: lineData)
     }
 
+    /// Derive command and error counts from the append-only session log.
+    func sessionLogCounts(in directory: URL) throws -> SessionLogCounts {
+        try sessionLogProjection(in: directory).counts
+    }
+
+    /// Derive command and error counts from the session log stored in an archive.
+    func sessionLogCounts(inArchive archivePath: URL) throws -> SessionLogCounts {
+        try sessionLogProjection(inArchive: archivePath).counts
+    }
+
+    /// Derive metadata projections from the append-only session log.
+    func sessionLogProjection(in directory: URL) throws -> (counts: SessionLogCounts, artifacts: [ArtifactEntry]) {
+        let data = try sessionLogData(in: directory)
+        return Self.sessionLogProjection(in: data)
+    }
+
+    /// Derive metadata projections from the session log stored in an archive.
+    func sessionLogProjection(inArchive archivePath: URL) throws -> (counts: SessionLogCounts, artifacts: [ArtifactEntry]) {
+        let data = try Self.archivedSessionLogData(from: archivePath)
+        return Self.sessionLogProjection(in: data)
+    }
+
     // MARK: - Private Helpers
 
+    private func sessionLogData(in directory: URL) throws -> Data {
+        let logPath = directory.appendingPathComponent("session.jsonl")
+        if FileManager.default.fileExists(atPath: logPath.path) {
+            return try Data(contentsOf: logPath)
+        }
+
+        let compressedPath = directory.appendingPathComponent("session.jsonl.gz")
+        if FileManager.default.fileExists(atPath: compressedPath.path) {
+            return try Self.gunzippedData(at: compressedPath)
+        }
+
+        throw CocoaError(.fileReadNoSuchFile, userInfo: [
+            NSFilePathErrorKey: logPath.path,
+        ])
+    }
+
+    private static func sessionLogProjection(in data: Data) -> (counts: SessionLogCounts, artifacts: [ArtifactEntry]) {
+        var commandCount = 0
+        var errorCount = 0
+        var artifacts: [ArtifactEntry] = []
+
+        for line in data.split(separator: 0x0A) {
+            guard let entry = try? JSONSerialization.jsonObject(with: Data(line)) as? [String: Any],
+                  let type = entry["type"] as? String else { continue }
+
+            switch type {
+            case "command":
+                commandCount += 1
+            case "response" where entry["status"] as? String == ResponseStatus.error.rawValue:
+                errorCount += 1
+            case "artifact":
+                if let artifact = artifactEntry(from: entry) {
+                    artifacts.append(artifact)
+                }
+            default:
+                continue
+            }
+        }
+
+        let counts = SessionLogCounts(commandCount: commandCount, errorCount: errorCount)
+        return (counts: counts, artifacts: artifacts)
+    }
+
+    private static func artifactEntry(from entry: [String: Any]) -> ArtifactEntry? {
+        guard let artifactType = entry["artifactType"] as? String,
+              let type = ArtifactType(rawValue: artifactType),
+              let path = entry["path"] as? String,
+              let size = entry["size"] as? Int,
+              let timestampString = entry["t"] as? String,
+              let timestamp = date(from: timestampString),
+              let requestId = entry["requestId"] as? String,
+              let command = entry["command"] as? String else {
+            return nil
+        }
+
+        let metadata = (entry["metadata"] as? [String: Any])?.reduce(into: [String: Double]()) { result, pair in
+            if let value = pair.value as? Double {
+                result[pair.key] = value
+            } else if let value = pair.value as? Int {
+                result[pair.key] = Double(value)
+            }
+        } ?? [:]
+
+        return ArtifactEntry(
+            type: type,
+            path: path,
+            size: size,
+            timestamp: timestamp,
+            requestId: requestId,
+            command: command,
+            metadata: metadata
+        )
+    }
+
+    private static func gunzippedData(at path: URL) throws -> Data {
+        try processOutput(
+            executablePath: "/usr/bin/gzip",
+            arguments: ["-dc", path.path],
+            failureContext: "gzip -dc",
+            failure: BookKeeperError.compressionFailed
+        )
+    }
+
+    private static func gunzippedData(_ data: Data) throws -> Data {
+        let temporaryPath = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(UUID().uuidString).session.jsonl.gz")
+        try data.write(to: temporaryPath, options: .atomic)
+        defer {
+            try? FileManager.default.removeItem(at: temporaryPath)
+        }
+        return try gunzippedData(at: temporaryPath)
+    }
+
+    private static func archivedSessionLogData(from archivePath: URL) throws -> Data {
+        let listingData = try processOutput(
+            executablePath: "/usr/bin/tar",
+            arguments: ["-tzf", archivePath.path],
+            failureContext: "tar -tzf",
+            failure: BookKeeperError.archiveFailed
+        )
+        let listing = String(data: listingData, encoding: .utf8) ?? ""
+        let entries = listing.split(separator: "\n").map(String.init)
+
+        if let logEntry = entries.first(where: { $0.hasSuffix("/session.jsonl") || $0 == "session.jsonl" }) {
+            return try archivedEntryData(logEntry, from: archivePath)
+        }
+
+        if let compressedEntry = entries.first(where: { $0.hasSuffix("/session.jsonl.gz") || $0 == "session.jsonl.gz" }) {
+            let compressedData = try archivedEntryData(compressedEntry, from: archivePath)
+            return try gunzippedData(compressedData)
+        }
+
+        throw BookKeeperError.archiveFailed("Expected session log not found in archive \(archivePath.path)")
+    }
+
+    private static func archivedEntryData(_ entry: String, from archivePath: URL) throws -> Data {
+        try processOutput(
+            executablePath: "/usr/bin/tar",
+            arguments: ["-xOzf", archivePath.path, entry],
+            failureContext: "tar -xOzf",
+            failure: BookKeeperError.archiveFailed
+        )
+    }
+
+    private static func processOutput(
+        executablePath: String,
+        arguments: [String],
+        failureContext: String,
+        failure: (String) -> BookKeeperError
+    ) throws -> Data {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executablePath)
+        process.arguments = arguments
+
+        let outputPipe = Pipe()
+        let errorPath = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(UUID().uuidString).process.stderr")
+        FileManager.default.createFile(atPath: errorPath.path, contents: nil)
+        let errorHandle = try FileHandle(forWritingTo: errorPath)
+        defer {
+            try? errorHandle.close()
+            try? FileManager.default.removeItem(at: errorPath)
+        }
+        process.standardOutput = outputPipe
+        process.standardError = errorHandle
+        process.standardInput = FileHandle.nullDevice
+
+        try process.run()
+        let output = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+
+        guard process.terminationStatus == 0 else {
+            try? errorHandle.close()
+            let errorOutput = try Data(contentsOf: errorPath)
+            let detail = String(data: errorOutput, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            throw failure(
+                "\(failureContext) exited with status \(process.terminationStatus): \(detail ?? "unknown error")"
+            )
+        }
+
+        return output
+    }
+
     private func iso8601Now() -> String {
+        iso8601String(from: Date())
+    }
+
+    private func iso8601String(from date: Date) -> String {
+        Self.iso8601Formatter().string(from: date)
+    }
+
+    private static func date(from string: String) -> Date? {
+        iso8601Formatter().date(from: string) ?? ISO8601DateFormatter().date(from: string)
+    }
+
+    private static func iso8601Formatter() -> ISO8601DateFormatter {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.string(from: Date())
+        return formatter
     }
 }

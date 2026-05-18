@@ -1608,13 +1608,13 @@ final class TheFenceTests: XCTestCase {
 
         let response = try await fence.execute(request: ["command": "archive_session"])
 
-        guard case .archiveResult(let path, let manifest) = response else {
+        guard case .archiveResult(let path, let snapshot) = response else {
             return XCTFail("Expected archiveResult response, got \(response)")
         }
         XCTAssertTrue(FileManager.default.fileExists(atPath: path))
         // 2 = the explicit status call above + the archive_session request,
         // which execute() logs before dispatching to the handler.
-        XCTAssertEqual(manifest.commandCount, 2)
+        XCTAssertEqual(snapshot.counts.commandCount, 2)
         if case .archived = fence.bookKeeper.phase {
             // expected
         } else {

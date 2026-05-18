@@ -18,7 +18,7 @@ enum SessionPhase: Sendable {
 }
 
 /// Two-phase heist-recording lifecycle inside an active session: either no
-/// recording is in progress, or one is and carries its file handle / counters.
+/// recording is in progress, or one is and carries its file handle and path.
 /// Replaces the `HeistRecording?` optional so the "not recording" phase is
 /// structurally distinct from any in-flight recording.
 enum HeistRecordingPhase: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
@@ -134,6 +134,21 @@ final class TheBookKeeper {
         }
     }
 
+    func sessionLogSnapshot() throws -> SessionLogSnapshot? {
+        switch phase {
+        case .idle:
+            return nil
+        case .active(let session):
+            return try sessionLogSnapshot(manifest: session.manifest, directory: session.directory)
+        case .closing(let session):
+            return try sessionLogSnapshot(manifest: session.manifest, directory: session.directory)
+        case .closed(let session):
+            return try sessionLogSnapshot(manifest: session.manifest, directory: session.directory)
+        case .archived(let session):
+            return try sessionLogSnapshot(manifest: session.manifest, archivePath: session.archivePath)
+        }
+    }
+
     // MARK: - Lifecycle
 
     func beginSession(identifier: String) throws {
@@ -219,13 +234,13 @@ final class TheBookKeeper {
         ))
     }
 
-    func archiveSession(deleteSource: Bool = false) async throws -> (URL, SessionManifest) {
+    func archiveSession(deleteSource: Bool = false) async throws -> (URL, SessionLogSnapshot) {
         guard case .closed(let session) = phase else {
             throw BookKeeperError.invalidPhase(expected: "closed", actual: phaseName)
         }
 
         let archivePath = try await createArchive(session: session)
-        let manifest = session.manifest
+        let snapshot = try sessionLogSnapshot(manifest: session.manifest, archivePath: archivePath)
 
         if deleteSource {
             try FileManager.default.removeItem(at: session.directory)
@@ -233,22 +248,20 @@ final class TheBookKeeper {
 
         phase = .archived(ArchivedSession(
             archivePath: archivePath,
-            manifest: manifest,
+            manifest: snapshot.manifest,
             startTime: session.startTime,
             endTime: session.endTime
         ))
 
-        return (archivePath, manifest)
+        return (archivePath, snapshot)
     }
 
     // MARK: - Logging
 
     func logCommand(_ request: TheFence.ParsedRequest) throws {
-        guard case .active(var session) = phase else { return }
+        guard case .active(let session) = phase else { return }
         let entry = buildCommandLogEntry(request)
         try appendLogLine(entry, to: session.logHandle)
-        session.manifest.commandCount += 1
-        phase = .active(session)
     }
 
     func logResponse(
@@ -258,7 +271,7 @@ final class TheBookKeeper {
         artifact: String? = nil,
         error: String? = nil
     ) throws {
-        guard case .active(var session) = phase else { return }
+        guard case .active(let session) = phase else { return }
         let entry = buildResponseLogEntry(
             requestId: requestId,
             status: status,
@@ -267,10 +280,6 @@ final class TheBookKeeper {
             error: error
         )
         try appendLogLine(entry, to: session.logHandle)
-        if status == .error {
-            session.manifest.errorCount += 1
-        }
-        phase = .active(session)
     }
 
     // MARK: - Artifact Storage
@@ -305,8 +314,7 @@ final class TheBookKeeper {
             command: command.rawValue,
             metadata: ["width": metadata.width, "height": metadata.height]
         )
-        session.manifest.artifacts.append(entry)
-        try flushManifest(session: session)
+        try appendLogLine(buildArtifactLogEntry(entry), to: session.logHandle)
         phase = .active(session)
 
         return fileURL
@@ -348,8 +356,7 @@ final class TheBookKeeper {
                 "frameCount": Double(metadata.frameCount),
             ]
         )
-        session.manifest.artifacts.append(entry)
-        try flushManifest(session: session)
+        try appendLogLine(buildArtifactLogEntry(entry), to: session.logHandle)
         phase = .active(session)
 
         return fileURL
@@ -368,9 +375,9 @@ final class TheBookKeeper {
     ///
     /// Resolution rules:
     /// - `outputPath` supplied → write raw bytes to that path via
-    ///   `writeToPath` (no manifest update).
+    ///   `writeToPath` (no session log artifact event).
     /// - No `outputPath`, session active → write via `writeScreenshot` into
-    ///   the session's artifact directory and append to the session manifest.
+    ///   the session's artifact directory and append an artifact event.
     /// - No `outputPath`, no session → return `nil`; caller is expected to
     ///   return the in-memory payload (e.g. `.screenshotData`).
     func writeScreenshotIfSinkAvailable(
@@ -715,5 +722,15 @@ final class TheBookKeeper {
         let data = try encoder.encode(session.manifest)
         let manifestPath = session.directory.appendingPathComponent("manifest.json")
         try data.write(to: manifestPath, options: .atomic)
+    }
+
+    private func sessionLogSnapshot(manifest: SessionManifest, directory: URL) throws -> SessionLogSnapshot {
+        let projection = try sessionLogProjection(in: directory)
+        return SessionLogSnapshot(manifest: manifest, counts: projection.counts, artifacts: projection.artifacts)
+    }
+
+    private func sessionLogSnapshot(manifest: SessionManifest, archivePath: URL) throws -> SessionLogSnapshot {
+        let projection = try sessionLogProjection(inArchive: archivePath)
+        return SessionLogSnapshot(manifest: manifest, counts: projection.counts, artifacts: projection.artifacts)
     }
 }
