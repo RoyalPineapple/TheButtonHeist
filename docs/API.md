@@ -1182,7 +1182,7 @@ Represents a single UI element captured from the accessibility hierarchy.
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `heistId` | `String` | Stable identifier for targeting (developer identifier or synthesized from traits + label) |
+| `heistId` | `String` | Current-hierarchy handle for immediate targeting. Use minimum matcher fields for durable replay. |
 | `label` | `String?` | Label |
 | `value` | `String?` | Current value |
 | `identifier` | `String?` | Identifier |

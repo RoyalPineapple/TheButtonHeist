@@ -26,6 +26,27 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertEqual(id, "save_button")
     }
 
+    func testElementTargetMatcherInitializerAcceptsOrdinalOnlyFallback() {
+        let target = ElementTarget(matcher: ElementMatcher(), ordinal: 2)
+
+        guard case .matcher(let matcher, let ordinal) = target else {
+            return XCTFail("Expected .matcher")
+        }
+        XCTAssertFalse(matcher.hasPredicates)
+        XCTAssertEqual(ordinal, 2)
+    }
+
+    func testElementTargetDecodesOrdinalOnlyFallback() throws {
+        let data = Data(#"{"ordinal":1}"#.utf8)
+        let target = try JSONDecoder().decode(ElementTarget.self, from: data)
+
+        guard case .matcher(let matcher, let ordinal) = target else {
+            return XCTFail("Expected .matcher")
+        }
+        XCTAssertFalse(matcher.hasPredicates)
+        XCTAssertEqual(ordinal, 1)
+    }
+
     func testScrollToVisibleTargetWithElementTarget() {
         // No element target
         let empty = ScrollToVisibleTarget()

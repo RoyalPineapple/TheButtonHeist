@@ -808,7 +808,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ["command": "scroll", "direction": "down"],
             contains: [
                 "scroll request contract failed: missing target",
-                "requires heistId or at least one matcher field",
+                "requires heistId, ordinal, or at least one matcher field",
                 "Next: get_interface()",
             ],
             errorCode: "request.missing_target",
@@ -829,7 +829,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ["command": "scroll_to_visible"],
             contains: [
                 "scroll_to_visible request contract failed: missing target",
-                "requires heistId or at least one matcher field",
+                "requires heistId, ordinal, or at least one matcher field",
                 "Next: get_interface()",
             ],
             errorCode: "request.missing_target",
@@ -873,7 +873,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ["command": "scroll_to_edge", "edge": "bottom"],
             contains: [
                 "scroll_to_edge request contract failed: missing target",
-                "requires heistId or at least one matcher field",
+                "requires heistId, ordinal, or at least one matcher field",
                 "Next: get_interface()",
             ],
             errorCode: "request.missing_target",
@@ -887,7 +887,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ["command": "element_search"],
             contains: [
                 "element_search request contract failed: missing target",
-                "requires heistId or at least one matcher field",
+                "requires heistId, ordinal, or at least one matcher field",
                 "Next: get_interface()",
             ],
             errorCode: "request.missing_target",
@@ -910,7 +910,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ["command": "activate"],
             contains: [
                 "activate request contract failed: missing target",
-                "requires heistId or at least one matcher field",
+                "requires heistId, ordinal, or at least one matcher field",
                 "Next: get_interface()",
             ],
             errorCode: "request.missing_target",
@@ -931,7 +931,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ["command": "increment"],
             contains: [
                 "increment request contract failed: missing target",
-                "requires heistId or at least one matcher field",
+                "requires heistId, ordinal, or at least one matcher field",
                 "Next: get_interface()",
             ],
             errorCode: "request.missing_target",
@@ -945,7 +945,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ["command": "decrement"],
             contains: [
                 "decrement request contract failed: missing target",
-                "requires heistId or at least one matcher field",
+                "requires heistId, ordinal, or at least one matcher field",
                 "Next: get_interface()",
             ],
             errorCode: "request.missing_target",
@@ -959,7 +959,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ["command": "perform_custom_action", "action": "doSomething"],
             contains: [
                 "perform_custom_action request contract failed: missing target",
-                "requires heistId or at least one matcher field",
+                "requires heistId, ordinal, or at least one matcher field",
                 "Next: get_interface()",
             ],
             errorCode: "request.missing_target",
@@ -996,7 +996,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ["command": "rotor", "rotor": "Errors"],
             contains: [
                 "rotor request contract failed: missing target",
-                "requires heistId or at least one matcher field",
+                "requires heistId, ordinal, or at least one matcher field",
                 "Next: get_interface()",
             ],
             errorCode: "request.missing_target",
@@ -1391,7 +1391,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ["command": "wait_for"],
             contains: [
                 "wait_for request contract failed: missing target",
-                "requires heistId or at least one matcher field",
+                "requires heistId, ordinal, or at least one matcher field",
                 "Next: get_interface()",
             ],
             errorCode: "request.missing_target",

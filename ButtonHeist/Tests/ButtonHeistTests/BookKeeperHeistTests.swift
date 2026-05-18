@@ -362,6 +362,39 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testHeistIdWithNoMatcherPredicatesRecordsOrdinalFallback() async throws {
+        let bookKeeper = makeBookKeeper()
+        try bookKeeper.beginSession(identifier: "test")
+        try bookKeeper.startHeistRecording(app: "com.example.app")
+
+        let first = makeElement(heistId: "anonymous_1")
+        let second = makeElement(heistId: "anonymous_2")
+        recordHeistEvidence(bookKeeper, command: .activate,
+            args: [
+                "command": "activate",
+                "heistId": "anonymous_2",
+            ],
+            actionResult: ActionResult(
+                success: true,
+                method: .activate,
+                accessibilityTrace: AccessibilityTrace(interface: Interface(
+                    timestamp: Date(timeIntervalSince1970: 0),
+                    tree: [
+                        .element(first),
+                        .element(second),
+                    ]
+                ))
+            ),
+            interfaceCache: [:]
+        )
+        let script = try bookKeeper.stopHeistRecording()
+
+        XCTAssertFalse(try XCTUnwrap(script.steps[0].target).hasPredicates)
+        XCTAssertEqual(script.steps[0].ordinal, 1)
+        XCTAssertEqual(script.steps[0].recorded?.heistId, "anonymous_2")
+    }
+
+    @ButtonHeistActor
     func testCoordinateOnlyFlagged() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")

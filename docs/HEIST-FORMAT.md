@@ -88,21 +88,27 @@ Each step is a flat JSON object using the same command names and argument fields
 | `command` | `String` | Yes | Button Heist command name (`activate`, `type_text`, `swipe`, etc.) |
 | `label` | `String` | No | Element matcher: case-insensitive equality (typography-folded) on accessibility label |
 | `identifier` | `String` | No | Element matcher: case-insensitive equality (typography-folded) on accessibility identifier |
+| `value` | `String` | No | Element matcher: case-insensitive equality (typography-folded) on accessibility value |
 | `traits` | `[String]` | No | Element matcher: all listed traits must be present |
 | `excludeTraits` | `[String]` | No | Element matcher: none of these traits may be present |
+| `ordinal` | `Int` | No | 0-based fallback index among matcher results; can stand alone only when no matcher predicate exists |
 | `expect` | `Object` | No | Expected outcome — validated on playback |
 | `_recorded` | `Object` | No | Optional recording notes (ignored during playback) |
 | *(other keys)* | varies | No | Command-specific arguments (`text`, `direction`, `duration`, etc.) |
 
-**Note**: `value` is intentionally absent from targeting fields. Value is mutable state (slider position, toggle state, text content) — using it in matchers breaks playback when the element's state differs. State validation belongs in expectations, not matchers.
+**Note**: `value` and state traits are lower-priority matcher fields. The recorder includes them only when identifier, label, and semantic traits do not uniquely identify the element in the capture. State validation still belongs in expectations when the state itself is the contract being tested.
 
 ## Recording Guidance
 
-When recording a heist, **always target elements by stable matcher fields** (label, identifier, traits, and ordinal when needed) — never by heistId. HeistIds are ephemeral screen-local identifiers that are meaningless on replay. Matcher fields describe the element's real accessibility identity, which is portable across sessions and devices.
+Minimum matcher is the recording primitive. Given an element in an accessibility capture, Button Heist records the least-specific matcher that uniquely resolves that element in the same capture. HeistIds remain useful, readable current-screen handles, but replay durability comes from the derived matcher fields and ordinal.
 
-**Workflow**: Call `get_interface` to inspect an element's accessibility properties by heistId, then use those properties (label, traits) to target it in the action call. Inspection calls help you build good matchers; durable heist steps should be the interactions and waits you want to replay.
+When recording a heist, it is fine to target a live action by heistId if that is the handle you were handed. The recorder resolves that heistId against the action trace or retained capture, derives a minimum matcher, and stores the matcher on the step. `_recorded.heistId` is evidence only.
 
-**Example**: You see `button_sign_in` in the interface. Instead of `activate(heistId: "button_sign_in")`, call `get_interface(elements: ["button_sign_in"])` to confirm it has label "Sign In" and traits ["button"], then call `activate(label: "Sign In", traits: ["button"])`.
+Ordinal-only steps are the least durable replay target. They are reserved for anonymous elements that have no identifier, label, value, or useful traits; if element order changes, they can target a different element without producing a matcher miss.
+
+**Workflow**: Call `get_interface` before recording actions so the recorder has current element data. Durable heist steps should be the interactions and waits you want to replay; inspection calls help the recorder build good matchers but are not themselves replay steps.
+
+**Example**: You activate `button_sign_in` in the current interface. The `.heist` step should store fields like `{"command":"activate","label":"Sign In","traits":["button"],"_recorded":{"heistId":"button_sign_in"}}`, not `heistId` as the replay target.
 
 ### Async operations
 
@@ -115,19 +121,25 @@ Examples:
 
 ## Element Targeting
 
-Matchers describe elements by **identity**, not state:
+Matchers describe elements by the least-specific available evidence in the capture:
 
-- **Label** + **identity traits** is the primary targeting strategy
-- **Identifier** (developer-assigned `accessibilityIdentifier`) takes priority when unique
-- **State traits** (`selected`, `notEnabled`, `isEditing`, `inactive`, `visited`, `updatesFrequently`) are filtered out of matchers
+- **Identifier** (developer-assigned `accessibilityIdentifier`) takes priority when stable and unique
+- **Label** is next
+- **Semantic traits** (`button`, `header`, `textEntry`, etc.) disambiguate labels before state is considered
+- **Value** is used only when earlier predicates are still ambiguous
+- **State traits** (`selected`, `notEnabled`, `isEditing`, `inactive`, `visited`, `updatesFrequently`) and `excludeTraits` are used before ordinal fallback
 - **UUID-containing identifiers** (runtime-generated) are detected and skipped in favor of labels
-- **Value** is never used for identification
+- **Ordinal** is last resort; when an element has no semantic or state predicates, ordinal can be the only replay selector
 
 Matching is exact (case-insensitive, typography-folded); the recorder builds the matcher progressively:
-1. Identifier alone (if stable — no UUIDs)
-2. Label + identity traits
-3. Label + identity traits + identifier
-4. Label + identity traits (accepts ambiguity rather than using state)
+1. Identifier
+2. Label
+3. Semantic traits
+4. Value
+5. Stateful traits / `excludeTraits`
+6. Ordinal
+
+Every element in a capture can produce a minimum matcher that resolves back to the same element in that capture. If a later capture introduces a conflict, rerun the minimum matcher pass for the new capture. Playback in 0.3.7 does not self-heal or auto-repair stale steps.
 
 ## Expectations
 

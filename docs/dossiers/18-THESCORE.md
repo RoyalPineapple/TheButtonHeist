@@ -209,7 +209,7 @@ classDiagram
     ElementTarget --> ElementMatcher
 ```
 
-All specified fields must match (AND logic). `ElementTarget` is an enum with `.heistId(String)` for stable ID lookup and `.matcher(ElementMatcher)` for predicate-based search. The `absent` flag lives on `WaitForTarget` (in ClientMessages.swift), not on `ElementMatcher`.
+All specified fields must match (AND logic). `ElementTarget` is an enum with `.heistId(String)` for current-screen handle lookup and `.matcher(ElementMatcher)` for predicate-based search. The `absent` flag lives on `WaitForTarget` (in ClientMessages.swift), not on `ElementMatcher`.
 
 ## Action Results and Deltas
 
