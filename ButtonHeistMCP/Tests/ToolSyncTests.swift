@@ -297,7 +297,8 @@ struct ToolSyncTests {
         }
 
         let description = getInterface.description ?? ""
-        #expect(description.contains("Omitted scope is the normal product state"))
+        #expect(description.contains("Omit scope for the normal"))
+        #expect(description.contains("app accessibility state"))
         #expect(description.contains("scope=visible only for fresh on-screen geometry diagnostics"))
         #expect(!description.contains("diagnostic on-screen reads"))
         #expect(!description.localizedCaseInsensitiveContains("viewport"))

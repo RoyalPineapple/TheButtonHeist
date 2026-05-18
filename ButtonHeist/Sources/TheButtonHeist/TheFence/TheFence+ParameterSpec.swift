@@ -612,8 +612,7 @@ extension TheFence.Command {
         switch toolName {
         case Self.getInterface.rawValue:
             return """
-                Read the app accessibility hierarchy. Omitted scope is the normal product state; \
-                call once on a new screen, then track changes via \
+                Read the app accessibility hierarchy. Call once on a new screen, then track changes via \
                 action deltas — re-fetch only when you need elements the delta didn't cover. \
                 Filter with matcher fields or heistId handle list. Omit scope for the normal \
                 app accessibility state; use scope=visible only for fresh on-screen geometry diagnostics.

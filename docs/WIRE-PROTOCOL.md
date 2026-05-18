@@ -152,7 +152,7 @@ The optional `driverId` field provides a unique driver identity for session lock
 
 ### requestInterface
 
-Request a fresh on-screen accessibility parse. Public clients normally use `get_interface`; omitted-scope `get_interface` performs app accessibility discovery, while `scope: "visible"` maps to this diagnostic wire read.
+Request the current on-screen interface from the server. Public clients normally use `get_interface`; omitted-scope `get_interface` performs app accessibility discovery, while `scope: "visible"` maps to this wire message for a fresh on-screen read.
 
 ```json
 {"buttonHeistVersion":"<calver>","type":"requestInterface"}
