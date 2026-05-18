@@ -205,7 +205,7 @@ actor TheMuscle {
     /// (true = session claimed, false = released). MainActor-isolated for the
     /// same reason as `onClientAuthenticated`: the production handler mutates
     /// Bonjour TXT state, which is MainActor-bound.
-    private var onSessionActiveChanged: (@MainActor @Sendable (_ isActive: Bool) -> Void)?
+    private var onSessionActiveChanged: (@MainActor @Sendable (_ isActive: Bool) async -> Void)?
 
     // MARK: - Init
 
@@ -234,7 +234,7 @@ actor TheMuscle {
         markClientAuthenticated: @escaping @Sendable (Int) async -> Void,
         disconnectClient: @escaping @Sendable (Int) async -> Void,
         onClientAuthenticated: @escaping @MainActor @Sendable (Int, @escaping @Sendable (Data) -> Void) -> Void,
-        onSessionActiveChanged: @escaping @MainActor @Sendable (Bool) -> Void
+        onSessionActiveChanged: @escaping @MainActor @Sendable (Bool) async -> Void
     ) {
         self.sendToClient = sendToClient
         self.markClientAuthenticated = markClientAuthenticated

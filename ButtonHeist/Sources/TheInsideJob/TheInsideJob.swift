@@ -382,7 +382,7 @@ public final class TheInsideJob {
         brains.stopKeyboardObservation()
 
         await muscle.tearDown()
-        getaway.tearDown()
+        await getaway.tearDown()
 
         stopAccessibilityObservation()
         stopLifecycleObservation()
@@ -654,7 +654,7 @@ public final class TheInsideJob {
         brains.stopKeyboardObservation()
 
         await muscle.tearDown()
-        getaway.tearDown()
+        await getaway.tearDown()
 
         stopAccessibilityObservation()
 
