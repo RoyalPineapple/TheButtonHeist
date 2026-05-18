@@ -61,8 +61,8 @@ graph TD
             Targets["targets([String: TargetConfig], defaultTarget)"]
             Batch["batch(results, failedIndex?)"]
             SessionState["sessionState(connected, deviceName, ...)"]
-            SessionLog["sessionLog(manifest)"]
-            ArchiveResult["archiveResult(path, manifest)"]
+            SessionLog["sessionLog(snapshot)"]
+            ArchiveResult["archiveResult(path, snapshot)"]
         end
     end
 
@@ -108,7 +108,7 @@ flowchart TD
     Route -->|list_devices| ListDev["scan 3s, return devices"]
     Route -->|connect| Connect["stop + reconnect to target"]
     Route -->|list_targets| ListTargets["return config file targets"]
-    Route -->|get_session_log| GetLog["return session manifest"]
+    Route -->|get_session_log| GetLog["return session log snapshot"]
     Route -->|archive_session| Archive["close + compress + tar.gz"]
     Route -->|start_heist| StartHeist["begin heist recording"]
     Route -->|stop_heist| StopHeist["stop recording, write .heist file"]

@@ -756,7 +756,7 @@ extension TheFence.Command {
                 """
 
         case Self.getSessionLog.rawValue:
-            return "Return the current session manifest: commands executed and artifacts produced."
+            return "Return the current session log snapshot: commands executed and artifacts produced."
 
         case Self.archiveSession.rawValue:
             return "Close and compress the current session into a .tar.gz archive; returns the path."
