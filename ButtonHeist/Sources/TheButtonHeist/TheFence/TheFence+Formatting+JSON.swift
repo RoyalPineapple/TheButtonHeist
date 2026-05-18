@@ -31,8 +31,8 @@ extension FenceResponse {
             return payload
         case .devices(let devices):
             return devicesJsonDict(devices)
-        case .interface(let interface, let detail, let filteredFrom):
-            return interfaceJsonDict(interface, detail: detail, filteredFrom: filteredFrom)
+        case .interface(let interface, let detail):
+            return interfaceJsonDict(interface, detail: detail)
         case .action(let result, let expectation):
             return actionWithExpectationJsonDict(result, expectation: expectation)
         case .screenshot(let path, let payload):
@@ -207,15 +207,13 @@ extension FenceResponse {
     }
 
     private func interfaceJsonDict(
-        _ interface: Interface, detail: InterfaceDetail, filteredFrom: Int?
+        _ interface: Interface, detail: InterfaceDetail
     ) -> [String: Any] {
-        var dict: [String: Any] = [
+        [
             "status": "ok",
             "detail": detail.rawValue,
             "interface": interfaceDictionary(interface, detail: detail),
         ]
-        if let filteredFrom { dict["filteredFrom"] = filteredFrom }
-        return dict
     }
 
     private func actionWithExpectationJsonDict(

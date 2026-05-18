@@ -65,7 +65,7 @@ final class MessageIntegrationTests: XCTestCase {
         decoder.dateDecodingStrategy = .iso8601
         let decoded = try decoder.decode(ServerMessage.self, from: data)
 
-        if case .interface(let decodedPayload, _) = decoded {
+        if case .interface(let decodedPayload) = decoded {
             XCTAssertEqual(decodedPayload.elements.count, 100)
             XCTAssertEqual(decodedPayload.elements[50].label, "Label 50")
         } else {
@@ -164,7 +164,7 @@ final class MessageIntegrationTests: XCTestCase {
             let data = try encoder.encode(msg)
             let decoded = try decoder.decode(ServerMessage.self, from: data)
 
-            if case .interface(let decodedPayload, _) = decoded {
+            if case .interface(let decodedPayload) = decoded {
                 XCTAssertEqual(decodedPayload.elements[0].label, "Label \(i)")
             } else {
                 XCTFail("Expected interface update \(i)")

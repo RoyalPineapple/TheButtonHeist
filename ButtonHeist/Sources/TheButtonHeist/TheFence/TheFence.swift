@@ -452,7 +452,7 @@ public final class TheFence {
     // MARK: - Pending Request Tracking
 
     private let actionTracker = PendingRequestTracker<ActionResult>()
-    private let interfaceTracker = PendingRequestTracker<InterfaceProjection>()
+    private let interfaceTracker = PendingRequestTracker<Interface>()
     private let screenTracker = PendingRequestTracker<ScreenPayload>()
     private let recordingStartTracker = PendingRequestTracker<Bool>()
     private let recordingTracker = PendingRequestTracker<RecordingPayload>()
@@ -526,11 +526,8 @@ public final class TheFence {
     private func handleServerMessage(_ message: ServerMessage, requestId: String?) {
         guard let requestId else { return }
         switch message {
-        case .interface(let payload, let filteredFrom):
-            interfaceTracker.resolve(
-                requestId: requestId,
-                result: .success(InterfaceProjection(interface: payload, filteredFrom: filteredFrom))
-            )
+        case .interface(let payload):
+            interfaceTracker.resolve(requestId: requestId, result: .success(payload))
         case .actionResult(let result):
             actionTracker.resolve(requestId: requestId, result: .success(result))
         case .screen(let payload):
@@ -1087,7 +1084,7 @@ public final class TheFence {
 
     private func fullInterfaceCapture(from response: FenceResponse, parsed: ParsedRequest) -> Interface? {
         guard case .getInterface = parsed.payload,
-              case .interface(let iface, _, _) = response else {
+              case .interface(let iface, _) = response else {
             return nil
         }
         return iface
@@ -1276,7 +1273,7 @@ public final class TheFence {
         try await sendAndAwait(message, tracker: actionTracker, timeout: timeout)
     }
 
-    func sendAndAwaitInterface(_ message: ClientMessage, timeout: TimeInterval) async throws -> InterfaceProjection {
+    func sendAndAwaitInterface(_ message: ClientMessage, timeout: TimeInterval) async throws -> Interface {
         try await sendAndAwait(message, tracker: interfaceTracker, timeout: timeout)
     }
 
@@ -1394,7 +1391,7 @@ public final class TheFence {
         try await actionTracker.wait(requestId: requestId, timeout: timeout)
     }
 
-    func waitForInterface(requestId: String, timeout: TimeInterval = 10.0) async throws -> InterfaceProjection {
+    func waitForInterface(requestId: String, timeout: TimeInterval = 10.0) async throws -> Interface {
         try await interfaceTracker.wait(requestId: requestId, timeout: timeout)
     }
 

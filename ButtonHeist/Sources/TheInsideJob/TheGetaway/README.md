@@ -35,7 +35,7 @@ Owns `RecordingPhase` state machine (`.idle` / `.recording(stakeout:)`). `handle
 
 `noteSettledChangeIfNeeded()` updates recording inactivity state when a settled accessibility capture has changed. Runtime hierarchy subscriptions are no longer a public surface.
 
-`sendInterface(query:requestId:respond:)` forwards the observation request to TheBrains, sends the returned accessibility-state projection, and records the sent state. TheBrains owns refresh, exploration, projection, and stale-state decisions; TheGetaway only routes typed messages and responses.
+`sendInterface(query:requestId:respond:)` forwards the observation request to TheBrains, sends the returned accessibility state, and records the sent state. TheBrains owns refresh, exploration, selection, and stale-state decisions; TheGetaway only routes typed messages and responses.
 
 ### Identity
 

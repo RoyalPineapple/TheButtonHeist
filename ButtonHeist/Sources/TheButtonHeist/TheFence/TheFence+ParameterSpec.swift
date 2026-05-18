@@ -399,7 +399,7 @@ enum FenceParameterBlocks: Sendable {
         ),
     ]
 
-    /// Subtree projection selector for get_interface. Cuts the parsed interface tree
+    /// Subtree selector for get_interface. Cuts the parsed interface tree
     /// at one matched leaf or container node.
     static let interfaceSubtree: FenceParameterSpec = .init(
         key: "subtree", type: .object, optionalRole: .matcher,
@@ -692,7 +692,7 @@ extension TheFence.Command {
             return """
                 Read the app accessibility hierarchy. Call once on a new screen, then track changes via \
                 action deltas — re-fetch only when you need elements the delta didn't cover. \
-                Omit subtree for the whole hierarchy, or pass subtree to project the returned tree from \
+                Omit subtree for the whole hierarchy, or pass subtree to select the returned tree from \
                 a selected leaf or container node.
                 """
 
@@ -891,7 +891,7 @@ extension TheFence.Command {
                 ),
                 .init(
                     key: "elements", type: .stringArray, optionalRole: .matcher,
-                    description: "Optional list of leaf heistId handles to project as subtrees. Omit for the app accessibility hierarchy."
+                    description: "Optional list of leaf heistId handles to return as subtrees. Omit for the app accessibility hierarchy."
                 ),
             ]
 

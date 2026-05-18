@@ -15,38 +15,6 @@ private enum ResponseEnvelopeCodingKeys: String, CodingKey {
     case accessibilityTrace
 }
 
-private struct InterfaceMessagePayload: Codable {
-    let interface: Interface
-    let filteredFrom: Int?
-
-    private enum CodingKeys: String, CodingKey {
-        case timestamp
-        case tree
-        case filteredFrom
-    }
-
-    init(interface: Interface, filteredFrom: Int? = nil) {
-        self.interface = interface
-        self.filteredFrom = filteredFrom
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        interface = Interface(
-            timestamp: try container.decode(Date.self, forKey: .timestamp),
-            tree: try container.decode([InterfaceNode].self, forKey: .tree)
-        )
-        filteredFrom = try container.decodeIfPresent(Int.self, forKey: .filteredFrom)
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(interface.timestamp, forKey: .timestamp)
-        try container.encode(interface.tree, forKey: .tree)
-        try container.encodeIfPresent(filteredFrom, forKey: .filteredFrom)
-    }
-}
-
 // MARK: - ResponseEnvelope Codable
 
 extension ResponseEnvelope {
@@ -94,8 +62,7 @@ extension ServerMessage {
         case .error(let payload): return (.error, payload)
         case .sessionLocked(let payload): return (.sessionLocked, payload)
         case .info(let payload): return (.info, payload)
-        case .interface(let payload, let filteredFrom):
-            return (.interface, InterfaceMessagePayload(interface: payload, filteredFrom: filteredFrom))
+        case .interface(let payload): return (.interface, payload)
         case .actionResult(let payload): return (.actionResult, payload)
         case .screen(let payload): return (.screen, payload)
         case .interaction(let payload): return (.interaction, payload)
@@ -122,9 +89,7 @@ extension ServerMessage {
         case .error: return .error(try ServerError(from: try payload()))
         case .sessionLocked: return .sessionLocked(try SessionLockedPayload(from: try payload()))
         case .info: return .info(try ServerInfo(from: try payload()))
-        case .interface:
-            let payload = try InterfaceMessagePayload(from: try payload())
-            return .interface(payload.interface, filteredFrom: payload.filteredFrom)
+        case .interface: return .interface(try Interface(from: try payload()))
         case .actionResult: return .actionResult(try ActionResult(from: try payload()))
         case .screen: return .screen(try ScreenPayload(from: try payload()))
         case .interaction: return .interaction(try InteractionEvent(from: try payload()))

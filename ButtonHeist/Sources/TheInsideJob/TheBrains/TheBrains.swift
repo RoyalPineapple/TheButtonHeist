@@ -40,8 +40,22 @@ final class TheBrains {
     private var waitForChangePhase: WaitForChangePhase = .idle
 
     enum InterfaceObservation {
-        case success(InterfaceProjection)
-        case failure(String)
+        case success(Interface)
+        case failure(InterfaceObservationError)
+    }
+
+    enum InterfaceObservationError: Error, Equatable {
+        case rootViewUnavailable
+        case selection(InterfaceSelectionError)
+
+        var message: String {
+            switch self {
+            case .rootViewUnavailable:
+                return "Could not access root view"
+            case .selection(let error):
+                return error.message
+            }
+        }
     }
 
     init(tripwire: TheTripwire) {
@@ -408,15 +422,16 @@ final class TheBrains {
         clearPendingRotorResult()
 
         guard refresh() != nil else {
-            return .failure("Could not access root view")
+            return .failure(.rootViewUnavailable)
         }
 
         _ = await navigation.exploreAndPrune()
-        let projection = currentInterface().projecting(query)
-        if let error = projection.error {
-            return .failure(error)
+        do {
+            let interface = try InterfaceSelector(interface: currentInterface()).select(query)
+            return .success(interface)
+        } catch {
+            return .failure(.selection(error))
         }
-        return .success(projection)
     }
 
     // MARK: - Background Accessibility Trace

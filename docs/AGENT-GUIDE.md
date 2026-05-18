@@ -148,7 +148,7 @@ You don't always need every element. Filter by heistId list, or by matcher predi
 {"tool": "get_interface", "arguments": {"elements": ["login-button", "email-field"]}}
 ```
 
-Use `subtree` when you want a projection cut from one selected node: a leaf by `heistId` or matcher, or a container by `stableId` or semantic metadata.
+Use `subtree` when you want one selected node and what hangs below it: a leaf by `heistId` or matcher, or a container by `stableId` or semantic metadata.
 
 ```json
 {"tool": "get_interface", "arguments": {"subtree": {"element": {"heistId": "login-button"}}}}

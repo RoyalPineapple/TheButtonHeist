@@ -74,41 +74,9 @@ final class ServerMessageTests: XCTestCase {
         decoder.dateDecodingStrategy = .iso8601
         let decoded = try decoder.decode(ServerMessage.self, from: data)
 
-        if case .interface(let decodedPayload, _) = decoded {
+        if case .interface(let decodedPayload) = decoded {
             XCTAssertEqual(decodedPayload.elements.count, 1)
             XCTAssertEqual(decodedPayload.elements[0].label, "Submit")
-        } else {
-            XCTFail("Expected interface, got \(decoded)")
-        }
-    }
-
-    func testInterfaceEncodeDecodeWithFilteredFrom() throws {
-        let element = HeistElement(
-            description: "Button",
-            label: "Submit",
-            value: nil,
-            identifier: "submit_btn",
-            frameX: 10, frameY: 20, frameWidth: 100, frameHeight: 44,
-            actions: [.activate]
-        )
-        let payload = Interface(timestamp: Date(), tree: [.element(element)])
-        let message = ServerMessage.interface(payload, filteredFrom: 10)
-
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        let data = try encoder.encode(message)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let wirePayload = try XCTUnwrap(json["payload"] as? [String: Any])
-        XCTAssertEqual(wirePayload["filteredFrom"] as? Int, 10)
-
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        let decoded = try decoder.decode(ServerMessage.self, from: data)
-
-        if case .interface(let decodedPayload, let filteredFrom) = decoded {
-            XCTAssertEqual(decodedPayload.elements.count, 1)
-            XCTAssertEqual(decodedPayload.elements[0].label, "Submit")
-            XCTAssertEqual(filteredFrom, 10)
         } else {
             XCTFail("Expected interface, got \(decoded)")
         }

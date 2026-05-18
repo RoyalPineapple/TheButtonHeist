@@ -28,7 +28,7 @@ TheBrains itself keeps the post-action delta cycle (`captureBeforeState`, `actio
 7. **Refresh convenience** — `refresh()` delegates to `stash.refresh()`. TheBurglar is TheStash's private implementation detail — TheBrains never references it.
 8. **Wait handlers (`TheBrains.swift`)** — `executeWaitForIdle(timeout:)` and `executeWaitForChange(timeout:expectation:)`.
 9. **Response state tracking (`TheBrains.swift`)** — `SentState`, `recordSentState`, `computeBackgroundAccessibilityTrace`, `screenChangedSinceLastSent`, `lastSentScreenId`.
-10. **TheGetaway-facing methods** — `currentInterface()`, `broadcastInterfaceIfChanged()`, `computeBackgroundAccessibilityTrace()`, `captureScreen()`, `captureScreenForRecording()`, `screenName`, `screenId`, `stakeout`.
+10. **TheGetaway-facing methods** — `observeInterface(_:)`, `currentInterface()`, `computeBackgroundAccessibilityTrace()`, `captureScreen()`, `captureScreenForRecording()`, `screenName`, `screenId`, `stakeout`. Observation policy lives here: `get_interface` requests can trigger exploration and selection; `get_screen` performs a fresh visible parse and returns geometry.
 
 ## Architecture
 

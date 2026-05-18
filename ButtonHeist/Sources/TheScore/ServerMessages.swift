@@ -55,7 +55,7 @@ public enum ServerMessage: Codable, Sendable {
     case info(ServerInfo)
 
     /// Interface (UI element hierarchy) response/update
-    case interface(Interface, filteredFrom: Int? = nil)
+    case interface(Interface)
 
     /// Pong response
     case pong

@@ -1070,7 +1070,7 @@ final class TheHandoffStateTests: XCTestCase {
         ))
 
         XCTAssertEqual(receivedMessages.count, 2)
-        guard case .interface(let receivedInterface, _) = receivedMessages[0].message else {
+        guard case .interface(let receivedInterface) = receivedMessages[0].message else {
             return XCTFail("Expected interface message, got \(receivedMessages[0].message)")
         }
         XCTAssertEqual(receivedInterface, interface)

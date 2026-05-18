@@ -12,15 +12,11 @@ extension TheFence {
     // MARK: - Handler: Interface
 
     func handleGetInterface(_ request: GetInterfaceRequest) async throws -> FenceResponse {
-        let projection = try await sendAndAwaitInterface(
+        let interface = try await sendAndAwaitInterface(
             .requestInterface(request.query),
             timeout: Timeouts.exploreSeconds
         )
-        return .interface(
-            projection.interface,
-            detail: request.detail,
-            filteredFrom: projection.filteredFrom
-        )
+        return .interface(interface, detail: request.detail)
     }
 
     // MARK: - Handler: Screen
@@ -574,7 +570,7 @@ extension TheFence {
     private func captureInterfaceSnapshot() async -> Interface? {
         do {
             let response = try await execute(parsed: defaultGetInterfaceParsedRequest())
-            if case .interface(let snapshot, _, _) = response {
+            if case .interface(let snapshot, _) = response {
                 return snapshot
             }
         } catch {

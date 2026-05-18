@@ -499,16 +499,16 @@ final class TheGetaway {
         respond: @escaping (Data) -> Void
     ) async {
         switch await brains.observeInterface(query) {
-        case .success(let projection):
-            insideJobLogger.info("Interface: \(projection.interface.elements.count) elements")
+        case .success(let interface):
+            insideJobLogger.info("Interface: \(interface.elements.count) elements")
             sendMessage(
-                .interface(projection.interface, filteredFrom: projection.filteredFrom),
+                .interface(interface),
                 requestId: requestId,
                 respond: respond
             )
             brains.recordSentState()
-        case .failure(let message):
-            sendMessage(.error(ServerError(kind: .general, message: message)), requestId: requestId, respond: respond)
+        case .failure(let error):
+            sendMessage(.error(ServerError(kind: .general, message: error.message)), requestId: requestId, respond: respond)
         }
     }
 

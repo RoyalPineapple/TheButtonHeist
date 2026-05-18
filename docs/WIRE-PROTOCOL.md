@@ -152,7 +152,7 @@ The optional `driverId` field provides a unique driver identity for session lock
 
 ### requestInterface
 
-Request the current app accessibility state from the server. Public clients normally use `get_interface`; optional query payloads can project the returned hierarchy by subtree, matcher, or element ids. Refresh, exploration, projection, and stale-state decisions are owned by TheInsideJob.
+Request the current app accessibility state from the server. Public clients normally use `get_interface`; optional query payloads can select the returned hierarchy by subtree, matcher, or element ids. Refresh, exploration, selection, and stale-state decisions are owned by TheInsideJob.
 
 ```json
 {"buttonHeistVersion":"<calver>","type":"requestInterface","payload":{}}
@@ -646,7 +646,7 @@ Sent in response to a `status` probe. This response is valid before authenticati
 
 ### interface
 
-UI element interface. Public JSON output uses a tree structure. Summary detail emits the identity fields per element (`heistId`, `label`, `value`, `identifier`, `traits`, meaningful `actions`); full detail adds VoiceOver `hint`, `customContent`, frames, and activation points. Filtered responses include `filteredFrom`, the element count in the source interface before projection.
+UI element interface. Public JSON output uses a tree structure. Summary detail emits the identity fields per element (`heistId`, `label`, `value`, `identifier`, `traits`, meaningful `actions`); full detail adds VoiceOver `hint`, `customContent`, frames, and activation points.
 
 ```json
 {"buttonHeistVersion":"<calver>","type":"interface","payload":{
@@ -1430,9 +1430,6 @@ A single recorded interaction event captured during a Stakeout recording.
 
 # Server responds with interface tree
 {"buttonHeistVersion":"<calver>","type":"interface","payload":{"timestamp":"2026-02-03T14:08:14.123Z","tree":[...]}}
-
-# Filtered interface responses include filteredFrom
-{"buttonHeistVersion":"<calver>","type":"interface","payload":{"timestamp":"2026-02-03T14:08:14.456Z","filteredFrom":27,"tree":[...]}}
 
 # Client requests screen capture
 {"buttonHeistVersion":"<calver>","type":"requestScreen"}

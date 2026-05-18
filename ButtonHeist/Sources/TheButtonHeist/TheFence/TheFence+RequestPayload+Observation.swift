@@ -86,7 +86,7 @@ extension TheFence {
         }
 
         guard selector.hasPredicates else {
-            throw SchemaValidationError(field: "subtree", observed: subtree, expected: "non-empty subtree projection selector")
+            throw SchemaValidationError(field: "subtree", observed: subtree, expected: "non-empty subtree selector")
         }
         return selector
     }

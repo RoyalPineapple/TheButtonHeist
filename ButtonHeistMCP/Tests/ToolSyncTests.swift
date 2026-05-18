@@ -291,8 +291,8 @@ struct ToolSyncTests {
         #expect(!extractPropertyKeys(from: getInterface).contains("scope"))
     }
 
-    @Test("get_interface MCP description presents app state and subtree projection")
-    func getInterfaceMCPDescriptionPresentsAppStateAndSubtreeProjection() {
+    @Test("get_interface MCP description presents app state and subtree selection")
+    func getInterfaceMCPDescriptionPresentsAppStateAndSubtreeSelection() {
         guard let getInterface = ToolDefinitions.all.first(where: { $0.name == TheFence.Command.getInterface.rawValue }) else {
             Issue.record("get_interface tool missing")
             return
@@ -300,15 +300,15 @@ struct ToolSyncTests {
 
         let description = getInterface.description ?? ""
         #expect(description.contains("Omit subtree for the whole hierarchy"))
-        #expect(description.contains("project the returned tree"))
+        #expect(description.contains("select the returned tree"))
         #expect(description.contains("app accessibility hierarchy"))
         #expect(!description.localizedCaseInsensitiveContains("scope=visible"))
         #expect(!description.contains("diagnostic on-screen reads"))
         #expect(!description.localizedCaseInsensitiveContains("viewport"))
     }
 
-    @Test("get_interface subtree schema describes projection without viewport language")
-    func getInterfaceSubtreeSchemaDescribesProjectionWithoutViewportLanguage() {
+    @Test("get_interface subtree schema describes selection without viewport language")
+    func getInterfaceSubtreeSchemaDescribesSelectionWithoutViewportLanguage() {
         guard let getInterface = ToolDefinitions.all.first(where: { $0.name == TheFence.Command.getInterface.rawValue }),
               let subtreeSchema = extractPropertySchema(from: getInterface, property: "subtree"),
               let subtreeProperties = extractObjectField(from: subtreeSchema, key: "properties") else {

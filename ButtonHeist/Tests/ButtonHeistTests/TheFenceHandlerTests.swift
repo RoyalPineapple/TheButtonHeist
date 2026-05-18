@@ -181,7 +181,7 @@ final class TheFenceHandlerTests: XCTestCase {
         )
     }
 
-    private func projectionTestInterface(includeDuplicateGroup: Bool = false) -> Interface {
+    private func selectionTestInterface(includeDuplicateGroup: Bool = false) -> Interface {
         let header = testElement("title", label: "Menu", traits: [.header])
         let submit = testElement("submit", label: "Submit", traits: [.button])
         let cancel = testElement("cancel", label: "Cancel", traits: [.button])
@@ -2449,7 +2449,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testGetInterfaceDefaultNoSubtreeReturnsWholeHierarchy() async throws {
         let (fence, mockConn) = makeConnectedFence()
-        let interfaceFixture = projectionTestInterface()
+        let interfaceFixture = selectionTestInterface()
         mockConn.autoResponse = { message in
             switch message {
             case .requestInterface:
@@ -2462,7 +2462,6 @@ final class TheFenceHandlerTests: XCTestCase {
         let response = try await fence.execute(request: ["command": "get_interface"])
 
         let json = response.jsonDict()
-        XCTAssertNil(json["filteredFrom"])
         let interface = json["interface"] as! [String: Any]
         let tree = interface["tree"] as! [[String: Any]]
         XCTAssertEqual(tree.count, 3)
@@ -2473,16 +2472,13 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testGetInterfaceQueryIsProjectedByInsideJobBoundary() async throws {
+    func testGetInterfaceQueryIsSentToInsideJobBoundaryAndReturnsSelectedInterface() async throws {
         let (fence, mockConn) = makeConnectedFence()
         mockConn.autoResponse = { message in
             switch message {
-            case .requestInterface(let query):
-                let projection = self.projectionTestInterface().projecting(query)
-                if let error = projection.error {
-                    return .error(ServerError(kind: .general, message: error))
-                }
-                return .interface(projection.interface, filteredFrom: projection.filteredFrom)
+            case .requestInterface:
+                let source = self.selectionTestInterface()
+                return .interface(Interface(timestamp: source.timestamp, tree: [source.tree[1]]))
             default:
                 return .actionResult(ActionResult(success: true, method: .activate))
             }
@@ -2501,7 +2497,6 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertNotNil(query.subtree)
 
         let json = response.jsonDict()
-        XCTAssertEqual(json["filteredFrom"] as? Int, 4)
         let interface = json["interface"] as! [String: Any]
         let tree = interface["tree"] as! [[String: Any]]
         XCTAssertEqual(tree.count, 1)
@@ -2514,7 +2509,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     func testContainerStableIdAppearsInSummaryJsonAndCompactOutput() {
-        let response = FenceResponse.interface(projectionTestInterface(), detail: .summary)
+        let response = FenceResponse.interface(selectionTestInterface(), detail: .summary)
 
         let json = response.jsonDict()
         let interface = json["interface"] as! [String: Any]
@@ -2534,13 +2529,10 @@ final class TheFenceHandlerTests: XCTestCase {
     func testGetInterfaceSendsMatcherInObservationQuery() async throws {
         let (fence, mockConn) = makeConnectedFence()
         let submit = testElement("submit", label: "Submit", traits: [.button])
-        let cancel = testElement("cancel", label: "Cancel", traits: [.button])
-        let sourceInterface = Interface(timestamp: Date(), tree: [.element(submit), .element(cancel)])
         mockConn.autoResponse = { message in
             switch message {
-            case .requestInterface(let query):
-                let projection = sourceInterface.projecting(query)
-                return .interface(projection.interface, filteredFrom: projection.filteredFrom)
+            case .requestInterface:
+                return .interface(Interface(timestamp: Date(), tree: [.element(submit)]))
             default:
                 return .actionResult(ActionResult(success: true, method: .activate))
             }
@@ -2559,7 +2551,6 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(query.matcher.label, "Submit")
 
         let json = response.jsonDict()
-        XCTAssertEqual(json["filteredFrom"] as? Int, 2)
         let responseInterface = json["interface"] as! [String: Any]
         let tree = responseInterface["tree"] as! [[String: Any]]
         XCTAssertEqual(tree.count, 1)
@@ -2570,14 +2561,11 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testGetInterfaceSendsElementIdsInObservationQuery() async throws {
         let (fence, mockConn) = makeConnectedFence()
-        let first = testElement("first", label: "First")
         let second = testElement("second", label: "Second")
-        let sourceInterface = Interface(timestamp: Date(), tree: [.element(first), .element(second)])
         mockConn.autoResponse = { message in
             switch message {
-            case .requestInterface(let query):
-                let projection = sourceInterface.projecting(query)
-                return .interface(projection.interface, filteredFrom: projection.filteredFrom)
+            case .requestInterface:
+                return .interface(Interface(timestamp: Date(), tree: [.element(second)]))
             default:
                 return .actionResult(ActionResult(success: true, method: .activate))
             }
@@ -2596,7 +2584,6 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(query.elementIds, ["second"])
 
         let json = response.jsonDict()
-        XCTAssertEqual(json["filteredFrom"] as? Int, 2)
         let responseInterface = json["interface"] as! [String: Any]
         let tree = responseInterface["tree"] as! [[String: Any]]
         XCTAssertEqual(tree.count, 1)

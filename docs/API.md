@@ -469,7 +469,7 @@ Typed response enum with `humanFormatted() -> String`, `jsonDict() -> [String: A
 | `help(commands:)` | List of supported commands |
 | `status(connected:deviceName:)` | Connection status |
 | `devices(_:)` | List of discovered devices |
-| `interface(_:filteredFrom:)` | UI element state, optionally projected from a larger interface |
+| `interface(_:)` | UI element state |
 | `action(result:expectation:)` | Action outcome with delta and optional expectation validation result |
 | `screenshot(path:payload:)` | Screenshot saved to path plus screen payload metadata |
 | `screenshotData(payload:)` | Screenshot as base64 PNG plus visible accessibility geometry |
@@ -822,7 +822,7 @@ Messages sent from server to client.
 - `authFailed(String)` - Authentication failed (sent before disconnect)
 - `authApproved(AuthApprovedPayload)` - Connection approved via on-device UI (contains token for future use). See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md#ui-approval-flow) for details.
 - `info(ServerInfo)` - Device/app metadata (sent after successful auth)
-- `interface(Interface, filteredFrom:)` - UI element state, optionally projected from a larger interface
+- `interface(Interface)` - UI element state
 - `pong` - Ping response
 - `error(String)` - Error description
 - `actionResult(ActionResult)` - Action outcome

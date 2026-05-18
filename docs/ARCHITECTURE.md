@@ -52,7 +52,7 @@ snapshots rather than pretending an empty post-navigation parse is stable.
 `get_interface` returns the app accessibility state for the current screen,
 including semantic content Button Heist can discover in scrollable containers.
 `get_screen` returns pixels plus the fresh visible accessibility tree with
-geometry. Refresh, exploration, projection, and stale-state decisions live inside
+geometry. Refresh, exploration, selection, and stale-state decisions live inside
 TheInsideJob; clients and adapters send typed observation intent.
 
 Detail level is separate: `detail: "summary"` keeps responses compact, while
