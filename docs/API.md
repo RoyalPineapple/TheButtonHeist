@@ -1382,7 +1382,7 @@ Recording configuration sent with `startRecording`.
 - `fps: Int?` - Frames per second (default: 8, range: 1-15)
 - `scale: Double?` - Resolution scale factor (default: 1.0, range: 0.25-1.0)
 - `maxDuration: Double?` - Maximum recording duration in seconds (default: 60.0)
-- `inactivityTimeout: Double?` - Optional early-stop seconds of inactivity; omitted follows `maxDuration`
+- `inactivityTimeout: Double?` - Optional early-stop seconds of inactivity; omitted disables inactivity auto-stop
 
 ### RecordingPayload
 
@@ -1740,7 +1740,7 @@ OPTIONS:
 
 ### buttonheist start_recording
 
-Record the screen as H.264/MP4 video. `max_duration` is the hard cap; `inactivity_timeout` is an optional early-stop hint and follows `max_duration` when omitted.
+Record the screen as H.264/MP4 video. `max_duration` is the hard cap; `inactivity_timeout` is an optional early-stop hint and inactivity auto-stop is disabled when omitted.
 
 ```
 USAGE: buttonheist start_recording [OPTIONS]

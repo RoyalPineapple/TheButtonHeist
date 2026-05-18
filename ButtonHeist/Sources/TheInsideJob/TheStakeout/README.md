@@ -12,14 +12,14 @@ Screen recording engine. Captures frames at configurable FPS, encodes H.264/MP4 
 
 ### Recording lifecycle
 
-**`startRecording(config:)`** — clamps fps (1-15, default 8), scale (0.25-1.0, default `1/screen.scale`), rounds dimensions to even (H.264 macroblock requirement). Creates `AVAssetWriter` with H.264 at `width * height * 2` bitrate, keyframe interval `fps * 2`. Starts the capture timer and inactivity monitor.
+**`startRecording(config:)`** — clamps fps (1-15, default 8), scale (0.25-1.0, default `1/screen.scale`), rounds dimensions to even (H.264 macroblock requirement). Creates `AVAssetWriter` with H.264 at `width * height * 2` bitrate, keyframe interval `fps * 2`. Starts the capture timer and, when explicitly configured, the inactivity monitor.
 
 **Frame capture** — a `Task` that loops: `captureAndAppendFrame()` then sleep `1/fps` seconds. Each frame:
 1. Guards `videoInput.isReadyForMoreMediaData` and `captureFrame?()` returns a `UIImage`
 2. Checks file size (>7 MB → stop, `.fileSizeLimit`), max duration (configurable → stop)
 3. Allocates `CVPixelBuffer` from the adaptor's pool, draws the image into a `CGContext`, appends with `CMTime(value: frameCount, timescale: fps)`
 
-**Inactivity monitor** — wakes every 1s, checks `Date().timeIntervalSince(lastActivityTime)` against `inactivityTimeout`. Activity is bumped by `noteActivity()` (incoming commands) and `noteScreenChange()` (settled hierarchy changes reported by TheGetaway). When omitted, `inactivityTimeout` follows `maxDuration`; explicit values remain early-stop hints.
+**Inactivity monitor** — wakes every 1s, checks `Date().timeIntervalSince(lastActivityTime)` against `inactivityTimeout`. Activity is bumped by `noteActivity()` (incoming commands) and `noteScreenChange()` (settled hierarchy changes reported by TheGetaway). The monitor only runs when `inactivityTimeout` is explicit; omitted values record until `maxDuration`, manual stop, or another hard cap.
 
 **`stopRecording(reason:)`** — cancels both tasks, transitions to `.finalizing`, calls `finalizeRecording`.
 

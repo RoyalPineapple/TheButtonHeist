@@ -740,4 +740,9 @@ final class WireTypeRoundTripTests: XCTestCase {
         let target = WaitForTarget(elementTarget: .heistId("x"), timeout: 60)
         XCTAssertEqual(target.resolvedTimeout, 30)
     }
+
+    func testWaitForChangeTargetResolvedDefaults() {
+        let target = WaitForChangeTarget()
+        XCTAssertEqual(target.resolvedTimeout, 30)
+    }
 }

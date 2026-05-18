@@ -41,7 +41,7 @@ actor TheStakeout {
         let screenBounds: CGRect
         let fps: Int
         let maxDuration: TimeInterval
-        let inactivityTimeout: TimeInterval
+        let inactivityTimeout: TimeInterval?
         let startTime: Date
         let requestedConfig: RecordingConfigurationEvidence
         let appliedConfig: RecordingConfigurationEvidence
@@ -86,7 +86,7 @@ actor TheStakeout {
         let caps: [RecordedInputCap]
         let fps: Int
         let maxDuration: TimeInterval
-        let inactivityTimeout: TimeInterval
+        let inactivityTimeout: TimeInterval?
         let effectiveScale: CGFloat
         let screenBounds: CGRect
         let evenWidth: Int
@@ -220,11 +220,13 @@ actor TheStakeout {
         let timing = resolvedStakeoutTiming(for: config)
         let inactivityTimeout = timing.inactivityTimeout
         let maxDuration = timing.maxDuration
-        if let requested = config.inactivityTimeout, requested != inactivityTimeout {
+        if let requested = config.inactivityTimeout,
+           let applied = inactivityTimeout,
+           requested != applied {
             caps.append(RecordedInputCap(
                 name: "inactivityTimeout",
                 requested: .double(requested),
-                applied: .double(inactivityTimeout),
+                applied: .double(applied),
                 minimum: .double(1.0),
                 reason: "recording inactivity timeout must be at least 1 second"
             ))
@@ -383,7 +385,7 @@ actor TheStakeout {
             "Recording started: \(setup.evenWidth)x\(setup.evenHeight) @ \(setup.fps)fps, effectiveScale=\(setup.effectiveScale)"
         )
 
-        // Start frame capture timer and inactivity monitor — these mutate the session
+        // Start frame capture timer and optional inactivity monitor — these mutate the session
         // via stakeoutPhase, so they must be started after the state transition.
         startCaptureTimer()
         startInactivityMonitor()
@@ -579,6 +581,7 @@ actor TheStakeout {
 
     private func startInactivityMonitor() {
         guard case .recording(var session) = stakeoutPhase else { return }
+        guard session.inactivityTimeout != nil else { return }
         let sessionID = session.id
         session.inactivityCheckTask = Task { [weak self] in
             while !Task.isCancelled {

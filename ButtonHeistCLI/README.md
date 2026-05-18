@@ -115,7 +115,7 @@ buttonheist start_recording
 buttonheist start_recording --output demo.mp4 --fps 15 --scale 0.5 --action-log demo-actions.json
 ```
 
-Flags: `-o/--output` (default "recording.mp4"), `--fps` (default 8), `--scale`, `--inactivity-timeout` (optional early-stop; omitted follows `--max-duration`), `--max-duration` (default 60s), `--action-log <path>`.
+Flags: `-o/--output` (default "recording.mp4"), `--fps` (default 8), `--scale`, `--inactivity-timeout` (optional early-stop; omitted disables inactivity auto-stop), `--max-duration` (default 60s), `--action-log <path>`.
 
 ### list_devices
 

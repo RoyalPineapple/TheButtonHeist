@@ -5,11 +5,11 @@ import TheScore
 
 final class TheStakeoutTimingTests: XCTestCase {
 
-    func testOmittedInactivityTimeoutDefaultsToMaxDuration() {
+    func testOmittedInactivityTimeoutDisablesInactivityAutoStop() {
         let timing = resolvedStakeoutTiming(for: RecordingConfig(maxDuration: 42.0))
 
         XCTAssertEqual(timing.maxDuration, 42.0)
-        XCTAssertEqual(timing.inactivityTimeout, 42.0)
+        XCTAssertNil(timing.inactivityTimeout)
     }
 
     func testExplicitInactivityTimeoutIsPreservedAsEarlyStop() {

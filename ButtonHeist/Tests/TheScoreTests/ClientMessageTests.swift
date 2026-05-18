@@ -280,7 +280,7 @@ final class ClientMessageTests: XCTestCase {
         }
         XCTAssertNil(target.expect)
         XCTAssertNil(target.timeout)
-        XCTAssertEqual(target.resolvedTimeout, 10.0)
+        XCTAssertEqual(target.resolvedTimeout, 30.0)
     }
 
     func testWaitForChangeWithExpectationRoundTrip() throws {

@@ -12,8 +12,8 @@ struct WaitForChangeCommand: AsyncParsableCommand, CLICommandContract {
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
 
-    @Option(name: .shortAndLong, help: "Maximum wait time in seconds (default: 10, max: 30)")
-    var timeout: Double = 10.0
+    @Option(name: .shortAndLong, help: "Maximum wait time in seconds (default: 30, max: 30)")
+    var timeout: Double = 30.0
 
     @Option(name: .shortAndLong, help: "Expected change shorthand or JSON object-form expectation")
     var expect: String?

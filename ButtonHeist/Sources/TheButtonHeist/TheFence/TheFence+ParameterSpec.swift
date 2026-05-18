@@ -821,7 +821,7 @@ extension TheFence.Command {
                 expect,
                 .init(
                     key: "timeout", type: .number,
-                    description: "Maximum wait time in seconds (default: 10, max: 30)",
+                    description: "Maximum wait time in seconds (default: 30, max: 30)",
                     maximum: 30
                 ),
             ]
@@ -1073,7 +1073,7 @@ extension TheFence.Command {
                 .init(key: "max_duration", type: .number, description: "Maximum recording duration in seconds (default: 60)"),
                 .init(
                     key: "inactivity_timeout", type: .number,
-                    description: "Optional early-stop after N seconds of no interactions; omitted follows max_duration"
+                    description: "Optional early-stop after N seconds of no interactions; omitted disables inactivity auto-stop"
                 ),
             ]
 
