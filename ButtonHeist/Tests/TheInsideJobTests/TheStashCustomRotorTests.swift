@@ -103,6 +103,72 @@ final class TheStashRotorTests: XCTestCase {
         XCTAssertNil(hit.textRange)
     }
 
+    func testSystemRotorCanBeInvokedByDisplayedName() throws {
+        let windowScene = try requireForegroundWindowScene()
+        let viewController = UIViewController()
+        viewController.view.backgroundColor = .white
+
+        let rotorHost = UIView(frame: CGRect(x: 20, y: 40, width: 280, height: 44))
+        rotorHost.isAccessibilityElement = true
+        rotorHost.accessibilityLabel = "Resources"
+        rotorHost.accessibilityIdentifier = "system_rotor_host"
+
+        let resultLabel = UILabel(frame: CGRect(x: 20, y: 120, width: 280, height: 44))
+        resultLabel.text = "Open Docs"
+        resultLabel.accessibilityLabel = "Open Docs"
+        resultLabel.accessibilityIdentifier = "open_docs"
+        resultLabel.isAccessibilityElement = true
+
+        rotorHost.accessibilityCustomRotors = [
+            UIAccessibilityCustomRotor(systemType: .link) { _ in
+                UIAccessibilityCustomRotorItemResult(targetElement: resultLabel, targetRange: nil)
+            }
+        ]
+
+        viewController.view.addSubview(rotorHost)
+        viewController.view.addSubview(resultLabel)
+
+        let window = UIWindow(windowScene: windowScene)
+        window.windowLevel = .alert + 31
+        window.rootViewController = viewController
+        window.frame = UIScreen.main.bounds
+        window.isHidden = false
+        defer {
+            window.isHidden = true
+        }
+
+        guard let screen = stash.parse() else {
+            XCTFail("Expected live parse result")
+            return
+        }
+        stash.currentScreen = screen
+
+        let resolvedHost = stash.resolveTarget(.matcher(ElementMatcher(identifier: "system_rotor_host"))).resolved?.screenElement
+        guard let resolvedHost else {
+            XCTFail("Expected rotor host to resolve")
+            return
+        }
+
+        XCTAssertEqual(rotorHost.accessibilityCustomRotors?.first?.name, "")
+        XCTAssertEqual(resolvedHost.element.customRotors.map(\.name), ["Links"])
+
+        let outcome = stash.performRotor(
+            RotorTarget(
+                elementTarget: .heistId(resolvedHost.heistId),
+                rotor: "Links"
+            ),
+            direction: .next,
+            on: resolvedHost
+        )
+
+        guard case .succeeded(let hit) = outcome else {
+            XCTFail("Expected rotor to succeed, got \(outcome)")
+            return
+        }
+        XCTAssertEqual(hit.rotor, "Links")
+        XCTAssertEqual(hit.screenElement?.element.identifier, "open_docs")
+    }
+
     func testRotorResultElementCanBeActivatedByReturnedHeistId() async throws {
         let windowScene = try requireForegroundWindowScene()
         let viewController = UIViewController()
