@@ -2815,6 +2815,73 @@ final class TheFenceTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testHeistRecordingUsesActionBeforeCaptureForTargetAfterScreenChange() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        let target = makeReceiptTestElement(
+            heistId: "pay_button",
+            label: "Pay",
+            identifier: "checkout.pay",
+            traits: [.button]
+        )
+        let after = makeReceiptTestElement(
+            heistId: "done",
+            label: "Done",
+            identifier: "checkout.done",
+            traits: [.staticText]
+        )
+        let trace = makeReceiptTestTrace(
+            before: makeReceiptTestInterface([target]),
+            after: makeReceiptTestInterface([after]),
+            beforeScreenId: "checkout",
+            afterScreenId: "receipt"
+        )
+        mockConn.autoResponse = { message in
+            switch message {
+            case .activate:
+                return .actionResult(ActionResult(
+                    success: true,
+                    method: .activate,
+                    accessibilityTrace: trace
+                ))
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+        try await startHeistRecording(on: fence)
+
+        let response = try await fence.execute(request: [
+            "command": "activate",
+            "heistId": "pay_button",
+            "expect": [
+                "type": "element_disappeared",
+                "matcher": ["label": "Pay"],
+            ],
+        ])
+        guard case .action(let result, let expectation) = response else {
+            return XCTFail("Expected action response, got \(response)")
+        }
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(expectation?.met, true)
+
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("heist")
+        defer { try? FileManager.default.removeItem(at: output) }
+        _ = try await fence.execute(request: [
+            "command": "stop_heist",
+            "output": output.path,
+        ])
+
+        let heist = try TheBookKeeper.readHeist(from: output)
+        XCTAssertEqual(heist.steps.count, 1)
+        XCTAssertEqual(heist.steps[0].recorded?.heistId, "pay_button")
+        XCTAssertEqual(heist.steps[0].target?.identifier, "checkout.pay")
+        XCTAssertEqual(heist.steps[0].recorded?.accessibilityDelta?.kindRawValue, "screenChanged")
+        XCTAssertEqual(heist.steps[0].recorded?.expectation?.met, true)
+        try? await fence.bookKeeper.closeSession()
+    }
+
+    @ButtonHeistActor
     func testHeistRecordingRecordsSuccessfulActionWithoutExpectation() async throws {
         let (fence, mockConn) = makeConnectedFence()
         mockConn.autoResponse = { message in
@@ -2847,7 +2914,7 @@ final class TheFenceTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testBackgroundTraceRefreshesHeistMatcherCache() async throws {
+    func testBackgroundTraceProvidesTargetCaptureForHeistMatcher() async throws {
         let (fence, mockConn) = makeConnectedFence()
         mockConn.autoResponse = { message in
             switch message {
@@ -2893,6 +2960,80 @@ final class TheFenceTests: XCTestCase {
         XCTAssertEqual(heist.steps.count, 1)
         XCTAssertEqual(heist.steps[0].recorded?.heistId, "pay_button")
         XCTAssertEqual(heist.steps[0].target?.identifier, "checkout.pay")
+        try? await fence.bookKeeper.closeSession()
+    }
+
+    @ButtonHeistActor
+    func testFullInterfaceSnapshotAdvancesBaselineWithoutMergingStaleElements() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        let stale = makeReceiptTestElement(
+            heistId: "stale_button",
+            label: "Stale",
+            identifier: "old.stale",
+            traits: [.button]
+        )
+        let current = makeReceiptTestElement(
+            heistId: "current_button",
+            label: "Current",
+            identifier: "new.current",
+            traits: [.button]
+        )
+        func exploreResult(elements: [HeistElement]) -> ActionResult {
+            ActionResult(
+                success: true,
+                method: .explore,
+                payload: .explore(ExploreResult(
+                    elements: elements,
+                    scrollCount: 1,
+                    containersExplored: 1,
+                    explorationTime: 0.1
+                ))
+            )
+        }
+        var exploreResponses = [
+            exploreResult(elements: [stale]),
+            exploreResult(elements: [current]),
+        ]
+        mockConn.autoResponse = { message in
+            switch message {
+            case .explore:
+                return .actionResult(exploreResponses.removeFirst())
+            case .activate:
+                return .actionResult(ActionResult(
+                    success: true,
+                    method: .activate,
+                    accessibilityDelta: .noChange(.init(elementCount: 1))
+                ))
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+        try await startHeistRecording(on: fence)
+
+        _ = try await fence.execute(request: ["command": "get_interface"])
+        _ = try await fence.execute(request: ["command": "get_interface"])
+        let response = try await fence.execute(request: [
+            "command": "activate",
+            "heistId": "stale_button",
+        ])
+        guard case .action(let result, _) = response else {
+            return XCTFail("Expected action response, got \(response)")
+        }
+        XCTAssertTrue(result.success)
+
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("heist")
+        defer { try? FileManager.default.removeItem(at: output) }
+        _ = try await fence.execute(request: [
+            "command": "stop_heist",
+            "output": output.path,
+        ])
+
+        let heist = try TheBookKeeper.readHeist(from: output)
+        XCTAssertEqual(heist.steps.count, 1)
+        XCTAssertNil(heist.steps[0].recorded?.heistId)
+        XCTAssertNil(heist.steps[0].target)
         try? await fence.bookKeeper.closeSession()
     }
 

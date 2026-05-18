@@ -442,14 +442,11 @@ public final class TheFence {
     }
     var playbackPhase: PlaybackPhase = .idle
 
-    /// Durable post-action snapshot of the most recently observed interface,
-    /// keyed by heistId. This is the only mirror of post-action interface
-    /// state on the client — the request trackers above are scoped to
-    /// in-flight requests and don't retain the last delivered value. The
-    /// cache feeds heist-evidence recording (so the activated element from
-    /// the old screen survives a screen change) and `elementDisappeared`
-    /// expectation validation (which resolves removed heistIds against it).
-    private var lastInterfaceCache: [String: HeistElement] = [:]
+    /// Fence-owned accessibility capture history. Captures are the retained
+    /// source of truth; element lookup dictionaries are derived locally from a
+    /// specific capture when validation or recording needs one.
+    private var accessibilityHistory = AccessibilityTrace.History(retention: .dropAfterDelivery)
+    private var lastDeliveredCaptureRef: AccessibilityTrace.CaptureRef?
 
     // MARK: - Pending Request Tracking
 
@@ -562,8 +559,10 @@ public final class TheFence {
     }
 
     func clearClientSessionState(error: Error) {
-        backgroundAccessibilityTraces.removeAll()
-        lastInterfaceCache.removeAll()
+        backgroundAccessibilityCursors.removeAll()
+        accessibilityHistory.removeAll()
+        accessibilityHistory.retention = .dropAfterDelivery
+        lastDeliveredCaptureRef = nil
         lastActionHistory = .unrun
         lastLatencyMs = 0
         recordingPhase = .idle
@@ -588,33 +587,39 @@ public final class TheFence {
         }
     }
 
-    /// Bounded FIFO of background accessibility traces received from the server.
+    /// Bounded FIFO of background accessibility trace cursors received from the server.
     ///
-    /// Expectation checks derive a compact delta from each trace at the match
+    /// Expectation checks derive a compact delta from each cursor at the match
     /// edge and acknowledge only the trace whose delta matches. This prevents a
     /// mismatched expectation from destroying the only evidence of a background
     /// change.
-    private var backgroundAccessibilityTraces: [AccessibilityTrace] = []
-    private static let maxBackgroundAccessibilityTraces = 20
+    private var backgroundAccessibilityCursors: [AccessibilityTrace.Cursor] = []
+    private static let maxBackgroundAccessibilityCursors = 20
 
     private func enqueueBackgroundAccessibilityTrace(_ trace: AccessibilityTrace) {
-        updateInterfaceCache(from: trace)
-        backgroundAccessibilityTraces.append(trace)
-        if backgroundAccessibilityTraces.count > Self.maxBackgroundAccessibilityTraces {
-            backgroundAccessibilityTraces.removeFirst(backgroundAccessibilityTraces.count - Self.maxBackgroundAccessibilityTraces)
+        guard let cursor = accessibilityHistory.ingest(trace) else { return }
+        backgroundAccessibilityCursors.append(cursor)
+        if backgroundAccessibilityCursors.count > Self.maxBackgroundAccessibilityCursors {
+            backgroundAccessibilityCursors.removeFirst(backgroundAccessibilityCursors.count - Self.maxBackgroundAccessibilityCursors)
         }
+        pruneAccessibilityHistory()
     }
 
     /// Return and clear the oldest queued background accessibility trace, if any.
     public func drainBackgroundAccessibilityTrace() -> AccessibilityTrace? {
-        if backgroundAccessibilityTraces.isEmpty { return nil }
-        return backgroundAccessibilityTraces.removeFirst()
+        guard !backgroundAccessibilityCursors.isEmpty else { return nil }
+        let cursor = backgroundAccessibilityCursors.removeFirst()
+        let trace = accessibilityHistory.trace(cursor: cursor)
+        finishAccessibilityDelivery(cursor.last)
+        return trace
     }
 
     /// Return and clear all queued background accessibility traces in arrival order.
     public func drainBackgroundAccessibilityTraces() -> [AccessibilityTrace] {
-        let traces = backgroundAccessibilityTraces
-        backgroundAccessibilityTraces.removeAll()
+        let cursors = backgroundAccessibilityCursors
+        let traces = cursors.compactMap { accessibilityHistory.trace(cursor: $0) }
+        backgroundAccessibilityCursors.removeAll()
+        finishAccessibilityDelivery(cursors.last?.last)
         return traces
     }
 
@@ -681,29 +686,37 @@ public final class TheFence {
            let backgroundResponse = responseIfBackgroundExpectationMet(
             parsed.expectationPayload.expectation, requestId: parsed.requestId
            ) {
-            return backgroundResponse
+            finishAccessibilityDelivery(backgroundResponse.deliveredCaptureRef)
+            return backgroundResponse.response
         }
 
-        let preDispatchBackgroundCount = backgroundAccessibilityTraces.count
+        let preDispatchBackgroundCount = backgroundAccessibilityCursors.count
+        let preDispatchCaptureRef = accessibilityHistory.latestCaptureRef
         let dispatched = try await dispatchCommand(parsed)
         lastLatencyMs = dispatched.durationMs
         logResponse(requestId: parsed.requestId, response: dispatched.response, durationMs: dispatched.durationMs)
 
-        let postDispatch = capturePostDispatchEffects(response: dispatched.response)
+        let postDispatch = capturePostDispatchEffects(
+            parsed: parsed,
+            response: dispatched.response,
+            preDispatchCaptureRef: preDispatchCaptureRef
+        )
         let validatedResponse = try await validateActionResponse(
             dispatched.response,
             command: parsed.command,
             expectation: parsed.expectationPayload.expectation,
             expectationTimeout: parsed.expectationPayload.postActionValidationTimeout,
-            preActionCache: postDispatch.preActionCache,
+            preActionCaptureRef: postDispatch.preActionCaptureRef,
             postDispatchBackgroundStartIndex: preDispatchBackgroundCount
         )
         recordHeistEvidence(
             parsed,
             dispatchedResponse: dispatched.response,
-            validatedResponse: validatedResponse
+            validatedResponse: validatedResponse.response,
+            lookupCaptureRef: postDispatch.recordingLookupCaptureRef
         )
-        return validatedResponse
+        finishAccessibilityDelivery(validatedResponse.deliveredCaptureRef ?? postDispatch.deliveredCaptureRef)
+        return validatedResponse.response
     }
 
     // MARK: - Execute Pipeline
@@ -714,8 +727,19 @@ public final class TheFence {
     }
 
     private struct PostDispatchOutcome {
-        let preActionCache: [String: HeistElement]
-        let cacheUpdate: ResponseCacheUpdate
+        let preActionCaptureRef: AccessibilityTrace.CaptureRef?
+        let recordingLookupCaptureRef: AccessibilityTrace.CaptureRef?
+        let deliveredCaptureRef: AccessibilityTrace.CaptureRef?
+    }
+
+    private struct ValidatedResponse {
+        let response: FenceResponse
+        let deliveredCaptureRef: AccessibilityTrace.CaptureRef?
+    }
+
+    private struct BackgroundExpectationResponse {
+        let response: FenceResponse
+        let deliveredCaptureRef: AccessibilityTrace.CaptureRef?
     }
 
     /// Parse and validate a raw request dictionary into typed fields.
@@ -797,26 +821,38 @@ public final class TheFence {
         )
     }
 
-    /// Update the interface cache and retain the evidence cache for later
-    /// recording, after final expectation validation has completed.
-    /// Returns the pre-action cache snapshot for downstream expectation
-    /// validation (elementDisappeared resolves removed heistIds against it).
-    private func capturePostDispatchEffects(response: FenceResponse) -> PostDispatchOutcome {
-        let preActionCache = lastInterfaceCache
-        let cacheUpdate = updateInterfaceCache(for: response, preActionCache: preActionCache)
-        applyPostRecordCacheUpdate(cacheUpdate)
-        return PostDispatchOutcome(preActionCache: preActionCache, cacheUpdate: cacheUpdate)
-    }
+    /// Ingest capture evidence from the just-dispatched response. The returned
+    /// refs let later steps derive request-local element lookups from a concrete
+    /// capture without retaining a semantic element map on TheFence.
+    private func capturePostDispatchEffects(
+        parsed: ParsedRequest,
+        response: FenceResponse,
+        preDispatchCaptureRef: AccessibilityTrace.CaptureRef?
+    ) -> PostDispatchOutcome {
+        if let fullInterface = fullInterfaceCapture(from: response, parsed: parsed) {
+            let captureRef = accessibilityHistory.append(fullInterface)
+            return PostDispatchOutcome(
+                preActionCaptureRef: nil,
+                recordingLookupCaptureRef: nil,
+                deliveredCaptureRef: captureRef
+            )
+        }
 
-    private struct ResponseCacheUpdate {
-        /// Snapshot of the cache to record heist evidence against. Includes
-        /// pre-action elements (so the activated element from the old screen
-        /// survives a screen change) merged with any newly-arrived elements.
-        let evidenceCache: [String: HeistElement]?
-        /// On a screen change, the new screen's elements that should
-        /// replace the cache after evidence is recorded. `nil` when the
-        /// cache should be left as-is.
-        let postRecordReplacement: [HeistElement]?
+        guard let actionResult = response.actionResult else {
+            return PostDispatchOutcome(
+                preActionCaptureRef: nil,
+                recordingLookupCaptureRef: nil,
+                deliveredCaptureRef: nil
+            )
+        }
+
+        let cursor = ingestActionTrace(actionResult)
+        let beforeRef = cursor?.first ?? preDispatchCaptureRef
+        return PostDispatchOutcome(
+            preActionCaptureRef: beforeRef,
+            recordingLookupCaptureRef: beforeRef,
+            deliveredCaptureRef: cursor?.last
+        )
     }
 
     private func handleImmediateCommand(_ command: Command) -> FenceResponse? {
@@ -848,13 +884,14 @@ public final class TheFence {
         _ expectation: ActionExpectation?,
         requestId: String,
         startingAt startIndex: Int = 0
-    ) -> FenceResponse? {
+    ) -> BackgroundExpectationResponse? {
         guard let expectation else { return nil }
-        let boundedStartIndex = min(max(startIndex, 0), backgroundAccessibilityTraces.count)
+        let boundedStartIndex = min(max(startIndex, 0), backgroundAccessibilityCursors.count)
 
         var matched: (index: Int, result: ActionResult, validation: ExpectationResult)?
-        for index in backgroundAccessibilityTraces.indices.dropFirst(boundedStartIndex) {
-            let trace = backgroundAccessibilityTraces[index]
+        for index in backgroundAccessibilityCursors.indices.dropFirst(boundedStartIndex) {
+            let cursor = backgroundAccessibilityCursors[index]
+            guard let trace = accessibilityHistory.trace(cursor: cursor) else { continue }
             guard trace.backgroundDelta != nil else { continue }
             let syntheticResult = ActionResult(
                 success: true,
@@ -862,7 +899,10 @@ public final class TheFence {
                 message: "expectation already met by background change",
                 accessibilityTrace: trace
             )
-            let validation = expectation.validate(against: syntheticResult)
+            let validation = expectation.validate(
+                against: syntheticResult,
+                preActionElements: elementLookup(captureRef: cursor.first)
+            )
             if validation.met {
                 matched = (index, syntheticResult, validation)
                 break
@@ -870,10 +910,10 @@ public final class TheFence {
         }
 
         guard let matched else { return nil }
-        backgroundAccessibilityTraces.remove(at: matched.index)
+        let cursor = backgroundAccessibilityCursors.remove(at: matched.index)
         let response = FenceResponse.action(result: matched.result, expectation: matched.validation)
         logResponse(requestId: requestId, response: response, durationMs: 0)
-        return response
+        return BackgroundExpectationResponse(response: response, deliveredCaptureRef: cursor.last)
     }
 
     private func ensureConnectedIfNeeded(for command: Command) async throws {
@@ -918,56 +958,16 @@ public final class TheFence {
         }
     }
 
-    private func updateInterfaceCache(
-        for response: FenceResponse,
-        preActionCache: [String: HeistElement]
-    ) -> ResponseCacheUpdate {
-        if case .interface(let iface, _, _, _) = response {
-            updateInterfaceCache(iface.elements)
-            return ResponseCacheUpdate(
-                evidenceCache: lastInterfaceCache.isEmpty ? nil : lastInterfaceCache,
-                postRecordReplacement: nil
-            )
-        }
-        guard let actionResult = response.actionResult,
-              case .screenChanged(let payload)? = actionResult.effectiveAccessibilityDelta else {
-            return ResponseCacheUpdate(
-                evidenceCache: lastInterfaceCache.isEmpty ? nil : lastInterfaceCache,
-                postRecordReplacement: nil
-            )
-        }
-        return updateInterfaceCache(for: actionResult, newInterface: payload.newInterface, preActionCache: preActionCache)
-    }
-
-    private func updateInterfaceCache(
-        for actionResult: ActionResult,
-        newInterface: Interface,
-        preActionCache: [String: HeistElement]
-    ) -> ResponseCacheUpdate {
-        // Only reachable when the trace-derived effective delta is .screenChanged (caller's guard).
-        // Below assumes newInterface is the screenChange payload.
-        replaceInterfaceCache(with: newInterface.elements)
-        // Evidence cache is union of pre-action elements + the new screen's
-        // elements so the activated element from the old screen survives long
-        // enough for the recorder to resolve its heistId to a matcher.
-        var evidenceCache = preActionCache
-        for element in newInterface.elements {
-            evidenceCache[element.heistId] = element
-        }
-        return ResponseCacheUpdate(
-            evidenceCache: evidenceCache.isEmpty ? nil : evidenceCache,
-            postRecordReplacement: newInterface.elements
-        )
-    }
-
     private func recordHeistEvidence(
         _ request: ParsedRequest,
         dispatchedResponse: FenceResponse,
-        validatedResponse: FenceResponse
+        validatedResponse: FenceResponse,
+        lookupCaptureRef: AccessibilityTrace.CaptureRef?
     ) {
         guard case .idle = playbackPhase else { return }
         guard let finalReceipt = validatedResponse.heistRecordingReceipt, finalReceipt.shouldRecord else { return }
         let targetCapture = dispatchedResponse.actionResult?.accessibilityTrace?.captures.first
+            ?? lookupCaptureRef.flatMap { accessibilityHistory.capture(ref: $0) }
             ?? finalReceipt.actionResult.accessibilityTrace?.captures.first
         bookKeeper.recordHeistEvidence(
             request,
@@ -977,82 +977,79 @@ public final class TheFence {
         )
     }
 
-    private func applyPostRecordCacheUpdate(_ cacheUpdate: ResponseCacheUpdate) {
-        guard let elements = cacheUpdate.postRecordReplacement else { return }
-        replaceInterfaceCache(with: elements)
-    }
-
-    private func updateInterfaceCache(from trace: AccessibilityTrace) {
-        guard let latestCapture = trace.captures.last else { return }
-        replaceInterfaceCache(with: latestCapture.interface.elements)
-    }
-
-    private func replaceInterfaceCache(with elements: [HeistElement]) {
-        lastInterfaceCache.removeAll()
-        for element in elements {
-            lastInterfaceCache[element.heistId] = element
-        }
-    }
-
     private func validateActionResponse(
         _ response: FenceResponse,
         command: Command,
         expectation: ActionExpectation?,
         expectationTimeout: Double?,
-        preActionCache: [String: HeistElement],
+        preActionCaptureRef: AccessibilityTrace.CaptureRef?,
         postDispatchBackgroundStartIndex: Int
-    ) async throws -> FenceResponse {
+    ) async throws -> ValidatedResponse {
         if let actionResult = response.actionResult {
             let delivery = ActionExpectation.validateDelivery(actionResult)
             if !delivery.met {
-                return .action(result: actionResult, expectation: delivery)
+                return ValidatedResponse(
+                    response: .action(result: actionResult, expectation: delivery),
+                    deliveredCaptureRef: nil
+                )
             }
             if let expectation {
                 // wait_for_change sends the expectation to the iOS server; a
                 // successful result means the server observed or already held it.
                 if command == .waitForChange {
-                    return .action(
-                        result: actionResult,
-                        expectation: ExpectationResult(
-                            met: actionResult.success,
-                            expectation: expectation,
-                            actual: actionResult.message ?? actionResult.effectiveAccessibilityDelta?.kindRawValue
-                        )
+                    return ValidatedResponse(
+                        response: .action(
+                            result: actionResult,
+                            expectation: ExpectationResult(
+                                met: actionResult.success,
+                                expectation: expectation,
+                                actual: actionResult.message ?? actionResult.effectiveAccessibilityDelta?.kindRawValue
+                            )
+                        ),
+                        deliveredCaptureRef: nil
                     )
                 }
+                let preActionElements = elementLookup(captureRef: preActionCaptureRef)
                 let validation = expectation.validate(
-                    against: actionResult, preActionElements: preActionCache
+                    against: actionResult, preActionElements: preActionElements
                 )
                 if validation.met {
-                    return .action(result: actionResult, expectation: validation)
+                    return ValidatedResponse(
+                        response: .action(result: actionResult, expectation: validation),
+                        deliveredCaptureRef: nil
+                    )
                 }
                 return try await waitForPostActionExpectation(
                     expectation,
                     initialResult: actionResult,
                     initialValidation: validation,
+                    preActionElements: preActionElements,
                     timeout: expectationTimeout,
                     backgroundStartIndex: postDispatchBackgroundStartIndex
                 )
             }
         }
 
-        return response
+        return ValidatedResponse(response: response, deliveredCaptureRef: nil)
     }
 
     private func waitForPostActionExpectation(
         _ expectation: ActionExpectation,
         initialResult: ActionResult,
         initialValidation: ExpectationResult,
+        preActionElements: [String: HeistElement],
         timeout: Double?,
         backgroundStartIndex: Int
-    ) async throws -> FenceResponse {
+    ) async throws -> ValidatedResponse {
         if let backgroundResponse = responseIfBackgroundExpectationMet(
             expectation,
             requestId: UUID().uuidString,
             startingAt: backgroundStartIndex
         ) {
-            updateInterfaceCacheForExpectationWait(backgroundResponse)
-            return backgroundResponse
+            return ValidatedResponse(
+                response: backgroundResponse.response,
+                deliveredCaptureRef: backgroundResponse.deliveredCaptureRef
+            )
         }
 
         let target = WaitForChangeTarget(expect: expectation, timeout: timeout)
@@ -1062,6 +1059,7 @@ public final class TheFence {
                 timeout: target.resolvedTimeout + config.postActionExpectationTimeoutBuffer
             )
             lastActionHistory = .completed(waitResult)
+            let waitCursor = ingestActionTrace(waitResult)
             let waitValidation: ExpectationResult = if waitResult.method == .waitForChange {
                 ExpectationResult(
                     met: waitResult.success,
@@ -1069,22 +1067,75 @@ public final class TheFence {
                     actual: waitResult.message ?? waitResult.effectiveAccessibilityDelta?.kindRawValue
                 )
             } else {
-                expectation.validate(against: waitResult)
+                expectation.validate(against: waitResult, preActionElements: preActionElements)
             }
-            let response = FenceResponse.action(
-                result: waitResult,
-                expectation: waitValidation
+            return ValidatedResponse(
+                response: .action(
+                    result: waitResult,
+                    expectation: waitValidation
+                ),
+                deliveredCaptureRef: waitCursor?.last
             )
-            updateInterfaceCacheForExpectationWait(response)
-            return response
         } catch FenceError.actionTimeout {
-            return .action(result: initialResult, expectation: initialValidation)
+            return ValidatedResponse(
+                response: .action(result: initialResult, expectation: initialValidation),
+                deliveredCaptureRef: nil
+            )
         }
     }
 
-    private func updateInterfaceCacheForExpectationWait(_ response: FenceResponse) {
-        let cacheUpdate = updateInterfaceCache(for: response, preActionCache: lastInterfaceCache)
-        applyPostRecordCacheUpdate(cacheUpdate)
+    private func fullInterfaceCapture(from response: FenceResponse, parsed: ParsedRequest) -> Interface? {
+        guard case .getInterface(let request) = parsed.payload,
+              request.scope == .full,
+              case .interface(let iface, _, _, let explore) = response else {
+            return nil
+        }
+        guard let explore else { return iface }
+        return Interface(
+            timestamp: iface.timestamp,
+            tree: explore.elements.map(InterfaceNode.element)
+        )
+    }
+
+    private func ingestActionTrace(_ actionResult: ActionResult) -> AccessibilityTrace.Cursor? {
+        guard let trace = actionResult.accessibilityTrace else { return nil }
+        return accessibilityHistory.ingest(trace)
+    }
+
+    private func elementLookup(
+        captureRef: AccessibilityTrace.CaptureRef?
+    ) -> [String: HeistElement] {
+        guard let captureRef,
+              let capture = accessibilityHistory.capture(ref: captureRef) else {
+            return [:]
+        }
+        return capture.interface.elements.reduce(into: [String: HeistElement]()) { partialResult, element in
+            partialResult[element.heistId] = element
+        }
+    }
+
+    private func finishAccessibilityDelivery(_ captureRef: AccessibilityTrace.CaptureRef?) {
+        if let captureRef {
+            lastDeliveredCaptureRef = captureRef
+        }
+        pruneAccessibilityHistory()
+    }
+
+    private func pruneAccessibilityHistory() {
+        var retainedRefs = Set(backgroundAccessibilityCursors.flatMap(\.captureRefs))
+        if let lastDeliveredCaptureRef {
+            retainedRefs.insert(lastDeliveredCaptureRef)
+        }
+        accessibilityHistory.prune(retaining: retainedRefs)
+    }
+
+    func beginRecordingAccessibilityHistoryRetention() {
+        accessibilityHistory.retention = .persistForSession
+    }
+
+    func endRecordingAccessibilityHistoryRetention() {
+        accessibilityHistory.retention = .dropAfterDelivery
+        pruneAccessibilityHistory()
     }
 
     private func connect() async throws {
@@ -1115,14 +1166,6 @@ public final class TheFence {
             throw FenceError(error)
         }
         handoff.onStatus?("Connected to \(device.name)")
-    }
-
-    // MARK: - Interface Cache
-
-    private func updateInterfaceCache(_ elements: [HeistElement]) {
-        for element in elements {
-            lastInterfaceCache[element.heistId] = element
-        }
     }
 
     // MARK: - Response Logging

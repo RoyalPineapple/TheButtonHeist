@@ -47,7 +47,7 @@ public enum ActionExpectation: Sendable, Equatable {
     /// Expected an element matching this predicate to appear in the delta's added list.
     case elementAppeared(ElementMatcher)
     /// Expected an element matching this predicate to disappear from the delta's removed list.
-    /// Validation requires a pre-action element cache to resolve removed heistIds to matchers.
+    /// Validation requires elements derived from the pre-action capture to resolve removed heistIds to matchers.
     case elementDisappeared(ElementMatcher)
     /// Compound: all sub-expectations must be met.
     case compound([ActionExpectation])
@@ -195,7 +195,7 @@ public struct ExpectationResult: Codable, Sendable, Equatable {
 
 extension ActionExpectation {
     /// Check this expectation against an ActionResult.
-    /// - Parameter preActionElements: Cached elements from before the action, keyed by heistId.
+    /// - Parameter preActionElements: Elements from the pre-action capture, keyed by heistId.
     ///   Required for `elementDisappeared` validation (resolves removed heistIds to matchers).
     ///   Pass an empty dictionary if unavailable.
     public func validate(

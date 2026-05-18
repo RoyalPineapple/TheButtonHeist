@@ -472,6 +472,7 @@ extension TheFence {
             try bookKeeper.beginSession(identifier: request.identifier)
         }
         try bookKeeper.startHeistRecording(app: request.app)
+        beginRecordingAccessibilityHistoryRetention()
         return .heistStarted
     }
 
@@ -479,9 +480,17 @@ extension TheFence {
         guard let resolvedURL = bookKeeper.validateOutputPath(request.outputPath) else {
             throw FenceError.invalidRequest("Invalid output path: must not be empty, contain '..' components, or contain control characters")
         }
-        let heist = try bookKeeper.stopHeistRecording()
-        try TheBookKeeper.writeHeist(heist, to: resolvedURL)
-        return .heistStopped(path: resolvedURL.path, stepCount: heist.steps.count)
+        do {
+            let heist = try bookKeeper.stopHeistRecording()
+            endRecordingAccessibilityHistoryRetention()
+            try TheBookKeeper.writeHeist(heist, to: resolvedURL)
+            return .heistStopped(path: resolvedURL.path, stepCount: heist.steps.count)
+        } catch {
+            if !bookKeeper.isRecordingHeist {
+                endRecordingAccessibilityHistoryRetention()
+            }
+            throw error
+        }
     }
 
     func handlePlayHeist(_ request: PlayHeistRequest) async throws -> FenceResponse {

@@ -304,7 +304,7 @@ final class ActionExpectationValidationTests: XCTestCase {
         XCTAssertEqual(outcome.actual, "no elements removed")
     }
 
-    func testElementDisappearedNoPreActionCache() {
+    func testElementDisappearedNoPreActionElements() {
         let result = ActionResult(
             success: true, method: .activate,
             accessibilityDelta: .elementsChanged(.init(elementCount: 5, edits: ElementEdits(removed: ["unknown_id"])))
