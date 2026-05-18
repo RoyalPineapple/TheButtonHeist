@@ -126,7 +126,7 @@ extension TheFence {
             return .invalid(
                 commandName: originalCommandName,
                 failure: BatchStepDecodeFailure(
-                    message: fenceError.localizedDescription,
+                    message: fenceError.coreMessage,
                     details: fenceError.failureDetails,
                     includeDetailsInResult: false
                 )

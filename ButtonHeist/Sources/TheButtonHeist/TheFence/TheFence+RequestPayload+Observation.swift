@@ -14,8 +14,6 @@ extension TheFence {
             return .getInterface(try decodeGetInterfaceRequest(request))
         case .getScreen, .stopRecording:
             return .artifact(try decodeArtifactRequest(request, requestId: requestId))
-        case .waitForChange:
-            return .waitForChange(try parseExpectationPayload(request))
         default:
             throw FenceError.invalidRequest("Unexpected observation command: \(command.rawValue)")
         }

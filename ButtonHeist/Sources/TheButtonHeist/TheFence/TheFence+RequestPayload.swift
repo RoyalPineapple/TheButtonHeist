@@ -154,8 +154,10 @@ extension TheFence {
         case .help, .status, .quit, .exit, .listDevices, .getPasteboard,
              .dismissKeyboard, .getSessionState, .listTargets, .getSessionLog:
             return .none
-        case .getInterface, .getScreen, .stopRecording, .waitForChange:
+        case .getInterface, .getScreen, .stopRecording:
             return try decodeObservationPayload(command: command, request: request, requestId: requestId)
+        case .waitForChange:
+            throw FenceError.invalidRequest("wait_for_change payload is decoded through expectation parsing")
         case .oneFingerTap, .longPress, .swipe, .drag, .pinch, .rotate,
              .twoFingerTap, .drawPath, .drawBezier:
             return try decodeGestureRequestPayload(command: command, request: request)
