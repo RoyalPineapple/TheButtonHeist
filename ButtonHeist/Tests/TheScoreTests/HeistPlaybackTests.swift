@@ -104,21 +104,23 @@ final class HeistPlaybackTests: XCTestCase {
     }
 
     func testStepWithRecordedAccessibilityTrace() throws {
+        let before = Interface(
+            timestamp: Date(timeIntervalSince1970: 0),
+            tree: [.element(makeElement(heistId: "before", label: "Before"))]
+        )
+        let after = Interface(
+            timestamp: Date(timeIntervalSince1970: 1),
+            tree: [.element(makeElement(heistId: "continue", label: "Continue"))]
+        )
         let step = HeistEvidence(
             command: "activate",
             target: ElementMatcher(label: "Continue", traits: [.button]),
             recorded: RecordedMetadata(
-                accessibilityTrace: AccessibilityTrace(interface: Interface(
-                    timestamp: Date(timeIntervalSince1970: 0),
-                    tree: [.element(makeElement(heistId: "continue", label: "Continue"))]
-                )),
-                accessibilityDelta: .screenChanged(.init(
-                    elementCount: 1,
-                    newInterface: Interface(
-                        timestamp: Date(timeIntervalSince1970: 0),
-                        tree: [.element(makeElement(heistId: "continue", label: "Continue"))]
-                    )
-                )),
+                accessibilityTrace: AccessibilityTrace(first: before).appending(
+                    after,
+                    transition: .init(screenChangeReason: "explicitSignal")
+                ),
+                accessibilityDelta: .noChange(.init(elementCount: 999)),
                 expectation: ExpectationResult(
                     met: true,
                     expectation: .screenChanged,
@@ -131,8 +133,8 @@ final class HeistPlaybackTests: XCTestCase {
         let decoded = try JSONDecoder().decode(HeistEvidence.self, from: data)
 
         let change = try XCTUnwrap(decoded.recorded?.accessibilityTrace?.receipts.first)
-        XCTAssertEqual(change.kind, .capture)
-        XCTAssertEqual(change.interface.elements.first?.label, "Continue")
+        XCTAssertEqual(change.kind, AccessibilityTrace.ReceiptKind.capture)
+        XCTAssertEqual(change.interface.elements.first?.label, "Before")
         XCTAssertEqual(decoded.recorded?.accessibilityDelta?.kindRawValue, "screenChanged")
         XCTAssertEqual(decoded.recorded?.accessibilityDelta?.elementCount, 1)
         XCTAssertEqual(decoded.recorded?.expectation?.met, true)

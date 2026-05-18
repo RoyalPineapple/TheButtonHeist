@@ -66,16 +66,15 @@ final class BookKeeperHeistTests: XCTestCase {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
+        let actionInterface = makeReceiptTestInterface([
+            makeElement(heistId: "go", label: "Go", traits: [.button]),
+        ])
         recordHeistEvidence(bookKeeper, command: .activate,
             args: ["command": "activate", "label": "Go", "traits": ["button"]],
             actionResult: ActionResult(
                 success: true,
                 method: .activate,
-                accessibilityDelta: .noChange(.init(elementCount: 1)),
-                accessibilityTrace: AccessibilityTrace(interface: Interface(
-                    timestamp: Date(timeIntervalSince1970: 0),
-                    tree: [.element(makeElement(heistId: "go", label: "Go", traits: [.button]))]
-                )),
+                accessibilityTrace: makeReceiptTestTrace(before: actionInterface, after: actionInterface),
                 screenName: "Home",
                 screenId: "home",
                 settled: true,

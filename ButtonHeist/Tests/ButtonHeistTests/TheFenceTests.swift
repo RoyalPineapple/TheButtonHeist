@@ -2617,17 +2617,16 @@ final class TheFenceTests: XCTestCase {
         mockConn.autoResponse = { message in
             switch message {
             case .activate:
+                let interface = makeReceiptTestInterface(elementCount: 0)
                 return .actionResult(ActionResult(
                     success: true,
                     method: .activate,
-                    accessibilityDelta: .screenChanged(.init(
-                        elementCount: 0,
-                        newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
-                    )),
-                    accessibilityTrace: AccessibilityTrace(interface: Interface(
-                        timestamp: Date(timeIntervalSince1970: 0),
-                        tree: []
-                    ))
+                    accessibilityTrace: makeReceiptTestTrace(
+                        before: interface,
+                        after: interface,
+                        beforeScreenId: "before",
+                        afterScreenId: "after"
+                    )
                 ))
             case .waitForChange:
                 XCTFail("Immediate screen_changed expectation should not wait")
@@ -2679,26 +2678,25 @@ final class TheFenceTests: XCTestCase {
         mockConn.autoResponse = { message in
             switch message {
             case .activate:
+                let loadingInterface = makeReceiptTestInterface([
+                    HeistElement(
+                        heistId: "loading",
+                        description: "Loading",
+                        label: "Loading",
+                        value: nil,
+                        identifier: nil,
+                        traits: [.staticText],
+                        frameX: 0,
+                        frameY: 0,
+                        frameWidth: 100,
+                        frameHeight: 44,
+                        actions: []
+                    ),
+                ])
                 return .actionResult(ActionResult(
                     success: true,
                     method: .activate,
-                    accessibilityDelta: .noChange(.init(elementCount: 1)),
-                    accessibilityTrace: AccessibilityTrace(interface: Interface(
-                        timestamp: Date(timeIntervalSince1970: 0),
-                        tree: [.element(HeistElement(
-                            heistId: "loading",
-                            description: "Loading",
-                            label: "Loading",
-                            value: nil,
-                            identifier: nil,
-                            traits: [.staticText],
-                            frameX: 0,
-                            frameY: 0,
-                            frameWidth: 100,
-                            frameHeight: 44,
-                            actions: []
-                        ))]
-                    ))
+                    accessibilityTrace: makeReceiptTestTrace(before: loadingInterface, after: loadingInterface)
                 ))
             case .waitForChange:
                 let doneInterface = Interface(
@@ -2720,11 +2718,12 @@ final class TheFenceTests: XCTestCase {
                 return .actionResult(ActionResult(
                     success: true,
                     method: .waitForChange,
-                    accessibilityDelta: .screenChanged(.init(
-                        elementCount: 1,
-                        newInterface: doneInterface
-                    )),
-                    accessibilityTrace: AccessibilityTrace(interface: doneInterface)
+                    accessibilityTrace: makeReceiptTestTrace(
+                        before: doneInterface,
+                        after: doneInterface,
+                        beforeScreenId: "loading",
+                        afterScreenId: "done"
+                    )
                 ))
             default:
                 return .actionResult(ActionResult(success: true, method: .activate))

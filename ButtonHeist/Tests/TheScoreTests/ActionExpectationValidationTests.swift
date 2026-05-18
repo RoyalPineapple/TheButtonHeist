@@ -104,7 +104,7 @@ final class ActionExpectationValidationTests: XCTestCase {
         XCTAssertEqual(outcome.actual, "screenChanged")
     }
 
-    func testScreenChangedFallsBackToLegacyDeltaWhenTraceHasNoEndpointEdge() {
+    func testScreenChangedDoesNotUseIndependentDeltaWhenTraceHasNoEndpointEdge() {
         let result = ActionResult(
             success: true,
             method: .activate,
@@ -120,8 +120,8 @@ final class ActionExpectationValidationTests: XCTestCase {
 
         let outcome = ActionExpectation.screenChanged.validate(against: result)
 
-        XCTAssertTrue(outcome.met)
-        XCTAssertEqual(outcome.actual, "screenChanged")
+        XCTAssertFalse(outcome.met)
+        XCTAssertEqual(outcome.actual, "noChange")
     }
 
     // MARK: - elementsChanged (superset rule)
