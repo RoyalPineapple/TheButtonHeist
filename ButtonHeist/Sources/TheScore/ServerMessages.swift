@@ -18,16 +18,8 @@ public struct ResponseEnvelope: Codable, Sendable {
     public let accessibilityTrace: AccessibilityTrace?
 
     public init(
+        buttonHeistVersion: String = TheScore.buttonHeistVersion,
         requestId: String? = nil,
-        message: ServerMessage,
-        accessibilityTrace: AccessibilityTrace? = nil
-    ) {
-        self.init(buttonHeistVersion: TheScore.buttonHeistVersion, requestId: requestId,
-                  message: message, accessibilityTrace: accessibilityTrace)
-    }
-
-    public init(
-        buttonHeistVersion: String, requestId: String? = nil,
         message: ServerMessage,
         accessibilityTrace: AccessibilityTrace? = nil
     ) {
