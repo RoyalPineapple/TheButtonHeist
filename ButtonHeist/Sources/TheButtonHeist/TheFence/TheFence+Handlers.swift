@@ -248,30 +248,42 @@ extension TheFence {
     ) -> (interface: Interface, filteredFrom: Int?, error: String?) {
         let candidates = interface.rootCandidates(matching: root)
         guard !candidates.isEmpty else {
+            let message = """
+                get_interface root matched no nodes; refine root using a container \
+                stableId/type/label/identifier or a leaf heistId/matcher from get_interface.
+                """
             return (
                 interface,
                 nil,
-                "get_interface root matched no nodes; refine root using a container stableId/type/label/identifier or a leaf heistId/matcher from get_interface."
+                message
             )
         }
 
         if let ordinal = root.ordinal {
             guard candidates.indices.contains(ordinal) else {
                 let range = candidates.count == 1 ? "0" : "0...\(candidates.count - 1)"
+                let message = """
+                    get_interface root ordinal \(ordinal) is out of range for \(candidates.count) matches; \
+                    use \(range) or refine root. Candidates: \(candidates.diagnosticList)
+                    """
                 return (
                     interface,
                     nil,
-                    "get_interface root ordinal \(ordinal) is out of range for \(candidates.count) matches; use \(range) or refine root. Candidates: \(candidates.diagnosticList)"
+                    message
                 )
             }
             return (interface.projecting(root: candidates[ordinal]), interface.elements.count, nil)
         }
 
         guard candidates.count == 1 else {
+            let message = """
+                get_interface root matched \(candidates.count) nodes; add root.ordinal \
+                0...\(candidates.count - 1) or refine root. Candidates: \(candidates.diagnosticList)
+                """
             return (
                 interface,
                 nil,
-                "get_interface root matched \(candidates.count) nodes; add root.ordinal 0...\(candidates.count - 1) or refine root. Candidates: \(candidates.diagnosticList)"
+                message
             )
         }
         return (interface.projecting(root: candidates[0]), interface.elements.count, nil)
