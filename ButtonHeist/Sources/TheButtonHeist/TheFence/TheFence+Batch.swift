@@ -92,11 +92,6 @@ extension TheFence {
         }
     }
 
-    static func batchNextCommand(from details: FailureDetails?) -> String? {
-        guard details?.errorCode == FenceRequestErrorCode.missingTarget else { return nil }
-        return details?.hint
-    }
-
     // MARK: - Session State
 
     func currentSessionState() -> SessionStatePayload {
