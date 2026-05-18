@@ -833,7 +833,7 @@ struct ToolSyncTests {
     ) {
         guard case .object(let rootSchema) = tool.inputSchema,
               let properties = extractObjectField(from: rootSchema, key: "properties") else {
-            Issue.record("\(tool.name) missing subtree properties")
+            Issue.record("\(tool.name) missing root properties")
             return
         }
 
@@ -1133,12 +1133,12 @@ private enum ToolSchemaLint {
 
     private static func lintRootSchema(_ schema: Value, path: String) -> [String] {
         guard case .object(let object) = schema else {
-            return ["\(path) subtree schema is not an object"]
+            return ["\(path) root schema is not an object"]
         }
 
         var violations: [String] = []
         if object["additionalProperties"] != .bool(false) {
-            violations.append("\(path) subtree schema must set additionalProperties: false")
+            violations.append("\(path) root schema must set additionalProperties: false")
         }
         violations += lint(schema, path: path)
         return violations
