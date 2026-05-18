@@ -269,7 +269,7 @@ public struct RecordedMetadata: Codable, Sendable, Equatable {
         self.unsupportedArguments = unsupportedArguments?.isEmpty == true ? nil : unsupportedArguments
         self.caps = caps?.isEmpty == true ? nil : caps
         self.accessibilityTrace = accessibilityTrace
-        self.accessibilityDelta = accessibilityDelta
+        self.accessibilityDelta = accessibilityTrace?.captureEndpointDelta ?? accessibilityDelta
         self.expectation = expectation
     }
 }

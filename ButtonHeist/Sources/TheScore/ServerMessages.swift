@@ -281,7 +281,7 @@ public struct ActionResult: Codable, Sendable {
     /// Derived compact view describing what changed in the hierarchy after the action.
     /// When `accessibilityTrace` is present, constructed and decoded results
     /// project this field from the trace, even when the trace projects nil.
-    public var accessibilityDelta: AccessibilityTrace.Delta?
+    public private(set) var accessibilityDelta: AccessibilityTrace.Delta?
     /// Source-of-truth accessibility capture receipt for this action.
     public var accessibilityTrace: AccessibilityTrace?
     /// Whether the UI was still animating when this result was produced.
