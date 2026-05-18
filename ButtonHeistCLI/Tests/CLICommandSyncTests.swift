@@ -151,6 +151,12 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(command.inactivityTimeout, 3)
     }
 
+    func testWaitForChangeCommandDefaultTimeoutIsThirtySeconds() throws {
+        let command = try WaitForChangeCommand.parse([])
+
+        XCTAssertEqual(command.timeout, 30)
+    }
+
     func testTypeTextRequiresText() {
         XCTAssertThrowsError(try TypeCommand.parse([]))
     }

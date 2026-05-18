@@ -571,7 +571,7 @@ public struct WaitForIdleTarget: Codable, Sendable {
 public struct WaitForChangeTarget: Codable, Sendable {
     /// The change to wait for. When nil, any tree change satisfies the wait.
     public let expect: ActionExpectation?
-    /// Maximum time to wait in seconds (default: 10, max: 30)
+    /// Maximum time to wait in seconds (default: 30, max: 30)
     public let timeout: Double?
 
     public init(expect: ActionExpectation? = nil, timeout: Double? = nil) {
@@ -579,7 +579,7 @@ public struct WaitForChangeTarget: Codable, Sendable {
         self.timeout = timeout
     }
 
-    public var resolvedTimeout: Double { min(timeout ?? 10, 30) }
+    public var resolvedTimeout: Double { min(timeout ?? 30, 30) }
 }
 
 /// Target for wait_for command — wait for an element to appear or disappear.
@@ -666,8 +666,8 @@ public struct RecordingConfig: Sendable {
     /// 1.0 = full native resolution (no reduction).
     public let scale: Double?
     /// Optional early-stop timeout in seconds — auto-stop when no screen changes
-    /// and no commands are received for this duration. When omitted, follows
-    /// `maxDuration`.
+    /// and no commands are received for this duration. When omitted,
+    /// inactivity auto-stop is disabled.
     public let inactivityTimeout: Double?
     /// Maximum recording duration in seconds as a hard safety cap (default: 60.0)
     public let maxDuration: Double?

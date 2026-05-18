@@ -353,7 +353,7 @@ Request a PNG capture of the current screen.
 
 ### startRecording
 
-Start recording the screen as H.264/MP4 video. Frames are captured at the configured FPS using `drawHierarchy` compositing (includes fingerprint overlays for taps and continuous gestures). `maxDuration` is the hard cap. `inactivityTimeout` is an optional early-stop hint: when provided, recording auto-stops after that many seconds with no screen changes and no real interactions (actions, touches, typing). When omitted, the inactivity timeout follows `maxDuration`. Pings and keepalive messages do not reset the inactivity timer.
+Start recording the screen as H.264/MP4 video. Frames are captured at the configured FPS using `drawHierarchy` compositing (includes fingerprint overlays for taps and continuous gestures). `maxDuration` is the hard cap. `inactivityTimeout` is an optional early-stop hint: when provided, recording auto-stops after that many seconds with no screen changes and no real interactions (actions, touches, typing). When omitted, inactivity auto-stop is disabled. Pings and keepalive messages do not reset the inactivity timer.
 
 ```json
 {"buttonHeistVersion":"<calver>","type":"startRecording","payload":{"fps":8,"scale":0.5,"maxDuration":60.0}}
@@ -366,7 +366,7 @@ All fields are optional — defaults are applied server-side.
 | `fps` | `Int?` | Frames per second (1-15, default: 8) |
 | `scale` | `Double?` | Resolution scale of native pixels (0.25-1.0, default: 1x point size) |
 | `maxDuration` | `Double?` | Maximum recording duration in seconds (default: 60.0) |
-| `inactivityTimeout` | `Double?` | Optional early-stop seconds of no activity; omitted follows `maxDuration` |
+| `inactivityTimeout` | `Double?` | Optional early-stop seconds of no activity; omitted disables inactivity auto-stop |
 
 ### stopRecording
 
@@ -511,13 +511,13 @@ Dismiss the keyboard by resigning first responder.
 Wait for the UI to change in a way that matches an expectation. With `expect`, the server checks the current settled state first, then watches settled changes until the expectation is true. With no expectation, returns on any post-baseline tree change.
 
 ```json
-{"buttonHeistVersion":"<calver>","type":"waitForChange","payload":{"expect":{"type":"screen_changed"},"timeout":10}}
+{"buttonHeistVersion":"<calver>","type":"waitForChange","payload":{"expect":{"type":"screen_changed"},"timeout":30}}
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `expect` | `ActionExpectation?` | The change to wait for — object form only, e.g. `{"type":"screen_changed"}`. When nil, any tree change satisfies. |
-| `timeout` | `Double?` | Max wait time in seconds (default: 10, max: 30) |
+| `timeout` | `Double?` | Max wait time in seconds (default: 30, max: 30) |
 
 Returns an `actionResult` with `method: "waitForChange"` and an `accessibilityDelta` describing what changed. If the current state already satisfies a state predicate such as `element_appeared`, `element_disappeared`, or `element_updated` with `newValue`, the result can succeed with `noChange`. On timeout, returns `success: false` with `errorKind: "timeout"`.
 
@@ -525,7 +525,7 @@ For `waitForChange`, `element_disappeared` is a current-state predicate: it is m
 
 **Fast paths**: if the current state already satisfies the expectation, returns immediately. If the tree already changed since the last response (while the agent was thinking), returns immediately with the accumulated delta.
 
-**Example flow**: `activate pay_now_button expect="screen_changed"` → delta shows spinner, expectation not met → `waitForChange expect="screen_changed" timeout=10` → receipt screen arrives, expectation met.
+**Example flow**: `activate pay_now_button expect="screen_changed"` → delta shows spinner, expectation not met → `waitForChange expect="screen_changed" timeout=30` → receipt screen arrives, expectation met.
 
 ### waitFor
 
@@ -1407,7 +1407,7 @@ Each collection is omitted when empty.
 | `fps` | `Int?` | Frames per second (1-15, default: 8) |
 | `scale` | `Double?` | Resolution scale of native pixels (0.25-1.0, default: 1x point size) |
 | `maxDuration` | `Double?` | Maximum recording duration in seconds (default: 60.0) |
-| `inactivityTimeout` | `Double?` | Optional early-stop seconds of inactivity; omitted follows `maxDuration` |
+| `inactivityTimeout` | `Double?` | Optional early-stop seconds of inactivity; omitted disables inactivity auto-stop |
 
 ### RecordingPayload
 
