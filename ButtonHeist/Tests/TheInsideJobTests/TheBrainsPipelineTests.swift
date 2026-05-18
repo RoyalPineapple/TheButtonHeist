@@ -94,7 +94,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             success: false,
             method: .getPasteboard,
             message: "pasteboard empty",
-            value: "",
+            payload: .value(""),
             before: before
         )
 
@@ -141,7 +141,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         let receipt = CommandReceipt(
             before: before,
-            attempt: .delivered(method: .typeText, message: "typed text", value: "hello"),
+            attempt: .delivered(method: .typeText, message: "typed text", payload: .value("hello")),
             settle: SettleReceipt(
                 outcome: .settled(timeMs: 321),
                 events: [],
@@ -155,12 +155,11 @@ final class TheBrainsPipelineTests: XCTestCase {
 
         var expectedBuilder = ActionResultBuilder(method: .typeText, capture: traceAfter)
         expectedBuilder.message = "typed text"
-        expectedBuilder.value = "hello"
         expectedBuilder.accessibilityDelta = delta
         expectedBuilder.accessibilityTrace = accessibilityTrace
         expectedBuilder.settled = true
         expectedBuilder.settleTimeMs = 321
-        let expected = expectedBuilder.success()
+        let expected = expectedBuilder.success(payload: .value("hello"))
 
         XCTAssertEqual(try canonicalJSON(projected), try canonicalJSON(expected))
         XCTAssertEqual(projected.screenName, "Receipt Screen")
@@ -176,6 +175,27 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(receipt.settle?.postCapture?.hash, postCapture.hash)
         XCTAssertEqual(receipt.settle?.accessibilityDelta, delta)
         XCTAssertEqual(receipt.settle?.accessibilityTrace, accessibilityTrace)
+    }
+
+    func testCommandReceiptDeliveredWithoutSettleCapturePreservesPayload() {
+        seedScreen(elements: [("Before", .header, "before_header")])
+        let before = brains.captureBeforeState()
+        let receipt = CommandReceipt(
+            before: before,
+            attempt: .delivered(method: .getPasteboard, message: "settle failed", payload: .value("hello")),
+            settle: nil
+        )
+
+        let result = receipt.actionResult()
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.message, "settle failed")
+        XCTAssertEqual(result.errorKind, .actionFailed)
+        guard case .value(let value) = result.payload else {
+            XCTFail("Expected .value payload, got \(String(describing: result.payload))")
+            return
+        }
+        XCTAssertEqual(value, "hello")
     }
 
     func testCommandReceiptProjectionDerivesScreenChangeFromTraceTransition() throws {

@@ -246,7 +246,7 @@ extension TheFence {
             elementTarget: try elementTarget(request),
             pointX: try request.schemaNumber("x"),
             pointY: try request.schemaNumber("y"),
-            duration: try request.schemaNumber("duration") ?? 0.5
+            duration: try schemaPositiveNumber(request, key: "duration") ?? 0.5
         )
     }
 
@@ -260,7 +260,7 @@ extension TheFence {
             endX: try request.schemaNumber("endX"),
             endY: try request.schemaNumber("endY"),
             direction: try request.schemaEnum("direction", as: SwipeDirection.self) { $0.lowercased() },
-            duration: try request.schemaNumber("duration"),
+            duration: try schemaPositiveNumber(request, key: "duration"),
             start: start,
             end: end
         )
@@ -273,7 +273,7 @@ extension TheFence {
             startY: try request.schemaNumber("startY") ?? request.schemaNumber("y"),
             endX: try request.requiredSchemaNumber("endX"),
             endY: try request.requiredSchemaNumber("endY"),
-            duration: try request.schemaNumber("duration")
+            duration: try schemaPositiveNumber(request, key: "duration")
         )
     }
 
@@ -282,9 +282,9 @@ extension TheFence {
             elementTarget: try elementTarget(request),
             centerX: try request.schemaNumber("centerX") ?? request.schemaNumber("x"),
             centerY: try request.schemaNumber("centerY") ?? request.schemaNumber("y"),
-            scale: try request.requiredSchemaNumber("scale"),
-            spread: try request.schemaNumber("spread"),
-            duration: try request.schemaNumber("duration")
+            scale: try requiredSchemaPositiveNumber(request, key: "scale"),
+            spread: try schemaPositiveNumber(request, key: "spread"),
+            duration: try schemaPositiveNumber(request, key: "duration")
         )
     }
 
@@ -294,8 +294,8 @@ extension TheFence {
             centerX: try request.schemaNumber("centerX") ?? request.schemaNumber("x"),
             centerY: try request.schemaNumber("centerY") ?? request.schemaNumber("y"),
             angle: try request.requiredSchemaNumber("angle"),
-            radius: try request.schemaNumber("radius"),
-            duration: try request.schemaNumber("duration")
+            radius: try schemaPositiveNumber(request, key: "radius"),
+            duration: try schemaPositiveNumber(request, key: "duration")
         )
     }
 
@@ -304,7 +304,7 @@ extension TheFence {
             elementTarget: try elementTarget(request),
             centerX: try request.schemaNumber("centerX") ?? request.schemaNumber("x"),
             centerY: try request.schemaNumber("centerY") ?? request.schemaNumber("y"),
-            spread: try request.schemaNumber("spread")
+            spread: try schemaPositiveNumber(request, key: "spread")
         )
     }
 
@@ -318,8 +318,8 @@ extension TheFence {
         }
         return DrawPathTarget(
             points: points,
-            duration: try request.schemaNumber("duration"),
-            velocity: try request.schemaNumber("velocity")
+            duration: try schemaPositiveNumber(request, key: "duration"),
+            velocity: try schemaPositiveNumber(request, key: "velocity")
         )
     }
 
@@ -341,10 +341,42 @@ extension TheFence {
             startX: startX,
             startY: startY,
             segments: segments,
-            samplesPerSegment: try request.schemaInteger("samplesPerSegment"),
-            duration: try request.schemaNumber("duration"),
-            velocity: try request.schemaNumber("velocity")
+            samplesPerSegment: try schemaPositiveInteger(request, key: "samplesPerSegment"),
+            duration: try schemaPositiveNumber(request, key: "duration"),
+            velocity: try schemaPositiveNumber(request, key: "velocity")
         )
+    }
+
+    private func requiredSchemaPositiveNumber(
+        _ dictionary: [String: Any],
+        key: String
+    ) throws -> Double {
+        guard let value = try schemaPositiveNumber(dictionary, key: key) else {
+            throw SchemaValidationError(field: key, observed: nil, expected: "number > 0")
+        }
+        return value
+    }
+
+    private func schemaPositiveNumber(
+        _ dictionary: [String: Any],
+        key: String
+    ) throws -> Double? {
+        guard let value = try dictionary.schemaNumber(key) else { return nil }
+        guard value > 0 else {
+            throw SchemaValidationError(field: key, observed: value, expected: "number > 0")
+        }
+        return value
+    }
+
+    private func schemaPositiveInteger(
+        _ dictionary: [String: Any],
+        key: String
+    ) throws -> Int? {
+        guard let value = try dictionary.schemaInteger(key) else { return nil }
+        guard value > 0 else {
+            throw SchemaValidationError(field: key, observed: value, expected: "integer > 0")
+        }
+        return value
     }
 
     private func schemaNumber(

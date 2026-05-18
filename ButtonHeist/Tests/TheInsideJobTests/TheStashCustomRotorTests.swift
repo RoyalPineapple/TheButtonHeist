@@ -285,7 +285,11 @@ final class TheStashRotorTests: XCTestCase {
         )
 
         XCTAssertTrue(search.success, search.message ?? "rotor failed")
-        XCTAssertEqual(search.rotorResult?.foundElement?.heistId, cachedHeistId)
+        guard case .rotor(let rotorResult)? = search.payload else {
+            XCTFail("Expected rotor payload, got \(String(describing: search.payload))")
+            return
+        }
+        XCTAssertEqual(rotorResult.foundElement?.heistId, cachedHeistId)
 
         let activate = await brains.executeCommand(.activate(.heistId(cachedHeistId)))
 

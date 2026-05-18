@@ -10,18 +10,18 @@ final class TheFenceBoolArgTests: XCTestCase {
         XCTAssertEqual(["key": false].boolean("key"), false)
     }
 
-    func testBooleanFromInt() {
-        XCTAssertEqual((["key": 1] as [String: Any]).boolean("key"), true)
-        XCTAssertEqual((["key": 0] as [String: Any]).boolean("key"), false)
-        XCTAssertEqual((["key": 42] as [String: Any]).boolean("key"), true)
+    func testBooleanRejectsInt() {
+        XCTAssertNil((["key": 1] as [String: Any]).boolean("key"))
+        XCTAssertNil((["key": 0] as [String: Any]).boolean("key"))
+        XCTAssertNil((["key": 42] as [String: Any]).boolean("key"))
     }
 
-    func testBooleanFromString() {
-        XCTAssertEqual((["key": "true"] as [String: Any]).boolean("key"), true)
-        XCTAssertEqual((["key": "1"] as [String: Any]).boolean("key"), true)
-        XCTAssertEqual((["key": "false"] as [String: Any]).boolean("key"), false)
-        XCTAssertEqual((["key": "0"] as [String: Any]).boolean("key"), false)
-        XCTAssertEqual((["key": "yes"] as [String: Any]).boolean("key"), false)
+    func testBooleanRejectsString() {
+        XCTAssertNil((["key": "true"] as [String: Any]).boolean("key"))
+        XCTAssertNil((["key": "1"] as [String: Any]).boolean("key"))
+        XCTAssertNil((["key": "false"] as [String: Any]).boolean("key"))
+        XCTAssertNil((["key": "0"] as [String: Any]).boolean("key"))
+        XCTAssertNil((["key": "yes"] as [String: Any]).boolean("key"))
     }
 
     func testBooleanMissing() {

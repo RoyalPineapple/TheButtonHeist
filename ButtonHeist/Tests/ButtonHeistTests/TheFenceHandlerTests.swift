@@ -239,14 +239,29 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(dict.integer("count"), 5)
     }
 
-    func testIntegerFromDouble() {
+    func testIntegerRejectsFractionalDouble() {
         let dict: [String: Any] = ["count": 5.7]
+        XCTAssertNil(dict.integer("count"))
+    }
+
+    func testIntegerFromWholeDouble() {
+        let dict: [String: Any] = ["count": 5.0]
         XCTAssertEqual(dict.integer("count"), 5)
     }
 
-    func testIntegerFromString() {
+    func testIntegerRejectsOutOfRangeDouble() {
+        let dict: [String: Any] = ["count": Double(Int.max)]
+        XCTAssertNil(dict.integer("count"))
+    }
+
+    func testIntegerRejectsString() {
         let dict: [String: Any] = ["count": "42"]
-        XCTAssertEqual(dict.integer("count"), 42)
+        XCTAssertNil(dict.integer("count"))
+    }
+
+    func testIntegerRejectsBool() {
+        let dict: [String: Any] = ["count": true]
+        XCTAssertNil(dict.integer("count"))
     }
 
     func testIntegerMissing() {
@@ -264,9 +279,14 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(dict.number("x"), 7.0)
     }
 
-    func testNumberFromString() {
+    func testNumberRejectsString() {
         let dict: [String: Any] = ["x": "2.5"]
-        XCTAssertEqual(dict.number("x"), 2.5)
+        XCTAssertNil(dict.number("x"))
+    }
+
+    func testNumberRejectsBool() {
+        let dict: [String: Any] = ["x": true]
+        XCTAssertNil(dict.number("x"))
     }
 
     func testNumberMissing() {
@@ -278,7 +298,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let dict: [String: Any] = ["d": 1.5, "i": 3, "s": "4.2", "bad": "notANumber"]
         XCTAssertEqual(dict.number("d"), 1.5)
         XCTAssertEqual(dict.number("i"), 3.0)
-        XCTAssertEqual(dict.number("s"), 4.2)
+        XCTAssertNil(dict.number("s"))
         XCTAssertNil(dict.number("missing"))
         XCTAssertNil(dict.number("bad"))
     }
@@ -385,12 +405,28 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testSchemaValidatedCoercionsStillWork() async {
+    func testSchemaValidatedStrictTypesStillWork() async {
         await assertPassesValidation(
-            ["command": "type_text", "deleteCount": "5"]
+            ["command": "type_text", "deleteCount": 5]
         )
         await assertPassesValidation(
-            ["command": "type_text", "clearFirst": "1"]
+            ["command": "type_text", "clearFirst": true]
+        )
+    }
+
+    @ButtonHeistActor
+    func testSchemaValidationRejectsStringIntegerCoercion() async {
+        await assertValidationError(
+            ["command": "type_text", "deleteCount": "5"],
+            equals: "schema validation failed for deleteCount: observed string \"5\"; expected integer"
+        )
+    }
+
+    @ButtonHeistActor
+    func testSchemaValidationRejectsStringBooleanCoercion() async {
+        await assertValidationError(
+            ["command": "type_text", "clearFirst": "1"],
+            equals: "schema validation failed for clearFirst: observed string \"1\"; expected boolean"
         )
     }
 
@@ -422,6 +458,22 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testOneFingerTapRejectsNaNCoordinate() async {
+        await assertValidationError(
+            ["command": "one_finger_tap", "x": Double.nan, "y": 200.0],
+            equals: "schema validation failed for x: observed number nan; expected number"
+        )
+    }
+
+    @ButtonHeistActor
+    func testOneFingerTapRejectsInfiniteCoordinate() async {
+        await assertValidationError(
+            ["command": "one_finger_tap", "x": Double.infinity, "y": 200.0],
+            equals: "schema validation failed for x: observed number inf; expected number"
+        )
+    }
+
+    @ButtonHeistActor
     func testOneFingerTapWithIdentifierPassesValidation() async {
         await assertPassesValidation(
             ["command": "one_finger_tap", "identifier": "myButton"]
@@ -440,6 +492,14 @@ final class TheFenceHandlerTests: XCTestCase {
     func testLongPressWithCoordinatesPassesValidation() async {
         await assertPassesValidation(
             ["command": "long_press", "x": 50.0, "y": 50.0]
+        )
+    }
+
+    @ButtonHeistActor
+    func testLongPressRejectsNegativeDuration() async {
+        await assertValidationError(
+            ["command": "long_press", "x": 50.0, "y": 50.0, "duration": -1.0],
+            equals: "schema validation failed for duration: observed number -1.0; expected number > 0"
         )
     }
 
@@ -486,6 +546,16 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testSwipeUnitPointsRejectOutOfRangeCoordinate() async {
+        await assertValidationError(
+            ["command": "swipe", "heistId": "row_5",
+             "start": ["x": 1.2, "y": 0.5],
+             "end": ["x": 0.2, "y": 0.5]],
+            equals: "schema validation failed for start.x: observed number 1.2; expected number in 0...1"
+        )
+    }
+
+    @ButtonHeistActor
     func testSwipeDirectionWithElementPassesValidation() async {
         await assertPassesValidation(
             ["command": "swipe", "heistId": "row_5", "direction": "left"]
@@ -528,7 +598,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testPinchMissingScale() async {
         await assertValidationError(
             ["command": "pinch"],
-            equals: "schema validation failed for scale: observed missing; expected number"
+            equals: "schema validation failed for scale: observed missing; expected number > 0"
         )
     }
 

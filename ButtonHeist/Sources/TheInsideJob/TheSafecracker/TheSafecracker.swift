@@ -75,6 +75,7 @@ final class TheSafecracker {
 
     /// Show a brief fingerprint indicator at a screen point.
     func showFingerprint(at point: CGPoint) {
+        guard GeometryValidation.validateScreenPoint(point) == nil else { return }
         fingerprints.showFingerprint(at: point)
     }
 
@@ -86,42 +87,50 @@ final class TheSafecracker {
         let success: Bool
         let method: ActionMethod
         let message: String?
-        let value: String?
-        let scrollSearchResult: ScrollSearchResult?
-        let rotorResult: RotorResult?
+        let payload: ResultPayload?
         /// Structural reason for failure when `success == false`. Lets dispatch code
         /// distinguish tree-unavailable from timeout without parsing `message`
         /// (which is user-facing copy, not a control-flow contract).
         let failureKind: FailureKind?
 
-        init(
+        private init(
             success: Bool,
             method: ActionMethod,
             message: String?,
-            value: String?,
-            scrollSearchResult: ScrollSearchResult? = nil,
-            rotorResult: RotorResult? = nil,
+            payload: ResultPayload?,
             failureKind: FailureKind? = nil
         ) {
             self.success = success
             self.method = method
             self.message = message
-            self.value = value
-            self.scrollSearchResult = scrollSearchResult
-            self.rotorResult = rotorResult
+            self.payload = payload
             self.failureKind = failureKind
+        }
+
+        static func success(
+            method: ActionMethod,
+            message: String? = nil,
+            payload: ResultPayload? = nil
+        ) -> InteractionResult {
+            InteractionResult(
+                success: true,
+                method: method,
+                message: message,
+                payload: payload
+            )
         }
 
         static func failure(
             _ method: ActionMethod,
             message: String,
+            payload: ResultPayload? = nil,
             failureKind: FailureKind? = nil
         ) -> InteractionResult {
             InteractionResult(
                 success: false,
                 method: method,
                 message: message,
-                value: nil,
+                payload: payload,
                 failureKind: failureKind
             )
         }
@@ -136,6 +145,8 @@ final class TheSafecracker {
         case treeUnavailable
         /// A polling/wait operation exceeded its budget.
         case timeout
+        /// Input geometry or other client-controlled values failed validation.
+        case inputValidation
     }
 
     // MARK: - Internal Touch State
@@ -156,6 +167,7 @@ final class TheSafecracker {
     /// - Parameter point: Point in screen coordinates
     /// - Returns: True if the touch events were dispatched (not necessarily handled)
     func tap(at point: CGPoint) async -> Bool {
+        guard Self.geometryIsValid([point], field: "tap point") else { return false }
         guard touchDown(at: point) else { return false }
         guard await Task.cancellableSleep(for: Self.gestureYieldDelay) else { return false }
         return touchUp()
@@ -168,6 +180,8 @@ final class TheSafecracker {
     ///   - point: Point in screen coordinates
     ///   - duration: How long to hold the press (seconds, default 0.5)
     func longPress(at point: CGPoint, duration: TimeInterval = 0.5) async -> Bool {
+        guard Self.geometryIsValid([point], field: "long press point") else { return false }
+        guard Self.durationIsValid(duration, field: "long press duration") else { return false }
         guard touchDown(at: point) else { return false }
         fingerprints.beginTrackingFingerprints(at: [point])
         onGestureMove?([point])
@@ -193,6 +207,8 @@ final class TheSafecracker {
     ///   - end: Ending point in screen coordinates
     ///   - duration: Duration of the swipe (seconds, default 0.15)
     func swipe(from start: CGPoint, to end: CGPoint, duration: TimeInterval = 0.15) async -> Bool {
+        guard Self.geometryIsValid([start, end], field: "swipe point") else { return false }
+        guard Self.durationIsValid(duration, field: "swipe duration") else { return false }
         let stepDelay: TimeInterval = 0.01
         let steps = max(Int(duration / stepDelay), 3)
         let waypoints = (1...steps).map { i -> CGPoint in
@@ -227,6 +243,8 @@ final class TheSafecracker {
     ///   - end: Ending point in screen coordinates
     ///   - duration: Duration of the drag (seconds, default 0.5)
     func drag(from start: CGPoint, to end: CGPoint, duration: TimeInterval = 0.5) async -> Bool {
+        guard Self.geometryIsValid([start, end], field: "drag point") else { return false }
+        guard Self.durationIsValid(duration, field: "drag duration") else { return false }
         let stepDelay: TimeInterval = 0.01
         let steps = max(Int(duration / stepDelay), 5)
         let waypoints = (1...steps).map { i -> CGPoint in
@@ -261,6 +279,8 @@ final class TheSafecracker {
     ///   - duration: Total duration of the gesture in seconds
     func drawPath(points: [CGPoint], duration: TimeInterval) async -> Bool {
         guard points.count >= 2 else { return false }
+        guard Self.geometryIsValid(points, field: "path point") else { return false }
+        guard Self.durationIsValid(duration, field: "path duration") else { return false }
 
         // Pre-compute: calculate segment lengths and total path length
         var totalLength: CGFloat = 0
@@ -415,6 +435,7 @@ final class TheSafecracker {
     /// Begin touches at N screen points simultaneously.
     func touchesDown(at points: [CGPoint]) -> Bool {
         guard !points.isEmpty else { return false }
+        guard Self.geometryIsValid(points, field: "touch point") else { return false }
         guard let window = windowForPoint(points[0]) else {
             insideJobLogger.error("No window found for point \(String(describing: points[0]))")
             return false
@@ -447,6 +468,7 @@ final class TheSafecracker {
     func moveTouches(to points: [CGPoint]) -> Bool {
         guard !activeTouches.isEmpty, let window = activeWindow else { return false }
         guard points.count == activeTouches.count else { return false }
+        guard Self.geometryIsValid(points, field: "touch move point") else { return false }
 
         for index in activeTouches.indices {
             let windowPoint = window.convert(points[index], from: nil)
@@ -494,11 +516,28 @@ final class TheSafecracker {
 
     // MARK: - Private
 
+    static func geometryIsValid(_ points: [CGPoint], field: String) -> Bool {
+        if let reason = GeometryValidation.validateScreenPoints(points, field: field) {
+            insideJobLogger.error("Rejected synthetic touch geometry: \(reason, privacy: .public)")
+            return false
+        }
+        return true
+    }
+
+    static func durationIsValid(_ duration: TimeInterval, field: String) -> Bool {
+        guard duration.isFinite, duration > 0 else {
+            insideJobLogger.error("Rejected synthetic touch timing: \(field, privacy: .public) must be finite and > 0")
+            return false
+        }
+        return true
+    }
+
     /// Find the correct window for a tap at the given screen point.
     /// Iterates all windows frontmost-first (highest windowLevel first),
     /// following KIF's pattern from UIApplication-KIFAdditions.m.
     /// Returns the first window whose hitTest succeeds at the point.
     private func windowForPoint(_ point: CGPoint) -> UIWindow? {
+        guard GeometryValidation.validateScreenPoint(point) == nil else { return nil }
         for window in TheTripwire.orderedVisibleWindows() {
             let windowPoint = window.convert(point, from: nil)
             if window.hitTest(windowPoint, with: nil) != nil {
