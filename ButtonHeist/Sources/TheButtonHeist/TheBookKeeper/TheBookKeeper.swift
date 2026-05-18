@@ -157,12 +157,7 @@ final class TheBookKeeper {
         FileManager.default.createFile(atPath: logPath.path, contents: nil)
         let logHandle = try FileHandle(forWritingTo: logPath)
 
-        let headerEntry: [String: Any] = [
-            "type": "header",
-            "formatVersion": SessionFormatVersion.current,
-            "sessionId": sessionId,
-        ]
-        try appendLogLine(headerEntry, to: logHandle)
+        try appendLogLine(buildHeaderLogEntry(sessionId: sessionId), to: logHandle)
 
         let startTime = Date()
         let manifest = SessionManifest(sessionId: sessionId, startTime: startTime)
@@ -248,17 +243,9 @@ final class TheBookKeeper {
 
     // MARK: - Logging
 
-    func logCommand(
-        requestId: String,
-        command: TheFence.Command,
-        arguments: [String: Any]
-    ) throws {
+    func logCommand(_ record: BookKeeperCommandRecord) throws {
         guard case .active(var session) = phase else { return }
-        let entry = buildCommandLogEntry(
-            requestId: requestId,
-            command: command,
-            arguments: arguments
-        )
+        let entry = buildCommandLogEntry(record)
         try appendLogLine(entry, to: session.logHandle)
         session.manifest.commandCount += 1
         phase = .active(session)
@@ -532,21 +519,19 @@ final class TheBookKeeper {
     ///     stable matchers. Caller is responsible for supplying the cache —
     ///     TheBookKeeper does not maintain its own copy.
     func recordHeistEvidence(
-        command: TheFence.Command,
-        args: [String: Any],
+        _ record: BookKeeperCommandRecord,
         actionResult: ActionResult? = nil,
         expectation: ExpectationResult? = nil,
         interfaceCache: [String: HeistElement]
     ) {
         guard case .active(let session) = phase,
               case .recording(let recording) = session.heistRecording else { return }
-        guard !Self.excludedHeistCommands.contains(command) else { return }
+        guard !Self.excludedHeistCommands.contains(record.command) else { return }
         guard actionResult?.success != false else { return }
         guard expectation?.met != false else { return }
 
         let step = buildStep(
-            command: command.rawValue,
-            args: args,
+            record: record,
             cache: Array(interfaceCache.values),
             interfaceCache: interfaceCache,
             actionResult: actionResult,
@@ -562,7 +547,9 @@ final class TheBookKeeper {
             lineData.append(contentsOf: [0x0A])
             recording.fileHandle.write(lineData)
         } catch {
-            logger.error("Failed to encode heist evidence for \(command.rawValue): \(error.localizedDescription)")
+            logger.error(
+                "Failed to encode heist evidence for \(record.command.rawValue): \(error.localizedDescription)"
+            )
             return
         }
     }
@@ -570,25 +557,37 @@ final class TheBookKeeper {
     // MARK: - Heist Step Construction
 
     private static let elementKeys: Set<String> = [
-        "heistId", "label", "identifier", "value", "traits", "excludeTraits",
+        BookKeeperCommandArgumentKey.heistId,
+        BookKeeperCommandArgumentKey.label,
+        BookKeeperCommandArgumentKey.identifier,
+        BookKeeperCommandArgumentKey.value,
+        BookKeeperCommandArgumentKey.traits,
+        BookKeeperCommandArgumentKey.excludeTraits,
     ]
 
     private static let stripKeys: Set<String> = [
-        "command", "heistId", "label", "identifier", "value", "traits", "excludeTraits",
-        "pngData", "videoData",
+        BookKeeperCommandArgumentKey.command,
+        BookKeeperCommandArgumentKey.heistId,
+        BookKeeperCommandArgumentKey.label,
+        BookKeeperCommandArgumentKey.identifier,
+        BookKeeperCommandArgumentKey.value,
+        BookKeeperCommandArgumentKey.traits,
+        BookKeeperCommandArgumentKey.excludeTraits,
+        BookKeeperCommandArgumentKey.pngData,
+        BookKeeperCommandArgumentKey.videoData,
     ]
 
     private func buildStep(
-        command: String,
-        args: [String: Any],
+        record: BookKeeperCommandRecord,
         cache: [HeistElement],
         interfaceCache: [String: HeistElement],
         actionResult: ActionResult?,
         expectation: ExpectationResult?
     ) -> HeistEvidence {
-        let heistId = args["heistId"] as? String
-        let hasMatcherFields = Self.elementKeys.subtracting(["heistId"]).contains { key in
-            args[key] != nil
+        let heistId = record.string(for: BookKeeperCommandArgumentKey.heistId)
+        let matcherKeys = Self.elementKeys.subtracting([BookKeeperCommandArgumentKey.heistId])
+        let hasMatcherFields = matcherKeys.contains { key in
+            record.contains(key)
         }
 
         var target: ElementMatcher?
@@ -614,34 +613,31 @@ final class TheBookKeeper {
             )
         } else if hasMatcherFields {
             target = ElementMatcher(
-                label: args["label"] as? String,
-                identifier: args["identifier"] as? String,
-                value: args["value"] as? String,
-                traits: (args["traits"] as? [String])?.compactMap { HeistTrait(rawValue: $0) },
-                excludeTraits: (args["excludeTraits"] as? [String])?.compactMap { HeistTrait(rawValue: $0) }
+                label: record.string(for: BookKeeperCommandArgumentKey.label),
+                identifier: record.string(for: BookKeeperCommandArgumentKey.identifier),
+                value: record.string(for: BookKeeperCommandArgumentKey.value),
+                traits: record.stringArray(for: BookKeeperCommandArgumentKey.traits)?.compactMap {
+                    HeistTrait(rawValue: $0)
+                },
+                excludeTraits: record.stringArray(for: BookKeeperCommandArgumentKey.excludeTraits)?.compactMap {
+                    HeistTrait(rawValue: $0)
+                }
             ).nonEmpty
             if let heistId {
                 recordedHeistId = heistId
             }
-        } else if hasCoordinateArgs(args) {
+        } else if hasCoordinateArgs(record) {
             coordinateOnly = true
         }
 
         var arguments: [String: HeistValue] = [:]
-        for (key, argValue) in args where !Self.stripKeys.contains(key) {
-            if let playbackValue = HeistValue.from(argValue) {
-                arguments[key] = playbackValue
-            } else {
-                unsupportedArguments.append(RecordedUnsupportedInput(
-                    name: key,
-                    valueType: Self.typeDescription(of: argValue),
-                    reason: "not JSON-compatible; omitted from replay arguments"
-                ))
-            }
+        for (key, argValue) in record.sortedPairs() where !Self.stripKeys.contains(key) {
+            arguments[key] = argValue
         }
+        unsupportedArguments = record.unsupportedArguments.filter { !Self.stripKeys.contains($0.name) }
 
         return HeistEvidence(
-            command: command,
+            command: record.command.rawValue,
             target: target,
             ordinal: ordinal,
             arguments: arguments,
@@ -707,12 +703,11 @@ final class TheBookKeeper {
         )
     }
 
-    private func hasCoordinateArgs(_ args: [String: Any]) -> Bool {
-        args["x"] != nil || args["startX"] != nil || args["centerX"] != nil || args["points"] != nil
-    }
-
-    private static func typeDescription(of value: Any) -> String {
-        String(describing: Swift.type(of: value))
+    private func hasCoordinateArgs(_ record: BookKeeperCommandRecord) -> Bool {
+        record.contains(BookKeeperCommandArgumentKey.x) ||
+            record.contains(BookKeeperCommandArgumentKey.startX) ||
+            record.contains(BookKeeperCommandArgumentKey.centerX) ||
+            record.contains(BookKeeperCommandArgumentKey.points)
     }
 
     // MARK: - Heist File I/O
