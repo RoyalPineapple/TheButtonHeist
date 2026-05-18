@@ -591,6 +591,13 @@ extension TheFence.Command {
     }
 
     private static func mcpDescription(for toolName: String) -> String {
+        mcpObservationDescription(for: toolName) ??
+            mcpInteractionDescription(for: toolName) ??
+            mcpSessionDescription(for: toolName) ??
+            "Execute the \(toolName) Button Heist tool."
+    }
+
+    private static func mcpObservationDescription(for toolName: String) -> String? {
         switch toolName {
         case Self.getInterface.rawValue:
             return """
@@ -600,6 +607,29 @@ extension TheFence.Command {
                 app accessibility state; use scope=visible only for diagnostic on-screen reads.
                 """
 
+        case Self.getScreen.rawValue:
+            return "Capture a PNG screenshot from the connected device. Returns inline base64 PNG image data. Use 'output' to save to a file path instead."
+
+        case Self.waitForChange.rawValue:
+            return """
+                Wait for the UI to change. With no expect, returns on any tree change. With expect, \
+                rides through intermediate states (spinners, loading) until the expectation is met. \
+                Use after an action whose delta showed a transient state and the expectation wasn't met yet.
+                """
+
+        case Self.waitFor.rawValue:
+            return """
+                Wait for an element matching a predicate to appear, or to disappear with absent=true. \
+                Polls on UI settle events. Returns the matched element or diagnostic info on timeout.
+                """
+
+        default:
+            return nil
+        }
+    }
+
+    private static func mcpInteractionDescription(for toolName: String) -> String? {
+        switch toolName {
         case Self.activate.rawValue:
             return """
                 Activate a UI element (VoiceOver-style double-tap): tap buttons, follow links, toggle \
@@ -619,37 +649,6 @@ extension TheFence.Command {
             return """
                 Type non-empty text via keyboard injection. Optionally target an \
                 element to focus it first and read back the resulting value.
-                """
-
-        case Self.waitFor.rawValue:
-            return """
-                Wait for an element matching a predicate to appear, or to disappear with absent=true. \
-                Polls on UI settle events. Returns the matched element or diagnostic info on timeout.
-                """
-
-        case Self.getScreen.rawValue:
-            return "Capture a PNG screenshot from the connected device. Returns inline base64 PNG image data. Use 'output' to save to a file path instead."
-
-        case Self.waitForChange.rawValue:
-            return """
-                Wait for the UI to change. With no expect, returns on any tree change. With expect, \
-                rides through intermediate states (spinners, loading) until the expectation is met. \
-                Use after an action whose delta showed a transient state and the expectation wasn't met yet.
-                """
-
-        case Self.startRecording.rawValue:
-            return "Start an H.264/MP4 screen recording. Recording auto-stops on inactivity or max duration."
-
-        case Self.stopRecording.rawValue:
-            return """
-                Stop an in-progress screen recording. Returns metadata only by default (raw video \
-                is too large for MCP context); pass 'output' to save the MP4 to a file path.
-                """
-
-        case Self.listDevices.rawValue:
-            return """
-                List iOS devices discovered via Bonjour plus named targets from .buttonheist.json. \
-                Empty when Bonjour is blocked and no config targets exist — use connect(device:token:) directly.
                 """
 
         case Self.scroll.rawValue:
@@ -684,13 +683,26 @@ extension TheFence.Command {
                 was written by another app.
                 """
 
-        case Self.runBatch.rawValue:
+        default:
+            return nil
+        }
+    }
+
+    private static func mcpSessionDescription(for toolName: String) -> String? {
+        switch toolName {
+        case Self.startRecording.rawValue:
+            return "Start an H.264/MP4 screen recording. Recording auto-stops on inactivity or max duration."
+
+        case Self.stopRecording.rawValue:
             return """
-                Execute multiple commands in one call. Each step is a JSON object with 'command' set \
-                to a canonical TheFence.Command name plus that command's parameters; grouped MCP tool \
-                names and selector shapes are not accepted inside batches. Attach 'expect' per step to verify \
-                inline. Returns ordered per-step results. \
-                policy=stop_on_error (default) or continue_on_error.
+                Stop an in-progress screen recording. Returns metadata only by default (raw video \
+                is too large for MCP context); pass 'output' to save the MP4 to a file path.
+                """
+
+        case Self.listDevices.rawValue:
+            return """
+                List iOS devices discovered via Bonjour plus named targets from .buttonheist.json. \
+                Empty when Bonjour is blocked and no config targets exist — use connect(device:token:) directly.
                 """
 
         case Self.getSessionState.rawValue:
@@ -711,6 +723,15 @@ extension TheFence.Command {
             return """
                 List named connection targets from .buttonheist.json (or ~/.config/buttonheist/config.json), \
                 including each target's address and which one is the default.
+                """
+
+        case Self.runBatch.rawValue:
+            return """
+                Execute multiple commands in one call. Each step is a JSON object with 'command' set \
+                to a canonical TheFence.Command name plus that command's parameters; grouped MCP tool \
+                names and selector shapes are not accepted inside batches. Attach 'expect' per step to verify \
+                inline. Returns ordered per-step results. \
+                policy=stop_on_error (default) or continue_on_error.
                 """
 
         case Self.getSessionLog.rawValue:
@@ -740,7 +761,7 @@ extension TheFence.Command {
                 """
 
         default:
-            return "Execute the \(toolName) Button Heist tool."
+            return nil
         }
     }
 
