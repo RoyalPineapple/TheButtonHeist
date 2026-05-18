@@ -754,7 +754,7 @@ public final class TheFence {
     }
 
     private func validateRequestKeys(command: Command, request: [String: Any]) throws {
-        let metadataKeys = Set(["command", "requestId", "timeout"])
+        let metadataKeys = Set(["command", "requestId"])
         let parameterKeys = Set(command.parameters.map(\.key))
         let allowedKeys = metadataKeys.union(parameterKeys)
         guard let unexpectedKey = request.keys.sorted().first(where: { !allowedKeys.contains($0) }) else {

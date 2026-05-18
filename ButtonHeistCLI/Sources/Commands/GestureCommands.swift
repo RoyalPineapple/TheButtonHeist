@@ -248,10 +248,10 @@ struct PinchSubcommand: AsyncParsableCommand, CLICommandContract {
     @OptionGroup var element: ElementTargetOptions
 
     @Option(name: .long, help: "Center X coordinate")
-    var x: Double?
+    var centerX: Double?
 
     @Option(name: .long, help: "Center Y coordinate")
-    var y: Double?
+    var centerY: Double?
 
     @Option(name: .long, help: "Scale factor (>1 zoom in, <1 zoom out)")
     var scale: Double
@@ -267,14 +267,14 @@ struct PinchSubcommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        guard element.hasTarget || (x != nil && y != nil) else {
-            throw ValidationError("Must specify a heistId, -id, or --x/--y coordinates")
+        guard element.hasTarget || (centerX != nil && centerY != nil) else {
+            throw ValidationError("Must specify a heistId, -id, or --center-x/--center-y coordinates")
         }
 
         var request = Self.fenceRequest([.scale: scale])
         try element.applyTo(&request)
-        if let x { request[.x] = x }
-        if let y { request[.y] = y }
+        if let centerX { request[.centerX] = centerX }
+        if let centerY { request[.centerY] = centerY }
         if let spread { request[.spread] = spread }
         if let duration { request[.duration] = duration }
 
@@ -297,10 +297,10 @@ struct RotateSubcommand: AsyncParsableCommand, CLICommandContract {
     @OptionGroup var element: ElementTargetOptions
 
     @Option(name: .long, help: "Center X coordinate")
-    var x: Double?
+    var centerX: Double?
 
     @Option(name: .long, help: "Center Y coordinate")
-    var y: Double?
+    var centerY: Double?
 
     @Option(name: .long, help: "Rotation angle in radians")
     var angle: Double
@@ -316,14 +316,14 @@ struct RotateSubcommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        guard element.hasTarget || (x != nil && y != nil) else {
-            throw ValidationError("Must specify a heistId, -id, or --x/--y coordinates")
+        guard element.hasTarget || (centerX != nil && centerY != nil) else {
+            throw ValidationError("Must specify a heistId, -id, or --center-x/--center-y coordinates")
         }
 
         var request = Self.fenceRequest([.angle: angle])
         try element.applyTo(&request)
-        if let x { request[.x] = x }
-        if let y { request[.y] = y }
+        if let centerX { request[.centerX] = centerX }
+        if let centerY { request[.centerY] = centerY }
         if let radius { request[.radius] = radius }
         if let duration { request[.duration] = duration }
 
@@ -346,10 +346,10 @@ struct TwoFingerTapSubcommand: AsyncParsableCommand, CLICommandContract {
     @OptionGroup var element: ElementTargetOptions
 
     @Option(name: .long, help: "Center X coordinate")
-    var x: Double?
+    var centerX: Double?
 
     @Option(name: .long, help: "Center Y coordinate")
-    var y: Double?
+    var centerY: Double?
 
     @Option(name: .long, help: "Distance between fingers in points (default 40)")
     var spread: Double?
@@ -359,14 +359,14 @@ struct TwoFingerTapSubcommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        guard element.hasTarget || (x != nil && y != nil) else {
-            throw ValidationError("Must specify a heistId, -id, or --x/--y coordinates")
+        guard element.hasTarget || (centerX != nil && centerY != nil) else {
+            throw ValidationError("Must specify a heistId, -id, or --center-x/--center-y coordinates")
         }
 
         var request = Self.fenceRequest()
         try element.applyTo(&request)
-        if let x { request[.x] = x }
-        if let y { request[.y] = y }
+        if let centerX { request[.centerX] = centerX }
+        if let centerY { request[.centerY] = centerY }
         if let spread { request[.spread] = spread }
 
         try await CLIRunner.run(

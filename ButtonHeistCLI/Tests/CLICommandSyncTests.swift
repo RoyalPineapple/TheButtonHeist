@@ -130,12 +130,17 @@ final class CLICommandSyncTests: XCTestCase {
 
         XCTAssertTrue(help.contains("--scope"), help)
         XCTAssertTrue(help.contains("visible"), help)
+        XCTAssertFalse(help.contains("--timeout"), help)
         XCTAssertFalse(help.contains("full"), help)
         XCTAssertFalse(help.contains("--full"), help)
     }
 
     func testGetInterfaceRejectsLegacyFullAlias() {
         XCTAssertThrowsError(try GetInterfaceCommand.parse(["--full"]))
+    }
+
+    func testGetInterfaceRejectsTimeoutOption() {
+        XCTAssertThrowsError(try GetInterfaceCommand.parse(["--timeout", "1"]))
     }
 
     func testRecordCommandLeavesOmittedInactivityTimeoutUnset() throws {

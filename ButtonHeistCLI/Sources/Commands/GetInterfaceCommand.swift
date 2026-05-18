@@ -19,14 +19,13 @@ struct GetInterfaceCommand: AsyncParsableCommand, CLICommandContract {
     @OptionGroup var connection: ConnectionOptions
 
     @OptionGroup var output: OutputOptions
-    @OptionGroup var timeoutOption: TimeoutOption
 
     @Option(help: "Diagnostic scope. Omit for app accessibility state; use visible for an on-screen parse")
     var scope: CLIGetInterfaceScope?
 
     @ButtonHeistActor
     mutating func run() async throws {
-        var request = Self.fenceRequest([.timeout: timeoutOption.timeout])
+        var request = Self.fenceRequest()
         if let scope { request[.scope] = scope.rawValue }
         try await CLIRunner.run(
             connection: connection,
