@@ -489,11 +489,11 @@ Public callback typealiases must declare their isolation in the closure type, no
 
 ```swift
 // Good
-public var onConnected: (@ButtonHeistActor (ServerInfo) -> Void)?
+public var onAuthApproved: (@ButtonHeistActor (String?) -> Void)?
 
 // Bad — isolation lives in a comment
 /// Fires on @ButtonHeistActor.
-public var onConnected: ((ServerInfo) -> Void)?
+public var onAuthApproved: ((String?) -> Void)?
 ```
 
 If a callback fires on a non-actor thread (network queue, ObjC runtime), still annotate explicitly: `@Sendable` for non-isolated, or document with the actor specified.

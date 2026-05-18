@@ -7,17 +7,14 @@ final class TheHandoffMessageTests: XCTestCase {
     // MARK: - .info
 
     @ButtonHeistActor
-    func testInfoSetsServerInfoAndCallsOnConnected() async {
+    func testInfoSetsServerInfo() async {
         let handoff = TheHandoff()
         connectMockHandoff(handoff)
-        var receivedInfo: ServerInfo?
-        handoff.onConnected = { receivedInfo = $0 }
 
         let info = makeServerInfo()
         handoff.handleServerMessage(.info(info), requestId: nil)
 
         XCTAssertEqual(handoff.serverInfo?.appName, "TestApp")
-        XCTAssertEqual(receivedInfo?.appName, "TestApp")
     }
 
     @ButtonHeistActor
@@ -153,10 +150,8 @@ final class TheHandoffMessageTests: XCTestCase {
     // MARK: - .protocolMismatch
 
     @ButtonHeistActor
-    func testProtocolMismatchCallsOnError() async {
+    func testProtocolMismatchTransitionsToFailed() async {
         let handoff = TheHandoff()
-        var receivedError: String?
-        handoff.onError = { receivedError = $0 }
 
         let payload = ProtocolMismatchPayload(
             serverButtonHeistVersion: "2026.05.09",
@@ -164,19 +159,19 @@ final class TheHandoffMessageTests: XCTestCase {
         )
         handoff.handleServerMessage(.protocolMismatch(payload), requestId: nil)
 
-        XCTAssertNotNil(receivedError)
-        XCTAssertTrue(receivedError?.contains("buttonHeistVersion mismatch") == true)
-        XCTAssertTrue(receivedError?.contains("2026.05.09") == true)
-        XCTAssertTrue(receivedError?.contains("2026.05.08") == true)
+        guard case .failed(.disconnected(.protocolMismatch(let message))) = handoff.connectionPhase else {
+            return XCTFail("Expected protocol mismatch failure, got \(handoff.connectionPhase)")
+        }
+        XCTAssertTrue(message.contains("buttonHeistVersion mismatch"))
+        XCTAssertTrue(message.contains("2026.05.09"))
+        XCTAssertTrue(message.contains("2026.05.08"))
     }
 
     @ButtonHeistActor
     func testRequestScopedErrorDoesNotFailConnection() async {
         let handoff = TheHandoff()
         connectMockHandoff(handoff)
-        var receivedError: String?
         var requestError: (serverError: ServerError, requestId: String)?
-        handoff.onError = { receivedError = $0 }
         handoff.onRequestError = { serverError, requestId in
             requestError = (serverError, requestId)
         }
@@ -184,7 +179,6 @@ final class TheHandoffMessageTests: XCTestCase {
 
         handoff.handleServerMessage(.error(ServerError(kind: .general, message: "Response too large")), requestId: "request-1")
 
-        XCTAssertNil(receivedError)
         XCTAssertEqual(requestError?.serverError.kind, .general)
         XCTAssertEqual(requestError?.serverError.message, "Response too large")
         XCTAssertEqual(requestError?.requestId, "request-1")

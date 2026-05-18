@@ -40,13 +40,11 @@ final class TheHandoffStateTests: XCTestCase {
     @ButtonHeistActor
     func testServerErrorSetsConnectionPhaseFailed() async {
         let handoff = TheHandoff()
-        var receivedError: String?
-        handoff.onError = { receivedError = $0 }
 
         handoff.handleServerMessage(.error(ServerError(kind: .general, message: "something went wrong")), requestId: nil)
 
         assertFailed(handoff.connectionPhase, failure: .connectionFailed("something went wrong"))
-        XCTAssertEqual(receivedError, "something went wrong")
+        XCTAssertEqual(handoff.connectionDiagnosticFailure, .connectionFailed("something went wrong"))
     }
 
     @ButtonHeistActor
@@ -1024,11 +1022,6 @@ final class TheHandoffStateTests: XCTestCase {
         mock.connectEventsOverride = []
         handoff.makeConnection = { _, _, _ in mock }
 
-        var connectedInfo: ServerInfo?
-        handoff.onConnected = { info in
-            connectedInfo = info
-        }
-
         handoff.connect(to: device)
         mock.onEvent?(.connected)
         mock.onEvent?(.message(
@@ -1043,7 +1036,6 @@ final class TheHandoffStateTests: XCTestCase {
             accessibilityTrace: nil
         ))
 
-        XCTAssertNil(connectedInfo)
         XCTAssertNil(handoff.serverInfo)
         assertFailed(handoff.connectionPhase, failure: .connectionFailed("connection failed"))
     }

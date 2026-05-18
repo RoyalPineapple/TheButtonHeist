@@ -372,8 +372,6 @@ final class TheHandoff {
 
     // MARK: - Connection Callbacks
 
-    /// Handshake completed successfully; `ServerInfo` carries server version + capabilities.
-    var onConnected: (@ButtonHeistActor (ServerInfo) -> Void)?
     /// The connection has dropped. `DisconnectReason` indicates whether this was local, remote, or error-driven.
     var onDisconnected: (@ButtonHeistActor (DisconnectReason) -> Void)?
     /// A `get_interface` response arrived. The trailing `String?` is the originating requestId (nil for unsolicited pushes).
@@ -385,8 +383,6 @@ final class TheHandoff {
     /// Recording lifecycle messages from the server. TheFence owns the
     /// client-side recording phase; TheHandoff only forwards typed messages.
     var onRecordingEvent: (@ButtonHeistActor (RecordingEvent) -> Void)?
-    /// General protocol/transport error reported by the server.
-    var onError: (@ButtonHeistActor (String) -> Void)?
     /// Error response for a specific in-flight request.
     var onRequestError: (@ButtonHeistActor (ServerError, String) -> Void)?
     /// Auth approved. The parameter is the approved token, or nil when reusing a persistent session.
@@ -667,7 +663,6 @@ final class TheHandoff {
         switch message {
         case .info(let info):
             mutateConnectedSession { $0.serverInfo = info }
-            onConnected?(info)
         case .interface(let payload):
             onInterface?(payload, requestId)
         case .actionResult(let result):
@@ -689,7 +684,6 @@ final class TheHandoff {
                     onRequestError?(serverError, requestId)
                 } else {
                     transitionToFailed(.connectionFailed(serverError.message))
-                    onError?(serverError.message)
                 }
             }
         case .authApproved(let payload):
@@ -702,7 +696,6 @@ final class TheHandoff {
         case .protocolMismatch(let payload):
             let message = "buttonHeistVersion mismatch: server=\(payload.serverButtonHeistVersion), client=\(payload.clientButtonHeistVersion)"
             transitionToFailed(.disconnected(.protocolMismatch(message)))
-            onError?(message)
         case .pong:
             mutateConnectedSession { $0.missedPongCount = 0 }
         case .recordingStopped:
