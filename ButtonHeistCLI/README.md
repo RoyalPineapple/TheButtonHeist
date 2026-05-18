@@ -162,9 +162,9 @@ Low-level gestures are top-level commands for coordinate-precise touch injection
 | `long_press` | `--identifier`, `--x/--y`, `--duration` (default 0.5) | Long press with configurable hold |
 | `swipe` | `--identifier`, `--direction`, `--from-x/y`, `--to-x/y`, `--distance`, `--duration` | Swipe by direction or between coordinates |
 | `drag` | `--from-x/y`, `--to-x/y` (required), `--duration` | Drag between two points (slower, for sliders/reordering) |
-| `pinch` | `--identifier`, `--x/--y`, `--scale` (required), `--spread`, `--duration` | Pinch/zoom gesture |
-| `rotate` | `--identifier`, `--x/--y`, `--angle` (required, radians), `--radius`, `--duration` | Two-finger rotation |
-| `two_finger_tap` | `--identifier`, `--x/--y`, `--spread` | Simultaneous two-finger tap |
+| `pinch` | `--identifier`, `--center-x/--center-y`, `--scale` (required), `--spread`, `--duration` | Pinch/zoom gesture |
+| `rotate` | `--identifier`, `--center-x/--center-y`, `--angle` (required, radians), `--radius`, `--duration` | Two-finger rotation |
+| `two_finger_tap` | `--identifier`, `--center-x/--center-y`, `--spread` | Simultaneous two-finger tap |
 | `draw_path` | `--points "x1,y1 x2,y2"` or `--path-file`, `--duration`, `--velocity` | Draw along a sequence of waypoints |
 | `draw_bezier` | `--bezier-file` (required), `--samples`, `--duration`, `--velocity` | Draw along cubic bezier curves |
 
@@ -178,7 +178,7 @@ buttonheist swipe --identifier list --direction up
 buttonheist swipe --from-x 200 --from-y 400 --to-x 200 --to-y 100
 buttonheist drag --from-x 100 --from-y 200 --to-x 300 --to-y 200
 buttonheist pinch --identifier mapView --scale 2.0
-buttonheist rotate --x 200 --y 300 --angle 1.57
+buttonheist rotate --center-x 200 --center-y 300 --angle 1.57
 buttonheist two_finger_tap --identifier zoomControl
 buttonheist draw_path --points "100,400 200,300 300,400" --duration 1.0
 buttonheist draw_bezier --bezier-file curve.json --velocity 300

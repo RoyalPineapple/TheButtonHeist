@@ -578,10 +578,10 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testDragXYAliasForStartXY() async {
+    func testDragWithStartCoordinatesDispatchesCanonicalPayload() async {
         let (fence, mockConn) = makeConnectedFence()
         _ = try? await fence.execute(request: [
-            "command": "drag", "x": 100.0, "y": 300.0, "endX": 300.0, "endY": 600.0
+            "command": "drag", "startX": 100.0, "startY": 300.0, "endX": 300.0, "endY": 600.0
         ])
         guard let (message, _) = mockConn.sent.last,
               case .touchDrag(let target) = message else {
@@ -592,6 +592,14 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(target.startY, 300.0)
         XCTAssertEqual(target.endX, 300.0)
         XCTAssertEqual(target.endY, 600.0)
+    }
+
+    @ButtonHeistActor
+    func testDragRejectsLegacyXYStartAliases() async {
+        await assertValidationError(
+            ["command": "drag", "x": 100.0, "y": 300.0, "endX": 300.0, "endY": 600.0],
+            equals: "schema validation failed for x: observed number 100.0; expected valid drag parameter"
+        )
     }
 
     @ButtonHeistActor
@@ -610,10 +618,10 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testPinchXYAliasForCenterXY() async {
+    func testPinchWithCenterCoordinatesDispatchesCanonicalPayload() async {
         let (fence, mockConn) = makeConnectedFence()
         _ = try? await fence.execute(request: [
-            "command": "pinch", "scale": 2.0, "x": 200.0, "y": 500.0
+            "command": "pinch", "scale": 2.0, "centerX": 200.0, "centerY": 500.0
         ])
         guard let (message, _) = mockConn.sent.last,
               case .touchPinch(let target) = message else {
@@ -625,27 +633,18 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testPinchCenterXYTakesPrecedenceOverXY() async {
-        let (fence, mockConn) = makeConnectedFence()
-        _ = try? await fence.execute(request: [
-            "command": "pinch", "scale": 2.0,
-            "centerX": 100.0, "centerY": 300.0,
-            "x": 999.0, "y": 999.0
-        ])
-        guard let (message, _) = mockConn.sent.last,
-              case .touchPinch(let target) = message else {
-            XCTFail("Expected touchPinch message")
-            return
-        }
-        XCTAssertEqual(target.centerX, 100.0)
-        XCTAssertEqual(target.centerY, 300.0)
+    func testPinchRejectsLegacyXYCenterAliases() async {
+        await assertValidationError(
+            ["command": "pinch", "scale": 2.0, "x": 200.0, "y": 500.0],
+            equals: "schema validation failed for x: observed number 200.0; expected valid pinch parameter"
+        )
     }
 
     @ButtonHeistActor
-    func testRotateXYAliasForCenterXY() async {
+    func testRotateWithCenterCoordinatesDispatchesCanonicalPayload() async {
         let (fence, mockConn) = makeConnectedFence()
         _ = try? await fence.execute(request: [
-            "command": "rotate", "angle": 1.57, "x": 150.0, "y": 400.0
+            "command": "rotate", "angle": 1.57, "centerX": 150.0, "centerY": 400.0
         ])
         guard let (message, _) = mockConn.sent.last,
               case .touchRotate(let target) = message else {
@@ -654,6 +653,14 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         XCTAssertEqual(target.centerX, 150.0)
         XCTAssertEqual(target.centerY, 400.0)
+    }
+
+    @ButtonHeistActor
+    func testRotateRejectsLegacyXYCenterAliases() async {
+        await assertValidationError(
+            ["command": "rotate", "angle": 1.57, "x": 150.0, "y": 400.0],
+            equals: "schema validation failed for x: observed number 150.0; expected valid rotate parameter"
+        )
     }
 
     @ButtonHeistActor
@@ -674,10 +681,10 @@ final class TheFenceHandlerTests: XCTestCase {
     // MARK: - Two Finger Tap
 
     @ButtonHeistActor
-    func testTwoFingerTapXYAliasForCenterXY() async {
+    func testTwoFingerTapWithCenterCoordinatesDispatchesCanonicalPayload() async {
         let (fence, mockConn) = makeConnectedFence()
         _ = try? await fence.execute(request: [
-            "command": "two_finger_tap", "x": 200.0, "y": 500.0
+            "command": "two_finger_tap", "centerX": 200.0, "centerY": 500.0
         ])
         guard let (message, _) = mockConn.sent.last,
               case .touchTwoFingerTap(let target) = message else {
@@ -686,6 +693,14 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         XCTAssertEqual(target.centerX, 200.0)
         XCTAssertEqual(target.centerY, 500.0)
+    }
+
+    @ButtonHeistActor
+    func testTwoFingerTapRejectsLegacyXYCenterAliases() async {
+        await assertValidationError(
+            ["command": "two_finger_tap", "x": 200.0, "y": 500.0],
+            equals: "schema validation failed for x: observed number 200.0; expected valid two_finger_tap parameter"
+        )
     }
 
     // MARK: - Draw Path Validation
@@ -2419,25 +2434,11 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testTimeoutIsAcceptedAsRequestControl() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-        mockConn.autoResponse = { message in
-            switch message {
-            case .explore:
-                return .actionResult(self.exploredActionResult(elements: [
-                    self.testElement("visible_button", label: "Visible", traits: [.button]),
-                ]))
-            default:
-                return .actionResult(ActionResult(success: true, method: .activate))
-            }
-        }
-
-        let response = try await fence.execute(request: [
-            "command": "get_interface",
-            "timeout": 15,
-        ])
-
-        XCTAssertFalse(response.isFailure)
+    func testTimeoutIsRejectedWhenCommandDoesNotConsumeIt() async {
+        await assertValidationError(
+            ["command": "get_interface", "timeout": 15],
+            equals: "schema validation failed for timeout: observed integer 15; expected valid get_interface parameter"
+        )
     }
 
     @ButtonHeistActor

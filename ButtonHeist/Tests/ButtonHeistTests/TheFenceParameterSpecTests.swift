@@ -1,0 +1,94 @@
+import XCTest
+@testable import ButtonHeist
+
+final class TheFenceParameterSpecTests: XCTestCase {
+
+    func testOptionalParametersDeclareNonCompatibilityRole() {
+        let issues = optionalParameterRoleIssues()
+
+        XCTAssertTrue(
+            issues.isEmpty,
+            "Optional parameter role issues:\n\(issues.joined(separator: "\n"))"
+        )
+    }
+
+    func testRemovedCompatibilityFieldsStayOutOfCommandSpecs() {
+        let removedFieldsByCommand: [TheFence.Command: Set<String>] = [
+            .getInterface: ["full"],
+            .typeText: ["clearFirst", "deleteCount"],
+            .performCustomAction: ["actionName"],
+            .drag: ["x", "y"],
+            .pinch: ["x", "y"],
+            .rotate: ["x", "y"],
+            .twoFingerTap: ["x", "y"],
+        ]
+
+        let offenders = removedFieldsByCommand.flatMap { command, removedFields in
+            let parameterKeys = Set(command.parameters.map(\.key))
+            return parameterKeys.intersection(removedFields).map { "\(command.rawValue).\($0)" }
+        }.sorted()
+
+        XCTAssertTrue(
+            offenders.isEmpty,
+            "Compatibility fields reintroduced into command specs:\n\(offenders.joined(separator: "\n"))"
+        )
+    }
+
+    private func optionalParameterRoleIssues() -> [String] {
+        var issues: [String] = []
+
+        for command in TheFence.Command.allCases {
+            collectOptionalParameterRoleIssues(
+                in: command.parameters,
+                context: command.rawValue,
+                issues: &issues
+            )
+        }
+
+        for contract in TheFence.Command.mcpToolContracts {
+            guard let selector = contract.selector else { continue }
+            collectOptionalParameterRoleIssues(
+                in: [selector.parameter],
+                context: "\(contract.name).selector",
+                issues: &issues
+            )
+        }
+
+        return issues.sorted()
+    }
+
+    private func collectOptionalParameterRoleIssues(
+        in specs: [FenceParameterSpec],
+        context: String,
+        issues: inout [String]
+    ) {
+        for spec in specs {
+            let specPath = "\(context).\(spec.key)"
+            if spec.required {
+                if let optionalRole = spec.optionalRole {
+                    issues.append("\(specPath) is required but declares optionalRole=\(optionalRole.rawValue)")
+                }
+            } else {
+                switch spec.optionalRole {
+                case .matcher, .payload, .behaviorSwitch:
+                    break
+                case .compatibility:
+                    issues.append("\(specPath) is compatibility optionality; delete the field instead")
+                case nil:
+                    issues.append("\(specPath) is optional but missing optionalRole")
+                }
+            }
+
+            collectOptionalParameterRoleIssues(
+                in: spec.objectProperties,
+                context: specPath,
+                issues: &issues
+            )
+            collectOptionalParameterRoleIssues(
+                in: spec.arrayItemProperties,
+                context: "\(specPath)[]",
+                issues: &issues
+            )
+        }
+    }
+}

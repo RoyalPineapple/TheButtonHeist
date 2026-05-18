@@ -87,8 +87,8 @@ extension TheFence {
     private func decodeDragTarget(_ request: [String: Any]) throws -> DragTarget {
         DragTarget(
             elementTarget: try elementTarget(request),
-            startX: try request.schemaNumber("startX") ?? request.schemaNumber("x"),
-            startY: try request.schemaNumber("startY") ?? request.schemaNumber("y"),
+            startX: try request.schemaNumber("startX"),
+            startY: try request.schemaNumber("startY"),
             endX: try request.requiredSchemaNumber("endX"),
             endY: try request.requiredSchemaNumber("endY"),
             duration: try schemaPositiveNumber(request, key: "duration")
@@ -98,8 +98,8 @@ extension TheFence {
     private func decodePinchTarget(_ request: [String: Any]) throws -> PinchTarget {
         PinchTarget(
             elementTarget: try elementTarget(request),
-            centerX: try request.schemaNumber("centerX") ?? request.schemaNumber("x"),
-            centerY: try request.schemaNumber("centerY") ?? request.schemaNumber("y"),
+            centerX: try request.schemaNumber("centerX"),
+            centerY: try request.schemaNumber("centerY"),
             scale: try requiredSchemaPositiveNumber(request, key: "scale"),
             spread: try schemaPositiveNumber(request, key: "spread"),
             duration: try schemaPositiveNumber(request, key: "duration")
@@ -109,8 +109,8 @@ extension TheFence {
     private func decodeRotateTarget(_ request: [String: Any]) throws -> RotateTarget {
         RotateTarget(
             elementTarget: try elementTarget(request),
-            centerX: try request.schemaNumber("centerX") ?? request.schemaNumber("x"),
-            centerY: try request.schemaNumber("centerY") ?? request.schemaNumber("y"),
+            centerX: try request.schemaNumber("centerX"),
+            centerY: try request.schemaNumber("centerY"),
             angle: try request.requiredSchemaNumber("angle"),
             radius: try schemaPositiveNumber(request, key: "radius"),
             duration: try schemaPositiveNumber(request, key: "duration")
@@ -120,8 +120,8 @@ extension TheFence {
     private func decodeTwoFingerTapTarget(_ request: [String: Any]) throws -> TwoFingerTapTarget {
         TwoFingerTapTarget(
             elementTarget: try elementTarget(request),
-            centerX: try request.schemaNumber("centerX") ?? request.schemaNumber("x"),
-            centerY: try request.schemaNumber("centerY") ?? request.schemaNumber("y"),
+            centerX: try request.schemaNumber("centerX"),
+            centerY: try request.schemaNumber("centerY"),
             spread: try schemaPositiveNumber(request, key: "spread")
         )
     }
