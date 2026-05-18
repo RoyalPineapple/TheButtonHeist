@@ -488,12 +488,11 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertNil(dispatchedPoint, "Known-only targets must not dispatch their stored activation point")
         XCTAssertDiagnostic(result.message, contains: [
-            "gesture target unavailable",
-            "method=syntheticTap",
-            "phase=targeting",
-            "heistId=\"below_fold_button\"",
-            "visible=false",
-            "element-derived gesture points require a live reachable element",
+            "ensure_on_screen failed",
+            "known target \"Below Fold\"",
+            "heistId: below_fold_button",
+            "no recorded scroll position",
+            "use element_search",
         ])
     }
 
