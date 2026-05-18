@@ -36,8 +36,8 @@ struct ScrollCommand: AsyncParsableCommand, CLICommandContract {
         }
 
         var request = Self.fenceRequest([
-            "direction": direction.lowercased(),
-            "timeout": timeoutOption.timeout,
+            .direction: direction.lowercased(),
+            .timeout: timeoutOption.timeout,
         ])
         try element.applyTo(&request)
 

@@ -41,62 +41,33 @@ struct ToolSyncTests {
     func allMCPToolsMapToValidCommands() {
         let commandRawValues = Set(TheFence.Command.allCases.map(\.rawValue))
 
-        // Collect grouped commands by their group tool name
-        var groupedCommands: [String: Set<String>] = [:]
-        for command in TheFence.Command.allCases {
-            if case .groupedUnder(let toolName) = command.mcpExposure {
-                groupedCommands[toolName, default: []].insert(command.rawValue)
-            }
-        }
-
         for tool in ToolDefinitions.all {
-            if let expectedCommands = groupedCommands[tool.name] {
-                // Grouped tool — verify its enum values match the grouped commands.
-                // gesture uses "type", scroll uses "mode", edit_action uses "action"
-                let enumProperty: String
-                switch tool.name {
-                case "gesture": enumProperty = "type"
-                case TheFence.Command.scroll.rawValue: enumProperty = "mode"
-                case TheFence.Command.editAction.rawValue: enumProperty = "action"
-                default: enumProperty = "type"
-                }
+            guard let contract = TheFence.Command.mcpToolContract(named: tool.name) else {
+                Issue.record("MCP tool '\(tool.name)' has no MCPToolContract")
+                continue
+            }
 
-                let enumValues = extractEnumValues(from: tool, property: enumProperty)
-
-                if tool.name == TheFence.Command.scroll.rawValue {
-                    // Scroll modes are synthetic names (page, to_visible, search, to_edge),
-                    // not command enum values. The boundary parses them into ScrollMode,
-                    // so the schema enum must match ScrollMode.allCases exactly.
-                    let expectedModes = Set(ScrollMode.allCases.map(\.rawValue))
+            if let selector = contract.selector {
+                let enumValues = extractEnumValues(from: tool, property: selector.parameter.key)
+                let expectedValues = Set(selector.parameter.enumValues ?? [])
+                #expect(
+                    enumValues == expectedValues,
+                    "\(tool.name).\(selector.parameter.key) enum should be rendered from the selector contract"
+                )
+                for enumValue in enumValues {
                     #expect(
-                        enumValues == expectedModes,
-                        "Scroll tool modes \(enumValues.sorted()) don't match expected \(expectedModes.sorted())"
+                        selector.command(for: enumValue) != nil,
+                        "\(tool.name) selector value '\(enumValue)' is not routed by MCPToolSelector"
                     )
-                } else if tool.name == TheFence.Command.editAction.rawValue {
-                    // edit_action has "dismiss" which maps to dismiss_keyboard,
-                    // plus the standard edit actions. Just verify "dismiss" is present.
-                    #expect(
-                        enumValues.contains("dismiss"),
-                        "edit_action tool missing 'dismiss' in action enum"
-                    )
-                } else {
-                    for typeName in enumValues {
-                        #expect(
-                            expectedCommands.contains(typeName),
-                            "\(tool.name) type '\(typeName)' is not a valid grouped command"
-                        )
-                    }
-                    for groupedCommand in expectedCommands {
-                        #expect(
-                            enumValues.contains(groupedCommand),
-                            "Grouped command '\(groupedCommand)' missing from \(tool.name) tool's enum"
-                        )
-                    }
                 }
             } else {
                 #expect(
                     commandRawValues.contains(tool.name),
                     "MCP tool '\(tool.name)' does not correspond to any TheFence.Command"
+                )
+                #expect(
+                    contract.commands.map(\.rawValue) == [tool.name],
+                    "\(tool.name) should be a one-command direct MCP contract"
                 )
             }
         }
@@ -105,7 +76,11 @@ struct ToolSyncTests {
     @Test("MCP direct tools stay aligned with direct commands")
     func directToolsStayAlignedWithDirectCommands() {
         // Tools that are purely grouped (no matching direct command name)
-        let purelyGroupedToolNames: Set<String> = ["gesture"]
+        let purelyGroupedToolNames = Set(
+            TheFence.Command.mcpToolContracts
+                .map(\.name)
+                .filter { TheFence.Command(rawValue: $0) == nil }
+        )
 
         let directToolNames = Set(
             ToolDefinitions.all
@@ -131,10 +106,15 @@ struct ToolSyncTests {
     // also routes to other commands via a mode/action parameter. Their schemas
     // are supersets of any individual command's spec, so we skip per-command
     // schema checks and validate them via the grouped tool coverage test instead.
-    private static let hybridToolNames: Set<String> = [
-        TheFence.Command.scroll.rawValue,
-        TheFence.Command.editAction.rawValue,
-    ]
+    private static let hybridToolNames: Set<String> = Set(
+        TheFence.Command.mcpToolContracts.compactMap { contract in
+            guard contract.selector != nil,
+                  TheFence.Command(rawValue: contract.name)?.mcpExposure == .directTool else {
+                return nil
+            }
+            return contract.name
+        }
+    )
 
     @Test("Direct tool schemas contain all parameter spec keys")
     func directToolSchemasContainSpecKeys() {
@@ -194,41 +174,26 @@ struct ToolSyncTests {
     func groupedToolsCoverAllGroupedParams() {
         let toolsByName = Dictionary(uniqueKeysWithValues: ToolDefinitions.all.map { ($0.name, $0) })
 
-        // Map of group tool name → synthetic keys added by the group (not in individual command specs)
-        let syntheticKeys: [String: Set<String>] = [
-            "gesture": ["type"],
-            TheFence.Command.scroll.rawValue: ["mode"],
-            TheFence.Command.editAction.rawValue: ["action"],
-        ]
-
-        // Collect grouped commands by tool name
-        var groupsByTool: [String: [TheFence.Command]] = [:]
-        for command in TheFence.Command.allCases {
-            if case .groupedUnder(let toolName) = command.mcpExposure {
-                groupsByTool[toolName, default: []].append(command)
-            }
-        }
-
-        for (toolName, commands) in groupsByTool {
-            guard let tool = toolsByName[toolName] else {
-                Issue.record("No tool found for group '\(toolName)'")
+        for contract in TheFence.Command.mcpToolContracts where contract.selector != nil {
+            guard let tool = toolsByName[contract.name] else {
+                Issue.record("No tool found for group '\(contract.name)'")
                 continue
             }
             let schemaKeys = extractPropertyKeys(from: tool)
-            let keysToIgnore = syntheticKeys[toolName] ?? []
+            let keysToIgnore = contract.selector.map { Set([$0.parameter.key]) } ?? []
             let schemaKeysMinusSynthetic = schemaKeys.subtracting(keysToIgnore)
 
             var allParamKeys = Set<String>()
-            for command in commands {
+            for command in contract.commands {
                 for param in command.parameters {
                     allParamKeys.insert(param.key)
                 }
             }
 
-            for paramKey in allParamKeys {
+            for paramKey in allParamKeys.subtracting(keysToIgnore) {
                 #expect(
                     schemaKeysMinusSynthetic.contains(paramKey),
-                    "\(toolName) param '\(paramKey)' is in a grouped command spec but missing from tool schema"
+                    "\(contract.name) param '\(paramKey)' is in a grouped command spec but missing from tool schema"
                 )
             }
         }
@@ -236,7 +201,7 @@ struct ToolSyncTests {
 
     @Test("Gesture drawing schemas describe array item shapes")
     func gestureDrawingSchemasDescribeArrayItemShapes() {
-        guard let gesture = ToolDefinitions.all.first(where: { $0.name == "gesture" }) else {
+        guard let gesture = ToolDefinitions.all.first(where: { $0.name == TheFence.Command.gestureMCPToolName }) else {
             Issue.record("No gesture tool found")
             return
         }
@@ -284,7 +249,7 @@ struct ToolSyncTests {
         #expect(extractEnumValues(from: scroll, property: "direction") == Set(ScrollDirection.allCases.map(\.rawValue)))
         #expect(extractEnumValues(from: scroll, property: "edge") == Set(ScrollEdge.allCases.map(\.rawValue)))
 
-        let gesture = ToolDefinitions.all.first { $0.name == "gesture" }
+        let gesture = ToolDefinitions.all.first { $0.name == TheFence.Command.gestureMCPToolName }
         #expect(extractEnumValues(from: gesture, property: "type") == Set(GestureType.allCases.map(\.rawValue)))
 
         let editAction = ToolDefinitions.all.first { $0.name == TheFence.Command.editAction.rawValue }
@@ -356,7 +321,7 @@ struct ToolSyncTests {
         #expect(!commandValues.contains(TheFence.Command.quit.rawValue))
         #expect(!commandValues.contains(TheFence.Command.exit.rawValue))
         #expect(!commandValues.contains(TheFence.Command.runBatch.rawValue))
-        #expect(!commandValues.contains("gesture"))
+        #expect(!commandValues.contains(TheFence.Command.gestureMCPToolName))
     }
 
     @Test("Expect schemas are projected from FenceParameterSpec")
@@ -445,8 +410,12 @@ struct ToolSyncTests {
             assertPropertySchemas(command.parameters, match: tool, enumPolicy: .exact)
         }
 
-        if let gesture = toolsByName["gesture"] {
-            assertPropertySchemas(groupedCommands(under: "gesture").flatMap(\.parameters), match: gesture, enumPolicy: .exact)
+        if let gesture = toolsByName[TheFence.Command.gestureMCPToolName] {
+            assertPropertySchemas(
+                groupedCommands(under: TheFence.Command.gestureMCPToolName).flatMap(\.parameters),
+                match: gesture,
+                enumPolicy: .exact
+            )
         }
         if let scroll = toolsByName[TheFence.Command.scroll.rawValue] {
             assertPropertySchemas(
@@ -479,10 +448,59 @@ struct ToolSyncTests {
         }
     }
 
+    @Test("MCP adapter source does not mirror Fence command or parameter literals")
+    func mcpAdapterSourceDoesNotMirrorFenceCatalogLiterals() throws {
+        let source = try readRepositoryFile("ButtonHeistMCP/Sources/ToolDefinitions.swift")
+
+        let sourceWithoutContractRoot = source.replacingOccurrences(of: "TheFence.Command.mcpToolContracts", with: "")
+        #expect(
+            !sourceWithoutContractRoot.contains("TheFence.Command."),
+            "ToolDefinitions.swift should render from MCPToolContract instead of referencing command cases"
+        )
+        #expect(
+            !source.contains(".rawValue"),
+            "ToolDefinitions.swift should not render command names through rawValue references"
+        )
+
+        let sourceForLiteralScan = Self.removingLineComments(from: source)
+        let literalCounts = Self.stringLiteralCounts(in: sourceForLiteralScan)
+        for (literal, expectedCount) in Self.expectedSchemaRendererCatalogLiteralCounts {
+            #expect(
+                literalCounts[literal] == expectedCount,
+                """
+                ToolDefinitions.swift contains \(literalCounts[literal] ?? 0) occurrences of the \
+                catalog literal \(literal), expected \(expectedCount) schema-renderer occurrences
+                """
+            )
+        }
+
+        let literalMirrors = Set(literalCounts.keys)
+            .intersection(Self.fenceCatalogLiterals)
+            .subtracting(Self.allowedSchemaRendererLiterals)
+        #expect(
+            literalMirrors.isEmpty,
+            "ToolDefinitions.swift should render command/parameter names from Fence specs, not mirror literals: \(literalMirrors.sorted())"
+        )
+    }
+
+    @Test("FenceParameterKey covers every advertised command parameter")
+    func fenceParameterKeyCoversEveryAdvertisedCommandParameter() {
+        let advertisedKeys = Self.fenceCatalogLiterals
+            .subtracting(TheFence.Command.allCases.map(\.rawValue))
+            .subtracting(TheFence.Command.mcpToolContracts.map(\.name))
+        let knownKeys = Set(FenceParameterKey.allCases.map(\.rawValue))
+        let missingKeys = advertisedKeys.subtracting(knownKeys)
+
+        #expect(
+            missingKeys.isEmpty,
+            "FenceParameterKey is missing advertised parameter keys: \(missingKeys.sorted())"
+        )
+    }
+
     @Test("Grouped MCP selectors are owned by command contracts")
     func groupedMCPSelectorsAreOwnedByCommandContracts() {
         assertSelectorContract(
-            toolName: "gesture",
+            toolName: TheFence.Command.gestureMCPToolName,
             key: "type",
             requiredKeys: ["type"],
             enumValues: GestureType.allCases.map(\.rawValue)
@@ -532,12 +550,17 @@ struct ToolSyncTests {
         }
     }
 
-    @Test("Every MCP tool has an explicit adapter description")
-    func everyMCPToolHasExplicitAdapterDescription() {
-        for tool in ToolDefinitions.all {
+    @Test("Every MCP tool contract has an explicit description")
+    func everyMCPToolContractHasExplicitDescription() {
+        let toolsByName = Dictionary(uniqueKeysWithValues: ToolDefinitions.all.map { ($0.name, $0) })
+        for contract in TheFence.Command.mcpToolContracts {
             #expect(
-                tool.description != "Execute the \(tool.name) Button Heist tool.",
-                "\(tool.name) is using the generic description fallback"
+                !contract.description.hasPrefix("Execute the"),
+                "\(contract.name) is using the generic description fallback"
+            )
+            #expect(
+                toolsByName[contract.name]?.description == contract.description,
+                "\(contract.name) rendered description should come from MCPToolContract"
             )
         }
     }
@@ -601,6 +624,76 @@ struct ToolSyncTests {
     }
 
     // MARK: - Helpers
+
+    private static let allowedSchemaRendererLiterals: Set<String> = [
+        "additionalProperties",
+        "array",
+        "boolean",
+        "description",
+        "enum",
+        "integer",
+        "items",
+        "maximum",
+        "minimum",
+        "minLength",
+        "number",
+        "object",
+        "properties",
+        "required",
+        "string",
+        "type",
+    ]
+
+    private static let expectedSchemaRendererCatalogLiteralCounts: [String: Int] = [
+        "type": 5,
+    ]
+
+    private static var fenceCatalogLiterals: Set<String> {
+        var literals = Set(TheFence.Command.allCases.map(\.rawValue))
+        literals.formUnion(TheFence.Command.mcpToolContracts.map(\.name))
+
+        for command in TheFence.Command.allCases {
+            collectParameterKeys(from: command.parameters, into: &literals)
+        }
+        for contract in TheFence.Command.mcpToolContracts {
+            if let selector = contract.selector {
+                collectParameterKeys(from: [selector.parameter], into: &literals)
+            }
+        }
+
+        return literals
+    }
+
+    private static func collectParameterKeys(
+        from specs: [FenceParameterSpec],
+        into literals: inout Set<String>
+    ) {
+        for spec in specs {
+            literals.insert(spec.key)
+            collectParameterKeys(from: spec.objectProperties, into: &literals)
+            collectParameterKeys(from: spec.arrayItemProperties, into: &literals)
+        }
+    }
+
+    private static func removingLineComments(from source: String) -> String {
+        source.replacingOccurrences(of: #"//.*"#, with: "", options: .regularExpression)
+    }
+
+    private static func stringLiterals(in source: String) -> Set<String> {
+        Set(stringLiteralCounts(in: source).keys)
+    }
+
+    private static func stringLiteralCounts(in source: String) -> [String: Int] {
+        guard let regex = try? NSRegularExpression(pattern: #""((?:\\.|[^"\\])*)""#) else {
+            return [:]
+        }
+        let range = NSRange(source.startIndex..<source.endIndex, in: source)
+        let literals: [String] = regex.matches(in: source, range: range).compactMap { match in
+            guard let literalRange = Range(match.range(at: 1), in: source) else { return nil }
+            return String(source[literalRange])
+        }
+        return Dictionary(literals.map { ($0, 1) }, uniquingKeysWith: +)
+    }
 
     private func readRepositoryFile(_ path: String) throws -> String {
         let data = try Data(contentsOf: repositoryRoot().appendingPathComponent(path))

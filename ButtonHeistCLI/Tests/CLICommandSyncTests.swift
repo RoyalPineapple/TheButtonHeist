@@ -70,10 +70,17 @@ final class CLICommandSyncTests: XCTestCase {
     func testCommandSourcesDoNotBypassFenceCommandRenderer() throws {
         let sourceFiles = try swiftSourceFiles(under: "ButtonHeistCLI/Sources/Commands")
             + swiftSourceFiles(under: "ButtonHeistCLI/Sources/Session")
+            + swiftSourceFiles(under: "ButtonHeistCLI/Sources/Support")
         let disallowedPatterns = [
             #"commandName:\s*TheFence\.Command"#,
             #""command"\s*:\s*TheFence\.Command"#,
             #"TheFence\.Command\.[A-Za-z0-9_]+\.rawValue"#,
+        ]
+        let mirroredFenceKeys = Set(FenceParameterKey.allCases.map(\.rawValue))
+        let requestKeyPatterns = [
+            #"(?:request|result|parsed|dictionary)\["([^"]+)"\]"#,
+            #"(?:fenceRequest|cliRequest)\(\["([^"]+)"\s*:"#,
+            #"return\s+\["([^"]+)"\s*:"#,
         ]
 
         for file in sourceFiles {
@@ -82,6 +89,15 @@ final class CLICommandSyncTests: XCTestCase {
                 XCTAssertNil(
                     contents.range(of: pattern, options: .regularExpression),
                     "\(relativePath(file)) should use CLICommandContract / TheFence.Command.cliRequest() instead of bypassing the renderer"
+                )
+            }
+
+            for pattern in requestKeyPatterns {
+                let mirroredLiterals = Set(captureGroupMatches(in: contents, pattern: pattern))
+                    .intersection(mirroredFenceKeys)
+                XCTAssertTrue(
+                    mirroredLiterals.isEmpty,
+                    "\(relativePath(file)) should use FenceParameterKey instead of mirrored request keys: \(mirroredLiterals.sorted())"
                 )
             }
         }
@@ -203,6 +219,21 @@ final class CLICommandSyncTests: XCTestCase {
             guard trimmed.hasPrefix("| `") else { return nil }
             return trimmed.dropFirst(3).split(separator: "`", maxSplits: 1).first.map(String.init)
         })
+    }
+
+    private func captureGroupMatches(in contents: String, pattern: String) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            XCTFail("Invalid regex pattern: \(pattern)")
+            return []
+        }
+        let range = NSRange(contents.startIndex..<contents.endIndex, in: contents)
+        return regex.matches(in: contents, range: range).compactMap { match in
+            guard match.numberOfRanges > 1,
+                  let matchRange = Range(match.range(at: 1), in: contents) else {
+                return nil
+            }
+            return String(contents[matchRange])
+        }
     }
 
     private func swiftSourceFiles(under relativePath: String) throws -> [URL] {

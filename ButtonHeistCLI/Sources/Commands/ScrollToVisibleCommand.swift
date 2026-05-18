@@ -29,7 +29,7 @@ struct ScrollToVisibleCommand: AsyncParsableCommand, CLICommandContract {
     mutating func run() async throws {
         _ = try element.requireTarget()
 
-        var request = Self.fenceRequest(["timeout": timeout])
+        var request = Self.fenceRequest([.timeout: timeout])
         try element.applyTo(&request)
 
         try await CLIRunner.run(

@@ -1,11 +1,12 @@
 import ArgumentParser
+import ButtonHeist
 import Foundation
 
 enum ExpectationArgumentParser {
     static func parse(_ rawValue: String) throws -> [String: Any] {
         let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         if let shorthand = shorthandType(for: trimmed) {
-            return ["type": shorthand]
+            return FenceParameterKey.rawDictionary([.type: shorthand])
         }
 
         guard trimmed.first == "{" else {

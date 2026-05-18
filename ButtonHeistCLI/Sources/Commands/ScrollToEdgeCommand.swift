@@ -36,8 +36,8 @@ struct ScrollToEdgeCommand: AsyncParsableCommand, CLICommandContract {
         }
 
         var request = Self.fenceRequest([
-            "edge": edge.lowercased(),
-            "timeout": timeoutOption.timeout,
+            .edge: edge.lowercased(),
+            .timeout: timeoutOption.timeout,
         ])
         try element.applyTo(&request)
 

@@ -19,7 +19,7 @@ struct ScreenshotCommand: AsyncParsableCommand, CLICommandContract {
     func run() async throws {
         var request = Self.fenceRequest()
         if let outputPath = output {
-            request["output"] = outputPath
+            request[.output] = outputPath
             try await CLIRunner.run(
                 connection: connection,
                 format: .human,

@@ -23,7 +23,7 @@ struct PlayHeistCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     func run() async throws {
-        let request = Self.fenceRequest(["input": input])
+        let request = Self.fenceRequest([.input: input])
 
         if let junitPath = junit {
             let (fence, response) = try await CLIRunner.execute(
