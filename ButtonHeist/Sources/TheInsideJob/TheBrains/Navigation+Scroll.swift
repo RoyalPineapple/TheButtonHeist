@@ -40,13 +40,13 @@ extension Navigation {
 
     struct ScrollProof: Equatable {
         let moved: Bool
-        let previousVisibleIds: Set<String>
+        let previousVisibleIds: Set<HeistId>
 
         var atEdge: Bool {
             !moved
         }
 
-        func visibleStateUnchanged(after visibleIds: Set<String>) -> Bool {
+        func visibleStateUnchanged(after visibleIds: Set<HeistId>) -> Bool {
             visibleIds == previousVisibleIds
         }
     }
@@ -185,7 +185,7 @@ extension Navigation {
     /// Parse through post-gesture spring/inertia and consider the swipe settled
     /// when no new elements are discovered for a short consecutive frame window.
     private func settleSwipeMotion(
-        previousVisibleIds: Set<String>,
+        previousVisibleIds: Set<HeistId>,
         previousAnchor: Int?,
         requireDirectionChangeSettle: Bool
     ) async -> Bool {
@@ -365,12 +365,11 @@ extension Navigation {
         }
     }
 
-    // MARK: - Scroll To Visible (One-Shot)
+    // MARK: - Scroll To Visible (Inflation)
 
-    /// One-shot scroll: jump directly to a known element's position.
-    /// If already visible, no-op. If the element has a recorded content-space
-    /// position, computes the target offset and scrolls there in one shot.
-    /// Fails if the element is not in the current screen or has no scroll position.
+    /// Reveal a target. If already visible, nudge it into the comfort zone. If
+    /// it is known-only, inflate it by scrolling a live parent derived from the
+    /// current graph, then prove success through a fresh visible resolution.
     func executeScrollToVisible(
         _ target: ScrollToVisibleTarget,
         recordedScreen: Screen? = nil
@@ -382,8 +381,8 @@ extension Navigation {
         stash.refresh()
 
         // Already visible — ensure it's in the comfort zone and return.
-        // Known entries can guide a jump, but only the live visible hierarchy
-        // can prove scroll_to_visible success.
+        // Known entries can guide inflation, but only the live visible
+        // hierarchy can prove scroll_to_visible success.
         if let found = stash.resolveVisibleTarget(elementTarget).resolved {
             guard ensureOnScreenSync(found) else {
                 return .failure(
@@ -394,10 +393,14 @@ extension Navigation {
             return .success(method: .scrollToVisible, message: "Already visible")
         }
 
-        // Known element with recorded position — one-shot jump
         let knownScreen = recordedScreen ?? stash.currentScreen
-        if let entry = knownOffscreenEntry(for: elementTarget, in: knownScreen),
-           stash.jumpToRecordedPosition(entry) != nil {
+        if let entry = knownOffscreenEntry(for: elementTarget, in: knownScreen) {
+            guard case .resolved = stash.inflateKnownTarget(entry) else {
+                return .failure(
+                    .scrollToVisible,
+                    message: scrollToVisibleKnownTargetFailureMessage(entry)
+                )
+            }
             await tripwire.yieldRealFrames(Self.postJumpRealFrames)
             refresh()
             var liveResolution = stash.resolveVisibleTarget(elementTarget)
@@ -411,7 +414,7 @@ extension Navigation {
                 }
             }
             let suffix = liveResolution.diagnostics.isEmpty ? "" : ": \(liveResolution.diagnostics)"
-            return .failure(.scrollToVisible, message: "Element not visible after scrolling to recorded position\(suffix)")
+            return .failure(.scrollToVisible, message: "Element not visible after inflation\(suffix)")
         }
 
         return .failure(.scrollToVisible,
@@ -697,7 +700,7 @@ extension Navigation {
 
         let knownScreen = recordedScreen ?? stash.currentScreen
         if let entry = knownOffscreenEntry(for: target, in: knownScreen) {
-            guard stash.jumpToRecordedPosition(entry) != nil else {
+            guard case .resolved = stash.inflateKnownTarget(entry) else {
                 return .failed(.actionFailed(
                     "ensure_on_screen failed: \(scrollToVisibleKnownTargetFailureMessage(entry))"
                 ))
@@ -709,7 +712,7 @@ extension Navigation {
             guard let liveTarget = liveResolution.resolved else {
                 let suffix = liveResolution.diagnostics.isEmpty ? "" : ": \(liveResolution.diagnostics)"
                 return .failed(.elementNotFound(
-                    "ensure_on_screen failed: target was not visible after recorded-position recovery\(suffix)"
+                    "ensure_on_screen failed: target was not visible after inflation\(suffix)"
                 ))
             }
             let ensureResult = await ensureVisibleResolvedTarget(liveTarget)
@@ -718,7 +721,7 @@ extension Navigation {
             refresh()
             guard stash.resolveVisibleTarget(target).resolved != nil else {
                 return .failed(.elementNotFound(
-                    "ensure_on_screen failed: target disappeared after recorded-position recovery"
+                    "ensure_on_screen failed: target disappeared after inflation"
                 ))
             }
             return .recoveredKnownOffscreen
@@ -728,7 +731,7 @@ extension Navigation {
         case .resolved(let resolved):
             return .failed(.elementNotFound(
                 "ensure_on_screen failed: target \(Self.describeScrollTarget(resolved.screenElement)) "
-                    + "is known but not currently visible and has no usable recorded scroll position; "
+                    + "is known but not currently visible and could not be inflated; "
                     + "use \(ScrollMode.toVisible.canonicalCommand) or \(ScrollMode.search.canonicalCommand)."
             ))
         case .notFound(let diagnostics), .ambiguous(_, let diagnostics):
@@ -786,9 +789,9 @@ extension Navigation {
     // MARK: - Known Offscreen Lookup
 
     /// Find a known element that matches `target` but is NOT in the live
-    /// viewport. Used by `scroll_to_visible` and `element_search` to jump to a
-    /// recorded position when an element scrolled out of view since the last
-    /// exploration committed.
+    /// viewport. Used by `scroll_to_visible` and `element_search` to inflate a
+    /// target when an element scrolled out of view since the last exploration
+    /// committed.
     ///
     /// Returns nil if the element is already on-screen or unknown. Callers that
     /// preserve a known semantic screen across a visible refresh pass it in
@@ -815,20 +818,24 @@ extension Navigation {
 
     private func scrollToVisibleKnownTargetFailureMessage(_ entry: Screen.ScreenElement) -> String {
         let description = Self.describeScrollTarget(entry)
-        if entry.contentSpaceOrigin == nil {
-            return "\(ScrollMode.toVisible.canonicalCommand) failed: known target \(description) has no recorded scroll position; "
+        switch stash.resolveInflationScrollView(for: entry) {
+        case .resolved:
+            return "\(ScrollMode.toVisible.canonicalCommand) failed: known target \(description) could not be inflated; "
                 + "use \(ScrollMode.search.canonicalCommand) to find it by scrolling"
-        }
-        guard let scrollView = entry.scrollView else {
-            return "\(ScrollMode.toVisible.canonicalCommand) failed: known target \(description) has no live scrollable ancestor; "
+        case .failed(.missingContentOrigin):
+            return "\(ScrollMode.toVisible.canonicalCommand) failed: known target \(description) has no content-space position; "
                 + "use \(ScrollMode.search.canonicalCommand) to find it by scrolling"
-        }
-        if scrollView.bhIsUnsafeForProgrammaticScrolling {
+        case .failed(.noLiveScrollableAncestor):
+            return "\(ScrollMode.toVisible.canonicalCommand) failed: known target \(description) is not inflated because no live "
+                + "scrollable ancestor is available; use \(ScrollMode.search.canonicalCommand) to find it by scrolling"
+        case .failed(.ambiguousLiveScrollableAncestor):
+            return "\(ScrollMode.toVisible.canonicalCommand) failed: known target \(description) is not inflated because the "
+                + "current graph does not identify a unique live scrollable ancestor; use "
+                + "\(ScrollMode.search.canonicalCommand) to find it by scrolling"
+        case .failed(.unsafeProgrammaticScroll):
             return "\(ScrollMode.toVisible.canonicalCommand) failed: known target \(description) is inside a scroll view that is "
                 + "unsafe for programmatic scrolling; use \(ScrollMode.search.canonicalCommand) to use semantic search"
         }
-        return "\(ScrollMode.toVisible.canonicalCommand) failed: known target \(description) could not be moved to its recorded position; "
-            + "use \(ScrollMode.search.canonicalCommand) to find it by scrolling"
     }
 
     /// Scroll either reveals the requested target or returns a reason it cannot.
@@ -849,7 +856,7 @@ extension Navigation {
                 method,
                 message: "\(commandName) failed: target is not uniquely resolved in the visible hierarchy; "
                     + "\(diagnostics)\nNext: use \(ScrollMode.toVisible.canonicalCommand) with a heistId for a known off-screen "
-                    + "target, or retarget a visible element from get_interface(scope: \"visible\")."
+                    + "target, or retarget from get_screen's visible interface."
             )
         case .notFound(let diagnostics):
             return .failure(.elementNotFound, message: diagnostics)
@@ -883,7 +890,7 @@ extension Navigation {
         screenElement: TheStash.ScreenElement,
         axis: ScrollAxis? = nil
     ) -> ScrollTargetResolution {
-        guard let scrollView = screenElement.scrollView else {
+        guard let scrollView = stash.liveScrollView(for: screenElement) else {
             return .failed(ScrollTargetDiagnostic(reason: .noScrollView))
         }
 

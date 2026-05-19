@@ -56,7 +56,7 @@ final class TheBurglarApplyTests: XCTestCase {
 
         let screen = TheBurglar.buildScreen(from: result)
 
-        XCTAssertEqual(screen.heistIdByElement[element], "ok_button")
+        XCTAssertEqual(screen.liveInterface.heistIdByElement[element], "ok_button")
     }
 
     func testBuildScreenSetsHierarchy() {
@@ -68,7 +68,7 @@ final class TheBurglarApplyTests: XCTestCase {
 
         let screen = TheBurglar.buildScreen(from: result)
 
-        XCTAssertEqual(screen.hierarchy.count, 1)
+        XCTAssertEqual(screen.liveInterface.hierarchy.count, 1)
     }
 
     // MARK: - Screen name derivation
@@ -148,7 +148,7 @@ final class TheBurglarApplyTests: XCTestCase {
 
         let screen = TheBurglar.buildScreen(from: result)
 
-        XCTAssertNotNil(screen.firstResponderHeistId)
+        XCTAssertNotNil(screen.liveInterface.firstResponderHeistId)
 
         textField.resignFirstResponder()
         window.isHidden = true
@@ -166,7 +166,7 @@ final class TheBurglarApplyTests: XCTestCase {
 
         let screen = TheBurglar.buildScreen(from: result)
 
-        XCTAssertNil(screen.firstResponderHeistId)
+        XCTAssertNil(screen.liveInterface.firstResponderHeistId)
     }
 
     // MARK: - HeistId determinism
@@ -225,8 +225,8 @@ final class TheBurglarApplyTests: XCTestCase {
 
         let screen = TheBurglar.buildScreen(from: result)
 
-        XCTAssertEqual(screen.heistIdByElement[first], "row_button_1")
-        XCTAssertEqual(screen.heistIdByElement[second], "row_button_2")
+        XCTAssertEqual(screen.liveInterface.heistIdByElement[first], "row_button_1")
+        XCTAssertEqual(screen.liveInterface.heistIdByElement[second], "row_button_2")
     }
 
     // MARK: - Content space origin

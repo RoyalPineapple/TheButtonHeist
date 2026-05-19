@@ -59,7 +59,9 @@
 		718DCEAFFDCDD59A7E416BDF /* swift-crypto_CryptoBoringWrapper.bundle in Dependencies */ = {isa = PBXBuildFile; fileRef = DB8715B7F0184816A69C6D1A /* swift-crypto_CryptoBoringWrapper.bundle */; };
 		73119075DE7B80CB7247E9F4 /* TheInsideJob.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 10CDD5E500E477B98B606858 /* TheInsideJob.framework */; };
 		7530B8E094B8A238664AAD79 /* NotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79538EA411CEC1C55C14AE0E /* NotesView.swift */; };
+		786B46298194F0E3BC2BC7DB /* AccessibilitySnapshotModel.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 8383A411CE9447318ADB9BCE /* AccessibilitySnapshotModel.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		82541C601407533FF3F64BD2 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 484B42EBF5AEA433BA605F9B /* AppDelegate.swift */; };
+		8462894D106D613FEA5F9A19 /* AccessibilitySnapshotModel.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 8383A411CE9447318ADB9BCE /* AccessibilitySnapshotModel.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		858C0F6CA62E8FECE563698C /* DemoCollectionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFCD3B58CA2D09B4D2C1508F /* DemoCollectionViewController.swift */; };
 		8772E72EB5A4058DAD26A05B /* LongListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98461A7DEEBAF0FBE167CDC0 /* LongListView.swift */; };
 		8DEDE9F0D849AEA51233BDE8 /* AnalogClockDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2E1395CF116B55B3E9A0D29 /* AnalogClockDemo.swift */; };
@@ -95,6 +97,7 @@
 		D1C477DEFDC607033FC9545E /* swift-crypto_CCryptoBoringSSL.bundle in Resources */ = {isa = PBXBuildFile; fileRef = D0DE24F8E60593CB79278BED /* swift-crypto_CCryptoBoringSSL.bundle */; };
 		D37A65C7ED7505D66E88E54D /* PresentationObscuringHarnessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AEE58CFB3DAAE9D3D921A3F /* PresentationObscuringHarnessView.swift */; };
 		D484A7DDDB21F0DCA5FBC12B /* swift-crypto_CryptoBoringWrapper.bundle in Resources */ = {isa = PBXBuildFile; fileRef = DB8715B7F0184816A69C6D1A /* swift-crypto_CryptoBoringWrapper.bundle */; };
+		D5B4FEEF1604DE64F4C8603C /* AccessibilitySnapshotModel.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 8383A411CE9447318ADB9BCE /* AccessibilitySnapshotModel.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		D7C4ADD7D3E28BC128DE4982 /* Crypto.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3043BA82964C737BBCED996A /* Crypto.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		D85E49685498BCB9218A7EBC /* ModalWindowDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF6D57530170B53655EA07A4 /* ModalWindowDemo.swift */; };
 		E04E26AEB7F31D3A11A437EC /* TuistAssets+UIKitTestApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD906130128B1A2B55BA304D /* TuistAssets+UIKitTestApp.swift */; };
@@ -118,6 +121,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
+				786B46298194F0E3BC2BC7DB /* AccessibilitySnapshotModel.framework in Embed Frameworks */,
 				0337719452BD0B62F958F20A /* AccessibilitySnapshotParser.framework in Embed Frameworks */,
 				4E9C59734A3E89DCF76E347A /* AccessibilitySnapshotParser_ObjC.framework in Embed Frameworks */,
 				136741C3EB01423C4C737A4F /* Crypto.framework in Embed Frameworks */,
@@ -148,6 +152,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
+				8462894D106D613FEA5F9A19 /* AccessibilitySnapshotModel.framework in Embed Frameworks */,
 				540D12ACEC20064BAC859223 /* AccessibilitySnapshotParser.framework in Embed Frameworks */,
 				EA78FA2AA8AB39C21DACFC8B /* AccessibilitySnapshotParser_ObjC.framework in Embed Frameworks */,
 				1E1BF81AC448FD851070F7D5 /* Crypto.framework in Embed Frameworks */,
@@ -191,6 +196,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
+				D5B4FEEF1604DE64F4C8603C /* AccessibilitySnapshotModel.framework in Embed Frameworks */,
 				C373F3E3F9A463C4ECD456AE /* AccessibilitySnapshotParser.framework in Embed Frameworks */,
 				D122BA938231536CCC720CE4 /* AccessibilitySnapshotParser_ObjC.framework in Embed Frameworks */,
 				D7C4ADD7D3E28BC128DE4982 /* Crypto.framework in Embed Frameworks */,
@@ -234,6 +240,7 @@
 		7EB069D6039881E065A92F23 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		817198E55C3FA789E150CDEE /* CartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CartView.swift; sourceTree = "<group>"; };
 		81E8C9D791343980F9040B17 /* AlbumFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlbumFlowView.swift; sourceTree = "<group>"; };
+		8383A411CE9447318ADB9BCE /* AccessibilitySnapshotModel.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AccessibilitySnapshotModel.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		85322473D5E71DA7818961F6 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		85ED0B72A40D7B1F27BB0635 /* RotorsDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RotorsDemo.swift; sourceTree = "<group>"; };
 		87327F54977A78F045D193DF /* CustomContentDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomContentDemo.swift; sourceTree = "<group>"; };
@@ -359,6 +366,7 @@
 		373576F027873391B8FAC423 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				8383A411CE9447318ADB9BCE /* AccessibilitySnapshotModel.framework */,
 				C7BFD903B5A7DB547CD6A4C7 /* AccessibilitySnapshotParser_ObjC.framework */,
 				97C3DF6EAC0366513F5B9CB8 /* AccessibilitySnapshotParser.framework */,
 				0D299F08D35557F0768E4EB5 /* BHDemo.app */,

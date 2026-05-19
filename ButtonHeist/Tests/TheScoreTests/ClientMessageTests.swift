@@ -14,7 +14,7 @@ final class ClientMessageTests: XCTestCase {
     }
 
     func testRequestSnapshotEncodeDecode() throws {
-        let message = ClientMessage.requestInterface
+        let message = ClientMessage.requestInterface(InterfaceQuery())
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
@@ -485,7 +485,7 @@ final class ClientMessageTests: XCTestCase {
 
 extension HeistElement {
     static func stub(
-        heistId: String = "test",
+        heistId: HeistId = "test",
         label: String? = nil,
         traits: [HeistTrait] = []
     ) -> HeistElement {

@@ -5,6 +5,16 @@ import TheScore
 
 final class StartupConfigurationTests: XCTestCase {
 
+    func testAutoStartIsDisabledUnderXCTestEnvironment() {
+        XCTAssertTrue(isRunningUnderXCTest(environment: [
+            "XCTestConfigurationFilePath": "/tmp/session.xctestconfiguration"
+        ]))
+        XCTAssertTrue(isRunningUnderXCTest(environment: [
+            "XCTestSessionIdentifier": "session"
+        ]))
+        XCTAssertFalse(isRunningUnderXCTest(environment: [:]))
+    }
+
     func testEnvironmentOverridesInfoPlist() {
         let configuration = StartupConfiguration.resolve(
             env: [

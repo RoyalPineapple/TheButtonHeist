@@ -3,7 +3,7 @@ import UIKit
 @testable import AccessibilitySnapshotParser
 @testable import TheScore
 
-/// Shared `AccessibilityElement` factory for tests.
+/// Shared `AccessibilityElement` construction helpers for tests.
 ///
 /// Subsumes the per-file `makeElement` / `element` / `dummyElement` helpers
 /// that used to live in every test file. Defaults match the most common

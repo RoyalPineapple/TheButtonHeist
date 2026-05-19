@@ -18,7 +18,7 @@ import AccessibilitySnapshotParser
 private struct Relaxation {
     let field: String
     let relaxed: ElementMatcher
-    let actual: (AccessibilityElement) -> String
+    let actual: (AccessibilityElement) -> HeistId
 }
 
 extension TheStash {
@@ -30,7 +30,7 @@ extension TheStash {
     /// it, so the id is either stale (the hierarchy changed since the agent's
     /// last `get_interface`) or it never existed.
     static func heistIdNotFound(
-        _ heistId: String,
+        _ heistId: HeistId,
         knownIds: some Collection<String>,
         knownCount: Int
     ) -> String {
@@ -53,7 +53,7 @@ extension TheStash {
     static func matcherNotFound(
         _ matcher: ElementMatcher,
         screenElements: [Screen.ScreenElement],
-        visibleHeistIds: Set<String>,
+        visibleHeistIds: Set<HeistId>,
         resolutionScope: ResolutionScope
     ) -> String {
         let query = formatMatcher(matcher)
@@ -98,7 +98,7 @@ extension TheStash {
     static func findNearMiss(
         for matcher: ElementMatcher,
         in screenElements: [Screen.ScreenElement],
-        visibleHeistIds: Set<String>
+        visibleHeistIds: Set<HeistId>
     ) -> String? {
         let relaxations: [Relaxation] = [
             matcher.value.map { _ in
@@ -195,7 +195,7 @@ extension TheStash {
     /// Capped at 20 elements to avoid flooding the response.
     static func compactElementSummary(
         screenElements: [Screen.ScreenElement],
-        visibleHeistIds: Set<String>,
+        visibleHeistIds: Set<HeistId>,
         resolutionScope: String = "known"
     ) -> String {
         let cap = 20
@@ -250,21 +250,21 @@ extension TheStash {
         field: String,
         actual: String,
         candidate: Screen.ScreenElement,
-        visibleHeistIds: Set<String>
+        visibleHeistIds: Set<HeistId>
     ) -> String {
         "\(field)=\"\(actual)\" \(availabilityDescription(for: candidate, visibleHeistIds: visibleHeistIds))"
     }
 
     static func availabilityDescription(
         for candidate: Screen.ScreenElement,
-        visibleHeistIds: Set<String>
+        visibleHeistIds: Set<HeistId>
     ) -> String {
         if visibleHeistIds.contains(candidate.heistId) {
             return "(heistId: \(candidate.heistId), visible)"
         }
 
         var details = ["heistId: \(candidate.heistId)", "offscreen"]
-        if candidate.contentSpaceOrigin == nil || candidate.scrollView == nil {
+        if candidate.contentSpaceOrigin == nil {
             details.append("unreachable")
         }
         return "(\(details.joined(separator: ", ")))"

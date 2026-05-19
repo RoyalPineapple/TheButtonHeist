@@ -47,16 +47,16 @@ When Tripwire triggers, TheBrains parses the accessibility hierarchy and
 element-change, or screen-change. The settle loop can also report unhealthy
 snapshots rather than pretending an empty post-navigation parse is stable.
 
-### Scope Has One Public Default
+### Observation Has One Owner
 
-`get_interface` without `scope` returns the normal app accessibility state for
-the current screen, including semantic content Button Heist can discover in
-scrollable containers. `scope: "visible"` is only for fresh on-screen geometry
-diagnostics after a scroll or gesture.
+`get_interface` returns the app accessibility state for the current screen,
+including semantic content Button Heist can discover in scrollable containers.
+`get_screen` returns pixels plus the fresh visible accessibility tree with
+geometry. Refresh, exploration, selection, and stale-state decisions live inside
+TheInsideJob; clients and adapters send typed observation intent.
 
-Legacy full-scope spellings remain compatibility inputs, not public concepts to
-teach. Detail level is separate: `detail: "summary"` keeps responses compact,
-while `detail: "full"` adds geometry and heavier accessibility fields.
+Detail level is separate: `detail: "summary"` keeps responses compact, while
+`detail: "full"` adds geometry and heavier accessibility fields.
 
 ### One Driver Owns the Session
 

@@ -591,7 +591,7 @@ final class TheBookKeeper {
     ) -> HeistEvidence {
         var target: ElementMatcher?
         var ordinal: Int?
-        var recordedHeistId: String?
+        var recordedHeistId: HeistId?
         var recordedFrame: RecordedFrame?
         var coordinateOnly: Bool?
 
@@ -631,12 +631,12 @@ final class TheBookKeeper {
     }
 
     private func matcherSource(
-        heistId: String,
+        heistId: HeistId,
         targetCapture: AccessibilityTrace.Capture?
     ) -> (element: HeistElement, capture: AccessibilityTrace.Capture)? {
         guard let targetCapture else { return nil }
         let elementsByHeistId = targetCapture.interface.elements.reduce(
-            into: [String: HeistElement]()
+            into: [HeistId: HeistElement]()
         ) { partialResult, element in
             partialResult[element.heistId] = element
         }
@@ -645,7 +645,7 @@ final class TheBookKeeper {
     }
 
     private func buildRecordedMetadata(
-        heistId: String?,
+        heistId: HeistId?,
         frame: RecordedFrame?,
         coordinateOnly: Bool?,
         actionResult: ActionResult?,

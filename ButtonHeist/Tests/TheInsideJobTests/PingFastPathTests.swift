@@ -39,7 +39,7 @@ final class PingFastPathTests: XCTestCase {
     }
 
     func testEncodedPongReturnsNilForNonPingRequest() throws {
-        let request = RequestEnvelope(requestId: "req-1", message: .requestInterface)
+        let request = RequestEnvelope(requestId: "req-1", message: .requestInterface(InterfaceQuery()))
         let data = try JSONEncoder().encode(request)
 
         XCTAssertNil(PingFastPath.encodedPong(for: data))

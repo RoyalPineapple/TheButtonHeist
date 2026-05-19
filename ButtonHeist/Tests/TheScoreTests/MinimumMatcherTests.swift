@@ -202,15 +202,12 @@ final class MinimumMatcherTests: XCTestCase {
     private func makeCapture(_ elements: [HeistElement]) -> AccessibilityTrace.Capture {
         AccessibilityTrace.Capture(
             sequence: 1,
-            interface: Interface(
-                timestamp: Date(timeIntervalSince1970: 0),
-                tree: elements.map(InterfaceNode.element)
-            )
+            interface: makeTestInterface(elements: elements)
         )
     }
 
     private func makeElement(
-        heistId: String,
+        heistId: HeistId,
         label: String? = nil,
         identifier: String? = nil,
         value: String? = nil,

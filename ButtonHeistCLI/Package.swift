@@ -11,6 +11,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../ButtonHeist"),
+        .package(path: "../submodules/AccessibilitySnapshotBH"),
         .package(url: "https://github.com/apple/swift-argument-parser", .upToNextMinor(from: "1.7.0"))
     ],
     targets: [
@@ -30,7 +31,8 @@ let package = Package(
             name: "ButtonHeistCLITests",
             dependencies: [
                 .target(name: "ButtonHeistCLIExe"),
-                .product(name: "ButtonHeist", package: "ButtonHeist")
+                .product(name: "ButtonHeist", package: "ButtonHeist"),
+                .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotBH"),
             ],
             path: "Tests",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]

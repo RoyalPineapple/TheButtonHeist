@@ -1,6 +1,8 @@
 import Foundation
+import CoreGraphics
 import os.log
 
+import AccessibilitySnapshotModel
 import TheScore
 
 private let logger = Logger(subsystem: "com.buttonheist.thefence", category: "formatting")
@@ -31,14 +33,16 @@ extension FenceResponse {
             return payload
         case .devices(let devices):
             return devicesJsonDict(devices)
-        case .interface(let interface, let detail, let filteredFrom, let explore):
-            return interfaceJsonDict(interface, detail: detail, filteredFrom: filteredFrom, explore: explore)
+        case .interface(let interface, let detail):
+            return interfaceJsonDict(interface, detail: detail)
         case .action(let result, let expectation):
             return actionWithExpectationJsonDict(result, expectation: expectation)
-        case .screenshot(let path, let width, let height):
-            return ["status": "ok", "path": path, "width": width, "height": height]
-        case .screenshotData(let pngData, let width, let height):
-            return ["status": "ok", "pngData": pngData, "width": width, "height": height]
+        case .screenshot(let path, let payload):
+            var dict = screenJsonDict(payload, includePNGData: false)
+            dict["path"] = path
+            return dict
+        case .screenshotData(let payload):
+            return screenJsonDict(payload, includePNGData: true)
         case .recording(let path, let payload):
             return recordingJsonDict(path: path, payload: payload)
         case .recordingData(let payload):
@@ -94,6 +98,19 @@ extension FenceResponse {
             "retryable": false,
             "hint": "Report this diagnostic with the command that produced it.",
         ]
+    }
+
+    private func screenJsonDict(_ payload: ScreenPayload, includePNGData: Bool) -> [String: Any] {
+        var dict: [String: Any] = [
+            "status": "ok",
+            "width": payload.width,
+            "height": payload.height,
+            "interface": interfaceDictionary(payload.interface, detail: .full),
+        ]
+        if includePNGData {
+            dict["pngData"] = payload.pngData
+        }
+        return dict
     }
 
     private func playbackFailureDict(_ failure: PlaybackFailure) -> [String: Any] {
@@ -192,24 +209,13 @@ extension FenceResponse {
     }
 
     private func interfaceJsonDict(
-        _ interface: Interface, detail: InterfaceDetail, filteredFrom: Int?,
-        explore: ExploreResult? = nil
+        _ interface: Interface, detail: InterfaceDetail
     ) -> [String: Any] {
-        var dict: [String: Any] = [
+        [
             "status": "ok",
             "detail": detail.rawValue,
             "interface": interfaceDictionary(interface, detail: detail),
         ]
-        if let filteredFrom { dict["filteredFrom"] = filteredFrom }
-        if let explore {
-            dict["explore"] = [
-                "elementCount": explore.elementCount,
-                "scrollCount": explore.scrollCount,
-                "containersExplored": explore.containersExplored,
-                "explorationTime": explore.explorationTime,
-            ] as [String: Any]
-        }
-        return dict
     }
 
     private func actionWithExpectationJsonDict(
@@ -478,8 +484,17 @@ extension FenceResponse {
 
     private func interfaceTreeDictionaries(_ interface: Interface, detail: InterfaceDetail) -> [[String: Any]] {
         let counter = IndexCounter()
-        return interface.tree.map { node in
-            nodeDictionary(node, detail: detail, counter: counter)
+        let elementAnnotations = interface.annotations.elementByPath
+        let containerAnnotations = interface.annotations.containerByPath
+        return interface.tree.enumerated().map { index, node in
+            nodeDictionary(
+                node,
+                path: TreePath([index]),
+                detail: detail,
+                counter: counter,
+                elementAnnotations: elementAnnotations,
+                containerAnnotations: containerAnnotations
+            )
         }
     }
 
@@ -489,29 +504,48 @@ extension FenceResponse {
         var value: Int = 0
     }
 
-    /// Recursive walk over an `InterfaceNode`, shared by the full-tree and
-    /// delta paths. Built on `InterfaceNode.folded` so the recursion lives in
-    /// exactly one place.
+    /// Recursive projection over the parser hierarchy. The tree stays
+    /// `AccessibilityHierarchy`; Button Heist metadata is attached from capture
+    /// annotations at formatting time.
     private func nodeDictionary(
-        _ node: InterfaceNode,
+        _ node: AccessibilityHierarchy,
+        path: TreePath,
         detail: InterfaceDetail,
-        counter: IndexCounter?
+        counter: IndexCounter?,
+        elementAnnotations: [TreePath: InterfaceElementAnnotation],
+        containerAnnotations: [TreePath: InterfaceContainerAnnotation]
     ) -> [String: Any] {
-        node.folded(
-            onElement: { element in
-                var payload = self.elementDictionary(element, detail: detail)
-                if let counter {
-                    payload["order"] = counter.value
-                    counter.value += 1
-                }
-                return ["element": payload]
-            },
-            onContainer: { info, children in
-                var payload = self.containerInfoDictionary(info, detail: detail)
-                payload["children"] = children
-                return ["container": payload]
+        switch node {
+        case .element(let element, _):
+            let projected = HeistElement(
+                accessibilityElement: element,
+                annotation: elementAnnotations[path]
+            )
+            var payload = elementDictionary(projected, detail: detail)
+            if let counter {
+                payload["order"] = counter.value
+                counter.value += 1
             }
-        )
+            return ["element": payload]
+
+        case .container(let container, let children):
+            var payload = containerDictionary(
+                container,
+                annotation: containerAnnotations[path],
+                detail: detail
+            )
+            payload["children"] = children.enumerated().map { index, child in
+                nodeDictionary(
+                    child,
+                    path: path.appending(index),
+                    detail: detail,
+                    counter: counter,
+                    elementAnnotations: elementAnnotations,
+                    containerAnnotations: containerAnnotations
+                )
+            }
+            return ["container": payload]
+        }
     }
 
     private func navigationDictionary(_ navigation: NavigationContext) -> [String: Any] {
@@ -595,13 +629,24 @@ extension FenceResponse {
 
     /// Delta payloads serialize inserted subtrees at summary detail (no
     /// geometry, no heavy semantics) and never carry traversal-order indices.
-    private func deltaNodeDictionary(_ node: InterfaceNode) -> [String: Any] {
-        nodeDictionary(node, detail: .summary, counter: nil)
+    private func deltaNodeDictionary(_ insertion: TreeInsertion) -> [String: Any] {
+        nodeDictionary(
+            insertion.node,
+            path: .root,
+            detail: .summary,
+            counter: nil,
+            elementAnnotations: insertion.annotations.elementByPath,
+            containerAnnotations: insertion.annotations.containerByPath
+        )
     }
 
-    private func containerInfoDictionary(_ info: ContainerInfo, detail: InterfaceDetail) -> [String: Any] {
+    private func containerDictionary(
+        _ container: AccessibilityContainer,
+        annotation: InterfaceContainerAnnotation?,
+        detail: InterfaceDetail
+    ) -> [String: Any] {
         var payload: [String: Any] = [:]
-        switch info.type {
+        switch container.type {
         case .semanticGroup(let label, let value, let identifier):
             payload["type"] = "semanticGroup"
             if let label { payload["label"] = label }
@@ -617,24 +662,28 @@ extension FenceResponse {
             payload["columnCount"] = columnCount
         case .tabBar:
             payload["type"] = "tabBar"
-        case .scrollable(let contentWidth, let contentHeight):
+        case .scrollable(let contentSize):
             payload["type"] = "scrollable"
-            payload["contentWidth"] = contentWidth
-            payload["contentHeight"] = contentHeight
+            payload["contentWidth"] = sanitizedDouble(contentSize.width)
+            payload["contentHeight"] = sanitizedDouble(contentSize.height)
         }
-        if info.isModalBoundary {
+        if container.isModalBoundary {
             payload["isModalBoundary"] = true
         }
-        if let stableId = info.stableId {
+        if let stableId = annotation?.stableId {
             payload["stableId"] = stableId
         }
         if detail == .full {
-            payload["frameX"] = info.frameX
-            payload["frameY"] = info.frameY
-            payload["frameWidth"] = info.frameWidth
-            payload["frameHeight"] = info.frameHeight
+            payload["frameX"] = sanitizedDouble(container.frame.origin.x)
+            payload["frameY"] = sanitizedDouble(container.frame.origin.y)
+            payload["frameWidth"] = sanitizedDouble(container.frame.size.width)
+            payload["frameHeight"] = sanitizedDouble(container.frame.size.height)
         }
         return payload
+    }
+
+    private func sanitizedDouble(_ value: CGFloat) -> Double {
+        value.isFinite ? Double(value) : 0
     }
 
     /// Delta dictionaries are always summary-level — geometry changes are filtered out.
@@ -723,7 +772,7 @@ extension FenceResponse {
     private func treeInsertionDictionary(_ insertion: TreeInsertion) -> [String: Any] {
         [
             "location": treeLocationDictionary(insertion.location),
-            "node": deltaNodeDictionary(insertion.node),
+            "node": deltaNodeDictionary(insertion),
         ]
     }
 

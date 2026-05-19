@@ -246,7 +246,7 @@ public enum HeistValue: Codable, Sendable, Equatable {
 /// under the `_recorded` key but ignored during playback.
 public struct RecordedMetadata: Codable, Sendable, Equatable {
     /// The heistId that was used to target the element at recording time.
-    public let heistId: String?
+    public let heistId: HeistId?
     /// The element's frame at recording time.
     public let frame: RecordedFrame?
     /// Whether the step used coordinate-only targeting (no element).
@@ -275,7 +275,7 @@ public struct RecordedMetadata: Codable, Sendable, Equatable {
     }
 
     public init(
-        heistId: String? = nil,
+        heistId: HeistId? = nil,
         frame: RecordedFrame? = nil,
         coordinateOnly: Bool? = nil,
         unsupportedArguments: [RecordedUnsupportedInput]? = nil,
@@ -295,7 +295,7 @@ public struct RecordedMetadata: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
-            heistId: try container.decodeIfPresent(String.self, forKey: .heistId),
+            heistId: try container.decodeIfPresent(HeistId.self, forKey: .heistId),
             frame: try container.decodeIfPresent(RecordedFrame.self, forKey: .frame),
             coordinateOnly: try container.decodeIfPresent(Bool.self, forKey: .coordinateOnly),
             unsupportedArguments: try container.decodeIfPresent([RecordedUnsupportedInput].self, forKey: .unsupportedArguments),

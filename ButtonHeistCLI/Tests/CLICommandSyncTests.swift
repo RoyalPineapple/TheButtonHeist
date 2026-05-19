@@ -118,21 +118,13 @@ final class CLICommandSyncTests: XCTestCase {
         )
     }
 
-    func testGetInterfaceAdvertisedScopeOptionsHideLegacyFullScope() {
-        XCTAssertEqual(
-            Set(CLIGetInterfaceScope.allCases.map(\.rawValue)),
-            ["visible"]
-        )
-    }
-
-    func testGetInterfaceHelpAdvertisesScopeAndHidesLegacyFullAlias() {
+    func testGetInterfaceHelpDoesNotAdvertiseScopeOrLegacyFullAlias() {
         let help = GetInterfaceCommand.helpMessage()
 
-        XCTAssertTrue(help.contains("--scope"), help)
-        XCTAssertTrue(help.contains("visible"), help)
+        XCTAssertFalse(help.contains("--scope"), help)
+        XCTAssertFalse(help.contains("visible"), help)
         XCTAssertFalse(help.contains("--timeout"), help)
         XCTAssertTrue(help.contains("Read the app accessibility hierarchy"), help)
-        XCTAssertTrue(help.contains("fresh on-screen geometry"), help)
         XCTAssertFalse(help.contains("full"), help)
         XCTAssertFalse(help.contains("--full"), help)
         XCTAssertFalse(help.contains("current UI element hierarchy"), help)

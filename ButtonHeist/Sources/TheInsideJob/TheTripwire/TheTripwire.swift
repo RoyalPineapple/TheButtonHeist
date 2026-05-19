@@ -519,21 +519,27 @@ final class TheTripwire {
         guard !windows.isEmpty else { return [] }
 
         let appWindows = windows.filter { !isPassthrough($0.window) }
-        let accessibleWindows = appWindows.map { deepestPresentedEntry($0) ?? $0 }
+        let accessibleWindows = appWindows.map { accessibleRootEntry($0) ?? $0 }
 
         return accessibleWindows.isEmpty ? windows : accessibleWindows
     }
 
-    /// If `entry`'s root VC has a presentation chain, return the deepest
-    /// presented VC's view paired with the window. Returns `nil` when there
-    /// is no root VC or no presentation chain.
-    private static func deepestPresentedEntry(
+    /// Return the view that should anchor accessibility parsing for a window.
+    /// Parser-level UIKit guards handle private intermediary views; keeping the
+    /// presented controller root preserves modal boundary metadata.
+    private static func accessibleRootEntry(
         _ entry: (window: UIWindow, rootView: UIView)
     ) -> (window: UIWindow, rootView: UIView)? {
         guard let rootVC = entry.window.rootViewController else { return nil }
         let chain = Array(sequence(first: rootVC, next: \.presentedViewController))
-        guard let deepest = chain.last, deepest !== rootVC else { return nil }
-        return (window: entry.window, rootView: deepest.view)
+        guard let deepest = chain.last else { return nil }
+        let rootView = accessibilityRootView(for: deepest)
+        guard rootView !== entry.rootView else { return deepest !== rootVC ? (entry.window, rootView) : nil }
+        return (window: entry.window, rootView: rootView)
+    }
+
+    private static func accessibilityRootView(for viewController: UIViewController) -> UIView {
+        return viewController.view
     }
 
     // MARK: - View Controller Identity

@@ -1,5 +1,6 @@
 #if canImport(UIKit) && canImport(AccessibilitySnapshotParser)
 import AccessibilitySnapshotParser
+import TheScore
 
 // MARK: - Container Convenience
 
@@ -11,17 +12,9 @@ extension AccessibilityContainer {
     }
 }
 
-// MARK: - Fold (catamorphism — transform tree to a different type)
+// MARK: - Fold
 
 extension AccessibilityHierarchy {
-    /// Transforms the tree into a value of a different type, bottom-up.
-    ///
-    /// For leaf elements: `onElement` receives the element and its traversal index.
-    /// For containers: children are folded first, then `onContainer` receives the
-    /// container metadata and the already-folded children.
-    ///
-    /// This is the general-purpose tree destructor — `convertHierarchyNode` and `containers`
-    /// are both built on it. Use it when the output type differs from `AccessibilityHierarchy`.
     func folded<Result>(
         onElement: (AccessibilityElement, Int) -> Result,
         onContainer: (AccessibilityContainer, [Result]) -> Result
@@ -102,6 +95,7 @@ extension Array where Element == AccessibilityHierarchy {
         }
         return results
     }
+
 }
 
 // MARK: - Bottom-Up Fold with Shared Accumulator

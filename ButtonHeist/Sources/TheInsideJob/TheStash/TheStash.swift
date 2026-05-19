@@ -13,7 +13,7 @@ import AccessibilitySnapshotParser
 /// wire-conversion facades over that value; parsing, diagnostics, capture,
 /// recording, response memory, and UIKit actions are boundary transforms or
 /// owned by other crew members. `currentScreen.knownInterface` is targetable
-/// semantic state; `currentScreen.interactionSnapshot` is the latest parse
+/// semantic state; `currentScreen.liveInterface` is the latest parse
 /// used for geometry, live objects, and scrolling. Callers call `parse()` to
 /// obtain a Screen value, then decide when to write it back via
 /// `currentScreen = ...`. The exploration accumulator lives in TheBrains as
@@ -55,17 +55,17 @@ final class TheStash {
 
     /// Hierarchy from the most recent parse. Proxy for call-site clarity —
     /// reads, matchers, scroll dispatch, and tab-bar geometry all need it
-    /// without spelling out `currentScreen.interactionSnapshot.hierarchy`
+    /// without spelling out `currentScreen.liveInterface.hierarchy`
     /// every time.
     var currentHierarchy: [AccessibilityHierarchy] {
-        currentScreen.interactionSnapshot.hierarchy
+        currentScreen.liveInterface.hierarchy
     }
 
     /// Scrollable containers paired with their backing UIView.
     /// Unwraps the weak ref wrapper for call sites that need a live UIView.
     var scrollableContainerViews: [AccessibilityContainer: UIView] {
         var result: [AccessibilityContainer: UIView] = [:]
-        for (container, ref) in currentScreen.interactionSnapshot.scrollableContainerViews {
+        for (container, ref) in currentScreen.liveInterface.scrollableContainerViews {
             if let view = ref.view {
                 result[container] = view
             }
@@ -78,20 +78,20 @@ final class TheStash {
     /// After an exploration commit this includes elements that were observed
     /// during scrolling and are no longer on-screen. Use `visibleIds` when
     /// you specifically need the latest parsed on-screen ids.
-    var knownIds: Set<String> {
+    var knownIds: Set<HeistId> {
         ids(in: .known)
     }
 
     /// HeistIds of elements present in the hierarchy from the most recent
     /// parse. Strictly a subset of `knownIds` after an exploration union has
     /// been committed.
-    var visibleIds: Set<String> {
+    var visibleIds: Set<HeistId> {
         ids(in: .visible)
     }
 
     /// HeistId of the element whose live object is currently first responder.
-    var firstResponderHeistId: String? {
-        currentScreen.interactionSnapshot.firstResponderHeistId
+    var firstResponderHeistId: HeistId? {
+        currentScreen.liveInterface.firstResponderHeistId
     }
 
     /// Screen name from the current screen (first header element by traversal order).
@@ -203,7 +203,7 @@ final class TheStash {
         let token: UUID
         let screenElement: ScreenElement
         /// Strongly retain out-of-tree rotor result objects for exactly one
-        /// follow-up command. `ScreenElement.object` is weak, but VoiceOver-style
+        /// follow-up command. `LiveInterface` refs are weak, but VoiceOver-style
         /// rotor continuation needs the object to remain alive long enough for
         /// activation or a next/previous step.
         let object: NSObject
@@ -234,24 +234,83 @@ final class TheStash {
         let scrollView: UIScrollView
     }
 
-    /// Jump a recorded element into view by setting its owning scroll view's
-    /// content offset to the clamped, centered target.
-    @discardableResult
-    func jumpToRecordedPosition(_ screenElement: ScreenElement, animated: Bool = true) -> CGPoint? {
-        guard let origin = screenElement.contentSpaceOrigin,
-              let scrollView = screenElement.scrollView,
-              !scrollView.bhIsUnsafeForProgrammaticScrolling else { return nil }
-        let savedOffset = scrollView.contentOffset
-        let targetOffset = Self.scrollTargetOffset(for: origin, in: scrollView)
-        scrollView.setContentOffset(targetOffset, animated: animated)
-        return savedOffset
+    enum KnownTargetInflationFailure: Equatable {
+        case missingContentOrigin
+        case noLiveScrollableAncestor
+        case ambiguousLiveScrollableAncestor
+        case unsafeProgrammaticScroll
     }
 
-    /// Restore the element's owning scroll view to a previously saved offset.
-    func restoreScrollPosition(_ screenElement: ScreenElement, to offset: CGPoint, animated: Bool = true) {
-        guard let scrollView = screenElement.scrollView,
-              !scrollView.bhIsUnsafeForProgrammaticScrolling else { return }
-        scrollView.setContentOffset(offset, animated: animated)
+    enum KnownTargetInflationResolution {
+        case resolved(UIScrollView)
+        case failed(KnownTargetInflationFailure)
+    }
+
+    /// Make a known target live by scrolling a live parent derived from the
+    /// current graph. Known-only semantic elements intentionally carry no
+    /// scroll path; until `Screen` retains semantic container ancestry, a
+    /// known-only target can be inflated only when the current live graph
+    /// exposes exactly one plausible scroll parent for its content origin.
+    @discardableResult
+    func inflateKnownTarget(_ screenElement: ScreenElement, animated: Bool = true) -> KnownTargetInflationResolution {
+        switch resolveInflationScrollView(for: screenElement) {
+        case .resolved(let scrollView):
+            guard let origin = screenElement.contentSpaceOrigin else {
+                return .failed(.missingContentOrigin)
+            }
+            let targetOffset = Self.scrollTargetOffset(for: origin, in: scrollView)
+            scrollView.setContentOffset(targetOffset, animated: animated)
+            return .resolved(scrollView)
+        case .failed(let failure):
+            return .failed(failure)
+        }
+    }
+
+    func resolveInflationScrollView(for screenElement: ScreenElement) -> KnownTargetInflationResolution {
+        guard let origin = screenElement.contentSpaceOrigin else {
+            return .failed(.missingContentOrigin)
+        }
+
+        if let liveScrollView = liveScrollView(for: screenElement) {
+            guard !liveScrollView.bhIsUnsafeForProgrammaticScrolling else {
+                return .failed(.unsafeProgrammaticScroll)
+            }
+            return .resolved(liveScrollView)
+        }
+
+        var seenScrollViews = Set<ObjectIdentifier>()
+        let scrollViews = currentScreen.liveInterface.scrollableContainerViews.values.compactMap {
+            $0.view as? UIScrollView
+        }.filter {
+            seenScrollViews.insert(ObjectIdentifier($0)).inserted
+        }
+        let safeCandidates = scrollViews.filter {
+            !$0.bhIsUnsafeForProgrammaticScrolling && Self.contentOrigin(origin, fitsIn: $0)
+        }
+        switch safeCandidates.count {
+        case 1:
+            return .resolved(safeCandidates[0])
+        case 0:
+            if !scrollViews.isEmpty,
+               scrollViews.allSatisfy(\.bhIsUnsafeForProgrammaticScrolling) {
+                return .failed(.unsafeProgrammaticScroll)
+            }
+            return .failed(.noLiveScrollableAncestor)
+        default:
+            return .failed(.ambiguousLiveScrollableAncestor)
+        }
+    }
+
+    private static func contentOrigin(_ origin: CGPoint, fitsIn scrollView: UIScrollView) -> Bool {
+        let insets = scrollView.adjustedContentInset
+        let minX = -insets.left
+        let minY = -insets.top
+        let maxX = scrollView.contentSize.width + insets.right
+        let maxY = scrollView.contentSize.height + insets.bottom
+        return origin.x >= minX
+            && origin.y >= minY
+            && origin.x <= maxX
+            && origin.y <= maxY
     }
 
     static func scrollTargetOffset(for contentOrigin: CGPoint, in scrollView: UIScrollView) -> CGPoint {
@@ -267,7 +326,7 @@ final class TheStash {
 
     func liveGeometry(for screenElement: ScreenElement) -> LiveGeometry? {
         guard let object = dispatchObject(for: screenElement),
-              let scrollView = screenElement.scrollView else { return nil }
+              let scrollView = liveScrollView(for: screenElement) else { return nil }
         let frame = object.accessibilityFrame
         guard !frame.isNull, !frame.isEmpty else { return nil }
         return LiveGeometry(
@@ -315,16 +374,24 @@ final class TheStash {
 
     private func dispatchObject(for screenElement: ScreenElement) -> NSObject? {
         if visibleIds.contains(screenElement.heistId) {
-            return screenElement.object
+            return currentScreen.liveInterface.object(for: screenElement.heistId)
         }
         if case .active(let pending) = pendingRotorState,
            pending.screenElement.heistId == screenElement.heistId {
             return pending.object
         }
         if currentScreen.knownInterface.findElement(heistId: screenElement.heistId) == nil {
-            return screenElement.object
+            return currentScreen.liveInterface.object(for: screenElement.heistId)
         }
         return nil
+    }
+
+    func liveObject(for screenElement: ScreenElement) -> NSObject? {
+        dispatchObject(for: screenElement)
+    }
+
+    func liveScrollView(for screenElement: ScreenElement) -> UIScrollView? {
+        currentScreen.liveInterface.scrollView(for: screenElement)
     }
 
     func performRotor(
@@ -455,10 +522,10 @@ final class TheStash {
     }
 
     /// HeistIds for either the live hierarchy or the committed known screen.
-    func ids(in scope: InterfaceElementScope) -> Set<String> {
+    func ids(in scope: InterfaceElementScope) -> Set<HeistId> {
         switch scope {
         case .visible:
-            return currentScreen.interactionSnapshot.heistIds
+            return currentScreen.liveInterface.heistIds
         case .known:
             return currentScreen.knownInterface.heistIds
         }
@@ -469,11 +536,11 @@ final class TheStash {
     /// `.known` reads the committed `Screen.elements` map, including any
     /// exploration union. `.visible` only returns ids backed by the latest live
     /// hierarchy parse.
-    func screenElement(heistId: String, in scope: InterfaceElementScope) -> ScreenElement? {
+    func screenElement(heistId: HeistId, in scope: InterfaceElementScope) -> ScreenElement? {
         guard let entry = currentScreen.knownInterface.findElement(heistId: heistId) else { return nil }
         switch scope {
         case .visible:
-            return currentScreen.interactionSnapshot.contains(heistId: heistId) ? entry : nil
+            return currentScreen.liveInterface.contains(heistId: heistId) ? entry : nil
         case .known:
             return entry
         }
@@ -485,7 +552,7 @@ final class TheStash {
     /// `heistIdByElement`. Off-screen known elements cannot be found with this
     /// overload.
     func screenElement(for element: AccessibilityElement, in scope: InterfaceElementScope) -> ScreenElement? {
-        guard let heistId = currentScreen.interactionSnapshot.heistId(for: element) else { return nil }
+        guard let heistId = currentScreen.liveInterface.heistId(for: element) else { return nil }
         return screenElement(heistId: heistId, in: scope)
     }
 
@@ -604,7 +671,7 @@ final class TheStash {
     private func ambiguousResolution(
         _ matcher: ElementMatcher,
         screenElements: [ScreenElement],
-        visibleHeistIds: Set<String>,
+        visibleHeistIds: Set<HeistId>,
         resolutionScope: ResolutionScope
     ) -> TargetResolution {
         let candidates = screenElements.prefix(10).map { screenElement -> String in
@@ -676,7 +743,11 @@ final class TheStash {
     /// Return the known `ScreenElement` corresponding to a UIKit accessibility
     /// object by live object identity.
     func knownObject(_ object: NSObject) -> ParsedRotorResultObject? {
-        guard let cached = currentScreen.elements.values.first(where: { $0.object === object }) else {
+        guard let heistId = currentScreen.liveInterface.elementRefs.first(where: { _, ref in
+            ref.object === object
+        })?.key,
+            let cached = currentScreen.findElement(heistId: heistId)
+        else {
             return nil
         }
         return ParsedRotorResultObject(
@@ -696,7 +767,7 @@ final class TheStash {
             return nil
         }
         let screen = TheBurglar.buildScreen(from: result)
-        guard let heistId = screen.heistIdByElement[parsedElement] else { return nil }
+        guard let heistId = screen.liveInterface.heistIdByElement[parsedElement] else { return nil }
         return screen.elements[heistId]
     }
 
@@ -715,21 +786,90 @@ final class TheStash {
             return ParsedRotorResultObject(screenElement: screenElement, isInCurrentHierarchy: true)
         }
 
+        if let standaloneElement,
+           let known = knownCachedRotorResult(matching: standaloneElement) {
+            return known
+        }
+
         guard let element = standaloneElement else { return nil }
         let heistId = pendingRotorHeistId(for: element)
         return ParsedRotorResultObject(
             screenElement: ScreenElement(
                 heistId: heistId,
                 contentSpaceOrigin: nil,
-                element: element,
-                object: object,
-                scrollView: nil
+                element: element
             ),
             isInCurrentHierarchy: false
         )
     }
 
-    func preparePendingRotorResult(targetedHeistId: String?) -> UUID? {
+    private func knownCachedRotorResult(matching rotorElement: AccessibilityElement) -> ParsedRotorResultObject? {
+        let candidates = selectElements().filter {
+            !visibleIds.contains($0.heistId)
+                && Self.matchesCachedRotorResult(knownElement: $0.element, rotorElement: rotorElement)
+        }
+        guard candidates.count == 1, let candidate = candidates.first else { return nil }
+        return ParsedRotorResultObject(screenElement: candidate, isInCurrentHierarchy: false)
+    }
+
+    private static func matchesCachedRotorResult(
+        knownElement: AccessibilityElement,
+        rotorElement: AccessibilityElement
+    ) -> Bool {
+        guard rotorElement.label?.isEmpty == false
+                || rotorElement.value?.isEmpty == false
+                || rotorElement.identifier?.isEmpty == false else {
+            return false
+        }
+        guard optionalText(knownElement.label, matches: rotorElement.label),
+              optionalText(knownElement.value, matches: rotorElement.value),
+              stableTraitNames(knownElement.traits) == stableTraitNames(rotorElement.traits),
+              framesApproximatelyMatch(knownElement.shape.frame, rotorElement.shape.frame) else {
+            return false
+        }
+        if let knownIdentifier = knownElement.identifier, !knownIdentifier.isEmpty,
+           let rotorIdentifier = rotorElement.identifier, !rotorIdentifier.isEmpty {
+            return ElementMatcher.stringEquals(knownIdentifier, rotorIdentifier)
+        }
+        return true
+    }
+
+    private static func optionalText(_ lhs: String?, matches rhs: String?) -> Bool {
+        switch (lhs, rhs) {
+        case (nil, nil):
+            return true
+        case let (lhs?, rhs?):
+            return ElementMatcher.stringEquals(lhs, rhs)
+        default:
+            return false
+        }
+    }
+
+    private static func stableTraitNames(_ traits: AccessibilityTraits) -> Set<String> {
+        Set(traits.traitNames).subtracting(AccessibilityPolicy.transientTraitNames)
+    }
+
+    private static func framesApproximatelyMatch(_ lhs: CGRect, _ rhs: CGRect) -> Bool {
+        guard !lhs.isNull, !lhs.isEmpty,
+              !rhs.isNull, !rhs.isEmpty,
+              lhs.origin.x.isFinite,
+              lhs.origin.y.isFinite,
+              lhs.size.width.isFinite,
+              lhs.size.height.isFinite,
+              rhs.origin.x.isFinite,
+              rhs.origin.y.isFinite,
+              rhs.size.width.isFinite,
+              rhs.size.height.isFinite else {
+            return false
+        }
+        let tolerance: CGFloat = 1
+        return abs(lhs.origin.x - rhs.origin.x) <= tolerance
+            && abs(lhs.origin.y - rhs.origin.y) <= tolerance
+            && abs(lhs.size.width - rhs.size.width) <= tolerance
+            && abs(lhs.size.height - rhs.size.height) <= tolerance
+    }
+
+    func preparePendingRotorResult(targetedHeistId: HeistId?) -> UUID? {
         let pending: PendingRotorResult
         switch pendingRotorState {
         case .none:
@@ -772,7 +912,7 @@ final class TheStash {
         }
     }
 
-    private func activePendingRotorResult(heistId: String) -> ScreenElement? {
+    private func activePendingRotorResult(heistId: HeistId) -> ScreenElement? {
         guard case .active(let pendingRotorResult) = pendingRotorState,
               pendingRotorResult.screenElement.heistId == heistId else {
             return nil
@@ -780,7 +920,7 @@ final class TheStash {
         return pendingRotorResult.screenElement
     }
 
-    private func pendingRotorHeistId(for element: AccessibilityElement) -> String {
+    private func pendingRotorHeistId(for element: AccessibilityElement) -> HeistId {
         let base = Self.IdAssignment.assign([element]).first ?? "element"
         let root = "rotor_result_\(base)"
         var candidate = root
@@ -826,27 +966,25 @@ final class TheStash {
         return screen
     }
 
-    // MARK: - Tree Read Helpers
+    // MARK: - Interface Read Helpers
 
-    /// Convert the current screen's hierarchy to canonical wire form. Every
-    /// element on screen appears at its tree position; containers carry
-    /// stable ids derived once during parse.
+    /// Current parser hierarchy plus Button Heist annotations.
     ///
-    /// Thin reader over `WireConversion.toWireTree` — exists because callers
-    /// need the tree of the *current* screen, not an arbitrary one.
-    func wireTree() -> [InterfaceNode] {
-        WireConversion.toWireTree(from: currentScreen)
+    /// Thin reader over `WireConversion.toInterface` — exists because callers
+    /// need the interface of the *current* screen, not an arbitrary one.
+    func interface(timestamp: Date = Date()) -> Interface {
+        WireConversion.toInterface(from: currentScreen, timestamp: timestamp)
     }
 
-    func wireTreeHash() -> Int {
-        wireTree().hashValue
+    func interfaceHash() -> String {
+        AccessibilityTrace.Capture.hash(interface())
     }
 
-    /// Single-walk variant: returns the tree alongside its hash so callers
-    /// that need both don't pay for two walks.
-    func wireTreeWithHash() -> (tree: [InterfaceNode], hash: Int) {
-        let tree = wireTree()
-        return (tree, tree.hashValue)
+    /// Single-build variant: returns the interface alongside its hash so callers
+    /// that need both don't pay for two projection passes.
+    func interfaceWithHash(timestamp: Date = Date()) -> (interface: Interface, hash: String) {
+        let interface = interface(timestamp: timestamp)
+        return (interface, AccessibilityTrace.Capture.hash(interface))
     }
 }
 

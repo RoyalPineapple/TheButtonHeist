@@ -529,7 +529,7 @@ final class TheBrainsActionTests: XCTestCase {
             "ensure_on_screen failed",
             "known target \"Below Fold\"",
             "heistId: below_fold_button",
-            "no recorded scroll position",
+            "no content-space position",
             "use element_search",
         ])
     }
@@ -746,7 +746,7 @@ final class TheBrainsActionTests: XCTestCase {
     // MARK: - Helpers
 
     private func registerScreenElement(
-        heistId: String,
+        heistId: HeistId,
         element: AccessibilityElement,
         object: NSObject?
     ) {
@@ -755,7 +755,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     private func installScreen(
         elements: [(AccessibilityElement, String)],
-        objects: [String: NSObject?] = [:]
+        objects: [HeistId: NSObject?] = [:]
     ) {
         brains.stash.currentScreen = .makeForTests(
             elements: elements.map { ($0.0, $0.1) },

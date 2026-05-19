@@ -48,11 +48,10 @@ final class Navigation {
     static let postScrollLayoutFrames: Int = 3
 
     /// Real (CADisplayLink-paced) frames to yield after an accessibility-SPI
-    /// scroll jump (`jumpToRecordedPosition`, `restoreScrollPosition`,
-    /// `scrollToMakeVisible`-animated). The SPI queues an animated scroll;
-    /// `Task.yield` alone won't advance it, so this uses `yieldRealFrames`
-    /// (Task.sleep at 16ms intervals). 20 frames is the empirical budget for
-    /// that animation to land.
+    /// animated scroll (`inflateKnownTarget`, `scrollToMakeVisible`-animated).
+    /// The SPI queues an animated scroll; `Task.yield` alone won't advance it,
+    /// so this uses `yieldRealFrames` (Task.sleep at 16ms intervals). 20 frames
+    /// is the empirical budget for that animation to land.
     static let postJumpRealFrames: Int = 20
 
     /// Maximum successful page scrolls `element_search` will perform before
@@ -107,25 +106,25 @@ final class Navigation {
     ///    that animations and layout have flushed.
     /// 4. `TheTripwire.yieldFrames(_:)` / `yieldRealFrames(_:)` — fixed-count
     ///    waits with no termination signal. Empirically calibrated budgets
-    ///    for known animation timings (post-jump SPI scrolls, etc.).
+    ///    for known animation timings (post-inflation SPI scrolls, etc.).
     ///
     /// This loop cannot be folded into (2) or (3): (2) doesn't expose a
     /// `moved` latch and runs its own polling cadence; (3) never reads the
     /// AX tree, so it can't tell whether new heistIds are still arriving.
     struct SettleSwipeLoopState: Equatable {
         let profile: SettleSwipeProfile
-        let previousVisibleIds: Set<String>
+        let previousVisibleIds: Set<HeistId>
         let previousAnchor: Int?
 
         private(set) var moved = false
         private(set) var frame = 0
-        private var lastVisibleIds: Set<String>
+        private var lastVisibleIds: Set<HeistId>
         private var idleFramesWithoutNew = 0
         private var stableVisibleFrames = 0
 
         init(
             profile: SettleSwipeProfile,
-            previousVisibleIds: Set<String>,
+            previousVisibleIds: Set<HeistId>,
             previousAnchor: Int?
         ) {
             self.profile = profile
@@ -138,9 +137,9 @@ final class Navigation {
         /// anchor signature (nil if content-space origins unavailable), and
         /// the heistIds newly discovered this frame.
         mutating func advance(
-            visibleIds: Set<String>,
+            visibleIds: Set<HeistId>,
             anchorSignature: Int?,
-            newHeistIds: Set<String>
+            newHeistIds: Set<HeistId>
         ) -> SettleSwipeStep {
             if let previousAnchor, let anchorSignature {
                 if anchorSignature != previousAnchor { moved = true }
@@ -247,10 +246,10 @@ final class Navigation {
         private(set) var knownContainers = Set<AccessibilityContainer>()
         private(set) var searchedContainers = Set<AccessibilityContainer>()
         private(set) var exhaustedContainers = Set<AccessibilityContainer>()
-        private var seenHeistIds: Set<String>
+        private var seenHeistIds: Set<HeistId>
 
         init(
-            initialVisibleHeistIds: Set<String> = [],
+            initialVisibleHeistIds: Set<HeistId> = [],
             knownContainers: Set<AccessibilityContainer> = [],
             maxScrolls: Int = Self.defaultMaxScrolls
         ) {
@@ -302,14 +301,14 @@ final class Navigation {
 
         mutating func markScrolledPage(
             in container: AccessibilityContainer,
-            visibleHeistIds: Set<String>
+            visibleHeistIds: Set<HeistId>
         ) {
             markContainerSearched(container)
             scrollCount += 1
             recordVisibleHeistIds(visibleHeistIds)
         }
 
-        mutating func recordVisibleHeistIds(_ heistIds: Set<String>) {
+        mutating func recordVisibleHeistIds(_ heistIds: Set<HeistId>) {
             seenHeistIds.formUnion(heistIds)
         }
     }

@@ -472,10 +472,9 @@ final class TheHandoffMessageTests: XCTestCase {
     }
 
     private func makeInterfacePayload() -> Interface {
-        Interface(
-            timestamp: Date(timeIntervalSince1970: 1_234),
-            tree: [
-                .element(HeistElement(
+        makeReceiptTestInterface(
+            [
+                HeistElement(
                     heistId: "continue_button",
                     description: "Continue",
                     label: "Continue",
@@ -487,8 +486,9 @@ final class TheHandoffMessageTests: XCTestCase {
                     frameWidth: 120,
                     frameHeight: 44,
                     actions: []
-                )),
-            ]
+                ),
+            ],
+            timestamp: Date(timeIntervalSince1970: 1_234)
         )
     }
 

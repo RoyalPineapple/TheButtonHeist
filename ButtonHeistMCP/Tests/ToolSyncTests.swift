@@ -241,14 +241,13 @@ struct ToolSyncTests {
     @Test("MCP enum schemas match advertised command boundaries")
     func mcpEnumSchemasMatchAdvertisedCommandBoundaries() {
         let getInterface = ToolDefinitions.all.first { $0.name == TheFence.Command.getInterface.rawValue }
-        #expect(extractEnumValues(from: getInterface, property: "scope") == ["visible"])
         #expect(extractEnumValues(from: getInterface, property: "detail") == Set(InterfaceDetail.allCases.map(\.rawValue)))
         if let subtreeSchema = getInterface.flatMap({ extractPropertySchema(from: $0, property: "subtree") }),
            let subtreeProperties = extractObjectField(from: subtreeSchema, key: "properties"),
            let containerSchema = extractObjectField(from: subtreeProperties, key: "container"),
            let containerProperties = extractObjectField(from: containerSchema, key: "properties"),
            let typeSchema = extractObjectField(from: containerProperties, key: "type") {
-            #expect(extractEnumValues(from: typeSchema) == Set(ContainerInfo.ContainerTypeName.allCases.map(\.rawValue)))
+            #expect(extractEnumValues(from: typeSchema) == Set(ContainerTypeName.allCases.map(\.rawValue)))
         } else {
             Issue.record("get_interface.subtree.container.type missing enum schema")
         }
@@ -282,24 +281,18 @@ struct ToolSyncTests {
         }
     }
 
-    @Test("get_interface scope schema advertises diagnostic visible scope only")
-    func getInterfaceScopeSchemaAdvertisesDiagnosticVisibleScopeOnly() {
-        guard let getInterface = ToolDefinitions.all.first(where: { $0.name == TheFence.Command.getInterface.rawValue }),
-              let scopeSchema = extractPropertySchema(from: getInterface, property: "scope") else {
-            Issue.record("get_interface.scope missing property schema")
+    @Test("get_interface schema does not expose diagnostic screen scope")
+    func getInterfaceSchemaDoesNotExposeDiagnosticScreenScope() {
+        guard let getInterface = ToolDefinitions.all.first(where: { $0.name == TheFence.Command.getInterface.rawValue }) else {
+            Issue.record("get_interface tool missing")
             return
         }
 
-        #expect(extractStringField(from: scopeSchema, key: "type") == "string")
-        #expect(extractEnumValues(from: scopeSchema) == ["visible"])
-        let description = extractStringField(from: scopeSchema, key: "description") ?? ""
-        #expect(description.contains("fresh on-screen geometry diagnostics"))
-        #expect(!description.contains("on-screen parse"))
-        #expect(!description.localizedCaseInsensitiveContains("viewport"))
+        #expect(!extractPropertyKeys(from: getInterface).contains("scope"))
     }
 
-    @Test("get_interface MCP description keeps full state default and visible diagnostic")
-    func getInterfaceMCPDescriptionKeepsFullStateDefaultAndVisibleDiagnostic() {
+    @Test("get_interface MCP description presents app state and subtree selection")
+    func getInterfaceMCPDescriptionPresentsAppStateAndSubtreeSelection() {
         guard let getInterface = ToolDefinitions.all.first(where: { $0.name == TheFence.Command.getInterface.rawValue }) else {
             Issue.record("get_interface tool missing")
             return
@@ -307,16 +300,15 @@ struct ToolSyncTests {
 
         let description = getInterface.description ?? ""
         #expect(description.contains("Omit subtree for the whole hierarchy"))
-        #expect(description.contains("project the returned tree"))
-        #expect(description.contains("Omit scope for the normal"))
-        #expect(description.contains("app accessibility state"))
-        #expect(description.contains("scope=visible only for fresh on-screen geometry diagnostics"))
+        #expect(description.contains("select the returned tree"))
+        #expect(description.contains("app accessibility hierarchy"))
+        #expect(!description.localizedCaseInsensitiveContains("scope=visible"))
         #expect(!description.contains("diagnostic on-screen reads"))
         #expect(!description.localizedCaseInsensitiveContains("viewport"))
     }
 
-    @Test("get_interface subtree schema describes projection without viewport language")
-    func getInterfaceSubtreeSchemaDescribesProjectionWithoutViewportLanguage() {
+    @Test("get_interface subtree schema describes selection without viewport language")
+    func getInterfaceSubtreeSchemaDescribesSelectionWithoutViewportLanguage() {
         guard let getInterface = ToolDefinitions.all.first(where: { $0.name == TheFence.Command.getInterface.rawValue }),
               let subtreeSchema = extractPropertySchema(from: getInterface, property: "subtree"),
               let subtreeProperties = extractObjectField(from: subtreeSchema, key: "properties") else {
@@ -807,9 +799,8 @@ struct ToolSyncTests {
         }
 
         let propertyKeys = extractPropertyKeys(from: getInterface)
-        #expect(propertyKeys.contains("scope"))
+        #expect(!propertyKeys.contains("scope"))
         #expect(!propertyKeys.contains("full"))
-        #expect(!extractEnumValues(from: getInterface, property: "scope").contains("full"))
     }
 
     private enum EnumPolicy {

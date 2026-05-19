@@ -98,9 +98,7 @@ final class DiagnosticsTests: XCTestCase {
         let screenElement = TheStash.ScreenElement(
             heistId: "hello",
             contentSpaceOrigin: nil,
-            element: element,
-            object: nil,
-            scrollView: nil
+            element: element
         )
 
         let summary = Diagnostics.compactElementSummary(

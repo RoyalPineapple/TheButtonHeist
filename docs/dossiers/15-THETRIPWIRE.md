@@ -274,7 +274,7 @@ Window-stack changes are Tripwire triggers only. Key-window status is input rout
 | `.settled` | quiet → settled edge | Every tick |
 | `.unsettled` | settled → not-quiet edge | Every tick |
 
-TheInsideJob wires `onTransition` and uses `.settled` to trigger deferred settled-change tracking when `hierarchyInvalidated` is true.
+TheInsideJob wires `onTransition`, marks `tripwireParsePending` when Tripwire triggers or the UI becomes unsettled, and uses `.settled` to run a visible parse. Semantic changes become trace history; viewport-only movement does not.
 
 ## Window Filtering
 

@@ -65,8 +65,8 @@ final class ActionExpectationValidationTests: XCTestCase {
 
     func testScreenChangedPrefersTraceProjectionOverLegacyDeltaField() {
         let before = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
-        let after = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [
-            .element(HeistElement(
+        let after = makeTestInterface(elements: [
+            HeistElement(
                 heistId: "settings_header",
                 description: "Settings",
                 label: "Settings",
@@ -78,7 +78,7 @@ final class ActionExpectationValidationTests: XCTestCase {
                 frameWidth: 100,
                 frameHeight: 44,
                 actions: []
-            )),
+            ),
         ])
         let first = AccessibilityTrace.Capture(
             sequence: 1,
@@ -275,7 +275,7 @@ final class ActionExpectationValidationTests: XCTestCase {
     // MARK: - elementDisappeared
 
     func testElementDisappearedMet() {
-        let preActionElements: [String: HeistElement] = [
+        let preActionElements: [HeistId: HeistElement] = [
             "old_btn": HeistElement(
                 heistId: "old_btn", description: "Remove",
                 label: "Remove", value: nil, identifier: nil,
@@ -324,9 +324,7 @@ final class ActionExpectationValidationTests: XCTestCase {
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
             actions: [.activate]
         )
-        let newInterface = Interface(
-            timestamp: Date(), tree: [.element(newElement)]
-        )
+        let newInterface = makeTestInterface(elements: [newElement], timestamp: Date())
         let result = ActionResult(
             success: true, method: .waitForChange,
             accessibilityDelta: .screenChanged(.init(elementCount: 1, newInterface: newInterface))
@@ -344,9 +342,7 @@ final class ActionExpectationValidationTests: XCTestCase {
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
             actions: [.activate]
         )
-        let newInterface = Interface(
-            timestamp: Date(), tree: [.element(otherElement)]
-        )
+        let newInterface = makeTestInterface(elements: [otherElement], timestamp: Date())
         let result = ActionResult(
             success: true, method: .waitForChange,
             accessibilityDelta: .screenChanged(.init(elementCount: 1, newInterface: newInterface))
@@ -360,7 +356,7 @@ final class ActionExpectationValidationTests: XCTestCase {
     // MARK: - elementDisappeared (screen change)
 
     func testElementDisappearedMetOnScreenChange() {
-        let preActionElements: [String: HeistElement] = [
+        let preActionElements: [HeistId: HeistElement] = [
             "loading": HeistElement(
                 heistId: "loading", description: "Recording payment",
                 label: "Recording payment", value: nil, identifier: nil,
@@ -376,9 +372,7 @@ final class ActionExpectationValidationTests: XCTestCase {
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
             actions: [.activate]
         )
-        let newInterface = Interface(
-            timestamp: Date(), tree: [.element(newElement)]
-        )
+        let newInterface = makeTestInterface(elements: [newElement], timestamp: Date())
         let result = ActionResult(
             success: true, method: .waitForChange,
             accessibilityDelta: .screenChanged(.init(elementCount: 1, newInterface: newInterface))
@@ -391,7 +385,7 @@ final class ActionExpectationValidationTests: XCTestCase {
     }
 
     func testElementDisappearedNotMetOnScreenChangeWhenStillPresent() {
-        let preActionElements: [String: HeistElement] = [
+        let preActionElements: [HeistId: HeistElement] = [
             "persist": HeistElement(
                 heistId: "persist", description: "Header",
                 label: "Header", value: nil, identifier: nil,
@@ -407,9 +401,7 @@ final class ActionExpectationValidationTests: XCTestCase {
             frameX: 0, frameY: 0, frameWidth: 200, frameHeight: 44,
             actions: []
         )
-        let newInterface = Interface(
-            timestamp: Date(), tree: [.element(sameElement)]
-        )
+        let newInterface = makeTestInterface(elements: [sameElement], timestamp: Date())
         let result = ActionResult(
             success: true, method: .waitForChange,
             accessibilityDelta: .screenChanged(.init(elementCount: 1, newInterface: newInterface))

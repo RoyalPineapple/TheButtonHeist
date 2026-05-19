@@ -14,8 +14,8 @@ Post-0.2.25 the resolution layer is **a single immutable value**, `Screen`. TheS
 2. **Target resolution** — `resolveTarget(_:)` looks only in `currentScreen.elements` / `currentScreen.hierarchy`. The off-screen rule is **strict**: an heistId not in `currentScreen.elements` returns `.notFound` with a near-miss suggestion. No fallback to a recorded scroll position from a previous parse. See [12-UNIFIED-TARGETING.md](12-UNIFIED-TARGETING.md) for the full targeting system.
 3. **Element matching** — `matchScreenElements(_:limit:)` walks `selectElements()` using `ElementMatcher` predicates with AND semantics and case-insensitive equality (typography-folded — smart quotes, dashes, ellipsis fold to ASCII; emoji/accents/CJK preserved). Matching sees the committed semantic state, including known-only entries retained from exploration. Matching is exact or miss; substring is reserved for the diagnostic suggestion path (`Diagnostics.findNearMiss`).
 4. **HeistId synthesis** — `IdAssignment` assigns stable, deterministic `heistId` identifiers directly from `AccessibilityElement` (developer identifier preferred, else synthesized from traits+label; value excluded for stability), with suffix disambiguation for duplicates and `_at_X_Y` content-position suffixes for spatially-distinct same-content elements seen within one parse. Synthesis is wire format — see CLAUDE.md.
-5. **Wire conversion at boundary** — `WireConversion.toWire()` converts `Screen.ScreenElement` → `HeistElement` at serialization boundaries. `WireConversion.toWireTree(from:)` walks the live hierarchy and emits `[InterfaceNode]` for the full tree payload. Pure transform — no stored state.
-6. **Capture inputs for deltas** — `WireConversion.toWireTree(from:)` emits the interface tree that TheBrains stores in `AccessibilityTrace.Capture`. Compact deltas are derived later from capture endpoints in TheScore; TheStash no longer accepts snapshot-only delta inputs.
+5. **Wire conversion at boundary** — `WireConversion.toWire()` converts `Screen.ScreenElement` → `HeistElement` at serialization boundaries. `WireConversion.toInterface(from:)` packages the parser hierarchy plus Button Heist annotations for the full interface payload. Pure transform — no stored state.
+6. **Capture inputs for deltas** — `WireConversion.toInterface(from:)` emits the interface that TheBrains stores in `AccessibilityTrace.Capture`. Compact deltas are derived later from capture endpoints in TheScore; TheStash no longer accepts snapshot-only delta inputs.
 7. **Element actions** — thin wrappers over `accessibilityActivate()`, `accessibilityIncrement()`, `accessibilityDecrement()`, `accessibilityCustomActions` on the live UIKit object. `performCustomAction` returns a `CustomActionOutcome` enum so callers can distinguish "view deallocated" from "no such action" without a raw NSObject check.
 8. **Scroll-position primitives** — `jumpToRecordedPosition(_:)`, `restoreScrollPosition(_:to:)`, and `scrollTargetOffset(for:in:)` set `contentOffset` on an element's owning scroll view from a recorded `contentSpaceOrigin`. The stash decides nothing (callers still orchestrate when to jump); it just encapsulates the UIScrollView write so the scroll view handle doesn't leak.
 9. **Live geometry readout** — `liveGeometry(for:)` promotes the weak NSObject ref internally and returns a value-typed `(frame, activationPoint, scrollView)` snapshot for callers that need to make viewport decisions.
@@ -44,7 +44,7 @@ let screen = stash.parse()        // pure read — does not touch currentScreen
 stash.currentScreen = screen      // commit
 
 // Exploration path (Navigation+Explore.exploreAndPrune):
-var union = stash.currentScreen   // seed with current interaction snapshot
+var union = stash.currentScreen   // seed with current live interface
 for container in scrollableContainers {
     await scrollToTop(container)
     if let parsed = stash.refresh() {
@@ -52,7 +52,7 @@ for container in scrollableContainers {
     }
     while await scrollOnePageAndSettle(container) {
         if let parsed = stash.parse() {
-            stash.currentScreen = parsed     // mid-cycle interaction snapshot for termination heuristics
+            stash.currentScreen = parsed     // mid-cycle live interface for termination heuristics
             union = union.merging(parsed)
         }
     }
@@ -109,12 +109,8 @@ flowchart LR
 
 ```swift
 struct Screen: Equatable {
-    let elements: [String: ScreenElement]              // heistId → entry
-    let hierarchy: [AccessibilityHierarchy]            // live parsed tree
-    let containerStableIds: [AccessibilityContainer: String]
-    let heistIdByElement: [AccessibilityElement: String]
-    let firstResponderHeistId: String?
-    let scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
+    let elements: [String: ScreenElement]              // known semantic state
+    let liveInterface: LiveInterface                   // live parse affordances
 
     static var empty: Screen { ... }
     func findElement(heistId: String) -> ScreenElement?
@@ -123,6 +119,14 @@ struct Screen: Equatable {
     var name: String? { /* first header label, computed */ }
     var id: String? { /* slugified name */ }
     var heistIds: Set<String> { Set(elements.keys) }
+}
+
+struct LiveInterface: Equatable {
+    let hierarchy: [AccessibilityHierarchy]            // latest parser tree
+    let containerStableIds: [AccessibilityContainer: String]
+    let heistIdByElement: [AccessibilityElement: String]
+    let firstResponderHeistId: String?
+    let scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
 }
 
 struct ScreenElement: @unchecked Sendable, Equatable {
@@ -179,12 +183,12 @@ Computed accessors proxy through `currentScreen`:
 
 | Accessor | Source |
 |----------|--------|
-| `currentHierarchy` | `currentScreen.interactionSnapshot.hierarchy` |
+| `currentHierarchy` | `currentScreen.liveInterface.hierarchy` |
 | `knownIds` | `currentScreen.knownIds` (all known semantic entries; after an exploration union this includes off-viewport entries) |
 | `visibleIds` | `currentScreen.visibleIds` (strictly backed by the latest parsed live hierarchy) |
-| `firstResponderHeistId` | `currentScreen.interactionSnapshot.firstResponderHeistId` |
-| `lastScreenName`, `lastScreenId` | derived from `currentScreen.interactionSnapshot.hierarchy` |
-| `scrollableContainerViews` | unwraps the weak-view wrappers from `currentScreen.interactionSnapshot.scrollableContainerViews` |
+| `firstResponderHeistId` | `currentScreen.liveInterface.firstResponderHeistId` |
+| `lastScreenName`, `lastScreenId` | derived from `currentScreen.liveInterface.hierarchy` |
+| `scrollableContainerViews` | unwraps the weak-view wrappers from `currentScreen.liveInterface.scrollableContainerViews` |
 
 No store writes to another store. No circular dependencies.
 
@@ -196,7 +200,7 @@ No store writes to another store. No circular dependencies.
 | `TheStash+Matching.swift` | Element matching against ElementMatcher predicates over `selectElements()` |
 | `TheStash+Capture.swift` | Screen capture (clean + recording overlay) |
 | `TheStash/Screen.swift` | `Screen` struct + `ScreenElement` + `ScrollableViewRef` + pure helpers (`visibleOnly`, `orderedElements`, `merging(_:)`) |
-| `TheStash/WireConversion.swift` | Caseless enum with static methods: traitNames, convert, toWire (element + array), toWireTree (Screen → InterfaceNode tree). Pure transform; no delta logic. |
+| `TheStash/WireConversion.swift` | Caseless enum with static methods: traitNames, convert, toWire (element + array), toInterface (Screen → Interface). Pure transform; no delta logic. |
 | `TheStash/IdAssignment.swift` | Caseless enum with static methods: deterministic heistId synthesis from traits/labels (wire-format-stable) |
 | `TheStash/Diagnostics.swift` | Caseless enum with static methods: resolution error formatting, near-miss suggestions |
 | `TheStash/Interactivity.swift` | Interactivity predicates (shared by WireConversion and ActionExecution) |
@@ -210,4 +214,4 @@ No store writes to another store. No circular dependencies.
 
 ## Architectural Rule
 
-TheStash owns the NSObject boundary — value semantics at its API edge. It holds exactly one piece of resolution state, `currentScreen`, and exposes thin facades for parse, refresh, resolve, match, and act. It does not *orchestrate* — it does not decide when to scroll, when to refresh, or when to dispatch an action. Those decisions belong to TheBrains, which coordinates TheStash, TheBurglar, TheSafecracker, and TheTripwire. No NSObject escapes the stash after TheBurglar deposits it: callers pass `ScreenElement` tokens and receive CGRects, CGPoints, Bools, and typed outcome enums. Wire conversion and ID assignment are static methods on caseless enums (`TheStash.WireConversion`, `TheStash.IdAssignment`); compact deltas are derived from `AccessibilityTrace` captures in TheScore. TheStash retains `wireTree()` / `wireTreeHash()` as thin readers because they need the *current* screen — they are not zero-behavior facades.
+TheStash owns the NSObject boundary — value semantics at its API edge. It holds exactly one piece of resolution state, `currentScreen`, and exposes thin facades for parse, refresh, resolve, match, and act. It does not *orchestrate* — it does not decide when to scroll, when to refresh, or when to dispatch an action. Those decisions belong to TheBrains, which coordinates TheStash, TheBurglar, TheSafecracker, and TheTripwire. No NSObject escapes the stash after TheBurglar deposits it: callers pass `ScreenElement` tokens and receive CGRects, CGPoints, Bools, and typed outcome enums. Wire conversion and ID assignment are static methods on caseless enums (`TheStash.WireConversion`, `TheStash.IdAssignment`); compact deltas are derived from `AccessibilityTrace` captures in TheScore. TheStash retains `interface()` / `interfaceHash()` as thin readers because they need the *current* screen — they are not zero-behavior facades.

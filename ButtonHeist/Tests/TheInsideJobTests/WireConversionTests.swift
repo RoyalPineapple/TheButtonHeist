@@ -73,7 +73,7 @@ final class WireConverterTests: XCTestCase {
     }
 
     private func makeScreenElement(
-        heistId: String,
+        heistId: HeistId,
         label: String? = nil,
         value: String? = nil,
         identifier: String? = nil,
@@ -87,8 +87,7 @@ final class WireConverterTests: XCTestCase {
         activationPointY: Double = 0,
         customContent: [AccessibilityElement.CustomContent] = [],
         customRotors: [AccessibilityElement.CustomRotor] = [],
-        respondsToUserInteraction: Bool = true,
-        object: NSObject? = nil
+        respondsToUserInteraction: Bool = true
     ) -> Screen.ScreenElement {
         Screen.ScreenElement(
             heistId: heistId,
@@ -101,56 +100,96 @@ final class WireConverterTests: XCTestCase {
                 customContent: customContent,
                 customRotors: customRotors,
                 respondsToUserInteraction: respondsToUserInteraction
-            ),
-            object: object,
-            scrollView: nil
+            )
         )
     }
 
-    /// Build a wire tree node from a ScreenElement leaf.
-    private func wireLeaf(_ element: Screen.ScreenElement) -> InterfaceNode {
-        .element(WireConversion.toWire(element))
+    private enum TestInterfaceNode {
+        case element(Screen.ScreenElement)
+        case container(String, AccessibilityContainer, children: [TestInterfaceNode])
     }
 
-    /// Build a wire tree container node with a fixed stableId.
+    /// Build a test tree node from a ScreenElement leaf.
+    private func wireLeaf(_ element: Screen.ScreenElement) -> TestInterfaceNode {
+        .element(element)
+    }
+
+    /// Build a test tree container node with a fixed stableId.
     private func wireContainer(
-        stableId: String,
-        type: ContainerInfo.ContainerType = .list,
+        stableId: HeistContainer,
+        type: AccessibilityContainer.ContainerType = .list,
         frame: CGRect = .zero,
-        children: [InterfaceNode]
-    ) -> InterfaceNode {
-        let info = ContainerInfo(
-            type: type,
-            stableId: stableId,
-            frameX: Double(frame.origin.x),
-            frameY: Double(frame.origin.y),
-            frameWidth: Double(frame.size.width),
-            frameHeight: Double(frame.size.height)
+        children: [TestInterfaceNode]
+    ) -> TestInterfaceNode {
+        .container(
+            stableId,
+            AccessibilityContainer(
+                type: type,
+                frame: AccessibilityRect(
+                    x: frame.origin.x,
+                    y: frame.origin.y,
+                    width: frame.size.width,
+                    height: frame.size.height
+                )
+            ),
+            children: children
         )
-        return .container(info, children: children)
+    }
+
+    private func makeInterface(
+        nodes: [TestInterfaceNode],
+        timestamp: Date
+    ) -> Interface {
+        var traversalIndex = 0
+        var elementAnnotations: [InterfaceElementAnnotation] = []
+        var containerAnnotations: [InterfaceContainerAnnotation] = []
+
+        func convert(_ node: TestInterfaceNode, path: TreePath) -> AccessibilityHierarchy {
+            switch node {
+            case .element(let element):
+                let index = traversalIndex
+                traversalIndex += 1
+                elementAnnotations.append(InterfaceElementAnnotation(
+                    path: path,
+                    heistId: element.heistId,
+                    actions: WireConversion.toWire(element).actions
+                ))
+                return .element(element.element, traversalIndex: index)
+            case .container(let stableId, let container, let children):
+                containerAnnotations.append(InterfaceContainerAnnotation(path: path, stableId: stableId))
+                return .container(
+                    container,
+                    children: children.enumerated().map { index, child in
+                        convert(child, path: path.appending(index))
+                    }
+                )
+            }
+        }
+
+        return Interface(
+            timestamp: timestamp,
+            tree: nodes.enumerated().map { index, node in
+                convert(node, path: TreePath([index]))
+            },
+            annotations: InterfaceAnnotations(elements: elementAnnotations, containers: containerAnnotations)
+        )
     }
 
     private func computeDelta(
         before: [Screen.ScreenElement],
         after: [Screen.ScreenElement],
-        beforeTree: [InterfaceNode]? = nil,
-        afterTree: [InterfaceNode]? = nil,
+        beforeTree: [TestInterfaceNode]? = nil,
+        afterTree: [TestInterfaceNode]? = nil,
         isScreenChange: Bool
     ) -> AccessibilityTrace.Delta {
-        let resolvedAfterTree: [InterfaceNode]
+        let resolvedAfterTree: [TestInterfaceNode]
         if let afterTree, !afterTree.isEmpty {
             resolvedAfterTree = afterTree
         } else {
             resolvedAfterTree = after.map(wireLeaf)
         }
-        let beforeInterface = Interface(
-            timestamp: Date(timeIntervalSince1970: 0),
-            tree: beforeTree ?? before.map(wireLeaf)
-        )
-        let afterInterface = Interface(
-            timestamp: Date(timeIntervalSince1970: 1),
-            tree: resolvedAfterTree
-        )
+        let beforeInterface = makeInterface(nodes: beforeTree ?? before.map(wireLeaf), timestamp: Date(timeIntervalSince1970: 0))
+        let afterInterface = makeInterface(nodes: resolvedAfterTree, timestamp: Date(timeIntervalSince1970: 1))
         let beforeCapture = AccessibilityTrace.Capture(sequence: 1, interface: beforeInterface)
         let afterCapture = AccessibilityTrace.Capture(
             sequence: 2,
@@ -289,11 +328,10 @@ final class WireConverterTests: XCTestCase {
         let element = makeScreenElement(
             heistId: "plain_action",
             label: "Plain action",
-            respondsToUserInteraction: false,
-            object: object
+            respondsToUserInteraction: false
         )
 
-        let wire = WireConversion.toWire(element)
+        let wire = WireConversion.convert(element.element, heistId: element.heistId, object: object)
 
         XCTAssertEqual(wire.actions, [.activate])
     }
@@ -303,11 +341,10 @@ final class WireConverterTests: XCTestCase {
         let element = makeScreenElement(
             heistId: "plain_label",
             label: "Plain label",
-            respondsToUserInteraction: false,
-            object: object
+            respondsToUserInteraction: false
         )
 
-        let wire = WireConversion.toWire(element)
+        let wire = WireConversion.convert(element.element, heistId: element.heistId, object: object)
 
         XCTAssertEqual(wire.actions, [])
     }
@@ -328,7 +365,7 @@ final class WireConverterTests: XCTestCase {
         )
         let screen = TheBurglar.buildScreen(from: parse)
 
-        let tree = WireConversion.toWireTree(from: screen)
+        let tree = WireConversion.toInterface(from: screen).tree
 
         guard case .container(let info, _) = tree.first else {
             return XCTFail("Expected container root")
@@ -541,7 +578,7 @@ final class WireConverterTests: XCTestCase {
         let after = [afterElement]
         // The new wire shape derives newInterface from the screen's tree, not
         // the flat snapshot — so the tree must reflect after.
-        let afterTree: [InterfaceNode] = [wireLeaf(afterElement)]
+        let afterTree = [wireLeaf(afterElement)]
 
         let delta = computeDelta(
             before: before, after: after, afterTree: afterTree, isScreenChange: true
@@ -555,8 +592,8 @@ final class WireConverterTests: XCTestCase {
 
     func testTreeOnlyChangeReturnsStructuralInsertion() {
         let element = makeScreenElement(heistId: "button_ok", label: "OK", traits: [.button])
-        let beforeTree = [InterfaceNode.element(WireConversion.toWire(element))]
-        let afterTree: [InterfaceNode] = [
+        let beforeTree = [wireLeaf(element)]
+        let afterTree = [
             wireContainer(
                 stableId: "list_0",
                 type: .list,
@@ -577,11 +614,13 @@ final class WireConverterTests: XCTestCase {
         if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
         XCTAssertEqual(delta.testEdits.treeInsertedOptional?.count, 1)
         XCTAssertEqual(delta.testEdits.treeInsertedOptional?.first?.location, TreeLocation(parentId: nil, index: 0))
-        guard case .container(let info, let children) = delta.testEdits.treeInsertedOptional?.first?.node else {
+        let insertion = delta.testEdits.treeInsertedOptional?.first
+        guard case .container(_, let children) = insertion?.node else {
             return XCTFail("Expected inserted container")
         }
-        XCTAssertEqual(info.stableId, "list_0")
-        XCTAssertEqual(children.flatten().map(\.heistId), ["button_ok"])
+        XCTAssertEqual(insertion?.annotations.containers.first?.stableId, "list_0")
+        XCTAssertEqual(insertion?.annotations.elements.map(\.heistId), ["button_ok"])
+        XCTAssertEqual(children.elements.map(\.traversalIndex), [0])
         XCTAssertEqual(
             delta.testEdits.treeMovedOptional,
             [TreeMove(
@@ -596,10 +635,10 @@ final class WireConverterTests: XCTestCase {
         let first = makeScreenElement(heistId: "first", label: "First")
         let second = makeScreenElement(heistId: "second", label: "Second")
         let beforeTree = [
-            InterfaceNode.element(WireConversion.toWire(first)),
-            InterfaceNode.element(WireConversion.toWire(second)),
+            wireLeaf(first),
+            wireLeaf(second),
         ]
-        let afterTree: [InterfaceNode] = [
+        let afterTree = [
             wireLeaf(second),
             wireLeaf(first),
         ]
@@ -646,10 +685,10 @@ final class WireConverterTests: XCTestCase {
         )
         let other = makeScreenElement(heistId: "daybreak_morning_ritual_button", label: "Daybreak")
         let beforeTree = [
-            InterfaceNode.element(WireConversion.toWire(beforeElement)),
-            InterfaceNode.element(WireConversion.toWire(other)),
+            wireLeaf(beforeElement),
+            wireLeaf(other),
         ]
-        let afterTree: [InterfaceNode] = [
+        let afterTree = [
             wireLeaf(other),
             wireLeaf(afterElement),
         ]
@@ -694,10 +733,10 @@ final class WireConverterTests: XCTestCase {
         )
         let other = makeScreenElement(heistId: "queue_button", label: "Queue")
         let beforeTree = [
-            InterfaceNode.element(WireConversion.toWire(beforeElement)),
-            InterfaceNode.element(WireConversion.toWire(other)),
+            wireLeaf(beforeElement),
+            wireLeaf(other),
         ]
-        let afterTree: [InterfaceNode] = [
+        let afterTree = [
             wireLeaf(other),
             wireLeaf(afterElement),
         ]
@@ -742,8 +781,8 @@ final class WireConverterTests: XCTestCase {
             frameY: 200,
             activationPointY: 222
         )
-        let beforeTree = [InterfaceNode.element(WireConversion.toWire(beforeElement))]
-        let afterTree: [InterfaceNode] = [wireLeaf(afterElement)]
+        let beforeTree = [wireLeaf(beforeElement)]
+        let afterTree = [wireLeaf(afterElement)]
 
         let delta = computeDelta(
             before: [beforeElement],
@@ -766,10 +805,10 @@ final class WireConverterTests: XCTestCase {
         let first = makeScreenElement(heistId: "first", label: "First")
         let second = makeScreenElement(heistId: "second", label: "Second")
         let beforeTree = [
-            InterfaceNode.element(WireConversion.toWire(first)),
-            InterfaceNode.element(WireConversion.toWire(second)),
+            wireLeaf(first),
+            wireLeaf(second),
         ]
-        let afterTree: [InterfaceNode] = [wireLeaf(first)]
+        let afterTree = [wireLeaf(first)]
 
         let delta = computeDelta(
             before: [first, second],

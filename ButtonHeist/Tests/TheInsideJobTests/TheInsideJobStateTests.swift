@@ -281,6 +281,45 @@ final class TheInsideJobStateTests: XCTestCase {
         XCTAssertEqual(job.pollingTimeoutSeconds, 3.5)
     }
 
+    func testSettledBackgroundParseRequiresRunningActiveAndNoParserWorkInFlight() {
+        XCTAssertTrue(TheInsideJob.canRunSettledBackgroundParse(
+            isRunning: true,
+            applicationState: .active,
+            commandParseInFlight: false,
+            settledTripwireParseInFlight: false
+        ))
+        XCTAssertFalse(TheInsideJob.canRunSettledBackgroundParse(
+            isRunning: false,
+            applicationState: .active,
+            commandParseInFlight: false,
+            settledTripwireParseInFlight: false
+        ))
+        XCTAssertFalse(TheInsideJob.canRunSettledBackgroundParse(
+            isRunning: true,
+            applicationState: .inactive,
+            commandParseInFlight: false,
+            settledTripwireParseInFlight: false
+        ))
+        XCTAssertFalse(TheInsideJob.canRunSettledBackgroundParse(
+            isRunning: true,
+            applicationState: .background,
+            commandParseInFlight: false,
+            settledTripwireParseInFlight: false
+        ))
+        XCTAssertFalse(TheInsideJob.canRunSettledBackgroundParse(
+            isRunning: true,
+            applicationState: .active,
+            commandParseInFlight: true,
+            settledTripwireParseInFlight: false
+        ))
+        XCTAssertFalse(TheInsideJob.canRunSettledBackgroundParse(
+            isRunning: true,
+            applicationState: .active,
+            commandParseInFlight: false,
+            settledTripwireParseInFlight: true
+        ))
+    }
+
     // MARK: - RecordingPhase
 
     func testInitialRecordingPhaseIsIdle() {

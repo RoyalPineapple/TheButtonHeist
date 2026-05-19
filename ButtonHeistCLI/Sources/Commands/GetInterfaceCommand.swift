@@ -2,12 +2,6 @@ import ArgumentParser
 import Foundation
 import ButtonHeist
 
-enum CLIGetInterfaceScope: String, ExpressibleByArgument, CaseIterable {
-    case visible
-
-    static let allCases: [CLIGetInterfaceScope] = [.visible]
-}
-
 struct GetInterfaceCommand: AsyncParsableCommand, CLICommandContract {
     static let fenceCommand = TheFence.Command.getInterface
 
@@ -20,18 +14,13 @@ struct GetInterfaceCommand: AsyncParsableCommand, CLICommandContract {
 
     @OptionGroup var output: OutputOptions
 
-    @Option(help: "Diagnostic scope. Omit for app accessibility state; use visible for fresh on-screen geometry")
-    var scope: CLIGetInterfaceScope?
-
     @ButtonHeistActor
     mutating func run() async throws {
-        var request = Self.fenceRequest()
-        if let scope { request[.scope] = scope.rawValue }
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
-            request: request,
-            statusMessage: scope == .visible ? "Requesting visible diagnostic interface..." : "Reading interface..."
+            request: Self.fenceRequest(),
+            statusMessage: "Reading interface..."
         )
     }
 }

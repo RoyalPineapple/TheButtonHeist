@@ -1035,7 +1035,7 @@ public final class TheFence {
         _ expectation: ActionExpectation,
         initialResult: ActionResult,
         initialValidation: ExpectationResult,
-        preActionElements: [String: HeistElement],
+        preActionElements: [HeistId: HeistElement],
         timeout: Double?,
         backgroundStartIndex: Int
     ) async throws -> ValidatedResponse {
@@ -1083,16 +1083,11 @@ public final class TheFence {
     }
 
     private func fullInterfaceCapture(from response: FenceResponse, parsed: ParsedRequest) -> Interface? {
-        guard case .getInterface(let request) = parsed.payload,
-              request.scope == .full,
-              case .interface(let iface, _, _, let explore) = response else {
+        guard case .getInterface = parsed.payload,
+              case .interface(let iface, _) = response else {
             return nil
         }
-        guard let explore else { return iface }
-        return Interface(
-            timestamp: iface.timestamp,
-            tree: explore.elements.map(InterfaceNode.element)
-        )
+        return iface
     }
 
     private func ingestActionTrace(_ actionResult: ActionResult) -> AccessibilityTrace.Cursor? {
@@ -1153,7 +1148,7 @@ public final class TheFence {
             responseStatus = .error
             artifactPath = nil
             errorMessage = message
-        case .screenshot(let path, _, _):
+        case .screenshot(let path, _):
             responseStatus = .ok
             artifactPath = path
             errorMessage = nil

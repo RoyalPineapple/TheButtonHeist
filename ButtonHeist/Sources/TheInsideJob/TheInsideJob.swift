@@ -393,7 +393,11 @@ public final class TheInsideJob {
 
     public func notifyChange() {
         guard isRunning else { return }
-        getaway.hierarchyInvalidated = true
+        getaway.tripwireParsePending = true
+        if canRunSettledBackgroundParse, tripwire.latestReading?.isSettled == true {
+            let getaway = self.getaway
+            Task { await getaway.noteSettledChangeIfNeeded() }
+        }
     }
 
     public func startPolling(interval timeout: TimeInterval = 2.0) {
@@ -416,9 +420,20 @@ public final class TheInsideJob {
     // MARK: - Pulse Handling
 
     private func handlePulseTransition(_ transition: TheTripwire.PulseTransition) {
-        if case .settled = transition, getaway.hierarchyInvalidated {
+        switch transition {
+        case .tripwireTriggered:
+            getaway.tripwireParsePending = true
+            if canRunSettledBackgroundParse, tripwire.latestReading?.isSettled == true {
+                let getaway = self.getaway
+                Task { await getaway.noteSettledChangeIfNeeded() }
+            }
+        case .unsettled:
+            getaway.tripwireParsePending = true
+        case .settled where getaway.tripwireParsePending && canRunSettledBackgroundParse:
             let getaway = self.getaway
             Task { await getaway.noteSettledChangeIfNeeded() }
+        case .settled:
+            break
         }
     }
 
@@ -428,11 +443,32 @@ public final class TheInsideJob {
             while self.isPollingEnabled && !Task.isCancelled {
                 let settled = await self.tripwire.waitForAllClear(timeout: interval)
                 guard !Task.isCancelled, self.isPollingEnabled else { break }
-                if settled {
+                if settled && self.canRunSettledBackgroundParse {
                     await self.getaway.noteSettledChangeIfNeeded()
                 }
             }
         }
+    }
+
+    private var canRunSettledBackgroundParse: Bool {
+        Self.canRunSettledBackgroundParse(
+            isRunning: isRunning,
+            applicationState: UIApplication.shared.applicationState,
+            commandParseInFlight: getaway.commandParseInFlight,
+            settledTripwireParseInFlight: getaway.settledTripwireParseInFlight
+        )
+    }
+
+    static func canRunSettledBackgroundParse(
+        isRunning: Bool,
+        applicationState: UIApplication.State,
+        commandParseInFlight: Bool,
+        settledTripwireParseInFlight: Bool
+    ) -> Bool {
+        isRunning
+            && applicationState == .active
+            && !commandParseInFlight
+            && !settledTripwireParseInFlight
     }
 
     // MARK: - Service Advertisement
@@ -520,7 +556,11 @@ public final class TheInsideJob {
     }
 
     @objc private func accessibilityDidChange() {
-        getaway.hierarchyInvalidated = true
+        getaway.tripwireParsePending = true
+        if canRunSettledBackgroundParse, tripwire.latestReading?.isSettled == true {
+            let getaway = self.getaway
+            Task { await getaway.noteSettledChangeIfNeeded() }
+        }
     }
 
     // MARK: - App Lifecycle

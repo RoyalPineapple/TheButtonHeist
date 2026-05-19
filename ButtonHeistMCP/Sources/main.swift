@@ -162,8 +162,8 @@ struct ButtonHeistMCPServer {
 
         // Screenshots: embed as image content. File-based screenshots fall through
         // to the compact text below.
-        if case .screenshotData(let pngData, _, _) = response {
-            content.append(.image(data: pngData, mimeType: "image/png", annotations: nil, _meta: nil))
+        if case .screenshotData(let payload) = response {
+            content.append(.image(data: payload.pngData, mimeType: "image/png", annotations: nil, _meta: nil))
         }
 
         content.append(.text(text: response.compactFormatted(), annotations: nil, _meta: nil))

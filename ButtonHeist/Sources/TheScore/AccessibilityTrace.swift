@@ -1,33 +1,67 @@
 import CryptoKit
 import Foundation
+import AccessibilitySnapshotModel
 
 // MARK: - Accessibility Trace
 
-/// Linear accessibility captures observed during a session.
+/// Accessibility state observed during a session.
 ///
-/// The durable currency is a full hierarchy capture with a content hash.
-/// Deltas, receipts, summaries, and samples are derived views.
+/// Screen changes create full baseline captures. Same-screen changes are stored
+/// as replayable patches on top of that baseline. `captures` remains the
+/// materialized projection for callers that want the full state at every point.
 public struct AccessibilityTrace: Codable, Sendable, Equatable {
-    public let captures: [Capture]
+    public let segments: [ScreenSegment]
+
+    public var captures: [Capture] {
+        segments.flatMap(\.captures)
+    }
 
     private enum CodingKeys: String, CodingKey {
-        case captures
+        case segments
     }
 
     public init(captures: [Capture]) {
-        var previousHash: String?
-        self.captures = captures.enumerated().map { index, capture in
+        var segments: [ScreenSegment] = []
+        var currentSegment: ScreenSegment?
+        var previousCapture: Capture?
+
+        for (index, capture) in captures.enumerated() {
             let linked = Capture(
                 sequence: index + 1,
                 interface: capture.interface,
-                parentHash: previousHash,
+                parentHash: previousCapture?.hash,
                 context: capture.context,
                 transition: capture.transition,
                 hash: capture.hash
             )
-            previousHash = linked.hash
-            return linked
+
+            guard let before = previousCapture, var segment = currentSegment else {
+                currentSegment = ScreenSegment(baseline: linked)
+                previousCapture = linked
+                continue
+            }
+
+            if linked.transition.startsScreenSegment {
+                segments.append(segment)
+                currentSegment = ScreenSegment(baseline: linked)
+            } else if let observed = ObservedTransition.between(before, linked) {
+                segment.append(observed)
+                currentSegment = segment
+            } else {
+                segments.append(segment)
+                currentSegment = ScreenSegment(baseline: linked)
+            }
+            previousCapture = linked
         }
+
+        if let currentSegment {
+            segments.append(currentSegment)
+        }
+        self.init(segments: segments)
+    }
+
+    public init(segments: [ScreenSegment]) {
+        self.segments = segments
     }
 
     public init(capture: Capture) {
@@ -44,12 +78,12 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.init(captures: try container.decode([Capture].self, forKey: .captures))
+        self.init(segments: try container.decode([ScreenSegment].self, forKey: .segments))
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(captures, forKey: .captures)
+        try container.encode(segments, forKey: .segments)
     }
 
     public func appending(
@@ -89,6 +123,63 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
     public var receipts: [Receipt] {
         captures.map(Receipt.init(capture:))
     }
+
+    public var integrityIssues: [IntegrityIssue] {
+        var issues: [IntegrityIssue] = []
+        var expectedParentHash: String?
+
+        for (segmentIndex, segment) in segments.enumerated() {
+            let baseline = segment.baseline
+            let computedBaselineHash = Capture.hash(interface: baseline.interface, context: baseline.context)
+            if baseline.hash != computedBaselineHash {
+                issues.append(.captureHashMismatch(
+                    segment: segmentIndex,
+                    sequence: baseline.sequence,
+                    recordedHash: baseline.hash,
+                    computedHash: computedBaselineHash
+                ))
+            }
+            if baseline.parentHash != expectedParentHash {
+                issues.append(.parentHashMismatch(
+                    segment: segmentIndex,
+                    sequence: baseline.sequence,
+                    recordedParentHash: baseline.parentHash,
+                    expectedParentHash: expectedParentHash
+                ))
+            }
+
+            var previous = baseline
+            for transition in segment.transitions {
+                if transition.fromHash != previous.hash {
+                    issues.append(.transitionFromHashMismatch(
+                        segment: segmentIndex,
+                        sequence: transition.sequence,
+                        recordedFromHash: transition.fromHash,
+                        expectedFromHash: previous.hash
+                    ))
+                }
+                let materialized = transition.materialize(after: previous)
+                if materialized.hash != transition.toHash {
+                    issues.append(.transitionToHashMismatch(
+                        segment: segmentIndex,
+                        sequence: transition.sequence,
+                        recordedToHash: transition.toHash,
+                        computedToHash: materialized.hash
+                    ))
+                }
+                previous = materialized
+            }
+
+            expectedParentHash = previous.hash
+        }
+
+        return issues
+    }
+
+    public var hasValidIntegrity: Bool {
+        integrityIssues.isEmpty
+    }
+
 }
 
 private enum AccessibilityTraceCaptureCodingKeys: String, CodingKey {
@@ -101,6 +192,239 @@ private enum AccessibilityTraceCaptureCodingKeys: String, CodingKey {
 }
 
 public extension AccessibilityTrace {
+    struct ScreenSegment: Codable, Sendable, Equatable {
+        public let baseline: Capture
+        public private(set) var transitions: [ObservedTransition]
+
+        public init(baseline: Capture, transitions: [ObservedTransition] = []) {
+            self.baseline = baseline
+            self.transitions = transitions
+        }
+
+        public var captures: [Capture] {
+            transitions.reduce(into: [baseline]) { result, transition in
+                guard let previous = result.last else { return }
+                result.append(transition.materialize(after: previous))
+            }
+        }
+
+        public var currentCapture: Capture {
+            captures.last ?? baseline
+        }
+
+        public mutating func append(_ transition: ObservedTransition) {
+            transitions.append(transition)
+        }
+
+    }
+
+    enum IntegrityIssue: Sendable, Equatable {
+        case captureHashMismatch(
+            segment: Int,
+            sequence: Int,
+            recordedHash: String,
+            computedHash: String
+        )
+        case parentHashMismatch(
+            segment: Int,
+            sequence: Int,
+            recordedParentHash: String?,
+            expectedParentHash: String?
+        )
+        case transitionFromHashMismatch(
+            segment: Int,
+            sequence: Int,
+            recordedFromHash: String,
+            expectedFromHash: String
+        )
+        case transitionToHashMismatch(
+            segment: Int,
+            sequence: Int,
+            recordedToHash: String,
+            computedToHash: String
+        )
+    }
+
+    struct ObservedTransition: Codable, Sendable, Equatable {
+        public let sequence: Int
+        public let fromHash: String
+        public let toHash: String
+        public let cause: TransitionCause
+        public let patch: AccessibilityPatch
+
+        public init(
+            sequence: Int,
+            fromHash: String,
+            toHash: String,
+            cause: TransitionCause = .unknown,
+            patch: AccessibilityPatch
+        ) {
+            self.sequence = sequence
+            self.fromHash = fromHash
+            self.toHash = toHash
+            self.cause = cause
+            self.patch = patch
+        }
+
+        public static func between(
+            _ before: Capture,
+            _ after: Capture,
+            cause: TransitionCause = .unknown
+        ) -> ObservedTransition? {
+            guard let patch = AccessibilityPatch.between(before, after) else { return nil }
+            return ObservedTransition(
+                sequence: after.sequence,
+                fromHash: before.hash,
+                toHash: after.hash,
+                cause: cause,
+                patch: patch
+            )
+        }
+
+        public func materialize(after capture: Capture, sequence: Int? = nil) -> Capture {
+            patch.apply(to: capture, sequence: sequence ?? self.sequence)
+        }
+    }
+
+    enum TransitionCause: Codable, Sendable, Equatable, Hashable {
+        case command(String)
+        case external
+        case system
+        case animation
+        case timer
+        case unknown
+    }
+
+    enum AccessibilityPatchOperation: Codable, Sendable, Equatable {
+        case updateElement(
+            path: TreePath,
+            element: AccessibilityElement
+        )
+        case updateContainer(
+            path: TreePath,
+            container: AccessibilityContainer
+        )
+        case insertSubtree(TreeInsertion)
+        case removeSubtree(TreeRemoval)
+        case moveSubtree(
+            TreeMove,
+            node: AccessibilityHierarchy
+        )
+        case replaceTree(
+            tree: [AccessibilityHierarchy]
+        )
+    }
+
+    struct AccessibilityPatch: Codable, Sendable, Equatable {
+        public let operations: [AccessibilityPatchOperation]
+        public let timestamp: Date
+        public let annotations: InterfaceAnnotations
+        public let context: Context
+        public let transition: Transition
+
+        public init(
+            operations: [AccessibilityPatchOperation],
+            timestamp: Date,
+            annotations: InterfaceAnnotations,
+            context: Context,
+            transition: Transition = .empty
+        ) {
+            self.operations = operations
+            self.timestamp = timestamp
+            self.annotations = annotations
+            self.context = context
+            self.transition = transition
+        }
+
+        public static func between(_ before: Capture, _ after: Capture) -> AccessibilityPatch? {
+            between(
+                before.interface,
+                after.interface,
+                context: after.context,
+                transition: after.transition
+            )
+        }
+
+        public static func between(
+            _ before: Interface,
+            _ after: Interface,
+            context: Context,
+            transition: Transition = .empty
+        ) -> AccessibilityPatch? {
+            let structuralOperations = before.tree.hasSameShape(as: after.tree) ? [] :
+                AccessibilityPatchOperation.structuralOperations(between: before, and: after)
+            let structurallyPatched = AccessibilityPatch(
+                operations: structuralOperations,
+                timestamp: after.timestamp,
+                annotations: after.annotations,
+                context: context,
+                transition: transition
+            ).apply(to: before)
+            let operations = structuralOperations + valueOperations(between: structurallyPatched, and: after)
+            let patch = AccessibilityPatch(
+                operations: operations,
+                timestamp: after.timestamp,
+                annotations: after.annotations,
+                context: context,
+                transition: transition
+            )
+            guard patch.apply(to: before) == after else {
+                return AccessibilityPatch(
+                    operations: [.replaceTree(tree: after.tree)],
+                    timestamp: after.timestamp,
+                    annotations: after.annotations,
+                    context: context,
+                    transition: transition
+                )
+            }
+            return patch
+        }
+
+        public func apply(to capture: Capture, sequence: Int) -> Capture {
+            let interface = apply(to: capture.interface)
+            return Capture(
+                sequence: sequence,
+                interface: interface,
+                parentHash: capture.hash,
+                context: context,
+                transition: transition
+            )
+        }
+
+        public func apply(to interface: Interface) -> Interface {
+            var tree = interface.tree
+            var lookupAnnotations = interface.annotations
+
+            for operation in operations {
+                switch operation {
+                case .updateElement(let path, let element):
+                    tree = tree.updatingElement(path: path, with: element)
+                case .updateContainer(let path, let container):
+                    tree = tree.updatingContainer(path: path, with: container)
+                case .insertSubtree(let insertion):
+                    tree = tree.inserting(insertion.node, at: insertion.location, annotations: lookupAnnotations)
+                    lookupAnnotations = annotations
+                case .removeSubtree(let removal):
+                    tree = tree.removing(removal, annotations: lookupAnnotations)
+                case .moveSubtree(let move, let node):
+                    tree = tree.removing(TreeRemoval(ref: move.ref, location: move.from), annotations: lookupAnnotations)
+                    tree = tree.inserting(node, at: move.to, annotations: annotations)
+                    lookupAnnotations = annotations
+                case .replaceTree(let replacement):
+                    tree = replacement
+                    lookupAnnotations = annotations
+                }
+            }
+
+            return Interface(
+                timestamp: timestamp,
+                tree: tree,
+                annotations: annotations
+            )
+        }
+
+    }
+
     struct Capture: Codable, Sendable, Equatable {
         /// 1-based position in this trace's linear capture chain.
         public let sequence: Int
@@ -166,7 +490,11 @@ public extension AccessibilityTrace {
         public static func hash(interface: Interface, context: Context) -> String {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.sortedKeys]
-            let content = StableCaptureContent(tree: interface.tree, context: context)
+            let content = StableCaptureContent(
+                tree: interface.tree,
+                annotations: interface.annotations,
+                context: context
+            )
             let data = (try? encoder.encode(content)) ?? Data()
             return "sha256:" + SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
         }
@@ -192,6 +520,10 @@ public extension AccessibilityTrace {
 
         public var isEmpty: Bool {
             screenChangeReason == nil && transient.isEmpty
+        }
+
+        fileprivate var startsScreenSegment: Bool {
+            screenChangeReason != nil
         }
     }
 
@@ -231,7 +563,7 @@ public extension AccessibilityTrace {
 
         /// Focused accessibility element, when the parser can map first
         /// responder state back to a heist id.
-        public let focusedElementId: String?
+        public let focusedElementId: HeistId?
         /// Software keyboard state affects text-entry affordances even when
         /// the hierarchy is otherwise unchanged.
         public let keyboardVisible: Bool?
@@ -242,7 +574,7 @@ public extension AccessibilityTrace {
         public let windowStack: [WindowContext]
 
         public init(
-            focusedElementId: String? = nil,
+            focusedElementId: HeistId? = nil,
             keyboardVisible: Bool? = nil,
             screenId: String? = nil,
             windowStack: [WindowContext] = []
@@ -271,10 +603,10 @@ public extension AccessibilityTrace {
     }
 
     struct ReceiptSample: Codable, Sendable, Equatable {
-        public let heistId: String?
+        public let heistId: HeistId?
         public let summary: String
 
-        public init(heistId: String? = nil, summary: String) {
+        public init(heistId: HeistId? = nil, summary: String) {
             self.heistId = heistId
             self.summary = summary
         }
@@ -331,8 +663,244 @@ extension AccessibilityTrace.Capture {
 }
 
 private struct StableCaptureContent: Codable {
-    let tree: [InterfaceNode]
+    let tree: [AccessibilityHierarchy]
+    let annotations: InterfaceAnnotations
     let context: AccessibilityTrace.Context
+}
+
+private func valueOperations(
+    between before: Interface,
+    and after: Interface
+) -> [AccessibilityTrace.AccessibilityPatchOperation] {
+    guard before.tree.hasSameShape(as: after.tree) else { return [] }
+
+    let beforeElements = before.tree.elementByPath
+    let afterElements = after.tree.elementByPath
+    let beforeContainers = before.tree.containerByPath
+    let afterContainers = after.tree.containerByPath
+
+    let elementOperations: [AccessibilityTrace.AccessibilityPatchOperation] =
+        afterElements.keys.sorted().compactMap { path in
+        guard let afterElement = afterElements[path],
+              beforeElements[path] != afterElement
+        else { return nil }
+        return AccessibilityTrace.AccessibilityPatchOperation.updateElement(
+            path: path,
+            element: afterElement
+        )
+    }
+
+    let containerOperations: [AccessibilityTrace.AccessibilityPatchOperation] =
+        afterContainers.keys.sorted().compactMap { path in
+        guard let afterContainer = afterContainers[path],
+              beforeContainers[path] != afterContainer
+        else { return nil }
+        return AccessibilityTrace.AccessibilityPatchOperation.updateContainer(path: path, container: afterContainer)
+    }
+
+    return elementOperations + containerOperations
+}
+
+private extension Array where Element == AccessibilityHierarchy {
+    func hasSameShape(as other: [AccessibilityHierarchy]) -> Bool {
+        guard count == other.count else { return false }
+        return zip(self, other).allSatisfy { $0.hasSameShape(as: $1) }
+    }
+
+    var elementByPath: [TreePath: AccessibilityElement] {
+        Dictionary(pathIndexedElements.map { ($0.path, $0.element) }, uniquingKeysWith: { _, latest in latest })
+    }
+
+    var containerByPath: [TreePath: AccessibilityContainer] {
+        let entries: [(TreePath, AccessibilityContainer)] = compactMapSubtrees { node, path in
+            guard case .container(let container, _) = node else { return nil }
+            return (path, container)
+        }
+        return Dictionary(entries, uniquingKeysWith: { _, latest in latest })
+    }
+
+    func updatingElement(path: TreePath, with element: AccessibilityElement) -> [AccessibilityHierarchy] {
+        guard let rootIndex = path.indices.first,
+              indices.contains(rootIndex)
+        else { return self }
+        return enumerated().map { index, root in
+            guard index == rootIndex else { return root }
+            return root.updatingElement(path: TreePath([Int](path.indices.dropFirst())), with: element)
+        }
+    }
+
+    func updatingContainer(path: TreePath, with container: AccessibilityContainer) -> [AccessibilityHierarchy] {
+        enumerated().map { index, node in
+            guard path.indices.first == index else { return node }
+            return node.updatingContainer(path: TreePath([Int](path.indices.dropFirst())), with: container)
+        }
+    }
+
+    func inserting(
+        _ node: AccessibilityHierarchy,
+        at location: TreeLocation,
+        annotations: InterfaceAnnotations
+    ) -> [AccessibilityHierarchy] {
+        guard let parentPath = parentPath(for: location, annotations: annotations) else { return self }
+        guard let rootIndex = parentPath.indices.first else {
+            var roots = self
+            roots.insert(node, at: bounded(location.index, count: roots.count))
+            return roots
+        }
+
+        return enumerated().map { index, root in
+            guard index == rootIndex else { return root }
+            return root.inserting(
+                node,
+                inContainerAt: [Int](parentPath.indices.dropFirst()),
+                childIndex: location.index
+            )
+        }
+    }
+
+    func removing(
+        _ removal: TreeRemoval,
+        annotations: InterfaceAnnotations
+    ) -> [AccessibilityHierarchy] {
+        guard let path = path(for: removal.ref, annotations: annotations)
+            ?? path(for: removal.location, annotations: annotations)
+        else { return self }
+        return removing(at: path)
+    }
+
+    private func parentPath(
+        for location: TreeLocation,
+        annotations: InterfaceAnnotations
+    ) -> TreePath? {
+        guard let parentId = location.parentId else { return .root }
+        return path(for: TreeNodeRef(id: parentId, kind: .container), annotations: annotations)
+    }
+
+    private func path(
+        for location: TreeLocation,
+        annotations: InterfaceAnnotations
+    ) -> TreePath? {
+        guard let parentPath = parentPath(for: location, annotations: annotations) else { return nil }
+        return TreePath(parentPath.indices + [location.index])
+    }
+
+    private func path(
+        for ref: TreeNodeRef,
+        annotations: InterfaceAnnotations
+    ) -> TreePath? {
+        let elementAnnotations = annotations.elementByPath
+        let containerAnnotations = annotations.containerByPath
+        return compactMapSubtrees { node, path -> TreePath? in
+            switch (ref.kind, node) {
+            case (.element, .element)
+                where elementAnnotations[path]?.heistId == ref.id:
+                return path
+            case (.container, .container)
+                where containerAnnotations[path]?.stableId == ref.id:
+                return path
+            default:
+                return nil
+            }
+        }.first
+    }
+
+    private func removing(at path: TreePath) -> [AccessibilityHierarchy] {
+        guard let rootIndex = path.indices.first,
+              indices.contains(rootIndex)
+        else { return self }
+        guard path.indices.count > 1 else {
+            var roots = self
+            roots.remove(at: rootIndex)
+            return roots
+        }
+
+        return enumerated().map { index, root in
+            guard index == rootIndex else { return root }
+            return root.removing(at: [Int](path.indices.dropFirst()))
+        }
+    }
+}
+
+private extension AccessibilityHierarchy {
+    func hasSameShape(as other: AccessibilityHierarchy) -> Bool {
+        switch (self, other) {
+        case (.element(_, let lhsIndex), .element(_, let rhsIndex)):
+            return lhsIndex == rhsIndex
+        case (.container(_, let lhsChildren), .container(_, let rhsChildren)):
+            return lhsChildren.hasSameShape(as: rhsChildren)
+        case (.element, .container), (.container, .element):
+            return false
+        }
+    }
+
+    func updatingElement(path: TreePath, with replacement: AccessibilityElement) -> AccessibilityHierarchy {
+        switch self {
+        case .element(_, let traversalIndex) where path.indices.isEmpty:
+            return .element(replacement, traversalIndex: traversalIndex)
+        case .element:
+            return self
+        case .container(let container, let children):
+            guard let first = path.indices.first else { return self }
+            let remainingPath = TreePath([Int](path.indices.dropFirst()))
+            return .container(
+                container,
+                children: children.enumerated().map { index, child in
+                    index == first ? child.updatingElement(path: remainingPath, with: replacement) : child
+                }
+            )
+        }
+    }
+
+    func updatingContainer(path: TreePath, with replacement: AccessibilityContainer) -> AccessibilityHierarchy {
+        guard let first = path.indices.first else {
+            guard case .container(_, let children) = self else { return self }
+            return .container(replacement, children: children)
+        }
+        guard case .container(let container, let children) = self else { return self }
+        let remainingPath = TreePath([Int](path.indices.dropFirst()))
+        return .container(
+            container,
+            children: children.enumerated().map { index, child in
+                index == first ? child.updatingContainer(path: remainingPath, with: replacement) : child
+            }
+        )
+    }
+
+    func inserting(
+        _ node: AccessibilityHierarchy,
+        inContainerAt path: [Int],
+        childIndex: Int
+    ) -> AccessibilityHierarchy {
+        guard case .container(let container, var children) = self else { return self }
+        guard let first = path.first else {
+            children.insert(node, at: bounded(childIndex, count: children.count))
+            return .container(container, children: children)
+        }
+        guard children.indices.contains(first) else { return self }
+        children[first] = children[first].inserting(
+            node,
+            inContainerAt: [Int](path.dropFirst()),
+            childIndex: childIndex
+        )
+        return .container(container, children: children)
+    }
+
+    func removing(at path: [Int]) -> AccessibilityHierarchy {
+        guard case .container(let container, var children) = self,
+              let first = path.first,
+              children.indices.contains(first)
+        else { return self }
+        guard path.count > 1 else {
+            children.remove(at: first)
+            return .container(container, children: children)
+        }
+        children[first] = children[first].removing(at: [Int](path.dropFirst()))
+        return .container(container, children: children)
+    }
+}
+
+private func bounded(_ index: Int, count: Int) -> Int {
+    min(max(index, 0), count)
 }
 
 private func normalized(_ value: String?) -> String? {

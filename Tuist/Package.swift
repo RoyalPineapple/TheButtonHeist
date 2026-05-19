@@ -8,6 +8,7 @@ import ProjectDescriptionHelpers
 let packageSettings = PackageSettings(
     productTypes: [
         "ArgumentParser": .framework,
+        "AccessibilitySnapshotModel": .framework,
         "AccessibilitySnapshotParser": .framework,
         "AccessibilitySnapshotParser-ObjC": .framework,
         "X509": .framework,

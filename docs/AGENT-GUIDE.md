@@ -113,24 +113,13 @@ When you need to interact with content that is not currently on screen, choose t
 
 This is the right choice when you know what you're looking for but don't know where it is. The response tells you how many scrolls it took and returns the element's heistId once found.
 
-**Read the current accessibility state.** If you need an inventory before acting, call `get_interface` without a scope:
+**Read the current accessibility state.** If you need an inventory before acting, call `get_interface`:
 
 ```json
 {"tool": "get_interface", "arguments": {}}
 ```
 
-The response may include summary stats when scrollable content was explored:
-
-```json
-{
-  "explore": {
-    "elementCount": 147,
-    "scrollCount": 12,
-    "containersExplored": 2,
-    "explorationTime": 3.4
-  }
-}
-```
+The app owns refresh and exploration policy. `get_interface` returns the current app state; `get_screen` returns the screenshot plus fresh visible geometry.
 
 Use the default `get_interface` read when you need to understand the current screen before acting — surveying a long form, counting items in a list, or planning a multi-step interaction across elements that are not all on screen at once.
 
@@ -159,7 +148,7 @@ You don't always need every element. Filter by heistId list, or by matcher predi
 {"tool": "get_interface", "arguments": {"elements": ["login-button", "email-field"]}}
 ```
 
-Use `subtree` when you want a projection cut from one selected node: a leaf by `heistId` or matcher, or a container by `stableId` or semantic metadata.
+Use `subtree` when you want one selected node and what hangs below it: a leaf by `heistId` or matcher, or a container by `stableId` or semantic metadata.
 
 ```json
 {"tool": "get_interface", "arguments": {"subtree": {"element": {"heistId": "login-button"}}}}
@@ -458,14 +447,14 @@ Attach expectations to actions where you have a clear hypothesis. They cost noth
 
 ### Progressive disclosure
 
-Start with `get_interface` for the current screen. If you need less, filter by traits or labels. If a specific element is not currently on screen, use `element_search`; use `scroll_to_visible` to return to a known `heistId` while it is still valid in the current hierarchy. Use `scope: "visible"` only when you explicitly need fresh on-screen geometry diagnostics. Each level costs more time — escalate only when the cheaper option isn't enough.
+Start with `get_interface` for the current screen. If you need less, filter by traits, labels, or a subtree selector. If a specific element is not currently on screen, use `element_search`; use `scroll_to_visible` to return to a known `heistId` while it is still valid in the current hierarchy. Use `get_screen` when you explicitly need fresh on-screen geometry or pixels. Each level costs more time — escalate only when the cheaper option isn't enough.
 
 ## Quick Reference
 
 | Task | Tool | Key Parameters |
 |------|------|----------------|
 | Read app accessibility state | `get_interface` | `detail`, `label`, `traits` |
-| Fresh on-screen geometry diagnostic | `get_interface` | `scope: "visible"` |
+| Fresh on-screen geometry diagnostic | `get_screen` | none |
 | Find unseen element not currently on screen | `scroll mode=search` / `element_search` | `label`/`identifier` |
 | Return to known element not currently on screen | `scroll mode=to_visible` / `scroll_to_visible` | `heistId` |
 | Tap/activate a control | `activate` | `heistId`, `action` |

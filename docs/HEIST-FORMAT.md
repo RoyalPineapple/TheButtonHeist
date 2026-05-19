@@ -26,6 +26,12 @@ A `.heist` file stores durable interaction steps, expected outcomes, and optiona
 
 Version 2 is intentionally not backward-compatible with the prototype v1 expectation shapes. Re-record old prototypes rather than carrying migration logic in playback.
 
+## Accessibility Trace Evidence
+
+Recording evidence uses accessibility traces as the source of truth. A trace is stored as screen segments: each screen change starts a full baseline capture, and same-screen changes are replayable patches on top of that baseline.
+
+Materialized captures are projections from those segments. They are useful for diagnostics, matcher derivation, and failure reporting, but they are not a second storage truth. Actions may explore scroll views to refresh off-screen state, and `get_interface` may refresh the hierarchy it returns; that exploration scope does not decide trace history scope. Only the screen-change classifier starts a new baseline segment.
+
 ## Evidence (Steps)
 
 Each step is a flat JSON object using the same command names and argument fields as live Button Heist requests.

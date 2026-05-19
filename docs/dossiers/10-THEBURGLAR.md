@@ -23,7 +23,7 @@ flowchart TD
     PR --> Build["buildScreen(from:)"]
     Build --> Walk["buildElementContexts()<br/>→ ElementContext per element<br/>(contentSpaceOrigin, scrollView, object)"]
     Walk --> IDs["IdAssignment.assign(hierarchy.sortedElements)<br/>→ [String] parallel to traversal order"]
-    IDs --> Compose["Compose Screen value:<br/>• elements: [heistId: ScreenElement]<br/>• hierarchy<br/>• containerStableIds<br/>• heistIdByElement<br/>• firstResponderHeistId<br/>• scrollableContainerViews"]
+    IDs --> Compose["Compose Screen value:<br/>• elements: known semantic entries<br/>• liveInterface: hierarchy + live refs + indexes"]
     Compose --> Return["Return Screen — no TheStash mutation"]
 
     Return --> Caller{Caller}
@@ -59,7 +59,7 @@ for container in scrollableContainers {
 stash.currentScreen = union                                        // final union committed
 ```
 
-Mid-cycle writes to `currentScreen` are intentional: scroll-page termination heuristics (`stash.visibleIds == before`) read the latest page-only interaction snapshot. The union only becomes the known semantic screen at the end of the walk.
+Mid-cycle writes to `currentScreen` are intentional: scroll-page termination heuristics (`stash.visibleIds == before`) read the latest page-only live interface. The union only becomes the known semantic screen at the end of the walk.
 
 ## Dependencies
 

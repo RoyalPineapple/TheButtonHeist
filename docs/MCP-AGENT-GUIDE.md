@@ -12,7 +12,7 @@ Button Heist drives iOS apps through the accessibility layer — the same interf
 
 ## Choosing Tools
 
-**Observing**: `get_interface` for element data, `get_screen` for visual context. Start with `get_interface`; by default it returns the app accessibility state for the current screen, including content Button Heist can discover in scroll views. Pass `subtree.element` to project from a leaf, or `subtree.container` to project from a container. Use `scope: "visible"` only for fresh on-screen geometry diagnostics. Reach for `get_screen` only when layout or visual state matters.
+**Observing**: `get_interface` for element data, `get_screen` for visual context plus fresh visible geometry. Start with `get_interface`; it returns the app accessibility state for the current screen, including content Button Heist can discover in scroll views. Pass `subtree.element` to project from a leaf, or `subtree.container` to project from a container. Reach for `get_screen` when layout, pixels, or the current viewport geometry matters.
 
 **Acting**: `activate` is your primary tool — it taps, toggles, follows links. Use `action: "increment"` or `"decrement"` for adjustable controls, with optional `count` to repeat 1...100 times. `type_text` for keyboard input. `gesture` with type "swipe" for directional gestures. `scroll` for paging through lists. Prefer `activate` over `gesture` — raw coordinates are fragile and don't record well.
 
@@ -23,6 +23,14 @@ Button Heist drives iOS apps through the accessibility layer — the same interf
 For `wait_for_change`, `element_disappeared` means the element is absent from the current settled hierarchy. It does not require Button Heist to prove the element existed and then vanished.
 
 **Composing**: `run_batch` for multi-step sequences in a single call. Attach `expect` to each step for inline verification.
+
+## Trace Semantics
+
+Screen changes create full baselines. Same-screen changes are patches on top of the current baseline.
+
+Actions can refresh off-screen state by exploring scroll views before or after the interaction, but that exploration is not a screen boundary by itself. It only broadens Button Heist's current-screen knowledge. If the app stays on the same screen, the action result is still an elements-changed patch; if Button Heist detects a real screen change, the trace starts a new full baseline.
+
+`get_interface` returns app state. A default call may refresh discoverable off-screen content so the returned hierarchy is current. Passing `subtree` scopes that projection to the part of the hierarchy you asked for. `get_screen` is diagnostic: it returns pixels plus fresh visible geometry for the current viewport, not a replacement for the app-state hierarchy.
 
 ## Local MCP Development
 

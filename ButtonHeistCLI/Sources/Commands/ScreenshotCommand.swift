@@ -34,8 +34,8 @@ struct ScreenshotCommand: AsyncParsableCommand, CLICommandContract {
             )
             defer { fence.stop() }
 
-            if case .screenshotData(let pngData, _, _) = response {
-                guard let data = Data(base64Encoded: pngData) else {
+            if case .screenshotData(let payload) = response {
+                guard let data = Data(base64Encoded: payload.pngData) else {
                     throw ValidationError("Failed to decode screenshot data")
                 }
                 FileHandle.standardOutput.write(data)

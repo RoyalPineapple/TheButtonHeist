@@ -56,54 +56,28 @@ final class TheBrainsScrollTests: XCTestCase {
             throw XCTSkip("No live hierarchy available for UIPageViewController regression test")
         }
 
-        let unsafeTargets = brains.stash.scrollableContainerViews.compactMap { entry -> (
-            AccessibilityContainer,
-            UIScrollView
-        )? in
-            let (container, view) = entry
+        let unsafeTargets = brains.stash.scrollableContainerViews.compactMap { entry -> UIScrollView? in
+            let (_, view) = entry
             guard let scrollView = view as? UIScrollView,
-                  scrollView.bhIsUnsafeForProgrammaticScrolling else {
-                return nil
-            }
-            return (container, scrollView)
+                  scrollView.bhIsUnsafeForProgrammaticScrolling else { return nil }
+            return scrollView
         }
-        guard !unsafeTargets.isEmpty else {
-            throw XCTSkip("UIPageViewController did not expose _UIQueuingScrollView on this OS")
-        }
+        let unsafeOffsets = Dictionary(
+            uniqueKeysWithValues: unsafeTargets.map { (ObjectIdentifier($0), $0.contentOffset) }
+        )
 
         var union = brains.stash.currentScreen
         let manifest = await brains.navigation.exploreScreen(union: &union)
 
-        for (container, _) in unsafeTargets {
-            XCTAssertTrue(
-                manifest.exploredContainers.contains(container),
-                "Unsafe page-view scroll containers should be marked explored without programmatic scrolling"
-            )
+        XCTAssertEqual(manifest.scrollCount, 0)
+        for scrollView in unsafeTargets {
+            XCTAssertEqual(Optional(scrollView.contentOffset), unsafeOffsets[ObjectIdentifier(scrollView)])
         }
         XCTAssertTrue(
             union.elements.values.contains {
                 $0.element.label == "Page One Visible Label"
             },
-            "Visible page content should remain discoverable without scrolling the queuing scroll view"
-        )
-
-        let unsafeScreenElement = TheStash.ScreenElement(
-            heistId: "unsafe_page_item",
-            contentSpaceOrigin: nil,
-            element: makeElement(label: "Unsafe Page Item"),
-            object: nil,
-            scrollView: unsafeTargets[0].1
-        )
-        guard case .failed(let diagnostic) = brains.navigation.resolveScrollTargetResult(
-            screenElement: unsafeScreenElement
-        ) else {
-            return XCTFail("Expected unsafe programmatic scroll diagnostic")
-        }
-        XCTAssertEqual(
-            diagnostic.message(for: unsafeScreenElement),
-            "scroll target failed: observed \"Unsafe Page Item\" (heistId: unsafe_page_item) "
-                + "inside a scroll view that is unsafe for programmatic scrolling; try element_search "
-                + "to use semantic search"
+            "Visible page content should remain discoverable without scrolling the private queuing scroll view"
         )
     }
 
@@ -547,16 +521,17 @@ final class TheBrainsScrollTests: XCTestCase {
         let visibleEntry = Screen.ScreenElement(
             heistId: visible.1,
             contentSpaceOrigin: nil,
-            element: visible.0,
-            object: nil,
-            scrollView: nil
+            element: visible.0
         )
+        let scrollContainer = makeScrollableContainer(
+            contentSize: offscreen.3.contentSize,
+            frame: offscreen.3.frame
+        )
+        let scrollStableId = "known_offscreen_scroll"
         let offscreenEntry = Screen.ScreenElement(
             heistId: offscreen.1,
             contentSpaceOrigin: offscreen.2,
-            element: offscreen.0,
-            object: nil,
-            scrollView: offscreen.3
+            element: offscreen.0
         )
         brains.stash.currentScreen = Screen(
             elements: [
@@ -564,10 +539,12 @@ final class TheBrainsScrollTests: XCTestCase {
                 offscreenEntry.heistId: offscreenEntry,
             ],
             hierarchy: [.element(visible.0, traversalIndex: 0)],
-            containerStableIds: [:],
+            containerStableIds: [scrollContainer: scrollStableId],
             heistIdByElement: [visible.0: visible.1],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
+            scrollableContainerViews: [
+                scrollContainer: .init(view: offscreen.3)
+            ]
         )
     }
 
@@ -704,7 +681,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(message.contains("get_interface"))
     }
 
-    func testEnsureOnScreenNamesKnownOffscreenRecoveryFailure() async {
+    func testEnsureOnScreenNamesKnownOffscreenInflationFailure() async {
         let visible = makeElement(label: "Visible")
         let offscreen = makeElement(label: "Offscreen")
         installScreenWithOffViewportEntry(
@@ -719,7 +696,23 @@ final class TheBrainsScrollTests: XCTestCase {
         }
         XCTAssertNil(failure.method)
         XCTAssertTrue(failure.message.contains("ensure_on_screen failed"))
-        XCTAssertTrue(failure.message.contains("has no recorded scroll position"))
+        XCTAssertTrue(failure.message.contains("has no content-space position"))
+    }
+
+    func testKnownOffscreenTargetWithoutLiveScrollParentFailsInflation() {
+        let visible = makeElement(label: "Visible")
+        let offscreen = makeElement(label: "Offscreen")
+        installScreenWithOffViewportEntry(
+            liveHierarchy: [(visible, "visible_element")],
+            offViewport: [(offscreen, "offscreen_button", CGPoint(x: 0, y: 1_200))]
+        )
+
+        let message = brains.navigation.scrollToVisibleFailureMessage(
+            for: .heistId("offscreen_button")
+        )
+
+        XCTAssertTrue(message.contains("not inflated"))
+        XCTAssertTrue(message.contains("no live scrollable ancestor"))
     }
 
     func testElementActionsConsumeEnsureOnScreenFailureBeforeDispatch() async {
@@ -772,9 +765,45 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(result.method, .elementNotFound)
         XCTAssertEqual(staleScrollView.contentOffset, .zero)
         XCTAssertFalse(
-            result.message?.contains("recorded-position recovery") ?? false,
-            "Stale offscreen memory must not drive operation-local recovery after a fresh screen change"
+            result.message?.contains("after inflation") ?? false,
+            "Stale offscreen memory must not drive operation-local inflation after a fresh screen change"
         )
+    }
+
+    func testKnownInflationIgnoresStaleSemanticScrollView() {
+        let staleScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        staleScrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let visible = makeElement(label: "Visible")
+        let offscreen = makeElement(label: "Offscreen")
+        let recordedScreen = makeScreenWithOffViewportEntry(
+            liveHierarchy: [(visible, "visible_element")],
+            offViewport: [(offscreen, "offscreen_button", CGPoint(x: 0, y: 1_200))]
+        )
+        let staleContainer = makeScrollableContainer(
+            contentSize: staleScrollView.contentSize,
+            frame: staleScrollView.frame
+        )
+        let staleScreen = Screen(
+            elements: recordedScreen.elements,
+            hierarchy: recordedScreen.liveInterface.hierarchy,
+            containerStableIds: [staleContainer: "stale_scroll"],
+            heistIdByElement: recordedScreen.liveInterface.heistIdByElement,
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [
+                staleContainer: .init(view: staleScrollView)
+            ]
+        )
+        brains.stash.currentScreen = .makeForTests(
+            elements: [(visible, "visible_element")]
+        )
+
+        let message = brains.navigation.scrollToVisibleFailureMessage(
+            for: .heistId("offscreen_button"),
+            in: staleScreen
+        )
+
+        XCTAssertEqual(staleScrollView.contentOffset, .zero)
+        XCTAssertTrue(message.contains("no live scrollable ancestor"))
     }
 
     func testScrollReturnsReasonInsteadOfRevealingKnownOffscreenTarget() async {
@@ -875,7 +904,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
     }
 
-    func testScrollToVisiblePostJumpAmbiguousLiveTargetFailsClosed() async throws {
+    func testScrollToVisiblePostInflationAmbiguousLiveTargetFailsClosed() async throws {
         let rootView = UIView()
         rootView.backgroundColor = .white
         let scrollView = AccessibilityRevealingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
@@ -895,39 +924,43 @@ final class TheBrainsScrollTests: XCTestCase {
         }
         await brains.tripwire.yieldFrames(3)
         guard brains.refresh() != nil else {
-            throw XCTSkip("No live hierarchy available for scroll_to_visible post-jump regression test")
+            throw XCTSkip("No live hierarchy available for scroll_to_visible post-inflation regression test")
         }
         if !brains.stash.matchScreenElements(ElementMatcher(label: "Jump Target"), limit: 1).isEmpty {
-            throw XCTSkip("Parser exposed offscreen scroll content before the jump")
+            throw XCTSkip("Parser exposed offscreen scroll content before inflation")
         }
 
-        let recordedElement = makeElement(label: "Jump Target", traits: .button)
-        let recordedEntry = TheStash.ScreenElement(
-            heistId: "recorded_jump_target",
+        let knownElement = makeElement(label: "Jump Target", traits: .button)
+        let knownEntry = TheStash.ScreenElement(
+            heistId: "known_inflation_target",
             contentSpaceOrigin: CGPoint(x: 40, y: 900),
-            element: recordedElement,
-            object: nil,
-            scrollView: scrollView
+            element: knownElement
         )
-        let recordedScreen = Screen(
-            elements: [recordedEntry.heistId: recordedEntry],
+        let scrollContainer = makeScrollableContainer(
+            contentSize: scrollView.contentSize,
+            frame: scrollView.frame
+        )
+        let knownScreen = Screen(
+            elements: [knownEntry.heistId: knownEntry],
             hierarchy: [],
-            containerStableIds: [:],
+            containerStableIds: [scrollContainer: "known_scroll"],
             heistIdByElement: [:],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
+            scrollableContainerViews: [
+                scrollContainer: .init(view: scrollView)
+            ]
         )
 
         let result = await brains.navigation.executeScrollToVisible(
             ScrollToVisibleTarget(elementTarget: .matcher(ElementMatcher(label: "Jump Target"))),
-            recordedScreen: recordedScreen
+            recordedScreen: knownScreen
         )
 
         XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .scrollToVisible)
+        XCTAssertEqual(result.method, ActionMethod.scrollToVisible)
         XCTAssertTrue(
             result.message?.contains("2 elements match") ?? false,
-            "Expected post-jump ambiguity diagnostic, got \(String(describing: result.message))"
+            "Expected post-inflation ambiguity diagnostic, got \(String(describing: result.message))"
         )
     }
 
@@ -937,9 +970,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let screenElement = TheStash.ScreenElement(
             heistId: "item",
             contentSpaceOrigin: nil,
-            element: makeElement(label: "Item"),
-            object: UILabel(),
-            scrollView: nil
+            element: makeElement(label: "Item")
         )
 
         let target = brains.navigation.resolveScrollTarget(screenElement: screenElement)
@@ -964,10 +995,9 @@ final class TheBrainsScrollTests: XCTestCase {
         let screenElement = TheStash.ScreenElement(
             heistId: "item",
             contentSpaceOrigin: nil,
-            element: makeElement(),
-            object: nil,
-            scrollView: scrollView
+            element: makeElement()
         )
+        installLiveScrollTarget(screenElement, scrollView: scrollView, stableId: "axis_scroll")
 
         let target = brains.navigation.resolveScrollTarget(
             screenElement: screenElement, axis: .vertical
@@ -1001,10 +1031,9 @@ final class TheBrainsScrollTests: XCTestCase {
         let screenElement = TheStash.ScreenElement(
             heistId: "item",
             contentSpaceOrigin: nil,
-            element: makeElement(),
-            object: nil,
-            scrollView: scrollView
+            element: makeElement()
         )
+        installLiveScrollTarget(screenElement, scrollView: scrollView, stableId: "horizontal_scroll")
 
         let target = brains.navigation.resolveScrollTarget(
             screenElement: screenElement, axis: .vertical
@@ -1025,10 +1054,9 @@ final class TheBrainsScrollTests: XCTestCase {
         let screenElement = TheStash.ScreenElement(
             heistId: "item",
             contentSpaceOrigin: nil,
-            element: makeElement(),
-            object: nil,
-            scrollView: scrollView
+            element: makeElement()
         )
+        installLiveScrollTarget(screenElement, scrollView: scrollView, stableId: "vertical_scroll")
 
         let target = brains.navigation.resolveScrollTarget(
             screenElement: screenElement, axis: .vertical
@@ -1254,6 +1282,30 @@ final class TheBrainsScrollTests: XCTestCase {
             hierarchy: containers.map { .container($0, children: []) },
             firstResponderHeistId: nil,
             scrollableContainerViews: [:]
+        )
+    }
+
+    private func installLiveScrollTarget(
+        _ screenElement: TheStash.ScreenElement,
+        scrollView: UIScrollView,
+        stableId: HeistContainer
+    ) {
+        let container = makeScrollableContainer(
+            contentSize: scrollView.contentSize,
+            frame: scrollView.frame
+        )
+        brains.stash.currentScreen = Screen(
+            elements: [screenElement.heistId: screenElement],
+            hierarchy: [.element(screenElement.element, traversalIndex: 0)],
+            containerStableIds: [container: stableId],
+            heistIdByElement: [screenElement.element: screenElement.heistId],
+            elementRefs: [
+                screenElement.heistId: .init(object: nil, scrollView: scrollView)
+            ],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [
+                container: .init(view: scrollView)
+            ]
         )
     }
 

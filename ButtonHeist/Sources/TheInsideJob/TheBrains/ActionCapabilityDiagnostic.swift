@@ -20,9 +20,15 @@ import AccessibilitySnapshotParser
 
     static func elementDeallocated(
         boundary: String,
-        element: TheStash.ScreenElement
+        element: TheStash.ScreenElement,
+        isInflated: Bool
     ) -> String {
-        "\(boundary) failed: observed \(formatElement(element)); try refresh with get_interface before retrying."
+        let observed = formatElement(
+            element,
+            includeLiveState: true,
+            missingLiveObjectState: isInflated ? "deallocated" : "notInflated"
+        )
+        return "\(boundary) failed: observed \(observed); try refresh with get_interface before retrying."
     }
 
     static func unsupportedElementAction(
@@ -121,7 +127,12 @@ import AccessibilitySnapshotParser
         }
     }
 
-    static func formatElement(_ screenElement: TheStash.ScreenElement) -> String {
+    static func formatElement(
+        _ screenElement: TheStash.ScreenElement,
+        liveObject: NSObject? = nil,
+        includeLiveState: Bool = false,
+        missingLiveObjectState: String = "notInflated"
+    ) -> String {
         let element = screenElement.element
         var parts = [
             "element",
@@ -138,9 +149,9 @@ import AccessibilitySnapshotParser
         }
         let traits = traitNames(element.traits)
         parts.append("traits=\(formatList(traits))")
-        parts.append("actions=\(formatList(availableActions(for: screenElement)))")
-        if screenElement.object == nil {
-            parts.append("liveObject=deallocated")
+        parts.append("actions=\(formatList(availableActions(for: screenElement, liveObject: liveObject)))")
+        if includeLiveState, liveObject == nil {
+            parts.append("liveObject=\(missingLiveObjectState)")
         }
         return parts.joined(separator: " ")
     }
@@ -191,10 +202,13 @@ import AccessibilitySnapshotParser
         return parts.joined(separator: " ")
     }
 
-    private static func availableActions(for screenElement: TheStash.ScreenElement) -> [String] {
+    private static func availableActions(
+        for screenElement: TheStash.ScreenElement,
+        liveObject: NSObject? = nil
+    ) -> [String] {
         var names: [String] = []
         let element = screenElement.element
-        let isInteractive = TheStash.Interactivity.isInteractive(element: element, object: screenElement.object)
+        let isInteractive = TheStash.Interactivity.isInteractive(element: element, object: liveObject)
         if isInteractive {
             names.append(ElementAction.activate.description)
         }
@@ -203,7 +217,7 @@ import AccessibilitySnapshotParser
             names.append(ElementAction.decrement.description)
         }
         appendUnique(element.customActions.map(\.name).filter { !$0.isEmpty }, to: &names)
-        let liveNames = screenElement.object?.accessibilityCustomActions?
+        let liveNames = liveObject?.accessibilityCustomActions?
             .map(\.name)
             .filter { !$0.isEmpty } ?? []
         appendUnique(liveNames, to: &names)
@@ -214,19 +228,25 @@ import AccessibilitySnapshotParser
         traits.namesIncludingUnknownBits
     }
 
-    private static func availableCustomActions(for screenElement: TheStash.ScreenElement) -> [String] {
+    private static func availableCustomActions(
+        for screenElement: TheStash.ScreenElement,
+        liveObject: NSObject? = nil
+    ) -> [String] {
         var names = screenElement.element.customActions.map(\.name).filter { !$0.isEmpty }
-        let liveNames = screenElement.object?.accessibilityCustomActions?
+        let liveNames = liveObject?.accessibilityCustomActions?
             .map(\.name)
             .filter { !$0.isEmpty } ?? []
         appendUnique(liveNames, to: &names)
         return names
     }
 
-    static func availableRotors(for screenElement: TheStash.ScreenElement) -> [String] {
+    static func availableRotors(
+        for screenElement: TheStash.ScreenElement,
+        liveObject: NSObject? = nil
+    ) -> [String] {
         var names = screenElement.element.customRotors.map(\.name).filter { !$0.isEmpty }
-        let liveNames = screenElement.object?.accessibilityCustomRotors?
-            .map { $0.bhInvocableName(locale: screenElement.object?.accessibilityLanguage) }
+        let liveNames = liveObject?.accessibilityCustomRotors?
+            .map { $0.bhInvocableName(locale: liveObject?.accessibilityLanguage) }
             .filter { !$0.isEmpty } ?? []
         appendUnique(liveNames, to: &names)
         return names

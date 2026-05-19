@@ -1,5 +1,5 @@
 import XCTest
- import TheScore
+import TheScore
 
 final class SnapshotTests: XCTestCase {
 
@@ -30,7 +30,7 @@ final class SnapshotTests: XCTestCase {
             )
         }
 
-        let payload = Interface(timestamp: Date(), tree: elements.map { .element($0) })
+        let payload = makeTestInterface(elements: elements, timestamp: Date())
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601

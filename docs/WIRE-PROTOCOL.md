@@ -152,10 +152,10 @@ The optional `driverId` field provides a unique driver identity for session lock
 
 ### requestInterface
 
-Request the current on-screen interface from the server. Public clients normally use `get_interface`; omitted-scope `get_interface` performs app accessibility discovery, while `scope: "visible"` maps to this wire message for a fresh on-screen read.
+Request the current app accessibility state from the server. Public clients normally use `get_interface`; optional query payloads can select the returned hierarchy by subtree, matcher, or element ids. Refresh, exploration, selection, and stale-state decisions are owned by TheInsideJob.
 
 ```json
-{"buttonHeistVersion":"<calver>","type":"requestInterface"}
+{"buttonHeistVersion":"<calver>","type":"requestInterface","payload":{}}
 ```
 
 ### activate
@@ -329,7 +329,7 @@ Type non-empty text character-by-character by injecting into the keyboard input 
 
 ### requestScreen
 
-Request a PNG capture of the current screen.
+Request a PNG capture of the current screen plus the fresh visible accessibility tree with geometry.
 
 ```json
 {"buttonHeistVersion":"<calver>","type":"requestScreen"}
@@ -448,7 +448,7 @@ No payload required.
 
 Returns an `actionResult` with `method: "explore"` and a `payload` of `{"kind": "explore", "data": {...}}` containing the element list and summary discovery statistics.
 
-> **Note**: `explore` is not exposed as a standalone CLI/MCP command. It is dispatched internally by the default `get_interface` read. See [Element Discovery](#element-discovery) for usage guidance.
+> **Note**: `explore` is not exposed as a standalone CLI/MCP command. TheInsideJob may run exploration while satisfying `get_interface` requests. See [Element Discovery](#element-discovery) for usage guidance.
 
 ### editAction
 
@@ -692,7 +692,7 @@ The `tree` is the canonical wire shape — every element appears exactly once at
 
 ### actionResult
 
-Response to `activate`, `one_finger_tap`, `increment`, `decrement`, `typeText`, `performCustomAction`, `handleAlert`, `setPasteboard`, `getPasteboard`, `scroll`, `scrollToVisible`, `elementSearch`, or `scrollToEdge` commands. Also returned by the default `get_interface` accessibility-state read.
+Response to `activate`, `one_finger_tap`, `increment`, `decrement`, `typeText`, `performCustomAction`, `handleAlert`, `setPasteboard`, `getPasteboard`, `scroll`, `scrollToVisible`, `elementSearch`, or `scrollToEdge` commands.
 
 ```json
 {"buttonHeistVersion":"<calver>","type":"actionResult","payload":{
@@ -861,10 +861,10 @@ sequenceDiagram
     Client->>Host: request accessibility state
     Host-->>Agent: interface (accessibility hierarchy + summary metadata)
 
-    Note over Agent,Host: get_interface fresh on-screen geometry diagnostic
-    Agent->>Client: get_interface(scope: visible)
-    Client->>Host: requestInterface
-    Host-->>Agent: interface (on-screen elements)
+    Note over Agent,Host: get_screen fresh viewport diagnostic
+    Agent->>Client: get_screen()
+    Client->>Host: requestScreen
+    Host-->>Agent: screen (pixels + visible accessibility tree with geometry)
 ```
 
 Three ways to find elements, each suited to a different situation:
@@ -872,7 +872,7 @@ Three ways to find elements, each suited to a different situation:
 | Command | What it returns | When to use |
 |---------|----------------|-------------|
 | `get_interface` | Current app accessibility state | You need to know what exists on the current screen before acting. Returns the `interface` response with discovered elements populated. |
-| `get_interface` with `scope: "visible"` | Fresh on-screen elements only | Diagnostic reads. Use when you need to verify what is currently drawn or inspect geometry after an execution step. |
+| `get_screen` | Screenshot plus fresh visible accessibility tree with geometry | Diagnostic reads. Use when you need to verify what is currently drawn or inspect geometry after an execution step. |
 | `scroll_to_visible` | Brings a known element into view | You have a visible target or a `heistId` still valid in the current hierarchy. Changes the scroll position. |
 | `element_search` | Scrolls until the target element is found, leaves it visible | You have not discovered the element yet and need to search scrollable content. |
 
@@ -886,8 +886,8 @@ Three ways to find elements, each suited to a different situation:
 
 ```mermaid
 flowchart TD
-    A[Need element evidence?] --> B{Need fresh on-screen geometry?}
-    B -->|Yes| C[get_interface scope=visible<br>Fresh on-screen geometry]
+    A[Need element evidence?] --> B{Need fresh on-screen geometry or pixels?}
+    B -->|Yes| C[get_screen<br>Pixels plus visible geometry]
     B -->|No| D{Need to interact with unseen content?}
     D -->|Yes, already discovered| E[scroll_to_visible<br>Bring known element<br>into view]
     D -->|Yes, not yet discovered| I[element_search<br>Scroll until found]
@@ -904,7 +904,7 @@ Most agent workflows start from the semantic interface and use fresh on-screen g
 3. `element_search` — find a specific unseen element when needed
 4. `scroll_to_visible` — return to a known `heistId` while it is still valid in the current hierarchy
 
-Use `get_interface` with `scope: "visible"` only when you explicitly need fresh on-screen geometry, such as checking layout after a scroll or gesture.
+Use `get_screen` when you explicitly need fresh on-screen geometry, such as checking layout after a scroll or gesture.
 
 ## Data Types
 
@@ -934,7 +934,8 @@ not duplicated on `ServerInfo`.
 |-------|------|-------------|
 | `screenDescription` | `String` | Deterministic one-line screen summary (e.g. `"Sign In — 1 text field, 1 password field, 3 buttons"`) |
 | `timestamp` | `ISO8601 Date` | When interface was captured |
-| `tree` | `[InterfaceNode]` | Canonical tree of leaf elements and grouping containers. Every element appears exactly once at its tree position; there is no parallel flat array on the wire. |
+| `tree` | `[AccessibilityHierarchy]` | Canonical full-fidelity parser hierarchy. Every accessibility node appears at its tree position; Button Heist metadata is attached through `annotations`. |
+| `annotations` | `InterfaceAnnotations` | Button Heist element/container metadata keyed by parser traversal index and tree path. |
 
 ### HeistElement
 
@@ -955,34 +956,26 @@ not duplicated on `ServerInfo`.
 | `customContent` | `[HeistCustomContent]?` | Custom accessibility content (full detail only) |
 | `actions` | `[ElementAction]?` | Non-obvious actions only. Omitted when all actions are implied by traits (`activate` for buttons, `increment`/`decrement` for adjustable). Custom actions always included. |
 
-### InterfaceNode
+### AccessibilityHierarchy
 
-Recursive node in the canonical interface tree. Each node is a singleton object whose key discriminates the case:
+Recursive node in the canonical interface tree. This is the parser model carried over the wire without converting into a Button Heist-specific tree:
 
-- `{"element":{...HeistElement}}` — Leaf node carrying a full `HeistElement` payload (no `order`, no parallel flat array — the leaf's tree position is its order).
-- `{"container":{type, …ContainerInfo, "children":[InterfaceNode]}}` — Container node carrying `ContainerInfo` fields (type discriminator + payload + frame) inline alongside `children`.
+- `{"element":{"_0":{...AccessibilityElement}, "traversalIndex": Int}}` — Leaf node carrying the parser element and traversal index.
+- `{"container":{"_0":{...AccessibilityContainer}, "children":[AccessibilityHierarchy]}}` — Container node carrying the parser container and nested children.
 
-### ContainerInfo
+### InterfaceAnnotations
 
-The container payload is a flat object keyed by the discriminator `type`. Type-specific fields live at the same level alongside the frame:
+Button Heist metadata is deliberately separate from the parser hierarchy so the tree stays full-fidelity:
 
 | Field | Type | Always present | Description |
 |-------|------|----------------|-------------|
-| `type` | `String` | Yes | Discriminator; one of the container types listed below |
-| `stableId` | `String?` | When available | Stable container identity used by tree deltas |
-| `isModalBoundary` | `Bool` | Only when `true` | Parser-reported accessibility modal boundary marker |
-| `frameX` | `Double` | Yes | Frame origin X in points |
-| `frameY` | `Double` | Yes | Frame origin Y in points |
-| `frameWidth` | `Double` | Yes | Frame width in points |
-| `frameHeight` | `Double` | Yes | Frame height in points |
-| `children` | `[InterfaceNode]` | Yes (inside `InterfaceNode.container`) | Child nodes |
-| `label` | `String?` | `semanticGroup` only | Container label |
-| `value` | `String?` | `semanticGroup` only | Container value |
-| `identifier` | `String?` | `semanticGroup` only | Container identifier |
-| `contentWidth` | `Double` | `scrollable` only | Scroll content size width |
-| `contentHeight` | `Double` | `scrollable` only | Scroll content size height |
-| `rowCount` | `Int` | `dataTable` only | Number of rows |
-| `columnCount` | `Int` | `dataTable` only | Number of columns |
+| `elements` | `[InterfaceElementAnnotation]` | Yes | Element annotations keyed by parser traversal index |
+| `containers` | `[InterfaceContainerAnnotation]` | Yes | Container annotations keyed by tree path |
+| `traversalIndex` | `Int` | Element annotation | Parser traversal index |
+| `heistId` | `String` | Element annotation | Current-hierarchy Button Heist handle |
+| `actions` | `[ElementAction]` | Element annotation | Supported Button Heist actions |
+| `path` | `TreePath` | Container annotation | Root-relative child-index path |
+| `stableId` | `String?` | Container annotation | Capture-local container identity used by subtree targeting and tree deltas |
 
 Container types:
 - `"semanticGroup"` — Semantic grouping (with optional `label`/`value`/`identifier`)
@@ -1693,9 +1686,8 @@ The current shape, beyond what is described in the message reference above:
   `recordingError` wire types are gone; their categories live in
   `ErrorKind` (`authFailure`, `recording`, `general`, plus the existing
   action-result kinds).
-- `Interface` ships a single canonical `tree: [InterfaceNode]` with
-  `HeistElement` payloads at the leaves. `Interface.elements` is a computed
-  flatten for source compat but does not appear on the wire.
+- `Interface` ships `tree: [AccessibilityHierarchy]` plus `annotations`.
+  `Interface.elements` is a computed projection and does not appear on the wire.
 - `ActionExpectation` uses an explicit `type` discriminator
   (`{"type": "element_updated", …}`) rather than Swift-synthesized Codable.
   The `expect` field accepts the object form only.

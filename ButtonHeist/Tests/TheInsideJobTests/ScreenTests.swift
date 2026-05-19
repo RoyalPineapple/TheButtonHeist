@@ -19,16 +19,14 @@ final class ScreenTests: XCTestCase {
     }
 
     private func makeEntry(
-        heistId: String,
+        heistId: HeistId,
         label: String? = nil,
         contentSpaceOrigin: CGPoint? = nil
     ) -> Screen.ScreenElement {
         Screen.ScreenElement(
             heistId: heistId,
             contentSpaceOrigin: contentSpaceOrigin,
-            element: makeElement(label: label ?? heistId),
-            object: nil,
-            scrollView: nil
+            element: makeElement(label: label ?? heistId)
         )
     }
 
@@ -39,11 +37,11 @@ final class ScreenTests: XCTestCase {
     }
 
     func testEmptyHasNoHierarchy() {
-        XCTAssertTrue(Screen.empty.hierarchy.isEmpty)
+        XCTAssertTrue(Screen.empty.liveInterface.hierarchy.isEmpty)
     }
 
     func testEmptyHasNoFirstResponder() {
-        XCTAssertNil(Screen.empty.firstResponderHeistId)
+        XCTAssertNil(Screen.empty.liveInterface.firstResponderHeistId)
     }
 
     func testEmptyHasNoName() {
@@ -59,7 +57,7 @@ final class ScreenTests: XCTestCase {
         XCTAssertTrue(Screen.empty.visibleIds.isEmpty)
     }
 
-    // MARK: - KnownInterface / InteractionSnapshot
+    // MARK: - KnownInterface / LiveInterface
 
     func testKnownInterfaceIncludesKnownEntriesOutsideLatestParse() {
         let visible = makeElement(label: "Visible", traits: .button)
@@ -76,12 +74,12 @@ final class ScreenTests: XCTestCase {
         )
 
         XCTAssertEqual(screen.knownInterface.heistIds, ["button_visible", "button_known"])
-        XCTAssertEqual(screen.interactionSnapshot.heistIds, ["button_visible"])
+        XCTAssertEqual(screen.liveInterface.heistIds, ["button_visible"])
         XCTAssertEqual(screen.knownInterface.findElement(heistId: "button_known")?.element.label, "Known")
-        XCTAssertFalse(screen.interactionSnapshot.contains(heistId: "button_known"))
+        XCTAssertFalse(screen.liveInterface.contains(heistId: "button_known"))
     }
 
-    func testMergingUnionsKnownInterfaceButTakesLatestInteractionSnapshot() {
+    func testMergingUnionsKnownInterfaceButTakesLatestLiveInterface() {
         let first = makeElement(label: "First", traits: .button)
         let second = makeElement(label: "Second", traits: .button)
         let oldPage = Screen.makeForTests(elements: [(first, "button_first")])
@@ -90,9 +88,9 @@ final class ScreenTests: XCTestCase {
         let merged = oldPage.merging(newPage)
 
         XCTAssertEqual(merged.knownInterface.heistIds, ["button_first", "button_second"])
-        XCTAssertEqual(merged.interactionSnapshot.heistIds, ["button_second"])
-        XCTAssertNil(merged.interactionSnapshot.heistId(for: first))
-        XCTAssertEqual(merged.interactionSnapshot.heistId(for: second), "button_second")
+        XCTAssertEqual(merged.liveInterface.heistIds, ["button_second"])
+        XCTAssertNil(merged.liveInterface.heistId(for: first))
+        XCTAssertEqual(merged.liveInterface.heistId(for: second), "button_second")
     }
 
     func testVisibleOnlyFiltersKnownEntriesOutsideLatestParse() {
@@ -114,9 +112,40 @@ final class ScreenTests: XCTestCase {
 
         XCTAssertEqual(visibleOnly.knownIds, ["button_visible"])
         XCTAssertEqual(visibleOnly.visibleIds, ["button_visible"])
-        XCTAssertEqual(visibleOnly.hierarchy, screen.hierarchy)
-        XCTAssertEqual(visibleOnly.firstResponderHeistId, "button_visible")
+        XCTAssertEqual(visibleOnly.liveInterface.hierarchy, screen.liveInterface.hierarchy)
+        XCTAssertEqual(visibleOnly.liveInterface.firstResponderHeistId, "button_visible")
         XCTAssertNil(visibleOnly.findElement(heistId: "button_known"))
+    }
+
+    func testSemanticHashIgnoresViewportGeometry() {
+        let top = AccessibilityElement.make(
+            label: "Chicken Tikka",
+            traits: .button,
+            shape: .frame(CGRect(x: 0, y: 0, width: 200, height: 44)),
+            activationPoint: CGPoint(x: 100, y: 22)
+        )
+        let scrolled = AccessibilityElement.make(
+            label: "Chicken Tikka",
+            traits: .button,
+            shape: .frame(CGRect(x: 0, y: -300, width: 200, height: 44)),
+            activationPoint: CGPoint(x: 100, y: -278)
+        )
+        let before = Screen.makeForTests(elements: [(top, "chicken_tikka_button")])
+        let after = Screen.makeForTests(elements: [(scrolled, "chicken_tikka_button")])
+        let beforeInterfaceHash = AccessibilityTrace.Capture.hash(TheStash.WireConversion.toInterface(from: before))
+        let afterInterfaceHash = AccessibilityTrace.Capture.hash(TheStash.WireConversion.toInterface(from: after))
+
+        XCTAssertNotEqual(beforeInterfaceHash, afterInterfaceHash)
+        XCTAssertEqual(before.semanticHash, after.semanticHash)
+    }
+
+    func testSemanticHashChangesForAccessibilityState() {
+        let oldTotal = makeElement(label: "Total", value: "$4.00", traits: .staticText)
+        let newTotal = makeElement(label: "Total", value: "$8.00", traits: .staticText)
+        let before = Screen.makeForTests(elements: [(oldTotal, "total_staticText")])
+        let after = Screen.makeForTests(elements: [(newTotal, "total_staticText")])
+
+        XCTAssertNotEqual(before.semanticHash, after.semanticHash)
     }
 
     func testOrderedElementsReturnsLiveOrderThenKnownOnlySortedByHeistId() {
@@ -241,16 +270,12 @@ final class ScreenTests: XCTestCase {
         let oldEntry = Screen.ScreenElement(
             heistId: "save_button",
             contentSpaceOrigin: nil,
-            element: makeElement(label: "Save", traits: .button),
-            object: nil,
-            scrollView: nil
+            element: makeElement(label: "Save", traits: .button)
         )
         let newEntry = Screen.ScreenElement(
             heistId: "save_button",
             contentSpaceOrigin: nil,
-            element: makeElement(label: "Save Changes", traits: .button),
-            object: nil,
-            scrollView: nil
+            element: makeElement(label: "Save Changes", traits: .button)
         )
         let lhs = Screen(
             elements: ["save_button": oldEntry],
@@ -355,8 +380,8 @@ final class ScreenTests: XCTestCase {
 
         let merged = lhs.merging(rhs)
 
-        XCTAssertEqual(merged.hierarchy.count, 1)
-        if case .element(let element, _) = merged.hierarchy[0] {
+        XCTAssertEqual(merged.liveInterface.hierarchy.count, 1)
+        if case .element(let element, _) = merged.liveInterface.hierarchy[0] {
             XCTAssertEqual(element.label, "New")
         } else {
             XCTFail("Expected element node")
@@ -377,7 +402,7 @@ final class ScreenTests: XCTestCase {
             scrollableContainerViews: [:]
         )
 
-        XCTAssertEqual(lhs.merging(rhs).firstResponderHeistId, "new_field")
+        XCTAssertEqual(lhs.merging(rhs).liveInterface.firstResponderHeistId, "new_field")
     }
 
     // MARK: - refreshingVisibleState
@@ -405,8 +430,32 @@ final class ScreenTests: XCTestCase {
 
         XCTAssertEqual(updated.knownIds, ["button_visible", "button_known"])
         XCTAssertEqual(updated.visibleIds, ["button_visible"])
-        XCTAssertEqual(updated.firstResponderHeistId, "button_visible")
+        XCTAssertEqual(updated.liveInterface.firstResponderHeistId, "button_visible")
         XCTAssertEqual(updated.findElement(heistId: "button_known")?.element.label, "Known")
+    }
+
+    func testRefreshingVisibleStateSlotsVisibleUpdatesWithoutTouchingOffViewportElements() {
+        let counter = makeElement(label: "Total", value: "$4.00", traits: .staticText)
+        let knownOnly = makeElement(label: "Below Fold", value: "old", traits: .button)
+        let updatedCounter = makeElement(label: "Total", value: "$8.00", traits: .staticText)
+        let screen = Screen.makeForTests(
+            elements: [(counter, "total_staticText")],
+            offViewport: [
+                Screen.OffViewportEntry(
+                    knownOnly,
+                    heistId: "below_fold_button",
+                    contentSpaceOrigin: CGPoint(x: 0, y: 2_000)
+                )
+            ]
+        )
+        let refresh = Screen.makeForTests(elements: [(updatedCounter, "total_staticText")])
+
+        let updated = screen.refreshingVisibleState(with: refresh)
+
+        XCTAssertEqual(updated.findElement(heistId: "total_staticText")?.element.value, "$8.00")
+        XCTAssertEqual(updated.findElement(heistId: "below_fold_button")?.element.value, "old")
+        XCTAssertEqual(updated.visibleIds, ["total_staticText"])
+        XCTAssertEqual(updated.knownIds, ["below_fold_button", "total_staticText"])
     }
 
     func testRefreshingVisibleStateDropsDisappearedVisibleNonScrollElements() {
@@ -434,16 +483,12 @@ final class ScreenTests: XCTestCase {
                 "button_scrolled_away": Screen.ScreenElement(
                     heistId: "button_scrolled_away",
                     contentSpaceOrigin: CGPoint(x: 0, y: 1_000),
-                    element: scrolledAway,
-                    object: nil,
-                    scrollView: nil
+                    element: scrolledAway
                 ),
                 "button_visible": Screen.ScreenElement(
                     heistId: "button_visible",
                     contentSpaceOrigin: nil,
-                    element: visible,
-                    object: nil,
-                    scrollView: nil
+                    element: visible
                 )
             ],
             hierarchy: [

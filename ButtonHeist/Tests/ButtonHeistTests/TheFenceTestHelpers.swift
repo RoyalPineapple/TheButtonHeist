@@ -1,5 +1,6 @@
 import XCTest
 import Network
+import AccessibilitySnapshotModel
 @testable import ButtonHeist
 import TheScore
 
@@ -77,7 +78,7 @@ func makeConnectedFence(configuration: TheFence.Configuration = .init()) -> (The
 }
 
 func makeReceiptTestElement(
-    heistId: String,
+    heistId: HeistId,
     label: String,
     value: String? = nil,
     identifier: String? = nil,
@@ -98,11 +99,140 @@ func makeReceiptTestElement(
     )
 }
 
+enum ReceiptTestInterfaceNode {
+    case element(HeistElement)
+    case container(AccessibilityContainer, stableId: HeistContainer? = nil, children: [ReceiptTestInterfaceNode])
+}
+
 func makeReceiptTestInterface(
     _ elements: [HeistElement],
     timestamp: Date = Date(timeIntervalSince1970: 0)
 ) -> Interface {
-    Interface(timestamp: timestamp, tree: elements.map(InterfaceNode.element))
+    makeReceiptTestInterface(nodes: elements.map(ReceiptTestInterfaceNode.element), timestamp: timestamp)
+}
+
+func makeReceiptTestInterface(
+    nodes: [ReceiptTestInterfaceNode],
+    timestamp: Date = Date(timeIntervalSince1970: 0)
+) -> Interface {
+    var traversalIndex = 0
+    var elementAnnotations: [InterfaceElementAnnotation] = []
+    var containerAnnotations: [InterfaceContainerAnnotation] = []
+
+    func convert(_ node: ReceiptTestInterfaceNode, path: TreePath) -> AccessibilityHierarchy {
+        switch node {
+        case .element(let element):
+            let index = traversalIndex
+            traversalIndex += 1
+            elementAnnotations.append(InterfaceElementAnnotation(
+                path: path,
+                heistId: element.heistId,
+                actions: element.actions
+            ))
+            return .element(makeReceiptTestAccessibilityElement(element), traversalIndex: index)
+        case .container(let container, let stableId, let children):
+            containerAnnotations.append(InterfaceContainerAnnotation(path: path, stableId: stableId))
+            return .container(
+                container,
+                children: children.enumerated().map { index, child in
+                    convert(child, path: path.appending(index))
+                }
+            )
+        }
+    }
+
+    return Interface(
+        timestamp: timestamp,
+        tree: nodes.enumerated().map { index, node in
+            convert(node, path: TreePath([index]))
+        },
+        annotations: InterfaceAnnotations(elements: elementAnnotations, containers: containerAnnotations)
+    )
+}
+
+func makeReceiptTestContainer(
+    type: AccessibilityContainer.ContainerType = .semanticGroup(label: nil, value: nil, identifier: nil),
+    frameX: Double = 0,
+    frameY: Double = 0,
+    frameWidth: Double = 100,
+    frameHeight: Double = 100,
+    isModalBoundary: Bool = false
+) -> AccessibilityContainer {
+    AccessibilityContainer(
+        type: type,
+        frame: AccessibilityRect(x: frameX, y: frameY, width: frameWidth, height: frameHeight),
+        isModalBoundary: isModalBoundary
+    )
+}
+
+func makeReceiptTestSemanticContainer(
+    label: String? = nil,
+    value: String? = nil,
+    identifier: String? = nil,
+    frameX: Double = 0,
+    frameY: Double = 0,
+    frameWidth: Double = 100,
+    frameHeight: Double = 100,
+    isModalBoundary: Bool = false
+) -> AccessibilityContainer {
+    makeReceiptTestContainer(
+        type: .semanticGroup(label: label, value: value, identifier: identifier),
+        frameX: frameX,
+        frameY: frameY,
+        frameWidth: frameWidth,
+        frameHeight: frameHeight,
+        isModalBoundary: isModalBoundary
+    )
+}
+
+func makeReceiptTestScrollableContainer(
+    contentWidth: Double,
+    contentHeight: Double,
+    frameX: Double = 0,
+    frameY: Double = 0,
+    frameWidth: Double = 100,
+    frameHeight: Double = 100,
+    isModalBoundary: Bool = false
+) -> AccessibilityContainer {
+    makeReceiptTestContainer(
+        type: .scrollable(contentSize: AccessibilitySize(width: contentWidth, height: contentHeight)),
+        frameX: frameX,
+        frameY: frameY,
+        frameWidth: frameWidth,
+        frameHeight: frameHeight,
+        isModalBoundary: isModalBoundary
+    )
+}
+
+func makeReceiptTestAccessibilityElement(_ element: HeistElement) -> AccessibilityElement {
+    AccessibilityElement(
+        description: element.description,
+        label: element.label,
+        value: element.value,
+        traits: AccessibilityTraits.fromNames(element.traits.map(\.rawValue)),
+        identifier: element.identifier,
+        hint: element.hint,
+        userInputLabels: nil,
+        shape: .frame(AccessibilityRect(
+            x: element.frameX,
+            y: element.frameY,
+            width: element.frameWidth,
+            height: element.frameHeight
+        )),
+        activationPoint: AccessibilityPoint(x: element.activationPointX, y: element.activationPointY),
+        usesDefaultActivationPoint: true,
+        customActions: [],
+        customContent: element.customContent?.map {
+            AccessibilityElement.CustomContent(
+                label: $0.label,
+                value: $0.value,
+                isImportant: $0.isImportant
+            )
+        } ?? [],
+        customRotors: element.rotors?.map { AccessibilityElement.CustomRotor(name: $0.name) } ?? [],
+        accessibilityLanguage: nil,
+        respondsToUserInteraction: element.respondsToUserInteraction
+    )
 }
 
 func makeReceiptTestInterface(

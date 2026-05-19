@@ -359,7 +359,7 @@ final class ActionExpectationTests: XCTestCase {
     }
 
     private func makeUpdateDelta(
-        heistId: String,
+        heistId: HeistId,
         property: ElementProperty,
         old: String?,
         new: String?,

@@ -34,7 +34,9 @@ final class TheGetaway {
     // `RecordingRouteState`, `RecordingPhase`, `RecordingOutcome`, and their handlers live in
     // TheGetaway+Recording.swift.
     private(set) var recordingRouteState: RecordingRouteState = .idle
-    var hierarchyInvalidated = false
+    var tripwireParsePending = false
+    var commandParseInFlight = false
+    var settledTripwireParseInFlight = false
 
     /// Current transport — set by `wireTransport`, cleared on teardown.
     private(set) weak var transport: ServerTransport?
@@ -232,7 +234,9 @@ final class TheGetaway {
         eventConsumerTask = nil
         pendingRecordingTasks.cancelAll()
         transport = nil
-        hierarchyInvalidated = false
+        tripwireParsePending = false
+        commandParseInFlight = false
+        settledTripwireParseInFlight = false
         replaceRecordingRouteState(.idle)
     }
 
@@ -263,9 +267,9 @@ final class TheGetaway {
         // swiftlint:disable:next agent_wire_message_arm_no_op_break
         case .clientHello, .authenticate:
             break
-        case .requestInterface:
+        case .requestInterface(let query):
             insideJobLogger.debug("Interface requested by client \(clientId)")
-            await sendInterface(requestId: requestId, respond: respond)
+            await sendInterface(query: query, requestId: requestId, respond: respond)
         case .ping:
             await muscle.noteClientActivity(clientId)
             sendMessage(.pong, requestId: requestId, respond: respond)
@@ -280,6 +284,7 @@ final class TheGetaway {
             brains.clearPendingRotorResult()
             let result = await brains.executeWaitForIdle(timeout: min(target.timeout ?? 5.0, 60.0))
             sendMessage(.actionResult(result), requestId: requestId, respond: respond)
+            noteCommandParseSatisfiedIfNeeded(result.accessibilityTrace)
             brains.recordSentState()
         case .waitForChange(let target):
             brains.clearPendingRotorResult()
@@ -287,6 +292,7 @@ final class TheGetaway {
                 timeout: target.resolvedTimeout, expectation: target.expect
             )
             sendMessage(.actionResult(result), requestId: requestId, respond: respond)
+            noteCommandParseSatisfiedIfNeeded(result.accessibilityTrace)
             brains.recordSentState()
 
         // Recording & interactions
@@ -309,7 +315,9 @@ final class TheGetaway {
                     return
                 }
 
-                let actionResult = await brains.executeCommand(message)
+                let actionResult = await withCommandParseInFlight {
+                    await brains.executeCommand(message)
+                }
                 await recordAndRespond(
                     command: message,
                     actionResult: actionResult,
@@ -319,6 +327,12 @@ final class TheGetaway {
                 )
             }
         }
+    }
+
+    private func withCommandParseInFlight<T>(_ operation: () async -> T) async -> T {
+        commandParseInFlight = true
+        defer { commandParseInFlight = false }
+        return await operation()
     }
 
     func staleTargetedActionFailure(for message: ClientMessage, backgroundTrace: AccessibilityTrace?) -> ActionResult? {
@@ -476,42 +490,62 @@ final class TheGetaway {
             accessibilityTrace: accessibilityTrace,
             respond: respond
         )
+        noteCommandParseSatisfiedIfNeeded(actionResult.accessibilityTrace ?? accessibilityTrace)
         brains.recordSentState()
+    }
+
+    private func noteCommandParseSatisfiedIfNeeded(_ accessibilityTrace: AccessibilityTrace?) {
+        guard accessibilityTrace != nil else { return }
+        tripwireParsePending = false
     }
 
     // MARK: - Settled Change Tracking
 
     func noteSettledChangeIfNeeded() async {
-        guard brains.interfaceChangedSinceLastSettledCheck() else {
-            hierarchyInvalidated = false
-            return
+        guard tripwireParsePending, !commandParseInFlight, !settledTripwireParseInFlight else { return }
+        tripwireParsePending = false
+        settledTripwireParseInFlight = true
+        defer {
+            settledTripwireParseInFlight = false
+            tripwireParsePending = false
         }
-        hierarchyInvalidated = false
+        let result = await brains.parseSettledTripwireChange()
+        guard result.changed else { return }
 
         if let stakeout {
             await stakeout.noteScreenChange()
         }
     }
 
-    func sendInterface(requestId: String? = nil, respond: @escaping (Data) -> Void) async {
-        _ = await tripwire.waitForAllClear(timeout: 0.5)
-        brains.clearPendingRotorResult()
-
-        guard brains.refresh() != nil else {
-            sendMessage(.error(ServerError(kind: .general, message: "Could not access root view")), requestId: requestId, respond: respond)
-            return
+    func sendInterface(
+        query: InterfaceQuery = InterfaceQuery(),
+        requestId: String? = nil,
+        respond: @escaping (Data) -> Void
+    ) async {
+        switch await brains.observeInterface(query) {
+        case .success(let interface):
+            insideJobLogger.info("Interface: \(interface.elements.count) elements")
+            sendMessage(
+                .interface(interface),
+                requestId: requestId,
+                respond: respond
+            )
+            tripwireParsePending = false
+            brains.recordSentState()
+        case .failure(let error):
+            sendMessage(.error(ServerError(kind: .general, message: error.message)), requestId: requestId, respond: respond)
         }
-
-        let payload = brains.currentInterface()
-        insideJobLogger.info("Interface: \(payload.elements.count) visible elements")
-        sendMessage(.interface(payload), requestId: requestId, respond: respond)
-        brains.recordSentState(viewportHash: payload.tree.hashValue)
     }
 
     // MARK: - Screen Capture
 
     func handleScreen(requestId: String? = nil, respond: @escaping (Data) -> Void) {
         insideJobLogger.debug("Screen requested")
+
+        guard brains.refresh() != nil else {
+            sendMessage(.error(ServerError(kind: .general, message: "Could not access accessibility tree")), requestId: requestId, respond: respond)
+            return
+        }
 
         guard let (image, bounds) = brains.captureScreen() else {
             sendMessage(.error(ServerError(kind: .general, message: "Could not access app window")), requestId: requestId, respond: respond)
@@ -526,10 +560,12 @@ final class TheGetaway {
         let payload = ScreenPayload(
             pngData: pngData.base64EncodedString(),
             width: bounds.width,
-            height: bounds.height
+            height: bounds.height,
+            interface: brains.currentInterface()
         )
 
         sendMessage(.screen(payload), requestId: requestId, respond: respond)
+        tripwireParsePending = false
         insideJobLogger.debug("Screen sent: \(pngData.count) bytes")
     }
 }

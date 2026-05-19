@@ -358,8 +358,7 @@ final class ActivateOutcomeBehaviorTests: XCTestCase {
             respondsToUserInteraction: false
         )
         let screenElement = TheStash.ScreenElement(
-            heistId: "x", contentSpaceOrigin: nil, element: element,
-            object: nil, scrollView: nil
+            heistId: "x", contentSpaceOrigin: nil, element: element
         )
         let stash = TheStash(tripwire: TheTripwire())
         XCTAssertEqual(stash.activate(screenElement), .objectDeallocated)

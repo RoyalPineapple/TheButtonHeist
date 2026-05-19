@@ -105,8 +105,8 @@ final class HeistIdDisambiguationTests: XCTestCase {
 
         XCTAssertEqual(screen.elements.count, 2,
                        "Both elements should survive disambiguation")
-        XCTAssertEqual(screen.heistIdByElement[upper], "row_button_1")
-        XCTAssertEqual(screen.heistIdByElement[lower], "row_button_2")
+        XCTAssertEqual(screen.liveInterface.heistIdByElement[upper], "row_button_1")
+        XCTAssertEqual(screen.liveInterface.heistIdByElement[lower], "row_button_2")
         assertNoContentPositionSuffix(in: screen)
     }
 
@@ -121,9 +121,9 @@ final class HeistIdDisambiguationTests: XCTestCase {
 
         XCTAssertEqual(screen.elements.count, 3,
                        "All three same-matcher rows should produce distinct heistIds")
-        XCTAssertEqual(screen.heistIdByElement[first], "item_button_1")
-        XCTAssertEqual(screen.heistIdByElement[second], "item_button_2")
-        XCTAssertEqual(screen.heistIdByElement[third], "item_button_3")
+        XCTAssertEqual(screen.liveInterface.heistIdByElement[first], "item_button_1")
+        XCTAssertEqual(screen.liveInterface.heistIdByElement[second], "item_button_2")
+        XCTAssertEqual(screen.liveInterface.heistIdByElement[third], "item_button_3")
         assertNoContentPositionSuffix(in: screen)
     }
 
@@ -139,8 +139,8 @@ final class HeistIdDisambiguationTests: XCTestCase {
 
         XCTAssertEqual(screen.elements.count, 2,
                        "Phase 2 distinct-ifies before content-position epsilon collapse applies")
-        XCTAssertEqual(screen.heistIdByElement[first], "cell_button_1")
-        XCTAssertEqual(screen.heistIdByElement[second], "cell_button_2")
+        XCTAssertEqual(screen.liveInterface.heistIdByElement[first], "cell_button_1")
+        XCTAssertEqual(screen.liveInterface.heistIdByElement[second], "cell_button_2")
         assertNoContentPositionSuffix(in: screen)
     }
 
@@ -168,9 +168,9 @@ final class HeistIdDisambiguationTests: XCTestCase {
         let screen = TheBurglar.buildScreen(from: result)
 
         XCTAssertEqual(screen.elements.count, 2)
-        XCTAssertEqual(screen.heistIdByElement[first], "thing_element_1",
+        XCTAssertEqual(screen.liveInterface.heistIdByElement[first], "thing_element_1",
                        "Different-matcher collisions resolve via Phase 2 `_N` suffixes")
-        XCTAssertEqual(screen.heistIdByElement[second], "thing_element_2")
+        XCTAssertEqual(screen.liveInterface.heistIdByElement[second], "thing_element_2")
         assertNoContentPositionSuffix(in: screen)
     }
 }

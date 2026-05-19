@@ -136,7 +136,6 @@ public enum FenceParameterKey: String, CaseIterable, Sendable {
     case rotorIndex
     case samplesPerSegment
     case scale
-    case scope
     case segments
     case spread
     case start
@@ -400,7 +399,7 @@ enum FenceParameterBlocks: Sendable {
         ),
     ]
 
-    /// Subtree projection selector for get_interface. Cuts the parsed interface tree
+    /// Subtree selector for get_interface. Cuts the parsed interface tree
     /// at one matched leaf or container node.
     static let interfaceSubtree: FenceParameterSpec = .init(
         key: "subtree", type: .object, optionalRole: .matcher,
@@ -442,7 +441,7 @@ enum FenceParameterBlocks: Sendable {
                     .init(
                         key: "type", type: .string, optionalRole: .matcher,
                         description: "Container type",
-                        enumValues: fenceEnumValues(ContainerInfo.ContainerTypeName.self)
+                        enumValues: fenceEnumValues(ContainerTypeName.self)
                     ),
                     .init(key: "label", type: .string, optionalRole: .matcher, description: "Exact semantic container label"),
                     .init(key: "value", type: .string, optionalRole: .matcher, description: "Exact semantic container value"),
@@ -693,13 +692,15 @@ extension TheFence.Command {
             return """
                 Read the app accessibility hierarchy. Call once on a new screen, then track changes via \
                 action deltas — re-fetch only when you need elements the delta didn't cover. \
-                Omit subtree for the whole hierarchy, or pass subtree to project the returned tree from \
-                a selected leaf or container node. Omit scope for the normal app accessibility state; \
-                use scope=visible only for fresh on-screen geometry diagnostics.
+                Omit subtree for the whole hierarchy, or pass subtree to select the returned tree from \
+                a selected leaf or container node.
                 """
 
         case Self.getScreen.rawValue:
-            return "Capture a PNG screenshot from the connected device. Returns inline base64 PNG image data. Use 'output' to save to a file path instead."
+            return """
+                Capture a PNG screenshot from the connected device and include the fresh visible \
+                accessibility tree. Returns inline base64 PNG image data; use output to save the image to a file.
+                """
 
         case Self.waitForChange.rawValue:
             return """
@@ -880,14 +881,6 @@ extension TheFence.Command {
             return filter + [
                 FenceParameterBlocks.interfaceSubtree,
                 .init(
-                    key: "scope", type: .string, optionalRole: .behaviorSwitch,
-                    description: """
-                        Optional diagnostic scope. Omit for the app accessibility state. \
-                        Use visible only when you need fresh on-screen geometry diagnostics.
-                        """,
-                    enumValues: [GetInterfaceScope.visible.rawValue]
-                ),
-                .init(
                     key: "detail", type: .string, optionalRole: .behaviorSwitch,
                     description: """
                         Level of detail. summary (default): identity fields, traits, and actions only \
@@ -898,7 +891,7 @@ extension TheFence.Command {
                 ),
                 .init(
                     key: "elements", type: .stringArray, optionalRole: .matcher,
-                    description: "Optional list of leaf heistId handles to project as subtrees. Omit for the app accessibility hierarchy."
+                    description: "Optional list of leaf heistId handles to return as subtrees. Omit for the app accessibility hierarchy."
                 ),
             ]
 

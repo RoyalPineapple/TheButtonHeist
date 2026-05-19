@@ -17,13 +17,16 @@ let package = Package(
         // Parser semantics are part of Button Heist's release contract.
         // Keep this exact tag aligned with submodules/AccessibilitySnapshotBH
         // via scripts/check-parser-contract.sh and scripts/bump-parser.sh.
-        .package(url: "https://github.com/RoyalPineapple/AccessibilitySnapshotBH", exact: "0.8.0"),
+        .package(url: "https://github.com/RoyalPineapple/AccessibilitySnapshotBH", exact: "0.9.3"),
         .package(url: "https://github.com/apple/swift-certificates", from: "1.0.0"),
         .package(url: "https://github.com/apple/swift-crypto", from: "3.0.0"),
     ],
     targets: [
         .target(
             name: "TheScore",
+            dependencies: [
+                .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotBH"),
+            ],
             path: "ButtonHeist/Sources/TheScore",
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
@@ -54,6 +57,7 @@ let package = Package(
             name: "ButtonHeist",
             dependencies: [
                 "TheScore",
+                .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotBH"),
                 .product(name: "Crypto", package: "swift-crypto"),
             ],
             path: "ButtonHeist/Sources/TheButtonHeist",

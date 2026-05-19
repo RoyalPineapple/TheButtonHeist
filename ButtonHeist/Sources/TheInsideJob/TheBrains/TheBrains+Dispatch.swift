@@ -139,7 +139,7 @@ extension TheBrains {
     }
 
     private func recordedScreenIfFreshParseStillMatches(_ screenBeforeRefresh: Screen) -> Screen? {
-        let currentVisibleIds = stash.currentScreen.interactionSnapshot.heistIds
+        let currentVisibleIds = stash.currentScreen.liveInterface.heistIds
         guard !screenBeforeRefresh.elements.isEmpty,
               currentVisibleIds.isSubset(of: screenBeforeRefresh.knownInterface.heistIds) else {
             return nil
@@ -317,8 +317,7 @@ extension TheBrains {
         let manifest = await navigation.exploreAndPrune()
         let afterSnapshot = stash.selectElements()
         let exploreElements = TheStash.WireConversion.toWire(afterSnapshot)
-        let afterTree = exploreElements.map(InterfaceNode.element)
-        let accessibilityTrace = makeAccessibilityTrace(afterTree: afterTree, parentCapture: before.capture)
+        let accessibilityTrace = makeAccessibilityTrace(afterInterface: stash.interface(), parentCapture: before.capture)
 
         var builder = ActionResultBuilder(method: .explore, snapshot: afterSnapshot)
         builder.accessibilityTrace = accessibilityTrace
@@ -459,7 +458,7 @@ extension TheBrains {
 
 private extension ClientMessage {
 
-    var pendingRotorResultTargetHeistId: String? {
+    var pendingRotorResultTargetHeistId: HeistId? {
         switch self {
         case .activate(let target),
              .increment(let target),
@@ -513,7 +512,7 @@ private extension ClientMessage {
 }
 
 private extension ElementTarget {
-    var exactHeistId: String? {
+    var exactHeistId: HeistId? {
         if case .heistId(let heistId) = self {
             return heistId
         }

@@ -135,10 +135,11 @@ Read the app accessibility state.
 ```bash
 buttonheist get_interface
 buttonheist get_interface --format json
-buttonheist get_interface --scope visible
 ```
 
-Flags: `--scope visible` for fresh on-screen geometry diagnostics, `-f/--format`.
+Flags: `-f/--format`.
+
+Use `buttonheist get_screen` when you need pixels plus fresh visible geometry.
 
 MCP and session JSON requests can pass `subtree` to project the returned hierarchy from a selected leaf or container, for example `{"command":"get_interface","subtree":{"container":{"stableId":"semantic_actions__actions"}}}`.
 

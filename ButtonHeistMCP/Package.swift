@@ -11,6 +11,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../ButtonHeist"),
+        .package(path: "../submodules/AccessibilitySnapshotBH"),
         .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", .upToNextMinor(from: "0.12.0"))
     ],
     targets: [
@@ -31,6 +32,7 @@ let package = Package(
             dependencies: [
                 "ButtonHeistMCP",
                 .product(name: "ButtonHeist", package: "ButtonHeist"),
+                .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotBH"),
                 .product(name: "MCP", package: "swift-sdk")
             ],
             path: "Tests",

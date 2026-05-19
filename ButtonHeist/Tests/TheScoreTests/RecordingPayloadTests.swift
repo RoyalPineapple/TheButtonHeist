@@ -369,10 +369,9 @@ final class RecordingPayloadTests: XCTestCase {
     }
 
     private func makeInterface(label: String, timestamp: TimeInterval) -> Interface {
-        Interface(
-            timestamp: Date(timeIntervalSince1970: timestamp),
-            tree: [
-                .element(HeistElement(
+        makeTestInterface(
+            elements: [
+                HeistElement(
                     heistId: label.lowercased(),
                     description: label,
                     label: label,
@@ -384,8 +383,9 @@ final class RecordingPayloadTests: XCTestCase {
                     frameWidth: 100,
                     frameHeight: 44,
                     actions: [.activate]
-                )),
-            ]
+                ),
+            ],
+            timestamp: Date(timeIntervalSince1970: timestamp),
         )
     }
 }

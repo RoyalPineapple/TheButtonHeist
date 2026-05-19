@@ -11,7 +11,7 @@ TheScore is the shared playbook. It defines:
 1. **All client-to-server messages** (`ClientMessage` — 35 cases)
 2. **All server-to-client messages** (`ServerMessage` — 18 cases, including `status(StatusPayload)`)
 3. **Request/response envelopes** (`RequestEnvelope`, `ResponseEnvelope`) for correlation
-4. **UI element types** (`HeistElement`, `Interface`, `InterfaceNode`, `ElementAction`, `ContainerInfo`, `HeistCustomContent`)
+4. **UI element types** (`HeistElement`, `Interface`, `AccessibilityHierarchy`, `InterfaceAnnotations`, `ElementAction`, `HeistCustomContent`)
 5. **Element targeting** (`ElementTarget`, `ElementMatcher`) — enum-based element reference (`.heistId`/`.matcher`) with structured multi-field AND matching
 6. **Action result types** (`ActionResult`, `AccessibilityTrace.Delta`, `ActionMethod`, `ScrollSearchResult`)
 7. **Action outcome signals** (`ActionExpectation`, `ExpectationResult`) — outcome classifiers for actions
@@ -33,7 +33,7 @@ TheScore is the shared playbook. It defines:
 | `ClientMessages+TouchTargets.swift` | Touch-specific target structs (`TapTarget`, `SwipeTarget`, `DragTarget`, `PinchTarget`, `RotateTarget`, `TwoFingerTapTarget`, `DrawPathTarget`, `DrawBezierTarget`, `LongPressTarget`) |
 | `ServerMessages.swift` | `ResponseEnvelope`, `ServerMessage` (18 cases), `ActionResult`, `ErrorKind`, `StatusPayload`, `ScreenPayload`, `RecordingPayload`, `InteractionEvent`, `ServerInfo` |
 | `AccessibilityTrace+Delta.swift` | `AccessibilityTrace.Delta` enum, `NoChange`, `ElementsChanged`, `ScreenChanged`, `ElementEdits`, `ElementUpdate`, `PropertyChange`, `ElementProperty`, `TreeInsertion`/`TreeRemoval`/`TreeMove` |
-| `Elements.swift` | `HeistElement`, `HeistTrait` (43 known cases + `unknown(String)`), `Interface`, `InterfaceNode`, `ContainerInfo` (with nested `ContainerType`), `ElementAction`, `HeistCustomContent`, `ElementTarget`, `ElementMatcher` |
+| `Elements.swift` | `HeistElement`, `HeistTrait` (43 known cases + `unknown(String)`), `Interface`, `InterfaceAnnotations`, `TreePath`, `ElementAction`, `HeistCustomContent`, `ElementTarget`, `ElementMatcher` |
 | `AccessibilityPolicy.swift` | `AccessibilityPolicy` namespace — single source of truth for trait policy: `transientTraits`, `interactiveTraits`, `staticOnlyTraits`, `synthesisPriority`, `tabSwitchPersistThreshold`. Consumed by both server-side parsing and client-side recording so the two cannot drift. |
 | `ActionExpectation.swift` | `ActionExpectation`, `ExpectationResult` |
 | `HeistPlayback.swift` | `HeistPlayback` — recorded session schema (versioned), with replayable command list |
@@ -115,7 +115,8 @@ graph TD
 classDiagram
     class Interface {
         +Date timestamp
-        +[InterfaceNode] tree
+        +[AccessibilityHierarchy] tree
+        +InterfaceAnnotations annotations
         +elements: [HeistElement] (computed flatten)
         +screenDescription: String (computed)
         +screenId: String? (computed)
@@ -140,17 +141,15 @@ classDiagram
         +activationPoint: CGPoint (computed)
     }
 
-    class InterfaceNode {
-        <<indirect enum>>
-        element(HeistElement)
-        container(ContainerInfo, [InterfaceNode])
+    class AccessibilityHierarchy {
+        <<parser enum>>
+        element(AccessibilityElement, traversalIndex)
+        container(AccessibilityContainer, [AccessibilityHierarchy])
     }
 
-    class ContainerInfo {
-        +ContainerType type
-        +String? stableId
-        +Bool isModalBoundary
-        +Double frameX/Y/Width/Height
+    class InterfaceAnnotations {
+        +[InterfaceElementAnnotation] elements
+        +[InterfaceContainerAnnotation] containers
     }
 
     class ContainerType {
@@ -177,10 +176,8 @@ classDiagram
         +Bool isImportant
     }
 
-    Interface --> InterfaceNode
-    InterfaceNode --> HeistElement
-    InterfaceNode --> ContainerInfo
-    ContainerInfo --> ContainerType
+    Interface --> AccessibilityHierarchy
+    Interface --> InterfaceAnnotations
     HeistElement --> ElementAction
     HeistElement --> HeistCustomContent
 ```
@@ -404,7 +401,7 @@ classDiagram
 
 **Interface tree wire encoding**
 - Top-level request/response envelopes are explicit `type` / `payload`
-- `InterfaceNode` and `ContainerInfo` carry custom `Codable` so the wire shape is `{"element": {...HeistElement...}}` and `{"container": {...ContainerInfo, "children":[...]}}` — the synthesized `_0`-wrapped form is never emitted on the wire
+- `Interface` carries the parser `AccessibilityHierarchy` plus `InterfaceAnnotations`; Button Heist handles and container stable IDs are projections, not a second tree payload.
 
 **No formal schema validation**
 - Messages rely entirely on `Codable` for validation

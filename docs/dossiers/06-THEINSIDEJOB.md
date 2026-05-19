@@ -172,27 +172,30 @@ flowchart TD
 
 ## Settled Change Tracking
 
-Two paths update recording/background state from settled hierarchy changes:
+Two paths update live accessibility state from settled Tripwire changes. This
+path performs a visible parse only; full scroll-view exploration remains owned
+by screen changes, actions, waits, `get_interface`, and `get_screen`.
 
 ### 1. Pulse-driven invalidation (primary)
 
 ```mermaid
 flowchart LR
-    AX["Accessibility notification / notifyChange()"] --> Schedule["scheduleHierarchyUpdate()"]
-    Schedule --> SetFlag["hierarchyInvalidated = true"]
+    AX["Accessibility notification / notifyChange() / Tripwire trigger"] --> SetFlag["tripwireParsePending = true"]
     SetFlag --> Wait["Wait for next .settled transition"]
     Wait --> Pulse["handlePulseTransition(.settled)"]
-    Pulse --> Track["noteSettledChangeIfNeeded()"]
+    Pulse --> Parse["parseSettledTripwireChange() updates visible state"]
+    Parse --> Track["semantic change bumps recording activity"]
 ```
 
 There is **no debounce timer**. The mechanism is entirely pulse-driven:
-- `scheduleHierarchyUpdate()` sets `hierarchyInvalidated = true`
+- `notifyChange()`, accessibility notifications, and Tripwire triggers set `tripwireParsePending = true`
 - the next `.settled` transition fires `handlePulseTransition`
-- `noteSettledChangeIfNeeded()` refreshes via TheBrains and updates recording inactivity state if the capture changed
+- `noteSettledChangeIfNeeded()` visible-parses, updates local state, and records only semantic changes
+- viewport-only scroll movement updates live geometry without producing trace history
 
 ### 2. Settle-driven polling (supplementary)
 
-`startPolling(interval:)` enables an optional loop that waits on `tripwire.waitForAllClear(timeout:)`, then calls the same settled-change tracking path. The timeout defaults to 2s and is clamped to a 0.5s minimum. **Disabled by default** (`isPollingEnabled = false`); auto-started instances can enable it.
+`startPolling(interval:)` enables an optional loop that waits on `tripwire.waitForAllClear(timeout:)`, then asks the same pending Tripwire parse path to run. If no Tripwire parse is pending, it is a no-op. The timeout defaults to 2s and is clamped to a 0.5s minimum. **Disabled by default** (`isPollingEnabled = false`); auto-started instances can enable it.
 
 ## Lifecycle State Machine
 

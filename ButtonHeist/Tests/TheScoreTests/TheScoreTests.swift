@@ -8,7 +8,7 @@ final class MessageIntegrationTests: XCTestCase {
     /// Test that a typical client-server message exchange encodes/decodes correctly
     func testClientServerExchange() throws {
         // 1. Client requests the current interface
-        let clientMsg = ClientMessage.requestInterface
+        let clientMsg = ClientMessage.requestInterface(InterfaceQuery())
         let clientData = try JSONEncoder().encode(clientMsg)
 
         // 2. Server receives and decodes
@@ -54,7 +54,7 @@ final class MessageIntegrationTests: XCTestCase {
             )
         }
 
-        let payload = Interface(timestamp: Date(), tree: elements.map { .element($0) })
+        let payload = makeTestInterface(elements: elements, timestamp: Date())
         let message = ServerMessage.interface(payload)
 
         let encoder = JSONEncoder()
@@ -76,7 +76,7 @@ final class MessageIntegrationTests: XCTestCase {
     /// Test all message types round-trip in sequence
     func testAllMessageTypesSequence() throws {
         let clientMessages: [ClientMessage] = [
-            .requestInterface,
+            .requestInterface(InterfaceQuery()),
             .ping,
             .status,
             .requestScreen
@@ -158,7 +158,7 @@ final class MessageIntegrationTests: XCTestCase {
                 frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
                 actions: []
             )
-            let payload = Interface(timestamp: Date(), tree: [.element(element)])
+            let payload = makeTestInterface(elements: [element], timestamp: Date())
             let msg = ServerMessage.interface(payload)
 
             let data = try encoder.encode(msg)

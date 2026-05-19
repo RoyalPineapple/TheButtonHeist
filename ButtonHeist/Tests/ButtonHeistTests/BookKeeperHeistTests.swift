@@ -135,33 +135,108 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testRecordHeistEvidenceStoresSameScreenTraceAsSegmentPatch() async throws {
+        let bookKeeper = makeBookKeeper()
+        try bookKeeper.beginSession(identifier: "same-screen-trace")
+        try bookKeeper.startHeistRecording(app: "com.example.app")
+
+        let beforeInterface = makeReceiptTestInterface([
+            makeElement(heistId: "cart_total", label: "Total", value: "$0.00", traits: [.staticText]),
+        ])
+        let afterInterface = makeReceiptTestInterface([
+            makeElement(heistId: "cart_total", label: "Total", value: "$12.00", traits: [.staticText]),
+        ])
+        let trace = makeReceiptTestTrace(before: beforeInterface, after: afterInterface)
+
+        try recordHeistEvidence(bookKeeper, command: .activate,
+            args: ["command": "activate", "label": "Chicken Tikka"],
+            actionResult: ActionResult(success: true, method: .activate, accessibilityTrace: trace),
+            targetCapture: nil
+        )
+
+        let script = try bookKeeper.stopHeistRecording()
+        let recordedTrace = try XCTUnwrap(script.steps[0].recorded?.accessibilityTrace)
+        XCTAssertEqual(recordedTrace.segments.count, 1)
+        XCTAssertEqual(recordedTrace.segments[0].transitions.count, 1)
+        XCTAssertEqual(recordedTrace.captures.map(\.interface), [beforeInterface, afterInterface])
+        XCTAssertEqual(script.steps[0].recorded?.accessibilityDelta?.kindRawValue, "elementsChanged")
+
+        let json = try XCTUnwrap(encodedRecordedTraceJSON(script))
+        XCTAssertNotNil(json["segments"])
+        XCTAssertNil(json["captures"])
+        let segments = try XCTUnwrap(json["segments"] as? [[String: Any]])
+        let firstSegment = try XCTUnwrap(segments.first)
+        XCTAssertNotNil(firstSegment["baseline"])
+        XCTAssertEqual((firstSegment["transitions"] as? [Any])?.count, 1)
+    }
+
+    @ButtonHeistActor
+    func testRecordHeistEvidenceStartsNewTraceSegmentForScreenChange() async throws {
+        let bookKeeper = makeBookKeeper()
+        try bookKeeper.beginSession(identifier: "screen-change-trace")
+        try bookKeeper.startHeistRecording(app: "com.example.app")
+
+        let before = AccessibilityTrace.Capture(
+            sequence: 1,
+            interface: makeReceiptTestInterface([
+                makeElement(heistId: "title", label: "Menu", traits: [.header]),
+            ])
+        )
+        let after = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: makeReceiptTestInterface([
+                makeElement(heistId: "title", label: "Checkout", traits: [.header]),
+            ]),
+            parentHash: before.hash,
+            transition: AccessibilityTrace.Transition(screenChangeReason: "test navigation")
+        )
+
+        try recordHeistEvidence(bookKeeper, command: .activate,
+            args: ["command": "activate", "label": "Checkout"],
+            actionResult: ActionResult(
+                success: true,
+                method: .activate,
+                accessibilityTrace: AccessibilityTrace(captures: [before, after])
+            ),
+            targetCapture: nil
+        )
+
+        let script = try bookKeeper.stopHeistRecording()
+        let recordedTrace = try XCTUnwrap(script.steps[0].recorded?.accessibilityTrace)
+        XCTAssertEqual(recordedTrace.segments.count, 2)
+        XCTAssertEqual(recordedTrace.segments.map(\.baseline.hash), [before.hash, after.hash])
+        XCTAssertTrue(recordedTrace.segments.allSatisfy(\.transitions.isEmpty))
+        XCTAssertEqual(script.steps[0].recorded?.accessibilityDelta?.kindRawValue, "screenChanged")
+    }
+
+    @ButtonHeistActor
     func testRecordHeistEvidenceDerivesMatcherFromTargetCaptureDuringScreenChange() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
 
-        let preActionInterface = Interface(
-            timestamp: Date(timeIntervalSince1970: 0),
-            tree: [
-                .element(makeElement(
+        let preActionInterface = makeReceiptTestInterface(
+            [
+                makeElement(
                     heistId: "save",
                     label: "Save",
                     identifier: "primary.save",
                     traits: [.button]
-                )),
-                .element(makeElement(heistId: "cancel", label: "Cancel", traits: [.button])),
-            ]
+                ),
+                makeElement(heistId: "cancel", label: "Cancel", traits: [.button]),
+            ],
+            timestamp: Date(timeIntervalSince1970: 0)
         )
-        let postActionInterface = Interface(
-            timestamp: Date(timeIntervalSince1970: 1),
-            tree: [
-                .element(makeElement(
+        let postActionInterface = makeReceiptTestInterface(
+            [
+                makeElement(
                     heistId: "save",
                     label: "Save",
                     identifier: "post-action.save",
                     traits: [.button]
-                )),
-            ]
+                ),
+            ],
+            timestamp: Date(timeIntervalSince1970: 1)
         )
         let preActionCapture = AccessibilityTrace.Capture(sequence: 1, interface: preActionInterface)
         let postActionCapture = AccessibilityTrace.Capture(
@@ -197,20 +272,20 @@ final class BookKeeperHeistTests: XCTestCase {
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
 
-        let preActionInterface = Interface(
-            timestamp: Date(timeIntervalSince1970: 0),
-            tree: [.element(makeElement(heistId: "cancel", label: "Cancel", traits: [.button]))]
+        let preActionInterface = makeReceiptTestInterface(
+            [makeElement(heistId: "cancel", label: "Cancel", traits: [.button])],
+            timestamp: Date(timeIntervalSince1970: 0)
         )
-        let postActionInterface = Interface(
-            timestamp: Date(timeIntervalSince1970: 1),
-            tree: [
-                .element(makeElement(
+        let postActionInterface = makeReceiptTestInterface(
+            [
+                makeElement(
                     heistId: "save",
                     label: "Save",
                     identifier: "post-action.save",
                     traits: [.button]
-                )),
-            ]
+                ),
+            ],
+            timestamp: Date(timeIntervalSince1970: 1)
         )
         let preActionCapture = AccessibilityTrace.Capture(sequence: 1, interface: preActionInterface)
 
@@ -380,7 +455,7 @@ final class BookKeeperHeistTests: XCTestCase {
         let element = makeElement(heistId: "button_submit", label: "Submit", traits: [.button])
         let capture = AccessibilityTrace.Capture(
             sequence: 1,
-            interface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [.element(element)])
+            interface: makeReceiptTestInterface([element], timestamp: Date(timeIntervalSince1970: 0))
         )
         try recordHeistEvidence(bookKeeper, command: .activate,
             args: [
@@ -406,13 +481,7 @@ final class BookKeeperHeistTests: XCTestCase {
         let second = makeElement(heistId: "anonymous_2")
         let capture = AccessibilityTrace.Capture(
             sequence: 1,
-            interface: Interface(
-                timestamp: Date(timeIntervalSince1970: 0),
-                tree: [
-                    .element(first),
-                    .element(second),
-                ]
-            )
+            interface: makeReceiptTestInterface([first, second], timestamp: Date(timeIntervalSince1970: 0))
         )
         try recordHeistEvidence(bookKeeper, command: .activate,
             args: [
@@ -636,7 +705,7 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     private func makeElement(
-        heistId: String,
+        heistId: HeistId,
         label: String? = nil,
         identifier: String? = nil,
         value: String? = nil,
@@ -697,4 +766,12 @@ private func appendEvidenceLine(_ evidence: HeistEvidence, to bookKeeper: TheBoo
     var data = try encoder.encode(evidence)
     data.append(contentsOf: [0x0A])
     recording.fileHandle.write(data)
+}
+
+private func encodedRecordedTraceJSON(_ script: HeistPlayback) throws -> [String: Any]? {
+    let data = try JSONEncoder().encode(script)
+    let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    let steps = try XCTUnwrap(json["steps"] as? [[String: Any]])
+    let recorded = try XCTUnwrap(steps.first?["_recorded"] as? [String: Any])
+    return recorded["accessibilityTrace"] as? [String: Any]
 }

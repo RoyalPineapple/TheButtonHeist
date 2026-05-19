@@ -6,235 +6,17 @@ import TheScore
 private let logger = Logger(subsystem: "com.buttonheist.fence", category: "handlers")
 private let accessibilityAdjustmentCountRange = 1...100
 
-private struct InterfaceSubtreeCandidate {
-    let node: InterfaceNode
-    let summary: String
-}
-
-private extension Interface {
-    func projectingLeafSubtrees(matching matcher: ElementMatcher) -> Interface {
-        Interface(
-            timestamp: timestamp,
-            tree: tree.flatMap { $0.leafSubtreeNodes(matching: matcher) }
-        )
-    }
-
-    func projectingLeafSubtrees(withIds heistIds: Set<String>) -> Interface {
-        Interface(
-            timestamp: timestamp,
-            tree: tree.flatMap { $0.leafSubtreeNodes(withIds: heistIds) }
-        )
-    }
-
-    func subtreeCandidates(matching selector: SubtreeSelector) -> [InterfaceSubtreeCandidate] {
-        tree.flatMap { $0.subtreeCandidates(matching: selector) }
-    }
-
-    func projecting(subtree candidate: InterfaceSubtreeCandidate) -> Interface {
-        Interface(timestamp: timestamp, tree: [candidate.node])
-    }
-}
-
-private extension ContainerInfo {
-    var subtreeCandidateSummary: String {
-        var parts = ["container", "type=\"\(typeName.rawValue)\""]
-        if let stableId { parts.append("stableId=\"\(stableId)\"") }
-        if let identifier = containerIdentifier, !identifier.isEmpty {
-            parts.append("identifier=\"\(identifier)\"")
-        }
-        if let label = containerLabel, !label.isEmpty {
-            parts.append("label=\"\(label)\"")
-        }
-        if let value = containerValue, !value.isEmpty {
-            parts.append("value=\"\(value)\"")
-        }
-        if isModalBoundary {
-            parts.append("isModalBoundary=true")
-        }
-        return parts.joined(separator: " ")
-    }
-}
-
-private extension HeistElement {
-    var subtreeCandidateSummary: String {
-        var parts = ["element", "heistId=\"\(heistId)\""]
-        if let identifier, !identifier.isEmpty {
-            parts.append("identifier=\"\(identifier)\"")
-        }
-        if let label, !label.isEmpty {
-            parts.append("label=\"\(label)\"")
-        }
-        if let value, !value.isEmpty {
-            parts.append("value=\"\(value)\"")
-        }
-        if !traits.isEmpty {
-            parts.append("traits=\"\(traits.map(\.rawValue).joined(separator: ","))\"")
-        }
-        return parts.joined(separator: " ")
-    }
-}
-
-private extension InterfaceNode {
-    func leafSubtreeNodes(matching matcher: ElementMatcher) -> [InterfaceNode] {
-        switch self {
-        case .element(let element):
-            return element.matches(matcher) ? [self] : []
-        case .container(_, let children):
-            return children.flatMap { $0.leafSubtreeNodes(matching: matcher) }
-        }
-    }
-
-    func leafSubtreeNodes(withIds heistIds: Set<String>) -> [InterfaceNode] {
-        switch self {
-        case .element(let element):
-            return heistIds.contains(element.heistId) ? [self] : []
-        case .container(_, let children):
-            return children.flatMap { $0.leafSubtreeNodes(withIds: heistIds) }
-        }
-    }
-
-    func subtreeCandidates(matching selector: SubtreeSelector) -> [InterfaceSubtreeCandidate] {
-        switch self {
-        case .element(let element):
-            guard case .element(let matcher, _) = selector, element.matches(matcher) else { return [] }
-            return [InterfaceSubtreeCandidate(node: self, summary: element.subtreeCandidateSummary)]
-        case .container(let info, let children):
-            var candidates: [InterfaceSubtreeCandidate] = []
-            if case .container(let matcher, _) = selector, info.matches(matcher) {
-                candidates.append(InterfaceSubtreeCandidate(node: self, summary: info.subtreeCandidateSummary))
-            }
-            candidates.append(contentsOf: children.flatMap { $0.subtreeCandidates(matching: selector) })
-            return candidates
-        }
-    }
-}
-
-private extension Array where Element == InterfaceSubtreeCandidate {
-    var diagnosticList: String {
-        enumerated().map { index, candidate in
-            "[\(index)] \(candidate.summary)"
-        }.joined(separator: "; ")
-    }
-}
-
 @ButtonHeistActor
 extension TheFence {
 
     // MARK: - Handler: Interface
 
     func handleGetInterface(_ request: GetInterfaceRequest) async throws -> FenceResponse {
-        // Default scope: capture the app accessibility state and return all discovered elements.
-        if request.scope == .full {
-            let result = try await sendAndAwaitAction(.explore, timeout: Timeouts.exploreSeconds)
-            lastActionHistory = .completed(result)
-            guard case .explore(let exploreResult) = result.payload else {
-                return .error("Explore failed: \(result.message ?? "unknown error")")
-            }
-            let interface = exploredInterface(from: result, exploreResult: exploreResult)
-            let projected = projectedInterface(interface, request: request)
-            if let error = projected.error { return .error(error) }
-            return .interface(
-                projected.interface,
-                detail: request.detail,
-                filteredFrom: projected.filteredFrom,
-                explore: exploreResult
-            )
-        }
-
-        let interface = try await sendAndAwaitInterface(.requestInterface, timeout: Timeouts.actionSeconds)
-        let projected = projectedInterface(interface, request: request)
-        if let error = projected.error { return .error(error) }
-        return .interface(projected.interface, detail: request.detail, filteredFrom: projected.filteredFrom)
-    }
-
-    private func exploredInterface(from result: ActionResult, exploreResult: ExploreResult) -> Interface {
-        let payloadTree = exploreResult.elements.map(InterfaceNode.element)
-        guard let traceInterface = result.accessibilityTrace?.captures.last?.interface else {
-            return Interface(timestamp: Date(), tree: payloadTree)
-        }
-
-        let payloadIds = Set(exploreResult.elements.map(\.heistId))
-        let traceIds = Set(traceInterface.elements.map(\.heistId))
-        guard payloadIds.isSubset(of: traceIds) else {
-            logger.warning(
-                """
-                Explore trace omitted payload elements; returning payload projection. \
-                payloadCount=\(payloadIds.count, privacy: .public) \
-                traceCount=\(traceIds.count, privacy: .public)
-                """
-            )
-            return Interface(timestamp: traceInterface.timestamp, tree: payloadTree)
-        }
-        return traceInterface
-    }
-
-    private func projectedInterface(
-        _ interface: Interface,
-        request: GetInterfaceRequest
-    ) -> (interface: Interface, filteredFrom: Int?, error: String?) {
-        if let subtree = request.subtree {
-            return projectedInterface(interface, subtree: subtree)
-        }
-
-        // Legacy flat matcher/list filters now project matching leaves as subtrees
-        // instead of retaining ancestor wrappers around them.
-        if request.matcher.hasPredicates {
-            let total = interface.elements.count
-            return (interface.projectingLeafSubtrees(matching: request.matcher), total, nil)
-        }
-
-        if let filterIds = request.elementIds, !filterIds.isEmpty {
-            let filterSet = Set(filterIds)
-            return (interface.projectingLeafSubtrees(withIds: filterSet), interface.elements.count, nil)
-        }
-        return (interface, nil, nil)
-    }
-
-    private func projectedInterface(
-        _ interface: Interface,
-        subtree: SubtreeSelector
-    ) -> (interface: Interface, filteredFrom: Int?, error: String?) {
-        let candidates = interface.subtreeCandidates(matching: subtree)
-        guard !candidates.isEmpty else {
-            let message = """
-                get_interface subtree matched no nodes; refine subtree using a container \
-                stableId/type/label/identifier or a leaf heistId/matcher from get_interface.
-                """
-            return (
-                interface,
-                nil,
-                message
-            )
-        }
-
-        if let ordinal = subtree.ordinal {
-            guard candidates.indices.contains(ordinal) else {
-                let range = candidates.count == 1 ? "0" : "0...\(candidates.count - 1)"
-                let message = """
-                    get_interface subtree ordinal \(ordinal) is out of range for \(candidates.count) matches; \
-                    use \(range) or refine subtree. Candidates: \(candidates.diagnosticList)
-                    """
-                return (
-                    interface,
-                    nil,
-                    message
-                )
-            }
-            return (interface.projecting(subtree: candidates[ordinal]), interface.elements.count, nil)
-        }
-
-        guard candidates.count == 1 else {
-            let message = """
-                get_interface subtree matched \(candidates.count) nodes; add subtree.ordinal \
-                0...\(candidates.count - 1) or refine subtree. Candidates: \(candidates.diagnosticList)
-                """
-            return (
-                interface,
-                nil,
-                message
-            )
-        }
-        return (interface.projecting(subtree: candidates[0]), interface.elements.count, nil)
+        let interface = try await sendAndAwaitInterface(
+            .requestInterface(request.query),
+            timeout: Timeouts.exploreSeconds
+        )
+        return .interface(interface, detail: request.detail)
     }
 
     // MARK: - Handler: Screen
@@ -250,14 +32,14 @@ extension TheFence {
                 command: .getScreen,
                 metadata: metadata
             ) {
-                return .screenshot(path: url.path, width: screen.width, height: screen.height)
+                return .screenshot(path: url.path, payload: screen)
             }
         } catch BookKeeperError.unsafePath {
             return .error("Invalid output path: must not contain '..' components or control characters")
         } catch BookKeeperError.base64DecodingFailed {
             return .error("Failed to decode screenshot data")
         }
-        return .screenshotData(pngData: screen.pngData, width: screen.width, height: screen.height)
+        return .screenshotData(payload: screen)
     }
 
     // MARK: - Handler: Gestures
@@ -788,7 +570,7 @@ extension TheFence {
     private func captureInterfaceSnapshot() async -> Interface? {
         do {
             let response = try await execute(parsed: defaultGetInterfaceParsedRequest())
-            if case .interface(let snapshot, _, _, _) = response {
+            if case .interface(let snapshot, _) = response {
                 return snapshot
             }
         } catch {
