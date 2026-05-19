@@ -40,8 +40,8 @@ struct TapSubcommand: AsyncParsableCommand, CLICommandContract {
 
         var request = Self.fenceRequest()
         try element.applyTo(&request)
-        if let x { request[.x] = x }
-        if let y { request[.y] = y }
+        if let x { request.set(.x, x) }
+        if let y { request.set(.y, y) }
 
         try await CLIRunner.run(
             connection: connection,
@@ -79,10 +79,10 @@ struct LongPressSubcommand: AsyncParsableCommand, CLICommandContract {
             throw ValidationError("Must specify a heistId, -id, or --x/--y coordinates")
         }
 
-        var request = Self.fenceRequest([.duration: duration])
+        var request = Self.fenceRequest([.duration: .double(duration)])
         try element.applyTo(&request)
-        if let x { request[.x] = x }
-        if let y { request[.y] = y }
+        if let x { request.set(.x, x) }
+        if let y { request.set(.y, y) }
 
         try await CLIRunner.run(
             connection: connection,
@@ -157,25 +157,35 @@ struct SwipeSubcommand: AsyncParsableCommand, CLICommandContract {
             }
         }
 
+        let swipeDirection: SwipeDirection?
         if let dir = direction {
-            guard SwipeDirection(rawValue: dir.lowercased()) != nil else {
+            guard let parsedDirection = SwipeDirection(rawValue: dir.lowercased()) else {
                 throw ValidationError("Invalid direction: \(dir). Valid: \(SwipeDirection.allCases.map(\.rawValue).joined(separator: ", "))")
             }
+            swipeDirection = parsedDirection
+        } else {
+            swipeDirection = nil
         }
 
         var request = Self.fenceRequest()
         try element.applyTo(&request)
-        if let fromX { request[.startX] = fromX }
-        if let fromY { request[.startY] = fromY }
-        if let toX { request[.endX] = toX }
-        if let toY { request[.endY] = toY }
-        if let direction { request[.direction] = direction.lowercased() }
-        if let duration { request[.duration] = duration }
+        if let fromX { request.set(.startX, fromX) }
+        if let fromY { request.set(.startY, fromY) }
+        if let toX { request.set(.endX, toX) }
+        if let toY { request.set(.endY, toY) }
+        if let swipeDirection { request.set(.direction, swipeDirection.rawValue) }
+        if let duration { request.set(.duration, duration) }
         if let startUnitX, let startUnitY {
-            request[.start] = FenceParameterKey.rawDictionary([.x: startUnitX, .y: startUnitY])
+            request.set(.start, .object([
+                FenceParameterKey.x.rawValue: .double(startUnitX),
+                FenceParameterKey.y.rawValue: .double(startUnitY),
+            ]))
         }
         if let endUnitX, let endUnitY {
-            request[.end] = FenceParameterKey.rawDictionary([.x: endUnitX, .y: endUnitY])
+            request.set(.end, .object([
+                FenceParameterKey.x.rawValue: .double(endUnitX),
+                FenceParameterKey.y.rawValue: .double(endUnitY),
+            ]))
         }
 
         try await CLIRunner.run(
@@ -221,13 +231,13 @@ struct DragSubcommand: AsyncParsableCommand, CLICommandContract {
         }
 
         var request = Self.fenceRequest([
-            .endX: toX,
-            .endY: toY,
+            .endX: .double(toX),
+            .endY: .double(toY),
         ])
         try element.applyTo(&request)
-        if let fromX { request[.startX] = fromX }
-        if let fromY { request[.startY] = fromY }
-        if let duration { request[.duration] = duration }
+        if let fromX { request.set(.startX, fromX) }
+        if let fromY { request.set(.startY, fromY) }
+        if let duration { request.set(.duration, duration) }
 
         try await CLIRunner.run(
             connection: connection,
@@ -271,12 +281,12 @@ struct PinchSubcommand: AsyncParsableCommand, CLICommandContract {
             throw ValidationError("Must specify a heistId, -id, or --center-x/--center-y coordinates")
         }
 
-        var request = Self.fenceRequest([.scale: scale])
+        var request = Self.fenceRequest([.scale: .double(scale)])
         try element.applyTo(&request)
-        if let centerX { request[.centerX] = centerX }
-        if let centerY { request[.centerY] = centerY }
-        if let spread { request[.spread] = spread }
-        if let duration { request[.duration] = duration }
+        if let centerX { request.set(.centerX, centerX) }
+        if let centerY { request.set(.centerY, centerY) }
+        if let spread { request.set(.spread, spread) }
+        if let duration { request.set(.duration, duration) }
 
         try await CLIRunner.run(
             connection: connection,
@@ -320,12 +330,12 @@ struct RotateSubcommand: AsyncParsableCommand, CLICommandContract {
             throw ValidationError("Must specify a heistId, -id, or --center-x/--center-y coordinates")
         }
 
-        var request = Self.fenceRequest([.angle: angle])
+        var request = Self.fenceRequest([.angle: .double(angle)])
         try element.applyTo(&request)
-        if let centerX { request[.centerX] = centerX }
-        if let centerY { request[.centerY] = centerY }
-        if let radius { request[.radius] = radius }
-        if let duration { request[.duration] = duration }
+        if let centerX { request.set(.centerX, centerX) }
+        if let centerY { request.set(.centerY, centerY) }
+        if let radius { request.set(.radius, radius) }
+        if let duration { request.set(.duration, duration) }
 
         try await CLIRunner.run(
             connection: connection,
@@ -365,9 +375,9 @@ struct TwoFingerTapSubcommand: AsyncParsableCommand, CLICommandContract {
 
         var request = Self.fenceRequest()
         try element.applyTo(&request)
-        if let centerX { request[.centerX] = centerX }
-        if let centerY { request[.centerY] = centerY }
-        if let spread { request[.spread] = spread }
+        if let centerX { request.set(.centerX, centerX) }
+        if let centerY { request.set(.centerY, centerY) }
+        if let spread { request.set(.spread, spread) }
 
         try await CLIRunner.run(
             connection: connection,

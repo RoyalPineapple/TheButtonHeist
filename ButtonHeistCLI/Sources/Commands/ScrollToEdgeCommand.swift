@@ -31,13 +31,13 @@ struct ScrollToEdgeCommand: AsyncParsableCommand, CLICommandContract {
     mutating func run() async throws {
         _ = try element.requireTarget()
 
-        guard ScrollEdge(rawValue: edge.lowercased()) != nil else {
+        guard let scrollEdge = ScrollEdge(rawValue: edge.lowercased()) else {
             throw ValidationError("Invalid edge '\(edge)'. Valid: \(ScrollEdge.allCases.map(\.rawValue).joined(separator: ", "))")
         }
 
         var request = Self.fenceRequest([
-            .edge: edge.lowercased(),
-            .timeout: timeoutOption.timeout,
+            .edge: .string(scrollEdge.rawValue),
+            .timeout: .double(timeoutOption.timeout),
         ])
         try element.applyTo(&request)
 

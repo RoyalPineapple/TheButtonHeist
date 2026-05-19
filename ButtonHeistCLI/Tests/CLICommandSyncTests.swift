@@ -172,14 +172,20 @@ final class CLICommandSyncTests: XCTestCase {
     func testExpectationArgumentParserNormalizesShorthand() throws {
         let parsed = try ExpectationArgumentParser.parse("screen_changed")
 
-        XCTAssertEqual(parsed["type"] as? String, "screen_changed")
+        guard case .object(let object) = parsed else {
+            return XCTFail("expected object expectation")
+        }
+        XCTAssertEqual(object["type"], .string("screen_changed"))
     }
 
     func testExpectationArgumentParserAcceptsJsonObject() throws {
         let parsed = try ExpectationArgumentParser.parse(#"{"type":"element_updated","property":"value"}"#)
 
-        XCTAssertEqual(parsed["type"] as? String, "element_updated")
-        XCTAssertEqual(parsed["property"] as? String, "value")
+        guard case .object(let object) = parsed else {
+            return XCTFail("expected object expectation")
+        }
+        XCTAssertEqual(object["type"], .string("element_updated"))
+        XCTAssertEqual(object["property"], .string("value"))
     }
 
     func testExpectationArgumentParserRejectsUnknownString() {
@@ -200,6 +206,60 @@ final class CLICommandSyncTests: XCTestCase {
 
         XCTAssertEqual(request[.command] as? String, TheFence.Command.waitForChange.rawValue)
         XCTAssertEqual(expect?[.type] as? String, "elements_changed")
+    }
+
+    func testRunBatchSerializesStepsBeforeSending() throws {
+        let steps = try RunBatchCommand.serializedBatchSteps(
+            inline: #"[{"command":"activate","heistId":"button-login"}]"#,
+            fromFile: nil
+        )
+
+        XCTAssertEqual(steps.count, 1)
+        guard case .object(let object) = steps[0].value else {
+            return XCTFail("expected serialized batch step object")
+        }
+        XCTAssertEqual(object["command"], .string(TheFence.Command.activate.rawValue))
+        XCTAssertEqual(object["heistId"], .string("button-login"))
+    }
+
+    func testRunBatchLeavesUnknownSerializedCommandForFenceValidation() throws {
+        let steps = try RunBatchCommand.serializedBatchSteps(
+            inline: #"[{"command":"not_a_command"}]"#,
+            fromFile: nil
+        )
+
+        guard case .object(let object) = steps[0].value else {
+            return XCTFail("expected serialized batch step object")
+        }
+        XCTAssertEqual(object["command"], .string("not_a_command"))
+    }
+
+    func testRunBatchLeavesNestedRunBatchCommandForFenceValidation() throws {
+        let steps = try RunBatchCommand.serializedBatchSteps(
+            inline: #"[{"command":"run_batch","steps":[]}]"#,
+            fromFile: nil
+        )
+
+        guard case .object(let object) = steps[0].value else {
+            return XCTFail("expected serialized batch step object")
+        }
+        XCTAssertEqual(object["command"], .string(TheFence.Command.runBatch.rawValue))
+        XCTAssertEqual(object["steps"], .array([]))
+    }
+
+    func testHumanParserPreservesKnownStringParameterValues() {
+        let request = ReplSession.parseHumanInput("set_pasteboard text=false")
+
+        XCTAssertEqual(request[.command] as? String, TheFence.Command.setPasteboard.rawValue)
+        XCTAssertEqual(request[.text] as? String, "false")
+    }
+
+    func testHumanParserCoercesKnownBooleanParametersOnly() {
+        let request = ReplSession.parseHumanInput("wait label=true absent=true")
+
+        XCTAssertEqual(request[.command] as? String, TheFence.Command.waitFor.rawValue)
+        XCTAssertEqual(request[.label] as? String, "true")
+        XCTAssertEqual(request[.absent] as? Bool, true)
     }
 
     func testHumanParserMapsCompoundCopyAlias() {

@@ -39,8 +39,8 @@ struct TypeCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        var request = Self.fenceRequest([.timeout: timeout])
-        request[.text] = text
+        var request = Self.fenceRequest([.timeout: .double(timeout)])
+        request.set(.text, text)
         try element.applyTo(&request)
 
         try await CLIRunner.run(

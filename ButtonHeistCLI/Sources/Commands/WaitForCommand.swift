@@ -40,9 +40,9 @@ struct WaitForCommand: AsyncParsableCommand, CLICommandContract {
     mutating func run() async throws {
         _ = try element.requireTarget()
 
-        var request = Self.fenceRequest([.timeout: timeout])
+        var request = Self.fenceRequest([.timeout: .double(timeout)])
         try element.applyTo(&request)
-        if absent { request[.absent] = true }
+        if absent { request.set(.absent, true) }
 
         try await CLIRunner.run(
             connection: connection,

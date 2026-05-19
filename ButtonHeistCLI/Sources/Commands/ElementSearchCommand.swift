@@ -41,9 +41,9 @@ struct ElementSearchCommand: AsyncParsableCommand, CLICommandContract {
             }
         }
 
-        var request = Self.fenceRequest([.timeout: timeout])
+        var request = Self.fenceRequest([.timeout: .double(timeout)])
         try element.applyTo(&request)
-        if let direction { request[.direction] = direction.lowercased() }
+        if let direction { request.set(.direction, direction.lowercased()) }
 
         try await CLIRunner.run(
             connection: connection,

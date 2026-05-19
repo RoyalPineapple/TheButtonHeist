@@ -31,13 +31,13 @@ struct ScrollCommand: AsyncParsableCommand, CLICommandContract {
     mutating func run() async throws {
         _ = try element.requireTarget()
 
-        guard ScrollDirection(rawValue: direction.lowercased()) != nil else {
+        guard let scrollDirection = ScrollDirection(rawValue: direction.lowercased()) else {
             throw ValidationError("Invalid direction '\(direction)'. Valid: \(ScrollDirection.allCases.map(\.rawValue).joined(separator: ", "))")
         }
 
         var request = Self.fenceRequest([
-            .direction: direction.lowercased(),
-            .timeout: timeoutOption.timeout,
+            .direction: .string(scrollDirection.rawValue),
+            .timeout: .double(timeoutOption.timeout),
         ])
         try element.applyTo(&request)
 

@@ -1,4 +1,5 @@
 import ArgumentParser
+import ButtonHeist
 import Foundation
 
 // MARK: - Output Helpers
@@ -29,7 +30,7 @@ func loadJSONArray(
     inline: String?,
     fromFile path: String?,
     optionName: String
-) throws -> [Any] {
+) throws -> [HeistValue] {
     switch (inline, path) {
     case (nil, nil):
         throw ValidationError("Must supply either --\(optionName) or --\(optionName)-from-file")
@@ -50,15 +51,10 @@ func loadJSONArray(
     }
 }
 
-private func parseJSONArray(from data: Data, source: String) throws -> [Any] {
-    let parsed: Any
+private func parseJSONArray(from data: Data, source: String) throws -> [HeistValue] {
     do {
-        parsed = try JSONSerialization.jsonObject(with: data, options: [])
+        return try JSONDecoder().decode([HeistValue].self, from: data)
     } catch {
         throw ValidationError("\(source) is not valid JSON: \(error.localizedDescription)")
     }
-    guard let array = parsed as? [Any] else {
-        throw ValidationError("\(source) must be a JSON array")
-    }
-    return array
 }
