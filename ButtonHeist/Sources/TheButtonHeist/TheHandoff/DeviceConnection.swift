@@ -26,6 +26,17 @@ enum DisconnectReason: Error, LocalizedError {
     case certificateMismatch
     case missingFingerprint
 
+    static func buttonHeistVersionMismatch(serverVersion: String, clientVersion: String) -> DisconnectReason {
+        .protocolMismatch(buttonHeistVersionMismatchMessage(serverVersion: serverVersion, clientVersion: clientVersion))
+    }
+
+    static func buttonHeistVersionMismatchMessage(serverVersion: String, clientVersion: String) -> String {
+        """
+        Button Heist version mismatch: app/Inside Job is \(serverVersion), client/CLI/MCP is \(clientVersion). \
+        Rebuild or reinstall the stale side so both use the same Button Heist version.
+        """
+    }
+
     var errorDescription: String? {
         switch self {
         case .networkError(let error):
@@ -463,6 +474,10 @@ final class DeviceConnection: DeviceConnecting {
 
             connectionState = .connected(active)
             processBuffer()
+            guard case .connected(let latest) = connectionState,
+                  latest.connection === connection else {
+                return
+            }
         }
 
         if isComplete {
@@ -504,7 +519,10 @@ final class DeviceConnection: DeviceConnecting {
         }
 
         if envelope.buttonHeistVersion != buttonHeistVersion {
-            let message = "server=\(envelope.buttonHeistVersion), client=\(buttonHeistVersion)"
+            let message = DisconnectReason.buttonHeistVersionMismatchMessage(
+                serverVersion: envelope.buttonHeistVersion,
+                clientVersion: buttonHeistVersion
+            )
             logger.error("buttonHeistVersion mismatch: \(message)")
             emitMessage(.protocolMismatch(ProtocolMismatchPayload(
                 serverButtonHeistVersion: envelope.buttonHeistVersion,
@@ -520,7 +538,10 @@ final class DeviceConnection: DeviceConnecting {
             logger.info("Received server hello")
             send(.clientHello)
         case .protocolMismatch(let payload):
-            let message = "server=\(payload.serverButtonHeistVersion), client=\(payload.clientButtonHeistVersion)"
+            let message = DisconnectReason.buttonHeistVersionMismatchMessage(
+                serverVersion: payload.serverButtonHeistVersion,
+                clientVersion: payload.clientButtonHeistVersion
+            )
             logger.error("buttonHeistVersion mismatch: \(message)")
             emitMessage(.protocolMismatch(payload), requestId: envelope.requestId)
             disconnect()

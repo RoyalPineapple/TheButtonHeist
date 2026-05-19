@@ -709,8 +709,10 @@ final class TheHandoff {
         case .status(let payload):
             logger.info("Received status payload: appName=\(payload.identity.appName, privacy: .public)")
         case .protocolMismatch(let payload):
-            let message = "buttonHeistVersion mismatch: server=\(payload.serverButtonHeistVersion), client=\(payload.clientButtonHeistVersion)"
-            transitionToFailed(.disconnected(.protocolMismatch(message)))
+            transitionToFailed(.disconnected(.buttonHeistVersionMismatch(
+                serverVersion: payload.serverButtonHeistVersion,
+                clientVersion: payload.clientButtonHeistVersion
+            )))
         case .pong:
             mutateConnectedSession { $0.missedPongCount = 0 }
         case .recordingStopped:

@@ -21,7 +21,7 @@ TLS/TCP server infrastructure — listener, transport, authentication, and conne
    Auth flow: `handleUnauthenticatedMessage` decodes the envelope, checks protocol version, then dispatches:
    - `.clientHello` → transition to `.helloValidated`, send `.authRequired`
    - `.authenticate(payload)` → check lockout → empty token: show `UIAlertController` (`.pendingApproval`) → wrong token: `recordFailedAttempt`, locked after 5 failures for 30s → correct token: `acquireSession`
-   - all other pre-auth messages → disconnect
+   - all other pre-auth messages → send typed error, then disconnect after a short flush grace period
 
    `acquireSession`: `.idle` → claim. Same driver → add connection. Different driver → `.sessionLocked`, disconnect after 100ms grace. Draining same driver → cancel release timer, re-activate.
 

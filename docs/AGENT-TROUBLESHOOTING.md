@@ -208,7 +208,7 @@ Sessions expire after 60 seconds of inactivity by default. If you go too long be
 
 ## "Protocol mismatch"
 
-`"Protocol mismatch: expected 1.2, got 1.1"` — the CLI/MCP version doesn't match the app version. This happens when you rebuild one side but not the other.
+`"Button Heist version mismatch: app/Inside Job is 0.3.9, client/CLI/MCP is 0.3.8"` — the CLI/MCP version doesn't match the app version. This happens when you rebuild one side but not the other.
 
 **Fix:** Rebuild both sides from the same commit. Rebuild the CLI (`cd ButtonHeistCLI && swift build -c release`), rebuild the app (`xcodebuild ... build`), and reinstall. The two version strings in the error tell you which side is behind.
 

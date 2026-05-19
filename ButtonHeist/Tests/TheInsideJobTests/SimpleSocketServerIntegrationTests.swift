@@ -4,6 +4,7 @@
 import XCTest
 import Network
 import os
+import TheScore
 @testable import TheInsideJob
 
 final class SimpleSocketServerIntegrationTests: XCTestCase {
@@ -264,6 +265,36 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
         connection.cancel()
     }
 
+    func testScopeRejectionSendsServerErrorBeforeDisconnect() async throws {
+        await server.stop()
+        server = SimpleSocketServer(allowedScopes: [.usb])
+
+        let port = try await server.startAsync(port: 0, bindToLoopback: true)
+        let connection = NWConnection(
+            host: .ipv6(.loopback),
+            port: NWEndpoint.Port(rawValue: port)!,
+            using: .tcp
+        )
+        let clientReady = expectation(description: "client ready")
+        connection.stateUpdateHandler = { state in
+            if case .ready = state { clientReady.fulfill() }
+        }
+        connection.start(queue: .global())
+
+        await fulfillment(of: [clientReady], timeout: 5.0)
+
+        let response = try await receiveData(from: connection)
+        let envelope = try JSONDecoder().decode(ResponseEnvelope.self, from: response)
+        guard case .error(let error) = envelope.message else {
+            connection.cancel()
+            return XCTFail("Expected server error before scope rejection teardown, got \(envelope.message)")
+        }
+        XCTAssertEqual(error.kind, .general)
+        XCTAssertEqual(error.message, "Connection rejected: simulator connections are not allowed by this server.")
+
+        connection.cancel()
+    }
+
     func testBroadcastOnlyReachesAuthenticatedClients() async throws {
         let capturedClientIds = OSAllocatedUnfairLock<[Int]>(initialState: [])
         let firstConnected = expectation(description: "first client connected")
@@ -322,5 +353,38 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
 
         connection1.cancel()
         connection2.cancel()
+    }
+
+    // MARK: - Helpers
+
+    private func receiveData(from connection: NWConnection, timeout: TimeInterval = 5.0) async throws -> Data {
+        try await withThrowingTaskGroup(of: Data.self) { group in
+            group.addTask {
+                try await withCheckedThrowingContinuation { continuation in
+                    connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { content, _, _, error in
+                        if let error {
+                            continuation.resume(throwing: error)
+                        } else if let content {
+                            continuation.resume(returning: content)
+                        } else {
+                            continuation.resume(
+                                throwing: NSError(domain: "test", code: -1, userInfo: [NSLocalizedDescriptionKey: "No data"])
+                            )
+                        }
+                    }
+                }
+            }
+            group.addTask {
+                // Group-race timeout against a real network read; needs wall-clock.
+                // swiftlint:disable:next agent_test_task_sleep
+                try await Task.sleep(for: .seconds(timeout))
+                throw NSError(domain: "test", code: -2, userInfo: [
+                    NSLocalizedDescriptionKey: "receiveData timed out after \(timeout)s"
+                ])
+            }
+            let result = try await group.next()!
+            group.cancelAll()
+            return result
+        }
     }
 }

@@ -194,7 +194,9 @@ final class TheHandoffMessageTests: XCTestCase {
         guard case .failed(.disconnected(.protocolMismatch(let message))) = handoff.connectionPhase else {
             return XCTFail("Expected protocol mismatch failure, got \(handoff.connectionPhase)")
         }
-        XCTAssertTrue(message.contains("buttonHeistVersion mismatch"))
+        XCTAssertTrue(message.contains("Button Heist version mismatch"))
+        XCTAssertTrue(message.contains("app/Inside Job is 2026.05.09"))
+        XCTAssertTrue(message.contains("client/CLI/MCP is 2026.05.08"))
         XCTAssertTrue(message.contains("2026.05.09"))
         XCTAssertTrue(message.contains("2026.05.08"))
     }
