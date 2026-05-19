@@ -51,7 +51,7 @@ struct Screen: Equatable {
     init(
         elements: [HeistId: ScreenElement],
         hierarchy: [AccessibilityHierarchy],
-        elementRefs: [HeistId: LiveInterface.ElementRef] = [:],
+        elementRefs: [HeistId: ElementRef] = [:],
         firstResponderHeistId: HeistId?,
         scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
     ) {
@@ -74,7 +74,7 @@ struct Screen: Equatable {
         hierarchy: [AccessibilityHierarchy],
         containerStableIds: [AccessibilityContainer: HeistContainer],
         heistIdByElement: [AccessibilityElement: HeistId],
-        elementRefs: [HeistId: LiveInterface.ElementRef] = [:],
+        elementRefs: [HeistId: ElementRef] = [:],
         firstResponderHeistId: HeistId?,
         scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
     ) {
@@ -132,16 +132,6 @@ struct Screen: Equatable {
         /// Parsed accessibility element (refreshed on every parse).
         let element: AccessibilityElement
 
-        init(
-            heistId: HeistId,
-            contentSpaceOrigin: CGPoint?,
-            element: AccessibilityElement
-        ) {
-            self.heistId = heistId
-            self.contentSpaceOrigin = contentSpaceOrigin
-            self.element = element
-        }
-
         static func == (lhs: ScreenElement, rhs: ScreenElement) -> Bool {
             lhs.heistId == rhs.heistId
                 && lhs.contentSpaceOrigin == rhs.contentSpaceOrigin
@@ -170,6 +160,20 @@ struct Screen: Equatable {
         }
     }
 
+    // `@unchecked Sendable` rationale: weak UIKit refs are only observed
+    // behind TheStash on the main actor.
+    // swiftlint:disable:next agent_unchecked_sendable_no_comment
+    struct ElementRef: @unchecked Sendable, Equatable {
+        /// Live UIKit object for action dispatch. Weak — nils on reuse.
+        weak var object: NSObject?
+        /// Nearest live scroll view for coordinate conversion.
+        weak var scrollView: UIScrollView?
+
+        static func == (lhs: ElementRef, rhs: ElementRef) -> Bool {
+            lhs.object === rhs.object && lhs.scrollView === rhs.scrollView
+        }
+    }
+
     /// Targetable semantic state retained across exploration.
     struct KnownInterface: Equatable {
         let elements: [HeistId: ScreenElement]
@@ -188,20 +192,6 @@ struct Screen: Equatable {
     /// off-screen elements are retained in `KnownInterface`, but their live
     /// UIKit refs are intentionally absent until a new parse inflates them.
     struct LiveInterface: Equatable {
-        // `@unchecked Sendable` rationale: weak UIKit refs are only observed
-        // behind TheStash on the main actor.
-        // swiftlint:disable:next agent_unchecked_sendable_no_comment
-        struct ElementRef: @unchecked Sendable, Equatable {
-            /// Live UIKit object for action dispatch. Weak — nils on reuse.
-            weak var object: NSObject?
-            /// Nearest live scroll view for coordinate conversion.
-            weak var scrollView: UIScrollView?
-
-            static func == (lhs: ElementRef, rhs: ElementRef) -> Bool {
-                lhs.object === rhs.object && lhs.scrollView === rhs.scrollView
-            }
-        }
-
         let hierarchy: [AccessibilityHierarchy]
         let containerStableIds: [AccessibilityContainer: HeistContainer]
         let heistIdByElement: [AccessibilityElement: HeistId]

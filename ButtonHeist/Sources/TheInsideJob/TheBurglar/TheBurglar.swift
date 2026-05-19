@@ -333,7 +333,7 @@ final class TheBurglar {
         screenElements.reserveCapacity(elements.count)
         var heistIdByElement: [AccessibilityElement: HeistId] = [:]
         heistIdByElement.reserveCapacity(elements.count)
-        var elementRefs: [HeistId: Screen.LiveInterface.ElementRef] = [:]
+        var elementRefs: [HeistId: Screen.ElementRef] = [:]
         elementRefs.reserveCapacity(elements.count)
         for (parsedElement, heistId) in zip(elements, resolvedHeistIds) {
             let context = contexts[parsedElement]
@@ -344,7 +344,7 @@ final class TheBurglar {
             )
             screenElements[heistId] = entry
             heistIdByElement[parsedElement] = heistId
-            elementRefs[heistId] = Screen.LiveInterface.ElementRef(
+            elementRefs[heistId] = Screen.ElementRef(
                 object: context?.object,
                 scrollView: context?.scrollView
             )

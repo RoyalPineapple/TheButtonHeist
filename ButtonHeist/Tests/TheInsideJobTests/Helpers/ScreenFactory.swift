@@ -42,14 +42,14 @@ extension Screen {
         var screenElements: [HeistId: ScreenElement] = [:]
         var hierarchy: [AccessibilityHierarchy] = []
         var heistIdByElement: [AccessibilityElement: HeistId] = [:]
-        var elementRefs: [HeistId: LiveInterface.ElementRef] = [:]
+        var elementRefs: [HeistId: ElementRef] = [:]
         for (index, pair) in liveElements.enumerated() {
             screenElements[pair.heistId] = ScreenElement(
                 heistId: pair.heistId,
                 contentSpaceOrigin: nil,
                 element: pair.element
             )
-            elementRefs[pair.heistId] = LiveInterface.ElementRef(
+            elementRefs[pair.heistId] = ElementRef(
                 object: objects[pair.heistId] ?? nil,
                 scrollView: nil
             )
