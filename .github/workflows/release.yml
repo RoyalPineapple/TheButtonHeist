@@ -85,15 +85,57 @@ jobs:
 
       - name: Build BH Demo for iOS Simulator
         run: |
+          set -eo pipefail
           tuist install
           BUTTONHEIST_TUIST_SKIP_AUTO_CLEAN=1 tuist generate --no-binary-cache --no-open
           ./scripts/clean-generated-projects.sh
+
+          read -r SIM_UDID SIM_OS < <(python3 - <<'PYEOF'
+          import json
+          import subprocess
+
+          devices = json.loads(subprocess.check_output(["xcrun", "simctl", "list", "devices", "available", "-j"]))["devices"]
+          runtimes = json.loads(subprocess.check_output(["xcrun", "simctl", "list", "runtimes", "-j"]))["runtimes"]
+          preferred = []
+          fallback = []
+          for rt in sorted(runtimes, key=lambda r: r["version"], reverse=True):
+              if rt["platform"] != "iOS" or not rt["isAvailable"]:
+                  continue
+              for dev in devices.get(rt["identifier"], []):
+                  if not dev["isAvailable"]:
+                      continue
+                  target = (dev["udid"], rt["version"])
+                  if dev["name"] == "iPhone 16 Pro":
+                      preferred.append(target)
+                  elif "iPhone" in dev["name"]:
+                      fallback.append(target)
+          candidates = preferred or fallback
+          if not candidates:
+              raise SystemExit("No available iPhone simulator found")
+          print(*candidates[0])
+          PYEOF
+          )
+          DERIVED_DATA_PATH="$RUNNER_TEMP/ButtonHeistDerivedData"
+          DEST="platform=iOS Simulator,id=$SIM_UDID"
+          echo "Building BH Demo for $DEST (iOS $SIM_OS)"
           xcodebuild -workspace ButtonHeist.xcworkspace -scheme "BH Demo" \
-            -destination "generic/platform=iOS Simulator" \
-            build | tail -5
-          APP_PATH=$(ls -td ~/Library/Developer/Xcode/DerivedData/ButtonHeist*/Build/Products/Debug-iphonesimulator/BHDemo.app | head -1)
+            -destination "$DEST" \
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            build | tail -20
+
+          APP_PATH="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/BHDemo.app"
+          if [[ ! -d "$APP_PATH" || ! -f "$APP_PATH/Info.plist" || ! -x "$APP_PATH/BHDemo" ]]; then
+            echo "::error::BH Demo build produced an incomplete app at $APP_PATH"
+            find "$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator" -maxdepth 3 -print || true
+            exit 1
+          fi
+          APP_SIZE_KB=$(du -sk "$APP_PATH" | awk '{print $1}')
+          if [[ "$APP_SIZE_KB" -lt 1024 ]]; then
+            echo "::error::BH Demo app is unexpectedly small (${APP_SIZE_KB}KB): $APP_PATH"
+            exit 1
+          fi
           echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
-          echo "Built: $APP_PATH"
+          echo "Built: $APP_PATH (${APP_SIZE_KB}KB)"
 
       - name: Collect TheInsideJob frameworks
         run: |
@@ -131,7 +173,15 @@ jobs:
           rm dist/buttonheist-mcp
 
           # Simulator app
+          if [[ ! -d "$APP_PATH" || ! -f "$APP_PATH/Info.plist" || ! -x "$APP_PATH/BHDemo" ]]; then
+            echo "::error::Refusing to package incomplete BH Demo app at $APP_PATH"
+            exit 1
+          fi
           ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "dist/${DEMO_ARCHIVE}"
+          if ! unzip -l "dist/${DEMO_ARCHIVE}" | grep -q 'BHDemo.app/BHDemo'; then
+            echo "::error::BH Demo archive is missing the app executable"
+            exit 1
+          fi
 
           # Checksums
           cd dist
