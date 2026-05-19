@@ -396,10 +396,9 @@ extension TheFence {
         case .active:
             try await bookKeeper.closeSession()
         case .closing:
-            // A prior close is mid-flight (or its compression failed and left
-            // us stuck). Don't attempt closeSession again; archiveSession will
-            // surface the diagnostic.
-            break
+            // A prior close either still owns compression or left a retryable
+            // failed compression. closeSession coalesces or retries it.
+            try await bookKeeper.closeSession()
         case .closed, .archived:
             break
         }

@@ -223,6 +223,58 @@ final class TheFenceHandlerTests: XCTestCase {
         return makeReceiptTestInterface(nodes: nodes)
     }
 
+    // MARK: - BookKeeper
+
+    @ButtonHeistActor
+    func testArchiveSessionRetriesClosingAfterCompressionFailure() async throws {
+        let (fence, _) = makeConnectedFence()
+        try fence.bookKeeper.beginSession(identifier: "archive-retry")
+        let statusRequest = try fence.parseRequest(command: .status, request: [
+            "command": "status",
+            "requestId": "r1",
+        ])
+        try fence.bookKeeper.logCommand(statusRequest)
+        guard case .active(let activeSession) = fence.bookKeeper.phase else {
+            return XCTFail("Expected active phase")
+        }
+
+        let sessionDirectory = activeSession.directory
+        let compressedLogPath = sessionDirectory.appendingPathComponent("session.jsonl.gz")
+        var archivePath: URL?
+        defer {
+            if let archivePath {
+                try? FileManager.default.removeItem(at: archivePath)
+            }
+            try? FileManager.default.removeItem(at: sessionDirectory)
+        }
+
+        try Data("existing compressed log".utf8).write(to: compressedLogPath)
+        do {
+            _ = try await fence.handleArchiveSession(.init(deleteSource: false))
+            XCTFail("Expected compression failure")
+        } catch let error as BookKeeperError {
+            guard case .compressionFailed = error else {
+                return XCTFail("Expected compressionFailed, got \(error)")
+            }
+        }
+
+        guard case .closing(let failedClosingSession) = fence.bookKeeper.phase else {
+            return XCTFail("Expected closing phase after failed compression")
+        }
+        XCTAssertEqual(failedClosingSession.sessionId, activeSession.sessionId)
+        XCTAssertNil(failedClosingSession.compressionTask)
+
+        try FileManager.default.removeItem(at: compressedLogPath)
+        let response = try await fence.handleArchiveSession(.init(deleteSource: false))
+
+        guard case .archiveResult(let path, let snapshot) = response else {
+            return XCTFail("Expected archiveResult, got \(response)")
+        }
+        archivePath = URL(fileURLWithPath: path)
+        XCTAssertEqual(snapshot.manifest.sessionId, activeSession.sessionId)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: path))
+    }
+
     // MARK: - Connect
 
     @ButtonHeistActor

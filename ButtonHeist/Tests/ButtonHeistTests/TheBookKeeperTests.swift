@@ -144,6 +144,51 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testCloseSessionCompressionFailureLeavesClosingRetryable() async throws {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        try bookKeeper.beginSession(identifier: "test-compress-retry")
+        try logCommand(bookKeeper, requestId: "r1", command: .status, arguments: [:])
+        guard case .active(let activeSession) = bookKeeper.phase else {
+            return XCTFail("Expected active phase")
+        }
+
+        let compressedLogPath = activeSession.directory.appendingPathComponent("session.jsonl.gz")
+        try Data("existing compressed log".utf8).write(to: compressedLogPath)
+
+        do {
+            try await bookKeeper.closeSession()
+            XCTFail("Expected compression failure")
+        } catch let error as BookKeeperError {
+            guard case .compressionFailed = error else {
+                return XCTFail("Expected compressionFailed, got \(error)")
+            }
+        }
+
+        guard case .closing(let failedClosingSession) = bookKeeper.phase else {
+            return XCTFail("Expected closing phase after failed compression")
+        }
+        XCTAssertEqual(failedClosingSession.sessionId, activeSession.sessionId)
+        XCTAssertNil(failedClosingSession.compressionTask)
+
+        XCTAssertThrowsError(try bookKeeper.beginSession(identifier: "replacement")) { error in
+            guard case BookKeeperError.invalidPhase(_, "closing") = error else {
+                XCTFail("Expected invalidPhase while closing, got \(error)")
+                return
+            }
+        }
+
+        try FileManager.default.removeItem(at: compressedLogPath)
+        try await bookKeeper.closeSession()
+
+        guard case .closed(let closedSession) = bookKeeper.phase else {
+            return XCTFail("Expected closed phase after retry")
+        }
+        XCTAssertEqual(closedSession.sessionId, activeSession.sessionId)
+        XCTAssertEqual(closedSession.manifest, failedClosingSession.manifest)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: closedSession.compressedLogPath.path))
+    }
+
+    @ButtonHeistActor
     func testArchiveSessionTransitionsToArchived() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-archive")
