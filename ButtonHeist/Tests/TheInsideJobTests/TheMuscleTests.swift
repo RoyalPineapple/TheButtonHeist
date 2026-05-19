@@ -235,6 +235,22 @@ final class TheMuscleTests: XCTestCase {
         XCTAssertEqual(authFailure?.message, "Authentication required before ping.")
     }
 
+    func testMalformedPreAuthMessageSendsErrorBeforeDisconnect() async throws {
+        let (respond, responses) = collectResponses()
+
+        await muscle.handleUnauthenticatedMessage(1, data: Data("not json".utf8), respond: respond)
+        await flushCallbacks()
+
+        let serverMessages = responses().compactMap { decodeServerMessage($0) }
+        let validationError = serverMessages.compactMap { message -> ServerError? in
+            guard case .error(let error) = message, error.kind == .validationError else { return nil }
+            return error
+        }.first
+        XCTAssertNotNil(validationError)
+        XCTAssertTrue(validationError?.message.contains("Could not decode client message before authentication") == true)
+        XCTAssertTrue(validationError?.message.contains("same Button Heist version") == true)
+    }
+
     // MARK: - Session Rules Tests
 
     func testNoSessionValidTokenAcquires() async throws {

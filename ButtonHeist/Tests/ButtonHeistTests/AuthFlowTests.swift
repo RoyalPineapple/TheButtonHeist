@@ -18,6 +18,10 @@ final class AuthFlowTests: XCTestCase {
         try JSONEncoder().encode(ResponseEnvelope(message: message))
     }
 
+    private func encode(_ message: ServerMessage, buttonHeistVersion version: String) throws -> Data {
+        try JSONEncoder().encode(ResponseEnvelope(buttonHeistVersion: version, message: message))
+    }
+
     // MARK: - Tests
 
     @ButtonHeistActor
@@ -31,6 +35,37 @@ final class AuthFlowTests: XCTestCase {
         try conn.handleMessage(encode(.authRequired))
 
         XCTAssertEqual(conn.token, "test-secret-token")
+    }
+
+    @ButtonHeistActor
+    func testProtocolMismatchNamesBothSidesAndDoesNotReportServerClosed() async throws {
+        let conn = DeviceConnection(device: makeDummyDevice(), token: "test-secret-token")
+        conn.simulateConnected()
+
+        var protocolMismatchPayload: ProtocolMismatchPayload?
+        var disconnectReasons: [DisconnectReason] = []
+        conn.onEvent = { event in
+            switch event {
+            case .message(.protocolMismatch(let payload), _, _):
+                protocolMismatchPayload = payload
+            case .disconnected(let reason):
+                disconnectReasons.append(reason)
+            default:
+                break
+            }
+        }
+
+        conn.handleMessage(try encode(.serverHello, buttonHeistVersion: "0.0.0"))
+
+        XCTAssertEqual(protocolMismatchPayload?.serverButtonHeistVersion, "0.0.0")
+        XCTAssertEqual(protocolMismatchPayload?.clientButtonHeistVersion, buttonHeistVersion)
+        XCTAssertEqual(disconnectReasons.count, 1)
+        guard case .protocolMismatch(let message) = disconnectReasons.first else {
+            return XCTFail("Expected protocol mismatch, got \(String(describing: disconnectReasons.first))")
+        }
+        XCTAssertTrue(message.contains("Button Heist version mismatch"))
+        XCTAssertTrue(message.contains("app/Inside Job is 0.0.0"))
+        XCTAssertTrue(message.contains("client/CLI/MCP is \(buttonHeistVersion)"))
     }
 
     @ButtonHeistActor

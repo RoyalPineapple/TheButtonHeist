@@ -49,6 +49,7 @@ actor SimpleSocketServer {
     private static let maxBufferSize = 10_000_000 // 10 MB
     private static let maxConnections = 5
     static let maxMessagesPerSecond = 30
+    private static let errorFlushGracePeriod: Duration = .milliseconds(100)
 
     /// Maximum bytes queued for sending per client before new sends are dropped.
     /// Prevents unbounded NWConnection buffer growth when a client reads slowly
@@ -403,7 +404,11 @@ actor SimpleSocketServer {
 
         if currentCount >= Self.maxConnections {
             logger.warning("Max connections (\(Self.maxConnections)) reached, rejecting")
-            connection.cancel()
+            rejectUnregisteredConnectionWithServerError(
+                connection,
+                kind: .general,
+                message: "Connection rejected: server already has the maximum number of clients."
+            )
             return
         }
 
@@ -426,7 +431,13 @@ actor SimpleSocketServer {
                 if let scopeFilter {
                     guard let host = Self.extractRemoteHost(from: connection) else {
                         logger.warning("Cannot classify connection endpoint, rejecting (scope filter active)")
-                        self.spawnTrackedTask { server in await server.removeClient(clientId) }
+                        self.spawnTrackedTask { server in
+                            await server.rejectClientWithServerError(
+                                clientId,
+                                kind: .general,
+                                message: "Connection rejected: server could not classify the connection scope."
+                            )
+                        }
                         return
                     }
                     let interfaceNameList = (connection.currentPath?.availableInterfaces ?? []).map(\.name)
@@ -435,7 +446,13 @@ actor SimpleSocketServer {
                     let interfaceNames = interfaceNameList.joined(separator: ", ")
                     if !scopeFilter.contains(scope) {
                         logger.warning("Rejecting \(scope.rawValue) connection from \(hostDescription) via [\(interfaceNames)]")
-                        self.spawnTrackedTask { server in await server.removeClient(clientId) }
+                        self.spawnTrackedTask { server in
+                            await server.rejectClientWithServerError(
+                                clientId,
+                                kind: .general,
+                                message: "Connection rejected: \(scope.rawValue) connections are not allowed by this server."
+                            )
+                        }
                         return
                     }
                     logger.info("Accepted \(scope.rawValue) connection from \(hostDescription) via [\(interfaceNames)]")
@@ -470,7 +487,11 @@ actor SimpleSocketServer {
             guard let self else { return }
             if let state = await self.clients[clientId], !state.isAuthenticated {
                 logger.warning("Client \(clientId) did not authenticate within \(Self.authDeadlineSeconds)s deadline")
-                await self.removeClient(clientId)
+                await self.rejectClientWithServerError(
+                    clientId,
+                    kind: .authFailure,
+                    message: "Authentication timed out after \(Self.authDeadlineSeconds) seconds."
+                )
             }
         }
     }
@@ -489,6 +510,47 @@ actor SimpleSocketServer {
         authDeadlineTasks[clientId] = nil
         state.connection.cancel()
         notifyClientDisconnected(clientId)
+    }
+
+    private func rejectUnregisteredConnectionWithServerError(_ connection: NWConnection, kind: ErrorKind, message: String) {
+        let response: Data
+        do {
+            response = try ResponseEnvelope(message: .error(TheScore.ServerError(kind: kind, message: message))).encoded()
+        } catch {
+            logger.error("Failed to encode connection rejection error: \(error.localizedDescription)")
+            connection.cancel()
+            return
+        }
+
+        var data = response
+        if !data.hasSuffix(Data([0x0A])) {
+            data.append(0x0A)
+        }
+
+        connection.start(queue: queue)
+        sendContent(connection, data, .contentProcessed { error in
+            if let error {
+                logger.error("Send error while rejecting unregistered connection: \(error)")
+            }
+            connection.cancel()
+        })
+    }
+
+    private func rejectClientWithServerError(_ clientId: Int, kind: ErrorKind, message: String) {
+        guard let state = clients[clientId] else { return }
+        sendErrorEnvelope(
+            clientId: clientId,
+            envelope: ResponseEnvelope(message: .error(TheScore.ServerError(kind: kind, message: message))),
+            state: state
+        )
+        scheduleErrorFlushDisconnect(clientId)
+    }
+
+    private func scheduleErrorFlushDisconnect(_ clientId: Int) {
+        pendingCallbackTasks.spawn { [weak self] in
+            guard await Task.cancellableSleep(for: Self.errorFlushGracePeriod) else { return }
+            await self?.removeClient(clientId)
+        }
     }
 
     // ClientState is a value type — copy, mutate timestamps, write back.
@@ -559,7 +621,11 @@ actor SimpleSocketServer {
 
         if messageBuffer.count > Self.maxBufferSize {
             logger.error("Client \(clientId) exceeded max buffer size, disconnecting")
-            removeClient(clientId)
+            rejectClientWithServerError(
+                clientId,
+                kind: .validationError,
+                message: "Inbound message exceeded the server buffer limit."
+            )
             return
         }
 

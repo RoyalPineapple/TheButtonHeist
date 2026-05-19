@@ -18,7 +18,7 @@ final class DeviceConnectionTLSTests: XCTestCase {
             .serverClosed,
             .authFailed("bad token"),
             .sessionLocked("locked"),
-            .protocolMismatch("server=old, client=new"),
+            .buttonHeistVersionMismatch(serverVersion: "old", clientVersion: "new"),
             .localDisconnect,
             .certificateMismatch,
             .missingFingerprint,
@@ -37,7 +37,10 @@ final class DeviceConnectionTLSTests: XCTestCase {
             (.serverClosed, "transport.server_closed", .transport, true),
             (.authFailed("bad token"), "auth.failed", .authentication, false),
             (.sessionLocked("busy"), "session.locked", .session, true),
-            (.protocolMismatch("server=old, client=new"), "protocol.mismatch", .protocolNegotiation, false),
+            (
+                .buttonHeistVersionMismatch(serverVersion: "old", clientVersion: "new"),
+                "protocol.mismatch", .protocolNegotiation, false
+            ),
             (.localDisconnect, "client.local_disconnect", .client, false),
             (.certificateMismatch, "tls.certificate_mismatch", .tls, false),
             (.missingFingerprint, "tls.missing_fingerprint", .tls, false),

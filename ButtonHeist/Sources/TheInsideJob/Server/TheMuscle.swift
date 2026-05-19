@@ -284,8 +284,7 @@ actor TheMuscle {
 
     func handleUnauthenticatedMessage(_ clientId: Int, data: Data, respond: @escaping @Sendable (Data) -> Void) async {
         guard let envelope = decodeRequest(data) else {
-            logger.warning("Client \(clientId) sent unparsable message before authenticating, disconnecting")
-            await disconnectClient?(clientId)
+            rejectUndecodableUnauthenticatedMessage(clientId, respond: respond)
             return
         }
 
@@ -337,6 +336,24 @@ actor TheMuscle {
             )
             return
         }
+    }
+
+    private func rejectUndecodableUnauthenticatedMessage(
+        _ clientId: Int,
+        respond: @escaping @Sendable (Data) -> Void
+    ) {
+        sendMessage(
+            .error(ServerError(
+                kind: .validationError,
+                message: """
+                    Could not decode client message before authentication. \
+                    Check that the client and app are built from the same Button Heist version.
+                    """
+            )),
+            respond: respond
+        )
+        logger.warning("Client \(clientId) sent unparsable message before authenticating")
+        scheduleDelayedDisconnect(clientId)
     }
 
     private func rejectUnauthenticatedMessage(
