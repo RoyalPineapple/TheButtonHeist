@@ -4,7 +4,7 @@ import Foundation
 
 enum TestInterfaceNode {
     case element(HeistElement)
-    case container(AccessibilityContainer, stableId: String?, children: [TestInterfaceNode])
+    case container(AccessibilityContainer, stableId: HeistContainer?, children: [TestInterfaceNode])
 }
 
 func testElement(_ element: HeistElement) -> TestInterfaceNode {
@@ -13,7 +13,7 @@ func testElement(_ element: HeistElement) -> TestInterfaceNode {
 
 func testContainer(
     _ container: AccessibilityContainer,
-    stableId: String? = nil,
+    stableId: HeistContainer? = nil,
     children: [TestInterfaceNode]
 ) -> TestInterfaceNode {
     .container(container, stableId: stableId, children: children)
@@ -40,7 +40,7 @@ func makeTestInterface(
             let index = traversalIndex
             traversalIndex += 1
             elementAnnotations.append(InterfaceElementAnnotation(
-                traversalIndex: index,
+                path: path,
                 heistId: element.heistId,
                 actions: element.actions
             ))

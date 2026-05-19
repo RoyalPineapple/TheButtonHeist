@@ -14,7 +14,7 @@ import TheScore
 
     struct Snapshot: Equatable {
         let signature: ScreenSignature
-        let firstResponderHeistId: String?
+        let firstResponderHeistId: HeistId?
     }
 
     struct ScreenSignature: Equatable {
@@ -89,10 +89,10 @@ import TheScore
     static func snapshot(of screen: Screen) -> Snapshot {
         Snapshot(
             signature: signature(
-                hierarchy: screen.hierarchy,
-                elements: screen.hierarchy.sortedElements
+                hierarchy: screen.liveInterface.hierarchy,
+                elements: screen.liveInterface.hierarchy.sortedElements
             ),
-            firstResponderHeistId: screen.firstResponderHeistId
+            firstResponderHeistId: screen.liveInterface.firstResponderHeistId
         )
     }
 

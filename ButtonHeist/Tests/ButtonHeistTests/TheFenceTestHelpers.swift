@@ -78,7 +78,7 @@ func makeConnectedFence(configuration: TheFence.Configuration = .init()) -> (The
 }
 
 func makeReceiptTestElement(
-    heistId: String,
+    heistId: HeistId,
     label: String,
     value: String? = nil,
     identifier: String? = nil,
@@ -101,7 +101,7 @@ func makeReceiptTestElement(
 
 enum ReceiptTestInterfaceNode {
     case element(HeistElement)
-    case container(AccessibilityContainer, stableId: String? = nil, children: [ReceiptTestInterfaceNode])
+    case container(AccessibilityContainer, stableId: HeistContainer? = nil, children: [ReceiptTestInterfaceNode])
 }
 
 func makeReceiptTestInterface(
@@ -125,7 +125,7 @@ func makeReceiptTestInterface(
             let index = traversalIndex
             traversalIndex += 1
             elementAnnotations.append(InterfaceElementAnnotation(
-                traversalIndex: index,
+                path: path,
                 heistId: element.heistId,
                 actions: element.actions
             ))

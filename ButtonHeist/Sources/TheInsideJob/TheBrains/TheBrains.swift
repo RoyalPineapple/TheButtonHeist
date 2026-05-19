@@ -38,6 +38,7 @@ final class TheBrains {
     }
 
     private var waitForChangePhase: WaitForChangePhase = .idle
+    private var settledTripwireParseInFlight = false
 
     enum InterfaceObservation {
         case success(Interface)
@@ -108,6 +109,7 @@ final class TheBrains {
         let hierarchy: [AccessibilityHierarchy]
         let interface: Interface
         let interfaceHash: String
+        let semanticHash: String
         let capture: AccessibilityTrace.Capture
         let tripwireSignal: TheTripwire.TripwireSignal
         let screenSnapshot: ScreenClassifier.Snapshot
@@ -126,6 +128,7 @@ final class TheBrains {
             hierarchy: stash.currentHierarchy,
             interface: interface,
             interfaceHash: interfaceHash,
+            semanticHash: stash.currentScreen.semanticHash,
             capture: capture,
             tripwireSignal: tripwireSignal,
             screenSnapshot: ScreenClassifier.snapshot(of: stash.currentScreen),
@@ -148,6 +151,7 @@ final class TheBrains {
             hierarchy: stash.currentHierarchy,
             interface: interface,
             interfaceHash: interfaceHash,
+            semanticHash: stash.currentScreen.semanticHash,
             capture: capture,
             tripwireSignal: tripwireSignal,
             screenSnapshot: ScreenClassifier.snapshot(of: stash.currentScreen),
@@ -198,13 +202,13 @@ final class TheBrains {
             afterScreen = stash.parse()
         }
 
-        let afterElements = afterScreen?.hierarchy.sortedElements ?? []
         let afterSnapshotForClassification = afterScreen.map(ScreenClassifier.snapshot(of:)) ?? ScreenClassifier.snapshot(of: .empty)
         let classification = ScreenClassifier.classify(
             before: before.screenSnapshot,
             after: afterSnapshotForClassification
         )
         let isScreenChange = classification.isScreenChange
+        let afterElements = afterScreen?.liveInterface.hierarchy.sortedElements ?? []
         if isScreenChange && afterElements.isEmpty {
             let repopulated = await repopulateAfterScreenChange(into: &afterScreen)
             if !repopulated { didSettle = false }
@@ -224,19 +228,14 @@ final class TheBrains {
             : SettleSession.transientElements(
                 seenByKey: settleResult.elementsByKey,
                 baseline: before.elements,
-                final: afterScreen?.hierarchy.sortedElements ?? []
+                final: afterScreen?.liveInterface.hierarchy.sortedElements ?? []
             )
-        let transition = AccessibilityTrace.Transition(
-            screenChangeReason: classification.reason?.rawValue,
+        let accessibilityTrace = makeAccessibilityTrace(
+            afterInterface: afterInterface,
+            parentCapture: before.capture,
+            classification: classification,
             transient: transientElements.map { TheStash.WireConversion.convert($0) }
         )
-        let postCapture = makeTraceCapture(
-            interface: afterInterface,
-            sequence: 2,
-            parentHash: before.capture.hash,
-            transition: transition
-        )
-        let accessibilityTrace = makeAccessibilityTrace(afterCapture: postCapture, parentCapture: before.capture)
 
         await stash.captureActionFrame()
 
@@ -338,18 +337,25 @@ final class TheBrains {
         stash.clearCache()
         navigation.clearCache()
         sentHistory = .fresh
-        lastSettledInterfaceHash = nil
     }
 
     // MARK: - Response State Tracking
 
     /// State captured after each response sent to the driver.
     struct SentState {
-        let interfaceHash: String
-        let viewportHash: String
-        let captureHash: String
         let beforeState: BeforeState
-        let screenId: String?
+
+        var interfaceHash: String {
+            beforeState.interfaceHash
+        }
+
+        var captureHash: String {
+            beforeState.capture.hash
+        }
+
+        var screenId: String? {
+            beforeState.screenId
+        }
     }
 
     /// Two-phase sent-state history: `.fresh` before the first response, and
@@ -363,11 +369,6 @@ final class TheBrains {
 
     private(set) var sentHistory: SentHistory = .fresh
 
-    /// Hash of the last hierarchy observed by settled-change tracking.
-    /// This is recording inactivity memory, not accessibility belief, so it
-    /// lives with TheBrains instead of TheStash's committed Screen state.
-    private var lastSettledInterfaceHash: String?
-
     /// The state of the last response sent to the driver, if any.
     var lastSentState: SentState? {
         if case .sent(let state) = sentHistory { return state }
@@ -376,45 +377,65 @@ final class TheBrains {
 
     /// Snapshot current state as "last sent" — call after every response to the driver.
     func recordSentState() {
-        let state = captureSemanticState()
-        sentHistory = .sent(SentState(
-            interfaceHash: state.interfaceHash,
-            viewportHash: stash.interfaceHash(),
-            captureHash: state.capture.hash,
-            beforeState: state,
-            screenId: state.screenId
-        ))
+        sentHistory = .sent(SentState(beforeState: captureSemanticState()))
     }
 
-    /// Record sent state when the caller already has the current viewport hash.
-    func recordSentState(viewportHash: Int) {
-        recordSentState(viewportHash: String(viewportHash))
+    // MARK: - Settled Tripwire Parsing
+
+    struct SettledTripwireParse {
+        let changed: Bool
+        let isScreenChange: Bool
+        let accessibilityTrace: AccessibilityTrace?
     }
 
-    /// Record sent state when the caller already has the current viewport hash.
-    func recordSentState(viewportHash: String) {
-        let state = captureSemanticState()
-        sentHistory = .sent(SentState(
-            interfaceHash: state.interfaceHash,
-            viewportHash: viewportHash,
-            captureHash: state.capture.hash,
-            beforeState: state,
-            screenId: state.screenId
-        ))
+    static func shouldRecordAccessibilityTrace(
+        baseline: BeforeState,
+        current: BeforeState,
+        classification: ScreenClassifier.Classification
+    ) -> Bool {
+        classification.isScreenChange
+            || current.capture.context != baseline.capture.context
+            || current.semanticHash != baseline.semanticHash
     }
 
-    // MARK: - Settled Change Tracking
+    /// Parse settled visible state after a Tripwire signal, update the local
+    /// semantic screen, and classify the result. Same-screen parses patch local
+    /// state; screen changes perform the full exploration pass before returning.
+    func parseSettledTripwireChange() async -> SettledTripwireParse {
+        guard !settledTripwireParseInFlight else {
+            return SettledTripwireParse(changed: false, isScreenChange: false, accessibilityTrace: nil)
+        }
+        settledTripwireParseInFlight = true
+        defer { settledTripwireParseInFlight = false }
 
-    /// Refresh and report whether the interface capture changed since the last settled check.
-    func interfaceChangedSinceLastSettledCheck() -> Bool {
-        guard refresh() != nil else { return false }
+        let baseline = captureSemanticState()
+        guard refresh() != nil else {
+            return SettledTripwireParse(changed: false, isScreenChange: false, accessibilityTrace: nil)
+        }
 
-        let currentHash = stash.interfaceHash()
+        let current = await semanticStateAfterVisibleRefresh(baseline: baseline)
+        let classification = ScreenClassifier.classify(
+            before: baseline.screenSnapshot,
+            after: current.screenSnapshot
+        )
+        guard Self.shouldRecordAccessibilityTrace(
+            baseline: baseline,
+            current: current,
+            classification: classification
+        ) else {
+            return SettledTripwireParse(changed: false, isScreenChange: false, accessibilityTrace: nil)
+        }
 
-        guard currentHash != lastSettledInterfaceHash else { return false }
-        lastSettledInterfaceHash = currentHash
-
-        return true
+        let accessibilityTrace = makeAccessibilityTrace(
+            afterInterface: current.interface,
+            parentCapture: baseline.capture,
+            classification: classification
+        )
+        return SettledTripwireParse(
+            changed: true,
+            isScreenChange: classification.isScreenChange,
+            accessibilityTrace: accessibilityTrace
+        )
     }
 
     /// Build an Interface payload from the current semantic state.
@@ -444,36 +465,25 @@ final class TheBrains {
     /// Check if the accessibility tree changed since the last response and
     /// return the public accessibility trace.
     func computeBackgroundAccessibilityTrace() async -> AccessibilityTrace? {
-        guard case .sent(let sent) = sentHistory,
-              !sent.interfaceHash.isEmpty,
-              !sent.viewportHash.isEmpty else { return nil }
+        guard case .sent(let sent) = sentHistory else { return nil }
         guard refresh() != nil else { return nil }
-        let currentViewportHash = stash.interfaceHash()
-        let currentContext = makeCaptureContext()
-        guard currentViewportHash != sent.viewportHash
-            || currentContext != sent.beforeState.capture.context
-        else { return nil }
-
         let current = await semanticStateAfterVisibleRefresh(baseline: sent.beforeState)
-        guard current.capture.hash != sent.captureHash else { return nil }
-
-        // Background edges carry classifier evidence inside the trace so
-        // downstream edges derive their compact delta from the same source.
         let classification = ScreenClassifier.classify(
             before: sent.beforeState.screenSnapshot,
             after: current.screenSnapshot
         )
-        let currentCapture = AccessibilityTrace.Capture(
-            sequence: current.capture.sequence,
-            interface: current.capture.interface,
-            parentHash: current.capture.parentHash,
-            context: current.capture.context,
-            transition: AccessibilityTrace.Transition(screenChangeReason: classification.reason?.rawValue),
-            hash: current.capture.hash
-        )
+        guard Self.shouldRecordAccessibilityTrace(
+            baseline: sent.beforeState,
+            current: current,
+            classification: classification
+        ) else {
+            return nil
+        }
+
         let accessibilityTrace = makeAccessibilityTrace(
-            afterCapture: currentCapture,
-            parentCapture: sent.beforeState.capture
+            afterInterface: current.interface,
+            parentCapture: sent.beforeState.capture,
+            classification: classification
         )
         guard accessibilityTrace.backgroundDelta != nil else { return nil }
         return accessibilityTrace
@@ -559,21 +569,27 @@ final class TheBrains {
             return builder.success()
         }
 
-        // Fast path: capture already changed since the last response
-        let lastCaptureHash: String? = {
-            if case .sent(let sent) = sentHistory { return sent.captureHash }
-            return nil
-        }()
-        if let lastCaptureHash, initial.capture.hash != lastCaptureHash {
-            let accessibilityTrace = makeClassifiedAccessibilityTrace(after: initial, parent: baseline)
-            let delta = accessibilityTrace.captureEndpointDelta ?? .noChange(.init(elementCount: initial.snapshot.count))
-            if let result = evaluateWaitForChange(
-                delta: delta, accessibilityTrace: accessibilityTrace,
-                afterSnapshot: initial.snapshot, expectation: predicate.expectation,
-                preWaitElements: preWaitElements,
-                start: start, round: 0, message: "already changed (0.0s)"
+        // Fast path: semantic state already changed since the last response.
+        if let sentBaseline {
+            let classification = ScreenClassifier.classify(
+                before: sentBaseline.screenSnapshot,
+                after: initial.screenSnapshot
+            )
+            if Self.shouldRecordAccessibilityTrace(
+                baseline: sentBaseline,
+                current: initial,
+                classification: classification
             ) {
-                return result
+                let accessibilityTrace = makeClassifiedAccessibilityTrace(after: initial, parent: baseline)
+                let delta = accessibilityTrace.captureEndpointDelta ?? .noChange(.init(elementCount: initial.snapshot.count))
+                if let result = evaluateWaitForChange(
+                    delta: delta, accessibilityTrace: accessibilityTrace,
+                    afterSnapshot: initial.snapshot, expectation: predicate.expectation,
+                    preWaitElements: preWaitElements,
+                    start: start, round: 0, message: "already changed (0.0s)"
+                ) {
+                    return result
+                }
             }
         }
 
@@ -617,7 +633,6 @@ final class TheBrains {
         // out. Tripwire signals reset the settle baseline inside
         // `SettleSession`; the parsed AX captures below still decide whether
         // anything changed.
-        var beforeCaptureHash = initial.capture.hash
         var settleBaseline = initial
         var round = 0
 
@@ -631,7 +646,15 @@ final class TheBrains {
             ) else { continue }
             round += 1
 
-            if current.capture.hash == beforeCaptureHash {
+            let classification = ScreenClassifier.classify(
+                before: settleBaseline.screenSnapshot,
+                after: current.screenSnapshot
+            )
+            guard Self.shouldRecordAccessibilityTrace(
+                baseline: settleBaseline,
+                current: current,
+                classification: classification
+            ) else {
                 settleBaseline = current
                 continue
             }
@@ -649,7 +672,6 @@ final class TheBrains {
                 return result
             }
 
-            beforeCaptureHash = current.capture.hash
             settleBaseline = current
             insideJobLogger.debug("wait_for_change round \(round): \(delta.kindRawValue), expectation not yet met")
         }
@@ -798,7 +820,7 @@ final class TheBrains {
     }
 
     private func validateElementUpdatedCurrentState(
-        heistId: String?,
+        heistId: HeistId?,
         property: ElementProperty?,
         oldValue: String?,
         newValue: String?,
@@ -897,6 +919,22 @@ final class TheBrains {
         return AccessibilityTrace(capture: capture)
     }
 
+    func makeAccessibilityTrace(
+        afterInterface: Interface,
+        parentCapture: AccessibilityTrace.Capture,
+        classification: ScreenClassifier.Classification,
+        transient: [HeistElement] = []
+    ) -> AccessibilityTrace {
+        makeAccessibilityTrace(
+            afterInterface: afterInterface,
+            parentCapture: parentCapture,
+            transition: AccessibilityTrace.Transition(
+                screenChangeReason: classification.reason?.rawValue,
+                transient: transient
+            )
+        )
+    }
+
     func makeAccessibilityTrace(afterCapture: AccessibilityTrace.Capture, parentCapture: AccessibilityTrace.Capture? = nil) -> AccessibilityTrace {
         let capture = AccessibilityTrace.Capture(
             sequence: parentCapture == nil ? 1 : 2,
@@ -918,8 +956,9 @@ final class TheBrains {
             after: after.screenSnapshot
         )
         let capture = AccessibilityTrace.Capture(
-            sequence: 1,
+            sequence: after.capture.sequence,
             interface: after.capture.interface,
+            parentHash: after.capture.parentHash,
             context: after.capture.context,
             transition: AccessibilityTrace.Transition(screenChangeReason: classification.reason?.rawValue),
             hash: after.capture.hash

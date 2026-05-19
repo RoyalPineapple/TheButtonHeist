@@ -22,7 +22,7 @@ extension TheStash {
     /// Returns the heistId array, parallel to the input elements array.
     static func assign(_ elements: [AccessibilityElement]) -> [String] {
         // Phase 1: generate base IDs
-        var heistIds = elements.map { element -> String in
+        var heistIds = elements.map { element -> HeistId in
             if let identifier = element.identifier, !identifier.isEmpty,
                isStableIdentifier(identifier) {
                 return identifier
@@ -31,7 +31,7 @@ extension TheStash {
         }
 
         // Phase 2: disambiguate duplicates
-        let counts = heistIds.reduce(into: [String: Int]()) { $0[$1, default: 0] += 1 }
+        let counts = heistIds.reduce(into: [HeistId: Int]()) { $0[$1, default: 0] += 1 }
 
         var seen: [String: Int] = [:]
         for index in heistIds.indices {

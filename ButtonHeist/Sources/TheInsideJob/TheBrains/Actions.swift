@@ -285,7 +285,8 @@ final class Actions {
                     .elementDeallocated,
                     message: ActionCapabilityDiagnostic.elementDeallocated(
                         boundary: "adjustable action",
-                        element: resolved.screenElement
+                        element: resolved.screenElement,
+                        isInflated: self.stash.visibleIds.contains(resolved.screenElement.heistId)
                     )
                 )
             }
@@ -310,7 +311,8 @@ final class Actions {
                     .elementDeallocated,
                     message: ActionCapabilityDiagnostic.elementDeallocated(
                         boundary: "adjustable action",
-                        element: resolved.screenElement
+                        element: resolved.screenElement,
+                        isInflated: self.stash.visibleIds.contains(resolved.screenElement.heistId)
                     )
                 )
             }
@@ -334,7 +336,8 @@ final class Actions {
                     .elementDeallocated,
                     message: ActionCapabilityDiagnostic.elementDeallocated(
                         boundary: "custom action",
-                        element: resolved.screenElement
+                        element: resolved.screenElement,
+                        isInflated: self.stash.visibleIds.contains(resolved.screenElement.heistId)
                     )
                 )
             case .noSuchAction:

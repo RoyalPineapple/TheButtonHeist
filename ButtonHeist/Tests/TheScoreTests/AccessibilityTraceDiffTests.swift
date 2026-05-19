@@ -224,7 +224,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
     }
 
     private func makeElement(
-        heistId: String,
+        heistId: HeistId,
         label: String,
         value: String? = nil,
         traits: [HeistTrait]

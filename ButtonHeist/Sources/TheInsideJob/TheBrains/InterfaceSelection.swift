@@ -57,50 +57,47 @@ struct InterfaceSelector {
     }
 
     private func selectLeafSubtrees(matching matcher: ElementMatcher) -> Interface {
-        let annotations = interface.annotations.elementByTraversalIndex
-        let tree = interface.tree.subtrees { node, _ in
-            guard case .element(let element, let traversalIndex) = node else { return false }
-            return HeistElement(
+        let annotations = interface.annotations.elementByPath
+        let candidates = interface.tree.compactMapSubtrees { node, path -> InterfaceLeafCandidate? in
+            guard case .element(let element, let traversalIndex) = node else { return nil }
+            let annotation = annotations[path]
+            guard HeistElement(
                 accessibilityElement: element,
-                annotation: annotations[traversalIndex]
-            ).matches(matcher)
+                annotation: annotation
+            ).matches(matcher) else { return nil }
+            return InterfaceLeafCandidate(node: node, path: path, traversalIndex: traversalIndex, annotation: annotation)
         }
-        return Interface(
-            timestamp: interface.timestamp,
-            tree: tree,
-            annotations: leafAnnotations(for: tree)
-        )
+        return selectedInterface(forLeafCandidates: candidates)
     }
 
-    private func selectLeafSubtrees(withIds heistIds: Set<String>) -> Interface {
-        let annotations = interface.annotations.elementByTraversalIndex
-        let tree = interface.tree.subtrees { node, _ in
+    private func selectLeafSubtrees(withIds heistIds: Set<HeistId>) -> Interface {
+        let annotations = interface.annotations.elementByPath
+        let candidates = interface.tree.compactMapSubtrees { node, path -> InterfaceLeafCandidate? in
             guard case .element(_, let traversalIndex) = node,
-                  let annotation = annotations[traversalIndex]
-            else { return false }
+                  let annotation = annotations[path]
+            else { return nil }
             return heistIds.contains(annotation.heistId)
+                ? InterfaceLeafCandidate(node: node, path: path, traversalIndex: traversalIndex, annotation: annotation)
+                : nil
         }
-        return Interface(
-            timestamp: interface.timestamp,
-            tree: tree,
-            annotations: leafAnnotations(for: tree)
-        )
+        return selectedInterface(forLeafCandidates: candidates)
     }
 
     private func select(_ subtree: SubtreeSelector) throws(InterfaceSelectionError) -> Interface {
-        let elementAnnotations = interface.annotations.elementByTraversalIndex
+        let elementAnnotations = interface.annotations.elementByPath
         let containerAnnotations = interface.annotations.containerByPath
         let candidates = interface.tree.compactMapSubtrees { node, path -> InterfaceSubtreeCandidate? in
             switch node {
             case .element(let element, let traversalIndex):
                 let projected = HeistElement(
                     accessibilityElement: element,
-                    annotation: elementAnnotations[traversalIndex]
+                    annotation: elementAnnotations[path]
                 )
                 guard case .element(let matcher, _) = subtree, projected.matches(matcher) else { return nil }
                 return InterfaceSubtreeCandidate(
                     node: node,
                     originalPath: path,
+                    traversalIndex: traversalIndex,
                     summary: projected.subtreeCandidateSummary
                 )
             case .container(let container, _):
@@ -111,10 +108,11 @@ struct InterfaceSelector {
                 return InterfaceSubtreeCandidate(
                     node: node,
                     originalPath: path,
+                    traversalIndex: nil,
                     summary: container.subtreeCandidateSummary(annotation: annotation)
                 )
             }
-        }
+        }.sorted(by: InterfaceSubtreeCandidate.isBefore)
         guard !candidates.isEmpty else {
             throw .subtreeNotFound
         }
@@ -156,18 +154,53 @@ struct InterfaceSelector {
         )
     }
 
-    private func leafAnnotations(for tree: [AccessibilityHierarchy]) -> InterfaceAnnotations {
-        let traversalIndices = Set(tree.indexedElements.map(\.traversalIndex))
-        return InterfaceAnnotations(
-            elements: interface.annotations.elements.filter { traversalIndices.contains($0.traversalIndex) }
+    private func selectedInterface(forLeafCandidates candidates: [InterfaceLeafCandidate]) -> Interface {
+        let orderedCandidates = candidates.sorted(by: InterfaceLeafCandidate.isBefore)
+        let tree = orderedCandidates.map(\.node)
+        let elementAnnotations = orderedCandidates.enumerated().compactMap { index, candidate -> InterfaceElementAnnotation? in
+            guard let annotation = candidate.annotation else { return nil }
+            return InterfaceElementAnnotation(
+                path: TreePath([index]),
+                heistId: annotation.heistId,
+                actions: annotation.actions
+            )
+        }
+        return Interface(
+            timestamp: interface.timestamp,
+            tree: tree,
+            annotations: InterfaceAnnotations(elements: elementAnnotations)
         )
+    }
+}
+
+private struct InterfaceLeafCandidate {
+    let node: AccessibilityHierarchy
+    let path: TreePath
+    let traversalIndex: Int
+    let annotation: InterfaceElementAnnotation?
+
+    static func isBefore(_ lhs: InterfaceLeafCandidate, _ rhs: InterfaceLeafCandidate) -> Bool {
+        if lhs.traversalIndex != rhs.traversalIndex {
+            return lhs.traversalIndex < rhs.traversalIndex
+        }
+        return lhs.path < rhs.path
     }
 }
 
 private struct InterfaceSubtreeCandidate {
     let node: AccessibilityHierarchy
     let originalPath: TreePath
+    let traversalIndex: Int?
     let summary: String
+
+    static func isBefore(_ lhs: InterfaceSubtreeCandidate, _ rhs: InterfaceSubtreeCandidate) -> Bool {
+        switch (lhs.traversalIndex, rhs.traversalIndex) {
+        case let (left?, right?) where left != right:
+            return left < right
+        default:
+            return lhs.originalPath < rhs.originalPath
+        }
+    }
 }
 
 private extension AccessibilityContainer {

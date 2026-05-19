@@ -139,7 +139,7 @@ extension TheBrains {
     }
 
     private func recordedScreenIfFreshParseStillMatches(_ screenBeforeRefresh: Screen) -> Screen? {
-        let currentVisibleIds = stash.currentScreen.interactionSnapshot.heistIds
+        let currentVisibleIds = stash.currentScreen.liveInterface.heistIds
         guard !screenBeforeRefresh.elements.isEmpty,
               currentVisibleIds.isSubset(of: screenBeforeRefresh.knownInterface.heistIds) else {
             return nil
@@ -458,7 +458,7 @@ extension TheBrains {
 
 private extension ClientMessage {
 
-    var pendingRotorResultTargetHeistId: String? {
+    var pendingRotorResultTargetHeistId: HeistId? {
         switch self {
         case .activate(let target),
              .increment(let target),
@@ -512,7 +512,7 @@ private extension ClientMessage {
 }
 
 private extension ElementTarget {
-    var exactHeistId: String? {
+    var exactHeistId: HeistId? {
         if case .heistId(let heistId) = self {
             return heistId
         }

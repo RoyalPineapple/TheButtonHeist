@@ -169,7 +169,7 @@ final class TheGetawayTests: XCTestCase {
     func testStaleTargetedActionAfterScreenChangeReturnsFailureWithDeltaContext() async throws {
         let (getaway, _, _) = await makeGetaway()
         seedScreen(getaway.brains, elements: [("Home", .header, "home_header"), ("Old", .button, "button_old")])
-        getaway.brains.recordSentState(viewportHash: 1)
+        getaway.brains.recordSentState()
         seedScreen(getaway.brains, elements: [("Settings", .header, "settings_header"), ("New", .button, "button_new")])
 
         let result = getaway.staleTargetedActionFailure(
@@ -190,7 +190,7 @@ final class TheGetawayTests: XCTestCase {
     func testStaleWaitForTargetDoesNotUseActionFailurePath() async {
         let (getaway, _, _) = await makeGetaway()
         seedScreen(getaway.brains, elements: [("Home", .header, "home_header"), ("Old", .button, "button_old")])
-        getaway.brains.recordSentState(viewportHash: 1)
+        getaway.brains.recordSentState()
         seedScreen(getaway.brains, elements: [("Settings", .header, "settings_header")])
 
         let result = getaway.staleTargetedActionFailure(
@@ -208,9 +208,6 @@ final class TheGetawayTests: XCTestCase {
         let (window, button) = try installRecordingActivityWindow(title: "Initial")
         defer { window.isHidden = true }
         await getaway.brains.tripwire.yieldFrames(3)
-        guard getaway.brains.interfaceChangedSinceLastSettledCheck() else {
-            throw XCTSkip("No live hierarchy available for recording inactivity regression test")
-        }
 
         let stakeout = TheStakeout(captureFrame: { @MainActor in nil })
         try await stakeout.startRecording(
@@ -230,6 +227,7 @@ final class TheGetawayTests: XCTestCase {
         button.accessibilityLabel = "Loaded"
         window.layoutIfNeeded()
         await getaway.brains.tripwire.yieldFrames(3)
+        getaway.tripwireParsePending = true
         await getaway.noteSettledChangeIfNeeded()
 
         // Total elapsed time is now beyond the 1s inactivity timeout from start.
@@ -841,7 +839,7 @@ final class TheGetawayTests: XCTestCase {
 
     private func seedScreen(
         _ brains: TheBrains,
-        elements: [(label: String, traits: UIAccessibilityTraits, heistId: String)]
+        elements: [(label: String, traits: UIAccessibilityTraits, heistId: HeistId)]
     ) {
         let pairs: [(AccessibilityElement, String)] = elements.map { entry in
             let element = AccessibilityElement.make(

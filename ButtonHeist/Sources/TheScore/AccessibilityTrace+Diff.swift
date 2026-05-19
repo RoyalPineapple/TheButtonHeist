@@ -9,7 +9,7 @@ private struct AccessibilityHierarchyRecord {
     let path: TreePath
     let node: AccessibilityHierarchy
     let element: HeistElement?
-    let ancestors: [String]
+    let ancestors: [HeistContainer]
 }
 
 private struct ElementIdentitySignature: Hashable {
@@ -201,7 +201,7 @@ public extension ElementEdits {
 
         var updated: [ElementUpdate] = []
         var added: [HeistElement] = []
-        var removed: [String] = []
+        var removed: [HeistId] = []
 
         for heistId in allHeistIds {
             let oldEls = oldByHeistId[heistId] ?? []
@@ -290,6 +290,30 @@ public extension ElementEdits {
     }
 }
 
+extension AccessibilityTrace.AccessibilityPatchOperation {
+    static func structuralOperations(
+        between before: Interface,
+        and after: Interface
+    ) -> [Self] {
+        let edits = ElementEdits.betweenTrees(before: before, after: after)
+        let afterRecords = indexTree(after)
+
+        let removals = edits.treeRemoved
+            .reversed()
+            .map(Self.removeSubtree)
+        let moves = edits.treeMoved.compactMap { move -> Self? in
+            guard let record = afterRecords[move.ref.id] else { return nil }
+            return .moveSubtree(
+                move,
+                node: record.node
+            )
+        }
+        let insertions = edits.treeInserted.map(Self.insertSubtree)
+
+        return removals + moves + insertions
+    }
+}
+
 private func suppressFunctionalMoveElementChurn(
     edits: ElementEdits,
     beforeElements: [HeistElement],
@@ -348,9 +372,9 @@ private func inferFunctionalTreePairs(
 }
 
 private func inferFunctionalHeistElementPairs(
-    removedById: [String: HeistElement],
-    addedById: [String: HeistElement]
-) -> [(removedId: String, insertedId: String)] {
+    removedById: [HeistId: HeistElement],
+    addedById: [HeistId: HeistElement]
+) -> [(removedId: HeistId, insertedId: HeistId)] {
     let removed = removedById.map { identifier, element in
         (identifier, pairingSignature(for: element))
     }
@@ -451,7 +475,7 @@ private func normalizedTraits(_ traits: [HeistTrait]) -> [HeistTrait] {
 // MARK: - Tree Indexing
 
 private func indexTree(_ interface: Interface) -> [String: AccessibilityHierarchyRecord] {
-    let elementAnnotations = interface.annotations.elementByTraversalIndex
+    let elementAnnotations = interface.annotations.elementByPath
     let containerAnnotations = interface.annotations.containerByPath
     var result: [String: AccessibilityHierarchyRecord] = [:]
     for (index, node) in interface.tree.enumerated() {
@@ -472,18 +496,18 @@ private func indexTree(_ interface: Interface) -> [String: AccessibilityHierarch
 private func collectTreeRecords(
     _ node: AccessibilityHierarchy,
     path: TreePath,
-    parentId: String?,
+    parentId: HeistContainer?,
     index: Int,
-    ancestors: [String],
-    elementAnnotations: [Int: InterfaceElementAnnotation],
+    ancestors: [HeistContainer],
+    elementAnnotations: [TreePath: InterfaceElementAnnotation],
     containerAnnotations: [TreePath: InterfaceContainerAnnotation],
     into result: inout [String: AccessibilityHierarchyRecord]
 ) {
-    let projection = elementProjection(for: node, annotations: elementAnnotations)
+    let projection = elementProjection(for: node, path: path, annotations: elementAnnotations)
     let ref = treeRef(for: node, path: path, element: projection, containerAnnotations: containerAnnotations)
     let location = TreeLocation(parentId: parentId, index: index)
-    let childParentId: String?
-    let childAncestors: [String]
+    let childParentId: HeistContainer?
+    let childAncestors: [HeistContainer]
     if let ref {
         result[ref.id] = AccessibilityHierarchyRecord(
             ref: ref,
@@ -517,13 +541,14 @@ private func collectTreeRecords(
 
 private func elementProjection(
     for node: AccessibilityHierarchy,
-    annotations: [Int: InterfaceElementAnnotation]
+    path: TreePath,
+    annotations: [TreePath: InterfaceElementAnnotation]
 ) -> HeistElement? {
     switch node {
-    case .element(let element, let traversalIndex):
+    case .element(let element, _):
         return HeistElement(
             accessibilityElement: element,
-            annotation: annotations[traversalIndex]
+            annotation: annotations[path]
         )
     case .container:
         return nil
@@ -578,7 +603,7 @@ private func compare(_ lhs: TreeLocation, _ rhs: TreeLocation) -> Bool {
 private func buildElementUpdate(
     old: HeistElement,
     new: HeistElement,
-    heistId: String? = nil,
+    heistId: HeistId? = nil,
     includeGeometry: Bool = true
 ) -> ElementUpdate? {
     var changes: [PropertyChange] = []

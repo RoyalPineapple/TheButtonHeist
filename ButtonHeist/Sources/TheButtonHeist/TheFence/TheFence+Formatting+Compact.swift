@@ -368,7 +368,7 @@ extension FenceResponse {
         detail: InterfaceDetail
     ) -> [String] {
         let counter = LineIndexCounter()
-        let elementAnnotations = interface.annotations.elementByTraversalIndex
+        let elementAnnotations = interface.annotations.elementByPath
         let containerAnnotations = interface.annotations.containerByPath
         return interface.tree.enumerated().flatMap { index, node in
             compactTreeLines(
@@ -393,14 +393,14 @@ extension FenceResponse {
         path: TreePath,
         detail: InterfaceDetail,
         counter: LineIndexCounter,
-        elementAnnotations: [Int: InterfaceElementAnnotation],
+        elementAnnotations: [TreePath: InterfaceElementAnnotation],
         containerAnnotations: [TreePath: InterfaceContainerAnnotation]
     ) -> [String] {
         switch node {
-        case .element(let element, let traversalIndex):
+        case .element(let element, _):
             let projected = HeistElement(
                 accessibilityElement: element,
-                annotation: elementAnnotations[traversalIndex]
+                annotation: elementAnnotations[path]
             )
             let index = counter.value
             counter.value += 1

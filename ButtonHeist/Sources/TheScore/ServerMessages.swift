@@ -511,10 +511,10 @@ public struct TreeNodeRef: Codable, Sendable, Equatable {
 
 /// A location in the interface tree. `parentId == nil` means the root forest.
 public struct TreeLocation: Codable, Sendable, Equatable {
-    public let parentId: String?
+    public let parentId: HeistContainer?
     public let index: Int
 
-    public init(parentId: String?, index: Int) {
+    public init(parentId: HeistContainer?, index: Int) {
         self.parentId = parentId
         self.index = index
     }
@@ -594,10 +594,10 @@ public struct PropertyChange: Codable, Sendable, Equatable {
 
 /// An element whose state changed — carries the heistId and which properties differ.
 public struct ElementUpdate: Codable, Sendable, Equatable {
-    public let heistId: String
+    public let heistId: HeistId
     public let changes: [PropertyChange]
 
-    public init(heistId: String, changes: [PropertyChange]) {
+    public init(heistId: HeistId, changes: [PropertyChange]) {
         self.heistId = heistId
         self.changes = changes
     }
@@ -792,7 +792,8 @@ public struct RecordedUnsupportedInput: Codable, Sendable, Equatable {
 }
 
 /// A single recorded interaction event captured during a TheStakeout recording.
-/// Uses `AccessibilityTrace.Delta` instead of full before/after `Interface` snapshots to minimize payload size.
+/// The action result carries `AccessibilityTrace` as durable evidence; compact
+/// deltas are projections from that trace.
 public struct InteractionEvent: Codable, Sendable {
     /// Time offset from recording start, in seconds.
     public let timestamp: Double

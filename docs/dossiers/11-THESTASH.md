@@ -44,7 +44,7 @@ let screen = stash.parse()        // pure read — does not touch currentScreen
 stash.currentScreen = screen      // commit
 
 // Exploration path (Navigation+Explore.exploreAndPrune):
-var union = stash.currentScreen   // seed with current interaction snapshot
+var union = stash.currentScreen   // seed with current live interface
 for container in scrollableContainers {
     await scrollToTop(container)
     if let parsed = stash.refresh() {
@@ -52,7 +52,7 @@ for container in scrollableContainers {
     }
     while await scrollOnePageAndSettle(container) {
         if let parsed = stash.parse() {
-            stash.currentScreen = parsed     // mid-cycle interaction snapshot for termination heuristics
+            stash.currentScreen = parsed     // mid-cycle live interface for termination heuristics
             union = union.merging(parsed)
         }
     }
@@ -109,12 +109,8 @@ flowchart LR
 
 ```swift
 struct Screen: Equatable {
-    let elements: [String: ScreenElement]              // heistId → entry
-    let hierarchy: [AccessibilityHierarchy]            // live parsed tree
-    let containerStableIds: [AccessibilityContainer: String]
-    let heistIdByElement: [AccessibilityElement: String]
-    let firstResponderHeistId: String?
-    let scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
+    let elements: [String: ScreenElement]              // known semantic state
+    let liveInterface: LiveInterface                   // live parse affordances
 
     static var empty: Screen { ... }
     func findElement(heistId: String) -> ScreenElement?
@@ -123,6 +119,14 @@ struct Screen: Equatable {
     var name: String? { /* first header label, computed */ }
     var id: String? { /* slugified name */ }
     var heistIds: Set<String> { Set(elements.keys) }
+}
+
+struct LiveInterface: Equatable {
+    let hierarchy: [AccessibilityHierarchy]            // latest parser tree
+    let containerStableIds: [AccessibilityContainer: String]
+    let heistIdByElement: [AccessibilityElement: String]
+    let firstResponderHeistId: String?
+    let scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
 }
 
 struct ScreenElement: @unchecked Sendable, Equatable {
@@ -179,12 +183,12 @@ Computed accessors proxy through `currentScreen`:
 
 | Accessor | Source |
 |----------|--------|
-| `currentHierarchy` | `currentScreen.interactionSnapshot.hierarchy` |
+| `currentHierarchy` | `currentScreen.liveInterface.hierarchy` |
 | `knownIds` | `currentScreen.knownIds` (all known semantic entries; after an exploration union this includes off-viewport entries) |
 | `visibleIds` | `currentScreen.visibleIds` (strictly backed by the latest parsed live hierarchy) |
-| `firstResponderHeistId` | `currentScreen.interactionSnapshot.firstResponderHeistId` |
-| `lastScreenName`, `lastScreenId` | derived from `currentScreen.interactionSnapshot.hierarchy` |
-| `scrollableContainerViews` | unwraps the weak-view wrappers from `currentScreen.interactionSnapshot.scrollableContainerViews` |
+| `firstResponderHeistId` | `currentScreen.liveInterface.firstResponderHeistId` |
+| `lastScreenName`, `lastScreenId` | derived from `currentScreen.liveInterface.hierarchy` |
+| `scrollableContainerViews` | unwraps the weak-view wrappers from `currentScreen.liveInterface.scrollableContainerViews` |
 
 No store writes to another store. No circular dependencies.
 

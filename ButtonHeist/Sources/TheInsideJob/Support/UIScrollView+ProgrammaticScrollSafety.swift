@@ -23,10 +23,10 @@ extension UIScrollView {
     /// off-screen content.
     @MainActor
     var bhIsUnsafeForProgrammaticScrolling: Bool {
-        guard let queuingScrollViewClass = NSClassFromString("_UIQueuingScrollView") else {
-            return false
-        }
-        return isKind(of: queuingScrollViewClass)
+        let className = NSStringFromClass(type(of: self))
+        return className == "_UIQueuingScrollView"
+            || className.hasSuffix("._UIQueuingScrollView")
+            || className.hasSuffix("._UIQueuingScrollView_Paging")
     }
 }
 

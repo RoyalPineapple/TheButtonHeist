@@ -258,17 +258,17 @@ public enum ClientMessage: Codable, Sendable {
 /// substring fallback.
 public enum ElementTarget: Sendable, Equatable {
     /// Current-hierarchy handle assigned by get_interface — fast O(1) lookup.
-    case heistId(String)
+    case heistId(HeistId)
     /// Predicate matcher: label, identifier, value, traits, excludeTraits.
     /// `ordinal` is a 0-based selection index into the list of matches
-    /// (ordered by tree traversal). When nil, requires a unique match and
-    /// reports ambiguity on 2+ hits. When set, selects the Nth match.
-    /// This is a selection index into match results, NOT a traversal index.
+    /// after semantic narrowing. When nil, requires a unique match and reports
+    /// ambiguity on 2+ hits. When set, selects the Nth narrowed match.
+    /// This is a disambiguator for match results, NOT durable identity.
     case matcher(ElementMatcher, ordinal: Int? = nil)
 
     /// Convenience: build from optional fields. HeistId wins if present.
     /// Returns nil if both matcher and ordinal are empty.
-    public init?(heistId: String? = nil, matcher: ElementMatcher, ordinal: Int? = nil) {
+    public init?(heistId: HeistId? = nil, matcher: ElementMatcher, ordinal: Int? = nil) {
         if let heistId {
             assert(ordinal == nil, "ordinal is ignored when heistId is present — pass one or the other")
             self = .heistId(heistId)
@@ -319,7 +319,7 @@ extension ElementTarget: Codable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        if let heistId = try container.decodeIfPresent(String.self, forKey: .heistId) {
+        if let heistId = try container.decodeIfPresent(HeistId.self, forKey: .heistId) {
             self = .heistId(heistId)
             return
         }
@@ -405,7 +405,7 @@ public struct RotorTarget: Sendable {
     public let direction: RotorDirection?
     /// Optional heistId for the current rotor item. Use the previous result's
     /// heistId to continue moving through a rotor like a VoiceOver user.
-    public let currentHeistId: String?
+    public let currentHeistId: HeistId?
     /// Optional text-range cursor for continuing through text-range rotor
     /// results inside the element identified by `currentHeistId`.
     public let currentTextRange: TextRangeReference?
@@ -415,7 +415,7 @@ public struct RotorTarget: Sendable {
         rotor: String? = nil,
         rotorIndex: Int? = nil,
         direction: RotorDirection? = nil,
-        currentHeistId: String? = nil,
+        currentHeistId: HeistId? = nil,
         currentTextRange: TextRangeReference? = nil
     ) {
         self.elementTarget = elementTarget
@@ -444,7 +444,7 @@ extension RotorTarget: Codable {
         rotor = try container.decodeIfPresent(String.self, forKey: .rotor)
         rotorIndex = try container.decodeIfPresent(Int.self, forKey: .rotorIndex)
         direction = try container.decodeIfPresent(RotorDirection.self, forKey: .direction)
-        currentHeistId = try container.decodeIfPresent(String.self, forKey: .currentHeistId)
+        currentHeistId = try container.decodeIfPresent(HeistId.self, forKey: .currentHeistId)
         currentTextRange = try container.decodeIfPresent(TextRangeReference.self, forKey: .currentTextRange)
         if let rotorIndex, rotorIndex < 0 {
             throw DecodingError.dataCorrupted(.init(

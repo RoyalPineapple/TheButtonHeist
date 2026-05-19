@@ -134,7 +134,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     private func testElement(
-        _ heistId: String,
+        _ heistId: HeistId,
         label: String,
         identifier: String? = nil,
         traits: [HeistTrait] = []

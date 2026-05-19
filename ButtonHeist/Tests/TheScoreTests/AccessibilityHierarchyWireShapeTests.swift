@@ -108,7 +108,7 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
     }
 
     private func sampleElement(
-        heistId: String = "btn",
+        heistId: HeistId = "btn",
         label: String? = "OK"
     ) -> HeistElement {
         HeistElement(

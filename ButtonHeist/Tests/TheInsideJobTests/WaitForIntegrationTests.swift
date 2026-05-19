@@ -11,25 +11,45 @@ final class WaitForIntegrationTests: XCTestCase {
 
     private var insideJob: TheInsideJob!
     private var window: UIWindow!
+    private var hostView: UIView!
 
     override func setUp() async throws {
+        let windowScene = try requireForegroundWindowScene()
+        let viewController = UIViewController()
+        viewController.view.backgroundColor = .white
+        viewController.view.accessibilityViewIsModal = true
+
+        let window = UIWindow(windowScene: windowScene)
+        window.frame = UIScreen.main.bounds
+        window.windowLevel = .alert + 60
+        window.rootViewController = viewController
+        window.isHidden = false
+
+        self.window = window
+        hostView = viewController.view
         insideJob = TheInsideJob(token: "wait-for-test-token")
-        // Pick the frontmost non-passthrough window so a keyboard window left
-        // over from a prior test in the suite (which is hidden from the
-        // accessibility tree) doesn't receive our test labels.
-        let windows = insideJob.tripwire.getTraversableWindows()
-            .filter { !TheTripwire.isSystemPassthroughWindow($0.window) }
-        window = windows.first?.window
-        XCTAssertNotNil(window, "Test host must provide a non-passthrough window")
     }
 
     override func tearDown() async throws {
         insideJob.tripwire.stopPulse()
         insideJob = nil
+        window.rootViewController?.view.accessibilityViewIsModal = false
+        window.isHidden = true
+        window.rootViewController = nil
         window = nil
+        hostView = nil
     }
 
     // MARK: - Helpers
+
+    private func requireForegroundWindowScene() throws -> UIWindowScene {
+        guard let scene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
+        else {
+            throw XCTSkip("No foreground-active UIWindowScene available in test host")
+        }
+        return scene
+    }
 
     private func collectResponse() -> (respond: @Sendable (Data) -> Void, result: () -> ActionResult?) {
         // Test-only inspection box. Mutated only from within the @Sendable
@@ -65,7 +85,7 @@ final class WaitForIntegrationTests: XCTestCase {
         if let identifier {
             label.accessibilityIdentifier = identifier
         }
-        window.addSubview(label)
+        hostView.addSubview(label)
         return label
     }
 
@@ -81,7 +101,7 @@ final class WaitForIntegrationTests: XCTestCase {
         label.isAccessibilityElement = true
         scrollView.addSubview(label)
 
-        window.addSubview(scrollView)
+        hostView.addSubview(scrollView)
         return scrollView
     }
 

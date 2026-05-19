@@ -8,7 +8,7 @@ import UIKit
 /// Deterministic tests for the pipelines on TheBrains that operate purely against
 /// the current `Screen` snapshot: the failure branch of `actionResultWithDelta`, the
 /// `SentState` accessors, the `computeBackgroundAccessibilityTrace` guards, the
-/// settled-change cache-miss, and `exploreAndPrune` pruning.
+/// background trace guards, and `exploreAndPrune` pruning.
 ///
 /// Success-path `actionResultWithDelta` and `exploreScreen` container iteration
 /// require a live window and are covered by integration/benchmark runs.
@@ -301,6 +301,59 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(result.accessibilityTrace, accessibilityTrace)
     }
 
+    func testClassifiedTraceKeepsSameScreenStructuralDiscoveryAsElementChange() throws {
+        seedScreen(elements: [("Menu", .header, "menu_header")])
+        let before = brains.captureBeforeState()
+
+        seedScreen(elements: [
+            ("Menu", .header, "menu_header"),
+            ("Chicken Tikka", .button, "button_chicken_tikka"),
+        ])
+        let after = brains.captureSemanticState()
+
+        let trace = brains.makeClassifiedAccessibilityTrace(after: after, parent: before)
+
+        XCTAssertNil(trace.captures.last?.transition.screenChangeReason)
+        guard case .elementsChanged(let payload)? = trace.captureEndpointDelta else {
+            return XCTFail("Expected elementsChanged delta, got \(String(describing: trace.captureEndpointDelta))")
+        }
+        XCTAssertEqual(payload.captureEdge?.before.hash, before.capture.hash)
+        XCTAssertEqual(payload.captureEdge?.after.hash, trace.captures.last?.hash)
+    }
+
+    func testClassifiedTraceStartsSegmentForRealScreenChange() throws {
+        seedScreen(elements: [("Menu", .header, "menu_header")])
+        let before = brains.captureBeforeState()
+
+        seedScreen(elements: [("Checkout", .header, "checkout_header")])
+        let after = brains.captureSemanticState()
+
+        let trace = brains.makeClassifiedAccessibilityTrace(after: after, parent: before)
+
+        XCTAssertEqual(trace.captures.last?.transition.screenChangeReason, "primaryHeaderChanged")
+        guard case .screenChanged(let payload)? = trace.captureEndpointDelta else {
+            return XCTFail("Expected screenChanged delta, got \(String(describing: trace.captureEndpointDelta))")
+        }
+        XCTAssertEqual(payload.captureEdge?.before.hash, before.capture.hash)
+        XCTAssertEqual(payload.captureEdge?.after.hash, trace.captures.last?.hash)
+    }
+
+    func testClassifiedTraceDeltaIsDerivedFromCaptureEndpoints() throws {
+        seedScreen(elements: [("Cart", .header, "cart_header"), ("Total", .staticText, "total_label")])
+        let before = brains.captureBeforeState()
+
+        seedScreen(elements: [("Cart", .header, "cart_header"), ("Total $12.00", .staticText, "total_label")])
+        let after = brains.captureSemanticState()
+
+        let trace = brains.makeClassifiedAccessibilityTrace(after: after, parent: before)
+        let endpointDelta = try XCTUnwrap(trace.captureEndpointDelta)
+
+        XCTAssertEqual(trace.backgroundDelta, endpointDelta)
+        XCTAssertEqual(trace.captures.first?.hash, before.capture.hash)
+        XCTAssertEqual(trace.captures.last?.parentHash, before.capture.hash)
+        XCTAssertEqual(trace.captures.last?.hash, after.capture.hash)
+    }
+
     // MARK: - SentState
 
     func testLastSentStateStartsNil() {
@@ -312,20 +365,20 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     func testRecordSentStatePopulatesAllFields() {
         seedScreen(elements: [("Home", .header, "home_header"), ("A", .button, "button_a")])
-        let viewportHash = brains.stash.interfaceHash()
 
         brains.recordSentState()
 
         let sent = brains.lastSentState
         XCTAssertNotNil(sent)
         XCTAssertEqual(sent?.screenId, "home")
-        XCTAssertEqual(sent?.viewportHash, viewportHash)
         XCTAssertFalse(sent?.interfaceHash.isEmpty ?? true,
                        "interfaceHash should be present for a non-empty screen")
+        XCTAssertEqual(sent?.captureHash, sent?.beforeState.capture.hash)
+        XCTAssertEqual(sent?.interfaceHash, sent?.beforeState.interfaceHash)
         XCTAssertEqual(brains.lastSentScreenId, "home")
     }
 
-    func testRecordSentStateUsesKnownSemanticElements() {
+    func testRecordSentStateKeepsKnownSemanticElementsWithCanonicalInterfaceHash() {
         let visible = AccessibilityElement.make(
             label: "Visible",
             traits: .button,
@@ -340,7 +393,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             elements: [(visible, "button_visible")],
             offViewport: [.init(offViewport, heistId: "button_below_fold")]
         )
-        let liveViewportHash = brains.stash.interfaceHash()
+        let interfaceHash = brains.stash.interfaceHash()
 
         brains.recordSentState()
 
@@ -349,27 +402,27 @@ final class TheBrainsPipelineTests: XCTestCase {
             Set(sent?.beforeState.snapshot.map(\.heistId) ?? []),
             ["button_visible", "button_below_fold"]
         )
-        XCTAssertNotEqual(
+        XCTAssertEqual(
             sent?.interfaceHash,
-            liveViewportHash,
-            "Sent state should hash the known semantic set, not only the live viewport tree"
+            interfaceHash,
+            "Interface captures hash the canonical parser tree; known-only entries stay in the targeting snapshot"
         )
     }
 
-    func testRecordSentStateWithViewportHashKeepsSemanticHashDomain() {
+    func testRecordSentStateDerivesMetadataFromCapturedState() {
         seedScreen(elements: [("Screen X", .header, "screen_x_header"), ("A", .button, "button_a")])
-        let semanticHash = brains.captureSemanticState().interfaceHash
+        let state = brains.captureSemanticState()
 
-        brains.recordSentState(viewportHash: 42)
+        brains.recordSentState()
 
-        XCTAssertEqual(brains.lastSentState?.interfaceHash, semanticHash)
-        XCTAssertEqual(brains.lastSentState?.viewportHash, "42")
+        XCTAssertEqual(brains.lastSentState?.interfaceHash, state.interfaceHash)
+        XCTAssertEqual(brains.lastSentState?.captureHash, state.capture.hash)
         XCTAssertEqual(brains.lastSentState?.screenId, "screen_x")
     }
 
     func testScreenChangedSinceLastSentDetectsIdTransition() {
         seedScreen(elements: [("Home", .header, "home_header")])
-        brains.recordSentState(viewportHash: 1)
+        brains.recordSentState()
         XCTAssertFalse(brains.screenChangedSinceLastSent)
 
         seedScreen(elements: [("Settings", .header, "settings_header")])
@@ -387,19 +440,6 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertNil(brains.lastSentState)
     }
 
-    func testClearCacheResetsSettledChangeMemo() throws {
-        guard brains.interfaceChangedSinceLastSettledCheck() else {
-            throw XCTSkip("No live hierarchy available for settled-change memo test")
-        }
-        guard !brains.interfaceChangedSinceLastSettledCheck() else {
-            throw XCTSkip("Live hierarchy changed during settled-change memo test")
-        }
-
-        brains.clearCache()
-
-        XCTAssertTrue(brains.interfaceChangedSinceLastSettledCheck())
-    }
-
     // MARK: - computeBackgroundAccessibilityTrace Guards
 
     func testComputeBackgroundAccessibilityTraceReturnsNilWithoutPriorSend() async {
@@ -407,14 +447,83 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertNil(trace, "No prior send means no comparison baseline, so return nil")
     }
 
-    func testComputeBackgroundAccessibilityTraceReturnsNilWhenViewportHashIsZero() async {
-        // A viewportHash of 0 is the sentinel for "not set" — even if lastSentState exists,
-        // the trace must be suppressed to avoid false positives.
-        seedScreen(elements: [("A", .button, "button_a")])
-        brains.recordSentState(viewportHash: 0)
+    func testComputeBackgroundAccessibilityTraceReturnsNilWhenSemanticStateIsUnchanged() async {
+        guard brains.refresh() != nil else {
+            XCTFail("Expected a live interface baseline")
+            return
+        }
+        brains.recordSentState()
 
         let trace = await brains.computeBackgroundAccessibilityTrace()
         XCTAssertNil(trace)
+    }
+
+    func testShouldRecordAccessibilityTraceIgnoresViewportOnlyMovement() {
+        let beforeElement = AccessibilityElement.make(
+            label: "Chicken Tikka",
+            traits: .button,
+            shape: .frame(CGRect(x: 0, y: 0, width: 200, height: 44)),
+            activationPoint: CGPoint(x: 100, y: 22),
+            respondsToUserInteraction: false
+        )
+        brains.stash.currentScreen = .makeForTests(elements: [(beforeElement, "chicken_tikka_button")])
+        let baseline = brains.captureSemanticState()
+
+        let afterElement = AccessibilityElement.make(
+            label: "Chicken Tikka",
+            traits: .button,
+            shape: .frame(CGRect(x: 0, y: -300, width: 200, height: 44)),
+            activationPoint: CGPoint(x: 100, y: -278),
+            respondsToUserInteraction: false
+        )
+        brains.stash.currentScreen = .makeForTests(elements: [(afterElement, "chicken_tikka_button")])
+        let current = brains.captureSemanticState()
+        let classification = ScreenClassifier.classify(
+            before: baseline.screenSnapshot,
+            after: current.screenSnapshot
+        )
+
+        XCTAssertFalse(
+            TheBrains.shouldRecordAccessibilityTrace(
+                baseline: baseline,
+                current: current,
+                classification: classification
+            ),
+            "Viewport-only geometry movement updates interaction state but does not become trace history"
+        )
+    }
+
+    func testShouldRecordAccessibilityTraceRecordsSameScreenSemanticChange() {
+        let beforeElement = AccessibilityElement.make(
+            label: "Total",
+            value: "$4.00",
+            traits: .staticText,
+            respondsToUserInteraction: false
+        )
+        brains.stash.currentScreen = .makeForTests(elements: [(beforeElement, "total_staticText")])
+        let baseline = brains.captureSemanticState()
+
+        let afterElement = AccessibilityElement.make(
+            label: "Total",
+            value: "$8.00",
+            traits: .staticText,
+            respondsToUserInteraction: false
+        )
+        brains.stash.currentScreen = .makeForTests(elements: [(afterElement, "total_staticText")])
+        let current = brains.captureSemanticState()
+        let classification = ScreenClassifier.classify(
+            before: baseline.screenSnapshot,
+            after: current.screenSnapshot
+        )
+
+        XCTAssertTrue(
+            TheBrains.shouldRecordAccessibilityTrace(
+                baseline: baseline,
+                current: current,
+                classification: classification
+            ),
+            "Same-screen value changes are semantic patches"
+        )
     }
 
     // MARK: - Unsupported Diagnostics
@@ -558,7 +667,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func makeInterface(label: String, traits: UIAccessibilityTraits, heistId: String) -> Interface {
+    private func makeInterface(label: String, traits: UIAccessibilityTraits, heistId: HeistId) -> Interface {
         let element = AccessibilityElement.make(
             label: label,
             traits: traits,
@@ -569,7 +678,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             tree: [.element(element, traversalIndex: 0)],
             annotations: InterfaceAnnotations(elements: [
                 InterfaceElementAnnotation(
-                    traversalIndex: 0,
+                    path: TreePath([0]),
                     heistId: heistId,
                     actions: []
                 ),
@@ -577,7 +686,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
     }
 
-    private func seedScreen(elements: [(label: String, traits: UIAccessibilityTraits, heistId: String)]) {
+    private func seedScreen(elements: [(label: String, traits: UIAccessibilityTraits, heistId: HeistId)]) {
         let pairs: [(AccessibilityElement, String)] = elements.map { entry in
             let element = AccessibilityElement.make(
                 label: entry.label,

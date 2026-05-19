@@ -41,7 +41,7 @@ public enum ActionExpectation: Sendable, Equatable {
     /// provide what you know, omit what you don't. Met when any entry in
     /// the result's trace-derived delta updates matches all provided fields.
     case elementUpdated(
-        heistId: String? = nil, property: ElementProperty? = nil,
+        heistId: HeistId? = nil, property: ElementProperty? = nil,
         oldValue: String? = nil, newValue: String? = nil
     )
     /// Expected an element matching this predicate to appear in the delta's added list.
@@ -126,7 +126,7 @@ extension ActionExpectation: Codable {
         case .elementUpdated:
             let container = try decoder.container(keyedBy: ElementUpdatedKey.self)
             self = .elementUpdated(
-                heistId: try container.decodeIfPresent(String.self, forKey: .heistId),
+                heistId: try container.decodeIfPresent(HeistId.self, forKey: .heistId),
                 property: try container.decodeIfPresent(ElementProperty.self, forKey: .property),
                 oldValue: try container.decodeIfPresent(String.self, forKey: .oldValue),
                 newValue: try container.decodeIfPresent(String.self, forKey: .newValue)
@@ -200,7 +200,7 @@ extension ActionExpectation {
     ///   Pass an empty dictionary if unavailable.
     public func validate(
         against result: ActionResult,
-        preActionElements: [String: HeistElement] = [:]
+        preActionElements: [HeistId: HeistElement] = [:]
     ) -> ExpectationResult {
         switch self {
         case .screenChanged:
@@ -263,7 +263,7 @@ extension ActionExpectation {
     }
 
     private static func validateElementUpdated(
-        heistId: String?, property: ElementProperty?,
+        heistId: HeistId?, property: ElementProperty?,
         oldValue: String?, newValue: String?,
         expectation: ActionExpectation, result: ActionResult
     ) -> ExpectationResult {
@@ -339,7 +339,7 @@ extension ActionExpectation {
         matcher: ElementMatcher,
         expectation: ActionExpectation,
         result: ActionResult,
-        preActionElements: [String: HeistElement]
+        preActionElements: [HeistId: HeistElement]
     ) -> ExpectationResult {
         let delta = result.effectiveAccessibilityDelta
 

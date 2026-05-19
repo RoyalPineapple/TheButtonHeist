@@ -2,6 +2,7 @@
 import XCTest
 @testable import AccessibilitySnapshotParser
 @testable import TheInsideJob
+@testable import TheScore
 
 @MainActor
 final class ScreenClassifierTests: XCTestCase {
@@ -209,7 +210,7 @@ final class ScreenClassifierTests: XCTestCase {
 
     private func screen(
         elements: [AccessibilityElement],
-        firstResponderHeistId: String? = nil
+        firstResponderHeistId: HeistId? = nil
     ) -> Screen {
         Screen.makeForTests(
             elements: elements.enumerated().map { index, element in
@@ -228,9 +229,7 @@ final class ScreenClassifierTests: XCTestCase {
                     Screen.ScreenElement(
                         heistId: "element_\(index)",
                         contentSpaceOrigin: nil,
-                        element: element,
-                        object: nil,
-                        scrollView: nil
+                        element: element
                     )
                 )
             }),

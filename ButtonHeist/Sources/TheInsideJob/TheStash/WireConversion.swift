@@ -42,7 +42,7 @@ extension TheStash {
 
     // MARK: - Element Conversion
 
-    static func convert(_ element: AccessibilityElement, heistId: String = "", object: NSObject? = nil) -> HeistElement {
+    static func convert(_ element: AccessibilityElement, heistId: HeistId = "", object: NSObject? = nil) -> HeistElement {
         let frame = element.shape.frame
         return HeistElement(
             heistId: heistId,
@@ -86,7 +86,7 @@ extension TheStash {
     // MARK: - Wire Output
 
     static func toWire(_ entry: ScreenElement) -> HeistElement {
-        convert(entry.element, heistId: entry.heistId, object: entry.object)
+        convert(entry.element, heistId: entry.heistId)
     }
 
     /// Convert a snapshot to wire format. Use at serialization boundaries.
@@ -98,11 +98,11 @@ extension TheStash {
 
     /// Convert a Screen into the canonical interface capture. The parser
     /// hierarchy remains the tree; Button Heist metadata is attached as
-    /// annotations keyed by parser traversal index and tree path.
+    /// annotations keyed by capture-local tree path.
     static func toInterface(from screen: Screen, timestamp: Date = Date()) -> Interface {
         Interface(
             timestamp: timestamp,
-            tree: screen.hierarchy,
+            tree: screen.liveInterface.hierarchy,
             annotations: InterfaceAnnotations(
                 elements: elementAnnotations(from: screen),
                 containers: containerAnnotations(from: screen)
@@ -113,43 +113,33 @@ extension TheStash {
     // MARK: - Private Helpers
 
     private static func elementAnnotations(from screen: Screen) -> [InterfaceElementAnnotation] {
-        screen.hierarchy.elements.map { element, traversalIndex in
-            guard let heistId = screen.heistIdByElement[element] else {
+        screen.liveInterface.hierarchy.compactMapSubtrees { node, path in
+            guard case .element(let element, _) = node else { return nil }
+            guard let heistId = screen.liveInterface.heistIdByElement[element] else {
                 wireConversionLogger.error("Hierarchy leaf with no heistId in screen; annotating without id")
                 return InterfaceElementAnnotation(
-                    traversalIndex: traversalIndex,
+                    path: path,
                     heistId: "",
                     actions: buildActions(for: element)
                 )
             }
 
             return InterfaceElementAnnotation(
-                traversalIndex: traversalIndex,
+                path: path,
                 heistId: heistId,
-                actions: buildActions(for: element, object: screen.elements[heistId]?.object)
+                actions: buildActions(for: element, object: screen.liveInterface.object(for: heistId))
             )
         }
     }
 
     private static func containerAnnotations(from screen: Screen) -> [InterfaceContainerAnnotation] {
-        var annotations: [InterfaceContainerAnnotation] = []
-
-        func walk(_ node: AccessibilityHierarchy, path: TreePath) {
-            guard case let .container(container, children) = node else { return }
-            annotations.append(InterfaceContainerAnnotation(
+        screen.liveInterface.hierarchy.compactMapSubtrees { node, path in
+            guard case .container(let container, _) = node else { return nil }
+            return InterfaceContainerAnnotation(
                 path: path,
-                stableId: screen.containerStableIds[container]
-            ))
-            for (index, child) in children.enumerated() {
-                walk(child, path: path.appending(index))
-            }
+                stableId: screen.liveInterface.containerStableIds[container]
+            )
         }
-
-        for (index, root) in screen.hierarchy.enumerated() {
-            walk(root, path: TreePath([index]))
-        }
-
-        return annotations
     }
     }
 }

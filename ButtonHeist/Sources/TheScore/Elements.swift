@@ -2,6 +2,12 @@ import Foundation
 import CoreGraphics
 import AccessibilitySnapshotModel
 
+/// Button Heist element handle carried over the wire as a string.
+public typealias HeistId = String
+
+/// Button Heist container handle carried over the wire as a string.
+public typealias HeistContainer = String
+
 // MARK: - Element Actions
 
 /// Actions that can be performed on a UI element.
@@ -192,15 +198,15 @@ extension TreePath: Comparable {
 ///
 /// `AccessibilityElement` is the accessibility fact. These annotations are
 /// BH affordances derived from a parse: targeting handle plus supported action
-/// names. They are keyed by parser traversal index so the accessibility tree
+/// names. They are keyed by capture-local tree path so the accessibility tree
 /// itself stays full-fidelity and unmodified.
 public struct InterfaceElementAnnotation: Codable, Equatable, Hashable, Sendable {
-    public let traversalIndex: Int
-    public let heistId: String
+    public let path: TreePath
+    public let heistId: HeistId
     public let actions: [ElementAction]
 
-    public init(traversalIndex: Int, heistId: String, actions: [ElementAction]) {
-        self.traversalIndex = traversalIndex
+    public init(path: TreePath, heistId: HeistId, actions: [ElementAction]) {
+        self.path = path
         self.heistId = heistId
         self.actions = actions
     }
@@ -213,9 +219,9 @@ public struct InterfaceElementAnnotation: Codable, Equatable, Hashable, Sendable
 /// targeting and tree-diff references.
 public struct InterfaceContainerAnnotation: Codable, Equatable, Hashable, Sendable {
     public let path: TreePath
-    public let stableId: String?
+    public let stableId: HeistContainer?
 
-    public init(path: TreePath, stableId: String?) {
+    public init(path: TreePath, stableId: HeistContainer?) {
         self.path = path
         self.stableId = stableId
     }
@@ -236,12 +242,12 @@ public struct InterfaceAnnotations: Codable, Equatable, Hashable, Sendable {
         self.containers = containers
     }
 
-    public var elementByTraversalIndex: [Int: InterfaceElementAnnotation] {
-        Dictionary(uniqueKeysWithValues: elements.map { ($0.traversalIndex, $0) })
+    public var elementByPath: [TreePath: InterfaceElementAnnotation] {
+        Dictionary(elements.map { ($0.path, $0) }, uniquingKeysWith: { _, latest in latest })
     }
 
     public var containerByPath: [TreePath: InterfaceContainerAnnotation] {
-        Dictionary(uniqueKeysWithValues: containers.map { ($0.path, $0) })
+        Dictionary(containers.map { ($0.path, $0) }, uniquingKeysWith: { _, latest in latest })
     }
 }
 
@@ -262,11 +268,11 @@ public struct Interface: Codable, Equatable, Sendable {
     /// Computed from `tree + annotations`; not stored as a second source of
     /// truth on the wire.
     public var elements: [HeistElement] {
-        let annotationsByIndex = annotations.elementByTraversalIndex
-        return tree.indexedElements.map { element, traversalIndex in
+        let annotationsByPath = annotations.elementByPath
+        return tree.pathIndexedElements.map { element, path, _ in
             HeistElement(
                 accessibilityElement: element,
-                annotation: annotationsByIndex[traversalIndex]
+                annotation: annotationsByPath[path]
             )
         }
     }
@@ -308,8 +314,18 @@ public struct Interface: Codable, Equatable, Sendable {
         originalPath: TreePath,
         rootPath: TreePath
     ) -> InterfaceAnnotations {
-        let traversalIndices = Set(node.indexedElements.map(\.traversalIndex))
-        let elements = annotations.elements.filter { traversalIndices.contains($0.traversalIndex) }
+        let elementsByPath = annotations.elementByPath
+        let elements = node.compactMapSubtrees(path: rootPath) { node, newPath -> InterfaceElementAnnotation? in
+            guard case .element = node else { return nil }
+            let relativePath = Array(newPath.indices.dropFirst(rootPath.indices.count))
+            let oldPath = TreePath(originalPath.indices + relativePath)
+            guard let annotation = elementsByPath[oldPath] else { return nil }
+            return InterfaceElementAnnotation(
+                path: newPath,
+                heistId: annotation.heistId,
+                actions: annotation.actions
+            )
+        }
         let containersByPath = annotations.containerByPath
         let containers = node.compactMapSubtrees(path: rootPath) { node, newPath -> InterfaceContainerAnnotation? in
             guard case .container = node else { return nil }
@@ -417,11 +433,11 @@ public struct Interface: Codable, Equatable, Sendable {
 /// with heistIds for direct activation.
 public struct NavigationContext: Codable, Equatable, Sendable {
     public struct NavigationItem: Codable, Equatable, Sendable {
-        public let heistId: String
+        public let heistId: HeistId
         public let label: String?
         public let value: String?
 
-        public init(heistId: String, label: String?, value: String?) {
+        public init(heistId: HeistId, label: String?, value: String?) {
             self.heistId = heistId
             self.label = label
             self.value = value
@@ -429,12 +445,12 @@ public struct NavigationContext: Codable, Equatable, Sendable {
     }
 
     public struct TabBarItem: Codable, Equatable, Sendable {
-        public let heistId: String
+        public let heistId: HeistId
         public let label: String?
         public let value: String?
         public let selected: Bool
 
-        public init(heistId: String, label: String?, value: String?, selected: Bool) {
+        public init(heistId: HeistId, label: String?, value: String?, selected: Bool) {
             self.heistId = heistId
             self.label = label
             self.value = value
@@ -490,6 +506,17 @@ public extension AccessibilityHierarchy {
         }
     }
 
+    func pathIndexedElements(path: TreePath = .root) -> [(element: AccessibilityElement, path: TreePath, traversalIndex: Int)] {
+        switch self {
+        case .element(let element, let traversalIndex):
+            return [(element, path, traversalIndex)]
+        case .container(_, let children):
+            return children.enumerated().flatMap { index, child in
+                child.pathIndexedElements(path: path.appending(index))
+            }
+        }
+    }
+
     func folded<Result>(
         onElement: (AccessibilityElement, Int) -> Result,
         onContainer: (AccessibilityContainer, [Result]) -> Result
@@ -529,6 +556,17 @@ public extension AccessibilityHierarchy {
 public extension Array where Element == AccessibilityHierarchy {
     var indexedElements: [(element: AccessibilityElement, traversalIndex: Int)] {
         flatMap(\.indexedElements).sorted { $0.traversalIndex < $1.traversalIndex }
+    }
+
+    var pathIndexedElements: [(element: AccessibilityElement, path: TreePath, traversalIndex: Int)] {
+        enumerated()
+            .flatMap { index, root in root.pathIndexedElements(path: TreePath([index])) }
+            .sorted {
+                if $0.traversalIndex != $1.traversalIndex {
+                    return $0.traversalIndex < $1.traversalIndex
+                }
+                return $0.path < $1.path
+            }
     }
 
     func compactMapSubtrees<Result>(
@@ -586,7 +624,7 @@ public enum ContainerTypeName: String, Codable, CaseIterable, Sendable {
 /// containers have different identity fields and are matched in different tree
 /// positions.
 public struct ContainerMatcher: Codable, Sendable, Equatable {
-    public let stableId: String?
+    public let stableId: HeistContainer?
     public let type: ContainerTypeName?
     public let label: String?
     public let value: String?
@@ -594,7 +632,7 @@ public struct ContainerMatcher: Codable, Sendable, Equatable {
     public let isModalBoundary: Bool?
 
     public init(
-        stableId: String? = nil,
+        stableId: HeistContainer? = nil,
         type: ContainerTypeName? = nil,
         label: String? = nil,
         value: String? = nil,
@@ -623,7 +661,7 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
     /// Stable, deterministic identifier for targeting this element.
     /// Developer-provided `accessibilityIdentifier` if present, otherwise synthesized
     /// from traits + label (or value as fallback). Unique within a snapshot.
-    public let heistId: String
+    public let heistId: HeistId
     public let description: String
     public let label: String?
     public let value: String?
@@ -644,7 +682,7 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
     public let actions: [ElementAction]
 
     public init(
-        heistId: String = "",
+        heistId: HeistId = "",
         description: String,
         label: String?,
         value: String?,
@@ -766,7 +804,7 @@ public struct HeistCustomContent: Codable, Equatable, Hashable, Sendable {
 /// via AccessibilitySnapshotParser's knownTraits.
 public struct ElementMatcher: Codable, Sendable, Equatable {
     /// Exact match against the Button Heist leaf element handle
-    public let heistId: String?
+    public let heistId: HeistId?
     /// Case-insensitive equality match against element label (typography-folded)
     public let label: String?
     /// Case-insensitive equality match against accessibility identifier (typography-folded)
@@ -779,7 +817,7 @@ public struct ElementMatcher: Codable, Sendable, Equatable {
     public let excludeTraits: [HeistTrait]?
 
     public init(
-        heistId: String? = nil,
+        heistId: HeistId? = nil,
         label: String? = nil,
         identifier: String? = nil,
         value: String? = nil,
@@ -815,7 +853,8 @@ public struct ElementMatcher: Codable, Sendable, Equatable {
 ///
 /// `.element` searches leaf `HeistElement` nodes with `ElementMatcher`.
 /// `.container` searches parser container nodes with `ContainerMatcher`.
-/// `ordinal` is applied after collecting matches in stable tree order.
+/// `ordinal` is applied only after semantic narrowing; element matches are
+/// ordered by parse-local traversal index with tree path as a tie-breaker.
 public enum SubtreeSelector: Codable, Sendable, Equatable {
     case element(ElementMatcher, ordinal: Int? = nil)
     case container(ContainerMatcher, ordinal: Int? = nil)

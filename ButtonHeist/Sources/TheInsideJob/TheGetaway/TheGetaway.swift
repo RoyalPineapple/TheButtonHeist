@@ -34,7 +34,9 @@ final class TheGetaway {
     // `RecordingRouteState`, `RecordingPhase`, `RecordingOutcome`, and their handlers live in
     // TheGetaway+Recording.swift.
     private(set) var recordingRouteState: RecordingRouteState = .idle
-    var hierarchyInvalidated = false
+    var tripwireParsePending = false
+    var commandParseInFlight = false
+    var settledTripwireParseInFlight = false
 
     /// Current transport — set by `wireTransport`, cleared on teardown.
     private(set) weak var transport: ServerTransport?
@@ -232,7 +234,9 @@ final class TheGetaway {
         eventConsumerTask = nil
         pendingRecordingTasks.cancelAll()
         transport = nil
-        hierarchyInvalidated = false
+        tripwireParsePending = false
+        commandParseInFlight = false
+        settledTripwireParseInFlight = false
         replaceRecordingRouteState(.idle)
     }
 
@@ -280,6 +284,7 @@ final class TheGetaway {
             brains.clearPendingRotorResult()
             let result = await brains.executeWaitForIdle(timeout: min(target.timeout ?? 5.0, 60.0))
             sendMessage(.actionResult(result), requestId: requestId, respond: respond)
+            noteCommandParseSatisfiedIfNeeded(result.accessibilityTrace)
             brains.recordSentState()
         case .waitForChange(let target):
             brains.clearPendingRotorResult()
@@ -287,6 +292,7 @@ final class TheGetaway {
                 timeout: target.resolvedTimeout, expectation: target.expect
             )
             sendMessage(.actionResult(result), requestId: requestId, respond: respond)
+            noteCommandParseSatisfiedIfNeeded(result.accessibilityTrace)
             brains.recordSentState()
 
         // Recording & interactions
@@ -309,7 +315,9 @@ final class TheGetaway {
                     return
                 }
 
-                let actionResult = await brains.executeCommand(message)
+                let actionResult = await withCommandParseInFlight {
+                    await brains.executeCommand(message)
+                }
                 await recordAndRespond(
                     command: message,
                     actionResult: actionResult,
@@ -319,6 +327,12 @@ final class TheGetaway {
                 )
             }
         }
+    }
+
+    private func withCommandParseInFlight<T>(_ operation: () async -> T) async -> T {
+        commandParseInFlight = true
+        defer { commandParseInFlight = false }
+        return await operation()
     }
 
     func staleTargetedActionFailure(for message: ClientMessage, backgroundTrace: AccessibilityTrace?) -> ActionResult? {
@@ -476,17 +490,27 @@ final class TheGetaway {
             accessibilityTrace: accessibilityTrace,
             respond: respond
         )
+        noteCommandParseSatisfiedIfNeeded(actionResult.accessibilityTrace ?? accessibilityTrace)
         brains.recordSentState()
+    }
+
+    private func noteCommandParseSatisfiedIfNeeded(_ accessibilityTrace: AccessibilityTrace?) {
+        guard accessibilityTrace != nil else { return }
+        tripwireParsePending = false
     }
 
     // MARK: - Settled Change Tracking
 
     func noteSettledChangeIfNeeded() async {
-        guard brains.interfaceChangedSinceLastSettledCheck() else {
-            hierarchyInvalidated = false
-            return
+        guard tripwireParsePending, !commandParseInFlight, !settledTripwireParseInFlight else { return }
+        tripwireParsePending = false
+        settledTripwireParseInFlight = true
+        defer {
+            settledTripwireParseInFlight = false
+            tripwireParsePending = false
         }
-        hierarchyInvalidated = false
+        let result = await brains.parseSettledTripwireChange()
+        guard result.changed else { return }
 
         if let stakeout {
             await stakeout.noteScreenChange()
@@ -506,6 +530,7 @@ final class TheGetaway {
                 requestId: requestId,
                 respond: respond
             )
+            tripwireParsePending = false
             brains.recordSentState()
         case .failure(let error):
             sendMessage(.error(ServerError(kind: .general, message: error.message)), requestId: requestId, respond: respond)
@@ -540,6 +565,7 @@ final class TheGetaway {
         )
 
         sendMessage(.screen(payload), requestId: requestId, respond: respond)
+        tripwireParsePending = false
         insideJobLogger.debug("Screen sent: \(pngData.count) bytes")
     }
 }

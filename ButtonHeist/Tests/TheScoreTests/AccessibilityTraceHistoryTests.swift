@@ -277,7 +277,7 @@ final class AccessibilityTraceHistoryTests: XCTestCase {
     }
 
     private func makeElement(
-        heistId: String,
+        heistId: HeistId,
         label: String,
         traits: [HeistTrait] = [.button]
     ) -> HeistElement {

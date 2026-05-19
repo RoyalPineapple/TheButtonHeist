@@ -1,5 +1,6 @@
 #if canImport(UIKit)
 #if DEBUG
+import CryptoKit
 import UIKit
 
 import TheScore
@@ -14,117 +15,132 @@ import AccessibilitySnapshotParser
 /// replaces the dozen mutable fields previously held on TheStash
 /// (`heistIdIndex`, `currentHierarchy`, `reverseIndex`, `knownIds`,
 /// `currentContainers`, `firstResponderHeistId`, `lastScreenName`, ...) with
-/// a single immutable value. The one-state invariant is: a `Screen` carries
-/// both targetable known elements and the latest visible capture.
-/// KnownInterface is targetable semantic state; InteractionSnapshot is the
-/// latest parse used for interaction.
+/// a single immutable value. The one-state invariant is: a `Screen` has two
+/// named parts: `knownInterface` is targetable semantic state, and
+/// `liveInterface` is the latest parse used for geometry, live object
+/// dispatch, scrolling, and wire-tree projection.
 ///
 /// Exploration accumulates a local `var union: Screen` in the caller; the
 /// final union is committed by writing it back into `stash.currentScreen`.
 /// TheStash never knows whether an exploration is in progress.
 ///
-/// `name` and `id` are derived from the hierarchy on demand — never stored
-/// — so they cannot drift from the underlying tree.
+/// `name` and `id` are derived from the live interface on demand — never
+/// stored — so they cannot drift from the underlying tree.
 struct Screen: Equatable {
 
     /// HeistId → element entry. This is targetable semantic state, including
     /// exploration results that are not currently on-screen.
-    let elements: [String: ScreenElement]
+    let elements: [HeistId: ScreenElement]
 
-    /// The latest parsed accessibility hierarchy. Used for scroll-target
-    /// discovery, wire tree construction, and interaction state.
-    let hierarchy: [AccessibilityHierarchy]
-
-    /// Stable id for every container reachable from `hierarchy`. Computed
-    /// once during parse so wire-tree construction and tree-edit detection
-    /// can ask for a container's identity without recomputing.
-    let containerStableIds: [AccessibilityContainer: String]
-
-    /// HeistId assigned to each `AccessibilityElement` in this parse. Allows
-    /// wire-tree construction to walk `hierarchy` and resolve each leaf to
-    /// its heistId without rebuilding the assignment.
-    let heistIdByElement: [AccessibilityElement: String]
-
-    /// HeistId of the element whose live object is currently first responder.
-    let firstResponderHeistId: String?
-
-    /// Maps scrollable containers from the hierarchy to their backing UIView.
-    /// Stored as `ScrollableViewRef` so `Screen` can be `Equatable` — UIView
-    /// itself isn't — while keeping the live reference available for scroll
-    /// dispatch.
-    let scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
+    /// Latest parse used for geometry, live object dispatch, scrolling, and
+    /// wire-tree projection. Viewport-shaped details stay behind this name;
+    /// trace history is gated by `semanticHash`, not by snapshot geometry.
+    let liveInterface: LiveInterface
 
     static var empty: Screen {
         Screen(
             elements: [:],
-            hierarchy: [],
-            containerStableIds: [:],
-            heistIdByElement: [:],
-            firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
+            liveInterface: .empty
         )
     }
 
     // MARK: - Init
 
     /// Convenience init for tests and call sites that don't have container /
-    /// element index data — defaults the new indices to empty maps.
+    /// element index data — defaults the live indices to empty maps.
     init(
-        elements: [String: ScreenElement],
+        elements: [HeistId: ScreenElement],
         hierarchy: [AccessibilityHierarchy],
-        firstResponderHeistId: String?,
+        elementRefs: [HeistId: LiveInterface.ElementRef] = [:],
+        firstResponderHeistId: HeistId?,
         scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
     ) {
         self.init(
             elements: elements,
-            hierarchy: hierarchy,
-            containerStableIds: [:],
-            heistIdByElement: [:],
-            firstResponderHeistId: firstResponderHeistId,
-            scrollableContainerViews: scrollableContainerViews
+            liveInterface: LiveInterface(
+                hierarchy: hierarchy,
+                containerStableIds: [:],
+                heistIdByElement: [:],
+                elementRefs: elementRefs,
+                firstResponderHeistId: firstResponderHeistId,
+                scrollableContainerViews: scrollableContainerViews
+            )
         )
     }
 
     /// Memberwise init. Explicit so the convenience overload above can call it.
     init(
-        elements: [String: ScreenElement],
+        elements: [HeistId: ScreenElement],
         hierarchy: [AccessibilityHierarchy],
-        containerStableIds: [AccessibilityContainer: String],
-        heistIdByElement: [AccessibilityElement: String],
-        firstResponderHeistId: String?,
+        containerStableIds: [AccessibilityContainer: HeistContainer],
+        heistIdByElement: [AccessibilityElement: HeistId],
+        elementRefs: [HeistId: LiveInterface.ElementRef] = [:],
+        firstResponderHeistId: HeistId?,
         scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
     ) {
+        self.init(
+            elements: elements,
+            liveInterface: LiveInterface(
+                hierarchy: hierarchy,
+                containerStableIds: containerStableIds,
+                heistIdByElement: heistIdByElement,
+                elementRefs: elementRefs,
+                firstResponderHeistId: firstResponderHeistId,
+                scrollableContainerViews: scrollableContainerViews,
+                scrollableViewsByStableId: Self.scrollableViewsByStableId(
+                    containerStableIds: containerStableIds,
+                    scrollableContainerViews: scrollableContainerViews
+                )
+            )
+        )
+    }
+
+    init(
+        elements: [HeistId: ScreenElement],
+        liveInterface: LiveInterface
+    ) {
         self.elements = elements
-        self.hierarchy = hierarchy
-        self.containerStableIds = containerStableIds
-        self.heistIdByElement = heistIdByElement
-        self.firstResponderHeistId = firstResponderHeistId
-        self.scrollableContainerViews = scrollableContainerViews
+        self.liveInterface = liveInterface
+    }
+
+    private static func scrollableViewsByStableId(
+        containerStableIds: [AccessibilityContainer: HeistContainer],
+        scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
+    ) -> [HeistContainer: ScrollableViewRef] {
+        Dictionary(
+            uniqueKeysWithValues: scrollableContainerViews.compactMap { container, ref in
+                guard let stableId = containerStableIds[container] else { return nil }
+                return (stableId, ref)
+            }
+        )
     }
 
     // MARK: - Element Entry
 
     // An element entry for the current screen. Holds the parsed
-    // `AccessibilityElement`, the assigned heistId, the content-space origin
-    // for scroll-target maths, and weak references to the live UIKit objects.
+    // `AccessibilityElement`, the assigned heistId, and the content-space
+    // origin for scroll-target maths.
     //
-    // `@unchecked Sendable` rationale: holds `weak NSObject` / `weak UIScrollView`
-    // refs. The type lives behind `@MainActor` (TheStash) at every runtime
-    // touchpoint, so weak refs are only observed on the main actor. Equatable
-    // compares heistId + parsed element + origin only; weak object identity is
-    // intentionally excluded.
+    // `@unchecked Sendable` rationale: contains `AccessibilityElement`, whose
+    // parser model is used only behind the main-actor stash at runtime.
     // swiftlint:disable:next agent_unchecked_sendable_no_comment
     struct ScreenElement: @unchecked Sendable, Equatable {
-        let heistId: String
+        let heistId: HeistId
         /// Content-space position within nearest scrollable container.
         /// nil if not inside a scrollable.
         let contentSpaceOrigin: CGPoint?
         /// Parsed accessibility element (refreshed on every parse).
         let element: AccessibilityElement
-        /// Live UIKit object for action dispatch. Weak — nils on cell reuse.
-        weak var object: NSObject?
-        /// Parent scroll view for coordinate conversion. Weak — outlives children.
-        weak var scrollView: UIScrollView?
+
+        init(
+            heistId: HeistId,
+            contentSpaceOrigin: CGPoint?,
+            element: AccessibilityElement
+        ) {
+            self.heistId = heistId
+            self.contentSpaceOrigin = contentSpaceOrigin
+            self.element = element
+        }
 
         static func == (lhs: ScreenElement, rhs: ScreenElement) -> Bool {
             lhs.heistId == rhs.heistId
@@ -156,37 +172,117 @@ struct Screen: Equatable {
 
     /// Targetable semantic state retained across exploration.
     struct KnownInterface: Equatable {
-        let elements: [String: ScreenElement]
+        let elements: [HeistId: ScreenElement]
 
-        var heistIds: Set<String> {
+        var heistIds: Set<HeistId> {
             Set(elements.keys)
         }
 
-        func findElement(heistId: String) -> ScreenElement? {
+        func findElement(heistId: HeistId) -> ScreenElement? {
             elements[heistId]
         }
     }
 
-    /// Latest parse used for geometry, live object dispatch, scrolling, and
-    /// wire-tree construction.
-    struct InteractionSnapshot: Equatable {
-        let hierarchy: [AccessibilityHierarchy]
-        let containerStableIds: [AccessibilityContainer: String]
-        let heistIdByElement: [AccessibilityElement: String]
-        let firstResponderHeistId: String?
-        let scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
+    /// Latest inflated parse used for geometry, live object dispatch,
+    /// scrolling, and wire-tree construction. This is viewport-shaped: known
+    /// off-screen elements are retained in `KnownInterface`, but their live
+    /// UIKit refs are intentionally absent until a new parse inflates them.
+    struct LiveInterface: Equatable {
+        // `@unchecked Sendable` rationale: weak UIKit refs are only observed
+        // behind TheStash on the main actor.
+        // swiftlint:disable:next agent_unchecked_sendable_no_comment
+        struct ElementRef: @unchecked Sendable, Equatable {
+            /// Live UIKit object for action dispatch. Weak — nils on reuse.
+            weak var object: NSObject?
+            /// Nearest live scroll view for coordinate conversion.
+            weak var scrollView: UIScrollView?
 
-        var heistIds: Set<String> {
+            static func == (lhs: ElementRef, rhs: ElementRef) -> Bool {
+                lhs.object === rhs.object && lhs.scrollView === rhs.scrollView
+            }
+        }
+
+        let hierarchy: [AccessibilityHierarchy]
+        let containerStableIds: [AccessibilityContainer: HeistContainer]
+        let heistIdByElement: [AccessibilityElement: HeistId]
+        let elementRefs: [HeistId: ElementRef]
+        let firstResponderHeistId: HeistId?
+        let scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
+        private let scrollableViewsByStableId: [HeistContainer: ScrollableViewRef]
+
+        init(
+            hierarchy: [AccessibilityHierarchy],
+            containerStableIds: [AccessibilityContainer: HeistContainer],
+            heistIdByElement: [AccessibilityElement: HeistId],
+            elementRefs: [HeistId: ElementRef],
+            firstResponderHeistId: HeistId?,
+            scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef],
+            scrollableViewsByStableId: [HeistContainer: ScrollableViewRef] = [:]
+        ) {
+            self.hierarchy = hierarchy
+            self.containerStableIds = containerStableIds
+            self.heistIdByElement = heistIdByElement
+            self.elementRefs = elementRefs
+            self.firstResponderHeistId = firstResponderHeistId
+            self.scrollableContainerViews = scrollableContainerViews
+            self.scrollableViewsByStableId = scrollableViewsByStableId
+        }
+
+        static let empty = LiveInterface(
+            hierarchy: [],
+            containerStableIds: [:],
+            heistIdByElement: [:],
+            elementRefs: [:],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
+
+        var heistIds: Set<HeistId> {
             Set(heistIdByElement.values)
         }
 
-        func contains(heistId: String) -> Bool {
+        func contains(heistId: HeistId) -> Bool {
             heistIdByElement.values.contains(heistId)
         }
 
-        func heistId(for element: AccessibilityElement) -> String? {
+        func heistId(for element: AccessibilityElement) -> HeistId? {
             heistIdByElement[element]
         }
+
+        func object(for heistId: HeistId) -> NSObject? {
+            elementRefs[heistId]?.object
+        }
+
+        func scrollView(for heistId: HeistId) -> UIScrollView? {
+            elementRefs[heistId]?.scrollView
+        }
+
+        func scrollView(forContainer stableId: HeistContainer) -> UIScrollView? {
+            scrollableViewsByStableId[stableId]?.view as? UIScrollView
+        }
+
+        func scrollView(for element: ScreenElement) -> UIScrollView? {
+            scrollView(for: element.heistId)
+        }
+    }
+
+    private struct SemanticElementFingerprint: Codable, Hashable {
+        let heistId: HeistId
+        let description: String
+        let label: String?
+        let value: String?
+        let identifier: String?
+        let hint: String?
+        let traits: [String]
+        let respondsToUserInteraction: Bool
+        let customContent: [SemanticCustomContentFingerprint]
+        let rotors: [String]
+    }
+
+    private struct SemanticCustomContentFingerprint: Codable, Hashable {
+        let label: String
+        let value: String
+        let isImportant: Bool
     }
 
     // MARK: - Derived Properties
@@ -195,21 +291,11 @@ struct Screen: Equatable {
         KnownInterface(elements: elements)
     }
 
-    var interactionSnapshot: InteractionSnapshot {
-        InteractionSnapshot(
-            hierarchy: hierarchy,
-            containerStableIds: containerStableIds,
-            heistIdByElement: heistIdByElement,
-            firstResponderHeistId: firstResponderHeistId,
-            scrollableContainerViews: scrollableContainerViews
-        )
-    }
-
-    /// Derive the screen name from the first header element in traversal
-    /// order. Not stored — recomputed on access so it cannot drift from
-    /// `hierarchy`.
+    /// Derive the screen name from the first header element in latest live
+    /// traversal order. Not stored — recomputed on access so it cannot drift
+    /// from the parser tree.
     var name: String? {
-        hierarchy.sortedElements.first {
+        liveInterface.hierarchy.sortedElements.first {
             $0.traits.contains(.header) && $0.label != nil
         }?.label
     }
@@ -220,34 +306,44 @@ struct Screen: Equatable {
     }
 
     /// The heistId set of every element in the committed semantic screen.
-    var knownIds: Set<String> {
+    var knownIds: Set<HeistId> {
         knownInterface.heistIds
     }
 
     /// The heistId set backed by the latest parsed live hierarchy.
-    var visibleIds: Set<String> {
-        interactionSnapshot.heistIds
+    var visibleIds: Set<HeistId> {
+        liveInterface.heistIds
+    }
+
+    /// Hash of the known semantic accessibility state. Deliberately excludes
+    /// viewport-only facts like frame, activation point, visible ids, and
+    /// scroll offset so a user can scroll a stable screen without producing
+    /// history events.
+    var semanticHash: String {
+        let fingerprints = elements.values
+            .map(Self.semanticElementFingerprint)
+            .sorted { $0.heistId < $1.heistId }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let data = (try? encoder.encode(fingerprints)) ?? Data()
+        return "sha256:" + SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
     // MARK: - Lookup
 
     /// O(1) heistId lookup.
-    func findElement(heistId: String) -> ScreenElement? {
+    func findElement(heistId: HeistId) -> ScreenElement? {
         knownInterface.findElement(heistId: heistId)
     }
 
     /// A pure view of this screen restricted to ids present in the latest live
-    /// hierarchy. This keeps the same InteractionSnapshot and drops known-only
+    /// hierarchy. This keeps the same live interface and drops known-only
     /// semantic entries retained from exploration.
     var visibleOnly: Screen {
-        let visibleIds = interactionSnapshot.heistIds
+        let visibleIds = liveInterface.heistIds
         return Screen(
             elements: elements.filter { visibleIds.contains($0.key) },
-            hierarchy: hierarchy,
-            containerStableIds: containerStableIds,
-            heistIdByElement: heistIdByElement,
-            firstResponderHeistId: firstResponderHeistId,
-            scrollableContainerViews: scrollableContainerViews
+            liveInterface: liveInterface
         )
     }
 
@@ -257,8 +353,8 @@ struct Screen: Equatable {
         var seen = Set<String>()
         var ordered: [ScreenElement] = []
         ordered.reserveCapacity(elements.count)
-        for (element, _) in hierarchy.elements {
-            guard let heistId = heistIdByElement[element],
+        for (element, _) in liveInterface.hierarchy.elements {
+            guard let heistId = liveInterface.heistIdByElement[element],
                   let entry = elements[heistId],
                   seen.insert(heistId).inserted else { continue }
             ordered.append(entry)
@@ -269,6 +365,31 @@ struct Screen: Equatable {
             .sorted { $0.heistId < $1.heistId }
         ordered.append(contentsOf: remaining)
         return ordered
+    }
+
+    private static func semanticElementFingerprint(_ entry: ScreenElement) -> SemanticElementFingerprint {
+        let element = entry.element
+        let customContent = element.customContent
+            .filter { !$0.label.isEmpty || !$0.value.isEmpty }
+            .map {
+                SemanticCustomContentFingerprint(
+                    label: $0.label,
+                    value: $0.value,
+                    isImportant: $0.isImportant
+                )
+            }
+        return SemanticElementFingerprint(
+            heistId: entry.heistId,
+            description: element.description,
+            label: element.label,
+            value: element.value,
+            identifier: element.identifier,
+            hint: element.hint,
+            traits: element.traits.namesIncludingUnknownBits,
+            respondsToUserInteraction: element.respondsToUserInteraction,
+            customContent: customContent,
+            rotors: element.customRotors.map(\.name).filter { !$0.isEmpty }
+        )
     }
 
     // MARK: - Merge
@@ -282,25 +403,21 @@ struct Screen: Equatable {
     /// to preserve a previously-recorded `contentSpaceOrigin`. The most recent
     /// observation is the source of truth.
     ///
-    /// `hierarchy`, `firstResponderHeistId`, container indices, and live-view
-    /// refs all take `other`'s. `hierarchy` is the live snapshot, not a
-    /// unionable tree — accumulating it across scrolled pages would mix stale
-    /// geometry with live geometry. Code that needs the "all elements ever
-    /// seen on this screen" view reads `elements`, not `hierarchy`.
+    /// `liveInterface` takes `other`'s. It is the latest inflated parse, not
+    /// a unionable tree — accumulating it across scrolled pages would keep
+    /// stale UIKit refs and geometry alive. Code that needs the "all elements
+    /// ever seen on this screen" view reads `knownInterface`, not the live
+    /// interface.
     func merging(_ other: Screen) -> Screen {
         let mergedElements = elements.merging(other.elements) { _, new in new }
         return Screen(
             elements: mergedElements,
-            hierarchy: other.hierarchy,
-            containerStableIds: other.containerStableIds,
-            heistIdByElement: other.heistIdByElement,
-            firstResponderHeistId: other.firstResponderHeistId,
-            scrollableContainerViews: other.scrollableContainerViews
+            liveInterface: other.liveInterface
         )
     }
 
     /// Apply a fresh visible parse. If the visible ids are already known, keep
-    /// explored offscreen memory and replace only the live interaction snapshot.
+    /// explored offscreen memory and replace only the live interface.
     /// Previously visible non-scroll elements that disappear are dropped; empty
     /// or unknown refreshes replace the screen.
     func refreshingVisibleState(with visibleRefresh: Screen) -> Screen {
@@ -318,11 +435,7 @@ struct Screen: Equatable {
         let refreshed = merging(visibleRefresh)
         return Screen(
             elements: refreshed.elements.filter { !staleVisibleIds.contains($0.key) },
-            hierarchy: refreshed.hierarchy,
-            containerStableIds: refreshed.containerStableIds,
-            heistIdByElement: refreshed.heistIdByElement,
-            firstResponderHeistId: refreshed.firstResponderHeistId,
-            scrollableContainerViews: refreshed.scrollableContainerViews
+            liveInterface: refreshed.liveInterface
         )
     }
 }

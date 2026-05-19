@@ -739,7 +739,7 @@ final class ServerMessageTests: XCTestCase {
 
     private func interfaceWithHeader(
         _ label: String,
-        heistId: String,
+        heistId: HeistId,
         timestamp: TimeInterval = 0
     ) -> Interface {
         makeTestInterface(

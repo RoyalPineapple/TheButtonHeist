@@ -45,12 +45,12 @@ final class TheStashResolutionTests: XCTestCase {
     /// Accumulated live hierarchy nodes for visible-scoped lookups.
     private var hierarchyNodes: [AccessibilityHierarchy] = []
     /// Accumulated elements (in registration order).
-    private var registeredEntries: [(element: AccessibilityElement, heistId: String, isLive: Bool)] = []
+    private var registeredEntries: [(element: AccessibilityElement, heistId: HeistId, isLive: Bool)] = []
 
     /// Register an element into the current Screen. Rebuilds the screen value
     /// on every call so individual tests don't have to think about the
     /// memberwise init. `Screen.heistIdByElement` is the matcher path lookup.
-    private func register(_ element: AccessibilityElement, heistId: String, index: Int) {
+    private func register(_ element: AccessibilityElement, heistId: HeistId, index: Int) {
         hierarchyNodes.append(.element(element, traversalIndex: index))
         registeredEntries.append((element, heistId, true))
         rebuildScreen()
@@ -60,21 +60,19 @@ final class TheStashResolutionTests: XCTestCase {
     /// without putting it in the live hierarchy. Known entries return nil from
     /// visible-scoped accessors but still participate in semantic target
     /// resolution.
-    private func registerOffScreen(_ element: AccessibilityElement, heistId: String) {
+    private func registerOffScreen(_ element: AccessibilityElement, heistId: HeistId) {
         registeredEntries.append((element, heistId, false))
         rebuildScreen()
     }
 
     private func rebuildScreen() {
-        var elements: [String: Screen.ScreenElement] = [:]
-        var heistIdByElement: [AccessibilityElement: String] = [:]
+        var elements: [HeistId: Screen.ScreenElement] = [:]
+        var heistIdByElement: [AccessibilityElement: HeistId] = [:]
         for entry in registeredEntries {
             let screenElement = Screen.ScreenElement(
                 heistId: entry.heistId,
                 contentSpaceOrigin: nil,
-                element: entry.element,
-                object: nil,
-                scrollView: nil
+                element: entry.element
             )
             elements[entry.heistId] = screenElement
             if entry.isLive {
@@ -534,9 +532,7 @@ final class TheStashResolutionTests: XCTestCase {
         let entry = Screen.ScreenElement(
             heistId: "below_fold_button",
             contentSpaceOrigin: CGPoint(x: 0, y: 2_000),
-            element: offScreen,
-            object: object,
-            scrollView: scrollView
+            element: offScreen
         )
 
         bagman.currentScreen = Screen(
@@ -562,6 +558,9 @@ final class TheStashResolutionTests: XCTestCase {
             hierarchy: [.element(offScreen, traversalIndex: 0)],
             containerStableIds: [:],
             heistIdByElement: [offScreen: entry.heistId],
+            elementRefs: [
+                entry.heistId: .init(object: object, scrollView: scrollView)
+            ],
             firstResponderHeistId: nil,
             scrollableContainerViews: [:]
         )

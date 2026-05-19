@@ -28,6 +28,11 @@ public func theInsideJobAutoStartFromLoad() {
     autoStartLogger.info("========== AUTO-START BEGIN ==========")
     autoStartLogger.info("Bundle ID: \(Bundle.main.bundleIdentifier ?? "unknown")")
 
+    if isRunningUnderXCTest() {
+        autoStartLogger.info("Auto-start disabled under XCTest")
+        return
+    }
+
     let configuration = StartupConfiguration.resolve()
     for warning in configuration.warnings {
         autoStartLogger.warning("\(warning.message, privacy: .public)")
@@ -52,6 +57,11 @@ public func theInsideJobAutoStartFromLoad() {
         }
     }
     autoStartTask.withLock { $0 = task }
+}
+
+func isRunningUnderXCTest(environment: [String: String] = ProcessInfo.processInfo.environment) -> Bool {
+    environment["XCTestConfigurationFilePath"] != nil
+        || environment["XCTestSessionIdentifier"] != nil
 }
 
 #endif // DEBUG

@@ -73,7 +73,7 @@ final class WireConverterTests: XCTestCase {
     }
 
     private func makeScreenElement(
-        heistId: String,
+        heistId: HeistId,
         label: String? = nil,
         value: String? = nil,
         identifier: String? = nil,
@@ -87,8 +87,7 @@ final class WireConverterTests: XCTestCase {
         activationPointY: Double = 0,
         customContent: [AccessibilityElement.CustomContent] = [],
         customRotors: [AccessibilityElement.CustomRotor] = [],
-        respondsToUserInteraction: Bool = true,
-        object: NSObject? = nil
+        respondsToUserInteraction: Bool = true
     ) -> Screen.ScreenElement {
         Screen.ScreenElement(
             heistId: heistId,
@@ -101,9 +100,7 @@ final class WireConverterTests: XCTestCase {
                 customContent: customContent,
                 customRotors: customRotors,
                 respondsToUserInteraction: respondsToUserInteraction
-            ),
-            object: object,
-            scrollView: nil
+            )
         )
     }
 
@@ -119,7 +116,7 @@ final class WireConverterTests: XCTestCase {
 
     /// Build a test tree container node with a fixed stableId.
     private func wireContainer(
-        stableId: String,
+        stableId: HeistContainer,
         type: AccessibilityContainer.ContainerType = .list,
         frame: CGRect = .zero,
         children: [TestInterfaceNode]
@@ -153,7 +150,7 @@ final class WireConverterTests: XCTestCase {
                 let index = traversalIndex
                 traversalIndex += 1
                 elementAnnotations.append(InterfaceElementAnnotation(
-                    traversalIndex: index,
+                    path: path,
                     heistId: element.heistId,
                     actions: WireConversion.toWire(element).actions
                 ))
@@ -331,11 +328,10 @@ final class WireConverterTests: XCTestCase {
         let element = makeScreenElement(
             heistId: "plain_action",
             label: "Plain action",
-            respondsToUserInteraction: false,
-            object: object
+            respondsToUserInteraction: false
         )
 
-        let wire = WireConversion.toWire(element)
+        let wire = WireConversion.convert(element.element, heistId: element.heistId, object: object)
 
         XCTAssertEqual(wire.actions, [.activate])
     }
@@ -345,11 +341,10 @@ final class WireConverterTests: XCTestCase {
         let element = makeScreenElement(
             heistId: "plain_label",
             label: "Plain label",
-            respondsToUserInteraction: false,
-            object: object
+            respondsToUserInteraction: false
         )
 
-        let wire = WireConversion.toWire(element)
+        let wire = WireConversion.convert(element.element, heistId: element.heistId, object: object)
 
         XCTAssertEqual(wire.actions, [])
     }

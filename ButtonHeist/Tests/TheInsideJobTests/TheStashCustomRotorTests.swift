@@ -330,17 +330,11 @@ final class TheStashRotorTests: XCTestCase {
                 identifier: cachedHeistId,
                 traits: .button,
                 frame: CGRect(x: 20, y: 120, width: 280, height: 44)
-            ),
-            object: cachedResult,
-            scrollView: nil
+            )
         )
         brains.stash.currentScreen = Screen(
             elements: elements,
-            hierarchy: screen.hierarchy,
-            containerStableIds: screen.containerStableIds,
-            heistIdByElement: screen.heistIdByElement,
-            firstResponderHeistId: screen.firstResponderHeistId,
-            scrollableContainerViews: screen.scrollableContainerViews
+            liveInterface: screen.liveInterface
         )
 
         let search = await brains.actions.executeRotor(
@@ -591,13 +585,22 @@ final class TheStashRotorTests: XCTestCase {
         let screenElement = Screen.ScreenElement(
             heistId: "rotor_host",
             contentSpaceOrigin: nil,
-            element: element,
-            object: host,
-            scrollView: nil
+            element: element
         )
         host.accessibilityCustomRotors = [
             UIAccessibilityCustomRotor(name: "Warnings") { _ in nil }
         ]
+        stash.currentScreen = Screen(
+            elements: [screenElement.heistId: screenElement],
+            hierarchy: [.element(element, traversalIndex: 0)],
+            containerStableIds: [:],
+            heistIdByElement: [element: screenElement.heistId],
+            elementRefs: [
+                screenElement.heistId: .init(object: host, scrollView: nil)
+            ],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
 
         let outcome = stash.performRotor(
             RotorTarget(

@@ -117,7 +117,7 @@ flowchart TD
 | Store | Lives on | Lifetime | Purpose |
 |-------|----------|----------|---------|
 | `lastSwipeDirectionByTarget` | Navigation | Across swipes | Last direction per swipeable target key (drives direction-change settle profile) |
-| `lastSentState` | TheBrains | Between responses | Snapshot (semantic treeHash, viewportHash, beforeState, screenId) of the last reply sent to the driver, used by `computeBackgroundAccessibilityTrace` and the wait-for-change fast path |
+| `lastSentState` | TheBrains | Between responses | Captured semantic state from the last reply sent to the driver; interface hash, capture hash, and screen id are derived from the capture, while viewport movement stays internal to interaction |
 
 ## Ownership Model
 

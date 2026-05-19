@@ -329,21 +329,25 @@ final class TheBurglar {
             base: baseHeistIds, elements: elements, contexts: contexts
         )
 
-        var screenElements: [String: Screen.ScreenElement] = [:]
+        var screenElements: [HeistId: Screen.ScreenElement] = [:]
         screenElements.reserveCapacity(elements.count)
-        var heistIdByElement: [AccessibilityElement: String] = [:]
+        var heistIdByElement: [AccessibilityElement: HeistId] = [:]
         heistIdByElement.reserveCapacity(elements.count)
+        var elementRefs: [HeistId: Screen.LiveInterface.ElementRef] = [:]
+        elementRefs.reserveCapacity(elements.count)
         for (parsedElement, heistId) in zip(elements, resolvedHeistIds) {
             let context = contexts[parsedElement]
             let entry = Screen.ScreenElement(
                 heistId: heistId,
                 contentSpaceOrigin: context?.contentSpaceOrigin,
-                element: parsedElement,
-                object: context?.object,
-                scrollView: context?.scrollView
+                element: parsedElement
             )
             screenElements[heistId] = entry
             heistIdByElement[parsedElement] = heistId
+            elementRefs[heistId] = Screen.LiveInterface.ElementRef(
+                object: context?.object,
+                scrollView: context?.scrollView
+            )
         }
 
         let firstResponders = zip(elements, resolvedHeistIds).filter { element, _ in
@@ -364,12 +368,12 @@ final class TheBurglar {
                 (container, Screen.ScrollableViewRef(view: view))
             }
         )
-
         return Screen(
             elements: screenElements,
             hierarchy: result.hierarchy,
             containerStableIds: containerStableIds,
             heistIdByElement: heistIdByElement,
+            elementRefs: elementRefs,
             firstResponderHeistId: firstResponders.first?.1,
             scrollableContainerViews: scrollableViewRefs
         )
@@ -417,7 +421,7 @@ final class TheBurglar {
         return resolved
     }
 
-    static func contentPositionHeistId(_ baseHeistId: String, origin: CGPoint) -> String {
+    static func contentPositionHeistId(_ baseHeistId: HeistId, origin: CGPoint) -> HeistId {
         "\(baseHeistId)_at_\(safeInt(origin.x.rounded()))_\(safeInt(origin.y.rounded()))"
     }
 

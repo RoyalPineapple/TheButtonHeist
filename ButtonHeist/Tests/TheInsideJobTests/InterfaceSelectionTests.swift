@@ -107,7 +107,7 @@ final class InterfaceSelectorTests: XCTestCase {
 
     private enum TestInterfaceNode {
         case element(HeistElement)
-        case container(AccessibilityContainer, stableId: String, children: [TestInterfaceNode])
+        case container(AccessibilityContainer, stableId: HeistContainer, children: [TestInterfaceNode])
     }
 
     private static func makeInterface(nodes: [TestInterfaceNode]) -> Interface {
@@ -121,7 +121,7 @@ final class InterfaceSelectorTests: XCTestCase {
                 let index = traversalIndex
                 traversalIndex += 1
                 elementAnnotations.append(InterfaceElementAnnotation(
-                    traversalIndex: index,
+                    path: path,
                     heistId: element.heistId,
                     actions: element.actions
                 ))
@@ -173,7 +173,7 @@ final class InterfaceSelectorTests: XCTestCase {
     }
 
     private static func makeElement(
-        _ heistId: String,
+        _ heistId: HeistId,
         label: String,
         identifier: String? = nil,
         traits: [HeistTrait] = []

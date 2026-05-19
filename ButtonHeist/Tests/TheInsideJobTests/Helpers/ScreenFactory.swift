@@ -3,6 +3,7 @@
 import UIKit
 @testable import AccessibilitySnapshotParser
 @testable import TheInsideJob
+@testable import TheScore
 
 /// Test-only `Screen` factory.
 ///
@@ -19,10 +20,10 @@ extension Screen {
     /// simulate known semantic state without a real scrollable container.
     struct OffViewportEntry {
         let element: AccessibilityElement
-        let heistId: String
+        let heistId: HeistId
         let contentSpaceOrigin: CGPoint?
 
-        init(_ element: AccessibilityElement, heistId: String, contentSpaceOrigin: CGPoint? = nil) {
+        init(_ element: AccessibilityElement, heistId: HeistId, contentSpaceOrigin: CGPoint? = nil) {
             self.element = element
             self.heistId = heistId
             self.contentSpaceOrigin = contentSpaceOrigin
@@ -33,19 +34,22 @@ extension Screen {
     /// hierarchy is constructed from the live pairs in order; known-only
     /// entries are added to `elements` but not to `hierarchy`.
     static func makeForTests(
-        elements liveElements: [(element: AccessibilityElement, heistId: String)] = [],
-        objects: [String: NSObject?] = [:],
+        elements liveElements: [(element: AccessibilityElement, heistId: HeistId)] = [],
+        objects: [HeistId: NSObject?] = [:],
         offViewport: [OffViewportEntry] = [],
-        firstResponderHeistId: String? = nil
+        firstResponderHeistId: HeistId? = nil
     ) -> Screen {
-        var screenElements: [String: ScreenElement] = [:]
+        var screenElements: [HeistId: ScreenElement] = [:]
         var hierarchy: [AccessibilityHierarchy] = []
-        var heistIdByElement: [AccessibilityElement: String] = [:]
+        var heistIdByElement: [AccessibilityElement: HeistId] = [:]
+        var elementRefs: [HeistId: LiveInterface.ElementRef] = [:]
         for (index, pair) in liveElements.enumerated() {
             screenElements[pair.heistId] = ScreenElement(
                 heistId: pair.heistId,
                 contentSpaceOrigin: nil,
-                element: pair.element,
+                element: pair.element
+            )
+            elementRefs[pair.heistId] = LiveInterface.ElementRef(
                 object: objects[pair.heistId] ?? nil,
                 scrollView: nil
             )
@@ -56,9 +60,7 @@ extension Screen {
             screenElements[entry.heistId] = ScreenElement(
                 heistId: entry.heistId,
                 contentSpaceOrigin: entry.contentSpaceOrigin,
-                element: entry.element,
-                object: nil,
-                scrollView: nil
+                element: entry.element
             )
         }
         return Screen(
@@ -66,6 +68,7 @@ extension Screen {
             hierarchy: hierarchy,
             containerStableIds: [:],
             heistIdByElement: heistIdByElement,
+            elementRefs: elementRefs,
             firstResponderHeistId: firstResponderHeistId,
             scrollableContainerViews: [:]
         )

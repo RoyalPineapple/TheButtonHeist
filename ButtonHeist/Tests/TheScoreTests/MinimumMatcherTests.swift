@@ -207,7 +207,7 @@ final class MinimumMatcherTests: XCTestCase {
     }
 
     private func makeElement(
-        heistId: String,
+        heistId: HeistId,
         label: String? = nil,
         identifier: String? = nil,
         value: String? = nil,

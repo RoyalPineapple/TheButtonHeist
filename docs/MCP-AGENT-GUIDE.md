@@ -24,6 +24,14 @@ For `wait_for_change`, `element_disappeared` means the element is absent from th
 
 **Composing**: `run_batch` for multi-step sequences in a single call. Attach `expect` to each step for inline verification.
 
+## Trace Semantics
+
+Screen changes create full baselines. Same-screen changes are patches on top of the current baseline.
+
+Actions can refresh off-screen state by exploring scroll views before or after the interaction, but that exploration is not a screen boundary by itself. It only broadens Button Heist's current-screen knowledge. If the app stays on the same screen, the action result is still an elements-changed patch; if Button Heist detects a real screen change, the trace starts a new full baseline.
+
+`get_interface` returns app state. A default call may refresh discoverable off-screen content so the returned hierarchy is current. Passing `subtree` scopes that projection to the part of the hierarchy you asked for. `get_screen` is diagnostic: it returns pixels plus fresh visible geometry for the current viewport, not a replacement for the app-state hierarchy.
+
 ## Local MCP Development
 
 Use this workflow when testing a worktree-local `ButtonHeistMCP` change through an MCP host.

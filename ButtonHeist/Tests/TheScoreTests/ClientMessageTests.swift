@@ -485,7 +485,7 @@ final class ClientMessageTests: XCTestCase {
 
 extension HeistElement {
     static func stub(
-        heistId: String = "test",
+        heistId: HeistId = "test",
         label: String? = nil,
         traits: [HeistTrait] = []
     ) -> HeistElement {

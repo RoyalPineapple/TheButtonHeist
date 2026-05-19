@@ -1035,7 +1035,7 @@ public final class TheFence {
         _ expectation: ActionExpectation,
         initialResult: ActionResult,
         initialValidation: ExpectationResult,
-        preActionElements: [String: HeistElement],
+        preActionElements: [HeistId: HeistElement],
         timeout: Double?,
         backgroundStartIndex: Int
     ) async throws -> ValidatedResponse {

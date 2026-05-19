@@ -424,7 +424,7 @@ final class HeistPlaybackTests: XCTestCase {
         }
     }
 
-    private func makeElement(heistId: String, label: String) -> HeistElement {
+    private func makeElement(heistId: HeistId, label: String) -> HeistElement {
         HeistElement(
             heistId: heistId,
             description: label,

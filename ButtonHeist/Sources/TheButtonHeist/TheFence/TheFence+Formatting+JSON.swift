@@ -484,7 +484,7 @@ extension FenceResponse {
 
     private func interfaceTreeDictionaries(_ interface: Interface, detail: InterfaceDetail) -> [[String: Any]] {
         let counter = IndexCounter()
-        let elementAnnotations = interface.annotations.elementByTraversalIndex
+        let elementAnnotations = interface.annotations.elementByPath
         let containerAnnotations = interface.annotations.containerByPath
         return interface.tree.enumerated().map { index, node in
             nodeDictionary(
@@ -512,14 +512,14 @@ extension FenceResponse {
         path: TreePath,
         detail: InterfaceDetail,
         counter: IndexCounter?,
-        elementAnnotations: [Int: InterfaceElementAnnotation],
+        elementAnnotations: [TreePath: InterfaceElementAnnotation],
         containerAnnotations: [TreePath: InterfaceContainerAnnotation]
     ) -> [String: Any] {
         switch node {
-        case .element(let element, let traversalIndex):
+        case .element(let element, _):
             let projected = HeistElement(
                 accessibilityElement: element,
-                annotation: elementAnnotations[traversalIndex]
+                annotation: elementAnnotations[path]
             )
             var payload = elementDictionary(projected, detail: detail)
             if let counter {
@@ -635,7 +635,7 @@ extension FenceResponse {
             path: .root,
             detail: .summary,
             counter: nil,
-            elementAnnotations: insertion.annotations.elementByTraversalIndex,
+            elementAnnotations: insertion.annotations.elementByPath,
             containerAnnotations: insertion.annotations.containerByPath
         )
     }
