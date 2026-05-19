@@ -107,14 +107,21 @@ public extension AccessibilityTrace {
             }
         }
 
+        /// Shared transition classifier used by compact action deltas and
+        /// screen-history segmentation. The raw string remains a wire detail;
+        /// product code should switch over this typed value.
+        public var kind: DeltaKind {
+            switch self {
+            case .noChange: return .noChange
+            case .elementsChanged: return .elementsChanged
+            case .screenChanged: return .screenChanged
+            }
+        }
+
         /// String form of the discriminator. Used by `BatchStepSummary` and
         /// other consumers that need to log the kind without switching.
         public var kindRawValue: String {
-            switch self {
-            case .noChange: return DeltaKind.noChange.rawValue
-            case .elementsChanged: return DeltaKind.elementsChanged.rawValue
-            case .screenChanged: return DeltaKind.screenChanged.rawValue
-            }
+            kind.rawValue
         }
 
         /// True iff this delta is a screen change.
