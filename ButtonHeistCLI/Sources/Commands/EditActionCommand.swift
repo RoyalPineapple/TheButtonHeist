@@ -33,7 +33,10 @@ struct EditActionCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        let request = Self.fenceRequest([.action: action])
+        guard let editAction = EditAction(rawValue: action) else {
+            throw ValidationError("Unknown edit action: \(action). Valid: \(EditAction.allCases.map(\.rawValue).joined(separator: ", "))")
+        }
+        let request = Self.fenceRequest([.action: .string(editAction.rawValue)])
 
         try await CLIRunner.run(
             connection: connection,

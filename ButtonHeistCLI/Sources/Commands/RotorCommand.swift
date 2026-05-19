@@ -51,7 +51,7 @@ struct RotorCommand: AsyncParsableCommand, CLICommandContract {
         if let rotorIndex, rotorIndex < 0 {
             throw ValidationError("rotor-index must be non-negative")
         }
-        guard RotorDirection(rawValue: direction.lowercased()) != nil else {
+        guard let rotorDirection = RotorDirection(rawValue: direction.lowercased()) else {
             throw ValidationError("Invalid direction '\(direction)'. Valid: \(RotorDirection.allCases.map(\.rawValue).joined(separator: ", "))")
         }
         if (currentTextStartOffset == nil) != (currentTextEndOffset == nil) {
@@ -66,15 +66,15 @@ struct RotorCommand: AsyncParsableCommand, CLICommandContract {
             }
         }
 
-        var request = Self.fenceRequest([.direction: direction.lowercased()])
-        if let rotor { request[.rotor] = rotor }
-        if let rotorIndex { request[.rotorIndex] = rotorIndex }
-        if let currentHeistId { request[.currentHeistId] = currentHeistId }
-        if let currentTextStartOffset { request[.currentTextStartOffset] = currentTextStartOffset }
-        if let currentTextEndOffset { request[.currentTextEndOffset] = currentTextEndOffset }
+        var request = Self.fenceRequest([.direction: .string(rotorDirection.rawValue)])
+        if let rotor { request.set(.rotor, rotor) }
+        if let rotorIndex { request.set(.rotorIndex, rotorIndex) }
+        if let currentHeistId { request.set(.currentHeistId, currentHeistId) }
+        if let currentTextStartOffset { request.set(.currentTextStartOffset, currentTextStartOffset) }
+        if let currentTextEndOffset { request.set(.currentTextEndOffset, currentTextEndOffset) }
 
         try element.applyTo(&request)
-        request[.timeout] = timeoutOption.timeout
+        request.set(.timeout, timeoutOption.timeout)
 
         try await CLIRunner.run(
             connection: connection,

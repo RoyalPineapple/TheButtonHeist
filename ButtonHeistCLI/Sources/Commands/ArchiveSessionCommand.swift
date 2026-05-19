@@ -19,7 +19,7 @@ struct ArchiveSessionCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     func run() async throws {
-        let request = Self.fenceRequest([.deleteSource: deleteSource])
+        let request = Self.fenceRequest([.deleteSource: .bool(deleteSource)])
         try await CLIRunner.run(
             connection: connection,
             format: output.format,

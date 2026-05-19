@@ -3,10 +3,10 @@ import ButtonHeist
 import Foundation
 
 enum ExpectationArgumentParser {
-    static func parse(_ rawValue: String) throws -> [String: Any] {
+    static func parse(_ rawValue: String) throws -> HeistValue {
         let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         if let shorthand = shorthandType(for: trimmed) {
-            return FenceParameterKey.rawDictionary([.type: shorthand])
+            return .object([FenceParameterKey.type.rawValue: .string(shorthand)])
         }
 
         guard trimmed.first == "{" else {
@@ -15,10 +15,11 @@ enum ExpectationArgumentParser {
 
         do {
             let data = Data(trimmed.utf8)
-            guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            let value = try JSONDecoder().decode(HeistValue.self, from: data)
+            guard case .object = value else {
                 throw ValidationError("Expected expectation JSON to decode as an object")
             }
-            return object
+            return value
         } catch let error as ValidationError {
             throw error
         } catch {

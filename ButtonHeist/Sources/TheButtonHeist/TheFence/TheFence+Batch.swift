@@ -6,7 +6,7 @@ extension TheFence {
 
     // MARK: - Batch Execution and Session State
 
-    enum BatchPolicy: String, CaseIterable {
+    public enum BatchPolicy: String, CaseIterable, Sendable {
         case stopOnError = "stop_on_error"
         case continueOnError = "continue_on_error"
     }

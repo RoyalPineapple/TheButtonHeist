@@ -50,13 +50,13 @@ struct DrawBezierCommand: AsyncParsableCommand, CLICommandContract {
     mutating func run() async throws {
         let array = try loadJSONArray(inline: segments, fromFile: segmentsFromFile, optionName: "segments")
         var request = Self.fenceRequest([
-            .startX: startX,
-            .startY: startY,
-            .segments: array,
+            .startX: .double(startX),
+            .startY: .double(startY),
+            .segments: .array(array),
         ])
-        if let samplesPerSegment { request[.samplesPerSegment] = samplesPerSegment }
-        if let duration { request[.duration] = duration }
-        if let velocity { request[.velocity] = velocity }
+        if let samplesPerSegment { request.set(.samplesPerSegment, samplesPerSegment) }
+        if let duration { request.set(.duration, duration) }
+        if let velocity { request.set(.velocity, velocity) }
         try await CLIRunner.run(
             connection: connection,
             format: output.format,

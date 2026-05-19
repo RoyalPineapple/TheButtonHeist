@@ -39,14 +39,41 @@ struct RunBatchCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        let array = try loadJSONArray(inline: steps, fromFile: stepsFromFile, optionName: "steps")
-        var request = Self.fenceRequest([.steps: array])
-        if let policy { request[.policy] = policy }
+        let batchSteps = try Self.serializedBatchSteps(inline: steps, fromFile: stepsFromFile)
+
+        var request = Self.fenceRequest([.steps: .array(batchSteps.map(\.value))])
+        if let policy {
+            guard let parsedPolicy = TheFence.BatchPolicy(rawValue: policy) else {
+                throw ValidationError("Invalid policy '\(policy)'. Valid: \(TheFence.BatchPolicy.allCases.map(\.rawValue).joined(separator: ", "))")
+            }
+            request.set(.policy, .string(parsedPolicy.rawValue))
+        }
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
             request: request,
             statusMessage: "Running batch..."
         )
+    }
+
+    static func serializedBatchSteps(inline: String?, fromFile path: String?) throws -> [SerializedBatchStep] {
+        try loadJSONArray(
+            inline: inline,
+            fromFile: path,
+            optionName: "steps"
+        ).enumerated().map { index, value in
+            try SerializedBatchStep(value: value, index: index)
+        }
+    }
+}
+
+struct SerializedBatchStep {
+    let value: HeistValue
+
+    init(value: HeistValue, index: Int) throws {
+        guard case .object = value else {
+            throw ValidationError("steps[\(index)] must be a JSON object")
+        }
+        self.value = value
     }
 }
