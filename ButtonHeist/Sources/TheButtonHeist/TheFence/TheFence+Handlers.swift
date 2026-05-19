@@ -75,11 +75,11 @@ extension TheFence {
             return try await sendAction(.scroll(target))
         case .scrollToVisible(let target):
             let result = try await sendAndAwaitAction(.scrollToVisible(target), timeout: Timeouts.actionSeconds)
-            lastActionHistory = .completed(result)
+            recordCompletedAction(result)
             return .action(result: result)
         case .elementSearch(let target):
             let result = try await sendAndAwaitAction(.elementSearch(target), timeout: Timeouts.longActionSeconds)
-            lastActionHistory = .completed(result)
+            recordCompletedAction(result)
             return .action(result: result)
         case .scrollToEdge(let target):
             return try await sendAction(.scrollToEdge(target))
@@ -175,7 +175,7 @@ extension TheFence {
         var finalResult: ActionResult?
         for repetition in 1...count {
             let result = try await sendAndAwaitAction(message, timeout: Timeouts.actionSeconds)
-            lastActionHistory = .completed(result)
+            recordCompletedAction(result)
             finalResult = result
             if !result.success && repetition < count {
                 let detail = result.message.map { ": \($0)" } ?? ""
@@ -196,7 +196,7 @@ extension TheFence {
 
     func handleTypeText(_ target: TypeTextTarget) async throws -> FenceResponse {
         let result = try await sendAndAwaitAction(.typeText(target), timeout: Timeouts.longActionSeconds)
-        lastActionHistory = .completed(result)
+        recordCompletedAction(result)
         return .action(result: result)
     }
 
@@ -218,7 +218,7 @@ extension TheFence {
 
     func handleWaitFor(_ target: WaitForTarget) async throws -> FenceResponse {
         let result = try await sendAndAwaitAction(.waitFor(target), timeout: target.resolvedTimeout + 5)
-        lastActionHistory = .completed(result)
+        recordCompletedAction(result)
         return .action(result: result)
     }
 
@@ -243,7 +243,7 @@ extension TheFence {
     func handleWaitForChange(_ payload: ExpectationPayload) async throws -> FenceResponse {
         let target = WaitForChangeTarget(expect: payload.expectation, timeout: payload.timeout)
         let result = try await sendAndAwaitAction(.waitForChange(target), timeout: target.resolvedTimeout + 5)
-        lastActionHistory = .completed(result)
+        recordCompletedAction(result)
         return .action(result: result)
     }
 
