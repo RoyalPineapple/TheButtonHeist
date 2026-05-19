@@ -300,7 +300,6 @@ final class ServerMessageTests: XCTestCase {
         )
 
         XCTAssertEqual(result.accessibilityDelta, trace.captureEndpointDelta)
-        XCTAssertEqual(result.effectiveAccessibilityDelta, trace.captureEndpointDelta)
         XCTAssertNotEqual(result.accessibilityDelta, conflictingDelta)
     }
 
@@ -356,8 +355,21 @@ final class ServerMessageTests: XCTestCase {
         let result = try JSONDecoder().decode(ActionResult.self, from: data)
 
         XCTAssertEqual(result.accessibilityDelta, trace.captureEndpointDelta)
-        XCTAssertEqual(result.effectiveAccessibilityDelta, trace.captureEndpointDelta)
         XCTAssertNotEqual(result.accessibilityDelta, conflictingDelta)
+    }
+
+    func testActionResultAccessibilityDeltaRetainsNoTraceProjection() throws {
+        let delta = AccessibilityTrace.Delta.noChange(.init(elementCount: 7))
+        let result = ActionResult(
+            success: true,
+            method: .activate,
+            accessibilityDelta: delta
+        )
+
+        let data = try JSONEncoder().encode(result)
+        let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
+
+        XCTAssertEqual(decoded.accessibilityDelta, delta)
     }
 
     func testActionResultTraceWithoutEndpointDropsIndependentDelta() throws {
@@ -389,7 +401,6 @@ final class ServerMessageTests: XCTestCase {
         )
 
         XCTAssertNil(result.accessibilityDelta)
-        XCTAssertNil(result.effectiveAccessibilityDelta)
 
         let traceJSON = try JSONSerialization.jsonObject(with: JSONEncoder().encode(trace))
         let deltaJSON = try JSONSerialization.jsonObject(with: JSONEncoder().encode(independentDelta))
@@ -405,7 +416,6 @@ final class ServerMessageTests: XCTestCase {
         )
 
         XCTAssertNil(decoded.accessibilityDelta)
-        XCTAssertNil(decoded.effectiveAccessibilityDelta)
     }
 
     func testActionResultScreenContextProjectsFromTrace() throws {

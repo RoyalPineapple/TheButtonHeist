@@ -120,7 +120,7 @@ extension FenceResponse {
         case .rotor(let search):
             text = Self.compactRotor(search)
         case .value, .explore, .none:
-            if let delta = result.effectiveAccessibilityDelta {
+            if let delta = result.accessibilityDelta {
                 text = Self.compactDelta(delta, method: result.method.rawValue)
             } else {
                 text = "\(result.method.rawValue): ok"

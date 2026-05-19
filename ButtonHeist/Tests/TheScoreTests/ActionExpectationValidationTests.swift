@@ -63,7 +63,7 @@ final class ActionExpectationValidationTests: XCTestCase {
         XCTAssertEqual(outcome.actual, "noChange")
     }
 
-    func testScreenChangedPrefersTraceProjectionOverLegacyDeltaField() {
+    func testScreenChangedPrefersTraceProjectionOverDecodedDeltaField() {
         let before = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
         let after = makeTestInterface(elements: [
             HeistElement(

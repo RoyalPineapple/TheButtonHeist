@@ -271,10 +271,9 @@ public struct ActionResult: Codable, Sendable {
     public let errorKind: ErrorKind?
     /// Command-specific payload. At most one variant per result.
     public let payload: ResultPayload?
-    /// Compatibility compact view describing what changed in the hierarchy
-    /// after the action. When `accessibilityTrace` is present, constructed and
-    /// decoded results project this field from the trace, even when the trace
-    /// projects nil.
+    /// Compact projection describing what changed in the hierarchy after the
+    /// action. When `accessibilityTrace` is present, constructed and decoded
+    /// results project this field from the trace, even when the trace projects nil.
     public let accessibilityDelta: AccessibilityTrace.Delta?
     /// Source-of-truth accessibility capture receipt for this action.
     public let accessibilityTrace: AccessibilityTrace?
@@ -321,9 +320,9 @@ public struct ActionResult: Codable, Sendable {
         self.errorKind = errorKind
         self.payload = payload
         self.accessibilityTrace = accessibilityTrace
-        self.accessibilityDelta = Self.projectedAccessibilityDelta(
+        self.accessibilityDelta = Self.accessibilityDeltaProjection(
             trace: accessibilityTrace,
-            legacyDeltaOnlyBridge: accessibilityDelta
+            noTraceDelta: accessibilityDelta
         )
         self.animating = animating
         if let accessibilityTrace {
@@ -370,23 +369,11 @@ public struct ActionResult: Codable, Sendable {
         )
     }
 
-    /// Compact delta projection for this result.
-    ///
-    /// `accessibilityTrace` is authoritative when present; `accessibilityDelta`
-    /// is a named legacy bridge only for no-trace payloads.
-    public var effectiveAccessibilityDelta: AccessibilityTrace.Delta? {
-        Self.projectedAccessibilityDelta(
-            trace: accessibilityTrace,
-            legacyDeltaOnlyBridge: accessibilityDelta
-        )
-    }
-
-    private static func projectedAccessibilityDelta(
+    private static func accessibilityDeltaProjection(
         trace: AccessibilityTrace?,
-        legacyDeltaOnlyBridge: AccessibilityTrace.Delta?
+        noTraceDelta: AccessibilityTrace.Delta?
     ) -> AccessibilityTrace.Delta? {
-        // The only delta-only bridge: old no-trace payloads may still surface their compact projection.
-        guard let trace else { return legacyDeltaOnlyBridge }
+        guard let trace else { return noTraceDelta }
         return trace.captureEndpointDelta
     }
 }
