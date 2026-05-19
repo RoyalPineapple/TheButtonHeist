@@ -1,5 +1,6 @@
 import XCTest
 @testable import ButtonHeist
+import TheScore
 
 final class TheFenceParameterSpecTests: XCTestCase {
 
@@ -31,6 +32,27 @@ final class TheFenceParameterSpecTests: XCTestCase {
         XCTAssertTrue(
             offenders.isEmpty,
             "Compatibility fields reintroduced into command specs:\n\(offenders.joined(separator: "\n"))"
+        )
+    }
+
+    func testHumanCommandAliasesResolveToCanonicalCommands() {
+        let aliases = TheFence.Command.humanCommandAliases
+
+        XCTAssertEqual(aliases["tap"]?.command, .oneFingerTap)
+        XCTAssertEqual(aliases["ui"]?.command, .getInterface)
+        XCTAssertEqual(aliases["record"]?.command, .startRecording)
+        XCTAssertEqual(aliases["copy"]?.command, .editAction)
+        XCTAssertEqual(aliases["copy"]?.parameters[.action], .string(EditAction.copy.rawValue))
+        XCTAssertEqual(aliases["select_all"]?.parameters[.action], .string(EditAction.selectAll.rawValue))
+    }
+
+    func testHumanCommandAliasesDoNotShadowCanonicalCommands() {
+        let canonicalCommandNames = Set(TheFence.Command.allCases.map(\.rawValue))
+        let shadowedAliases = Set(TheFence.Command.humanCommandAliases.keys).intersection(canonicalCommandNames)
+
+        XCTAssertTrue(
+            shadowedAliases.isEmpty,
+            "Human aliases must not shadow canonical command names: \(shadowedAliases.sorted())"
         )
     }
 

@@ -1,6 +1,7 @@
 import XCTest
 import ButtonHeist
 import Foundation
+import TheScore
 @testable import ButtonHeistCLIExe
 
 final class CLICommandSyncTests: XCTestCase {
@@ -267,6 +268,36 @@ final class CLICommandSyncTests: XCTestCase {
 
         XCTAssertEqual(request[.command] as? String, TheFence.Command.editAction.rawValue)
         XCTAssertEqual(request[.action] as? String, EditAction.copy.rawValue)
+    }
+
+    func testHumanParserAliasesComeFromSharedCommandContract() {
+        for (aliasName, alias) in TheFence.Command.humanCommandAliases {
+            let request = ReplSession.parseHumanInput(aliasName)
+
+            XCTAssertEqual(
+                request[.command] as? String,
+                alias.command.rawValue,
+                "\(aliasName) should resolve through TheFence.Command.humanCommandAliases"
+            )
+            for (key, value) in alias.parameters {
+                XCTAssertEqual(
+                    request[key].flatMap(HeistValue.from),
+                    value,
+                    "\(aliasName) should apply canonical alias parameter \(key.rawValue)"
+                )
+            }
+        }
+    }
+
+    func testSessionReplDoesNotDeclareCommandAliasTables() throws {
+        let source = try String(
+            contentsOf: repositoryRoot()
+                .appendingPathComponent("ButtonHeistCLI/Sources/Session/SessionRepl.swift"),
+            encoding: .utf8
+        )
+
+        XCTAssertFalse(source.contains("commandAliases:"), "REPL command aliases should live in TheFence.Command.humanCommandAliases")
+        XCTAssertFalse(source.contains("compoundAliases:"), "REPL compound aliases should live in TheFence.Command.humanCommandAliases")
     }
 
     func testHumanParserMapsCoordinateTapAlias() {

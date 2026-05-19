@@ -239,31 +239,6 @@ nonisolated extension ReplSession {
         JSON input still works: {"command":"activate","heistId":"button_save"}
         """
 
-    private static let commandAliases: [String: TheFence.Command] = [
-        "tap": .oneFingerTap,
-        "press": .longPress,
-        "ui": .getInterface,
-        "screen": .getScreen,
-        "screenshot": .getScreen,
-        "idle": .waitForChange,
-        "change": .waitForChange,
-        "wait": .waitFor,
-        "devices": .listDevices,
-        "list": .listDevices,
-        "type": .typeText,
-        "record": .startRecording,
-    ]
-
-    /// Aliases that expand to a command + typed default action (e.g. "copy" -> edit_action/action=copy).
-    private static let compoundAliases: [String: (command: TheFence.Command, action: EditAction)] = [
-        "copy": (.editAction, .copy),
-        "paste": (.editAction, .paste),
-        "cut": (.editAction, .cut),
-        "delete": (.editAction, .delete),
-        "select": (.editAction, .select),
-        "select_all": (.editAction, .selectAll),
-    ]
-
     private static let directionWords: Set<String> = [
         "up", "down", "left", "right", "next", "previous"
     ]
@@ -287,6 +262,10 @@ nonisolated extension ReplSession {
             self.rawCommand = command.rawValue
             self.typedParameters = parameters
             self.extraParameters = []
+        }
+
+        init(alias: FenceCommandAlias) {
+            self.init(command: alias.command, parameters: alias.parameters)
         }
 
         init(rawCommand: String) {
@@ -332,17 +311,12 @@ nonisolated extension ReplSession {
         var request: HumanCommandRequest
         let args = Array(tokens.dropFirst())
 
-        if let compound = compoundAliases[rawCommand] {
-            request = HumanCommandRequest(
-                command: compound.command,
-                parameters: [.action: .string(compound.action.rawValue)]
-            )
+        if let alias = TheFence.Command.humanAlias(named: rawCommand) {
+            request = HumanCommandRequest(alias: alias)
+        } else if let command = TheFence.Command(rawValue: rawCommand) {
+            request = HumanCommandRequest(command: command)
         } else {
-            if let command = commandAliases[rawCommand] ?? TheFence.Command(rawValue: rawCommand) {
-                request = HumanCommandRequest(command: command)
-            } else {
-                request = HumanCommandRequest(rawCommand: rawCommand)
-            }
+            request = HumanCommandRequest(rawCommand: rawCommand)
         }
 
         // Separate key=value pairs from positional tokens
