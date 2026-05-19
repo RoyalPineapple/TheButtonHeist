@@ -113,14 +113,6 @@ extension TheFence {
                 hint: failure.hint
             )
         }
-        let lastActionPayload = lastActionResult.map { last in
-            SessionLastActionPayload(
-                method: last.method,
-                success: last.success,
-                message: last.message,
-                latencyMs: lastLatencyMs
-            )
-        }
         return SessionStatePayload(
             connected: connected,
             phase: currentSessionConnectionPhase(),

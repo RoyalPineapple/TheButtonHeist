@@ -602,8 +602,7 @@ public final class TheFence {
     func clearClientSessionState(error: Error) {
         accessibilityHistory.reset()
         accessibilityHistory.retention = .dropAfterDelivery
-        lastActionHistory = .unrun
-        lastLatencyMs = 0
+        commandExecutionState.reset()
         recordingState = RecordingState()
         cancelAllPendingRequests(error: error)
     }
@@ -717,7 +716,7 @@ public final class TheFence {
         let preDispatchBackgroundCount = accessibilityHistory.pendingTraceCount
         let preDispatchCaptureRef = accessibilityHistory.latestRef
         let dispatched = try await dispatchCommand(parsed)
-        lastLatencyMs = dispatched.durationMs
+        commandExecutionState.noteDispatchedResponse(dispatched.response, latencyMs: dispatched.durationMs)
         logResponse(requestId: parsed.requestId, response: dispatched.response, durationMs: dispatched.durationMs)
 
         let postDispatch = capturePostDispatchEffects(
@@ -1082,7 +1081,7 @@ public final class TheFence {
                 .waitForChange(target),
                 timeout: target.resolvedTimeout + config.postActionExpectationTimeoutBuffer
             )
-            lastActionHistory = .completed(waitResult)
+            recordCompletedAction(waitResult)
             let waitCursor = ingestActionTrace(waitResult)
             let waitValidation: ExpectationResult = if waitResult.method == .waitForChange {
                 ExpectationResult(
@@ -1291,7 +1290,7 @@ public final class TheFence {
 
     func sendAction(_ message: ClientMessage) async throws -> FenceResponse {
         let result = try await sendAndAwaitAction(message, timeout: Timeouts.actionSeconds)
-        lastActionHistory = .completed(result)
+        recordCompletedAction(result)
         return .action(result: result)
     }
 
@@ -1373,7 +1372,7 @@ public final class TheFence {
     // Expectation parsing (`parseExpectation` and its helpers) lives in
     // TheFence+ExpectationParsing.swift.
 
-    // MARK: - Last Action / Latency Tracking
+    // MARK: - Command Execution State
 
     /// Two-phase action history: `.unrun` before any action has completed,
     /// `.completed` once one has. Display state derives from the active case;
@@ -1383,16 +1382,68 @@ public final class TheFence {
         case completed(ActionResult)
     }
 
-    var lastActionHistory: LastActionHistory = .unrun
+    /// Owns command-execution state derived from dispatched action responses.
+    /// The last action and its measured dispatch latency move together so
+    /// session-state projection cannot read from sibling lifecycle fields.
+    struct CommandExecutionState {
+        private(set) var lastActionHistory: LastActionHistory = .unrun
+        private(set) var lastLatencyMs: Int = 0
+
+        var lastActionResult: ActionResult? {
+            if case .completed(let result) = lastActionHistory { return result }
+            return nil
+        }
+
+        var lastActionPayload: SessionLastActionPayload? {
+            lastActionResult.map { last in
+                SessionLastActionPayload(
+                    method: last.method,
+                    success: last.success,
+                    message: last.message,
+                    latencyMs: lastLatencyMs
+                )
+            }
+        }
+
+        mutating func noteDispatchedResponse(_ response: FenceResponse, latencyMs: Int) {
+            guard response.actionResult != nil else { return }
+            lastLatencyMs = latencyMs
+        }
+
+        mutating func completeAction(_ result: ActionResult) {
+            lastActionHistory = .completed(result)
+        }
+
+        mutating func reset() {
+            lastActionHistory = .unrun
+            lastLatencyMs = 0
+        }
+    }
+
+    private var commandExecutionState = CommandExecutionState()
+
+    var lastActionHistory: LastActionHistory {
+        commandExecutionState.lastActionHistory
+    }
 
     /// Convenience read of the last completed action's result, if any.
     var lastActionResult: ActionResult? {
-        if case .completed(let result) = lastActionHistory { return result }
-        return nil
+        commandExecutionState.lastActionResult
     }
+
+    var lastActionPayload: SessionLastActionPayload? {
+        commandExecutionState.lastActionPayload
+    }
+
     /// Round-trip time in milliseconds for the last action command that
     /// completed (request issued → response received).
-    private(set) var lastLatencyMs: Int = 0
+    var lastLatencyMs: Int {
+        commandExecutionState.lastLatencyMs
+    }
+
+    func recordCompletedAction(_ result: ActionResult) {
+        commandExecutionState.completeAction(result)
+    }
 
     // Batch execution (`handleRunBatch`, `BatchPolicy`, step-summary building,
     // and `currentSessionState`) lives in TheFence+Batch.swift.
