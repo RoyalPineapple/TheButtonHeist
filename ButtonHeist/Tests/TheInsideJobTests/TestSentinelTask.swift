@@ -8,7 +8,7 @@ import Foundation
 /// cancellation.
 ///
 /// Use this in tests that need an "in-flight" Task to assign into an enum case
-/// (e.g. `.resuming(task: Task<Void, Never>)`) so the SUT can cancel it and the
+/// (e.g. `.resuming(id: UUID(), task: Task<Void, Never>)`) so the SUT can cancel it and the
 /// test can observe the cancellation. The Task makes no progress on its own;
 /// cancellation is the only termination signal.
 ///

@@ -214,6 +214,56 @@ final class TheGetawayTests: XCTestCase {
         XCTAssertNil(result, "waitFor is wait-only; stale action failure semantics are only for targeted actions")
     }
 
+    // MARK: - Background change tracking
+
+    func testChangeDuringSettledParseRemainsPending() throws {
+        var state = BackgroundChangeState()
+        state.noteChange()
+
+        let claim = state.beginSettledParse()
+        XCTAssertEqual(claim, 1)
+
+        state.noteChange()
+        state.finishSettledParse(claimedGeneration: try XCTUnwrap(claim))
+
+        XCTAssertEqual(state.parsedThroughGeneration, 1)
+        XCTAssertEqual(state.latestGeneration, 2)
+        XCTAssertTrue(state.hasPendingSettledChange)
+        XCTAssertTrue(state.canBeginSettledParse)
+    }
+
+    func testObservedGenerationDoesNotClearNewerBackgroundChange() {
+        var state = BackgroundChangeState()
+        state.noteChange()
+        let observedGeneration = state.latestGeneration
+        state.noteChange()
+
+        state.markObserved(through: observedGeneration)
+
+        XCTAssertEqual(state.parsedThroughGeneration, 1)
+        XCTAssertEqual(state.latestGeneration, 2)
+        XCTAssertTrue(state.hasPendingSettledChange)
+    }
+
+    func testCommandDuringSettledParseKeepsParserBlockedUntilCommandFinishes() throws {
+        var state = BackgroundChangeState()
+        state.noteChange()
+        let claim = try XCTUnwrap(state.beginSettledParse())
+
+        state.beginCommand()
+        state.noteChange()
+        state.finishSettledParse(claimedGeneration: claim)
+
+        XCTAssertTrue(state.isCommandInFlight)
+        XCTAssertFalse(state.isSettledParseInFlight)
+        XCTAssertFalse(state.canBeginSettledParse)
+
+        state.finishCommand()
+
+        XCTAssertTrue(state.hasPendingSettledChange)
+        XCTAssertTrue(state.canBeginSettledParse)
+    }
+
     // MARK: - Recording auto-finish
 
     func testSettledScreenChangePreventsRecordingInactivityAutoStop() async throws {
@@ -240,7 +290,7 @@ final class TheGetawayTests: XCTestCase {
         button.accessibilityLabel = "Loaded"
         window.layoutIfNeeded()
         await getaway.brains.tripwire.yieldFrames(3)
-        getaway.tripwireParsePending = true
+        getaway.noteBackgroundChange()
         await getaway.noteSettledChangeIfNeeded()
 
         // Total elapsed time is now beyond the 1s inactivity timeout from start.
