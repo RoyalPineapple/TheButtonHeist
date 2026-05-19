@@ -683,7 +683,8 @@ final class TheGetawayTests: XCTestCase {
         await fulfillment(of: [completion], timeout: 5.0)
 
         XCTAssertEqual(completions.count, 1, "Invalidating an active recording should finalize exactly once")
-        XCTAssertTrue(await stakeout.isIdle, "Recorder should be fully finalized after disconnect invalidation")
+        let recorderIsIdleAfterDisconnect = await stakeout.isIdle
+        XCTAssertTrue(recorderIsIdleAfterDisconnect, "Recorder should be fully finalized after disconnect invalidation")
         assertRecordingRouteCleared(getaway)
         try await assertFutureDriverCannotDrainRecording(from: getaway)
     }
@@ -709,7 +710,8 @@ final class TheGetawayTests: XCTestCase {
         await fulfillment(of: [completion], timeout: 5.0)
 
         XCTAssertEqual(completions.count, 1, "Session release should finalize an active recorder exactly once")
-        XCTAssertTrue(await stakeout.isIdle, "Recorder should be fully finalized after session release")
+        let recorderIsIdleAfterSessionRelease = await stakeout.isIdle
+        XCTAssertTrue(recorderIsIdleAfterSessionRelease, "Recorder should be fully finalized after session release")
         assertRecordingRouteCleared(getaway)
         try await assertFutureDriverCannotDrainRecording(from: getaway)
     }
