@@ -67,9 +67,7 @@ extension TheFence {
         command: Command,
         request: [String: Any]
     ) throws -> AccessibilityPayload {
-        guard let target = try elementTarget(request) else {
-            throw MissingElementTarget(command: command.rawValue)
-        }
+        let target = try requiredElementTarget(request, command: command)
         let count = CountArgument(
             value: try request.schemaInteger("count"),
             observed: request["count"]
@@ -97,9 +95,7 @@ extension TheFence {
     }
 
     private func decodeRotorTarget(_ request: [String: Any]) throws -> RotorTarget {
-        guard let target = try elementTarget(request) else {
-            throw MissingElementTarget(command: Command.rotor.rawValue)
-        }
+        let target = try requiredElementTarget(request, command: .rotor)
         if let rotorIndex = try request.schemaInteger("rotorIndex"), rotorIndex < 0 {
             throw SchemaValidationError(field: "rotorIndex", observed: rotorIndex, expected: "integer >= 0")
         }
@@ -142,14 +138,12 @@ extension TheFence {
         }
         return TypeTextTarget(
             text: text,
-            elementTarget: try elementTarget(request)
+            elementTarget: try decodedElementTarget(request)
         )
     }
 
     private func decodeWaitForTarget(_ request: [String: Any]) throws -> WaitForTarget {
-        guard let target = try elementTarget(request) else {
-            throw MissingElementTarget(command: Command.waitFor.rawValue)
-        }
+        let target = try requiredElementTarget(request, command: .waitFor)
         return WaitForTarget(
             elementTarget: target,
             absent: try request.schemaBoolean("absent"),
@@ -157,10 +151,23 @@ extension TheFence {
         )
     }
 
-    private func requiredElementTarget(_ request: [String: Any], command: Command) throws -> ElementTarget {
-        guard let target = try elementTarget(request) else {
+    func decodedElementTarget(_ request: [String: Any]) throws -> ElementTarget? {
+        _ = try elementTargetOrdinal(request)
+        return try elementTarget(request)
+    }
+
+    func requiredElementTarget(_ request: [String: Any], command: Command) throws -> ElementTarget {
+        guard let target = try decodedElementTarget(request) else {
             throw MissingElementTarget(command: command.rawValue)
         }
         return target
+    }
+
+    private func elementTargetOrdinal(_ request: [String: Any]) throws -> Int? {
+        guard let ordinal = try request.schemaInteger("ordinal") else { return nil }
+        guard ordinal >= 0 else {
+            throw SchemaValidationError(field: "ordinal", observed: ordinal, expected: "integer >= 0")
+        }
+        return ordinal
     }
 }

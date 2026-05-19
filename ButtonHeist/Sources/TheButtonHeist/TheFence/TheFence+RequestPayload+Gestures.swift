@@ -41,7 +41,7 @@ extension TheFence {
 
     private func decodeTouchTapTarget(_ request: [String: Any]) throws -> TouchTapTarget {
         let target = TouchTapTarget(
-            elementTarget: try elementTarget(request),
+            elementTarget: try decodedElementTarget(request),
             pointX: try request.schemaNumber("x"),
             pointY: try request.schemaNumber("y")
         )
@@ -53,7 +53,7 @@ extension TheFence {
 
     private func decodeLongPressTarget(_ request: [String: Any]) throws -> LongPressTarget {
         let target = LongPressTarget(
-            elementTarget: try elementTarget(request),
+            elementTarget: try decodedElementTarget(request),
             pointX: try request.schemaNumber("x"),
             pointY: try request.schemaNumber("y"),
             duration: try schemaPositiveNumber(request, key: "duration") ?? 0.5
@@ -68,7 +68,7 @@ extension TheFence {
         let start = try request.schemaUnitPoint("start")
         let end = try request.schemaUnitPoint("end")
         let target = SwipeTarget(
-            elementTarget: try elementTarget(request),
+            elementTarget: try decodedElementTarget(request),
             startX: try request.schemaNumber("startX"),
             startY: try request.schemaNumber("startY"),
             endX: try request.schemaNumber("endX"),
@@ -86,7 +86,7 @@ extension TheFence {
 
     private func decodeDragTarget(_ request: [String: Any]) throws -> DragTarget {
         DragTarget(
-            elementTarget: try elementTarget(request),
+            elementTarget: try decodedElementTarget(request),
             startX: try request.schemaNumber("startX"),
             startY: try request.schemaNumber("startY"),
             endX: try request.requiredSchemaNumber("endX"),
@@ -97,7 +97,7 @@ extension TheFence {
 
     private func decodePinchTarget(_ request: [String: Any]) throws -> PinchTarget {
         PinchTarget(
-            elementTarget: try elementTarget(request),
+            elementTarget: try decodedElementTarget(request),
             centerX: try request.schemaNumber("centerX"),
             centerY: try request.schemaNumber("centerY"),
             scale: try requiredSchemaPositiveNumber(request, key: "scale"),
@@ -108,7 +108,7 @@ extension TheFence {
 
     private func decodeRotateTarget(_ request: [String: Any]) throws -> RotateTarget {
         RotateTarget(
-            elementTarget: try elementTarget(request),
+            elementTarget: try decodedElementTarget(request),
             centerX: try request.schemaNumber("centerX"),
             centerY: try request.schemaNumber("centerY"),
             angle: try request.requiredSchemaNumber("angle"),
@@ -119,7 +119,7 @@ extension TheFence {
 
     private func decodeTwoFingerTapTarget(_ request: [String: Any]) throws -> TwoFingerTapTarget {
         TwoFingerTapTarget(
-            elementTarget: try elementTarget(request),
+            elementTarget: try decodedElementTarget(request),
             centerX: try request.schemaNumber("centerX"),
             centerY: try request.schemaNumber("centerY"),
             spread: try schemaPositiveNumber(request, key: "spread")
