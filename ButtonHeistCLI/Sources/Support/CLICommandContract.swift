@@ -31,7 +31,10 @@ extension TheFence.Command {
 
 extension FenceParameterKey {
     static func rawDictionary(_ parameters: CLIRequestParameters) -> [String: Any] {
-        Dictionary(uniqueKeysWithValues: parameters.map { ($0.key.rawValue, $0.value.toAny()) })
+        Dictionary(
+            parameters.map { ($0.key.rawValue, $0.value.toAny()) },
+            uniquingKeysWith: { _, newest in newest }
+        )
     }
 }
 

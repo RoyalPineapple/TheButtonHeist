@@ -2862,6 +2862,17 @@ final class TheFenceHandlerTests: XCTestCase {
             return false
         }
         XCTAssertEqual(activateMessages.count, 3)
+        XCTAssertEqual(
+            mockConn.sent.map { $0.0.canonicalName },
+            [
+                "request_interface",
+                "activate",
+                "request_interface",
+                "activate",
+                "request_interface",
+                "activate",
+            ]
+        )
     }
 
     @ButtonHeistActor
