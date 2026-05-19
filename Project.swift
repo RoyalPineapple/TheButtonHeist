@@ -32,6 +32,10 @@ let project = Project(
             infoPlist: .default,
             sources: ["ButtonHeist/Sources/TheScore/**"],
 
+            dependencies: [
+                .external(name: "AccessibilitySnapshotModel"),
+            ],
+
             settings: .settings(base: [
                 "SWIFT_VERSION": "6",
                 "LastSwiftMigration": "2620",

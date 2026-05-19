@@ -295,13 +295,26 @@ public extension AccessibilityTrace {
         case unknown
     }
 
+    enum AccessibilityPatchOperation: Codable, Sendable, Equatable {
+        case updateElement(
+            traversalIndex: Int,
+            element: AccessibilityElement,
+            annotation: InterfaceElementAnnotation?
+        )
+        case updateContainer(
+            path: TreePath,
+            container: AccessibilityContainer,
+            annotation: InterfaceContainerAnnotation?
+        )
+    }
+
     struct AccessibilityPatch: Codable, Sendable, Equatable {
-        public let operations: [Operation]
+        public let operations: [AccessibilityPatchOperation]
         public let context: Context
         public let transition: Transition
 
         public init(
-            operations: [Operation],
+            operations: [AccessibilityPatchOperation],
             context: Context,
             transition: Transition = .empty
         ) {
@@ -336,7 +349,7 @@ public extension AccessibilityTrace {
             let beforeContainerAnnotations = before.annotations.containerByPath
             let afterContainerAnnotations = after.annotations.containerByPath
 
-            var operations: [Operation] = []
+            var operations: [AccessibilityPatchOperation] = []
             for traversalIndex in afterElements.keys.sorted() {
                 guard let afterElement = afterElements[traversalIndex] else { continue }
                 if beforeElements[traversalIndex] != afterElement ||
@@ -411,18 +424,6 @@ public extension AccessibilityTrace {
             )
         }
 
-        public enum Operation: Codable, Sendable, Equatable {
-            case updateElement(
-                traversalIndex: Int,
-                element: AccessibilityElement,
-                annotation: InterfaceElementAnnotation?
-            )
-            case updateContainer(
-                path: TreePath,
-                container: AccessibilityContainer,
-                annotation: InterfaceContainerAnnotation?
-            )
-        }
     }
 
     struct Capture: Codable, Sendable, Equatable {

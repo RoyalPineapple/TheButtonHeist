@@ -461,7 +461,10 @@ extension FenceResponse {
             parts.append("modal")
         }
         if detail == .full {
-            parts.append("frame=(\(Int(container.frame.origin.x)),\(Int(container.frame.origin.y)),\(Int(container.frame.size.width)),\(Int(container.frame.size.height)))")
+            let frame = container.frame
+            parts.append(
+                "frame=(\(Int(frame.origin.x)),\(Int(frame.origin.y)),\(Int(frame.size.width)),\(Int(frame.size.height)))"
+            )
         }
         return parts.joined(separator: " ")
     }
