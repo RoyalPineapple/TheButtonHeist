@@ -1,5 +1,6 @@
 #if canImport(UIKit)
 #if DEBUG
+import CryptoKit
 import UIKit
 
 import TheScore
@@ -34,7 +35,23 @@ final class TheBurglar {
     struct ParseResult {
         let hierarchy: [AccessibilityHierarchy]
         let objects: [AccessibilityElement: NSObject]
+        let objectsByPath: [TreePath: NSObject]
         let scrollViews: [AccessibilityContainer: UIView]
+        let scrollViewsByPath: [TreePath: UIView]
+
+        init(
+            hierarchy: [AccessibilityHierarchy],
+            objects: [AccessibilityElement: NSObject],
+            objectsByPath: [TreePath: NSObject] = [:],
+            scrollViews: [AccessibilityContainer: UIView],
+            scrollViewsByPath: [TreePath: UIView] = [:]
+        ) {
+            self.hierarchy = hierarchy
+            self.objects = objects
+            self.objectsByPath = objectsByPath
+            self.scrollViews = scrollViews
+            self.scrollViewsByPath = scrollViewsByPath
+        }
     }
 
     // MARK: - Parse (read-only)
@@ -64,7 +81,8 @@ final class TheBurglar {
 
         var allHierarchy: [AccessibilityHierarchy] = []
         var allObjects: [AccessibilityElement: NSObject] = [:]
-        var allScrollViews: [AccessibilityContainer: UIView] = [:]
+        var objectCandidates: [AccessibilityElement: [NSObject]] = [:]
+        var scrollViewCandidates: [AccessibilityContainer: [UIView]] = [:]
 
         for (window, rootView) in windows {
             let containsModalBoundary = autoreleasepool { () -> Bool in
@@ -74,10 +92,11 @@ final class TheBurglar {
                     rotorResultLimit: 0,
                     elementVisitor: { element, _, object in
                         allObjects[element] = object
+                        objectCandidates[element, default: []].append(object)
                     },
                     containerVisitor: { container, object in
                         if case .scrollable = container.type, let view = object as? UIView {
-                            allScrollViews[container] = view
+                            scrollViewCandidates[container, default: []].append(view)
                         }
                         if container.isModalBoundary {
                             containsModalBoundary = true
@@ -108,10 +127,23 @@ final class TheBurglar {
             }
         }
 
+        let allScrollViewsByPath = Self.scrollViewsByPath(
+            hierarchy: allHierarchy,
+            scrollViewCandidates: scrollViewCandidates
+        )
+        let allObjectsByPath = Self.objectsByPath(
+            hierarchy: allHierarchy,
+            objectCandidates: objectCandidates
+        )
         return ParseResult(
             hierarchy: allHierarchy,
             objects: allObjects,
-            scrollViews: allScrollViews
+            objectsByPath: allObjectsByPath,
+            scrollViews: Self.legacyScrollViews(
+                hierarchy: allHierarchy,
+                scrollViewsByPath: allScrollViewsByPath
+            ),
+            scrollViewsByPath: allScrollViewsByPath
         )
     }
 
@@ -144,35 +176,45 @@ final class TheBurglar {
     /// (no enclosing scrollable) keep their screen-space frame.
     struct ContainerIdentityContext {
         let contentFrames: [AccessibilityContainer: CGRect]
+        let contentFramesByPath: [TreePath: CGRect]
         let nestedInScrollView: Set<AccessibilityContainer>
     }
 
     static func buildContainerIdentityContext(
         hierarchy: [AccessibilityHierarchy],
-        scrollableContainerViews: [AccessibilityContainer: UIView]
+        scrollableContainerViews: [AccessibilityContainer: UIView],
+        scrollableContainerViewsByPath: [TreePath: UIView] = [:]
     ) -> ContainerIdentityContext {
         var contentFrames: [AccessibilityContainer: CGRect] = [:]
+        var contentFramesByPath: [TreePath: CGRect] = [:]
         var nestedInScrollView = Set<AccessibilityContainer>()
-        for node in hierarchy {
+        for (index, node) in hierarchy.enumerated() {
             collectContainerContentFrames(
                 node: node,
+                path: TreePath([index]),
                 parentScrollView: nil,
                 scrollableContainerViews: scrollableContainerViews,
+                scrollableContainerViewsByPath: scrollableContainerViewsByPath,
                 into: &contentFrames,
+                byPath: &contentFramesByPath,
                 nestedInScrollView: &nestedInScrollView
             )
         }
         return ContainerIdentityContext(
             contentFrames: contentFrames,
+            contentFramesByPath: contentFramesByPath,
             nestedInScrollView: nestedInScrollView
         )
     }
 
     private static func collectContainerContentFrames(
         node: AccessibilityHierarchy,
+        path: TreePath,
         parentScrollView: UIScrollView?,
         scrollableContainerViews: [AccessibilityContainer: UIView],
+        scrollableContainerViewsByPath: [TreePath: UIView],
         into result: inout [AccessibilityContainer: CGRect],
+        byPath pathResult: inout [TreePath: CGRect],
         nestedInScrollView: inout Set<AccessibilityContainer>
     ) {
         guard case .container(let container, let children) = node else { return }
@@ -187,21 +229,26 @@ final class TheBurglar {
             contentFrame = frame
         }
         result[container] = contentFrame
+        pathResult[path] = contentFrame
 
         let childScrollView: UIScrollView?
-        if let scrollView = scrollableContainerViews[container] as? UIScrollView,
+        if let scrollView = scrollableContainerViewsByPath[path] as? UIScrollView
+            ?? scrollableContainerViews[container] as? UIScrollView,
            !scrollView.bhIsUnsafeForProgrammaticScrolling {
             childScrollView = scrollView
         } else {
             childScrollView = parentScrollView
         }
 
-        for child in children {
+        for (index, child) in children.enumerated() {
             collectContainerContentFrames(
                 node: child,
+                path: path.appending(index),
                 parentScrollView: childScrollView,
                 scrollableContainerViews: scrollableContainerViews,
+                scrollableContainerViewsByPath: scrollableContainerViewsByPath,
                 into: &result,
+                byPath: &pathResult,
                 nestedInScrollView: &nestedInScrollView
             )
         }
@@ -215,63 +262,128 @@ final class TheBurglar {
         weak var object: NSObject?
     }
 
+    private struct ElementObjectIndex {
+        let byElement: [AccessibilityElement: NSObject]
+        let byPath: [TreePath: NSObject]
+
+        func object(for element: AccessibilityElement, path: TreePath) -> NSObject? {
+            byPath[path] ?? byElement[element]
+        }
+    }
+
     /// Walk the hierarchy tree to gather per-element context: content-space origins,
     /// scroll view refs, and live element objects.
     static func buildElementContexts(
         hierarchy: [AccessibilityHierarchy],
         scrollableContainerViews: [AccessibilityContainer: UIView],
-        elementObjects: [AccessibilityElement: NSObject]
+        scrollableContainerViewsByPath: [TreePath: UIView] = [:],
+        elementObjects: [AccessibilityElement: NSObject],
+        elementObjectsByPath: [TreePath: NSObject] = [:]
     ) -> [AccessibilityElement: ElementContext] {
-        Dictionary(
-            hierarchy.compactMap(
-                context: nil as UIScrollView?,
-                container: { parentScrollView, accessibilityContainer in
-                    guard let scrollView = scrollableContainerViews[accessibilityContainer] as? UIScrollView,
-                          !scrollView.bhIsUnsafeForProgrammaticScrolling else {
-                        return parentScrollView
-                    }
-                    return scrollView
-                },
-                element: { element, _, scrollView in
-                    let origin: CGPoint? = scrollView.flatMap { scrollView in
-                        let frame = element.shape.frame
-                        return (!frame.isNull && !frame.isEmpty)
-                            ? scrollView.convert(frame.origin, from: nil)
-                            : nil
-                    }
-                    return (
-                        element,
-                        ElementContext(
-                            contentSpaceOrigin: origin,
-                            scrollView: scrollView,
-                            object: elementObjects[element]
-                        )
-                    )
-                }
-            ),
+        let byPath = buildElementContextsByPath(
+            hierarchy: hierarchy,
+            scrollableContainerViews: scrollableContainerViews,
+            scrollableContainerViewsByPath: scrollableContainerViewsByPath,
+            elementObjects: elementObjects,
+            elementObjectsByPath: elementObjectsByPath
+        )
+        return Dictionary(
+            byPath.compactMap { path, context in
+                guard case .element(let element, _) = hierarchy.node(at: path) else { return nil }
+                return (element, context)
+            },
             uniquingKeysWith: { _, latest in latest }
         )
     }
 
+    static func buildElementContextsByPath(
+        hierarchy: [AccessibilityHierarchy],
+        scrollableContainerViews: [AccessibilityContainer: UIView],
+        scrollableContainerViewsByPath: [TreePath: UIView] = [:],
+        elementObjects: [AccessibilityElement: NSObject],
+        elementObjectsByPath: [TreePath: NSObject] = [:]
+    ) -> [TreePath: ElementContext] {
+        var contexts: [AccessibilityElement: ElementContext] = [:]
+        var contextsByPath: [TreePath: ElementContext] = [:]
+        let objectIndex = ElementObjectIndex(byElement: elementObjects, byPath: elementObjectsByPath)
+        for (index, node) in hierarchy.enumerated() {
+            collectElementContexts(
+                node: node,
+                path: TreePath([index]),
+                parentScrollView: nil,
+                scrollableContainerViews: scrollableContainerViews,
+                scrollableContainerViewsByPath: scrollableContainerViewsByPath,
+                objectIndex: objectIndex,
+                into: &contexts,
+                byPath: &contextsByPath
+            )
+        }
+        return contextsByPath
+    }
+
+    private static func collectElementContexts(
+        node: AccessibilityHierarchy,
+        path: TreePath,
+        parentScrollView: UIScrollView?,
+        scrollableContainerViews: [AccessibilityContainer: UIView],
+        scrollableContainerViewsByPath: [TreePath: UIView],
+        objectIndex: ElementObjectIndex,
+        into contexts: inout [AccessibilityElement: ElementContext],
+        byPath contextsByPath: inout [TreePath: ElementContext]
+    ) {
+        switch node {
+        case .element(let element, _):
+            let origin: CGPoint? = parentScrollView.flatMap { scrollView in
+                let frame = element.shape.frame
+                return (!frame.isNull && !frame.isEmpty)
+                    ? scrollView.convert(frame.origin, from: nil)
+                    : nil
+            }
+            let context = ElementContext(
+                contentSpaceOrigin: origin,
+                scrollView: parentScrollView,
+                object: objectIndex.object(for: element, path: path)
+            )
+            contexts[element] = context
+            contextsByPath[path] = context
+        case .container(let container, let children):
+            let childScrollView: UIScrollView?
+            if let scrollView = scrollableContainerViewsByPath[path] as? UIScrollView
+                ?? scrollableContainerViews[container] as? UIScrollView,
+               !scrollView.bhIsUnsafeForProgrammaticScrolling {
+                childScrollView = scrollView
+            } else {
+                childScrollView = parentScrollView
+            }
+
+            for (index, child) in children.enumerated() {
+                collectElementContexts(
+                    node: child,
+                    path: path.appending(index),
+                    parentScrollView: childScrollView,
+                    scrollableContainerViews: scrollableContainerViews,
+                    scrollableContainerViewsByPath: scrollableContainerViewsByPath,
+                    objectIndex: objectIndex,
+                    into: &contexts,
+                    byPath: &contextsByPath
+                )
+            }
+        }
+    }
+
     // MARK: - Stable Container Identity
 
-    /// Compute a stable identifier for a parser container, derived from its
-    /// own exposed values. Identifiers persist across parses so callers that
-    /// compare container identity across reads (wire tree edits, exploration
-    /// caching) survive normal layout drift.
+    /// Compute a readable handle prefix for a parser container, derived from
+    /// its own exposed values. Container handles are capture-local tree
+    /// projections; `buildContainerStableIdIndex` appends a deterministic
+    /// subtree hash when multiple containers share this prefix in one parse.
     static func stableId(
         for container: AccessibilityContainer,
-        contentFrame: CGRect,
-        isNestedInScrollView: Bool = false,
-        scrollableView: UIView? = nil
+        contentFrame: CGRect
     ) -> String {
         let frameHash = coarseFrameHash(contentFrame)
         switch container.type {
         case .scrollable:
-            if let scrollableView, !isNestedInScrollView {
-                let oid = ObjectIdentifier(scrollableView)
-                return "scrollable_\(String(oid.hashValue, radix: 16))"
-            }
             return "scrollable_\(frameHash)"
         case .semanticGroup(let label, let value, let identifier):
             let labelSlug = TheScore.slugify(label) ?? "anon"
@@ -313,30 +425,38 @@ final class TheBurglar {
     /// (with content-position disambiguation), context resolution, container
     /// stable-id computation, and first-responder detection, all in one pass.
     static func buildScreen(from result: ParseResult) -> Screen {
-        let elements = result.hierarchy.sortedElements
-        let contexts = buildElementContexts(
+        let indexedElements = result.hierarchy.pathIndexedElements
+        let elements = indexedElements.map(\.element)
+        let contextsByPath = buildElementContextsByPath(
             hierarchy: result.hierarchy,
             scrollableContainerViews: result.scrollViews,
-            elementObjects: result.objects
+            scrollableContainerViewsByPath: result.scrollViewsByPath,
+            elementObjects: result.objects,
+            elementObjectsByPath: result.objectsByPath
         )
         let identityContext = buildContainerIdentityContext(
             hierarchy: result.hierarchy,
-            scrollableContainerViews: result.scrollViews
+            scrollableContainerViews: result.scrollViews,
+            scrollableContainerViewsByPath: result.scrollViewsByPath
         )
 
         let baseHeistIds = TheStash.IdAssignment.assign(elements)
         let resolvedHeistIds = resolveHeistIds(
-            base: baseHeistIds, elements: elements, contexts: contexts
+            base: baseHeistIds,
+            elements: elements,
+            origins: indexedElements.map { contextsByPath[$0.path]?.contentSpaceOrigin }
         )
 
         var screenElements: [HeistId: Screen.ScreenElement] = [:]
         screenElements.reserveCapacity(elements.count)
         var heistIdByElement: [AccessibilityElement: HeistId] = [:]
         heistIdByElement.reserveCapacity(elements.count)
+        var heistIdByElementPath: [TreePath: HeistId] = [:]
+        heistIdByElementPath.reserveCapacity(elements.count)
         var elementRefs: [HeistId: Screen.ElementRef] = [:]
         elementRefs.reserveCapacity(elements.count)
-        for (parsedElement, heistId) in zip(elements, resolvedHeistIds) {
-            let context = contexts[parsedElement]
+        for ((parsedElement, path, _), heistId) in zip(indexedElements, resolvedHeistIds) {
+            let context = contextsByPath[path]
             let entry = Screen.ScreenElement(
                 heistId: heistId,
                 contentSpaceOrigin: context?.contentSpaceOrigin,
@@ -344,39 +464,110 @@ final class TheBurglar {
             )
             screenElements[heistId] = entry
             heistIdByElement[parsedElement] = heistId
+            heistIdByElementPath[path] = heistId
             elementRefs[heistId] = Screen.ElementRef(
                 object: context?.object,
                 scrollView: context?.scrollView
             )
         }
 
-        let firstResponders = zip(elements, resolvedHeistIds).filter { element, _ in
-            (result.objects[element] as? UIView)?.isFirstResponder == true
+        let firstResponders = zip(indexedElements, resolvedHeistIds).filter { item, _ in
+            (contextsByPath[item.path]?.object as? UIView)?.isFirstResponder == true
         }
         if firstResponders.count > 1 {
             insideJobLogger.warning("Multiple first responders detected: \(firstResponders.map(\.1).joined(separator: ", "))")
         }
 
-        let containerStableIds = buildContainerStableIds(
+        let containerStableIdIndex = buildContainerStableIdIndex(
             hierarchy: result.hierarchy,
-            identityContext: identityContext,
-            scrollableViews: result.scrollViews
+            identityContext: identityContext
         )
+        let containerStableIds = containerStableIdIndex.byContainer
+        let containerStableIdsByPath = containerStableIdIndex.byPath
 
-        let scrollableViewRefs = Dictionary(
-            uniqueKeysWithValues: result.scrollViews.map { (container, view) in
-                (container, Screen.ScrollableViewRef(view: view))
-            }
-        )
+        let scrollableViewRefs = result.scrollViews.mapValues { Screen.ScrollableViewRef(view: $0) }
+        let scrollableViewRefsByPath = result.scrollViewsByPath.mapValues {
+            Screen.ScrollableViewRef(view: $0)
+        }
         return Screen(
             elements: screenElements,
             hierarchy: result.hierarchy,
             containerStableIds: containerStableIds,
+            containerStableIdsByPath: containerStableIdsByPath,
             heistIdByElement: heistIdByElement,
+            heistIdByElementPath: heistIdByElementPath,
             elementRefs: elementRefs,
             firstResponderHeistId: firstResponders.first?.1,
-            scrollableContainerViews: scrollableViewRefs
+            scrollableContainerViews: scrollableViewRefs,
+            scrollableContainerViewsByPath: scrollableViewRefsByPath
         )
+    }
+
+    private static func objectsByPath(
+        hierarchy: [AccessibilityHierarchy],
+        objectCandidates: [AccessibilityElement: [NSObject]]
+    ) -> [TreePath: NSObject] {
+        var consumedCounts: [AccessibilityElement: Int] = [:]
+        var result: [TreePath: NSObject] = [:]
+        for (element, path, _) in hierarchy.pathIndexedElements {
+            let nextIndex = consumedCounts[element, default: 0]
+            if let objects = objectCandidates[element], objects.indices.contains(nextIndex) {
+                result[path] = objects[nextIndex]
+            }
+            consumedCounts[element] = nextIndex + 1
+        }
+        return result
+    }
+
+    private static func scrollViewsByPath(
+        hierarchy: [AccessibilityHierarchy],
+        scrollViewCandidates: [AccessibilityContainer: [UIView]]
+    ) -> [TreePath: UIView] {
+        var consumedCounts: [AccessibilityContainer: Int] = [:]
+        var result: [TreePath: UIView] = [:]
+        for (container, path) in parserVisitorScrollableContainerPaths(hierarchy: hierarchy) {
+            let nextIndex = consumedCounts[container, default: 0]
+            if let views = scrollViewCandidates[container], views.indices.contains(nextIndex) {
+                result[path] = views[nextIndex]
+            }
+            consumedCounts[container] = nextIndex + 1
+        }
+        return result
+    }
+
+    private static func parserVisitorScrollableContainerPaths(
+        hierarchy: [AccessibilityHierarchy]
+    ) -> [(container: AccessibilityContainer, path: TreePath)] {
+        hierarchy.enumerated().flatMap { index, node in
+            parserVisitorScrollableContainerPaths(node: node, path: TreePath([index]))
+        }
+    }
+
+    private static func parserVisitorScrollableContainerPaths(
+        node: AccessibilityHierarchy,
+        path: TreePath
+    ) -> [(container: AccessibilityContainer, path: TreePath)] {
+        guard case .container(let container, let children) = node else { return [] }
+
+        var result = children.enumerated().flatMap { index, child in
+            parserVisitorScrollableContainerPaths(node: child, path: path.appending(index))
+        }
+        if container.isScrollable {
+            result.append((container, path))
+        }
+        return result
+    }
+
+    private static func legacyScrollViews(
+        hierarchy: [AccessibilityHierarchy],
+        scrollViewsByPath: [TreePath: UIView]
+    ) -> [AccessibilityContainer: UIView] {
+        var result: [AccessibilityContainer: UIView] = [:]
+        for (container, path) in hierarchy.containerPaths where container.isScrollable {
+            guard result[container] == nil, let view = scrollViewsByPath[path] else { continue }
+            result[container] = view
+        }
+        return result
     }
 
     // MARK: - HeistId Disambiguation (in-parse only)
@@ -388,14 +579,13 @@ final class TheBurglar {
     private static func resolveHeistIds(
         base: [String],
         elements: [AccessibilityElement],
-        contexts: [AccessibilityElement: ElementContext]
+        origins: [CGPoint?]
     ) -> [String] {
         var resolved: [String] = []
         resolved.reserveCapacity(base.count)
         var seen: [String: (element: AccessibilityElement, origin: CGPoint?)] = [:]
 
-        for (heistId, element) in zip(base, elements) {
-            let origin = contexts[element]?.contentSpaceOrigin
+        for ((heistId, element), origin) in zip(zip(base, elements), origins) {
             guard let existing = seen[heistId] else {
                 resolved.append(heistId)
                 seen[heistId] = (element, origin)
@@ -447,24 +637,84 @@ final class TheBurglar {
 
     // MARK: - Container StableId Index
 
-    private static func buildContainerStableIds(
+    private static func buildContainerStableIdIndex(
         hierarchy: [AccessibilityHierarchy],
-        identityContext: ContainerIdentityContext,
-        scrollableViews: [AccessibilityContainer: UIView]
-    ) -> [AccessibilityContainer: String] {
-        var result: [AccessibilityContainer: String] = [:]
-        for container in hierarchy.containers {
-            let contentFrame = identityContext.contentFrames[container] ?? container.frame.cgRect
-            let isNested = identityContext.nestedInScrollView.contains(container)
-            let stableId = stableId(
+        identityContext: ContainerIdentityContext
+    ) -> ContainerStableIdIndex {
+        let candidates = hierarchy.compactMapSubtrees { node, path -> ContainerStableIdCandidate? in
+            guard case .container(let container, _) = node else { return nil }
+            let contentFrame = identityContext.contentFramesByPath[path]
+                ?? identityContext.contentFrames[container]
+                ?? container.frame.cgRect
+            let readableName = stableId(
                 for: container,
-                contentFrame: contentFrame,
-                isNestedInScrollView: isNested,
-                scrollableView: scrollableViews[container]
+                contentFrame: contentFrame
             )
-            result[container] = stableId
+            return ContainerStableIdCandidate(
+                path: path,
+                container: container,
+                node: node,
+                readableName: readableName
+            )
         }
-        return result
+
+        let duplicateReadableNames = Set(
+            Dictionary(grouping: candidates, by: \.readableName)
+                .filter { $0.value.count > 1 }
+                .keys
+        )
+
+        var byContainer: [AccessibilityContainer: HeistContainer] = [:]
+        var byPath: [TreePath: HeistContainer] = [:]
+        for candidate in candidates {
+            let stableId: HeistContainer
+            if duplicateReadableNames.contains(candidate.readableName) {
+                stableId = captureLocalContainerId(
+                    readableName: candidate.readableName,
+                    node: candidate.node,
+                    path: candidate.path
+                )
+            } else {
+                stableId = candidate.readableName
+            }
+            byContainer[candidate.container] = stableId
+            byPath[candidate.path] = stableId
+        }
+        return ContainerStableIdIndex(byContainer: byContainer, byPath: byPath)
+    }
+
+    static func captureLocalContainerId(
+        readableName: HeistContainer,
+        node: AccessibilityHierarchy,
+        path: TreePath
+    ) -> HeistContainer {
+        "\(readableName)-\(containerHash(node: node, path: path))"
+    }
+
+    private static func containerHash(node: AccessibilityHierarchy, path: TreePath) -> String {
+        let payload = ContainerIdentityPayload(path: path.indices, subtree: node)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let data = (try? encoder.encode(payload))
+            ?? Data("\(path.indices)|\(String(describing: node))".utf8)
+        return SHA256.hash(data: data).prefix(6).map { String(format: "%02x", $0) }.joined()
+    }
+
+    private struct ContainerStableIdCandidate {
+        let path: TreePath
+        let container: AccessibilityContainer
+        let node: AccessibilityHierarchy
+        let readableName: HeistContainer
+    }
+
+    private struct ContainerStableIdIndex {
+        let byContainer: [AccessibilityContainer: HeistContainer]
+        let byPath: [TreePath: HeistContainer]
+    }
+
+    private struct ContainerIdentityPayload: Encodable {
+        let path: [Int]
+        let subtree: AccessibilityHierarchy
     }
 
 }
@@ -481,7 +731,28 @@ private final class RotorResultParsingRoot: UIView {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        return nil
+    }
+}
+
+private extension Array where Element == AccessibilityHierarchy {
+    func node(at path: TreePath) -> AccessibilityHierarchy? {
+        guard let rootIndex = path.indices.first,
+              indices.contains(rootIndex)
+        else { return nil }
+        guard path.indices.count > 1 else { return self[rootIndex] }
+        return self[rootIndex].node(at: TreePath([Int](path.indices.dropFirst())))
+    }
+}
+
+private extension AccessibilityHierarchy {
+    func node(at path: TreePath) -> AccessibilityHierarchy? {
+        guard !path.indices.isEmpty else { return self }
+        guard case .container(_, let children) = self,
+              let childIndex = path.indices.first,
+              children.indices.contains(childIndex)
+        else { return nil }
+        return children[childIndex].node(at: TreePath([Int](path.indices.dropFirst())))
     }
 }
 

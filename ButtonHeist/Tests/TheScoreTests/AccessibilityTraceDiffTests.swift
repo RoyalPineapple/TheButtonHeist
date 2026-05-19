@@ -35,6 +35,33 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         XCTAssertEqual(delta.elementEdits, edits)
     }
 
+    func testTreeDiffKeepsElementAndContainerIdentityNamespacesSeparate() {
+        let shared = makeElement(heistId: "shared", label: "Shared", traits: [.button])
+        let container = makeContainer()
+        let before = makeTestInterface(nodes: [
+            testElement(shared),
+            testContainer(container, stableId: "shared", children: []),
+        ])
+        let after = makeTestInterface(nodes: [
+            testContainer(container, stableId: "shared", children: []),
+            testElement(shared),
+        ])
+
+        let edits = ElementEdits.between(before, after)
+
+        XCTAssertEqual(edits.treeMoved.count, 2)
+        XCTAssertTrue(edits.treeMoved.contains {
+            $0.ref == TreeNodeRef(id: "shared", kind: .container)
+                && $0.from == TreeLocation(parentId: nil, index: 1)
+                && $0.to == TreeLocation(parentId: nil, index: 0)
+        })
+        XCTAssertTrue(edits.treeMoved.contains {
+            $0.ref == TreeNodeRef(id: "shared", kind: .element)
+                && $0.from == TreeLocation(parentId: nil, index: 0)
+                && $0.to == TreeLocation(parentId: nil, index: 1)
+        })
+    }
+
     func testTreeInterfaceAndCaptureDiffsShareTheSameEdits() {
         let beforeInterface = makeTestInterface(
             nodes: [

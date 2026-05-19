@@ -77,7 +77,8 @@ struct ClosingSession: Sendable {
 
     var endTime: Date {
         guard let endTime = manifest.endTime else {
-            preconditionFailure("Closing session manifest must have an endTime")
+            logger.error("Closing session manifest is missing endTime; using startTime")
+            return manifest.startTime
         }
         return endTime
     }
@@ -104,7 +105,8 @@ struct ClosedSession: Sendable {
 
     var endTime: Date {
         guard let endTime = manifest.endTime else {
-            preconditionFailure("Closed session manifest must have an endTime")
+            logger.error("Closed session manifest is missing endTime; using startTime")
+            return manifest.startTime
         }
         return endTime
     }
@@ -120,7 +122,8 @@ struct ArchivedSession: Sendable {
 
     var endTime: Date {
         guard let endTime = manifest.endTime else {
-            preconditionFailure("Archived session manifest must have an endTime")
+            logger.error("Archived session manifest is missing endTime; using startTime")
+            return manifest.startTime
         }
         return endTime
     }

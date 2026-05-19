@@ -30,7 +30,6 @@ private extension HeistValue {
             let data = try JSONEncoder().encode(value)
             return try JSONDecoder().decode(HeistValue.self, from: data)
         } catch {
-            assertionFailure("Failed to encode \(T.self) as HeistValue: \(error)")
             return .object([
                 "type": .string("encoding_failed"),
                 "error": .string(String(describing: error)),

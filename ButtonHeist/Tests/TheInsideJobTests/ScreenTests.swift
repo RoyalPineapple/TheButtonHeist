@@ -13,9 +13,10 @@ final class ScreenTests: XCTestCase {
         label: String? = nil,
         value: String? = nil,
         identifier: String? = nil,
-        traits: UIAccessibilityTraits = .none
+        traits: UIAccessibilityTraits = .none,
+        shape: AccessibilityElement.Shape = .frame(.zero)
     ) -> AccessibilityElement {
-        .make(label: label, value: value, identifier: identifier, traits: traits)
+        .make(label: label, value: value, identifier: identifier, traits: traits, shape: shape)
     }
 
     private func makeEntry(
@@ -209,6 +210,30 @@ final class ScreenTests: XCTestCase {
         )
         XCTAssertEqual(screen.name, "Controls Demo")
         XCTAssertEqual(screen.id, "controls_demo")
+    }
+
+    func testNameDerivesFromTopmostHeaderInHierarchy() {
+        let contentHeader = makeElement(
+            label: "Section Header Style",
+            traits: .header,
+            shape: .frame(CGRect(x: 20, y: 240, width: 200, height: 44))
+        )
+        let navigationTitle = makeElement(
+            label: "Display",
+            traits: .header,
+            shape: .frame(CGRect(x: 120, y: 72, width: 100, height: 44))
+        )
+        let screen = Screen(
+            elements: [:],
+            hierarchy: [
+                .element(contentHeader, traversalIndex: 0),
+                .element(navigationTitle, traversalIndex: 1),
+            ],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
+        XCTAssertEqual(screen.name, "Display")
+        XCTAssertEqual(screen.id, "display")
     }
 
     func testNameIgnoresHeaderWithoutLabel() {

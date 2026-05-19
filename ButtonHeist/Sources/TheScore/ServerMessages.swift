@@ -493,13 +493,13 @@ public struct RotorTextRange: Codable, Equatable, Sendable {
 // MARK: - Tree Edit Types
 
 /// Stable identity namespace for a node in `Interface.tree`.
-public enum TreeNodeKind: String, Codable, Sendable, Equatable {
+public enum TreeNodeKind: String, Codable, Sendable, Equatable, Hashable {
     case element
     case container
 }
 
 /// A stable reference to an existing tree node.
-public struct TreeNodeRef: Codable, Sendable, Equatable {
+public struct TreeNodeRef: Codable, Sendable, Equatable, Hashable {
     public let id: String
     public let kind: TreeNodeKind
 

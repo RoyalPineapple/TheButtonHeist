@@ -261,6 +261,18 @@ final class IdAssignerTests: XCTestCase {
         XCTAssertEqual(ids[1], "cell_2")
     }
 
+    func testDuplicateSuffixesSkipExistingIds() {
+        let ids = assign([
+            makeElement(identifier: "cell"),
+            makeElement(identifier: "cell"),
+            makeElement(identifier: "cell_1"),
+        ])
+        XCTAssertEqual(ids[0], "cell_2")
+        XCTAssertEqual(ids[1], "cell_3")
+        XCTAssertEqual(ids[2], "cell_1")
+        XCTAssertEqual(Set(ids).count, ids.count)
+    }
+
     func testUniqueElementsGetNoSuffix() {
         let ids = assign([
             makeElement(label: "OK", traits: [.button]),

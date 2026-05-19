@@ -59,6 +59,27 @@ final class TheBurglarApplyTests: XCTestCase {
         XCTAssertEqual(screen.liveInterface.heistIdByElement[element], "ok_button")
     }
 
+    func testBuildScreenKeepsPathHeistIdsForValueEqualElements() {
+        let first = makeElement(label: "Item", traits: .button)
+        let second = makeElement(label: "Item", traits: .button)
+        let result = TheBurglar.ParseResult(
+            hierarchy: [
+                .element(first, traversalIndex: 0),
+                .element(second, traversalIndex: 1),
+            ],
+            objects: [:],
+            scrollViews: [:]
+        )
+
+        let screen = TheBurglar.buildScreen(from: result)
+        let interface = TheStash.WireConversion.toInterface(from: screen)
+
+        XCTAssertEqual(screen.elements.count, 2)
+        XCTAssertEqual(screen.liveInterface.heistIdByElementPath[TreePath([0])], "item_button_1")
+        XCTAssertEqual(screen.liveInterface.heistIdByElementPath[TreePath([1])], "item_button_2")
+        XCTAssertEqual(interface.annotations.elements.map(\.heistId), ["item_button_1", "item_button_2"])
+    }
+
     func testBuildScreenSetsHierarchy() {
         let element = makeElement(label: "Item")
         let hierarchy: [AccessibilityHierarchy] = [.element(element, traversalIndex: 0)]

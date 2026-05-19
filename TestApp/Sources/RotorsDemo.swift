@@ -95,6 +95,7 @@ private struct TextRangeRotorView: UIViewRepresentable {
     }
 
     private static func mentionRanges(in textView: UITextView) -> [UITextRange] {
+        guard let mentionRegex else { return [] }
         let fullRange = NSRange(textView.text.startIndex..., in: textView.text)
         return mentionRegex.matches(in: textView.text, range: fullRange).compactMap { match in
             guard let start = textView.position(from: textView.beginningOfDocument, offset: match.range.location),
@@ -105,13 +106,7 @@ private struct TextRangeRotorView: UIViewRepresentable {
         }
     }
 
-    private static let mentionRegex: NSRegularExpression = {
-        do {
-            return try NSRegularExpression(pattern: "@[A-Za-z]+")
-        } catch {
-            preconditionFailure("Static mention rotor regex failed to compile: \(error)")
-        }
-    }()
+    private static let mentionRegex = try? NSRegularExpression(pattern: "@[A-Za-z]+")
 }
 
 private struct RotorDemoIssueRow: View {

@@ -48,6 +48,20 @@ final class MinimumMatcherTests: XCTestCase {
         XCTAssertEqual(resolve(minimumMatcher, in: capture), target)
     }
 
+    func testBuildForElementOutsideCaptureReturnsBestEffortMatcher() {
+        let staleElement = makeElement(heistId: "external", label: "External", traits: [.button])
+        let capture = makeCapture([
+            makeElement(heistId: "save", label: "Save", traits: [.button]),
+        ])
+
+        let minimumMatcher = MinimumMatcher.build(element: staleElement, in: capture)
+
+        XCTAssertEqual(minimumMatcher.element, staleElement)
+        XCTAssertEqual(minimumMatcher.matcher, ElementMatcher(label: "External"))
+        XCTAssertNil(minimumMatcher.ordinal)
+        XCTAssertNil(resolve(minimumMatcher, in: capture))
+    }
+
     func testFreshPassResolvesNewConflictIntroducedByMutatedCapture() {
         let originalTarget = makeElement(heistId: "save", label: "Save", traits: [.button])
         let originalCapture = makeCapture([

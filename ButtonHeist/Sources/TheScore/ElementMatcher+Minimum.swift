@@ -22,17 +22,18 @@ public struct MinimumMatcher: Sendable, Equatable {
     /// uniqueness universe.
     ///
     /// A matcher is valid only relative to the full accessibility state that
-    /// proves its uniqueness. Passing an element that is not in the capture is
-    /// a programming error.
+    /// proves its uniqueness. If the element is no longer in the capture,
+    /// return a best-effort matcher for that stale element rather than
+    /// terminating the host app.
     public static func build(
         element: HeistElement,
         in capture: AccessibilityTrace.Capture
     ) -> MinimumMatcher {
         let elements = capture.interface.elements
-        guard let captureElement = elements.first(where: { $0 == element }) else {
-            preconditionFailure("MinimumMatcher requires an element from the supplied capture")
+        if let captureElement = elements.first(where: { $0 == element }) {
+            return build(element: captureElement, allElements: elements)
         }
-        return build(element: captureElement, allElements: elements)
+        return build(element: element, allElements: elements + [element])
     }
 
     /// Build matchers for every element in a capture, preserving traversal order.

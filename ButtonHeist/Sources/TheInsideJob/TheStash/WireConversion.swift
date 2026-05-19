@@ -115,7 +115,8 @@ extension TheStash {
     private static func elementAnnotations(from screen: Screen) -> [InterfaceElementAnnotation] {
         screen.liveInterface.hierarchy.compactMapSubtrees { node, path in
             guard case .element(let element, _) = node else { return nil }
-            guard let heistId = screen.liveInterface.heistIdByElement[element] else {
+            guard let heistId = screen.liveInterface.heistId(forPath: path)
+                ?? screen.liveInterface.heistIdByElement[element] else {
                 wireConversionLogger.error("Hierarchy leaf with no heistId in screen; annotating without id")
                 return InterfaceElementAnnotation(
                     path: path,
@@ -137,7 +138,8 @@ extension TheStash {
             guard case .container(let container, _) = node else { return nil }
             return InterfaceContainerAnnotation(
                 path: path,
-                stableId: screen.liveInterface.containerStableIds[container]
+                stableId: screen.liveInterface.containerStableIdsByPath[path]
+                    ?? screen.liveInterface.containerStableIds[container]
             )
         }
     }

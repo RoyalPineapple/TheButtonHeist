@@ -53,7 +53,8 @@ struct Screen: Equatable {
         hierarchy: [AccessibilityHierarchy],
         elementRefs: [HeistId: ElementRef] = [:],
         firstResponderHeistId: HeistId?,
-        scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
+        scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef],
+        scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:]
     ) {
         self.init(
             elements: elements,
@@ -61,9 +62,11 @@ struct Screen: Equatable {
                 hierarchy: hierarchy,
                 containerStableIds: [:],
                 heistIdByElement: [:],
+                heistIdByElementPath: [:],
                 elementRefs: elementRefs,
                 firstResponderHeistId: firstResponderHeistId,
-                scrollableContainerViews: scrollableContainerViews
+                scrollableContainerViews: scrollableContainerViews,
+                scrollableContainerViewsByPath: scrollableContainerViewsByPath
             )
         )
     }
@@ -73,23 +76,32 @@ struct Screen: Equatable {
         elements: [HeistId: ScreenElement],
         hierarchy: [AccessibilityHierarchy],
         containerStableIds: [AccessibilityContainer: HeistContainer],
+        containerStableIdsByPath: [TreePath: HeistContainer] = [:],
         heistIdByElement: [AccessibilityElement: HeistId],
+        heistIdByElementPath: [TreePath: HeistId] = [:],
         elementRefs: [HeistId: ElementRef] = [:],
         firstResponderHeistId: HeistId?,
-        scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
+        scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef],
+        scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:]
     ) {
         self.init(
             elements: elements,
             liveInterface: LiveInterface(
                 hierarchy: hierarchy,
                 containerStableIds: containerStableIds,
+                containerStableIdsByPath: containerStableIdsByPath,
                 heistIdByElement: heistIdByElement,
+                heistIdByElementPath: heistIdByElementPath,
                 elementRefs: elementRefs,
                 firstResponderHeistId: firstResponderHeistId,
                 scrollableContainerViews: scrollableContainerViews,
+                scrollableContainerViewsByPath: scrollableContainerViewsByPath,
                 scrollableViewsByStableId: Self.scrollableViewsByStableId(
+                    hierarchy: hierarchy,
                     containerStableIds: containerStableIds,
-                    scrollableContainerViews: scrollableContainerViews
+                    containerStableIdsByPath: containerStableIdsByPath,
+                    scrollableContainerViews: scrollableContainerViews,
+                    scrollableContainerViewsByPath: scrollableContainerViewsByPath
                 )
             )
         )
@@ -104,15 +116,27 @@ struct Screen: Equatable {
     }
 
     private static func scrollableViewsByStableId(
+        hierarchy: [AccessibilityHierarchy],
         containerStableIds: [AccessibilityContainer: HeistContainer],
-        scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
+        containerStableIdsByPath: [TreePath: HeistContainer],
+        scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef],
+        scrollableContainerViewsByPath: [TreePath: ScrollableViewRef]
     ) -> [HeistContainer: ScrollableViewRef] {
-        Dictionary(
-            uniqueKeysWithValues: scrollableContainerViews.compactMap { container, ref in
-                guard let stableId = containerStableIds[container] else { return nil }
-                return (stableId, ref)
+        var result: [HeistContainer: ScrollableViewRef] = [:]
+        var ambiguousIds = Set<HeistContainer>()
+
+        for (container, path) in hierarchy.containerPaths {
+            guard let ref = scrollableContainerViewsByPath[path] ?? scrollableContainerViews[container] else { continue }
+            guard let stableId = containerStableIdsByPath[path] ?? containerStableIds[container] else { continue }
+            guard !ambiguousIds.contains(stableId) else { continue }
+            if result[stableId] != nil {
+                result[stableId] = nil
+                ambiguousIds.insert(stableId)
+            } else {
+                result[stableId] = ref
             }
-        )
+        }
+        return result
     }
 
     // MARK: - Element Entry
@@ -194,27 +218,36 @@ struct Screen: Equatable {
     struct LiveInterface: Equatable {
         let hierarchy: [AccessibilityHierarchy]
         let containerStableIds: [AccessibilityContainer: HeistContainer]
+        let containerStableIdsByPath: [TreePath: HeistContainer]
         let heistIdByElement: [AccessibilityElement: HeistId]
+        let heistIdByElementPath: [TreePath: HeistId]
         let elementRefs: [HeistId: ElementRef]
         let firstResponderHeistId: HeistId?
         let scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
+        let scrollableContainerViewsByPath: [TreePath: ScrollableViewRef]
         private let scrollableViewsByStableId: [HeistContainer: ScrollableViewRef]
 
         init(
             hierarchy: [AccessibilityHierarchy],
             containerStableIds: [AccessibilityContainer: HeistContainer],
+            containerStableIdsByPath: [TreePath: HeistContainer] = [:],
             heistIdByElement: [AccessibilityElement: HeistId],
+            heistIdByElementPath: [TreePath: HeistId] = [:],
             elementRefs: [HeistId: ElementRef],
             firstResponderHeistId: HeistId?,
             scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef],
+            scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:],
             scrollableViewsByStableId: [HeistContainer: ScrollableViewRef] = [:]
         ) {
             self.hierarchy = hierarchy
             self.containerStableIds = containerStableIds
+            self.containerStableIdsByPath = containerStableIdsByPath
             self.heistIdByElement = heistIdByElement
+            self.heistIdByElementPath = heistIdByElementPath
             self.elementRefs = elementRefs
             self.firstResponderHeistId = firstResponderHeistId
             self.scrollableContainerViews = scrollableContainerViews
+            self.scrollableContainerViewsByPath = scrollableContainerViewsByPath
             self.scrollableViewsByStableId = scrollableViewsByStableId
         }
 
@@ -222,13 +255,14 @@ struct Screen: Equatable {
             hierarchy: [],
             containerStableIds: [:],
             heistIdByElement: [:],
+            heistIdByElementPath: [:],
             elementRefs: [:],
             firstResponderHeistId: nil,
             scrollableContainerViews: [:]
         )
 
         var heistIds: Set<HeistId> {
-            Set(heistIdByElement.values)
+            Set(heistIdByElement.values).union(heistIdByElementPath.values)
         }
 
         func contains(heistId: HeistId) -> Bool {
@@ -237,6 +271,10 @@ struct Screen: Equatable {
 
         func heistId(for element: AccessibilityElement) -> HeistId? {
             heistIdByElement[element]
+        }
+
+        func heistId(forPath path: TreePath) -> HeistId? {
+            heistIdByElementPath[path]
         }
 
         func object(for heistId: HeistId) -> NSObject? {
@@ -281,13 +319,25 @@ struct Screen: Equatable {
         KnownInterface(elements: elements)
     }
 
-    /// Derive the screen name from the first header element in latest live
+    /// Derive the screen name from the topmost header element in latest live
     /// traversal order. Not stored — recomputed on access so it cannot drift
     /// from the parser tree.
     var name: String? {
-        liveInterface.hierarchy.sortedElements.first {
-            $0.traits.contains(.header) && $0.label != nil
-        }?.label
+        liveInterface.hierarchy.sortedElements
+            .enumerated()
+            .compactMap { index, element -> (index: Int, element: AccessibilityElement)? in
+                guard element.traits.contains(.header), element.label != nil else { return nil }
+                return (index, element)
+            }
+            .min { left, right in
+                let leftFrame = left.element.shape.frame
+                let rightFrame = right.element.shape.frame
+                if leftFrame.minY != rightFrame.minY { return leftFrame.minY < rightFrame.minY }
+                if leftFrame.minX != rightFrame.minX { return leftFrame.minX < rightFrame.minX }
+                return left.index < right.index
+            }?
+            .element
+            .label
     }
 
     /// Slugified screen name for machine use (e.g. "controls_demo").

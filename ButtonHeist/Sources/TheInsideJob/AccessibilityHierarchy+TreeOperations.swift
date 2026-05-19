@@ -196,6 +196,14 @@ extension Array where Element == AccessibilityHierarchy {
         flatMap(\.containers)
     }
 
+    /// All container nodes across all roots, paired with capture-local tree paths.
+    var containerPaths: [(container: AccessibilityContainer, path: TreePath)] {
+        compactMapSubtrees { node, path in
+            guard case .container(let container, _) = node else { return nil }
+            return (container, path)
+        }
+    }
+
     // MARK: - Container Queries
 
     /// Scrollable containers in pre-order (outermost first).

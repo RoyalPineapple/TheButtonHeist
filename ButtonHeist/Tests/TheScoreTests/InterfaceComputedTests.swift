@@ -119,6 +119,16 @@ final class InterfaceComputedTests: XCTestCase {
         XCTAssertTrue(description.contains("1 link"))
     }
 
+    func testScreenDescriptionUsesTopmostHeader() {
+        let elements = [
+            makeElement(label: "Section Header Style", traits: [.header], frameY: 240),
+            makeElement(label: "Display", traits: [.header], frameY: 72),
+            makeElement(label: "Favorite star", traits: [.image], frameY: 180),
+        ]
+        let description = Interface.buildScreenDescription(from: elements)
+        XCTAssertEqual(description, "Display")
+    }
+
     func testScreenDescriptionBackButtonExcluded() {
         let elements = [
             makeElement(label: "Back", traits: [.button, .backButton]),
@@ -141,6 +151,15 @@ final class InterfaceComputedTests: XCTestCase {
         ]
         let interface = makeTestInterface(elements: elements, timestamp: Date())
         XCTAssertEqual(interface.screenId, "controls_demo")
+    }
+
+    func testScreenIdUsesTopmostHeader() {
+        let elements = [
+            makeElement(label: "Section Header Style", traits: [.header], frameY: 240),
+            makeElement(label: "Display", traits: [.header], frameY: 72),
+        ]
+        let interface = makeTestInterface(elements: elements, timestamp: Date())
+        XCTAssertEqual(interface.screenId, "display")
     }
 
     func testScreenIdNilWhenNoHeader() {
@@ -195,6 +214,15 @@ final class InterfaceComputedTests: XCTestCase {
         XCTAssertEqual(navigation.screenTitle, "Checkout")
         XCTAssertNil(navigation.backButton)
         XCTAssertNil(navigation.tabBarItems)
+    }
+
+    func testNavigationScreenTitleUsesTopmostHeader() {
+        let elements = [
+            makeElement(label: "Section Header Style", traits: [.header], frameY: 240),
+            makeElement(label: "Display", traits: [.header], frameY: 72),
+        ]
+        let navigation = Interface.buildNavigation(from: elements)
+        XCTAssertEqual(navigation.screenTitle, "Display")
     }
 
     func testNavigationBackButton() {
@@ -270,14 +298,16 @@ final class InterfaceComputedTests: XCTestCase {
         heistId: HeistId = "",
         label: String?,
         value: String? = nil,
-        traits: [HeistTrait]
+        traits: [HeistTrait],
+        frameX: Double = 0,
+        frameY: Double = 0
     ) -> HeistElement {
         HeistElement(
             heistId: heistId,
             description: label ?? "",
             label: label, value: value, identifier: nil,
             traits: traits,
-            frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
+            frameX: frameX, frameY: frameY, frameWidth: 100, frameHeight: 44,
             actions: []
         )
     }

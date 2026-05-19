@@ -22,7 +22,7 @@ class TouchCanvasUIView: UIView {
         accessibilityLabel = "Touch Canvas"
     }
 
-    required init?(coder: NSCoder) { fatalError() }
+    required init?(coder: NSCoder) { return nil }
 
     func clearPaths() {
         paths.removeAll()
