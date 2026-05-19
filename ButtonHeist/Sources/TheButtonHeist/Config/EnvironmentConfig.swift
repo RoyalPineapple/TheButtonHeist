@@ -149,7 +149,15 @@ public struct EnvironmentConfig: Sendable {
             resolvedSessionTimeout = 60.0
         }
 
-        let resolvedConnectionTimeout = connectionTimeout ?? 30.0
+        let resolvedConnectionTimeout: TimeInterval
+        if let explicit = connectionTimeout, explicit > 0 {
+            resolvedConnectionTimeout = explicit
+        } else if let envStr = env[EnvironmentKey.buttonheistConnectionTimeout.rawValue],
+                  let parsed = Double(envStr), parsed > 0 {
+            resolvedConnectionTimeout = parsed
+        } else {
+            resolvedConnectionTimeout = 30.0
+        }
 
         return EnvironmentConfig(
             deviceFilter: resolvedDevice,

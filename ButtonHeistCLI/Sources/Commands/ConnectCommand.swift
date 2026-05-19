@@ -49,6 +49,7 @@ struct ConnectCommand: AsyncParsableCommand, CLICommandContract {
         let resolved = EnvironmentConfig.resolve(
             deviceFilter: resolvedConnection.device,
             token: resolvedConnection.token,
+            connectionTimeout: resolvedConnection.connectTimeout,
             autoReconnect: false
         )
         guard resolved.deviceFilter != nil else {
@@ -88,6 +89,7 @@ extension ConnectionOptions {
         var merged = ConnectionOptions()
         merged.device = positionalDevice ?? base.device
         merged.token = base.token
+        merged.connectTimeout = base.connectTimeout
         merged.quiet = base.quiet
         return merged
     }

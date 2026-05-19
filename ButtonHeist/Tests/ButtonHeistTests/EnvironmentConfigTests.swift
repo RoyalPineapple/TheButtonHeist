@@ -42,16 +42,34 @@ final class EnvironmentConfigTests: XCTestCase {
         XCTAssertEqual(config.sessionTimeout, 120.0)
     }
 
+    func testConnectionTimeoutFromEnvVar() {
+        let env = ["BUTTONHEIST_CONNECTION_TIMEOUT": "7.5"]
+        let config = EnvironmentConfig.resolve(env: env)
+        XCTAssertEqual(config.connectionTimeout, 7.5)
+    }
+
     func testExplicitSessionTimeoutOverridesEnv() {
         let env = ["BUTTONHEIST_SESSION_TIMEOUT": "120"]
         let config = EnvironmentConfig.resolve(sessionTimeout: 300, env: env)
         XCTAssertEqual(config.sessionTimeout, 300.0)
     }
 
+    func testExplicitConnectionTimeoutOverridesEnv() {
+        let env = ["BUTTONHEIST_CONNECTION_TIMEOUT": "7.5"]
+        let config = EnvironmentConfig.resolve(connectionTimeout: 2.0, env: env)
+        XCTAssertEqual(config.connectionTimeout, 2.0)
+    }
+
     func testInvalidSessionTimeoutEnvFallsBackToDefault() {
         let env = ["BUTTONHEIST_SESSION_TIMEOUT": "abc"]
         let config = EnvironmentConfig.resolve(env: env)
         XCTAssertEqual(config.sessionTimeout, 60.0)
+    }
+
+    func testInvalidConnectionTimeoutEnvFallsBackToDefault() {
+        let env = ["BUTTONHEIST_CONNECTION_TIMEOUT": "abc"]
+        let config = EnvironmentConfig.resolve(env: env)
+        XCTAssertEqual(config.connectionTimeout, 30.0)
     }
 
     func testZeroSessionTimeoutEnvFallsBackToDefault() {
