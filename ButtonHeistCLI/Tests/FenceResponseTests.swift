@@ -508,7 +508,7 @@ final class FenceResponseTests: XCTestCase {
         }
         let annotations = InterfaceAnnotations(elements: elements.enumerated().map { index, element in
             InterfaceElementAnnotation(
-                traversalIndex: index,
+                path: TreePath([index]),
                 heistId: element.heistId,
                 actions: element.actions
             )
@@ -523,7 +523,7 @@ final class FenceResponseTests: XCTestCase {
             node: .element(makeAccessibilityElement(element), traversalIndex: 0),
             annotations: InterfaceAnnotations(elements: [
                 InterfaceElementAnnotation(
-                    traversalIndex: 0,
+                    path: .root,
                     heistId: element.heistId,
                     actions: element.actions
                 ),
