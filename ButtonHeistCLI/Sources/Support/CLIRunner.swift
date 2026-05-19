@@ -18,11 +18,18 @@ enum CLIRunner {
         request: [String: Any],
         statusMessage: String? = nil
     ) async throws {
-        let (fence, response) = try await execute(
-            connection: connection,
-            request: request,
-            statusMessage: statusMessage
-        )
+        let fence: TheFence
+        let response: FenceResponse
+        do {
+            (fence, response) = try await execute(
+                connection: connection,
+                request: request,
+                statusMessage: statusMessage
+            )
+        } catch {
+            outputResponse(.failure(error), format: format ?? .auto)
+            throw ExitCode.failure
+        }
         defer { fence.stop() }
 
         outputResponse(response, format: format ?? .auto)
@@ -106,6 +113,7 @@ enum CLIRunner {
         let config = EnvironmentConfig.resolve(
             deviceFilter: connection.device,
             token: connection.token,
+            connectionTimeout: connection.connectTimeout,
             autoReconnect: false
         )
         let fence = TheFence(configuration: config.fenceConfiguration)

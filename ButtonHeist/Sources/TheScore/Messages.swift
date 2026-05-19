@@ -90,6 +90,7 @@ public enum EnvironmentKey: String, Sendable {
     case buttonheistToken = "BUTTONHEIST_TOKEN"
     case buttonheistDriverId = "BUTTONHEIST_DRIVER_ID"
     case buttonheistSessionTimeout = "BUTTONHEIST_SESSION_TIMEOUT"
+    case buttonheistConnectionTimeout = "BUTTONHEIST_CONNECTION_TIMEOUT"
     // Server
     case insideJobToken = "INSIDEJOB_TOKEN"
     case insideJobPort = "INSIDEJOB_PORT"

@@ -23,6 +23,7 @@ APP=""
 CLI_CONFIGURATION="debug"
 HEIST_PATH=""
 SKIP_HEIST_PLAYBACK=false
+BENCHMARK_REPORT=""
 
 usage() {
     cat <<'EOF'
@@ -41,6 +42,7 @@ Options:
   --cli-configuration C  SwiftPM CLI configuration: debug or release. Defaults to debug.
   --heist PATH           Heist fixture to replay. Defaults to tests/fixtures/bh-demo-smoke.heist.
   --skip-heist-playback  Skip replaying the recorded heist fixture.
+  --benchmark-report P   Write per-command timing measurements to PATH.
   -h, --help             Show this help.
 
 This harness is intentionally CLI-only: it does not require an MCP server or a
@@ -233,6 +235,11 @@ while [[ $# -gt 0 ]]; do
             SKIP_HEIST_PLAYBACK=true
             shift
             ;;
+        --benchmark-report)
+            BENCHMARK_REPORT="${2:-}"
+            [[ -n "$BENCHMARK_REPORT" ]] || fail "--benchmark-report requires a value"
+            shift 2
+            ;;
         -h|--help)
             usage
             exit 0
@@ -251,6 +258,7 @@ require_tool cksum
 require_tool awk
 require_tool sed
 require_tool jq
+require_tool python3
 
 WORKTREE_ID="$(sanitize_identifier "$(basename "$REPO_ROOT")")"
 [[ -n "$WORKTREE_ID" ]] || WORKTREE_ID="workspace"
@@ -277,6 +285,7 @@ DEVICE_ENDPOINT="127.0.0.1:$PORT"
 DERIVED_DATA="${TMPDIR:-/tmp}/buttonheist-e2e-${WORKTREE_ID}-derived-data"
 BUILD_LOG="${TMPDIR:-/tmp}/buttonheist-e2e-${WORKTREE_ID}-xcodebuild.log"
 BUTTONHEIST_BIN="$REPO_ROOT/ButtonHeistCLI/.build/$CLI_CONFIGURATION/buttonheist"
+BENCHMARK_TMP="$(mktemp "${TMPDIR:-/tmp}/buttonheist-demo-benchmark.XXXXXX")"
 OWNS_SIMULATOR=false
 APP_LAUNCHED=false
 
@@ -294,15 +303,94 @@ cleanup() {
     fi
     rm -rf "$DERIVED_DATA"
     rm -f "$BUILD_LOG"
+    rm -f "$BENCHMARK_TMP"
     exit "$status"
 }
 trap cleanup EXIT
 
+now_ms() {
+    python3 - <<'PY'
+import time
+print(time.monotonic_ns() // 1_000_000)
+PY
+}
+
+record_benchmark() {
+    local name="$1"
+    local command="$2"
+    local duration_ms="$3"
+    local status="$4"
+    jq -cn \
+        --arg name "$name" \
+        --arg command "$command" \
+        --argjson durationMs "$duration_ms" \
+        --argjson status "$status" \
+        '{name: $name, command: $command, durationMs: $durationMs, status: $status}' \
+        >> "$BENCHMARK_TMP"
+}
+
+emit_benchmark_report() {
+    local generated_at
+    local report_json
+    generated_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+    report_json="$(
+        jq -s \
+            --arg generatedAt "$generated_at" \
+            --arg cliConfiguration "$CLI_CONFIGURATION" \
+            --arg endpoint "$DEVICE_ENDPOINT" \
+            '{
+                generatedAt: $generatedAt,
+                cliConfiguration: $cliConfiguration,
+                endpoint: $endpoint,
+                commandCount: length,
+                totalDurationMs: ((map(.durationMs) | add) // 0),
+                maxDurationMs: ((map(.durationMs) | max) // 0),
+                measurements: .
+            }' "$BENCHMARK_TMP"
+    )"
+    log "Benchmark summary"
+    jq -r '
+        "    commands: \(.commandCount)",
+        "    total: \(.totalDurationMs)ms",
+        "    max: \(.maxDurationMs)ms",
+        (.measurements[] | "    \(.name): \(.durationMs)ms")
+    ' <<< "$report_json"
+    if [[ -n "$BENCHMARK_REPORT" ]]; then
+        mkdir -p "$(dirname "$BENCHMARK_REPORT")"
+        printf '%s\n' "$report_json" > "$BENCHMARK_REPORT"
+        log "Benchmark report written to $BENCHMARK_REPORT"
+    fi
+}
+
 run_cli_json() {
+    local status
+    local output
+    local start_ms
+    local end_ms
+    local duration_ms
+    local name
+    name="${1:-command}"
+    start_ms="$(now_ms)"
+    set +e
+    output="$(
     BUTTONHEIST_DEVICE="$DEVICE_ENDPOINT" \
     BUTTONHEIST_TOKEN="$TOKEN" \
     BUTTONHEIST_DRIVER_ID="$TOKEN" \
-    "$BUTTONHEIST_BIN" "$@" --format json --quiet
+    "$BUTTONHEIST_BIN" "$@" \
+        --connect-timeout "${BUTTONHEIST_CONNECT_TIMEOUT:-10}" \
+        --format json \
+        --quiet 2>&1
+    )"
+    status=$?
+    end_ms="$(now_ms)"
+    set -e
+    duration_ms=$((end_ms - start_ms))
+    record_benchmark "$name" "$*" "$duration_ms" "$status"
+    if (( status != 0 )); then
+        printf '%s\n' "$output" >&2
+        return "$status"
+    fi
+    printf '%s\n' "$output"
 }
 
 if port_is_open "$PORT"; then
@@ -416,4 +504,5 @@ if [[ "$SKIP_HEIST_PLAYBACK" == false ]]; then
     printf '%s' "$PLAYBACK_FINAL_JSON" | expect_screen_title "Controls Demo"
 fi
 
+emit_benchmark_report
 log "Demo smoke test passed"

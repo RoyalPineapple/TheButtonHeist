@@ -16,7 +16,7 @@ permissions:
 jobs:
   build-and-release:
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
 
@@ -57,6 +57,11 @@ jobs:
           fi
           scripts/validate-release-contract.sh
           echo "Version $TAG_VERSION verified across tag, release contract, and source."
+
+      - name: Run SwiftPM test discovery gates
+        run: |
+          scripts/swift-test-gate.sh ButtonHeistCLI
+          scripts/swift-test-gate.sh ButtonHeistMCP
 
       - name: Build CLI (universal)
         run: |
@@ -135,7 +140,26 @@ jobs:
             exit 1
           fi
           echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
+          echo "SIM_UDID=$SIM_UDID" >> "$GITHUB_ENV"
           echo "Built: $APP_PATH (${APP_SIZE_KB}KB)"
+
+      - name: Run BH Demo lifecycle gate
+        run: |
+          scripts/e2e-lifecycle-gate.py \
+            --sim-udid "$SIM_UDID" \
+            --app "$APP_PATH" \
+            --cli "$PWD/ButtonHeistCLI/.build/buttonheist" \
+            --report "$RUNNER_TEMP/buttonheist-lifecycle-report.json"
+
+      - name: Run BH Demo CLI smoke benchmark
+        timeout-minutes: 12
+        run: |
+          scripts/e2e-demo-smoke.sh \
+            --skip-generate \
+            --sim-udid "$SIM_UDID" \
+            --app "$APP_PATH" \
+            --cli-configuration release \
+            --benchmark-report "$RUNNER_TEMP/buttonheist-demo-benchmark.json"
 
       - name: Collect TheInsideJob frameworks
         run: |

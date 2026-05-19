@@ -139,6 +139,29 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertThrowsError(try GetInterfaceCommand.parse(["--timeout", "1"]))
     }
 
+    func testGetInterfaceAcceptsConnectionTimeoutOption() throws {
+        let command = try GetInterfaceCommand.parse(["--connect-timeout", "2.5"])
+
+        XCTAssertEqual(command.connection.connectTimeout, 2.5)
+    }
+
+    func testConnectCommandMergesPositionalDeviceAndConnectionTimeout() throws {
+        let command = try ConnectCommand.parse([
+            "127.0.0.1:1455",
+            "--connect-timeout",
+            "2.5",
+            "--quiet",
+        ])
+        let merged = ConnectionOptions.merging(
+            base: command.connection,
+            positionalDevice: command.device
+        )
+
+        XCTAssertEqual(merged.device, "127.0.0.1:1455")
+        XCTAssertEqual(merged.connectTimeout, 2.5)
+        XCTAssertTrue(merged.quiet)
+    }
+
     func testRecordCommandLeavesOmittedInactivityTimeoutUnset() throws {
         let command = try RecordCommand.parse(["--max-duration", "120"])
 
