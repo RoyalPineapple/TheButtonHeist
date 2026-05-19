@@ -470,6 +470,14 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testCommandTargetRejectsNegativeOrdinal() async {
+        await assertValidationError(
+            ["command": "activate", "label": "Save", "ordinal": -1],
+            equals: "schema validation failed for ordinal: observed integer -1; expected integer >= 0"
+        )
+    }
+
+    @ButtonHeistActor
     func testElementTargetWithoutOrdinal() async throws {
         let (fence, _) = makeConnectedFence()
         let dict: [String: Any] = ["label": "Save"]
