@@ -271,12 +271,21 @@ public struct ActionResult: Codable, Sendable {
     public let errorKind: ErrorKind?
     /// Command-specific payload. At most one variant per result.
     public let payload: ResultPayload?
-    /// Compact projection describing what changed in the hierarchy after the
-    /// action. When `accessibilityTrace` is present, constructed and decoded
-    /// results project this field from the trace, even when the trace projects nil.
-    public let accessibilityDelta: AccessibilityTrace.Delta?
     /// Source-of-truth accessibility capture receipt for this action.
     public let accessibilityTrace: AccessibilityTrace?
+    /// Compact projection describing what changed in the hierarchy after the
+    /// action. When `accessibilityTrace` is present, this is always derived
+    /// from the trace, even when the trace projects nil.
+    public var accessibilityDelta: AccessibilityTrace.Delta? {
+        if let accessibilityTrace {
+            return accessibilityTrace.captureEndpointDelta
+        }
+        return noTraceAccessibilityDelta
+    }
+    /// Fallback for synthetic/no-trace action results. Real action responses
+    /// should carry `accessibilityTrace`; this field exists only so tests and
+    /// untraced payloads can still render the same compact projection.
+    private let noTraceAccessibilityDelta: AccessibilityTrace.Delta?
     /// Whether the UI was still animating when this result was produced.
     /// nil means idle (no animations detected).
     public let animating: Bool?
@@ -320,10 +329,7 @@ public struct ActionResult: Codable, Sendable {
         self.errorKind = errorKind
         self.payload = payload
         self.accessibilityTrace = accessibilityTrace
-        self.accessibilityDelta = Self.accessibilityDeltaProjection(
-            trace: accessibilityTrace,
-            noTraceDelta: accessibilityDelta
-        )
+        self.noTraceAccessibilityDelta = accessibilityTrace == nil ? accessibilityDelta : nil
         self.animating = animating
         if let accessibilityTrace {
             self.screenName = accessibilityTrace.captureEndpointScreenName
@@ -369,12 +375,20 @@ public struct ActionResult: Codable, Sendable {
         )
     }
 
-    private static func accessibilityDeltaProjection(
-        trace: AccessibilityTrace?,
-        noTraceDelta: AccessibilityTrace.Delta?
-    ) -> AccessibilityTrace.Delta? {
-        guard let trace else { return noTraceDelta }
-        return trace.captureEndpointDelta
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(success, forKey: .success)
+        try container.encode(method, forKey: .method)
+        try container.encodeIfPresent(message, forKey: .message)
+        try container.encodeIfPresent(errorKind, forKey: .errorKind)
+        try container.encodeIfPresent(payload, forKey: .payload)
+        try container.encodeIfPresent(accessibilityDelta, forKey: .accessibilityDelta)
+        try container.encodeIfPresent(accessibilityTrace, forKey: .accessibilityTrace)
+        try container.encodeIfPresent(animating, forKey: .animating)
+        try container.encodeIfPresent(screenName, forKey: .screenName)
+        try container.encodeIfPresent(screenId, forKey: .screenId)
+        try container.encodeIfPresent(settled, forKey: .settled)
+        try container.encodeIfPresent(settleTimeMs, forKey: .settleTimeMs)
     }
 }
 

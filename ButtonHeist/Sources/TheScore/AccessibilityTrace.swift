@@ -41,15 +41,19 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
                 continue
             }
 
-            if linked.transition.startsScreenSegment {
+            switch AccessibilityTrace.Delta.between(before, linked).kind {
+            case .screenChanged:
                 segments.append(segment)
                 currentSegment = ScreenSegment(baseline: linked)
-            } else if let observed = ObservedTransition.between(before, linked) {
+            case .elementsChanged, .noChange:
+                guard let observed = ObservedTransition.between(before, linked) else {
+                    segments.append(segment)
+                    currentSegment = ScreenSegment(baseline: linked)
+                    previousCapture = linked
+                    continue
+                }
                 segment.append(observed)
                 currentSegment = segment
-            } else {
-                segments.append(segment)
-                currentSegment = ScreenSegment(baseline: linked)
             }
             previousCapture = linked
         }
@@ -271,6 +275,7 @@ public extension AccessibilityTrace {
             _ after: Capture,
             cause: TransitionCause = .unknown
         ) -> ObservedTransition? {
+            guard AccessibilityTrace.Delta.between(before, after).kind != .screenChanged else { return nil }
             guard let patch = AccessibilityPatch.between(before, after) else { return nil }
             return ObservedTransition(
                 sequence: after.sequence,
@@ -520,10 +525,6 @@ public extension AccessibilityTrace {
 
         public var isEmpty: Bool {
             screenChangeReason == nil && transient.isEmpty
-        }
-
-        fileprivate var startsScreenSegment: Bool {
-            screenChangeReason != nil
         }
     }
 

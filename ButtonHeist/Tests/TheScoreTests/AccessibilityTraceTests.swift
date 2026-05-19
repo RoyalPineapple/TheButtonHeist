@@ -197,6 +197,19 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertEqual(trace.captures.map(\.hash), [before.hash, after.hash])
     }
 
+    func testObservedTransitionDoesNotRepresentScreenChange() throws {
+        let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu"))
+        let after = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: makeInterface(label: "Checkout"),
+            parentHash: before.hash,
+            transition: AccessibilityTrace.Transition(screenChangeReason: "primaryHeaderChanged")
+        )
+
+        XCTAssertEqual(AccessibilityTrace.Delta.between(before, after).kind, .screenChanged)
+        XCTAssertNil(AccessibilityTrace.ObservedTransition.between(before, after))
+    }
+
     func testScreenChangeReasonStartsNewSegmentEvenForStructuralChange() throws {
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeListInterface(["Antipasti"]))
         let after = AccessibilityTrace.Capture(
@@ -211,6 +224,51 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertEqual(trace.segments.map(\.captures.count), [1, 1])
         XCTAssertEqual(trace.segments[1].baseline.interface, after.interface)
         XCTAssertTrue(trace.hasValidIntegrity)
+    }
+
+    func testScreenIdChangeStartsNewBaselineSegmentUsingDeltaSemantics() throws {
+        let interface = makeInterface(label: "Menu")
+        let before = AccessibilityTrace.Capture(
+            sequence: 1,
+            interface: interface,
+            context: AccessibilityTrace.Context(screenId: "menu")
+        )
+        let after = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: interface,
+            parentHash: before.hash,
+            context: AccessibilityTrace.Context(screenId: "checkout")
+        )
+
+        let trace = AccessibilityTrace(captures: [before, after])
+
+        XCTAssertEqual(AccessibilityTrace.Delta.between(before, after).kind, .screenChanged)
+        XCTAssertEqual(trace.segments.count, 2)
+        XCTAssertEqual(trace.segments.map(\.baseline.hash), [before.hash, after.hash])
+        XCTAssertEqual(trace.segments.flatMap(\.transitions), [])
+    }
+
+    func testSameScreenContextChangeStaysPatchUsingDeltaSemantics() throws {
+        let interface = makeInterface(label: "Menu")
+        let before = AccessibilityTrace.Capture(
+            sequence: 1,
+            interface: interface,
+            context: AccessibilityTrace.Context(focusedElementId: "search", keyboardVisible: true)
+        )
+        let after = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: interface,
+            parentHash: before.hash,
+            context: AccessibilityTrace.Context(focusedElementId: "total", keyboardVisible: false)
+        )
+
+        let trace = AccessibilityTrace(captures: [before, after])
+
+        XCTAssertEqual(AccessibilityTrace.Delta.between(before, after).kind, .elementsChanged)
+        XCTAssertEqual(trace.segments.count, 1)
+        XCTAssertEqual(trace.segments[0].baseline.hash, before.hash)
+        XCTAssertEqual(trace.segments[0].transitions.map(\.toHash), [after.hash])
+        XCTAssertEqual(trace.captures.map(\.hash), [before.hash, after.hash])
     }
 
     func testTraceProjectsEndpointScreenContext() throws {
