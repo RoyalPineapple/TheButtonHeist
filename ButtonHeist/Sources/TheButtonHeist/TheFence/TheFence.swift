@@ -457,35 +457,63 @@ public final class TheFence {
     private let recordingStartTracker = PendingRequestTracker<Bool>()
     private let recordingTracker = PendingRequestTracker<RecordingPayload>()
 
-    /// Fence-owned recording phase. Handoff forwards server recording
-    /// messages, but request decisions live here.
-    enum RecordingPhase: Equatable {
+    enum RecordingPhase {
         case idle
         case recording
     }
-    private var recordingPhase: RecordingPhase = .idle
+
+    /// Fence-owned recording state. Handoff forwards server recording
+    /// messages, but request decisions and wait ownership live here.
+    struct RecordingState {
+        private(set) var phase: RecordingPhase = .idle
+        private(set) var startWaitId: String?
+        private(set) var completionWaitId: String?
+
+        var isRecording: Bool {
+            phase == .recording
+        }
+
+        var isWaitingForCompletion: Bool {
+            completionWaitId != nil
+        }
+
+        mutating func beginStartWait(syntheticId: String) -> Bool {
+            guard startWaitId == nil else { return false }
+            startWaitId = syntheticId
+            return true
+        }
+
+        mutating func finishStartWait(syntheticId: String) {
+            guard startWaitId == syntheticId else { return }
+            startWaitId = nil
+        }
+
+        mutating func beginCompletionWait(syntheticId: String) -> Bool {
+            guard completionWaitId == nil else { return false }
+            completionWaitId = syntheticId
+            return true
+        }
+
+        mutating func finishCompletionWait(syntheticId: String) {
+            guard completionWaitId == syntheticId else { return }
+            completionWaitId = nil
+        }
+
+        mutating func noteStarted() {
+            phase = .recording
+        }
+
+        mutating func noteFinished() {
+            phase = .idle
+        }
+    }
+    private var recordingState = RecordingState()
     var isRecording: Bool {
-        recordingPhase == .recording
+        recordingState.isRecording
     }
-
-    /// State of the in-flight `start_recording` acknowledgement wait, if any.
-    enum RecordingStartWait {
-        case idle
-        case waiting(syntheticId: String)
-    }
-    private var recordingStartWait: RecordingStartWait = .idle
-
-    /// State of the in-flight `stop_recording` wait, if any. `.waiting`
-    /// carries the synthetic request ID used to key the recording tracker.
-    enum RecordingWait {
-        case idle
-        case waiting(syntheticId: String)
-    }
-    private var recordingWait: RecordingWait = .idle
     /// Test-visible state for deterministic recording completion injection.
     var isWaitingForRecordingCompletion: Bool {
-        if case .waiting = recordingWait { return true }
-        return false
+        recordingState.isWaitingForCompletion
     }
 
     public init(configuration: Configuration) {
@@ -576,24 +604,22 @@ public final class TheFence {
         accessibilityHistory.retention = .dropAfterDelivery
         lastActionHistory = .unrun
         lastLatencyMs = 0
-        recordingPhase = .idle
-        recordingStartWait = .idle
-        recordingWait = .idle
+        recordingState = RecordingState()
         cancelAllPendingRequests(error: error)
     }
 
     private func handleRecordingEvent(_ event: RecordingEvent) {
         switch event {
         case .started:
-            recordingPhase = .recording
+            recordingState.noteStarted()
             resolveRecordingStart(.success(true))
         case .stopped:
-            recordingPhase = .idle
+            recordingState.noteFinished()
         case .completed(let payload):
-            recordingPhase = .idle
+            recordingState.noteFinished()
             resolveRecordingCompletion(.success(payload))
         case .failed(let message):
-            recordingPhase = .idle
+            recordingState.noteFinished()
             resolveRecordingError(message)
         }
     }
@@ -1421,13 +1447,11 @@ public final class TheFence {
         guard !isRecording else {
             throw FenceError.invalidRequest("Recording already in progress — use stop_recording first")
         }
-        guard case .idle = recordingStartWait else {
+        let syntheticId = "recording-start"
+        guard recordingState.beginStartWait(syntheticId: syntheticId) else {
             throw FenceError.invalidRequest("start_recording already waiting for acknowledgement")
         }
-
-        let syntheticId = "recording-start"
-        recordingStartWait = .waiting(syntheticId: syntheticId)
-        defer { recordingStartWait = .idle }
+        defer { recordingState.finishStartWait(syntheticId: syntheticId) }
 
         var didSendStart = false
         do {
@@ -1449,18 +1473,18 @@ public final class TheFence {
     }
 
     private func resolveRecordingStart(_ result: Result<Bool, Error>) {
-        guard case .waiting(let syntheticId) = recordingStartWait else { return }
+        guard let syntheticId = recordingState.startWaitId else { return }
         recordingStartTracker.resolve(requestId: syntheticId, result: result)
     }
 
     private func resolveRecordingCompletion(_ result: Result<RecordingPayload, Error>) {
-        guard case .waiting(let syntheticId) = recordingWait else { return }
+        guard let syntheticId = recordingState.completionWaitId else { return }
         recordingTracker.resolve(requestId: syntheticId, result: result)
     }
 
     private func resolveRecordingError(_ message: String) {
         let error = FenceError.actionFailed("Recording failed: \(message)")
-        if case .waiting = recordingWait {
+        if recordingState.isWaitingForCompletion {
             resolveRecordingCompletion(.failure(error))
         } else {
             resolveRecordingStart(.failure(error))
@@ -1520,14 +1544,11 @@ public final class TheFence {
         timeout: TimeInterval,
         afterRegister: (() -> Void)?
     ) async throws -> RecordingPayload {
-        guard case .idle = recordingWait else {
+        let syntheticId = "recording"
+        guard recordingState.beginCompletionWait(syntheticId: syntheticId) else {
             throw FenceError.invalidRequest("stop_recording already waiting for completion")
         }
-        let syntheticId = "recording"
-        recordingWait = .waiting(syntheticId: syntheticId)
-        defer {
-            recordingWait = .idle
-        }
+        defer { recordingState.finishCompletionWait(syntheticId: syntheticId) }
         return try await recordingTracker.wait(requestId: syntheticId, timeout: timeout, afterRegister: afterRegister)
     }
 
