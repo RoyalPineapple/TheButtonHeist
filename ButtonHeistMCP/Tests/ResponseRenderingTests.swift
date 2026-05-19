@@ -157,7 +157,7 @@ struct ResponseRenderingTests {
         }
         let annotations = InterfaceAnnotations(elements: elements.enumerated().map { index, element in
             InterfaceElementAnnotation(
-                traversalIndex: index,
+                path: TreePath([index]),
                 heistId: element.heistId,
                 actions: element.actions
             )
