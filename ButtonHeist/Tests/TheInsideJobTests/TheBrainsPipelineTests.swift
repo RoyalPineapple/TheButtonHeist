@@ -225,24 +225,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         seedScreen(elements: [("Before", .header, "before_header")])
         let before = brains.captureBeforeState()
 
-        let afterInterface = Interface(
-            timestamp: Date(timeIntervalSince1970: 0),
-            tree: [
-                .element(HeistElement(
-                    heistId: "after_header",
-                    description: "After",
-                    label: "After",
-                    value: nil,
-                    identifier: nil,
-                    traits: [.header],
-                    frameX: 0,
-                    frameY: 0,
-                    frameWidth: 100,
-                    frameHeight: 44,
-                    actions: []
-                )),
-            ]
-        )
+        let afterInterface = makeInterface(label: "After", traits: .header, heistId: "after_header")
         let afterCapture = AccessibilityTrace.Capture(
             sequence: 2,
             interface: afterInterface,
@@ -337,8 +320,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertNotNil(sent)
         XCTAssertEqual(sent?.screenId, "home")
         XCTAssertEqual(sent?.viewportHash, viewportHash)
-        XCTAssertNotEqual(sent?.treeHash, 0,
-                          "treeHash should be non-zero for a non-empty screen")
+        XCTAssertFalse(sent?.interfaceHash.isEmpty ?? true,
+                       "interfaceHash should be present for a non-empty screen")
         XCTAssertEqual(brains.lastSentScreenId, "home")
     }
 
@@ -367,7 +350,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             ["button_visible", "button_below_fold"]
         )
         XCTAssertNotEqual(
-            sent?.treeHash,
+            sent?.interfaceHash,
             liveViewportHash,
             "Sent state should hash the known semantic set, not only the live viewport tree"
         )
@@ -375,12 +358,12 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     func testRecordSentStateWithViewportHashKeepsSemanticHashDomain() {
         seedScreen(elements: [("Screen X", .header, "screen_x_header"), ("A", .button, "button_a")])
-        let semanticHash = brains.captureSemanticState().treeHash
+        let semanticHash = brains.captureSemanticState().interfaceHash
 
         brains.recordSentState(viewportHash: 42)
 
-        XCTAssertEqual(brains.lastSentState?.treeHash, semanticHash)
-        XCTAssertEqual(brains.lastSentState?.viewportHash, 42)
+        XCTAssertEqual(brains.lastSentState?.interfaceHash, semanticHash)
+        XCTAssertEqual(brains.lastSentState?.viewportHash, "42")
         XCTAssertEqual(brains.lastSentState?.screenId, "screen_x")
     }
 
@@ -454,7 +437,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let messages: [ClientMessage] = [
             .clientHello,
             .authenticate(AuthenticatePayload(token: "token")),
-            .requestInterface,
+            .requestInterface(InterfaceQuery()),
             .ping,
             .status,
             .requestScreen,
@@ -574,6 +557,25 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     // MARK: - Helpers
+
+    private func makeInterface(label: String, traits: UIAccessibilityTraits, heistId: String) -> Interface {
+        let element = AccessibilityElement.make(
+            label: label,
+            traits: traits,
+            respondsToUserInteraction: false
+        )
+        return Interface(
+            timestamp: Date(timeIntervalSince1970: 0),
+            tree: [.element(element, traversalIndex: 0)],
+            annotations: InterfaceAnnotations(elements: [
+                InterfaceElementAnnotation(
+                    traversalIndex: 0,
+                    heistId: heistId,
+                    actions: []
+                ),
+            ])
+        )
+    }
 
     private func seedScreen(elements: [(label: String, traits: UIAccessibilityTraits, heistId: String)]) {
         let pairs: [(AccessibilityElement, String)] = elements.map { entry in

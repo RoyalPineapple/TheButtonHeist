@@ -58,30 +58,32 @@ struct InterfaceSelector {
 
     private func selectLeafSubtrees(matching matcher: ElementMatcher) -> Interface {
         let annotations = interface.annotations.elementByTraversalIndex
+        let tree = interface.tree.subtrees { node, _ in
+            guard case .element(let element, let traversalIndex) = node else { return false }
+            return HeistElement(
+                accessibilityElement: element,
+                annotation: annotations[traversalIndex]
+            ).matches(matcher)
+        }
         return Interface(
             timestamp: interface.timestamp,
-            tree: interface.tree.subtrees { node, _ in
-                guard case .element(let element, let traversalIndex) = node else { return false }
-                return HeistElement(
-                    accessibilityElement: element,
-                    annotation: annotations[traversalIndex]
-                ).matches(matcher)
-            },
-            annotations: interface.annotations
+            tree: tree,
+            annotations: leafAnnotations(for: tree)
         )
     }
 
     private func selectLeafSubtrees(withIds heistIds: Set<String>) -> Interface {
         let annotations = interface.annotations.elementByTraversalIndex
+        let tree = interface.tree.subtrees { node, _ in
+            guard case .element(_, let traversalIndex) = node,
+                  let annotation = annotations[traversalIndex]
+            else { return false }
+            return heistIds.contains(annotation.heistId)
+        }
         return Interface(
             timestamp: interface.timestamp,
-            tree: interface.tree.subtrees { node, _ in
-                guard case .element(_, let traversalIndex) = node,
-                      let annotation = annotations[traversalIndex]
-                else { return false }
-                return heistIds.contains(annotation.heistId)
-            },
-            annotations: interface.annotations
+            tree: tree,
+            annotations: leafAnnotations(for: tree)
         )
     }
 
@@ -151,6 +153,13 @@ struct InterfaceSelector {
             forSubtree: candidate.node,
             originalPath: candidate.originalPath,
             rootPath: TreePath([0])
+        )
+    }
+
+    private func leafAnnotations(for tree: [AccessibilityHierarchy]) -> InterfaceAnnotations {
+        let traversalIndices = Set(tree.indexedElements.map(\.traversalIndex))
+        return InterfaceAnnotations(
+            elements: interface.annotations.elements.filter { traversalIndices.contains($0.traversalIndex) }
         )
     }
 }

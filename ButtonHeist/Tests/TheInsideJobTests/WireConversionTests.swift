@@ -619,11 +619,13 @@ final class WireConverterTests: XCTestCase {
         if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
         XCTAssertEqual(delta.testEdits.treeInsertedOptional?.count, 1)
         XCTAssertEqual(delta.testEdits.treeInsertedOptional?.first?.location, TreeLocation(parentId: nil, index: 0))
-        guard case .container(let info, let children) = delta.testEdits.treeInsertedOptional?.first?.node else {
+        let insertion = delta.testEdits.treeInsertedOptional?.first
+        guard case .container(_, let children) = insertion?.node else {
             return XCTFail("Expected inserted container")
         }
-        XCTAssertEqual(info.stableId, "list_0")
-        XCTAssertEqual(children.flatten().map(\.heistId), ["button_ok"])
+        XCTAssertEqual(insertion?.annotations.containers.first?.stableId, "list_0")
+        XCTAssertEqual(insertion?.annotations.elements.map(\.heistId), ["button_ok"])
+        XCTAssertEqual(children.elements.map(\.traversalIndex), [0])
         XCTAssertEqual(
             delta.testEdits.treeMovedOptional,
             [TreeMove(

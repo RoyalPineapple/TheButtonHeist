@@ -12,11 +12,15 @@ final class InterfaceSelectorTests: XCTestCase {
             matcher: ElementMatcher(label: "Submit")
         ))
         XCTAssertEqual(interface.elements.map(\.heistId), ["submit"])
+        XCTAssertEqual(interface.annotations.elements.map(\.heistId), ["submit"])
+        XCTAssertTrue(interface.annotations.containers.isEmpty)
     }
 
     func testElementIdsSelectMatchingLeaves() throws {
         let interface = try select(InterfaceQuery(elementIds: ["cancel"]))
         XCTAssertEqual(interface.elements.map(\.heistId), ["cancel"])
+        XCTAssertEqual(interface.annotations.elements.map(\.heistId), ["cancel"])
+        XCTAssertTrue(interface.annotations.containers.isEmpty)
     }
 
     func testElementSubtreeSelectsMatchingLeaf() throws {

@@ -110,7 +110,7 @@ final class TheStakeoutTests: XCTestCase {
 
         let event = InteractionEvent(
             timestamp: 1.0,
-            command: .requestInterface,
+            command: .requestInterface(InterfaceQuery()),
             result: ActionResult(success: true, method: .activate)
         )
         await stakeout.recordInteraction(event: event)
@@ -178,7 +178,7 @@ final class TheStakeoutTests: XCTestCase {
 
         let event = InteractionEvent(
             timestamp: 1.0,
-            command: .requestInterface,
+            command: .requestInterface(InterfaceQuery()),
             result: ActionResult(success: true, method: .activate)
         )
         await stakeout.recordInteraction(event: event)
@@ -194,7 +194,7 @@ final class TheStakeoutTests: XCTestCase {
 
         let event = InteractionEvent(
             timestamp: 1.0,
-            command: .requestInterface,
+            command: .requestInterface(InterfaceQuery()),
             result: ActionResult(success: true, method: .activate)
         )
 
@@ -227,7 +227,7 @@ final class TheStakeoutTests: XCTestCase {
 
         let event = InteractionEvent(
             timestamp: 1.0,
-            command: .requestInterface,
+            command: .requestInterface(InterfaceQuery()),
             result: ActionResult(success: true, method: .activate)
         )
         for _ in 0..<503 {
@@ -254,7 +254,7 @@ final class TheStakeoutTests: XCTestCase {
 
         let event = InteractionEvent(
             timestamp: 1.0,
-            command: .requestInterface,
+            command: .requestInterface(InterfaceQuery()),
             result: ActionResult(success: true, method: .activate)
         )
         await stakeout.recordInteraction(event: event)
@@ -277,7 +277,7 @@ final class TheStakeoutTests: XCTestCase {
         try await stakeout.startRecording(config: RecordingConfig(), screen: Self.testScreen)
 
         await stakeout.recordInteractionIfRecording(
-            command: .requestInterface,
+            command: .requestInterface(InterfaceQuery()),
             result: ActionResult(success: true, method: .activate)
         )
 
@@ -294,7 +294,7 @@ final class TheStakeoutTests: XCTestCase {
         let stakeout = makeStakeout()
 
         await stakeout.recordInteractionIfRecording(
-            command: .requestInterface,
+            command: .requestInterface(InterfaceQuery()),
             result: ActionResult(success: true, method: .activate)
         )
 
