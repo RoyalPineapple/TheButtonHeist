@@ -26,16 +26,25 @@ extension TheFence {
         let payload: PlaybackPayload
 
         init(evidence: HeistEvidence, index: Int) throws {
-            guard let command = Command(rawValue: evidence.command) else {
+            let payload = PlaybackPayload(values: evidence.arguments)
+            var operationArguments = payload.dispatchBridgeArguments()
+            operationArguments["command"] = evidence.command
+
+            let operation: NormalizedOperation
+            switch FenceOperationCatalog.normalizePlaybackStep(operationArguments) {
+            case .success(let normalized):
+                operation = normalized
+            case .failure(let error):
                 throw FenceError.invalidRequest(
-                    "Invalid heist step \(index): unknown command \"\(evidence.command)\""
+                    "Invalid heist step \(index): \(error.message)"
                 )
             }
+
             self.init(
-                command: command,
+                command: operation.command,
                 target: evidence.target,
                 ordinal: evidence.ordinal,
-                payload: PlaybackPayload(values: evidence.arguments)
+                payload: payload
             )
         }
 
