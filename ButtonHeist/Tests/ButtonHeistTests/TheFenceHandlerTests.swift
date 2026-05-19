@@ -2914,6 +2914,80 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testTypedPlaybackAcceptsCanonicalBatchExecutableCommands() async throws {
+        let playback = try TheFence.TypedHeistPlayback(
+            wire: HeistPlayback(
+                app: "com.test.mock",
+                steps: TheFence.Command.batchExecutableCases.map { command in
+                    HeistEvidence(command: command.rawValue)
+                }
+            )
+        )
+
+        XCTAssertEqual(playback.steps.map(\.command), TheFence.Command.batchExecutableCases)
+    }
+
+    @ButtonHeistActor
+    func testTypedPlaybackRejectsGroupedMCPToolShapes() async throws {
+        let cases: [(name: String, evidence: HeistEvidence, message: String)] = [
+            (
+                "gesture selector tool",
+                HeistEvidence(command: "gesture", arguments: ["type": .string(TheFence.Command.swipe.rawValue)]),
+                "heist step command must be a canonical TheFence.Command; unknown command \"gesture\""
+            ),
+            (
+                "scroll mode selector",
+                HeistEvidence(command: "scroll", arguments: ["mode": .string(ScrollMode.search.rawValue)]),
+                "heist step \"scroll\" uses the MCP mode selector; use canonical Fence commands scroll, scroll_to_visible, element_search, or scroll_to_edge."
+            ),
+            (
+                "edit_action dismiss selector",
+                HeistEvidence(command: "edit_action", arguments: ["action": .string("dismiss")]),
+                "heist step \"edit_action\" uses the MCP dismiss selector; use canonical Fence command dismiss_keyboard."
+            ),
+        ]
+
+        for testCase in cases {
+            XCTAssertThrowsError(
+                try TheFence.TypedHeistPlayback(
+                    wire: HeistPlayback(app: "com.test.mock", steps: [testCase.evidence])
+                ),
+                testCase.name
+            ) { error in
+                guard case FenceError.invalidRequest(let message) = error else {
+                    return XCTFail("Expected FenceError.invalidRequest, got \(error)")
+                }
+                XCTAssertTrue(message.contains("Invalid heist step 0"))
+                XCTAssertTrue(
+                    message.contains(testCase.message),
+                    "Expected \(testCase.name) error to contain '\(testCase.message)', got: \(message)"
+                )
+            }
+        }
+    }
+
+    @ButtonHeistActor
+    func testTypedPlaybackRejectsNonExecutableCommands() async throws {
+        for command in [TheFence.Command.help, .status, .quit, .exit, .runBatch] {
+            XCTAssertThrowsError(
+                try TheFence.TypedHeistPlayback(
+                    wire: HeistPlayback(app: "com.test.mock", steps: [HeistEvidence(command: command.rawValue)])
+                ),
+                command.rawValue
+            ) { error in
+                guard case FenceError.invalidRequest(let message) = error else {
+                    return XCTFail("Expected FenceError.invalidRequest, got \(error)")
+                }
+                XCTAssertTrue(message.contains("Invalid heist step 0"))
+                XCTAssertTrue(
+                    message.contains("heist step command \"\(command.rawValue)\" is not playback-executable"),
+                    "Unexpected error for \(command.rawValue): \(message)"
+                )
+            }
+        }
+    }
+
+    @ButtonHeistActor
     func testExecutePlaybackOperationUsesTypedCommand() async throws {
         let operation = try TheFence.PlaybackOperation(
             evidence: HeistEvidence(command: "activate", target: ElementMatcher(identifier: "btn1")),

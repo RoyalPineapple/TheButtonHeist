@@ -56,6 +56,28 @@ public enum FenceOperationCatalog {
     public static func normalizeBatchStep(
         _ step: [String: Any]
     ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
+        normalizeCanonicalStep(
+            step,
+            context: "run_batch step",
+            nonExecutableLabel: "batch-executable"
+        )
+    }
+
+    public static func normalizePlaybackStep(
+        _ step: [String: Any]
+    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
+        normalizeCanonicalStep(
+            step,
+            context: "heist step",
+            nonExecutableLabel: "playback-executable"
+        )
+    }
+
+    private static func normalizeCanonicalStep(
+        _ step: [String: Any],
+        context: String,
+        nonExecutableLabel: String
+    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
         let commandName: String
         do {
             commandName = try step.requiredSchemaString("command")
@@ -70,17 +92,17 @@ public enum FenceOperationCatalog {
 
         guard let command = TheFence.Command(rawValue: commandName) else {
             return .failure(FenceOperationRoutingError(
-                message: "run_batch step command must be a canonical TheFence.Command; unknown command \"\(commandName)\""
+                message: "\(context) command must be a canonical TheFence.Command; unknown command \"\(commandName)\""
             ))
         }
 
         guard command.isBatchExecutable else {
             return .failure(FenceOperationRoutingError(
-                message: "run_batch step command \"\(command.rawValue)\" is not batch-executable"
+                message: "\(context) command \"\(command.rawValue)\" is not \(nonExecutableLabel)"
             ))
         }
 
-        if let error = rawBatchShapeError(for: command, arguments: arguments) {
+        if let error = rawCanonicalShapeError(for: command, arguments: arguments, context: context) {
             return .failure(error)
         }
 
@@ -132,9 +154,10 @@ public enum FenceOperationCatalog {
         "Tool \"\(rawToolName)\" is grouped under \"\(groupedToolName)\"; call \(groupedToolName) with \(selectorName)=\"\(selectorValue)\"."
     }
 
-    private static func rawBatchShapeError(
+    private static func rawCanonicalShapeError(
         for command: TheFence.Command,
-        arguments: [String: Any]
+        arguments: [String: Any],
+        context: String
     ) -> FenceOperationRoutingError? {
         guard let contract = TheFence.Command.mcpToolContract(named: command.rawValue),
               let selector = contract.selector else {
@@ -147,7 +170,7 @@ public enum FenceOperationCatalog {
         let commandParameterKeys = Set(command.parameters.map(\.key))
         if !commandParameterKeys.contains(selectorKey) {
             return .init(
-                message: "run_batch step \"\(command.rawValue)\" uses the MCP \(selectorKey) selector; " +
+                message: "\(context) \"\(command.rawValue)\" uses the MCP \(selectorKey) selector; " +
                     "use canonical Fence commands \(rawCommandList(contract.commands))."
             )
         }
@@ -159,7 +182,7 @@ public enum FenceOperationCatalog {
             return nil
         }
         return .init(
-            message: "run_batch step \"\(command.rawValue)\" uses the MCP \(selectorValue) selector; " +
+            message: "\(context) \"\(command.rawValue)\" uses the MCP \(selectorValue) selector; " +
                 "use canonical Fence command \(selectedCommand.rawValue)."
         )
     }
