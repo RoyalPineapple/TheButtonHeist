@@ -75,8 +75,12 @@ final class TheGetaway {
     }
 
     var recordingInvalidationReason: RecordingInvalidationReason? {
-        guard case .invalidated(_, let reason) = recordingRouteState else { return nil }
-        return reason
+        switch recordingRouteState {
+        case .invalidated(_, let reason), .invalidating(_, _, let reason):
+            return reason
+        case .idle, .starting, .recording, .stopping, .completed:
+            return nil
+        }
     }
 
     /// Test seam for routing tests that need to stage an otherwise internal
@@ -145,14 +149,14 @@ final class TheGetaway {
         let onAuthenticated: @MainActor @Sendable (Int, @escaping @Sendable (Data) -> Void) -> Void = { [weak self] clientId, respond in
             self?.handleClientConnected(clientId, respond: respond)
         }
-        let onSessionActiveChanged: @MainActor @Sendable (Bool) -> Void = { [weak self] isActive in
+        let onSessionActiveChanged: @MainActor @Sendable (Bool) async -> Void = { [weak self] isActive in
             self?.transport?.updateTXTRecord([TXTRecordKey.sessionActive.rawValue: isActive ? "1" : "0"])
             if !isActive {
                 // Session released — drop any cached recording payload so a
                 // future driver can't pick up a video the previous driver
                 // started. Pending stop waiters are also cleared; their
                 // transport is dead anyway.
-                self?.invalidateRecordingForSessionRelease()
+                await self?.invalidateRecordingForSessionRelease()
             }
         }
         // Awaited inline: the event consumer below must not see a
@@ -208,7 +212,7 @@ final class TheGetaway {
 
         case .clientDisconnected(let clientId):
             insideJobLogger.info("Client \(clientId) disconnected")
-            invalidateRecordingForDisconnect(clientId: clientId)
+            await invalidateRecordingForDisconnect(clientId: clientId)
             await muscle.handleClientDisconnected(clientId)
 
         case .dataReceived(let clientId, let data, let respond):
@@ -229,9 +233,10 @@ final class TheGetaway {
         }
     }
 
-    func tearDown() {
+    func tearDown() async {
         eventConsumerTask?.cancel()
         eventConsumerTask = nil
+        await invalidateRecordingForSessionRelease()
         pendingRecordingTasks.cancelAll()
         transport = nil
         tripwireParsePending = false

@@ -83,9 +83,9 @@ final class TheMuscleTests: XCTestCase {
         let onAuthenticated: @MainActor @Sendable (Int, @escaping @Sendable (Data) -> Void) -> Void = { clientId, respond in
             sink.appendAuthenticatedCallback((clientId, respond))
         }
-        let recordChanges: @MainActor @Sendable (Bool) -> Void = { value in sink.appendSessionChange(value) }
-        let ignoreChanges: @MainActor @Sendable (Bool) -> Void = { _ in }
-        let onSessionActiveChanged: @MainActor @Sendable (Bool) -> Void = observeSessionChanges
+        let recordChanges: @MainActor @Sendable (Bool) async -> Void = { value in sink.appendSessionChange(value) }
+        let ignoreChanges: @MainActor @Sendable (Bool) async -> Void = { _ in }
+        let onSessionActiveChanged: @MainActor @Sendable (Bool) async -> Void = observeSessionChanges
             ? recordChanges
             : ignoreChanges
         await muscle.installCallbacks(

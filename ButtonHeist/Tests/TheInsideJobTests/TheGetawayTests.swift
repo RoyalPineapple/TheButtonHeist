@@ -33,12 +33,25 @@ final class TheGetawayTests: XCTestCase {
         return (getaway, muscle, transport)
     }
 
+    private static let recordingTestScreen = TheStakeout.ScreenInfo(
+        bounds: CGRect(x: 0, y: 0, width: 100, height: 100),
+        scale: 1.0
+    )
+
     // swiftlint:disable:next agent_unchecked_sendable_no_comment - Test callback storage is protected by NSLock.
     private final class SentBox: @unchecked Sendable {
         private var storage: [(Data, Int)] = []
         private let lock = NSLock()
         func append(_ data: Data, clientId: Int) { lock.withLock { storage.append((data, clientId)) } }
         var all: [(Data, Int)] { lock.withLock { storage } }
+    }
+
+    // swiftlint:disable:next agent_unchecked_sendable_no_comment - Test callback storage is protected by NSLock.
+    private final class RecordingCompletionBox: @unchecked Sendable {
+        private var storage = 0
+        private let lock = NSLock()
+        func increment() { lock.withLock { storage += 1 } }
+        var count: Int { lock.withLock { storage } }
     }
 
     // MARK: - Ordering
@@ -527,7 +540,7 @@ final class TheGetawayTests: XCTestCase {
             cachePolicy: .originatorOnly(7)
         )))
 
-        getaway.invalidateRecordingForDisconnect(clientId: 7)
+        await getaway.invalidateRecordingForDisconnect(clientId: 7)
 
         XCTAssertNil(getaway.recordingOriginatorClientId)
         XCTAssertNil(getaway.pendingRecordingResponse)
@@ -552,7 +565,7 @@ final class TheGetawayTests: XCTestCase {
             cachePolicy: .originatorOnly(7)
         )))
 
-        getaway.invalidateRecordingForDisconnect(clientId: 99)
+        await getaway.invalidateRecordingForDisconnect(clientId: 99)
 
         XCTAssertEqual(getaway.recordingOriginatorClientId, 7)
         if case .succeeded = getaway.completedRecording { } else {
@@ -574,7 +587,7 @@ final class TheGetawayTests: XCTestCase {
             respond: { _ in deliveriesAfterDisconnect += 1 }
         )))
 
-        getaway.invalidateRecordingForDisconnect(clientId: 3)
+        await getaway.invalidateRecordingForDisconnect(clientId: 3)
 
         XCTAssertNil(getaway.pendingRecordingResponse, "Pending stop closure must be released when originator disconnects")
         XCTAssertEqual(deliveriesAfterDisconnect, 0, "The captured closure must never fire after disconnect")
@@ -598,7 +611,7 @@ final class TheGetawayTests: XCTestCase {
             cachePolicy: .originatorOnly(7)
         )))
 
-        getaway.invalidateRecordingForSessionRelease()
+        await getaway.invalidateRecordingForSessionRelease()
 
         XCTAssertNil(getaway.recordingOriginatorClientId)
         XCTAssertNil(getaway.pendingRecordingResponse)
@@ -615,7 +628,7 @@ final class TheGetawayTests: XCTestCase {
         let (getaway, _, _) = await makeGetaway()
         let stubStakeout = TheStakeout(captureFrame: { @MainActor in nil })
         getaway.installRecordingRouteStateForTest(.recording(stakeout: stubStakeout, ownerClientId: 99))
-        getaway.invalidateRecordingForDisconnect(clientId: 99)
+        await getaway.invalidateRecordingForDisconnect(clientId: 99)
         let payload = RecordingPayload(
             videoData: "AAAA",
             width: 100, height: 200,
@@ -647,6 +660,60 @@ final class TheGetawayTests: XCTestCase {
             return XCTFail("New client stop must not receive a recording payload, got \(String(describing: envelope?.message))")
         }
         XCTAssertTrue(serverError.message.contains("No recording in progress"))
+    }
+
+    func testDisconnectWhileRecordingFinalizesOnceAndClearsRoute() async throws {
+        let (getaway, _, _) = await makeGetaway()
+        let completion = expectation(description: "recording finalized")
+        completion.assertForOverFulfill = true
+        let completions = RecordingCompletionBox()
+        let stakeout = TheStakeout(captureFrame: { @MainActor in nil })
+        await stakeout.setOnRecordingComplete { _ in
+            completions.increment()
+            completion.fulfill()
+        }
+        try await stakeout.startRecording(
+            config: RecordingConfig(inactivityTimeout: 60.0, maxDuration: 60.0),
+            screen: Self.recordingTestScreen
+        )
+        getaway.installRecordingRouteStateForTest(.recording(stakeout: stakeout, ownerClientId: 7))
+        getaway.brains.stakeout = stakeout
+
+        await getaway.invalidateRecordingForDisconnect(clientId: 7)
+        await fulfillment(of: [completion], timeout: 5.0)
+
+        XCTAssertEqual(completions.count, 1, "Invalidating an active recording should finalize exactly once")
+        let recorderIsIdleAfterDisconnect = await stakeout.isIdle
+        XCTAssertTrue(recorderIsIdleAfterDisconnect, "Recorder should be fully finalized after disconnect invalidation")
+        assertRecordingRouteCleared(getaway)
+        try await assertFutureDriverCannotDrainRecording(from: getaway)
+    }
+
+    func testSessionReleaseWhileRecordingFinalizesOnceAndClearsRoute() async throws {
+        let (getaway, _, _) = await makeGetaway()
+        let completion = expectation(description: "recording finalized")
+        completion.assertForOverFulfill = true
+        let completions = RecordingCompletionBox()
+        let stakeout = TheStakeout(captureFrame: { @MainActor in nil })
+        await stakeout.setOnRecordingComplete { _ in
+            completions.increment()
+            completion.fulfill()
+        }
+        try await stakeout.startRecording(
+            config: RecordingConfig(inactivityTimeout: 60.0, maxDuration: 60.0),
+            screen: Self.recordingTestScreen
+        )
+        getaway.installRecordingRouteStateForTest(.recording(stakeout: stakeout, ownerClientId: 7))
+        getaway.brains.stakeout = stakeout
+
+        await getaway.invalidateRecordingForSessionRelease()
+        await fulfillment(of: [completion], timeout: 5.0)
+
+        XCTAssertEqual(completions.count, 1, "Session release should finalize an active recorder exactly once")
+        let recorderIsIdleAfterSessionRelease = await stakeout.isIdle
+        XCTAssertTrue(recorderIsIdleAfterSessionRelease, "Recorder should be fully finalized after session release")
+        assertRecordingRouteCleared(getaway)
+        try await assertFutureDriverCannotDrainRecording(from: getaway)
     }
 
     /// PR #314 H3 / PR #348 M3: an originator-owned cached completion is
@@ -897,6 +964,51 @@ final class TheGetawayTests: XCTestCase {
             context: AccessibilityTrace.Context(screenId: "settings")
         )
         return AccessibilityTrace(captures: [before, after])
+    }
+
+    private func assertRecordingRouteCleared(
+        _ getaway: TheGetaway,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        XCTAssertNil(getaway.brains.stakeout, "Brains must not retain the invalidated recorder", file: file, line: line)
+        XCTAssertNil(getaway.stakeout, "Getaway route must not expose an active recorder", file: file, line: line)
+        XCTAssertNil(getaway.pendingRecordingResponse, "Invalidation must clear any parked stop waiter", file: file, line: line)
+        XCTAssertNil(getaway.recordingOriginatorClientId, "Invalidation must clear route ownership", file: file, line: line)
+        if case .idle = getaway.recordingPhase {
+            // expected
+        } else {
+            XCTFail("Recording phase should be idle after invalidation, got \(getaway.recordingPhase)", file: file, line: line)
+        }
+        if case .none = getaway.completedRecording {
+            // expected
+        } else {
+            XCTFail("Invalidation must not leave a cached payload, got \(getaway.completedRecording)", file: file, line: line)
+        }
+    }
+
+    private func assertFutureDriverCannotDrainRecording(
+        from getaway: TheGetaway,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws {
+        var stopResponse: Data?
+        await getaway.handleStopRecording(clientId: 42, requestId: "future-driver-stop") { data in
+            stopResponse = data
+        }
+        let response = try XCTUnwrap(stopResponse, "Future driver stop should receive an error response", file: file, line: line)
+        let envelope = try decodeResponseEnvelope(from: response)
+        XCTAssertEqual(envelope.requestId, "future-driver-stop", file: file, line: line)
+        guard case .error(let serverError) = envelope.message else {
+            XCTFail("Future driver must not receive a recording payload, got \(envelope.message)", file: file, line: line)
+            return
+        }
+        XCTAssertTrue(serverError.message.contains("No recording in progress"), file: file, line: line)
+    }
+
+    private func decodeResponseEnvelope(from data: Data) throws -> ResponseEnvelope {
+        let trimmed = data.last == 0x0A ? data.dropLast() : data
+        return try JSONDecoder().decode(ResponseEnvelope.self, from: trimmed)
     }
 }
 #endif // canImport(UIKit)
