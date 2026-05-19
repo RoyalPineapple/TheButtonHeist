@@ -328,6 +328,120 @@ public struct MCPToolContract: Sendable, Equatable {
     }
 }
 
+/// Neutral JSON Schema value owned by the Fence command contract.
+///
+/// Adapters translate this tree into their transport-specific value type; they
+/// do not own schema literals or parameter-shape branching.
+public enum FenceJSONSchemaValue: Sendable, Equatable {
+    case string(String)
+    case int(Int)
+    case double(Double)
+    case bool(Bool)
+    case array([FenceJSONSchemaValue])
+    case object([String: FenceJSONSchemaValue])
+}
+
+public extension MCPToolContract {
+    var inputJSONSchema: FenceJSONSchemaValue {
+        FenceParameterSpec.jsonInputSchema(
+            properties: FenceParameterSpec.jsonSchemaProperties(from: parameters),
+            required: requiredParameterKeys
+        )
+    }
+}
+
+public extension FenceParameterSpec.ParamType {
+    var jsonSchemaType: String {
+        switch self {
+        case .string:
+            return "string"
+        case .integer:
+            return "integer"
+        case .number:
+            return "number"
+        case .boolean:
+            return "boolean"
+        case .stringArray, .array:
+            return "array"
+        case .object:
+            return "object"
+        }
+    }
+}
+
+public extension FenceParameterSpec {
+    var jsonSchemaProperty: FenceJSONSchemaValue {
+        Self.jsonSchemaProperty(for: self)
+    }
+
+    static func jsonSchemaProperties(from specs: [FenceParameterSpec]) -> [String: FenceJSONSchemaValue] {
+        var properties: [String: FenceJSONSchemaValue] = [:]
+        for spec in specs where properties[spec.key] == nil {
+            properties[spec.key] = spec.jsonSchemaProperty
+        }
+        return properties
+    }
+
+    static func jsonInputSchema(
+        properties: [String: FenceJSONSchemaValue],
+        required: [String] = []
+    ) -> FenceJSONSchemaValue {
+        var schema: [String: FenceJSONSchemaValue] = [
+            "type": .string(FenceParameterSpec.ParamType.object.jsonSchemaType),
+            "properties": .object(properties),
+            "additionalProperties": .bool(false),
+        ]
+        if !required.isEmpty {
+            schema["required"] = .array(required.map { .string($0) })
+        }
+        return .object(schema)
+    }
+
+    static func jsonSchemaProperty(for spec: FenceParameterSpec) -> FenceJSONSchemaValue {
+        var schema: [String: FenceJSONSchemaValue] = ["type": .string(spec.type.jsonSchemaType)]
+        if let description = spec.description { schema["description"] = .string(description) }
+        if let enumValues = spec.enumValues { schema["enum"] = .array(enumValues.map { .string($0) }) }
+        if let minimum = spec.minimum { schema["minimum"] = jsonSchemaNumber(minimum) }
+        if let maximum = spec.maximum { schema["maximum"] = jsonSchemaNumber(maximum) }
+        if let minLength = spec.minLength { schema["minLength"] = .int(minLength) }
+
+        switch spec.type {
+        case .stringArray:
+            schema["items"] = .object(["type": .string(FenceParameterSpec.ParamType.string.jsonSchemaType)])
+
+        case .object where !spec.objectProperties.isEmpty:
+            schema["properties"] = .object(jsonSchemaProperties(from: spec.objectProperties))
+            let required = spec.objectProperties.filter(\.required).map(\.key)
+            if !required.isEmpty { schema["required"] = .array(required.map { .string($0) }) }
+            schema["additionalProperties"] = .bool(spec.objectAdditionalProperties)
+
+        case .array:
+            if let itemType = spec.arrayItemType {
+                var items: [String: FenceJSONSchemaValue] = ["type": .string(itemType.jsonSchemaType)]
+                if itemType == .object {
+                    items["properties"] = .object(jsonSchemaProperties(from: spec.arrayItemProperties))
+                    let required = spec.arrayItemProperties.filter(\.required).map(\.key)
+                    if !required.isEmpty { items["required"] = .array(required.map { .string($0) }) }
+                    items["additionalProperties"] = .bool(spec.arrayItemAdditionalProperties)
+                }
+                schema["items"] = .object(items)
+            }
+
+        default:
+            break
+        }
+
+        return .object(schema)
+    }
+
+    private static func jsonSchemaNumber(_ value: Double) -> FenceJSONSchemaValue {
+        if value.rounded(.towardZero) == value {
+            return .int(Int(value))
+        }
+        return .double(value)
+    }
+}
+
 // MARK: - CLI Exposure
 
 /// How a command is surfaced by the top-level `buttonheist` CLI.

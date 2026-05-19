@@ -686,28 +686,9 @@ struct ToolSyncTests {
 
     // MARK: - Helpers
 
-    private static let allowedSchemaRendererLiterals: Set<String> = [
-        "additionalProperties",
-        "array",
-        "boolean",
-        "description",
-        "enum",
-        "integer",
-        "items",
-        "maximum",
-        "minimum",
-        "minLength",
-        "number",
-        "object",
-        "properties",
-        "required",
-        "string",
-        "type",
-    ]
+    private static let allowedSchemaRendererLiterals: Set<String> = []
 
-    private static let expectedSchemaRendererCatalogLiteralCounts: [String: Int] = [
-        "type": 5,
-    ]
+    private static let expectedSchemaRendererCatalogLiteralCounts: [String: Int] = [:]
 
     private static var fenceCatalogLiterals: Set<String> {
         var literals = Set(TheFence.Command.allCases.map(\.rawValue))
