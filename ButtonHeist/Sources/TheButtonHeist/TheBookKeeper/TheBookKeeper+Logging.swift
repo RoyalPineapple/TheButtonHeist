@@ -4,27 +4,15 @@ import TheScore
 
 // MARK: - Typed Request Recording
 
-/// Command argument keys BookKeeper treats specially while recording logs and heists.
-enum BookKeeperCommandArgumentKey {
-    static let heistId = "heistId"
-    static let label = "label"
-    static let identifier = "identifier"
-    static let value = "value"
-    static let traits = "traits"
-    static let excludeTraits = "excludeTraits"
-    static let ordinal = "ordinal"
-    static let x = "x"
-    static let y = "y"
-    static let startX = "startX"
-    static let startY = "startY"
-    static let endX = "endX"
-    static let endY = "endY"
-    static let centerX = "centerX"
-    static let centerY = "centerY"
-    static let points = "points"
-}
-
 private extension HeistValue {
+    static func fenceObject(_ values: [FenceParameterKey: HeistValue]) -> HeistValue {
+        .object(
+            values.reduce(into: [String: HeistValue]()) { result, pair in
+                result[pair.key.rawValue] = pair.value
+            }
+        )
+    }
+
     static func encoded<T: Encodable>(_ value: T) -> HeistValue {
         do {
             let data = try JSONEncoder().encode(value)
@@ -67,9 +55,18 @@ private extension String {
 }
 
 private extension Dictionary where Key == String, Value == HeistValue {
+    subscript(_ key: FenceParameterKey) -> HeistValue? {
+        get { self[key.rawValue] }
+        set { self[key.rawValue] = newValue }
+    }
+
     mutating func set(_ key: String, _ value: String?) {
         guard let value else { return }
         self[key] = .string(value)
+    }
+
+    mutating func set(_ key: FenceParameterKey, _ value: String?) {
+        set(key.rawValue, value)
     }
 
     mutating func set(_ key: String, _ value: Int?) {
@@ -77,9 +74,17 @@ private extension Dictionary where Key == String, Value == HeistValue {
         self[key] = .int(value)
     }
 
+    mutating func set(_ key: FenceParameterKey, _ value: Int?) {
+        set(key.rawValue, value)
+    }
+
     mutating func set(_ key: String, _ value: Double?) {
         guard let value else { return }
         self[key] = .double(value)
+    }
+
+    mutating func set(_ key: FenceParameterKey, _ value: Double?) {
+        set(key.rawValue, value)
     }
 
     mutating func set(_ key: String, _ value: Bool?) {
@@ -87,21 +92,29 @@ private extension Dictionary where Key == String, Value == HeistValue {
         self[key] = .bool(value)
     }
 
+    mutating func set(_ key: FenceParameterKey, _ value: Bool?) {
+        set(key.rawValue, value)
+    }
+
     mutating func set<E: RawRepresentable>(_ key: String, _ value: E?) where E.RawValue == String {
         guard let value else { return }
         self[key] = .string(value.rawValue)
     }
 
+    mutating func set<E: RawRepresentable>(_ key: FenceParameterKey, _ value: E?) where E.RawValue == String {
+        set(key.rawValue, value)
+    }
+
     mutating func appendMatcher(_ matcher: ElementMatcher) {
-        set(BookKeeperCommandArgumentKey.heistId, matcher.heistId)
-        set(BookKeeperCommandArgumentKey.label, matcher.label)
-        set(BookKeeperCommandArgumentKey.identifier, matcher.identifier)
-        set(BookKeeperCommandArgumentKey.value, matcher.value)
+        set(.heistId, matcher.heistId)
+        set(.label, matcher.label)
+        set(.identifier, matcher.identifier)
+        set(.value, matcher.value)
         if let traits = matcher.traits {
-            self[BookKeeperCommandArgumentKey.traits] = .array(traits.map { .string($0.rawValue) })
+            self[.traits] = .array(traits.map { .string($0.rawValue) })
         }
         if let excludeTraits = matcher.excludeTraits {
-            self[BookKeeperCommandArgumentKey.excludeTraits] = .array(excludeTraits.map { .string($0.rawValue) })
+            self[.excludeTraits] = .array(excludeTraits.map { .string($0.rawValue) })
         }
     }
 
@@ -109,18 +122,18 @@ private extension Dictionary where Key == String, Value == HeistValue {
         guard let target else { return }
         switch target {
         case .heistId(let heistId):
-            self[BookKeeperCommandArgumentKey.heistId] = .string(heistId)
+            self[.heistId] = .string(heistId)
         case .matcher(let matcher, let ordinal):
             appendMatcher(matcher)
-            set(BookKeeperCommandArgumentKey.ordinal, ordinal)
+            set(.ordinal, ordinal)
         }
     }
 
     mutating func appendExpectation(_ expectation: ActionExpectation?, timeout: Double?) {
         if let expectation {
-            self["expect"] = HeistValue.encoded(expectation)
+            self[.expect] = HeistValue.encoded(expectation)
         }
-        set("timeout", timeout)
+        set(.timeout, timeout)
     }
 }
 
@@ -160,7 +173,7 @@ private extension TheFence.RequestPayload {
             return request.bookKeeperArguments
         case .artifact(let request):
             var arguments: [String: HeistValue] = [:]
-            arguments.set("output", request.outputPath)
+            arguments.set(.output, request.outputPath)
             return arguments
         case .gesture(let payload):
             return payload.bookKeeperArguments(includeTarget: includeTarget)
@@ -172,18 +185,18 @@ private extension TheFence.RequestPayload {
             return target.bookKeeperArguments(includeTarget: includeTarget)
         case .typeText(let target):
             var arguments: [String: HeistValue] = [:]
-            arguments.set("text", target.text)
+            arguments.set(.text, target.text)
             if includeTarget {
                 arguments.appendTarget(target.elementTarget)
             }
             return arguments
         case .editAction(let target):
             var arguments: [String: HeistValue] = [:]
-            arguments.set("action", target.action)
+            arguments.set(.action, target.action)
             return arguments
         case .setPasteboard(let target):
             var arguments: [String: HeistValue] = [:]
-            arguments.set("text", target.text)
+            arguments.set(.text, target.text)
             return arguments
         case .waitFor(let target):
             return target.bookKeeperArguments(includeTarget: includeTarget)
@@ -200,21 +213,21 @@ private extension TheFence.RequestPayload {
         case .archiveSession(let request):
             var arguments: [String: HeistValue] = [:]
             if request.deleteSource {
-                arguments.set("delete_source", true)
+                arguments.set(.deleteSource, true)
             }
             return arguments
         case .startHeist(let request):
             var arguments: [String: HeistValue] = [:]
-            arguments.set("app", request.app)
-            arguments.set("identifier", request.identifier)
+            arguments.set(.app, request.app)
+            arguments.set(.identifier, request.identifier)
             return arguments
         case .stopHeist(let request):
             var arguments: [String: HeistValue] = [:]
-            arguments.set("output", request.outputPath)
+            arguments.set(.output, request.outputPath)
             return arguments
         case .playHeist(let request):
             var arguments: [String: HeistValue] = [:]
-            arguments.set("input", request.inputPath)
+            arguments.set(.input, request.inputPath)
             return arguments
         }
     }
@@ -254,16 +267,16 @@ private extension TheFence.GetInterfaceRequest {
     var bookKeeperArguments: [String: HeistValue] {
         var arguments: [String: HeistValue] = [:]
         if detail != .summary {
-            arguments.set("detail", detail)
+            arguments.set(.detail, detail)
         }
         if let subtree = query.subtree {
-            arguments["subtree"] = subtree.bookKeeperValue
+            arguments[.subtree] = subtree.bookKeeperValue
         }
         if query.matcher.hasPredicates {
             arguments.appendMatcher(query.matcher)
         }
         if let elementIds = query.elementIds {
-            arguments["elements"] = .array(elementIds.map { .string($0) })
+            arguments[.elements] = .array(elementIds.map { .string($0) })
         }
         return arguments
     }
@@ -276,11 +289,11 @@ private extension SubtreeSelector {
         case .element(let matcher, let ordinal):
             var element: [String: HeistValue] = [:]
             element.appendMatcher(matcher)
-            payload["element"] = .object(element)
-            payload.set("ordinal", ordinal)
+            payload[.element] = .object(element)
+            payload.set(.ordinal, ordinal)
         case .container(let matcher, let ordinal):
-            payload["container"] = matcher.bookKeeperValue
-            payload.set("ordinal", ordinal)
+            payload[.container] = matcher.bookKeeperValue
+            payload.set(.ordinal, ordinal)
         }
         return .object(payload)
     }
@@ -289,12 +302,12 @@ private extension SubtreeSelector {
 private extension ContainerMatcher {
     var bookKeeperValue: HeistValue {
         var payload: [String: HeistValue] = [:]
-        payload.set("stableId", stableId)
-        payload.set("type", type)
-        payload.set("label", label)
-        payload.set("value", value)
-        payload.set("identifier", identifier)
-        payload.set("isModalBoundary", isModalBoundary)
+        payload.set(.stableId, stableId)
+        payload.set(.type, type)
+        payload.set(.label, label)
+        payload.set(.value, value)
+        payload.set(.identifier, identifier)
+        payload.set(.isModalBoundary, isModalBoundary)
         return .object(payload)
     }
 }
@@ -369,8 +382,8 @@ private extension TheFence.GesturePayload {
 private extension TouchTapTarget {
     func bookKeeperArguments(includeTarget: Bool) -> [String: HeistValue] {
         var arguments: [String: HeistValue] = [:]
-        arguments.set(BookKeeperCommandArgumentKey.x, pointX)
-        arguments.set(BookKeeperCommandArgumentKey.y, pointY)
+        arguments.set(.x, pointX)
+        arguments.set(.y, pointY)
         if includeTarget {
             arguments.appendTarget(elementTarget)
         }
@@ -381,9 +394,9 @@ private extension TouchTapTarget {
 private extension LongPressTarget {
     func bookKeeperArguments(includeTarget: Bool) -> [String: HeistValue] {
         var arguments: [String: HeistValue] = [:]
-        arguments.set(BookKeeperCommandArgumentKey.x, pointX)
-        arguments.set(BookKeeperCommandArgumentKey.y, pointY)
-        arguments.set("duration", duration)
+        arguments.set(.x, pointX)
+        arguments.set(.y, pointY)
+        arguments.set(.duration, duration)
         if includeTarget {
             arguments.appendTarget(elementTarget)
         }
@@ -394,17 +407,17 @@ private extension LongPressTarget {
 private extension SwipeTarget {
     func bookKeeperArguments(includeTarget: Bool) -> [String: HeistValue] {
         var arguments: [String: HeistValue] = [:]
-        arguments.set("direction", direction)
-        arguments.set(BookKeeperCommandArgumentKey.startX, startX)
-        arguments.set(BookKeeperCommandArgumentKey.startY, startY)
-        arguments.set(BookKeeperCommandArgumentKey.endX, endX)
-        arguments.set(BookKeeperCommandArgumentKey.endY, endY)
-        arguments.set("duration", duration)
+        arguments.set(.direction, direction)
+        arguments.set(.startX, startX)
+        arguments.set(.startY, startY)
+        arguments.set(.endX, endX)
+        arguments.set(.endY, endY)
+        arguments.set(.duration, duration)
         if let start {
-            arguments["start"] = start.bookKeeperValue
+            arguments[.start] = start.bookKeeperValue
         }
         if let end {
-            arguments["end"] = end.bookKeeperValue
+            arguments[.end] = end.bookKeeperValue
         }
         if includeTarget {
             arguments.appendTarget(elementTarget)
@@ -416,11 +429,11 @@ private extension SwipeTarget {
 private extension DragTarget {
     func bookKeeperArguments(includeTarget: Bool) -> [String: HeistValue] {
         var arguments: [String: HeistValue] = [:]
-        arguments.set(BookKeeperCommandArgumentKey.startX, startX)
-        arguments.set(BookKeeperCommandArgumentKey.startY, startY)
-        arguments.set(BookKeeperCommandArgumentKey.endX, endX)
-        arguments.set(BookKeeperCommandArgumentKey.endY, endY)
-        arguments.set("duration", duration)
+        arguments.set(.startX, startX)
+        arguments.set(.startY, startY)
+        arguments.set(.endX, endX)
+        arguments.set(.endY, endY)
+        arguments.set(.duration, duration)
         if includeTarget {
             arguments.appendTarget(elementTarget)
         }
@@ -431,11 +444,11 @@ private extension DragTarget {
 private extension PinchTarget {
     func bookKeeperArguments(includeTarget: Bool) -> [String: HeistValue] {
         var arguments: [String: HeistValue] = [:]
-        arguments.set(BookKeeperCommandArgumentKey.centerX, centerX)
-        arguments.set(BookKeeperCommandArgumentKey.centerY, centerY)
-        arguments.set("scale", scale)
-        arguments.set("spread", spread)
-        arguments.set("duration", duration)
+        arguments.set(.centerX, centerX)
+        arguments.set(.centerY, centerY)
+        arguments.set(.scale, scale)
+        arguments.set(.spread, spread)
+        arguments.set(.duration, duration)
         if includeTarget {
             arguments.appendTarget(elementTarget)
         }
@@ -446,11 +459,11 @@ private extension PinchTarget {
 private extension RotateTarget {
     func bookKeeperArguments(includeTarget: Bool) -> [String: HeistValue] {
         var arguments: [String: HeistValue] = [:]
-        arguments.set(BookKeeperCommandArgumentKey.centerX, centerX)
-        arguments.set(BookKeeperCommandArgumentKey.centerY, centerY)
-        arguments.set("angle", angle)
-        arguments.set("radius", radius)
-        arguments.set("duration", duration)
+        arguments.set(.centerX, centerX)
+        arguments.set(.centerY, centerY)
+        arguments.set(.angle, angle)
+        arguments.set(.radius, radius)
+        arguments.set(.duration, duration)
         if includeTarget {
             arguments.appendTarget(elementTarget)
         }
@@ -461,9 +474,9 @@ private extension RotateTarget {
 private extension TwoFingerTapTarget {
     func bookKeeperArguments(includeTarget: Bool) -> [String: HeistValue] {
         var arguments: [String: HeistValue] = [:]
-        arguments.set(BookKeeperCommandArgumentKey.centerX, centerX)
-        arguments.set(BookKeeperCommandArgumentKey.centerY, centerY)
-        arguments.set("spread", spread)
+        arguments.set(.centerX, centerX)
+        arguments.set(.centerY, centerY)
+        arguments.set(.spread, spread)
         if includeTarget {
             arguments.appendTarget(elementTarget)
         }
@@ -473,18 +486,18 @@ private extension TwoFingerTapTarget {
 
 private extension UnitPoint {
     var bookKeeperValue: HeistValue {
-        .object([
-            "x": .double(x),
-            "y": .double(y),
+        .fenceObject([
+            .x: .double(x),
+            .y: .double(y),
         ])
     }
 }
 
 private extension PathPoint {
     var bookKeeperValue: HeistValue {
-        .object([
-            "x": .double(x),
-            "y": .double(y),
+        .fenceObject([
+            .x: .double(x),
+            .y: .double(y),
         ])
     }
 }
@@ -492,22 +505,22 @@ private extension PathPoint {
 private extension DrawPathTarget {
     var bookKeeperArguments: [String: HeistValue] {
         var arguments: [String: HeistValue] = [:]
-        arguments[BookKeeperCommandArgumentKey.points] = .array(points.map(\.bookKeeperValue))
-        arguments.set("duration", duration)
-        arguments.set("velocity", velocity)
+        arguments[.points] = .array(points.map(\.bookKeeperValue))
+        arguments.set(.duration, duration)
+        arguments.set(.velocity, velocity)
         return arguments
     }
 }
 
 private extension BezierSegment {
     var bookKeeperValue: HeistValue {
-        .object([
-            "cp1X": .double(cp1X),
-            "cp1Y": .double(cp1Y),
-            "cp2X": .double(cp2X),
-            "cp2Y": .double(cp2Y),
-            "endX": .double(endX),
-            "endY": .double(endY),
+        .fenceObject([
+            .cp1X: .double(cp1X),
+            .cp1Y: .double(cp1Y),
+            .cp2X: .double(cp2X),
+            .cp2Y: .double(cp2Y),
+            .endX: .double(endX),
+            .endY: .double(endY),
         ])
     }
 }
@@ -515,12 +528,12 @@ private extension BezierSegment {
 private extension DrawBezierTarget {
     var bookKeeperArguments: [String: HeistValue] {
         var arguments: [String: HeistValue] = [:]
-        arguments.set(BookKeeperCommandArgumentKey.startX, startX)
-        arguments.set(BookKeeperCommandArgumentKey.startY, startY)
-        arguments["segments"] = .array(segments.map(\.bookKeeperValue))
-        arguments.set("samplesPerSegment", samplesPerSegment)
-        arguments.set("duration", duration)
-        arguments.set("velocity", velocity)
+        arguments.set(.startX, startX)
+        arguments.set(.startY, startY)
+        arguments[.segments] = .array(segments.map(\.bookKeeperValue))
+        arguments.set(.samplesPerSegment, samplesPerSegment)
+        arguments.set(.duration, duration)
+        arguments.set(.velocity, velocity)
         return arguments
     }
 }
@@ -538,7 +551,7 @@ private extension TheFence.ScrollPayload {
             return arguments
         case .elementSearch(let target):
             var arguments: [String: HeistValue] = [:]
-            arguments.set("direction", target.direction)
+            arguments.set(.direction, target.direction)
             if includeTarget {
                 arguments.appendTarget(target.elementTarget)
             }
@@ -565,7 +578,7 @@ private extension TheFence.ScrollPayload {
 private extension ScrollTarget {
     func bookKeeperArguments(includeTarget: Bool) -> [String: HeistValue] {
         var arguments: [String: HeistValue] = [:]
-        arguments.set("direction", direction)
+        arguments.set(.direction, direction)
         if includeTarget {
             arguments.appendTarget(elementTarget)
         }
@@ -576,7 +589,7 @@ private extension ScrollTarget {
 private extension ScrollToEdgeTarget {
     func bookKeeperArguments(includeTarget: Bool) -> [String: HeistValue] {
         var arguments: [String: HeistValue] = [:]
-        arguments.set("edge", edge)
+        arguments.set(.edge, edge)
         if includeTarget {
             arguments.appendTarget(elementTarget)
         }
@@ -589,20 +602,20 @@ private extension TheFence.AccessibilityPayload {
         var arguments: [String: HeistValue] = [:]
         switch self {
         case .activate(let target, let actionName, let count):
-            arguments.set("action", actionName)
-            arguments.set("count", count.value)
+            arguments.set(.action, actionName)
+            arguments.set(.count, count.value)
             if includeTarget {
                 arguments.appendTarget(target)
             }
         case .increment(let target, let count),
              .decrement(let target, let count):
-            arguments.set("count", count.value)
+            arguments.set(.count, count.value)
             if includeTarget {
                 arguments.appendTarget(target)
             }
         case .performCustomAction(let target, let actionName, let count):
-            arguments.set("action", actionName)
-            arguments.set("count", count.value)
+            arguments.set(.action, actionName)
+            arguments.set(.count, count.value)
             if includeTarget {
                 arguments.appendTarget(target)
             }
@@ -624,12 +637,12 @@ private extension TheFence.AccessibilityPayload {
 private extension RotorTarget {
     func bookKeeperArguments(includeTarget: Bool) -> [String: HeistValue] {
         var arguments: [String: HeistValue] = [:]
-        arguments.set("rotor", rotor)
-        arguments.set("rotorIndex", rotorIndex)
-        arguments.set("direction", direction)
-        arguments.set("currentHeistId", currentHeistId)
-        arguments.set("currentTextStartOffset", currentTextRange?.startOffset)
-        arguments.set("currentTextEndOffset", currentTextRange?.endOffset)
+        arguments.set(.rotor, rotor)
+        arguments.set(.rotorIndex, rotorIndex)
+        arguments.set(.direction, direction)
+        arguments.set(.currentHeistId, currentHeistId)
+        arguments.set(.currentTextStartOffset, currentTextRange?.startOffset)
+        arguments.set(.currentTextEndOffset, currentTextRange?.endOffset)
         if includeTarget {
             arguments.appendTarget(elementTarget)
         }
@@ -640,8 +653,8 @@ private extension RotorTarget {
 private extension WaitForTarget {
     func bookKeeperArguments(includeTarget: Bool) -> [String: HeistValue] {
         var arguments: [String: HeistValue] = [:]
-        arguments.set("absent", absent)
-        arguments.set("timeout", timeout)
+        arguments.set(.absent, absent)
+        arguments.set(.timeout, timeout)
         if includeTarget {
             arguments.appendTarget(elementTarget)
         }
@@ -652,10 +665,10 @@ private extension WaitForTarget {
 private extension RecordingConfig {
     var bookKeeperArguments: [String: HeistValue] {
         var arguments: [String: HeistValue] = [:]
-        arguments.set("fps", fps)
-        arguments.set("scale", scale)
-        arguments.set("inactivity_timeout", inactivityTimeout)
-        arguments.set("max_duration", maxDuration)
+        arguments.set(.fps, fps)
+        arguments.set(.scale, scale)
+        arguments.set(.inactivityTimeout, inactivityTimeout)
+        arguments.set(.maxDuration, maxDuration)
         return arguments
     }
 }
@@ -663,9 +676,9 @@ private extension RecordingConfig {
 private extension TheFence.ConnectRequest {
     var bookKeeperArguments: [String: HeistValue] {
         var arguments: [String: HeistValue] = [:]
-        arguments.set("target", targetName)
-        arguments.set("device", device)
-        arguments.set("token", token)
+        arguments.set(.target, targetName)
+        arguments.set(.device, device)
+        arguments.set(.token, token)
         return arguments
     }
 }
@@ -673,9 +686,9 @@ private extension TheFence.ConnectRequest {
 private extension TheFence.RunBatchRequest {
     var bookKeeperArguments: [String: HeistValue] {
         var arguments: [String: HeistValue] = [:]
-        arguments["steps"] = .array(steps.map(\.bookKeeperValue))
+        arguments[.steps] = .array(steps.map(\.bookKeeperValue))
         if policy != .stopOnError {
-            arguments.set("policy", policy)
+            arguments.set(.policy, policy)
         }
         return arguments
     }
@@ -686,11 +699,11 @@ private extension TheFence.RunBatchStepRequest {
         switch self {
         case .decoded(let request):
             var values = request.bookKeeperLogArguments
-            values["command"] = .string(request.command.rawValue)
+            values[.command] = .string(request.command.rawValue)
             return .object(values)
         case .invalid(let commandName, let failure):
             return .object([
-                "command": .string(commandName),
+                FenceParameterKey.command.rawValue: .string(commandName),
                 "decodeError": .string(failure.message),
             ])
         }
