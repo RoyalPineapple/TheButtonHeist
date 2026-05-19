@@ -527,7 +527,11 @@ public final class TheInsideJob {
             "tls=enabled fingerprint=\(tlsFingerprint)",
             "bonjour=advertising service=\(bonjourServiceName)"
         ].joined(separator: " ")
-        insideJobLogger.info("Startup summary: \(fields, privacy: .public) token=\(token, privacy: .public)")
+        if tokenSource == .generated {
+            insideJobLogger.info("Startup summary: \(fields, privacy: .public) token=\(token, privacy: .public)")
+        } else {
+            insideJobLogger.info("Startup summary: \(fields, privacy: .public)")
+        }
     }
 
     // MARK: - Accessibility Observation

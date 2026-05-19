@@ -13,13 +13,15 @@ import TheScore
 /// can read it from the logs and connect.
 ///
 /// Token resolution order:
-/// 1. Explicit token (from INSIDEJOB_TOKEN env var or InsideJobToken plist key)
-/// 2. New auto-generated UUID (fresh each launch, logged to console)
+/// 1. Explicit token (from API, INSIDEJOB_TOKEN env var, or InsideJobToken plist key)
+/// 2. New auto-generated UUID (fresh each launch, surfaced to the connector)
 ///
 /// Auth behavior is determined per-connection by the incoming token:
 /// - Token matches → authenticated immediately (no UI prompt)
-/// - Empty token → UI approval prompt (Allow/Deny), approved clients receive the token
-/// - Wrong token → rejected with hint to retry without a token for a fresh session
+/// - Empty token with a generated token and no active session → UI approval prompt
+/// - Empty token with an explicit token or active session → rejected with structured guidance
+/// - Wrong token with generated-token auth → rejected with hint to retry without a token for a fresh session
+/// - Wrong token with explicit-token auth → rejected with hint to retry with the configured token
 /// - Any connection while a session is active from a different driver → busy signal
 private let logger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "auth")
 
@@ -172,6 +174,7 @@ actor TheMuscle {
     private var sessionPhase: SessionPhase = .idle
     /// Timeout before releasing a session after all connections disconnect or go idle
     private let sessionReleaseTimeout: TimeInterval
+    private let approvalTokenPayload: String?
 
     // Computed accessors — preserve the external read interface.
 
@@ -190,6 +193,19 @@ actor TheMuscle {
         case .active(_, let connections): return connections
         case .idle, .draining: return []
         }
+    }
+
+    private var hasPendingApproval: Bool {
+        clients.values.contains { phase in
+            if case .pendingApproval = phase { return true }
+            return false
+        }
+    }
+
+    private var canRequestUIApproval: Bool {
+        guard approvalTokenPayload != nil, !hasPendingApproval else { return false }
+        if case .idle = sessionPhase { return true }
+        return false
     }
 
     // MARK: - Callbacks (set by TheInsideJob)
@@ -219,7 +235,9 @@ actor TheMuscle {
         sessionReleaseTimeout: TimeInterval? = nil,
         alerts: AlertPresenter? = nil
     ) {
-        self.sessionToken = explicitToken ?? UUID().uuidString
+        let resolvedToken = explicitToken ?? UUID().uuidString
+        self.sessionToken = resolvedToken
+        self.approvalTokenPayload = explicitToken == nil ? resolvedToken : nil
         self.alerts = alerts ?? AlertPresenter()
         self.sessionReleaseTimeout = sessionReleaseTimeout ?? StartupConfiguration.defaultSessionTimeout
     }
@@ -383,7 +401,24 @@ actor TheMuscle {
         }
 
         if payload.token.isEmpty {
-            // No token → request UI approval (Allow/Deny prompt on device)
+            guard approvalTokenPayload != nil else {
+                sendMessage(
+                    .error(ServerError(
+                        kind: .authFailure,
+                        message: "UI approval is available only when InsideJob generated the session token. Retry with the configured token."
+                    )),
+                    respond: respond
+                )
+                logger.warning("Client \(clientId) requested UI approval while an explicit token is configured")
+                scheduleDelayedDisconnect(clientId)
+                return
+            }
+
+            guard canRequestUIApproval else {
+                rejectUnavailableUIApprovalRequest(clientId, respond: respond)
+                return
+            }
+
             logger.info("Client \(clientId) requesting UI approval (no token)")
             clients[clientId] = .pendingApproval(address: address, respond: respond, driverId: payload.driverId)
             showApprovalAlert(clientId: clientId)
@@ -391,12 +426,14 @@ actor TheMuscle {
         }
 
         guard constantTimeEqual(payload.token, sessionToken) else {
-            // Wrong token → reject with guidance to retry without a token
+            let retryMessage = approvalTokenPayload == nil
+                ? "Invalid token. Retry with the configured token."
+                : "Invalid token. Retry without a token to request a fresh session."
             let attempts = recordFailedAttempt(address: address)
             if attempts >= TheMuscle.maxFailedAttempts {
                 logger.warning("Address \(address) locked out after \(attempts) failed attempts")
             }
-            sendMessage(.error(ServerError(kind: .authFailure, message: "Invalid token. Retry without a token to request a fresh session.")), respond: respond)
+            sendMessage(.error(ServerError(kind: .authFailure, message: retryMessage)), respond: respond)
             logger.warning("Client \(clientId) sent invalid token, rejected (attempt \(attempts))")
             scheduleDelayedDisconnect(clientId)
             return
@@ -413,6 +450,45 @@ actor TheMuscle {
         await markClientAuthenticated?(clientId)
         logger.info("Client \(clientId) authenticated with token")
         await onClientAuthenticated?(clientId, respond)
+    }
+
+    private func rejectUnavailableUIApprovalRequest(
+        _ clientId: Int,
+        respond: @escaping @Sendable (Data) -> Void
+    ) {
+        switch sessionPhase {
+        case .active(let driverId, let connections):
+            rejectClientForSessionLock(
+                clientId,
+                payload: sessionLockPayload(
+                    baseMessage: "UI approval is unavailable while a ButtonHeist session is active",
+                    ownerDriverId: exposedDriverId(from: driverId),
+                    activeConnections: connections.count
+                ),
+                respond: respond
+            )
+        case .draining(let driverId, _, let releaseDeadline):
+            rejectClientForSessionLock(
+                clientId,
+                payload: sessionLockPayload(
+                    baseMessage: "UI approval is unavailable while a ButtonHeist session is draining",
+                    ownerDriverId: exposedDriverId(from: driverId),
+                    activeConnections: 0,
+                    remainingTimeoutSeconds: max(0, releaseDeadline.timeIntervalSince(Date()))
+                ),
+                respond: respond
+            )
+        case .idle:
+            sendMessage(
+                .error(ServerError(
+                    kind: .authFailure,
+                    message: "UI approval is available only when no approval request is already active."
+                )),
+                respond: respond
+            )
+            logger.warning("Client \(clientId) requested UI approval while approval is already pending")
+            scheduleDelayedDisconnect(clientId)
+        }
     }
 
     func handleClientDisconnected(_ clientId: Int) async {
@@ -434,7 +510,7 @@ actor TheMuscle {
         clients[clientId] = .authenticated(address: address, driverIdentity: driverIdentity)
         await markClientAuthenticated?(clientId)
         logger.info("Client \(clientId) approved via UI")
-        sendMessage(.authApproved(AuthApprovedPayload(token: sessionToken)), respond: respond)
+        sendMessage(.authApproved(AuthApprovedPayload(token: approvalTokenPayload)), respond: respond)
         await onClientAuthenticated?(clientId, respond)
     }
 

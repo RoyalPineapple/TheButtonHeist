@@ -100,6 +100,25 @@ final class TheFenceTests: XCTestCase {
         }
     }
 
+    // MARK: - Auth Token Status
+
+    func testAuthApprovedStatusEmitsGeneratedTokenWhenNoTokenWasConfigured() {
+        XCTAssertEqual(
+            TheFence.authApprovedStatusMessage(token: "generated-token", configuredToken: nil),
+            "BUTTONHEIST_TOKEN=generated-token"
+        )
+    }
+
+    func testAuthApprovedStatusDoesNotEchoConfiguredToken() {
+        XCTAssertNil(
+            TheFence.authApprovedStatusMessage(token: "configured-token", configuredToken: "configured-token")
+        )
+    }
+
+    func testAuthApprovedStatusIgnoresMissingToken() {
+        XCTAssertNil(TheFence.authApprovedStatusMessage(token: nil, configuredToken: nil))
+    }
+
     // MARK: - FenceResponse Human Formatting
 
     func testOkResponseFormatting() {
@@ -245,6 +264,17 @@ final class TheFenceTests: XCTestCase {
         XCTAssertEqual(json["phase"] as? String, "auth")
         XCTAssertEqual(json["retryable"] as? Bool, false)
         XCTAssertEqual(json["hint"] as? String, "Retry without --token to request a fresh session.")
+    }
+
+    func testAuthFailureHintPreservesConfiguredTokenRemediation() {
+        let response = FenceResponse.failure(FenceError.authFailed("Invalid token. Retry with the configured token."))
+        let json = response.jsonDict()
+
+        XCTAssertEqual(json["errorCode"] as? String, "auth.failed")
+        XCTAssertEqual(json["hint"] as? String, "Retry with the configured token.")
+        let message = json["message"] as? String
+        XCTAssertTrue(message?.contains("Retry with the configured token.") == true)
+        XCTAssertFalse(message?.contains("Retry without --token") == true)
     }
 
     func testHelpResponseJSON() {
