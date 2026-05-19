@@ -366,7 +366,7 @@ extension FenceResponse {
             payload["rotor"] = rotor
         }
         if result.animating == true { payload["animating"] = true }
-        if let delta = result.effectiveAccessibilityDelta {
+        if let delta = result.accessibilityDelta {
             payload["delta"] = deltaDictionary(delta)
         }
 

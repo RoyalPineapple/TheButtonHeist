@@ -73,7 +73,7 @@ final class AutoSettleFieldsTests: XCTestCase {
         let message: String?
     }
 
-    private struct LegacyAccessibilityDelta: Decodable {
+    private struct CompactAccessibilityDeltaReader: Decodable {
         let kind: String
         let elementCount: Int
     }
@@ -106,8 +106,8 @@ final class AutoSettleFieldsTests: XCTestCase {
         )
         let delta: AccessibilityTrace.Delta = .noChange(.init(elementCount: 7, transient: [element]))
         let data = try JSONEncoder().encode(delta)
-        let legacy = try JSONDecoder().decode(LegacyAccessibilityDelta.self, from: data)
-        XCTAssertEqual(legacy.kind, "noChange")
-        XCTAssertEqual(legacy.elementCount, 7)
+        let compact = try JSONDecoder().decode(CompactAccessibilityDeltaReader.self, from: data)
+        XCTAssertEqual(compact.kind, "noChange")
+        XCTAssertEqual(compact.elementCount, 7)
     }
 }

@@ -159,7 +159,7 @@ extension BatchStepOutcome {
         case .action(let result, _):
             return BatchStepSummary(
                 command: command,
-                deltaKind: result.effectiveAccessibilityDelta?.kindRawValue,
+                deltaKind: result.accessibilityDelta?.kindRawValue,
                 screenName: result.screenName,
                 screenId: result.screenId,
                 expectationMet: expectationMet,
@@ -677,7 +677,7 @@ public enum FenceResponse {
                     }
                 }
             }
-            if let delta = result.effectiveAccessibilityDelta {
+            if let delta = result.accessibilityDelta {
                 output += "  \(formatDelta(delta))"
             }
             if result.animating == true {

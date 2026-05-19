@@ -141,7 +141,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         try assertDeltaDerivesFromCaptureEdge(delta, trace: trace)
     }
 
-    func testTransitionTransientLivesOnCaptureEdgeAndProjectsToLegacyDeltaField() throws {
+    func testTransitionTransientLivesOnCaptureEdgeAndProjectsToCompactDeltaField() throws {
         let transient = makeElement(heistId: "spinner", label: "Loading", traits: [.staticText])
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface())
         let after = AccessibilityTrace.Capture(

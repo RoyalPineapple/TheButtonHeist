@@ -1001,7 +1001,7 @@ public final class TheFence {
                             expectation: ExpectationResult(
                                 met: actionResult.success,
                                 expectation: expectation,
-                                actual: actionResult.message ?? actionResult.effectiveAccessibilityDelta?.kindRawValue
+                                actual: actionResult.message ?? actionResult.accessibilityDelta?.kindRawValue
                             )
                         ),
                         deliveredCaptureRef: nil
@@ -1062,7 +1062,7 @@ public final class TheFence {
                 ExpectationResult(
                     met: waitResult.success,
                     expectation: expectation,
-                    actual: waitResult.message ?? waitResult.effectiveAccessibilityDelta?.kindRawValue
+                    actual: waitResult.message ?? waitResult.accessibilityDelta?.kindRawValue
                 )
             } else {
                 expectation.validate(against: waitResult, preActionElements: preActionElements)

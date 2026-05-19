@@ -2568,7 +2568,6 @@ final class TheFenceTests: XCTestCase {
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.accessibilityTrace, trace)
         XCTAssertEqual(result.accessibilityDelta, trace.captureEndpointDelta)
-        XCTAssertEqual(result.effectiveAccessibilityDelta, trace.captureEndpointDelta)
         XCTAssertEqual(expectation?.met, true)
         guard case .screenChanged(let payload)? = result.accessibilityDelta else {
             return XCTFail("Expected trace transition to project screenChanged, got \(String(describing: result.accessibilityDelta))")

@@ -204,15 +204,15 @@ extension ActionExpectation {
     ) -> ExpectationResult {
         switch self {
         case .screenChanged:
-            let kindString = result.effectiveAccessibilityDelta?.kindRawValue ?? "noChange"
+            let kindString = result.accessibilityDelta?.kindRawValue ?? "noChange"
             return ExpectationResult(
-                met: result.effectiveAccessibilityDelta?.isScreenChanged == true,
+                met: result.accessibilityDelta?.isScreenChanged == true,
                 expectation: self,
                 actual: kindString
             )
         case .elementsChanged:
             // Superset rule: screen_changed implies elements_changed.
-            let delta = result.effectiveAccessibilityDelta
+            let delta = result.accessibilityDelta
             let kindString = delta?.kindRawValue ?? "noChange"
             let met: Bool = {
                 guard let delta else { return false }
@@ -267,7 +267,7 @@ extension ActionExpectation {
         oldValue: String?, newValue: String?,
         expectation: ActionExpectation, result: ActionResult
     ) -> ExpectationResult {
-        let updates = result.effectiveAccessibilityDelta?.elementEdits?.updated ?? []
+        let updates = result.accessibilityDelta?.elementEdits?.updated ?? []
         guard !updates.isEmpty else {
             return ExpectationResult(met: false, expectation: expectation, actual: "no element updates")
         }
@@ -302,7 +302,7 @@ extension ActionExpectation {
     private static func validateElementAppeared(
         matcher: ElementMatcher, expectation: ActionExpectation, result: ActionResult
     ) -> ExpectationResult {
-        let delta = result.effectiveAccessibilityDelta
+        let delta = result.accessibilityDelta
 
         // Normal path: check the added list from element-level diffs.
         let added = delta?.elementEdits?.added ?? []
@@ -341,7 +341,7 @@ extension ActionExpectation {
         result: ActionResult,
         preActionElements: [HeistId: HeistElement]
     ) -> ExpectationResult {
-        let delta = result.effectiveAccessibilityDelta
+        let delta = result.accessibilityDelta
 
         // Normal path: check the removed list from element-level diffs.
         let removed = delta?.elementEdits?.removed ?? []
