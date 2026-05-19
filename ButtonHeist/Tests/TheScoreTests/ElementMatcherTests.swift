@@ -26,6 +26,15 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertEqual(id, "save_button")
     }
 
+    func testElementTargetMatcherInitializerIgnoresOrdinalWithHeistId() {
+        let target = ElementTarget(heistId: "save_button", matcher: ElementMatcher(), ordinal: 2)
+
+        guard case .heistId(let id) = target else {
+            return XCTFail("Expected .heistId")
+        }
+        XCTAssertEqual(id, "save_button")
+    }
+
     func testElementTargetMatcherInitializerAcceptsOrdinalOnlyFallback() {
         let target = ElementTarget(matcher: ElementMatcher(), ordinal: 2)
 

@@ -824,8 +824,8 @@ private extension Array where Element == AccessibilityHierarchy {
 private extension AccessibilityHierarchy {
     func hasSameShape(as other: AccessibilityHierarchy) -> Bool {
         switch (self, other) {
-        case (.element(_, let lhsIndex), .element(_, let rhsIndex)):
-            return lhsIndex == rhsIndex
+        case (.element, .element):
+            return true
         case (.container(_, let lhsChildren), .container(_, let rhsChildren)):
             return lhsChildren.hasSameShape(as: rhsChildren)
         case (.element, .container), (.container, .element):

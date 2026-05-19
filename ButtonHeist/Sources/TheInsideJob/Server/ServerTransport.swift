@@ -112,13 +112,14 @@ final class ServerTransport: NSObject {
     @MainActor private var hasStarted = false
 
     /// Install a synchronous data interceptor. Must be called before
-    /// `start()`; calling after start trips a `precondition`.
+    /// `start()`; calls after start are ignored because `makeCallbacks()`
+    /// snapshots the interceptor by value.
     @MainActor
     func setSyncDataInterceptor(_ interceptor: (@Sendable (_ clientId: Int, _ data: Data) -> Data?)?) {
-        precondition(
-            !hasStarted,
-            "ServerTransport.syncDataInterceptor must be set before start(); later assignment is silently dropped because makeCallbacks() snapshots by value"
-        )
+        guard !hasStarted else {
+            logger.warning("Ignoring syncDataInterceptor assignment after start; makeCallbacks() snapshots it by value")
+            return
+        }
         syncDataInterceptor = interceptor
     }
 
@@ -168,9 +169,9 @@ final class ServerTransport: NSObject {
     /// Each closure is `@Sendable` because `SimpleSocketServer` invokes it on
     /// its own network queue, not the main actor. The continuation is itself
     /// Sendable; `yield` is safe to call from any context. The synchronous
-    /// data interceptor is snapshotted here at start time — that's why
-    /// `setSyncDataInterceptor(_:)` preconditions on `!hasStarted`: a later
-    /// assignment would not reach the captured `interceptor` constant.
+    /// data interceptor is snapshotted here at start time; later interceptor
+    /// assignments are ignored because they would not reach the captured
+    /// `interceptor` constant.
     @MainActor
     internal func makeCallbacks() -> SimpleSocketServer.Callbacks {
         let continuation = eventContinuation

@@ -2,6 +2,7 @@
 import XCTest
 @testable import AccessibilitySnapshotParser
 @testable import TheInsideJob
+import TheScore
 
 /// Direct tests for `TheBurglar.buildContainerIdentityContext` — the parent-
 /// scrollable-threading walk that converts each container's screen-space
@@ -11,8 +12,8 @@ import XCTest
 @MainActor
 final class TheBurglarContainerFramesTests: XCTestCase {
 
-    private func makeElement() -> AccessibilityElement {
-        .make(respondsToUserInteraction: false)
+    private func makeElement(label: String = "Element") -> AccessibilityElement {
+        .make(label: label, respondsToUserInteraction: false)
     }
 
     func testTopLevelContainerKeepsScreenSpaceFrame() {
@@ -195,6 +196,122 @@ final class TheBurglarContainerFramesTests: XCTestCase {
         let frame = CGRect(x: 16, y: 96, width: 320, height: 40)
         // Expected: 16/8=2, 96/8=12, 320/8=40, 40/8=5
         XCTAssertEqual(TheBurglar.coarseFrameHash(frame), "2_12_40_5")
+    }
+
+    func testDuplicateReadableContainerIdsGetCaptureLocalHashes() {
+        let frame = CGRect(x: 0, y: 0, width: 320, height: 400)
+        let firstContainer = AccessibilityContainer(
+            type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 1_000)),
+            frame: frame
+        )
+        let secondContainer = AccessibilityContainer(
+            type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 2_000)),
+            frame: frame
+        )
+        let firstElement = makeElement(label: "First")
+        let secondElement = makeElement(label: "Second")
+        let firstScrollView = UIScrollView(frame: frame)
+        let secondScrollView = UIScrollView(frame: frame)
+
+        let screen = TheBurglar.buildScreen(from: TheBurglar.ParseResult(
+            hierarchy: [
+                .container(firstContainer, children: [.element(firstElement, traversalIndex: 0)]),
+                .container(secondContainer, children: [.element(secondElement, traversalIndex: 1)]),
+            ],
+            objects: [:],
+            scrollViews: [
+                firstContainer: firstScrollView,
+                secondContainer: secondScrollView,
+            ]
+        ))
+        let interface = TheStash.WireConversion.toInterface(from: screen)
+        let stableIds = interface.annotations.containers.compactMap(\.stableId)
+
+        XCTAssertEqual(stableIds.count, 2)
+        XCTAssertEqual(Set(stableIds).count, 2)
+        XCTAssertTrue(stableIds.allSatisfy { $0.hasPrefix("scrollable_0_0_40_50-") })
+        XCTAssertTrue(screen.liveInterface.scrollView(forContainer: stableIds[0]) === firstScrollView)
+        XCTAssertTrue(screen.liveInterface.scrollView(forContainer: stableIds[1]) === secondScrollView)
+    }
+
+    func testNestedDuplicateScrollableFrameIdsGetCaptureLocalHashes() {
+        let frame = CGRect(x: 0, y: 0, width: 320, height: 400)
+        let pagerFrame = CGRect(x: 0, y: 0, width: 960, height: 400)
+        let repeatedContentSize = AccessibilitySize(width: 320, height: 800)
+        let outer = AccessibilityContainer(
+            type: .scrollable(contentSize: repeatedContentSize),
+            frame: frame
+        )
+        let pager = AccessibilityContainer(
+            type: .scrollable(contentSize: AccessibilitySize(width: 960, height: 400)),
+            frame: pagerFrame
+        )
+        let page = AccessibilityContainer(
+            type: .scrollable(contentSize: repeatedContentSize),
+            frame: frame
+        )
+        let list = AccessibilityContainer(
+            type: .scrollable(contentSize: repeatedContentSize),
+            frame: frame
+        )
+        let outerScrollView = UIScrollView(frame: frame)
+        let pagerScrollView = UIScrollView(frame: frame)
+        let pageScrollView = UIScrollView(frame: frame)
+        let listScrollView = UIScrollView(frame: frame)
+
+        let screen = TheBurglar.buildScreen(from: TheBurglar.ParseResult(
+            hierarchy: [
+                .container(outer, children: [
+                    .container(pager, children: [
+                        .container(page, children: [
+                            .container(list, children: [
+                                .element(makeElement(label: "Checkout"), traversalIndex: 0),
+                            ]),
+                        ]),
+                    ]),
+                ]),
+            ],
+            objects: [:],
+            scrollViews: [
+                outer: outerScrollView,
+                pager: pagerScrollView,
+            ],
+            scrollViewsByPath: [
+                TreePath([0]): outerScrollView,
+                TreePath([0, 0]): pagerScrollView,
+                TreePath([0, 0, 0]): pageScrollView,
+                TreePath([0, 0, 0, 0]): listScrollView,
+            ]
+        ))
+        let interface = TheStash.WireConversion.toInterface(from: screen)
+        let stableIds = interface.annotations.containers.compactMap(\.stableId)
+        let repeatedFrameIds = stableIds.filter { $0.hasPrefix("scrollable_0_0_40_50-") }
+
+        XCTAssertEqual(stableIds.count, 4)
+        XCTAssertEqual(repeatedFrameIds.count, 3)
+        XCTAssertEqual(Set(repeatedFrameIds).count, 3)
+        XCTAssertTrue(stableIds.contains("scrollable_0_0_120_50"))
+        let repeatedScrollViews = repeatedFrameIds.compactMap { screen.liveInterface.scrollView(forContainer: $0) }
+        XCTAssertEqual(repeatedScrollViews.count, 3)
+        XCTAssertEqual(Set(repeatedScrollViews.map(ObjectIdentifier.init)).count, 3)
+    }
+
+    func testUniqueContainerKeepsReadableIdWithoutHashSuffix() {
+        let container = AccessibilityContainer(
+            type: .list,
+            frame: CGRect(x: 0, y: 0, width: 320, height: 400)
+        )
+        let screen = TheBurglar.buildScreen(from: TheBurglar.ParseResult(
+            hierarchy: [
+                .container(container, children: [.element(makeElement(), traversalIndex: 0)]),
+            ],
+            objects: [:],
+            scrollViews: [:]
+        ))
+
+        let interface = TheStash.WireConversion.toInterface(from: screen)
+
+        XCTAssertEqual(interface.annotations.containers.first?.stableId, "list_0_0_40_50")
     }
 }
 

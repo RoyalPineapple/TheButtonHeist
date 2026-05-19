@@ -284,12 +284,9 @@ public struct Interface: Codable, Equatable, Sendable {
     }
 
     /// Slugified screen name for machine use (e.g. "controls_demo").
-    /// Derived from the first header element's label.
+    /// Derived from the topmost header element's label.
     public var screenId: String? {
-        let screenName = elements
-            .first(where: { $0.traits.contains(.header) })
-            .flatMap(\.label)
-        return slugify(screenName)
+        slugify(Self.primaryHeaderLabel(from: elements))
     }
 
     /// Structured navigation context extracted from element traits.
@@ -342,9 +339,7 @@ public struct Interface: Codable, Equatable, Sendable {
     // MARK: - Navigation Context
 
     static func buildNavigation(from elements: [HeistElement]) -> NavigationContext {
-        let screenTitle = elements
-            .first(where: { $0.traits.contains(.header) })
-            .flatMap(\.label)
+        let screenTitle = Self.primaryHeaderLabel(from: elements)
 
         let backButton = elements
             .first(where: { $0.traits.contains(.backButton) })
@@ -372,9 +367,7 @@ public struct Interface: Codable, Equatable, Sendable {
 
     /// Build a one-line screen summary from element metadata.
     static func buildScreenDescription(from elements: [HeistElement]) -> String {
-        let screenName = elements
-            .first(where: { $0.traits.contains(.header) })
-            .flatMap(\.label)
+        let screenName = Self.primaryHeaderLabel(from: elements)
 
         var textFields = 0
         var buttons = 0
@@ -423,6 +416,24 @@ public struct Interface: Codable, Equatable, Sendable {
         } else {
             return "\(elements.count) elements"
         }
+    }
+
+    private static func primaryHeaderLabel(from elements: [HeistElement]) -> String? {
+        elements
+            .enumerated()
+            .compactMap { index, element -> (index: Int, element: HeistElement)? in
+                guard element.traits.contains(.header), element.label != nil else { return nil }
+                return (index, element)
+            }
+            .min { left, right in
+                let leftFrame = left.element.frame
+                let rightFrame = right.element.frame
+                if leftFrame.minY != rightFrame.minY { return leftFrame.minY < rightFrame.minY }
+                if leftFrame.minX != rightFrame.minX { return leftFrame.minX < rightFrame.minX }
+                return left.index < right.index
+            }?
+            .element
+            .label
     }
 }
 

@@ -324,7 +324,7 @@ private final class UIKitModalContent: UIViewController {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
-        fatalError("init(coder:) not implemented")
+        return nil
     }
 
     override func viewDidLoad() {

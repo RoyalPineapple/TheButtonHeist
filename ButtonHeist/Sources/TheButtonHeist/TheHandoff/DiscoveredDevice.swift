@@ -284,9 +284,8 @@ private final class ReachabilityResolver {
     private enum State {
         /// No awaiter has registered and no result has arrived.
         case idle
-        /// An awaiter is parked on `continuation`, waiting for the first
-        /// `resolve(_:)` to fire.
-        case awaiting(CheckedContinuation<Bool, Never>)
+        /// Awaiters are parked, waiting for the first `resolve(_:)` to fire.
+        case awaiting([CheckedContinuation<Bool, Never>])
         /// A result arrived before any awaiter registered. The next
         /// `await value` returns immediately.
         case resolved(Bool)
@@ -301,12 +300,10 @@ private final class ReachabilityResolver {
                 case .resolved(let value):
                     continuation.resume(returning: value)
                 case .idle:
-                    state = .awaiting(continuation)
-                case .awaiting:
-                    // The resolver is one-shot — only one awaiter is ever
-                    // registered per instance. Reaching this case would
-                    // indicate a contract violation by the caller.
-                    preconditionFailure("ReachabilityResolver: second awaiter registered before resolve")
+                    state = .awaiting([continuation])
+                case .awaiting(var continuations):
+                    continuations.append(continuation)
+                    state = .awaiting(continuations)
                 }
             }
         }
@@ -314,9 +311,11 @@ private final class ReachabilityResolver {
 
     func resolve(_ value: Bool) {
         switch state {
-        case .awaiting(let continuation):
+        case .awaiting(let continuations):
             state = .resolved(value)
-            continuation.resume(returning: value)
+            for continuation in continuations {
+                continuation.resume(returning: value)
+            }
         case .idle:
             state = .resolved(value)
         case .resolved:

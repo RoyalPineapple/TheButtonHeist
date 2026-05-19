@@ -129,6 +129,35 @@ final class TheBookKeeperTests: XCTestCase {
         XCTAssertHasNoStoredPhaseTimingMirrors(session)
     }
 
+    func testTerminalSessionEndTimeFallsBackToStartTimeWhenManifestIsMalformed() {
+        let startTime = Date(timeIntervalSince1970: 1_000_000)
+        let manifest = SessionManifest(
+            sessionId: "malformed",
+            startTime: startTime,
+            endTime: nil
+        )
+
+        let closing = ClosingSession(
+            sessionId: "malformed",
+            directory: tempDirectory,
+            manifest: manifest
+        )
+        let closed = ClosedSession(
+            sessionId: "malformed",
+            directory: tempDirectory,
+            compressedLogPath: tempDirectory.appendingPathComponent("session.jsonl.gz"),
+            manifest: manifest
+        )
+        let archived = ArchivedSession(
+            archivePath: tempDirectory.appendingPathComponent("session.tar.gz"),
+            manifest: manifest
+        )
+
+        XCTAssertEqual(closing.endTime, startTime)
+        XCTAssertEqual(closed.endTime, startTime)
+        XCTAssertEqual(archived.endTime, startTime)
+    }
+
     @ButtonHeistActor
     func testCloseSessionCompressesLog() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)

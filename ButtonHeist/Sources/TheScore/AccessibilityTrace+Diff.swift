@@ -228,6 +228,8 @@ public extension ElementEdits {
 
         let insertedIds = newIds.subtracting(oldIds)
         let removedIds = oldIds.subtracting(newIds)
+        let insertedContainerIds = Set(insertedIds.compactMap { $0.kind == .container ? $0.id : nil })
+        let removedContainerIds = Set(removedIds.compactMap { $0.kind == .container ? $0.id : nil })
         let inferredPairs = inferFunctionalTreePairs(
             oldRecords: oldRecords,
             newRecords: newRecords,
@@ -240,7 +242,7 @@ public extension ElementEdits {
         let inserted = insertedIds.subtracting(inferredInsertedIds)
             .filter { identifier in
                 guard let record = newRecords[identifier] else { return false }
-                return !record.ancestors.contains(where: insertedIds.contains)
+                return !record.ancestors.contains(where: insertedContainerIds.contains)
             }
             .compactMap { identifier -> TreeInsertion? in
                 guard let record = newRecords[identifier] else { return nil }
@@ -259,7 +261,7 @@ public extension ElementEdits {
         let removed = removedIds.subtracting(inferredRemovedIds)
             .filter { identifier in
                 guard let record = oldRecords[identifier] else { return false }
-                return !record.ancestors.contains(where: removedIds.contains)
+                return !record.ancestors.contains(where: removedContainerIds.contains)
             }
             .compactMap { identifier -> TreeRemoval? in
                 guard let record = oldRecords[identifier] else { return nil }
@@ -278,11 +280,11 @@ public extension ElementEdits {
             guard old.location != new.location else { return nil }
             return TreeMove(ref: new.ref, from: old.location, to: new.location)
         } + inferredMoves
-        let movedIds = Set(rawMoved.map(\.ref.id))
+        let movedContainerIds = Set(rawMoved.compactMap { $0.ref.kind == .container ? $0.ref.id : nil })
         let moved = rawMoved
             .filter { move in
-                let ancestors = newRecords[move.ref.id]?.ancestors ?? []
-                return !ancestors.contains(where: movedIds.contains)
+                let ancestors = newRecords[move.ref]?.ancestors ?? []
+                return !ancestors.contains(where: movedContainerIds.contains)
             }
             .sorted(by: treeMoveOrder)
 
@@ -302,7 +304,7 @@ extension AccessibilityTrace.AccessibilityPatchOperation {
             .reversed()
             .map(Self.removeSubtree)
         let moves = edits.treeMoved.compactMap { move -> Self? in
-            guard let record = afterRecords[move.ref.id] else { return nil }
+            guard let record = afterRecords[move.ref] else { return nil }
             return .moveSubtree(
                 move,
                 node: record.node
@@ -356,11 +358,11 @@ private func suppressFunctionalMoveElementChurn(
 // MARK: - Functional-Move Pairing
 
 private func inferFunctionalTreePairs(
-    oldRecords: [String: AccessibilityHierarchyRecord],
-    newRecords: [String: AccessibilityHierarchyRecord],
-    removedIds: Set<String>,
-    insertedIds: Set<String>
-) -> [(removedId: String, insertedId: String)] {
+    oldRecords: [TreeNodeRef: AccessibilityHierarchyRecord],
+    newRecords: [TreeNodeRef: AccessibilityHierarchyRecord],
+    removedIds: Set<TreeNodeRef>,
+    insertedIds: Set<TreeNodeRef>
+) -> [(removedId: TreeNodeRef, insertedId: TreeNodeRef)] {
     let removedById = Dictionary(uniqueKeysWithValues: removedIds.compactMap { identifier in
         oldRecords[identifier].map { (identifier, $0) }
     })
@@ -385,26 +387,26 @@ private func inferFunctionalHeistElementPairs(
 }
 
 private func inferFunctionalTreeRecordPairs(
-    removedById: [String: AccessibilityHierarchyRecord],
-    addedById: [String: AccessibilityHierarchyRecord]
-) -> [(removedId: String, insertedId: String)] {
-    let removed = removedById.compactMap { identifier, record -> (String, ElementPairingSignature)? in
+    removedById: [TreeNodeRef: AccessibilityHierarchyRecord],
+    addedById: [TreeNodeRef: AccessibilityHierarchyRecord]
+) -> [(removedId: TreeNodeRef, insertedId: TreeNodeRef)] {
+    let removed = removedById.compactMap { identifier, record -> (TreeNodeRef, ElementPairingSignature)? in
         pairingSignature(for: record).map { (identifier, $0) }
     }
-    let added = addedById.compactMap { identifier, record -> (String, ElementPairingSignature)? in
+    let added = addedById.compactMap { identifier, record -> (TreeNodeRef, ElementPairingSignature)? in
         pairingSignature(for: record).map { (identifier, $0) }
     }
     return inferFunctionalPairs(removed: removed, added: added)
 }
 
-private func inferFunctionalPairs(
-    removed: [(String, ElementPairingSignature)],
-    added: [(String, ElementPairingSignature)]
-) -> [(removedId: String, insertedId: String)] {
+private func inferFunctionalPairs<Identifier: Hashable>(
+    removed: [(Identifier, ElementPairingSignature)],
+    added: [(Identifier, ElementPairingSignature)]
+) -> [(removedId: Identifier, insertedId: Identifier)] {
     let removedByIdentity = Dictionary(grouping: removed, by: { $0.1.identity })
     let addedByIdentity = Dictionary(grouping: added, by: { $0.1.identity })
     let identities = Set(removedByIdentity.keys).intersection(addedByIdentity.keys)
-    var pairs: [(removedId: String, insertedId: String)] = []
+    var pairs: [(removedId: Identifier, insertedId: Identifier)] = []
 
     for identity in identities {
         guard let removedMatches = removedByIdentity[identity],
@@ -474,10 +476,10 @@ private func normalizedTraits(_ traits: [HeistTrait]) -> [HeistTrait] {
 
 // MARK: - Tree Indexing
 
-private func indexTree(_ interface: Interface) -> [String: AccessibilityHierarchyRecord] {
+private func indexTree(_ interface: Interface) -> [TreeNodeRef: AccessibilityHierarchyRecord] {
     let elementAnnotations = interface.annotations.elementByPath
     let containerAnnotations = interface.annotations.containerByPath
-    var result: [String: AccessibilityHierarchyRecord] = [:]
+    var result: [TreeNodeRef: AccessibilityHierarchyRecord] = [:]
     for (index, node) in interface.tree.enumerated() {
         collectTreeRecords(
             node,
@@ -501,7 +503,7 @@ private func collectTreeRecords(
     ancestors: [HeistContainer],
     elementAnnotations: [TreePath: InterfaceElementAnnotation],
     containerAnnotations: [TreePath: InterfaceContainerAnnotation],
-    into result: inout [String: AccessibilityHierarchyRecord]
+    into result: inout [TreeNodeRef: AccessibilityHierarchyRecord]
 ) {
     let projection = elementProjection(for: node, path: path, annotations: elementAnnotations)
     let ref = treeRef(for: node, path: path, element: projection, containerAnnotations: containerAnnotations)
@@ -509,7 +511,7 @@ private func collectTreeRecords(
     let childParentId: HeistContainer?
     let childAncestors: [HeistContainer]
     if let ref {
-        result[ref.id] = AccessibilityHierarchyRecord(
+        result[ref] = AccessibilityHierarchyRecord(
             ref: ref,
             location: location,
             path: path,

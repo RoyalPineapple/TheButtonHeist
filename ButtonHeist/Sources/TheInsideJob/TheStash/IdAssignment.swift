@@ -34,12 +34,19 @@ extension TheStash {
         let counts = heistIds.reduce(into: [HeistId: Int]()) { $0[$1, default: 0] += 1 }
 
         var seen: [String: Int] = [:]
+        var usedIds = Set(counts.compactMap { id, count in count == 1 ? id : nil })
         for index in heistIds.indices {
             let base = heistIds[index]
             if let count = counts[base], count > 1 {
-                let suffix = seen[base, default: 0] + 1
+                var suffix = seen[base, default: 0] + 1
+                var candidate = "\(base)_\(suffix)"
+                while usedIds.contains(candidate) {
+                    suffix += 1
+                    candidate = "\(base)_\(suffix)"
+                }
                 seen[base] = suffix
-                heistIds[index] = "\(base)_\(suffix)"
+                usedIds.insert(candidate)
+                heistIds[index] = candidate
             }
         }
 

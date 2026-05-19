@@ -270,7 +270,6 @@ public enum ElementTarget: Sendable, Equatable {
     /// Returns nil if both matcher and ordinal are empty.
     public init?(heistId: HeistId? = nil, matcher: ElementMatcher, ordinal: Int? = nil) {
         if let heistId {
-            assert(ordinal == nil, "ordinal is ignored when heistId is present — pass one or the other")
             self = .heistId(heistId)
         } else if let match = matcher.nonEmpty {
             self = .matcher(match, ordinal: ordinal)

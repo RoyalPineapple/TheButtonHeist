@@ -69,7 +69,7 @@ private final class ClockView: UIView {
         configureHand(hourHand, length: 0.28, width: 4, color: .label)
     }
 
-    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+    required init?(coder: NSCoder) { return nil }
 
     override func layoutSubviews() {
         super.layoutSubviews()
