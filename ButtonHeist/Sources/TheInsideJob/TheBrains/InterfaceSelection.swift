@@ -58,7 +58,7 @@ struct InterfaceSelector {
 
     private func selectLeafSubtrees(matching matcher: ElementMatcher) -> Interface {
         let annotations = interface.annotations.elementByTraversalIndex
-        Interface(
+        return Interface(
             timestamp: interface.timestamp,
             tree: interface.tree.subtrees { node, _ in
                 guard case .element(let element, let traversalIndex) = node else { return false }
@@ -73,7 +73,7 @@ struct InterfaceSelector {
 
     private func selectLeafSubtrees(withIds heistIds: Set<String>) -> Interface {
         let annotations = interface.annotations.elementByTraversalIndex
-        Interface(
+        return Interface(
             timestamp: interface.timestamp,
             tree: interface.tree.subtrees { node, _ in
                 guard case .element(_, let traversalIndex) = node,

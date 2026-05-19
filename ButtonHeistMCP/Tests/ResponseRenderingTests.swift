@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import AccessibilitySnapshotModel
 import MCP
 @testable import ButtonHeistMCP
 import ButtonHeist
@@ -151,7 +152,44 @@ struct ResponseRenderingTests {
     }
 
     private func makeInterface(elements: [HeistElement]) -> Interface {
-        Interface(timestamp: Date(timeIntervalSince1970: 0), tree: elements.map(InterfaceNode.element))
+        let tree = elements.enumerated().map { index, element in
+            AccessibilityHierarchy.element(makeAccessibilityElement(element), traversalIndex: index)
+        }
+        let annotations = InterfaceAnnotations(elements: elements.enumerated().map { index, element in
+            InterfaceElementAnnotation(
+                traversalIndex: index,
+                heistId: element.heistId,
+                actions: element.actions
+            )
+        })
+        return Interface(timestamp: Date(timeIntervalSince1970: 0), tree: tree, annotations: annotations)
+    }
+
+    private func makeAccessibilityElement(_ element: HeistElement) -> AccessibilityElement {
+        AccessibilityElement(
+            description: element.description,
+            label: element.label,
+            value: element.value,
+            traits: AccessibilityTraits.fromNames(element.traits.map(\.rawValue)),
+            identifier: element.identifier,
+            hint: element.hint,
+            userInputLabels: nil,
+            shape: .frame(AccessibilityRect(
+                x: element.frameX,
+                y: element.frameY,
+                width: element.frameWidth,
+                height: element.frameHeight
+            )),
+            activationPoint: AccessibilityPoint(x: element.activationPointX, y: element.activationPointY),
+            usesDefaultActivationPoint: true,
+            customActions: [],
+            customContent: element.customContent?.map {
+                AccessibilityElement.CustomContent(label: $0.label, value: $0.value, isImportant: $0.isImportant)
+            } ?? [],
+            customRotors: element.rotors?.map { AccessibilityElement.CustomRotor(name: $0.name) } ?? [],
+            accessibilityLanguage: nil,
+            respondsToUserInteraction: element.respondsToUserInteraction
+        )
     }
 
     private func makePlaceholderElements(count: Int) -> [HeistElement] {

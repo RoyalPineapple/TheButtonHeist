@@ -1,4 +1,5 @@
 import XCTest
+import AccessibilitySnapshotModel
 import ButtonHeist
 import Network
 import TheScore
@@ -66,7 +67,7 @@ final class FenceResponseTests: XCTestCase {
             frameX: 10, frameY: 20, frameWidth: 100, frameHeight: 44,
             actions: [.activate]
         )
-        let iface = Interface(timestamp: Date(), tree: [.element(element)])
+        let iface = makeInterface(elements: [element], timestamp: Date())
         let response = FenceResponse.interface(iface)
         let output = response.humanFormatted()
         XCTAssertTrue(output.contains("1 elements"))
@@ -195,10 +196,7 @@ final class FenceResponseTests: XCTestCase {
 
     func testDeltaStructuralFormatting() {
         let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(treeInserted: [
-                TreeInsertion(
-                    location: TreeLocation(parentId: nil, index: 1),
-                    node: .element(makeElement(heistId: "new_row", label: "New Row"))
-                ),
+                makeTreeInsertion(index: 1, heistId: "new_row", label: "New Row"),
             ], treeRemoved: [
                 TreeRemoval(
                     ref: TreeNodeRef(id: "old_row", kind: .element),
@@ -221,10 +219,7 @@ final class FenceResponseTests: XCTestCase {
 
     func testCompactDeltaSummarizesStructuralChangesWithoutTreeInternals() {
         let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(treeInserted: [
-                TreeInsertion(
-                    location: TreeLocation(parentId: nil, index: 1),
-                    node: .element(makeElement(heistId: "new_row", label: "New Row"))
-                ),
+                makeTreeInsertion(index: 1, heistId: "new_row", label: "New Row"),
             ], treeRemoved: [
                 TreeRemoval(
                     ref: TreeNodeRef(id: "old_row", kind: .element),
@@ -312,7 +307,7 @@ final class FenceResponseTests: XCTestCase {
             value: nil, identifier: nil,
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44, actions: []
         )
-        let iface = Interface(timestamp: Date(), tree: [.element(element)])
+        let iface = makeInterface(elements: [element], timestamp: Date())
         let response = FenceResponse.interface(iface)
         let dict = response.jsonDict()
         XCTAssertEqual(dict["status"] as? String, "ok")
@@ -347,10 +342,7 @@ final class FenceResponseTests: XCTestCase {
 
     func testActionWithStructuralDeltaJsonFormatting() {
         let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(treeInserted: [
-                TreeInsertion(
-                    location: TreeLocation(parentId: nil, index: 1),
-                    node: .element(makeElement(heistId: "new_row", label: "New Row"))
-                ),
+                makeTreeInsertion(index: 1, heistId: "new_row", label: "New Row"),
             ], treeRemoved: [
                 TreeRemoval(
                     ref: TreeNodeRef(id: "old_row", kind: .element),
@@ -507,6 +499,62 @@ final class FenceResponseTests: XCTestCase {
             frameWidth: 100,
             frameHeight: 44,
             actions: []
+        )
+    }
+
+    private func makeInterface(elements: [HeistElement], timestamp: Date) -> Interface {
+        let tree = elements.enumerated().map { index, element in
+            AccessibilityHierarchy.element(makeAccessibilityElement(element), traversalIndex: index)
+        }
+        let annotations = InterfaceAnnotations(elements: elements.enumerated().map { index, element in
+            InterfaceElementAnnotation(
+                traversalIndex: index,
+                heistId: element.heistId,
+                actions: element.actions
+            )
+        })
+        return Interface(timestamp: timestamp, tree: tree, annotations: annotations)
+    }
+
+    private func makeTreeInsertion(index: Int, heistId: String, label: String) -> TreeInsertion {
+        let element = makeElement(heistId: heistId, label: label)
+        return TreeInsertion(
+            location: TreeLocation(parentId: nil, index: index),
+            node: .element(makeAccessibilityElement(element), traversalIndex: 0),
+            annotations: InterfaceAnnotations(elements: [
+                InterfaceElementAnnotation(
+                    traversalIndex: 0,
+                    heistId: element.heistId,
+                    actions: element.actions
+                ),
+            ])
+        )
+    }
+
+    private func makeAccessibilityElement(_ element: HeistElement) -> AccessibilityElement {
+        AccessibilityElement(
+            description: element.description,
+            label: element.label,
+            value: element.value,
+            traits: AccessibilityTraits.fromNames(element.traits.map(\.rawValue)),
+            identifier: element.identifier,
+            hint: element.hint,
+            userInputLabels: nil,
+            shape: .frame(AccessibilityRect(
+                x: element.frameX,
+                y: element.frameY,
+                width: element.frameWidth,
+                height: element.frameHeight
+            )),
+            activationPoint: AccessibilityPoint(x: element.activationPointX, y: element.activationPointY),
+            usesDefaultActivationPoint: true,
+            customActions: [],
+            customContent: element.customContent?.map {
+                AccessibilityElement.CustomContent(label: $0.label, value: $0.value, isImportant: $0.isImportant)
+            } ?? [],
+            customRotors: element.rotors?.map { AccessibilityElement.CustomRotor(name: $0.name) } ?? [],
+            accessibilityLanguage: nil,
+            respondsToUserInteraction: element.respondsToUserInteraction
         )
     }
 

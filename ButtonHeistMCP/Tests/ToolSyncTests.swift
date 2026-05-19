@@ -247,7 +247,7 @@ struct ToolSyncTests {
            let containerSchema = extractObjectField(from: subtreeProperties, key: "container"),
            let containerProperties = extractObjectField(from: containerSchema, key: "properties"),
            let typeSchema = extractObjectField(from: containerProperties, key: "type") {
-            #expect(extractEnumValues(from: typeSchema) == Set(ContainerInfo.ContainerTypeName.allCases.map(\.rawValue)))
+            #expect(extractEnumValues(from: typeSchema) == Set(ContainerTypeName.allCases.map(\.rawValue)))
         } else {
             Issue.record("get_interface.subtree.container.type missing enum schema")
         }
