@@ -470,7 +470,7 @@ extension TheFence {
         defer { playbackPhase = .idle }
 
         // Prime current element data before playback.
-        _ = try await execute(parsed: defaultGetInterfaceParsedRequest())
+        try await primePlaybackInterface()
 
         for (index, operation) in typedPlayback.steps.enumerated() {
             let stepStart = CFAbsoluteTimeGetCurrent()
@@ -493,6 +493,10 @@ extension TheFence {
                 break
             }
             completedSteps += 1
+
+            if index < typedPlayback.steps.index(before: typedPlayback.steps.endIndex) {
+                try await primePlaybackInterface()
+            }
         }
 
         // Capture the live interface at time of failure for diagnostics
@@ -517,6 +521,10 @@ extension TheFence {
             failure: failure,
             report: report
         )
+    }
+
+    private func primePlaybackInterface() async throws {
+        _ = try await execute(parsed: defaultGetInterfaceParsedRequest())
     }
 
     /// Build a StepResult from a step and its optional failure.

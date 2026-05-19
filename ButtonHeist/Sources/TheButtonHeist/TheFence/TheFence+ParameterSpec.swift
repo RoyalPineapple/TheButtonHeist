@@ -736,9 +736,12 @@ extension TheFence.Command {
                     description: "Gesture type",
                     enumValues: fenceEnumValues(GestureType.self)
                 ),
-                commandByValue: Dictionary(uniqueKeysWithValues: GestureType.allCases.compactMap { gestureType in
-                    Self(rawValue: gestureType.rawValue).map { (gestureType.rawValue, $0) }
-                })
+                commandByValue: Dictionary(
+                    GestureType.allCases.compactMap { gestureType in
+                        Self(rawValue: gestureType.rawValue).map { (gestureType.rawValue, $0) }
+                    },
+                    uniquingKeysWith: { _, newest in newest }
+                )
             )
 
         case Self.scroll.rawValue:
@@ -749,9 +752,12 @@ extension TheFence.Command {
                     enumValues: fenceEnumValues(ScrollMode.self)
                 ),
                 defaultValue: ScrollMode.page.rawValue,
-                commandByValue: Dictionary(uniqueKeysWithValues: ScrollMode.allCases.compactMap { mode in
-                    Self(rawValue: mode.canonicalCommand).map { (mode.rawValue, $0) }
-                })
+                commandByValue: Dictionary(
+                    ScrollMode.allCases.compactMap { mode in
+                        Self(rawValue: mode.canonicalCommand).map { (mode.rawValue, $0) }
+                    },
+                    uniquingKeysWith: { _, newest in newest }
+                )
             )
 
         case Self.editAction.rawValue:
@@ -762,9 +768,10 @@ extension TheFence.Command {
                     description: "Action to perform",
                     enumValues: fenceEnumValues(EditAction.self) + [dismissValue]
                 ),
-                commandByValue: Dictionary(uniqueKeysWithValues:
+                commandByValue: Dictionary(
                     EditAction.allCases.map { ($0.rawValue, Self.editAction) } +
-                        [(dismissValue, Self.dismissKeyboard)]
+                        [(dismissValue, Self.dismissKeyboard)],
+                    uniquingKeysWith: { _, newest in newest }
                 ),
                 consumedValues: [dismissValue]
             )

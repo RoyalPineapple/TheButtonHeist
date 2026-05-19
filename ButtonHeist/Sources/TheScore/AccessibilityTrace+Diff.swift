@@ -363,12 +363,18 @@ private func inferFunctionalTreePairs(
     removedIds: Set<TreeNodeRef>,
     insertedIds: Set<TreeNodeRef>
 ) -> [(removedId: TreeNodeRef, insertedId: TreeNodeRef)] {
-    let removedById = Dictionary(uniqueKeysWithValues: removedIds.compactMap { identifier in
-        oldRecords[identifier].map { (identifier, $0) }
-    })
-    let insertedById = Dictionary(uniqueKeysWithValues: insertedIds.compactMap { identifier in
-        newRecords[identifier].map { (identifier, $0) }
-    })
+    let removedById = Dictionary(
+        removedIds.compactMap { identifier in
+            oldRecords[identifier].map { (identifier, $0) }
+        },
+        uniquingKeysWith: { _, newest in newest }
+    )
+    let insertedById = Dictionary(
+        insertedIds.compactMap { identifier in
+            newRecords[identifier].map { (identifier, $0) }
+        },
+        uniquingKeysWith: { _, newest in newest }
+    )
 
     return inferFunctionalTreeRecordPairs(removedById: removedById, addedById: insertedById)
 }
