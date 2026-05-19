@@ -8,6 +8,46 @@ final class DeviceConnectionReceiveTests: XCTestCase {
     // The NWConnections here are intentionally never started. handleReceive
     // only uses them for identity comparison (`===`), so no real I/O is needed.
 
+    func testDeviceEventStreamDropsNewestWhenBufferLimitIsReached() {
+        let eventConnection = NWConnection(host: "127.0.0.1", port: 1111, using: .tcp)
+        let (stream, continuation) = DeviceConnection.makeEventStream()
+        defer {
+            continuation.finish()
+            withExtendedLifetime(stream) {}
+        }
+
+        for _ in 0..<DeviceConnection.eventStreamBufferLimit {
+            guard case .enqueued = continuation.yield(.state(.setup, connection: eventConnection)) else {
+                return XCTFail("Expected event to enqueue before the buffer limit")
+            }
+        }
+
+        guard case .dropped = continuation.yield(.state(.setup, connection: eventConnection)) else {
+            return XCTFail("Expected newest event to drop when the buffer limit is reached")
+        }
+    }
+
+    @ButtonHeistActor
+    func testEventStreamOverflowDisconnectsActiveConnection() async {
+        let activeConnection = NWConnection(host: "127.0.0.1", port: 1111, using: .tcp)
+        let connection = DeviceConnection(device: makeDummyDevice())
+        connection.connectionState = .connected(.init(connection: activeConnection))
+        var disconnectReason: DisconnectReason?
+        connection.onEvent = { event in
+            if case .disconnected(let reason) = event {
+                disconnectReason = reason
+            }
+        }
+
+        connection.handleEventStreamOverflow(connection: activeConnection)
+
+        XCTAssertFalse(connection.isConnected)
+        XCTAssertEqual(
+            disconnectReason,
+            .eventBacklogOverflow(maxEvents: DeviceConnection.eventStreamBufferLimit)
+        )
+    }
+
     @ButtonHeistActor
     func testHandleReceiveIgnoresIsCompleteFromStaleConnection() async {
         let activeConnection = NWConnection(host: "127.0.0.1", port: 1111, using: .tcp)

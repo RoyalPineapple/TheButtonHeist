@@ -327,6 +327,7 @@ public final class TheInsideJob {
         self.tlsActive = true
         getaway.identity.tlsActive = true
         let transport = ServerTransport(tlsIdentity: identity, allowedScopes: allowedScopes)
+        installTransportOverflowHandler(transport)
         await getaway.wireTransport(transport)
 
         let useLoopback = allowedScopes == [.simulator]
@@ -744,6 +745,7 @@ public final class TheInsideJob {
                 self.getaway.identity.tlsActive = true
 
                 let transport = ServerTransport(tlsIdentity: identity, allowedScopes: self.allowedScopes)
+                self.installTransportOverflowHandler(transport)
                 await self.getaway.wireTransport(transport)
                 startedTransport = transport
 
@@ -789,6 +791,17 @@ public final class TheInsideJob {
             }
         }
         serverPhase = .resuming(id: resumeID, task: task)
+    }
+
+    private func installTransportOverflowHandler(_ transport: ServerTransport) {
+        transport.setEventBacklogOverflowHandler { [weak self] maxEvents in
+            await self?.handleTransportEventBacklogOverflow(maxEvents: maxEvents)
+        }
+    }
+
+    func handleTransportEventBacklogOverflow(maxEvents: Int) async {
+        insideJobLogger.error("Transport event backlog exceeded \(maxEvents), stopping server")
+        await stop()
     }
 
     func isCurrentResumeAttempt(_ resumeID: UUID) -> Bool {

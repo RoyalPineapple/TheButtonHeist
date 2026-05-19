@@ -15,6 +15,7 @@ final class DeviceConnectionTLSTests: XCTestCase {
         let reasons: [DisconnectReason] = [
             .networkError(NSError(domain: "test", code: 1)),
             .bufferOverflow,
+            .eventBacklogOverflow(maxEvents: 512),
             .serverClosed,
             .authFailed("bad token"),
             .sessionLocked("locked"),
@@ -34,6 +35,7 @@ final class DeviceConnectionTLSTests: XCTestCase {
         let cases: [(DisconnectReason, String, FailurePhase, Bool)] = [
             (.networkError(NSError(domain: "test", code: 1)), "transport.network_error", .transport, true),
             (.bufferOverflow, "transport.buffer_overflow", .transport, false),
+            (.eventBacklogOverflow(maxEvents: 512), "transport.event_backlog_overflow", .transport, true),
             (.serverClosed, "transport.server_closed", .transport, true),
             (.authFailed("bad token"), "auth.failed", .authentication, false),
             (.sessionLocked("busy"), "session.locked", .session, true),

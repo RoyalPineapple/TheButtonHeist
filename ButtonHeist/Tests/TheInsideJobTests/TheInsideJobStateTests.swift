@@ -302,6 +302,17 @@ final class TheInsideJobStateTests: XCTestCase {
         }
     }
 
+    func testTransportEventBacklogOverflowStopsServer() async {
+        let job = TheInsideJob()
+        job.serverPhase = .running(transport: ServerTransport())
+
+        await job.handleTransportEventBacklogOverflow(maxEvents: ServerTransport.eventStreamBufferLimit)
+
+        guard case .stopped = job.serverPhase else {
+            return XCTFail("Expected overflow to stop server, got \(job.serverPhase)")
+        }
+    }
+
     // MARK: - PollingPhase: Computed properties
 
     func testPollingTimeoutReturnsDefaultWhenDisabled() {

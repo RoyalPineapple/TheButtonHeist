@@ -35,6 +35,20 @@ enum TransportEvent: Sendable {
     case sendFailed(clientId: Int, failure: ServerSendFailure)
 }
 
+private final class TransportOverflowStopper: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+    weak var transport: ServerTransport?
+
+    init(transport: ServerTransport) {
+        self.transport = transport
+    }
+
+    @MainActor
+    func stop(maxEvents: Int) async {
+        guard let transport else { return }
+        await transport.handleEventBacklogOverflow(maxEvents: maxEvents)
+    }
+}
+
 /// Server-side transport layer for TheInsideJob.
 ///
 /// Combines `SimpleSocketServer` (TCP) with Bonjour `NetService` advertisement
@@ -66,6 +80,12 @@ enum TransportEvent: Sendable {
 /// on any context can use them without an actor hop.
 final class ServerTransport: NSObject {
 
+    /// Maximum ordered transport events buffered while the consumer is busy.
+    ///
+    /// Backlog overflow is a transport failure, not a signal to keep allocating:
+    /// the server stops and the caller can restart from a clean session.
+    nonisolated static let eventStreamBufferLimit = 512
+
     /// The underlying TCP server (actor-isolated).
     nonisolated let server: SimpleSocketServer
 
@@ -78,8 +98,16 @@ final class ServerTransport: NSObject {
     /// In-flight stop task for deterministic lifecycle transitions.
     @MainActor private var stopTask: Task<Void, Never>?
 
+    /// Callback bridge work that must be cancelled during transport teardown.
+    private nonisolated let callbackTasks = TaskTracker()
+
     /// Current TXT record entries (preserved across updates).
     @MainActor private var currentTXT: [String: Data] = [:]
+
+    /// Owner callback for fail-closed shutdown when ordered event delivery
+    /// overflows. If unset, the transport still stops itself and unpublished
+    /// Bonjour rather than leaving a stale listener advertised.
+    @MainActor private var eventBacklogOverflowHandler: (@MainActor @Sendable (_ maxEvents: Int) async -> Void)?
 
     // MARK: - Event Stream
 
@@ -123,6 +151,23 @@ final class ServerTransport: NSObject {
         syncDataInterceptor = interceptor
     }
 
+    @MainActor
+    func setEventBacklogOverflowHandler(
+        _ handler: (@MainActor @Sendable (_ maxEvents: Int) async -> Void)?
+    ) {
+        eventBacklogOverflowHandler = handler
+    }
+
+    @MainActor
+    func handleEventBacklogOverflow(maxEvents: Int) async {
+        if let handler = eventBacklogOverflowHandler {
+            await handler(maxEvents)
+        } else {
+            let stopTask = stop()
+            await stopTask.value
+        }
+    }
+
     /// The port the server is listening on (0 if not started).
     nonisolated var listeningPort: UInt16 {
         server.listeningPort
@@ -133,9 +178,7 @@ final class ServerTransport: NSObject {
     nonisolated init(tlsIdentity: TLSIdentity? = nil, allowedScopes: Set<ConnectionScope> = ConnectionScope.all) {
         self.server = SimpleSocketServer(allowedScopes: allowedScopes)
         self.tlsIdentity = tlsIdentity
-        (self.events, self.eventContinuation) = AsyncStream<TransportEvent>.makeStream(
-            bufferingPolicy: .unbounded
-        )
+        (self.events, self.eventContinuation) = Self.makeEventStream()
         super.init()
     }
 
@@ -176,37 +219,85 @@ final class ServerTransport: NSObject {
     internal func makeCallbacks() -> SimpleSocketServer.Callbacks {
         let continuation = eventContinuation
         let interceptor = syncDataInterceptor
+        let callbackTasks = callbackTasks
+        let overflow = TransportOverflowStopper(transport: self)
+        let onOverflow: @Sendable () -> Void = {
+            logger.error("Transport event backlog exceeded \(Self.eventStreamBufferLimit), stopping server")
+            let task = Task { @MainActor in
+                await overflow.stop(maxEvents: Self.eventStreamBufferLimit)
+            }
+            callbackTasks.record(task)
+        }
         return SimpleSocketServer.Callbacks(
             onClientConnected: { clientId, remoteAddress in
-                continuation.yield(.clientConnected(clientId: clientId, remoteAddress: remoteAddress))
+                Self.yieldEvent(
+                    .clientConnected(clientId: clientId, remoteAddress: remoteAddress),
+                    to: continuation,
+                    onOverflow: onOverflow
+                )
             },
             onClientDisconnected: { clientId in
-                continuation.yield(.clientDisconnected(clientId: clientId))
+                Self.yieldEvent(.clientDisconnected(clientId: clientId), to: continuation, onOverflow: onOverflow)
             },
             onDataReceived: { clientId, data, respond in
                 if let interceptor, let response = interceptor(clientId, data) {
                     respond(response)
-                    continuation.yield(.fastPathHandled(clientId: clientId))
+                    Self.yieldEvent(.fastPathHandled(clientId: clientId), to: continuation, onOverflow: onOverflow)
                     return
                 }
-                continuation.yield(.dataReceived(clientId: clientId, data: data, respond: respond))
+                Self.yieldEvent(
+                    .dataReceived(clientId: clientId, data: data, respond: respond),
+                    to: continuation,
+                    onOverflow: onOverflow
+                )
             },
             onSendFailed: { clientId, failure in
-                continuation.yield(.sendFailed(clientId: clientId, failure: failure))
+                Self.yieldEvent(.sendFailed(clientId: clientId, failure: failure), to: continuation, onOverflow: onOverflow)
             },
             onUnauthenticatedData: { clientId, data, respond in
-                continuation.yield(.unauthenticatedData(clientId: clientId, data: data, respond: respond))
+                Self.yieldEvent(
+                    .unauthenticatedData(clientId: clientId, data: data, respond: respond),
+                    to: continuation,
+                    onOverflow: onOverflow
+                )
             },
             onRateLimited: { clientId, respond in
-                continuation.yield(.rateLimited(clientId: clientId, respond: respond))
+                Self.yieldEvent(.rateLimited(clientId: clientId, respond: respond), to: continuation, onOverflow: onOverflow)
             }
         )
+    }
+
+    nonisolated static func makeEventStream() -> (
+        AsyncStream<TransportEvent>,
+        AsyncStream<TransportEvent>.Continuation
+    ) {
+        AsyncStream<TransportEvent>.makeStream(
+            bufferingPolicy: .bufferingOldest(eventStreamBufferLimit)
+        )
+    }
+
+    nonisolated static func yieldEvent(
+        _ event: TransportEvent,
+        to continuation: AsyncStream<TransportEvent>.Continuation,
+        onOverflow: @escaping @Sendable () -> Void
+    ) {
+        switch continuation.yield(event) {
+        case .enqueued, .terminated:
+            return
+        case .dropped:
+            continuation.finish()
+            onOverflow()
+        @unknown default:
+            continuation.finish()
+            onOverflow()
+        }
     }
 
     /// Stop the TCP server and any Bonjour advertisement.
     @MainActor
     @discardableResult
     func stop() -> Task<Void, Never> {
+        callbackTasks.cancelAll()
         stopAdvertising()
         eventContinuation.finish()
         let task = Task { [server] in
