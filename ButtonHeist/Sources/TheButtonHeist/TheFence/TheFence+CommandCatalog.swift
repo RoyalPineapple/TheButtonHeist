@@ -1,4 +1,5 @@
 import Foundation
+import TheScore
 
 extension TheFence {
 
@@ -50,7 +51,50 @@ extension TheFence {
     }
 }
 
+/// Canonical expansion for a user-facing command alias.
+///
+/// Aliases are part of the external command contract: adapters may parse and
+/// transport them, but the command identity and default parameters live here.
+public struct FenceCommandAlias: Sendable, Equatable {
+    public let command: TheFence.Command
+    public let parameters: [FenceParameterKey: HeistValue]
+
+    public init(
+        command: TheFence.Command,
+        parameters: [FenceParameterKey: HeistValue] = [:]
+    ) {
+        self.command = command
+        self.parameters = parameters
+    }
+}
+
 public extension TheFence.Command {
+    /// Human-friendly command aliases accepted by the CLI session parser.
+    static let humanCommandAliases: [String: FenceCommandAlias] = [
+        "tap": .init(command: .oneFingerTap),
+        "press": .init(command: .longPress),
+        "ui": .init(command: .getInterface),
+        "screen": .init(command: .getScreen),
+        "screenshot": .init(command: .getScreen),
+        "idle": .init(command: .waitForChange),
+        "change": .init(command: .waitForChange),
+        "wait": .init(command: .waitFor),
+        "devices": .init(command: .listDevices),
+        "list": .init(command: .listDevices),
+        "type": .init(command: .typeText),
+        "record": .init(command: .startRecording),
+        "copy": .init(command: .editAction, parameters: [.action: .string(EditAction.copy.rawValue)]),
+        "paste": .init(command: .editAction, parameters: [.action: .string(EditAction.paste.rawValue)]),
+        "cut": .init(command: .editAction, parameters: [.action: .string(EditAction.cut.rawValue)]),
+        "delete": .init(command: .editAction, parameters: [.action: .string(EditAction.delete.rawValue)]),
+        "select": .init(command: .editAction, parameters: [.action: .string(EditAction.select.rawValue)]),
+        "select_all": .init(command: .editAction, parameters: [.action: .string(EditAction.selectAll.rawValue)]),
+    ]
+
+    static func humanAlias(named name: String) -> FenceCommandAlias? {
+        humanCommandAliases[name.lowercased()]
+    }
+
     /// Commands that can execute as a run_batch step.
     ///
     /// Session-control and batch-orchestration commands are accepted at
