@@ -122,6 +122,13 @@ final class TheMuscleTests: XCTestCase {
         }
     }
 
+    private func authApprovedPayloads(from responses: [Data]) -> [AuthApprovedPayload] {
+        responses.compactMap { data in
+            guard case .authApproved(let payload) = decodeServerMessage(data) else { return nil }
+            return payload
+        }
+    }
+
     private func performHello(clientId: Int, respond: @escaping @Sendable (Data) -> Void) async {
         guard let data = try? JSONEncoder().encode(RequestEnvelope(message: .clientHello)) else {
             XCTFail("Failed to encode clientHello")
@@ -200,24 +207,96 @@ final class TheMuscleTests: XCTestCase {
         XCTAssertEqual(authenticatedCount, 0)
 
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
-        let hasAuthFailed = serverMessages.contains { msg in
-            if case .error(let serverError) = msg, serverError.kind == .authFailure { return true }
-            return false
-        }
-        XCTAssertTrue(hasAuthFailed, "Should send authFailure error for invalid token")
+        let authFailure = serverMessages.compactMap { msg -> ServerError? in
+            guard case .error(let serverError) = msg, serverError.kind == .authFailure else { return nil }
+            return serverError
+        }.first
+        XCTAssertEqual(
+            authFailure?.message,
+            "Invalid token. Retry with the configured token."
+        )
     }
 
-    func testEmptyTokenTriggersPendingApproval() async throws {
-        let (respond, _) = collectResponses()
+    func testExplicitTokenRejectsEmptyTokenWithoutUIApproval() async throws {
+        let (respond, responses) = collectResponses()
         try await authenticate(clientId: 1, token: "", respond: respond)
-        await flushCallbacks()
 
-        // Client should NOT be authenticated yet — waiting for UI approval
+        let authFailure = responses().compactMap { data -> ServerError? in
+            guard case .error(let error) = decodeServerMessage(data), error.kind == .authFailure else { return nil }
+            return error
+        }.first
+        XCTAssertTrue(authFailure?.message.contains("generated the session token") == true)
         XCTAssertFalse(markedAuthenticated.contains(1))
         let authenticatedIDs = await muscle.authenticatedClientIDs
         XCTAssertFalse(authenticatedIDs.contains(1))
         let authenticatedCount = await muscle.authenticatedClientCount
         XCTAssertEqual(authenticatedCount, 0)
+    }
+
+    func testGeneratedTokenEmptyTokenTriggersPendingApproval() async throws {
+        await muscle.tearDown()
+        muscle = TheMuscle(explicitToken: nil)
+        sink = CallbackSink()
+        await installCallbacks(observeSessionChanges: false)
+        let (respond, responses) = collectResponses()
+        try await authenticate(clientId: 1, token: "", respond: respond)
+
+        await muscle.approveClient(1)
+
+        let payload = try XCTUnwrap(authApprovedPayloads(from: responses()).first)
+        XCTAssertNotNil(payload.token)
+    }
+
+    func testGeneratedTokenIsReturnedAfterUIApproval() async throws {
+        await muscle.tearDown()
+        muscle = TheMuscle(explicitToken: nil)
+        sink = CallbackSink()
+        await installCallbacks(observeSessionChanges: false)
+        let generatedToken = await muscle.sessionToken
+        let (respond, responses) = collectResponses()
+        try await authenticate(clientId: 1, token: "", respond: respond)
+
+        await muscle.approveClient(1)
+
+        let payload = try XCTUnwrap(authApprovedPayloads(from: responses()).first)
+        XCTAssertEqual(payload.token, generatedToken)
+    }
+
+    func testGeneratedTokenInvalidTokenSuggestsUIApproval() async throws {
+        await muscle.tearDown()
+        muscle = TheMuscle(explicitToken: nil)
+        sink = CallbackSink()
+        await installCallbacks(observeSessionChanges: false)
+        let (respond, responses) = collectResponses()
+
+        try await authenticate(clientId: 1, token: "wrong-token", respond: respond)
+
+        let authFailure = responses().compactMap { data -> ServerError? in
+            guard case .error(let error) = decodeServerMessage(data), error.kind == .authFailure else { return nil }
+            return error
+        }.first
+        XCTAssertEqual(
+            authFailure?.message,
+            "Invalid token. Retry without a token to request a fresh session."
+        )
+    }
+
+    func testGeneratedTokenRejectsEmptyTokenWhileSessionActive() async throws {
+        await muscle.tearDown()
+        muscle = TheMuscle(explicitToken: nil)
+        sink = CallbackSink()
+        await installCallbacks(observeSessionChanges: false)
+        let generatedToken = await muscle.sessionToken
+        try await authenticate(clientId: 1, token: generatedToken, respond: respondSink())
+        let (respond, responses) = collectResponses()
+
+        try await authenticate(clientId: 2, token: "", respond: respond)
+
+        let payload = try XCTUnwrap(sessionLockedPayloads(from: responses()).first)
+        XCTAssertTrue(payload.message.contains("UI approval is unavailable"))
+        XCTAssertEqual(payload.activeConnections, 1)
+        let authenticatedIDs = await muscle.authenticatedClientIDs
+        XCTAssertFalse(authenticatedIDs.contains(2))
     }
 
     func testNonAuthMessageReturnsAuthFailure() async throws {

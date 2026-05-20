@@ -110,7 +110,7 @@ public enum FenceError: Error, LocalizedError {
         case .authFailed(let message):
             return """
                 Auth failed: \(message)
-                  Retry without --token to request a fresh session.
+                  \(Self.authFailureRecoveryHint(for: message))
                 """
         case .notConnected:
             return """
@@ -211,8 +211,8 @@ public enum FenceError: Error, LocalizedError {
         case .sessionLocked:
             return "Wait for the current driver to disconnect or for the session to time out. " +
                 "If this is your own stale session, retry with the same BUTTONHEIST_DRIVER_ID or restart the app."
-        case .authFailed:
-            return "Retry without --token to request a fresh session."
+        case .authFailed(let message):
+            return Self.authFailureRecoveryHint(for: message)
         case .notConnected:
             return "Check that the app is running, then retry the command. Use 'buttonheist list' to see available devices."
         case .actionTimeout:
@@ -222,6 +222,13 @@ public enum FenceError: Error, LocalizedError {
         case .serverError(let serverError):
             return serverError.hint
         }
+    }
+
+    private static func authFailureRecoveryHint(for message: String) -> String {
+        if message.localizedCaseInsensitiveContains("configured token") {
+            return "Retry with the configured token."
+        }
+        return "Retry without --token to request a fresh session."
     }
 }
 
@@ -598,15 +605,25 @@ public final class TheFence {
 
     public init(configuration: Configuration) {
         self.config = configuration
-        self.handoff.token = configuration.token ?? EnvironmentKey.buttonheistToken.value
+        let configuredToken = configuration.token ?? EnvironmentKey.buttonheistToken.value
+        self.handoff.token = configuredToken
         self.handoff.driverId = EnvironmentKey.buttonheistDriverId.value
         self.handoff.onAuthApproved = { [weak self] token in
-            if let token {
-                self?.onStatus?("BUTTONHEIST_TOKEN=\(token)")
-            }
-            self?.onAuthApproved?(token)
+            self?.handleAuthApproved(token, configuredToken: configuredToken)
         }
         wireUpResponseCallbacks()
+    }
+
+    nonisolated static func authApprovedStatusMessage(token: String?, configuredToken: String?) -> String? {
+        guard let token, configuredToken == nil else { return nil }
+        return "BUTTONHEIST_TOKEN=\(token)"
+    }
+
+    private func handleAuthApproved(_ token: String?, configuredToken: String?) {
+        if let message = Self.authApprovedStatusMessage(token: token, configuredToken: configuredToken) {
+            onStatus?(message)
+        }
+        onAuthApproved?(token)
     }
 
     private func wireUpResponseCallbacks() {

@@ -116,7 +116,10 @@ enum DisconnectReason: Error, LocalizedError {
             return "Check that the app is still running and reachable, then retry."
         case .bufferOverflow:
             return "Request a smaller payload or narrow the interface query before retrying."
-        case .authFailed:
+        case .authFailed(let reason):
+            if reason.localizedCaseInsensitiveContains("configured token") {
+                return "Retry with the configured token."
+            }
             return "Retry without a token to request a fresh session."
         case .sessionLocked:
             return "Wait for the current driver to disconnect or for the session to time out. " +

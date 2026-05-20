@@ -64,6 +64,14 @@ final class DeviceConnectionTLSTests: XCTestCase {
         XCTAssertTrue(message.contains("configure the device's TLS certificate fingerprint"))
     }
 
+    func testExplicitTokenAuthFailureHintDoesNotSuggestUIApproval() {
+        let reason = DisconnectReason.authFailed("Invalid token. Retry with the configured token.")
+
+        XCTAssertEqual(reason.hint, "Retry with the configured token.")
+        XCTAssertTrue(reason.connectionFailureMessage.contains("Retry with the configured token."))
+        XCTAssertFalse(reason.connectionFailureMessage.contains("Retry without a token"))
+    }
+
     // MARK: - DeviceConnection Init (actor-isolated)
 
     @ButtonHeistActor
