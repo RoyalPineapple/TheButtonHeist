@@ -95,6 +95,7 @@ extension TheFence {
         static let maxRunBatchRequestBytes = 1_000_000
         static let maxRunBatchNestingDepth = 32
         static let maxBatchResultRows = maxRunBatchSteps
+        static let maxInlineScreenshotBase64Bytes = 1_000_000
 
         static let maxDrawPathPoints = 10_000
         static let maxDrawBezierSegments = 1_000
@@ -141,6 +142,8 @@ public enum FenceParameterKey: String, CaseIterable, Sendable {
     case heistId
     case identifier
     case inactivityTimeout = "inactivity_timeout"
+    case includeInterface
+    case inlineData
     case input
     case isModalBoundary
     case label
@@ -844,8 +847,9 @@ extension TheFence.Command {
 
         case Self.getScreen.rawValue:
             return """
-                Capture a PNG screenshot from the connected device and include the fresh visible \
-                accessibility tree. Returns inline base64 PNG image data; use output to save the image to a file.
+                Capture a PNG screenshot from the connected device. Returns metadata plus an artifact path \
+                by default. Set inlineData=true to return capped base64 PNG data inline; set includeInterface=true \
+                to include the fresh visible accessibility tree.
                 """
 
         case Self.waitForChange.rawValue:
@@ -1043,7 +1047,21 @@ extension TheFence.Command {
 
         case .getScreen:
             return [
-                .init(key: "output", type: .string, optionalRole: .payload, description: "File path to save PNG (omit for inline base64)"),
+                .init(
+                    key: "output", type: .string, optionalRole: .payload,
+                    description: "File path to save PNG (omit for default artifact path; cannot be combined with inlineData=true)"
+                ),
+                .init(
+                    key: "inlineData", type: .boolean, optionalRole: .compatibility,
+                    description: """
+                        Return base64 PNG data inline instead of an artifact path \
+                        (default false; capped before delivery; not allowed inside run_batch)
+                        """
+                ),
+                .init(
+                    key: "includeInterface", type: .boolean, optionalRole: .behaviorSwitch,
+                    description: "Include the fresh visible interface tree in the response (default false)"
+                ),
             ]
 
         case .waitForChange:

@@ -173,6 +173,16 @@ private extension TheFence.RequestPayload {
             return [:]
         case .getInterface(let request):
             return request.bookKeeperArguments
+        case .screen(let request):
+            var arguments: [String: HeistValue] = [:]
+            arguments.set(.output, request.outputPath)
+            if request.inlineData {
+                arguments.set(.inlineData, true)
+            }
+            if request.includeInterface {
+                arguments.set(.includeInterface, true)
+            }
+            return arguments
         case .artifact(let request):
             var arguments: [String: HeistValue] = [:]
             arguments.set(.output, request.outputPath)
@@ -248,7 +258,7 @@ private extension TheFence.RequestPayload {
             return target.elementTarget
         case .waitFor(let target):
             return target.elementTarget
-        case .none, .getInterface, .artifact, .editAction, .setPasteboard,
+        case .none, .getInterface, .screen, .artifact, .editAction, .setPasteboard,
              .waitForChange, .startRecording, .connect, .runBatch, .archiveSession,
              .startHeist, .stopHeist, .playHeist:
             return nil

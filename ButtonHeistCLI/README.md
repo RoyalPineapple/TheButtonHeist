@@ -101,10 +101,11 @@ Capture a PNG screenshot.
 
 ```bash
 buttonheist get_screen --output screen.png
-buttonheist get_screen | imgcat
+buttonheist get_screen
+buttonheist get_screen --inline | imgcat
 ```
 
-Flags: `-o/--output <path>` (default: raw PNG to stdout).
+Flags: `-o/--output <path>` (default: generated artifact path), `--inline` (compatibility mode: raw PNG to stdout). `--inline` cannot be combined with `--output`.
 
 ### start_recording
 
@@ -139,7 +140,7 @@ buttonheist get_interface --format json
 
 Flags: `-f/--format`.
 
-Use `buttonheist get_screen` when you need pixels plus fresh visible geometry.
+Use `buttonheist get_screen` when you need pixels and a durable artifact path. Use `get_interface` for hierarchy data, or MCP/session `get_screen` with `includeInterface=true` when you explicitly need the visible tree with the screenshot metadata.
 
 MCP and session JSON requests can pass `subtree` to project the returned hierarchy from a selected leaf or container, for example `{"command":"get_interface","subtree":{"container":{"stableId":"semantic_actions__actions"}}}`.
 

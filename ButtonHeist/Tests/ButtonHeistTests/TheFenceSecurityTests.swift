@@ -103,7 +103,7 @@ final class TheFenceSecurityTests: XCTestCase {
         let (fence, _) = makeConnectedFence()
         do {
             let response = try await fence.execute(request: ["command": "get_screen", "output": outputPath])
-            if case .screenshot(let path, _) = response {
+            if case .screenshot(let path, _, _) = response {
                 XCTAssertFalse(path.contains(".."), "Resolved path should not contain '..'")
             }
             try? FileManager.default.removeItem(atPath: outputPath)
