@@ -1376,7 +1376,10 @@ extension TheFence.Command {
             return [
                 .init(
                     key: "steps", type: .array, required: true,
-                    description: "Ordered list of batch-executable canonical Fence command requests to execute (max 100 steps; max request size 1 MB; max nesting depth 32)",
+                    description: """
+                    Ordered list of batch-executable canonical Fence command requests to execute \
+                    (max 100 steps; max request size 1 MB; max nesting depth 32)
+                    """,
                     minItems: 1,
                     maxItems: TheFence.DecodeLimits.maxRunBatchSteps,
                     arrayItemType: .object,

@@ -620,6 +620,14 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testLongPressRejectsOversizedDurationBeforeExecution() async {
+        await assertValidationError(
+            ["command": "long_press", "x": 50.0, "y": 50.0, "duration": 61.0],
+            equals: "schema validation failed for duration: observed number 61.0; expected number in 0...60.0"
+        )
+    }
+
+    @ButtonHeistActor
     func testSwipeInvalidDirection() async {
         await assertValidationError(
             ["command": "swipe", "direction": "diagonal"],
@@ -2414,6 +2422,20 @@ final class TheFenceHandlerTests: XCTestCase {
                 ] as [[String: Any]],
             ],
             contains: "expected nesting depth <= 32"
+        )
+    }
+
+    @ButtonHeistActor
+    func testBatchRejectsOversizedRequestBeforeExecution() async {
+        let payload = String(repeating: "x", count: TheFence.DecodeLimits.maxRunBatchRequestBytes)
+        await assertValidationError(
+            [
+                "command": "run_batch",
+                "steps": [
+                    ["command": "activate", "identifier": payload],
+                ] as [[String: Any]],
+            ],
+            contains: "expected JSON request <= \(TheFence.DecodeLimits.maxRunBatchRequestBytes) bytes"
         )
     }
 

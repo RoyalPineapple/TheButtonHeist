@@ -56,7 +56,7 @@ extension TheFence {
             elementTarget: try decodedElementTarget(request),
             pointX: try request.schemaNumber("x"),
             pointY: try request.schemaNumber("y"),
-            duration: try schemaPositiveNumber(request, key: "duration") ?? 0.5
+            duration: try schemaGestureDuration(request) ?? 0.5
         )
         if target.elementTarget == nil, target.point == nil {
             throw FenceError.invalidRequest("Must specify element (heistId or matcher) or coordinates (x, y)")
@@ -74,7 +74,7 @@ extension TheFence {
             endX: try request.schemaNumber("endX"),
             endY: try request.schemaNumber("endY"),
             direction: try request.schemaEnum("direction", as: SwipeDirection.self) { $0.lowercased() },
-            duration: try schemaPositiveNumber(request, key: "duration"),
+            duration: try schemaGestureDuration(request),
             start: start,
             end: end
         )
@@ -91,7 +91,7 @@ extension TheFence {
             startY: try request.schemaNumber("startY"),
             endX: try request.requiredSchemaNumber("endX"),
             endY: try request.requiredSchemaNumber("endY"),
-            duration: try schemaPositiveNumber(request, key: "duration")
+            duration: try schemaGestureDuration(request)
         )
     }
 
@@ -102,7 +102,7 @@ extension TheFence {
             centerY: try request.schemaNumber("centerY"),
             scale: try requiredSchemaPositiveNumber(request, key: "scale"),
             spread: try schemaPositiveNumber(request, key: "spread"),
-            duration: try schemaPositiveNumber(request, key: "duration")
+            duration: try schemaGestureDuration(request)
         )
     }
 
@@ -113,7 +113,7 @@ extension TheFence {
             centerY: try request.schemaNumber("centerY"),
             angle: try request.requiredSchemaNumber("angle"),
             radius: try schemaPositiveNumber(request, key: "radius"),
-            duration: try schemaPositiveNumber(request, key: "duration")
+            duration: try schemaGestureDuration(request)
         )
     }
 
@@ -239,6 +239,14 @@ extension TheFence {
             throw SchemaValidationError(field: key, observed: value, expected: "number > 0")
         }
         return value
+    }
+
+    private func schemaGestureDuration(_ dictionary: [String: Any]) throws -> Double? {
+        try schemaBoundedPositiveNumber(
+            dictionary,
+            key: "duration",
+            maximum: DecodeLimits.maxDrawGestureDurationSeconds
+        )
     }
 
     private func schemaBoundedPositiveNumber(
