@@ -36,13 +36,31 @@ def run(
     timeout: float = 60,
     check: bool = True,
 ) -> subprocess.CompletedProcess[str]:
-    result = subprocess.run(
-        cmd,
-        env=env,
-        timeout=timeout,
-        text=True,
-        capture_output=True,
-    )
+    try:
+        result = subprocess.run(
+            cmd,
+            env=env,
+            timeout=timeout,
+            text=True,
+            capture_output=True,
+        )
+    except subprocess.TimeoutExpired as error:
+        if check:
+            raise
+        stdout = (
+            error.stdout.decode(errors="replace")
+            if isinstance(error.stdout, bytes)
+            else (error.stdout or "")
+        )
+        stderr = (
+            error.stderr.decode(errors="replace")
+            if isinstance(error.stderr, bytes)
+            else (error.stderr or "")
+        )
+        if stderr:
+            stderr += "\n"
+        stderr += f"timed out after {timeout:g} seconds"
+        return subprocess.CompletedProcess(cmd, 124, stdout, stderr)
     if check and result.returncode != 0:
         raise RuntimeError(
             f"command failed ({result.returncode}): {' '.join(cmd)}\n"
