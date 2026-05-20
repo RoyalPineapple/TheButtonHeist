@@ -77,11 +77,13 @@ flowchart TD
     SNAP --> EXEC["actions.executeXxx(target)"]
 
     EXEC --> ENS["navigation.ensureOnScreen(target)<br/>Auto-scroll if element<br/>is off-viewport"]
-    ENS --> RES["stash.resolveTarget(target)"]
+    ENS --> RES["stash.resolveTarget(target)<br/>semantic identity"]
     RES --> CHK{Resolved?}
     CHK -->|No| ERR["Return .failure<br/>+ diagnostics"]
-    CHK -->|Yes| INT{Has interactive<br/>object?}
-    INT -->|No| ERR2["Return .failure<br/>'does not support activation'"]
+    CHK --> LIVE["stash.resolveLiveActionTarget(resolved)<br/>fresh geometry"]
+    LIVE -->|No| ERR2["Return .failure<br/>live target unavailable"]
+    LIVE -->|Yes| INT{Interactive?}
+    INT -->|No| ERR3["Return .failure<br/>'does not support activation'"]
     INT -->|Yes| ACT["Perform action<br/>(accessibilityActivate, increment, etc.)"]
     ACT --> OK{Succeeded?}
     OK -->|Yes| RET["Return InteractionResult"]

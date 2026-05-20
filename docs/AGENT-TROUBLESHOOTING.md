@@ -49,7 +49,9 @@ The element was found but has the `notEnabled` trait. The full message is `"Elem
 
 ### Session locked by another driver
 
-`"Session is locked by another driver. Session will time out after Ns of inactivity."` — another agent owns this app instance. The message includes the exact timeout duration.
+`"Session is locked by another driver"` — another agent owns this app instance.
+Active-session lock messages do not include a precise timeout. Draining-session
+lock messages include remaining release time when the server knows it.
 
 **Fix:** Don't change the token. Find *your* simulator. Check which simulators are running with `xcrun simctl list devices booted`. Connect to the one matching your task slug. If you don't have a dedicated simulator, create one.
 
@@ -86,22 +88,25 @@ The iOS app with Button Heist enabled must be running in the simulator or on a d
 
 ### Recovering port and token from logs
 
-If the app is running but you don't know the port or token (e.g., launched without explicit env vars), read them from the simulator logs:
+If the app is running but you don't know the port, read it from the simulator
+logs. Generated tokens are redacted; omit `BUTTONHEIST_TOKEN` to request
+on-device approval, then reuse the `BUTTONHEIST_TOKEN=...` status printed after
+approval. For automation, launch with an explicit `INSIDEJOB_TOKEN`.
 
 ```bash
 xcrun simctl spawn $SIM_UDID log show \
   --predicate 'subsystem == "com.buttonheist.theinsidejob" AND category == "server"' \
-  --last 5m --style compact 2>&1 | grep -E "listening on port|Auth token|Instance ID"
+  --last 5m --style compact 2>&1 | grep -E "listening on port|Instance ID|token=<redacted>"
 ```
 
 This shows three lines:
 - `Server listening on port 23456` — the TCP port
-- `Auth token: abc123...` — the token to pass as `BUTTONHEIST_TOKEN`
+- `token=<redacted>` — generated token exists but is not durable-log-visible
 - `Instance ID: accra-task` (or an 8-char hex fallback if none was set)
 
 Then connect directly:
 ```bash
-BUTTONHEIST_DEVICE="127.0.0.1:<port>" BUTTONHEIST_TOKEN="<token>" buttonheist session
+BUTTONHEIST_DEVICE="127.0.0.1:<port>" buttonheist session
 ```
 
 ## Text input failures
@@ -202,9 +207,15 @@ Simulators suspend background apps. If the app was backgrounded or the simulator
 
 ### Session timeout
 
-Sessions expire after 60 seconds of inactivity by default. If you go too long between commands, the session is released.
+Server sessions release after 30 seconds of inactivity by default
+(`INSIDEJOB_SESSION_TIMEOUT`). CLI/MCP clients also have their own idle timeout
+(`BUTTONHEIST_SESSION_TIMEOUT`, default 60 seconds). If you go too long between
+commands, the session may be released.
 
-**Fix:** This is intentional — it prevents stale sessions from blocking other agents. Reconnect and continue. If you need longer idle windows, the `BUTTONHEIST_SESSION_TIMEOUT` environment variable controls the timeout.
+**Fix:** This is intentional — it prevents stale sessions from blocking other
+agents. Reconnect and continue. If you need longer server ownership windows,
+configure `INSIDEJOB_SESSION_TIMEOUT` on the app. If you need a longer client
+idle window, configure `BUTTONHEIST_SESSION_TIMEOUT`.
 
 ## "Protocol mismatch"
 

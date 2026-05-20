@@ -56,22 +56,28 @@ log show --predicate 'process == "mDNSResponder"' --last 5m --style compact 2>&1
 
 ## Recovering Connection Info from Logs
 
-If the app launched without explicit env vars, the port and token are logged at startup. Read them from the simulator:
+If the app launched without explicit env vars, logs can recover the port and
+instance ID. Generated tokens are redacted; omit `BUTTONHEIST_TOKEN` to request
+on-device approval, then reuse the `BUTTONHEIST_TOKEN=...` status printed after
+approval.
 
 ```bash
 xcrun simctl spawn $SIM_UDID log show \
   --predicate 'subsystem == "com.buttonheist.theinsidejob" AND category == "server"' \
-  --last 5m --style compact 2>&1 | grep -E "listening on port|Auth token|Instance ID"
+  --last 5m --style compact 2>&1 | grep -E "listening on port|Instance ID|token=<redacted>"
 ```
 
 Output:
 ```
 Server listening on port 23456
-Auth token: E4F7A2B1-...
+token=<redacted>
 Instance ID: a1b2c3d4
 ```
 
-Then connect directly: `BUTTONHEIST_DEVICE="127.0.0.1:23456" BUTTONHEIST_TOKEN="E4F7A2B1-..." buttonheist session`
+Then request approval directly:
+`BUTTONHEIST_DEVICE="127.0.0.1:23456" buttonheist session`.
+For automation, configure `INSIDEJOB_TOKEN` explicitly at launch and pass the
+same value as `BUTTONHEIST_TOKEN`.
 
 ## Workaround: Fixed Port Direct Connection
 
@@ -122,7 +128,9 @@ The direct connect path uses the same TLS transport and authentication as Bonjou
 
 ### Port selection
 
-- `0` (default): OS picks a random available port. Requires Bonjour for discovery.
+- `0` (default): OS picks a random available port. Use Bonjour only when
+  network scope is enabled; otherwise use a fixed port, named target, or direct
+  endpoint for deterministic discovery.
 - Any non-zero value: Server binds to that specific port. Use with `BUTTONHEIST_DEVICE` on the client.
 - Priority: `INSIDEJOB_PORT` env var > `InsideJobPort` Info.plist key > default (0).
 

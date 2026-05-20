@@ -42,6 +42,14 @@ final class Actions {
 
     // MARK: - Element Action Pipeline
 
+    struct LiveElementActionContext {
+        let resolvedTarget: TheStash.ResolvedTarget
+        let liveTarget: TheStash.LiveActionTarget
+
+        var screenElement: TheStash.ScreenElement { resolvedTarget.screenElement }
+        var element: AccessibilityElement { resolvedTarget.element }
+    }
+
     /// Unified pipeline for actions that target an element:
     /// ensureOnScreen → resolve → check interactivity → perform action.
     func performElementAction(
@@ -49,31 +57,127 @@ final class Actions {
         method: ActionMethod,
         recordedScreen: Screen? = nil,
         requireInteractive: Bool = true,
-        action: @MainActor (TheStash.ResolvedTarget) async -> TheSafecracker.InteractionResult?
+        deallocatedBoundary: String = "element action",
+        preflight: (@MainActor (TheStash.ResolvedTarget) -> TheSafecracker.InteractionResult?)? = nil,
+        action: @MainActor (LiveElementActionContext) async -> TheSafecracker.InteractionResult?
     ) async -> TheSafecracker.InteractionResult {
         let positioning = await navigation.ensureOnScreen(for: target, recordedScreen: recordedScreen)
         if let failure = positioning.failure {
             return .failure(failure.method ?? method, message: failure.message)
         }
-        let resolution = stash.resolveTarget(target)
-        guard let resolved = resolution.resolved else {
-            return .failure(.elementNotFound, message: resolution.diagnostics)
+        switch await resolveLiveElementActionContext(
+            target: target,
+            method: method,
+            recordedScreen: recordedScreen,
+            requireInteractive: requireInteractive,
+            deallocatedBoundary: deallocatedBoundary,
+            preflight: preflight
+        ) {
+        case .success(let context):
+            return await action(context) ?? .failure(method, message: "\(method.rawValue) failed")
+        case .failure(let result):
+            return result
+        case .retryableFailure(let result):
+            return result
+        }
+    }
+
+    private enum LiveElementActionContextResolution {
+        case success(LiveElementActionContext)
+        case failure(TheSafecracker.InteractionResult)
+        case retryableFailure(TheSafecracker.InteractionResult)
+    }
+
+    private func resolveLiveElementActionContext(
+        target: ElementTarget,
+        method: ActionMethod,
+        recordedScreen: Screen?,
+        requireInteractive: Bool,
+        deallocatedBoundary: String,
+        preflight: (@MainActor (TheStash.ResolvedTarget) -> TheSafecracker.InteractionResult?)?
+    ) async -> LiveElementActionContextResolution {
+        let firstResolution = stash.resolveTarget(target)
+        guard let firstResolved = firstResolution.resolved else {
+            return .failure(.failure(.elementNotFound, message: firstResolution.diagnostics))
+        }
+        switch makeLiveElementActionContext(
+            resolved: firstResolved,
+            method: method,
+            requireInteractive: requireInteractive,
+            deallocatedBoundary: deallocatedBoundary,
+            preflight: preflight
+        ) {
+        case .success(let context):
+            return .success(context)
+        case .failure(let result):
+            return .failure(result)
+        case .retryableFailure(let initialFailure):
+            // Re-parse once to recover from cell reuse or a stale live ref, but
+            // preserve the first-class live-target diagnostic if the semantic
+            // target disappears during the retry.
+            navigation.refresh()
+            let retryPositioning = await navigation.ensureOnScreen(for: target, recordedScreen: recordedScreen)
+            if let failure = retryPositioning.failure {
+                if failure.method == .elementNotFound {
+                    return .failure(initialFailure)
+                }
+                return .failure(.failure(failure.method ?? method, message: failure.message))
+            }
+            let retryResolution = stash.resolveTarget(target)
+            guard let retryResolved = retryResolution.resolved else {
+                return .failure(initialFailure)
+            }
+            return makeLiveElementActionContext(
+                resolved: retryResolved,
+                method: method,
+                requireInteractive: requireInteractive,
+                deallocatedBoundary: deallocatedBoundary,
+                preflight: preflight
+            )
+        }
+    }
+
+    private func makeLiveElementActionContext(
+        resolved: TheStash.ResolvedTarget,
+        method: ActionMethod,
+        requireInteractive: Bool,
+        deallocatedBoundary: String,
+        preflight: (@MainActor (TheStash.ResolvedTarget) -> TheSafecracker.InteractionResult?)?
+    ) -> LiveElementActionContextResolution {
+        if let failure = preflight?(resolved) {
+            return .failure(failure)
+        }
+        let liveTargetResolution = stash.resolveLiveActionTarget(for: resolved)
+        let liveTarget: TheStash.LiveActionTarget
+        switch liveTargetResolution {
+        case .resolved(let resolvedLiveTarget):
+            liveTarget = resolvedLiveTarget
+        case .objectUnavailable, .geometryUnavailable:
+            guard let failure = liveActionTargetFailure(
+                for: liveTargetResolution,
+                method: method,
+                resolved: resolved,
+                deallocatedBoundary: deallocatedBoundary
+            ) else {
+                return .failure(.failure(method, message: "\(method.rawValue) failed"))
+            }
+            return .retryableFailure(failure)
         }
         if requireInteractive {
-            switch stash.checkElementInteractivity(resolved.screenElement) {
+            switch TheStash.Interactivity.checkInteractivity(resolved.element, object: liveTarget.object) {
             case .blocked(let reason):
-                return .failure(method, message: reason)
+                return .failure(.failure(method, message: reason))
             case .interactive(let warning):
                 if let warning { insideJobLogger.warning("\(warning)") }
             }
-            guard stash.hasInteractiveObject(resolved.screenElement) else {
-                return .failure(
+            guard TheStash.Interactivity.isInteractive(element: resolved.element, object: liveTarget.object) else {
+                return .failure(.failure(
                     method,
                     message: ActionCapabilityDiagnostic.unsupportedElementAction(method, element: resolved.screenElement)
-                )
+                ))
             }
         }
-        return await action(resolved) ?? .failure(method, message: "\(method.rawValue) failed")
+        return .success(LiveElementActionContext(resolvedTarget: resolved, liveTarget: liveTarget))
     }
 
     /// Unified pipeline for gestures that target a screen point:
@@ -162,7 +266,7 @@ final class Actions {
         guard let resolved = resolution.resolved else {
             return .failure(.failure(.elementNotFound, message: resolution.diagnostics))
         }
-        guard let frame = stash.liveFrame(for: resolved.screenElement) else {
+        guard case .resolved(let liveTarget) = stash.resolveLiveActionTarget(for: resolved) else {
             return .failure(.failure(
                 method,
                 message: ActionCapabilityDiagnostic.gestureTargetUnavailable(
@@ -172,6 +276,7 @@ final class Actions {
                 )
             ))
         }
+        let frame = liveTarget.frame
         if let message = GeometryValidation.validateRect(frame, field: "frame") {
             return .failure(.failure(
                 method,
@@ -241,14 +346,13 @@ final class Actions {
     // MARK: - Accessibility Actions
 
     func executeActivate(_ target: ElementTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
-        await performElementAction(target: target, method: .activate, recordedScreen: recordedScreen) { resolved in
+        await performElementAction(target: target, method: .activate, recordedScreen: recordedScreen) { context in
+            let liveTarget = context.liveTarget
             // First attempt — accessibilityActivate on the live UIKit object.
-            if case .resolved(let liveTarget) = self.stash.resolveLiveActionTarget(for: resolved) {
-                let firstOutcome = self.stash.activate(liveTarget)
-                if firstOutcome == .success {
-                    self.safecracker.showFingerprint(at: liveTarget.activationPoint)
-                    return .success(method: .activate)
-                }
+            let firstOutcome = self.stash.activate(liveTarget)
+            if firstOutcome == .success {
+                self.safecracker.showFingerprint(at: liveTarget.activationPoint)
+                return .success(method: .activate)
             }
 
             // Retry once after a refresh + ensureOnScreen cycle. Cell reuse during
@@ -261,7 +365,9 @@ final class Actions {
                 return .failure(failure.method ?? .activate, message: failure.message)
             }
             let retryResolution = self.stash.resolveTarget(target)
-            let retryResolved = retryResolution.resolved ?? resolved
+            guard let retryResolved = retryResolution.resolved else {
+                return .failure(.elementNotFound, message: retryResolution.diagnostics)
+            }
             let retryLiveTargetResolution = self.stash.resolveLiveActionTarget(for: retryResolved)
             guard case .resolved(let retryLiveTarget) = retryLiveTargetResolution else {
                 switch retryLiveTargetResolution {
@@ -321,61 +427,57 @@ final class Actions {
     }
 
     func executeIncrement(_ target: ElementTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
-        await performElementAction(target: target, method: .increment, recordedScreen: recordedScreen) { resolved in
-            guard resolved.element.traits.contains(.adjustable) else {
-                return .failure(
-                    .increment,
-                    message: ActionCapabilityDiagnostic.nonAdjustableAction(
+        await performElementAction(
+            target: target,
+            method: .increment,
+            recordedScreen: recordedScreen,
+            deallocatedBoundary: "adjustable action",
+            preflight: { resolved in
+                guard resolved.element.traits.contains(.adjustable) else {
+                    return .failure(
                         .increment,
-                        element: resolved.screenElement
+                        message: ActionCapabilityDiagnostic.nonAdjustableAction(
+                            .increment,
+                            element: resolved.screenElement
+                        )
                     )
-                )
+                }
+                return nil
+            },
+            action: { context in
+                let liveTarget = context.liveTarget
+                _ = self.stash.increment(liveTarget)
+                self.safecracker.showFingerprint(at: liveTarget.activationPoint)
+                return .success(method: .increment)
             }
-            let liveTargetResolution = self.stash.resolveLiveActionTarget(for: resolved)
-            if let failure = self.liveActionTargetFailure(
-                for: liveTargetResolution,
-                method: .increment,
-                resolved: resolved,
-                deallocatedBoundary: "adjustable action"
-            ) {
-                return failure
-            }
-            guard case .resolved(let liveTarget) = liveTargetResolution else {
-                return .failure(.increment, message: "increment failed")
-            }
-            _ = self.stash.increment(liveTarget)
-            self.safecracker.showFingerprint(at: liveTarget.activationPoint)
-            return .success(method: .increment)
-        }
+        )
     }
 
     func executeDecrement(_ target: ElementTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
-        await performElementAction(target: target, method: .decrement, recordedScreen: recordedScreen) { resolved in
-            guard resolved.element.traits.contains(.adjustable) else {
-                return .failure(
-                    .decrement,
-                    message: ActionCapabilityDiagnostic.nonAdjustableAction(
+        await performElementAction(
+            target: target,
+            method: .decrement,
+            recordedScreen: recordedScreen,
+            deallocatedBoundary: "adjustable action",
+            preflight: { resolved in
+                guard resolved.element.traits.contains(.adjustable) else {
+                    return .failure(
                         .decrement,
-                        element: resolved.screenElement
+                        message: ActionCapabilityDiagnostic.nonAdjustableAction(
+                            .decrement,
+                            element: resolved.screenElement
+                        )
                     )
-                )
+                }
+                return nil
+            },
+            action: { context in
+                let liveTarget = context.liveTarget
+                _ = self.stash.decrement(liveTarget)
+                self.safecracker.showFingerprint(at: liveTarget.activationPoint)
+                return .success(method: .decrement)
             }
-            let liveTargetResolution = self.stash.resolveLiveActionTarget(for: resolved)
-            if let failure = self.liveActionTargetFailure(
-                for: liveTargetResolution,
-                method: .decrement,
-                resolved: resolved,
-                deallocatedBoundary: "adjustable action"
-            ) {
-                return failure
-            }
-            guard case .resolved(let liveTarget) = liveTargetResolution else {
-                return .failure(.decrement, message: "decrement failed")
-            }
-            _ = self.stash.decrement(liveTarget)
-            self.safecracker.showFingerprint(at: liveTarget.activationPoint)
-            return .success(method: .decrement)
-        }
+        )
     }
 
     func executeCustomAction(
@@ -385,20 +487,11 @@ final class Actions {
         await performElementAction(
             target: target.elementTarget,
             method: .customAction,
-            recordedScreen: recordedScreen
-        ) { resolved in
-            let liveTargetResolution = self.stash.resolveLiveActionTarget(for: resolved)
-            if let failure = self.liveActionTargetFailure(
-                for: liveTargetResolution,
-                method: .customAction,
-                resolved: resolved,
-                deallocatedBoundary: "custom action"
-            ) {
-                return failure
-            }
-            guard case .resolved(let liveTarget) = liveTargetResolution else {
-                return .failure(.customAction, message: "custom action failed")
-            }
+            recordedScreen: recordedScreen,
+            deallocatedBoundary: "custom action"
+        ) { context in
+            let resolved = context.resolvedTarget
+            let liveTarget = context.liveTarget
             switch self.stash.performCustomAction(named: target.actionName, on: liveTarget) {
             case .deallocated:
                 return .failure(.customAction, message: "custom action failed")
@@ -432,13 +525,13 @@ final class Actions {
             method: method,
             recordedScreen: recordedScreen,
             requireInteractive: false
-        ) { resolved in
-            let outcome = self.stash.performRotor(target, direction: direction, on: resolved.screenElement)
+        ) { context in
+            let outcome = self.stash.performRotor(target, direction: direction, on: context.liveTarget)
             return Self.rotorInteractionResult(
                 outcome: outcome,
                 target: target,
                 direction: direction,
-                element: resolved.screenElement
+                liveTarget: context.liveTarget
             )
         }
     }
@@ -866,8 +959,10 @@ final class Actions {
         outcome: TheStash.RotorOutcome,
         target: RotorTarget,
         direction: RotorDirection,
-        element: TheStash.ScreenElement
+        liveTarget: TheStash.LiveActionTarget
     ) -> TheSafecracker.InteractionResult {
+        let element = liveTarget.screenElement
+        let liveObject = liveTarget.object
         switch outcome {
         case .succeeded(let hit):
             return rotorSuccessResult(hit, direction: direction)
@@ -877,48 +972,65 @@ final class Actions {
                 observed: "liveObject=deallocated before rotor step",
                 target: target,
                 element: element,
+                liveObject: liveObject,
                 suggestion: "refresh with get_interface and retarget the refreshed element"
             )
         case .noRotors:
             return rotorFailure(.rotor, observed: "customRotors=[]", target: target, element: element,
+                                liveObject: liveObject,
                                 suggestion: "target an element exposing custom rotors")
         case .noSuchRotor(let available):
             return rotorFailure(.rotor, observed: "requestedRotor=\(ActionCapabilityDiagnostic.quote(target.rotor ?? "")) "
                                 + "availableRotors=\(ActionCapabilityDiagnostic.formatQuotedList(available))",
                                 target: target, element: element,
+                                liveObject: liveObject,
                                 suggestion: "use one of available rotors \(ActionCapabilityDiagnostic.formatQuotedList(available))")
         case .ambiguousRotor(let available):
             return rotorFailure(.rotor, observed: "ambiguousRotor=\(ActionCapabilityDiagnostic.quote(target.rotor ?? "")) "
                                 + "availableRotors=\(ActionCapabilityDiagnostic.formatQuotedList(available))",
                                 target: target, element: element,
+                                liveObject: liveObject,
                                 suggestion: "specify rotorIndex or an exact rotor name")
         case .currentItemUnavailable(let heistId):
             return rotorFailure(
                 .elementNotFound,
                 observed: "currentHeistId=\(ActionCapabilityDiagnostic.quote(heistId)) is not available",
-                                target: target, element: element,
-                                suggestion: "use the heistId returned by the previous rotor result after refetching")
+                target: target,
+                element: element,
+                liveObject: liveObject,
+                suggestion: "use the heistId returned by the previous rotor result after refetching"
+            )
         case .currentTextRangeUnavailable:
             return rotorFailure(.rotor, observed: "currentTextRange is not available", target: target, element: element,
+                                liveObject: liveObject,
                                 suggestion: "use the text range returned by the previous rotor result after refetching")
         case .noResult(let rotorName):
             return rotorFailure(
                 .rotor,
                 observed: "rotor=\(ActionCapabilityDiagnostic.quote(rotorName)) returned no \(direction.rawValue) result",
-                                target: target, element: element,
-                                suggestion: "try the opposite rotor direction or stop at the current item")
+                target: target,
+                element: element,
+                liveObject: liveObject,
+                suggestion: "try the opposite rotor direction or stop at the current item"
+            )
         case .resultTargetUnavailable(let rotorName):
             return rotorFailure(
                 .rotor,
                 observed: "rotor=\(ActionCapabilityDiagnostic.quote(rotorName)) returned a result without an accessibility target",
-                                target: target, element: element,
-                                suggestion: "refetch with get_interface and retry the rotor from a visible target")
+                target: target,
+                element: element,
+                liveObject: liveObject,
+                suggestion: "refetch with get_interface and retry the rotor from a visible target"
+            )
         case .resultTargetNotParsed(let rotorName):
             return rotorFailure(
                 .rotor,
                 observed: "rotor=\(ActionCapabilityDiagnostic.quote(rotorName)) returned a target outside the parsed hierarchy",
-                                target: target, element: element,
-                                suggestion: "refetch with get_interface before acting on the rotor result")
+                target: target,
+                element: element,
+                liveObject: liveObject,
+                suggestion: "refetch with get_interface before acting on the rotor result"
+            )
         }
     }
 
@@ -951,6 +1063,7 @@ final class Actions {
         observed: String,
         target: RotorTarget,
         element: TheStash.ScreenElement,
+        liveObject: NSObject,
         suggestion: String
     ) -> TheSafecracker.InteractionResult {
         .failure(
@@ -959,6 +1072,7 @@ final class Actions {
                 observed: observed,
                 target: target,
                 element: element,
+                liveObject: liveObject,
                 suggestion: suggestion
             )
         )
@@ -968,6 +1082,7 @@ final class Actions {
         observed: String,
         target: RotorTarget,
         element: TheStash.ScreenElement,
+        liveObject: NSObject,
         suggestion: String
     ) -> String {
         var attempted: [String] = []
@@ -981,9 +1096,9 @@ final class Actions {
         }
         attempted.append("direction=\(target.resolvedDirection.rawValue)")
 
-        let availableRotors = ActionCapabilityDiagnostic.availableRotors(for: element)
+        let availableRotors = ActionCapabilityDiagnostic.availableRotors(for: element, liveObject: liveObject)
         return "rotor failed: attempted \(attempted.joined(separator: " ")) "
-            + "on \(ActionCapabilityDiagnostic.formatElement(element)) "
+            + "on \(ActionCapabilityDiagnostic.formatElement(element, liveObject: liveObject)) "
             + "availableRotors=\(ActionCapabilityDiagnostic.formatQuotedList(availableRotors)); "
             + "observed \(observed); try \(suggestion)."
     }

@@ -13,6 +13,15 @@ private final class ActionActivationOverrideView: UIView {
     }
 }
 
+private final class CustomActionTargetObject: NSObject {
+    private(set) var invocationCount = 0
+
+    @objc func archive(_ action: UIAccessibilityCustomAction) -> Bool {
+        invocationCount += 1
+        return true
+    }
+}
+
 private final class ActionGeometryView: UIView {
     private let testActivationPoint: CGPoint
 
@@ -352,6 +361,32 @@ final class TheBrainsActionTests: XCTestCase {
         ])
     }
 
+    func testExecuteCustomActionDispatchesLiveCustomAction() async {
+        let heistId = "live_custom_action_host"
+        let liveObject = UIView()
+        let customActionTarget = CustomActionTargetObject()
+        liveObject.accessibilityCustomActions = [
+            UIAccessibilityCustomAction(
+                name: "Archive",
+                target: customActionTarget,
+                selector: #selector(CustomActionTargetObject.archive(_:))
+            ),
+        ]
+        registerScreenElement(
+            heistId: heistId,
+            element: makeElement(label: "Options", traits: .button),
+            object: liveObject
+        )
+
+        let result = await brains.actions.executeCustomAction(
+            CustomActionTarget(elementTarget: .heistId(heistId), actionName: "Archive")
+        )
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(result.method, .customAction)
+        XCTAssertEqual(customActionTarget.invocationCount, 1)
+    }
+
     func testExecuteActivateSucceedsForNoTraitElementWithActivationOverride() async {
         let heistId = "plain_action"
         let liveObject = ActionActivationOverrideView()
@@ -478,6 +513,57 @@ final class TheBrainsActionTests: XCTestCase {
             "visible=true",
             "refresh with get_interface",
         ])
+    }
+
+    func testElementActionRetriesWithRefreshedLiveTarget() async throws {
+        let rootView = UIView(frame: UIScreen.main.bounds)
+        rootView.backgroundColor = .white
+        let liveObject = AdjustableGeometryView(
+            frame: CGRect(x: 80, y: 180, width: 180, height: 44),
+            activationPoint: CGPoint(x: 170, y: 202)
+        )
+        liveObject.isAccessibilityElement = true
+        liveObject.accessibilityLabel = "Refreshed Slider"
+        liveObject.accessibilityIdentifier = "refreshed_slider"
+        liveObject.accessibilityTraits = .adjustable
+        rootView.addSubview(liveObject)
+
+        let window = try installModalWindow(rootView: rootView)
+        defer {
+            window.rootViewController?.view.accessibilityViewIsModal = false
+            window.isHidden = true
+        }
+        await brains.tripwire.yieldFrames(3)
+
+        let staleElement = AccessibilityElement.make(
+            label: "Refreshed Slider",
+            identifier: "refreshed_slider",
+            traits: .adjustable,
+            frame: CGRect(x: 10, y: 10, width: 120, height: 44),
+            respondsToUserInteraction: false
+        )
+        brains.stash.currentScreen = .makeForTests(
+            elements: [(staleElement, "stale_refreshed_slider")],
+            objects: ["stale_refreshed_slider": nil]
+        )
+        guard let staleResolved = brains.stash.resolveTarget(
+            .matcher(ElementMatcher(identifier: "refreshed_slider"))
+        ).resolved else {
+            XCTFail("Expected stale semantic target to resolve")
+            return
+        }
+        guard case .objectUnavailable = brains.stash.resolveLiveActionTarget(for: staleResolved) else {
+            XCTFail("Expected stale semantic target to have no live action target")
+            return
+        }
+
+        let result = await brains.actions.executeIncrement(
+            .matcher(ElementMatcher(identifier: "refreshed_slider"))
+        )
+
+        XCTAssertTrue(result.success, result.message ?? "increment failed")
+        XCTAssertEqual(result.method, .increment)
+        XCTAssertEqual(liveObject.incrementCount, 1)
     }
 
     func testExecuteTypeTextWithoutActiveInputReportsFocusState() async {
@@ -689,6 +775,29 @@ final class TheBrainsActionTests: XCTestCase {
         ])
     }
 
+    func testExecuteRotorDispatchesLiveRotorAction() async {
+        let heistId = "live_rotor_host"
+        let liveObject = UIView()
+        liveObject.accessibilityCustomRotors = [
+            UIAccessibilityCustomRotor(name: "Live Rotor") { _ in
+                UIAccessibilityCustomRotorItemResult(targetElement: liveObject, targetRange: nil)
+            },
+        ]
+        registerScreenElement(
+            heistId: heistId,
+            element: makeElement(label: "Rotor host", traits: .button),
+            object: liveObject
+        )
+
+        let result = await brains.actions.executeRotor(
+            RotorTarget(elementTarget: .heistId(heistId), rotor: "Live Rotor")
+        )
+
+        XCTAssertTrue(result.success, result.message ?? "rotor failed")
+        XCTAssertEqual(result.method, .rotor)
+        XCTAssertTrue(result.message?.contains("Rotor 'Live Rotor' found \(heistId)") ?? false)
+    }
+
     func testExecuteRotorNotFoundReportsAvailableRotorsAndNextStep() async {
         let heistId = "rotor_host"
         let liveObject = UIView()
@@ -854,6 +963,31 @@ final class TheBrainsActionTests: XCTestCase {
         brains.stash.currentScreen = .makeForTests(
             offViewport: offViewport
         )
+    }
+
+    private func installModalWindow(rootView: UIView) throws -> UIWindow {
+        let windowScene = try requireForegroundWindowScene()
+        let viewController = UIViewController()
+        viewController.view = rootView
+        viewController.view.frame = UIScreen.main.bounds
+        viewController.view.accessibilityViewIsModal = true
+
+        let window = UIWindow(windowScene: windowScene)
+        window.windowLevel = .alert + 45
+        window.rootViewController = viewController
+        window.frame = UIScreen.main.bounds
+        window.isHidden = false
+        window.layoutIfNeeded()
+        return window
+    }
+
+    private func requireForegroundWindowScene() throws -> UIWindowScene {
+        guard let scene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
+        else {
+            throw XCTSkip("No foreground-active UIWindowScene available in test host")
+        }
+        return scene
     }
 
     private func makeElement(

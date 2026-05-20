@@ -48,15 +48,15 @@ final class MinimumMatcherTests: XCTestCase {
         XCTAssertEqual(resolve(minimumMatcher, in: capture), target)
     }
 
-    func testBuildForElementOutsideCaptureReturnsBestEffortMatcher() {
-        let staleElement = makeElement(heistId: "external", label: "External", traits: [.button])
+    func testBuildForElementOutsideCaptureAppendsElementToUniquenessUniverse() {
+        let externalElement = makeElement(heistId: "external", label: "External", traits: [.button])
         let capture = makeCapture([
             makeElement(heistId: "save", label: "Save", traits: [.button]),
         ])
 
-        let minimumMatcher = MinimumMatcher.build(element: staleElement, in: capture)
+        let minimumMatcher = MinimumMatcher.build(element: externalElement, in: capture)
 
-        XCTAssertEqual(minimumMatcher.element, staleElement)
+        XCTAssertEqual(minimumMatcher.element, externalElement)
         XCTAssertEqual(minimumMatcher.matcher, ElementMatcher(label: "External"))
         XCTAssertNil(minimumMatcher.ordinal)
         XCTAssertNil(resolve(minimumMatcher, in: capture))
@@ -113,15 +113,15 @@ final class MinimumMatcherTests: XCTestCase {
         let capture = makeCapture([stableTarget, sameLabel, firstAmbiguous, secondAmbiguous])
 
         let stableMatcher = MinimumMatcher.build(element: stableTarget, in: capture)
-        let firstFallback = MinimumMatcher.build(element: firstAmbiguous, in: capture)
-        let secondFallback = MinimumMatcher.build(element: secondAmbiguous, in: capture)
+        let firstOrdinalMatcher = MinimumMatcher.build(element: firstAmbiguous, in: capture)
+        let secondOrdinalMatcher = MinimumMatcher.build(element: secondAmbiguous, in: capture)
 
         XCTAssertEqual(stableMatcher.matcher, ElementMatcher(identifier: "primary.save"))
-        XCTAssertNil(stableMatcher.ordinal, "Identifier should disambiguate before ordinal fallback.")
-        XCTAssertEqual(firstFallback.matcher, ElementMatcher(label: "Item", traits: [.staticText]))
-        XCTAssertEqual(firstFallback.ordinal, 0)
-        XCTAssertEqual(secondFallback.matcher, ElementMatcher(label: "Item", traits: [.staticText]))
-        XCTAssertEqual(secondFallback.ordinal, 1)
+        XCTAssertNil(stableMatcher.ordinal, "Identifier should disambiguate before ordinal selection.")
+        XCTAssertEqual(firstOrdinalMatcher.matcher, ElementMatcher(label: "Item", traits: [.staticText]))
+        XCTAssertEqual(firstOrdinalMatcher.ordinal, 0)
+        XCTAssertEqual(secondOrdinalMatcher.matcher, ElementMatcher(label: "Item", traits: [.staticText]))
+        XCTAssertEqual(secondOrdinalMatcher.ordinal, 1)
     }
 
     func testBuildSkipsUUIDIdentifiers() {
@@ -180,7 +180,7 @@ final class MinimumMatcherTests: XCTestCase {
         XCTAssertEqual(resolve(minimumMatcher, in: capture), first)
     }
 
-    func testAnonymousElementsUseOrdinalFallbackAcrossTheCapture() {
+    func testAnonymousElementsUseOrdinalSelectorAcrossTheCapture() {
         let first = makeElement(heistId: "anonymous_1")
         let named = makeElement(heistId: "save", label: "Save", traits: [.button])
         let second = makeElement(heistId: "anonymous_2")

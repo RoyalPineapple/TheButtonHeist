@@ -16,8 +16,8 @@ TheInsideJob automatically starts when your app loads via ObjC `+load`. No manua
 
 When the TheInsideJob framework loads:
 1. Reads configuration from environment variables or Info.plist
-2. Creates a TCP server on an OS-assigned port
-3. Begins Bonjour advertisement as `_buttonheist._tcp`
+2. Creates a TLS TCP server on an OS-assigned port
+3. Publishes Bonjour as `_buttonheist._tcp` only when network scope is enabled
 4. Starts settle-driven UI change detection
 
 ### Configuration
@@ -30,6 +30,7 @@ INSIDEJOB_DISABLE_FINGERPRINTS=true  # Suppress visual tap/gesture indicators
 INSIDEJOB_TOKEN=my-secret-token      # Auth token (fresh UUID auto-generated each launch if not set)
 INSIDEJOB_ID=my-instance             # Human-readable instance identifier
 INSIDEJOB_SESSION_TIMEOUT=30         # Session release timeout in seconds (default: 30, min: 1)
+INSIDEJOB_SCOPE=simulator,usb        # Allowed scopes (default: simulator,usb; add network to publish Bonjour)
 ```
 
 **Info.plist (fallback):**
@@ -44,6 +45,11 @@ INSIDEJOB_SESSION_TIMEOUT=30         # Session release timeout in seconds (defau
 <string>my-secret-token</string>
 <key>InsideJobInstanceId</key>
 <string>my-instance</string>
+<key>InsideJobScope</key>
+<array>
+    <string>simulator</string>
+    <string>usb</string>
+</array>
 ```
 
 **Client-side:** Set `BUTTONHEIST_TOKEN` environment variable to authenticate with the server.
@@ -88,7 +94,7 @@ Configure the shared instance with an auth token, instance identifier, allowed s
 **Parameters**:
 - `token`: Auth token for client authentication. If nil, auto-generated at startup.
 - `instanceId`: Human-readable instance identifier. If nil, falls back to a short UUID prefix.
-- `allowedScopes`: Set of connection scopes the server will accept. If nil, all scopes are allowed.
+- `allowedScopes`: Set of connection scopes the server will accept. If nil, startup/default scopes are used (`simulator,usb` unless overridden by `INSIDEJOB_SCOPE` or `InsideJobScope`).
 - `port`: Preferred TCP port for the server. Pass 0 (the default) for an OS-assigned ephemeral port. The Info.plist (`InsideJobPort`) and environment variable (`INSIDEJOB_PORT`) fallback is handled by the auto-start mechanism in `AutoStart.swift`, not by `configure()` itself.
 
 **Note**: Normally not needed - use Info.plist or environment variable configuration instead.
@@ -96,22 +102,22 @@ Configure the shared instance with an auth token, instance identifier, allowed s
 ##### start()
 
 ```swift
-public func start() throws
+public func start() async throws
 ```
 
-Start the TCP server and begin Bonjour advertisement.
+Start the TLS TCP server. Listener setup fails closed if the TLS identity or TLS transport parameters cannot be created. Bonjour advertisement begins only when the configured scopes include `.network`.
 
 **Note**: Called automatically on framework load. Manual calls are rarely needed.
 
-**Throws**: Network errors if the listener fails to start.
+**Throws**: TLS setup or network errors if the listener fails to start.
 
 ##### stop()
 
 ```swift
-public func stop()
+public func stop() async
 ```
 
-Stop the server, disconnect all clients, and stop Bonjour advertisement.
+Stop the server, disconnect all clients, and stop Bonjour advertisement if it was active.
 
 ##### startPolling(interval:)
 
@@ -146,9 +152,9 @@ Mark the hierarchy as changed so the next settled Tripwire pulse refreshes Butto
 
 TheInsideJob follows an **activation-first** strategy for all element interactions:
 
-1. **Try `accessibilityActivate()` first** -- TheBrains calls the element's native accessibility activation method via Button Heist's current element state. This is the most reliable path because it mirrors how VoiceOver activates controls and respects custom activation behavior.
+1. **Try `accessibilityActivate()` first** -- TheBrains refreshes live target state, resolves the element to a live object and geometry snapshot, then calls the element's native accessibility activation method. This is the most reliable path because it mirrors how VoiceOver activates controls and respects custom activation behavior.
 
-2. **Fall back to synthetic tap** -- If activation returns `false` or the element does not support it, TheSafecracker injects a synthetic tap at the element's activation point. This is a low-level escape hatch that cannot confirm the gesture was actually handled by the target view.
+2. **Fall back to synthetic tap** -- If activation returns `false` or the element does not support it, TheSafecracker injects a synthetic tap at the fresh live activation point. If live geometry cannot be acquired, the command fails with structured diagnostics instead of tapping a cached coordinate.
 
 The same pattern applies to `increment`/`decrement` (native accessibility API first). The `one_finger_tap` command is a pure synthetic tap with no activation-first logic — it is a low-level escape hatch for when coordinate-precise touch injection is needed.
 
@@ -165,13 +171,14 @@ TheInsideJob uses `TheSafecracker` internally for handling all touch gesture and
 
 **Supported gestures:**
 - `one_finger_tap` - Single tap at a point (low-level escape hatch; prefer `activate` for element interactions)
-- `longPress` - Long press with configurable duration
+- `long_press` - Long press with configurable duration
 - `swipe` - Quick swipe between two points
 - `drag` - Slow drag between two points (for sliders, reordering)
 - `pinch` - Two-finger pinch/zoom
 - `rotate` - Two-finger rotation
 - `twoFingerTap` - Simultaneous two-finger tap
-- `drawPath` - Trace through a sequence of waypoints (polyline)
+- `draw_path` - Trace through a sequence of waypoints (polyline)
+- `draw_bezier` - Trace through cubic bezier segments sampled server-side
 
 **Text input (via UIKeyboardImpl):**
 - `typeText` - Inject text character-by-character via `addInputString:`
@@ -298,48 +305,18 @@ Tests replace these with mock implementations to avoid real Bonjour and NWConnec
 | `discoverReachableDevices(timeout:probeTimeout:retryInterval:)` | Discover and probe-validate devices |
 | `displayName(for:)` | Disambiguated display name for a device |
 
-#### ConnectionPhase
+#### Connection Phases and Failures
 
-```swift
-public enum ConnectionPhase {
-    case disconnected
-    case connecting(device: DiscoveredDevice)
-    case connected(ConnectedSession)
-    case failed(ConnectionError)
-}
-```
+TheHandoff exposes a connection phase for disconnected, connecting, connected,
+and failed states. Failure diagnostics are derived from typed disconnect reasons
+instead of a hand-maintained public enum list. Current failure families include
+transport failure, session lock, auth failure, auth approval pending/timeout,
+protocol version mismatch, missing TLS fingerprint for a non-loopback endpoint,
+backlog overflow, no discovered device, and no matching target.
 
-> `ConnectionPhase` is not `Equatable`: the `.connected` case carries a
-> `ConnectedSession` whose `keepaliveTask` is a `Task`, which has no
-> structural equality. Tests that compare phases assert on individual
-> cases via pattern match instead.
-
-#### ConnectionError
-
-```swift
-public enum ConnectionError: Error, LocalizedError, Equatable {
-    case connectionFailed(String)
-    case authFailed(String)
-    case sessionLocked(String)
-    case timeout
-    case noDeviceFound
-    case noMatchingDevice(filter: String, available: [String])
-}
-```
-
-Used both as the thrown error type for connect/wait operations and as the
-`.failed` phase payload. Phase-producing cases are `connectionFailed`,
-`authFailed`, and `sessionLocked`; the other cases surface only via thrown
-errors from the resolver and `waitForConnectionResult`.
-
-#### ReconnectPolicy
-
-```swift
-public enum ReconnectPolicy: Equatable {
-    case disabled
-    case enabled(filter: String?)
-}
-```
+Auto-reconnect preserves one concrete target identity and reports a terminal
+diagnostic after bounded retries. Direct endpoint sessions (`host:port`) reuse
+that endpoint without requiring Bonjour discovery.
 
 #### RecordingPhase
 
@@ -442,11 +419,11 @@ public enum Command: String, CaseIterable, Sendable {
     case listTargets = "list_targets"
     case getSessionLog = "get_session_log"
     case archiveSession = "archive_session"
-    // ... 43 total cases
+    // Full catalog lives in TheFence+CommandCatalog.swift.
 }
 ```
 
-Single source of truth for the 43 supported commands in the product command layer. Each case has a `rawValue` matching the command request string accepted by TheFence (e.g., `.oneFingerTap` -> `"one_finger_tap"`). These command names are the CLI/session/batch contract; wire message discriminators are a lower transport layer and may use different names such as `typeText`. `Command.allCases` replaces the former hand-maintained string array.
+Single source of truth for supported commands in the product command layer. Each case has a `rawValue` matching the command request string accepted by TheFence (e.g., `.oneFingerTap` -> `"one_finger_tap"`). These command names are the CLI/session/batch contract; wire message discriminators are a lower transport layer and may use different names such as `typeText`. `Command.allCases` replaces the former hand-maintained string array.
 
 `connect` establishes the session and returns session state; observation starts with `get_interface`. It verifies transport, handshake/auth, and session ownership, but it does not request, parse, or explore the UI hierarchy.
 
@@ -510,12 +487,13 @@ public enum FenceError: Error, LocalizedError
 
 ```swift
 public struct TargetConfig: Codable, Sendable, Equatable {
-    public let device: String   // host:port string
-    public let token: String?   // Optional auth token
+    public let device: String            // host:port string
+    public let token: String?            // Optional auth token
+    public let certFingerprint: String?  // Optional TLS fingerprint pin
 }
 ```
 
-A named connection target with a device address and optional auth token. Defined in config files (`.buttonheist.json` or `~/.config/buttonheist/config.json`).
+A named connection target with a device address, optional auth token, and optional TLS certificate fingerprint. Defined in config files (`.buttonheist.json` or `~/.config/buttonheist/config.json`). Non-loopback direct targets must have configured or persisted trust, usually a `certFingerprint` such as `sha256:<hex>`.
 
 ### ButtonHeistFileConfig
 
@@ -550,19 +528,18 @@ Stateless resolver for connection targets with environment variable override pre
 public enum DisconnectReason: Error, LocalizedError
 ```
 
-Structured reason for why a connection was closed. Passed via `ConnectionEvent.disconnected` on `DeviceConnection`; TheHandoff folds it into `connectionPhase`/`connectionDiagnosticFailure` for session-state consumers.
+Structured reason for why a connection was closed. Passed via `ConnectionEvent.disconnected` on `DeviceConnection`; TheHandoff folds it into connection phase and diagnostic state for session-state consumers.
 
-#### Cases
+Public diagnostics are grouped into high-level categories rather than exposed as a stable enum inventory:
 
-| Case | Description |
-|------|-------------|
-| `networkError(_:)` | Underlying network error (wraps the original `Error`) |
-| `bufferOverflow` | Server exceeded max buffer size |
-| `serverClosed` | Connection closed by server |
-| `authFailed(_:)` | Authentication failed with reason |
-| `sessionLocked(_:)` | Session locked by another driver |
-| `localDisconnect` | Disconnected by client |
-| `certificateMismatch` | TLS certificate fingerprint did not match configured or explicitly approved trust |
+| Category | Examples |
+|----------|----------|
+| Transport | Network errors, buffer overflow, server close, event backlog overflow |
+| TLS trust | Certificate fingerprint mismatch or missing TLS fingerprint for a non-loopback target |
+| Authentication | Auth failure or on-device approval pending |
+| Protocol | Exact `buttonHeistVersion` mismatch during hello negotiation |
+| Session | Session locked by another driver |
+| Client | Local disconnect |
 
 ---
 
@@ -574,7 +551,7 @@ Structured reason for why a connection was closed. Passed via `ConnectionEvent.d
 
 ### Overview
 
-MCP server exposing 24 purpose-built tools backed by TheFence. `activate` is the primary interaction tool — it uses the activation-first pattern (accessibility activation, then synthetic tap fallback). Pass `action` to `activate` to perform named actions (increment, decrement, or custom actions). Low-level touch gestures are grouped under `gesture` as escape hatches. Build with:
+MCP server projecting its tool schemas from TheFence. `activate` is the primary interaction tool — it uses the activation-first pattern (accessibility activation, then synthetic tap fallback). Pass `action` to `activate` to perform named actions (increment, decrement, or custom actions). Low-level touch gestures are grouped under `gesture` as escape hatches. Build with:
 
 ```bash
 cd ButtonHeistMCP && swift build -c release
@@ -582,9 +559,9 @@ cd ButtonHeistMCP && swift build -c release
 
 ### Tool Surface
 
-ButtonHeistMCP exposes 24 tools. The exact schemas are projected from `TheFence.Command.parameters` in `ToolDefinitions.swift` and guarded by sync tests; this section documents the contract rather than duplicating every parameter.
+ButtonHeistMCP projects its tool surface from `TheFence.Command.parameters` in `ToolDefinitions.swift`; this section documents the contract rather than duplicating every parameter.
 
-- Direct tools map 1:1 to canonical Fence commands such as `activate`, `type_text`, `wait_for`, `get_screen`, `set_pasteboard`, `run_batch`, and session-management commands.
+- Direct tools use canonical Fence command names such as `activate`, `type_text`, `wait_for`, `get_screen`, `set_pasteboard`, `run_batch`, and session-management commands.
 - `gesture` is a top-level MCP grouping for low-level gesture commands selected by `type`.
 - `scroll` is a top-level MCP grouping for page scrolling, scroll-to-visible, search scrolling, and edge scrolling selected by `mode`.
 - `edit_action` accepts responder-chain edit actions, with the top-level MCP `dismiss` selector routing to canonical Fence command `dismiss_keyboard`.
@@ -607,7 +584,7 @@ For `wait_for_change`, `element_disappeared` is satisfied by current absence. It
 
 #### activate
 
-The primary way to interact with buttons, links, and controls. Uses the activation-first pattern: tries `accessibilityActivate()` (like VoiceOver double-tap) first, falls back to synthetic tap at the element's activation point. Provide a `heistId` from `get_interface` or flat matcher fields such as `identifier`, `label`, `traits`, and optional `ordinal`.
+The primary way to interact with buttons, links, and controls. Uses the activation-first pattern: resolves the semantic target, refreshes live target geometry, tries `accessibilityActivate()` (like VoiceOver double-tap), then falls back to a synthetic tap at the fresh live activation point. If live geometry cannot be acquired, the command fails with structured diagnostics instead of using cached coordinates. Provide a `heistId` from the current hierarchy or flat matcher fields such as `identifier`, `label`, `traits`, and optional `ordinal`.
 
 Pass `action` to perform a named action instead of default activation:
 - `"increment"` / `"decrement"` — For sliders, steppers
@@ -623,7 +600,7 @@ Touch gesture tool. For element interactions, prefer `activate` instead. The `ty
 - `swipe` — Swipe on element or between coordinates. `direction` for cardinal swipes, or `start`/`end` unit points (0-1 relative to element frame) for precise control. Also accepts `startX`/`startY`/`endX`/`endY` for absolute screen coordinates. Optional `duration`.
 - `one_finger_tap` — Synthetic tap at x/y coordinates
 - `drag` — Requires `endX`, `endY`
-- `long_press` — Optional `duration` (seconds, default 1.0)
+- `long_press` — Optional `duration` (seconds, default 0.5)
 - `pinch` — Requires `scale` (>1 zoom in, <1 zoom out)
 - `rotate` — Requires `angle` (radians)
 - `two_finger_tap` — Two-finger tap
@@ -664,7 +641,7 @@ With the default `stop_on_error` policy, the batch halts at the first mismet exp
 | `BUTTONHEIST_DEVICE` | Default device filter |
 | `BUTTONHEIST_TOKEN` | Auth token |
 | `BUTTONHEIST_DRIVER_ID` | Driver identity for session locking |
-| `BUTTONHEIST_SESSION_TIMEOUT` | Idle timeout in seconds (default: 60). Disconnects from device after inactivity; next tool call auto-reconnects |
+| `BUTTONHEIST_SESSION_TIMEOUT` | MCP client idle timeout in seconds (default: 60). Disconnects from device after MCP inactivity; next tool call auto-reconnects. Server-side session release is controlled by `INSIDEJOB_SESSION_TIMEOUT` |
 
 ### Response Handling
 
@@ -687,44 +664,13 @@ public let buttonHeistServiceType = "_buttonheist._tcp"
 public let buttonHeistVersion = "<semver>"  // Single product version; bumped only by scripts/release.sh
 ```
 
-### ConnectionPhase
+### Connection Lifecycle Types
 
-```swift
-public enum ConnectionPhase
-```
-
-#### Cases
-
-- `disconnected` - No active connection
-- `connecting(device: DiscoveredDevice)` - Connection in progress to device
-- `connected(device: DiscoveredDevice)` - Connected to a device
-- `failed(ConnectionError)` - Connection failed with typed error
-
-### ConnectionError
-
-```swift
-public enum ConnectionError: Error, LocalizedError, Equatable
-```
-
-#### Cases
-
-- `connectionFailed(String)` - General connection error
-- `authFailed(String)` - Authentication rejected
-- `sessionLocked(String)` - Session locked by another driver
-- `timeout` - Connection or handshake timed out
-- `noDeviceFound` - Discovery yielded no candidates
-- `noMatchingDevice(filter: String, available: [String])` - Filter matched none of the discovered devices
-
-### ReconnectPolicy
-
-```swift
-public enum ReconnectPolicy: Equatable
-```
-
-#### Cases
-
-- `disabled` - Auto-reconnect will not fire
-- `enabled(filter: String?)` - Auto-reconnect fires on disconnect with optional device filter
+Connection lifecycle state lives in TheHandoff. Public responses expose
+structured diagnostics rather than requiring callers to switch on internal enum
+cases. Diagnostics distinguish transport failure, auth failure, auth approval
+pending/timeout, session lock, protocol mismatch, missing TLS fingerprint,
+backlog overflow, no device, and no matching target.
 
 ### RecordingPhase
 
@@ -777,9 +723,9 @@ Messages sent from client to server.
 - `authenticate(AuthenticatePayload)` - Authenticate with a token (sent after `clientHello` / `authRequired`)
 - `requestInterface` - Request the current on-screen interface
 - `ping` - Keepalive
-- `activate(ActionTarget)` - Activate element (VoiceOver double-tap)
-- `increment(ActionTarget)` - Increment adjustable element
-- `decrement(ActionTarget)` - Decrement adjustable element
+- `activate(ElementTarget)` - Activate element (VoiceOver double-tap)
+- `increment(ElementTarget)` - Increment adjustable element
+- `decrement(ElementTarget)` - Decrement adjustable element
 - `performCustomAction(CustomActionTarget)` - Invoke named custom action
 - `touchTap(TouchTapTarget)` - Tap at coordinates or element
 - `touchLongPress(LongPressTarget)` - Long press at coordinates or element
@@ -802,7 +748,7 @@ Messages sent from client to server.
 - `waitForIdle(WaitForIdleTarget)` - Wait for animations to settle (internal)
 - `waitForChange(WaitForChangeTarget)` - Wait for UI to change, optionally matching an expectation
 - `waitFor(WaitForTarget)` - Wait for an element matching a predicate to appear or disappear
-- `requestScreen` - Request PNG screenshot plus visible accessibility data; public responses expose the interface only when explicitly requested
+- `requestScreen` - Request PNG screenshot plus visible accessibility data at the wire layer; public responses expose the interface only when explicitly requested
 - `startRecording(RecordingConfig)` - Start screen recording (H.264/MP4)
 - `stopRecording` - Stop active screen recording
 - `status` - Lightweight status probe allowed after the hello handshake and before auth (identity + availability, no session claim)
@@ -901,11 +847,11 @@ public struct SessionLockedPayload: Codable, Sendable
 public enum ElementTarget: Codable, Sendable
 ```
 
-Two resolution strategies: `heistId` (assigned token from `get_interface`) or flat matcher fields (describe the element by accessibility properties). `heistId` takes priority when both are present.
+Two resolution strategies: `heistId` (a handle from the current hierarchy) or flat matcher fields (describe the element by accessibility properties). `heistId` takes priority when both are present. A `heistId` is not a durable identity and is not geometry authority; action execution resolves fresh live geometry immediately before touching.
 
 #### Properties
 
-- `heistId: String?` - Stable element identifier assigned by `get_interface`
+- `heistId: String?` - Current-hierarchy semantic handle assigned by `get_interface`
 - `label` / `identifier` / `value` / `traits` / `excludeTraits` - Predicate matcher fields for accessibility-based resolution
 - `ordinal: Int?` - 0-based index to select among multiple matcher results. Without ordinal, multiple matches return an ambiguity error with a hint showing valid ordinal range.
 
@@ -917,7 +863,7 @@ public struct TouchTapTarget: Codable, Sendable
 
 #### Properties
 
-- `elementTarget: ActionTarget?` - Target element (taps at activation point)
+- `elementTarget: ElementTarget?` - Target element (taps at a freshly resolved live activation point)
 - `pointX: Double?` - Explicit X coordinate
 - `pointY: Double?` - Explicit Y coordinate
 - `point: CGPoint?` - Computed CGPoint from pointX/pointY
@@ -931,7 +877,7 @@ public struct TypeTextTarget: Codable, Sendable
 #### Properties
 
 - `text: String` - Non-empty text to type character-by-character
-- `elementTarget: ActionTarget?` - Element to tap for focus and value readback
+- `elementTarget: ElementTarget?` - Element to tap for focus and value readback
 
 ### CustomActionTarget
 
@@ -941,7 +887,7 @@ public struct CustomActionTarget: Codable, Sendable
 
 #### Properties
 
-- `elementTarget: ActionTarget` - Target element
+- `elementTarget: ElementTarget` - Target element
 - `actionName: String` - Name of the custom action
 
 ### ScrollDirection
@@ -967,7 +913,7 @@ public struct ScrollTarget: Codable, Sendable
 
 #### Properties
 
-- `elementTarget: ActionTarget?` - Element to scroll from (axis-aware: finds scroll view matching direction's axis)
+- `elementTarget: ElementTarget?` - Element to scroll from (axis-aware: finds scroll view matching direction's axis)
 - `direction: ScrollDirection` - Scroll direction
 
 ### ScrollEdge
@@ -991,7 +937,7 @@ public struct ScrollToEdgeTarget: Codable, Sendable
 
 #### Properties
 
-- `elementTarget: ActionTarget?` - Element whose nearest scroll view ancestor to scroll (axis-aware)
+- `elementTarget: ElementTarget?` - Element whose nearest scroll view ancestor to scroll (axis-aware)
 - `edge: ScrollEdge` - Which edge to scroll to
 
 ### ElementMatcher
@@ -1167,7 +1113,7 @@ Represents a single UI element captured from the accessibility hierarchy.
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `heistId` | `String` | Current-hierarchy handle for immediate targeting. Use minimum matcher fields for durable replay. |
+| `heistId` | `String` | Current-hierarchy handle for immediate targeting. Use minimum matcher fields for durable replay; action geometry is refreshed live before dispatch. |
 | `label` | `String?` | Label |
 | `value` | `String?` | Current value |
 | `identifier` | `String?` | Identifier |
@@ -1345,7 +1291,7 @@ The outcome of checking an `ActionExpectation` against an `ActionResult`.
 public struct ScreenPayload: Codable, Sendable
 ```
 
-Raw wire screen capture payload. Public CLI/MCP responses write the image as an artifact and return metadata by default; inline PNG data is opt-in and size-bounded.
+Raw wire screen capture payload. Public CLI/MCP responses write the image as an artifact and return metadata by default; inline PNG data and visible-interface expansion are explicit opt-ins and size-bounded.
 
 #### Properties
 
@@ -1353,6 +1299,7 @@ Raw wire screen capture payload. Public CLI/MCP responses write the image as an 
 - `width: Double` - Screen width in points
 - `height: Double` - Screen height in points
 - `timestamp: Date` - When screenshot was captured
+- `interface: Interface` - Fresh visible accessibility capture at the wire layer. Public outputs include it only when `includeInterface=true`.
 
 ### RecordingConfig
 
@@ -1420,7 +1367,6 @@ A single recorded interaction event captured during a Stakeout recording.
 ## CLI Reference
 
 **Location**: `ButtonHeistCLI/`
-**Version**: 0.4.1
 
 All subcommands that connect to a device accept these connection options:
 
@@ -1535,8 +1481,10 @@ Low-level touch gestures registered as top-level commands. For tapping buttons a
 | `buttonheist pinch` | Pinch/zoom at a point or element |
 | `buttonheist rotate` | Rotate at a point or element |
 | `buttonheist two_finger_tap` | Tap with two fingers at a point or element |
+| `buttonheist draw_path` | Draw a touch path through JSON waypoints |
+| `buttonheist draw_bezier` | Draw a touch path along cubic bezier segments |
 
-All gesture commands accept a positional heistId, `--heist-id`, or matcher fields such as `--identifier`, `--label`, `--traits`, and optional `--ordinal` to target an element. Coordinate options (`--x`, `--y`, `--from-x`, `--from-y`, `--to-x`, `--to-y`) remain available for explicit positioning, and `--device` targets a specific device.
+Element-targeted gesture commands accept a positional heistId, `--heist-id`, or matcher fields such as `--identifier`, `--label`, `--traits`, and optional `--ordinal` to target an element. Coordinate options (`--x`, `--y`, `--from-x`, `--from-y`, `--to-x`, `--to-y`, `--center-x`, `--center-y`) remain available where applicable, and `--device` targets a specific device. `draw_path` and `draw_bezier` are coordinate path commands; they use `--points` / `--points-from-file` and `--segments` / `--segments-from-file` rather than element matchers.
 
 ### buttonheist type_text
 
@@ -1719,7 +1667,6 @@ USAGE: buttonheist get_screen [OPTIONS]
 OPTIONS:
   -o, --output <path>     Output file path (default: generated artifact path)
   --inline                Write raw PNG bytes to stdout for compatibility
-  -t, --timeout <seconds> Timeout in seconds (default: 10)
   -q, --quiet             Suppress status messages
   --device <filter>       Target a specific device
 ```
@@ -1737,7 +1684,6 @@ OPTIONS:
   --scale <factor>            Resolution scale (default: 1.0, range: 0.25-1.0)
   --max-duration <seconds>    Maximum recording duration (default: 60)
   --inactivity-timeout <secs> Optional early-stop after N seconds of inactivity
-  -t, --timeout <seconds>     Timeout waiting for recording to complete (default: 120)
   -q, --quiet                 Suppress status messages
   --device <filter>           Target a specific device
 ```
@@ -1815,7 +1761,7 @@ struct MyApp: App {
 }
 ```
 
-**Info.plist:**
+**Info.plist for Bonjour/LAN discovery:**
 ```xml
 <key>NSLocalNetworkUsageDescription</key>
 <string>element inspector connection.</string>
@@ -1824,6 +1770,9 @@ struct MyApp: App {
     <string>_buttonheist._tcp</string>
 </array>
 ```
+
+These keys are only needed when you include `network` in `INSIDEJOB_SCOPE` /
+`InsideJobScope`. The default `simulator,usb` scope does not publish Bonjour.
 
 ### Callback-Based Usage
 
@@ -1924,7 +1873,7 @@ buttonheist long_press --identifier myButton --duration 1.0
 buttonheist swipe --identifier list --direction up
 buttonheist drag --from-x 100 --from-y 200 --to-x 300 --to-y 200
 buttonheist pinch --identifier mapView --scale 2.0
-buttonheist rotate --x 200 --y 300 --angle 1.57
+buttonheist rotate --center-x 200 --center-y 300 --angle 1.57
 buttonheist two_finger_tap --identifier zoomControl
 
 # Text entry

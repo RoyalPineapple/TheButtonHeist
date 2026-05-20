@@ -8,7 +8,7 @@
 
 TheFence is the brain of the outside operation:
 
-1. **Command dispatch** - routes 43 commands via TheHandoff
+1. **Command dispatch** - routes the Fence command catalog via TheHandoff
 2. **Auto-discovery and connection** - finds and connects to devices automatically
 3. **Auto-reconnect** - retries connection on disconnect via TheHandoff
 4. **Session bookkeeping** - delegates session logs, artifact storage, and archival to TheBookKeeper
@@ -31,15 +31,15 @@ graph TD
     subgraph TheFence["TheFence (@ButtonHeistActor)"]
         Config["Configuration - deviceFilter, connectionTimeout, - token, autoReconnect"]
         Execute["execute(request:) - Main entry point"]
-        Dispatch["dispatch(command:args:) - 43-command switch"]
+        Dispatch["dispatch(command:args:) - command switch"]
         Reconnect["Auto-Reconnect - via TheHandoff.setupAutoReconnect"]
 
-        subgraph Commands["Command Catalog (43)"]
+        subgraph Commands["Command Catalog"]
             Conn["help, status, quit, exit, list_devices"]
             IF["get_interface (default product state), get_screen, wait_for_change"]
             Access["activate (with optional action param), - increment, decrement, - perform_custom_action"]
             Gesture["one_finger_tap, long_press, swipe, drag, - pinch, rotate, two_finger_tap, - draw_path, draw_bezier"]
-            Scroll["scroll, scroll_to_visible, scroll_to_edge"]
+            Scroll["scroll, scroll_to_visible,\nelement_search, scroll_to_edge"]
             Text["type_text, edit_action, dismiss_keyboard"]
             Pasteboard["set_pasteboard, get_pasteboard"]
             Rec["start_recording, stop_recording"]
@@ -157,7 +157,7 @@ stateDiagram-v2
 ### MEDIUM PRIORITY
 
 **TheFence test coverage is improving but incomplete**
-- `TheFenceTests` covers command enum exhaustiveness (case count guard + wire-format verification for all 43 commands) and `FenceResponse` formatting
+- `TheFenceTests` covers command enum exhaustiveness and `FenceResponse` formatting
 - `TheFenceHandlerTests` covers command routing (`testAllCatalogCommandsAreRouted`) and handler-level argument validation
 - Timeout behavior and auto-reconnect logic remain untested
 
@@ -169,7 +169,7 @@ stateDiagram-v2
 - Well-tested: `FenceResponseTests` covers both human formatting and JSON serialization
 
 **`supportedCommands` derived from `Command` enum** (`TheFence+CommandCatalog.swift`)
-- `TheFence.Command` is a `String`-backed `CaseIterable` enum with 43 cases
+- `TheFence.Command` is a `String`-backed `CaseIterable` enum
 - Commands are matched by enum case in the dispatch switch (compile-time exhaustiveness)
 - `supportedCommands` is `Command.allCases.map(\.rawValue)` — no hand-maintained list
 

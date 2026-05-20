@@ -2,13 +2,13 @@
 
 > **Module:** `ButtonHeistMCP/Sources/`
 > **Platform:** macOS 14.0+
-> **Role:** Exposes Button Heist as 24 typed MCP tools for AI agents
+> **Role:** Exposes Button Heist as typed MCP tools rendered from the Fence command contract
 
 ## Responsibilities
 
 This is the clean handshake between an AI agent and the rest of the crew:
 
-1. **24 typed tools** backed by `TheFence`
+1. **Typed tools** backed by `TheFence`
 2. **Tool-to-command routing** for direct, grouped, and hybrid tools
 3. **Response adaptation** for MCP clients: screenshots and recordings as artifact-first metadata, with capped opt-in inline media/log content
 4. **Idle disconnects** with automatic reconnect on the next tool call
@@ -20,7 +20,7 @@ This is the clean handshake between an AI agent and the rest of the crew:
 | File | Contents |
 |------|----------|
 | `main.swift` | `ButtonHeistMCPServer` entry point, `setUp()`, `handleToolCall`, `renderResponse` |
-| `ToolDefinitions.swift` | 24 tool schemas projected from `FenceParameterSpec`, with grouped-tool selector overrides |
+| `ToolDefinitions.swift` | Renders MCP tools from `TheFence.Command.mcpToolContracts`; command identity, parameters, grouped selectors, and schema metadata are Fence-owned |
 
 `IdleMonitor` lives in the ButtonHeist framework (`ButtonHeist/Sources/TheButtonHeist/IdleMonitor.swift`), not in the MCP package.
 `TargetConfigResolver` lives in the ButtonHeist framework (`TargetConfig.swift`), not in the MCP package.
@@ -33,7 +33,7 @@ graph TD
         Main["main.swift — ButtonHeistMCPServer"]
         Server["swift-sdk Server"]
         Transport["StdioTransport"]
-        Tools["ToolDefinitions.swift — 24 tool schemas"]
+        Tools["ToolDefinitions.swift — renders Fence MCP contracts"]
         Handler["handleToolCall — decode → route → execute → render"]
         Idle["IdleMonitor — fence.stop() after timeout"]
         Config["TargetConfigResolver — .buttonheist.json / ~/.config/..."]
@@ -57,11 +57,13 @@ graph TD
 
 ## Tool Surface
 
-ButtonHeistMCP exposes 24 tools. The authoritative list and parameter schemas live in `ToolDefinitions.swift`, projected from `FenceParameterSpec`; `ButtonHeistMCP/README.md` carries the human-facing tool list checked by drift tests.
+ButtonHeistMCP projects tools from `ToolDefinitions.swift`, which is rendered
+from Fence-owned command contracts and `FenceParameterSpec`. Human docs describe
+families and routing rules; they do not carry a second exhaustive tool list.
 
 ### Grouped and Hybrid Tools
 
-`gesture` groups 9 gesture commands under a `type` discriminator:
+`gesture` groups the gesture command family under a `type` discriminator:
 `swipe`, `one_finger_tap`, `drag`, `long_press`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`
 
 `scroll` uses a `mode` discriminator: `page` (default — scrolls one page), `to_visible` (jump to known element), `search` (scroll all containers looking for match), `to_edge` (scroll to edge).

@@ -61,7 +61,10 @@ struct MyApp: App {
 }
 ```
 
-Add the Info.plist entries so Bonjour can advertise the app:
+By default the server accepts simulator loopback and USB-scoped connections, but
+does not publish Bonjour on the LAN. If you opt into network scope with
+`INSIDEJOB_SCOPE=simulator,usb,network` or `InsideJobScope`, add the
+Info.plist entries that allow Bonjour advertisement:
 
 ```xml
 <key>NSLocalNetworkUsageDescription</key>
@@ -93,7 +96,11 @@ Add the MCP server to your project's `.mcp.json`:
 }
 ```
 
-This exposes 24 tools, including `get_interface`, `activate`, `type_text`, `run_batch`, and `get_screen`. The agent discovers instrumented apps through Bonjour:
+The MCP adapter projects its tools from the Fence command contract. Agents
+typically start with `get_interface`, then use commands such as `activate`,
+`type_text`, `run_batch`, and `get_screen`. Default connections use loopback,
+USB, named targets, or direct `host:port` targets; Bonjour discovery is
+available only when the app opts into network scope:
 
 ```
 Agent: "I need to log the user in"
@@ -164,12 +171,14 @@ When the screen changes while the agent is thinking, the next response uses the 
 
 ### 2. Expectations: assertions on the contract
 
-Each command can declare what should happen with `expect`. Button Heist checks the delta projection against that expectation and reports pass/fail inline:
+Commands whose Fence contract includes `expect` can declare what should happen.
+Button Heist checks the delta projection against that expectation and reports
+pass/fail inline:
 
 ```json
 {
   "command": "activate",
-  "target": {"heistId": "button_login"},
+  "heistId": "button_login",
   "expect": {"type": "screen_changed"}
 }
 ```
@@ -188,9 +197,18 @@ The agent says what it expects. Button Heist says whether it happened.
 {
   "command": "run_batch",
   "steps": [
-    {"command": "type_text", "target": {"heistId": "textfield_email"}, "text": "user@example.com",
-     "expect": {"type": "element_updated", "heistId": "textfield_email", "property": "value", "newValue": "user@example.com"}},
-    {"command": "activate", "target": {"heistId": "button_submit"}, "expect": {"type": "screen_changed"}}
+    {
+      "command": "type_text",
+      "heistId": "textfield_email",
+      "text": "user@example.com",
+      "expect": {
+        "type": "element_updated",
+        "heistId": "textfield_email",
+        "property": "value",
+        "newValue": "user@example.com"
+      }
+    },
+    {"command": "activate", "heistId": "button_submit", "expect": {"type": "screen_changed"}}
   ]
 }
 ```
@@ -250,7 +268,7 @@ Button Heist is a distributed system: an iOS framework inside the app, a macOS c
 
 | Name | Role |
 |------|------|
-| **TheInsideJob** | iOS framework embedded in the app. Hosts the TCP server, Bonjour advertisement, accessibility hierarchy, and command dispatch |
+| **TheInsideJob** | iOS framework embedded in the app. Hosts the TLS TCP server, optional Bonjour advertisement, accessibility hierarchy, and command dispatch |
 | **TheSafecracker** | Touch, gesture, text-entry, and edit-action execution through synthetic events |
 | **TheStash** | Current element state, target resolution, `heistId` assignment, and wire conversion. Live view pointers stay inside |
 | **TheBurglar** | Accessibility hierarchy parsing, topology detection, and scroll-container discovery |
@@ -267,7 +285,7 @@ Button Heist is a distributed system: an iOS framework inside the app, a macOS c
 | Name | Role |
 |------|------|
 | **TheFence** | Command dispatch for CLI and MCP, request-response correlation, and async waits |
-| **TheHandoff** | Bonjour and USB discovery, TLS connection handling, session state, and testable connection hooks |
+| **TheHandoff** | Scoped discovery, named/direct targets, TLS connection handling, session state, and testable connection hooks |
 | **TheBookKeeper** | Session logs, artifact storage, heist recording, and replay |
 
 ### Interfaces
@@ -275,7 +293,7 @@ Button Heist is a distributed system: an iOS framework inside the app, a macOS c
 | Name | Role |
 |------|------|
 | **ButtonHeistCLI** | Command-line interface for `list_devices`, `session`, `activate`, `type_text`, `get_screen`, `start_recording`, and more |
-| **ButtonHeistMCP** | MCP server exposing 24 agent tools backed by TheFence |
+| **ButtonHeistMCP** | MCP server projecting agent tools from TheFence |
 
 ## Development
 
@@ -313,8 +331,8 @@ ButtonHeist/
 
 1. TheInsideJob framework linked to your target
 2. App running in the foreground
-3. Info.plist has the `_buttonheist._tcp` Bonjour service entry
-4. Scope allows the connection path. Defaults are simulator/device-local; LAN exposure requires explicit network scope.
+3. For Bonjour/LAN discovery only: Info.plist has the `_buttonheist._tcp` service entry
+4. Scope allows the connection path. Defaults are simulator and USB; LAN exposure requires explicit network scope.
 
 ### USB connection refused
 

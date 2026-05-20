@@ -5,14 +5,25 @@
 
 ## Overview
 
-Unified targeting turns a caller's intent ("tap the Submit button") into a concrete `AccessibilityElement` and traversal index on the iOS side. Every action command — activate, scroll, swipe, type_text, gesture, edit_action — flows through the same resolution pipeline.
+Unified targeting turns a caller's intent ("tap the Submit button") into
+semantic target identity on the iOS side. Element-targeted actions then perform
+a separate live-geometry resolution immediately before touching or dispatching
+an accessibility action. Every action command — activate, scroll, swipe,
+type_text, gesture, edit_action — flows through this shared semantic resolution
+pipeline before any command-specific live action step.
 
 There are exactly **two targeting strategies**, encoded as cases of the `ElementTarget` enum:
 
 1. **`.heistId(String)`** — "you gave me this token, I hand it back." Assigned by `get_interface`, valid only as a current-screen handle while the element is in `currentScreen`. O(1) lookup into `currentScreen.elements`.
 2. **`.matcher(ElementMatcher)`** — "I'm describing the element by its accessibility properties." A predicate-based search on label, identifier, value, and traits with **case-insensitive equality** (typography-folded — smart quotes, dashes, ellipsis fold to ASCII) and exact trait bitmask comparison. Matching is **exact or miss** — there is no substring fallback. On a miss the resolver returns structured suggestions through the diagnostic path. Callers can embed expectations (e.g. `value="6"`) so stale state fails early instead of acting on the wrong element.
 
-A single method, `TheStash.resolveTarget(_:)`, implements this and returns a `TargetResolution` enum (`.resolved(ResolvedTarget)`, `.notFound(diagnostics:)`, `.ambiguous(candidates:diagnostics:)`). `ResolvedTarget` has a single field: `screenElement: ScreenElement`. Every action executor calls this method — there are no alternative resolution paths.
+A single method, `TheStash.resolveTarget(_:)`, implements semantic resolution
+and returns a `TargetResolution` enum (`.resolved(ResolvedTarget)`,
+`.notFound(diagnostics:)`, `.ambiguous(candidates:diagnostics:)`).
+Element-targeted actions then call `resolveLiveActionTarget(for:)` to promote
+the current object reference and acquire fresh frame/activation-point data.
+Missing live geometry is a first-class failure, not a fallback to cached
+coordinates.
 
 ### What was removed/changed
 
@@ -47,10 +58,11 @@ sequenceDiagram
     ACT->>NAV: ensureOnScreen(for: target)
     NAV->>ST: resolveTarget(target)
     ACT->>ST: resolveTarget(target) → ResolvedTarget
-    ACT->>ST: Interactivity.checkInteractivity(element)
+    ACT->>ST: resolveLiveActionTarget(resolved) → LiveActionTarget
+    ACT->>ST: Interactivity.checkInteractivity(liveTarget)
     ACT->>ACT: activate
     ACT-->>ACT: activate failed?
-    ACT->>TS: fallback tap(at: activationPoint)
+    ACT->>TS: fallback tap(at: fresh activationPoint)
     TS-->>ACT: success
     ACT-->>TB: InteractionResult
     TB-->>IJ: ActionResult (with delta)
@@ -113,7 +125,11 @@ Trait names are resolved to `UIAccessibilityTraits` bitmasks on the iOS side via
 
 ## Resolution: TheStash.resolveTarget()
 
-`TheStash.swift` — the single resolution method. Returns `TargetResolution` enum: `.resolved(ResolvedTarget)`, `.notFound(diagnostics:)`, or `.ambiguous(candidates:diagnostics:)`. `ResolvedTarget` has a single field (`screenElement: ScreenElement`) with a computed `element` property.
+`TheStash.swift` — the single semantic resolution method. Returns
+`TargetResolution` enum: `.resolved(ResolvedTarget)`, `.notFound(diagnostics:)`,
+or `.ambiguous(candidates:diagnostics:)`. `ResolvedTarget` carries the matched
+semantic screen entry; callers that will touch the app must then call
+`resolveLiveActionTarget(for:)` before dispatch.
 
 ```mermaid
 flowchart TD
@@ -231,10 +247,10 @@ These commands do not resolve exactly one live element through `resolveTarget()`
 ## Design Principles
 
 1. **Two strategies, nothing else.** heistId (you got this token) or matcher (describe what you want). Optional ordinal disambiguates when multiple elements match the same predicate.
-2. **Single resolution path** — `resolveTarget()` is the only way to go from `ElementTarget` to a live element. No alternative code paths that could fall out of sync.
+2. **Two-stage action resolution** — `resolveTarget()` is the only way to go from `ElementTarget` to semantic identity; `resolveLiveActionTarget(for:)` is the required final step before touch/accessibility dispatch. No action treats semantic state as fresh geometry.
 3. **Exact matching only** — no fuzzy resolution, no partial matches. Miss → progressive diagnostic that answers the next question.
 4. **Expectations in the search** — embed value/trait expectations in the matcher so stale state fails early. A slider at value "8" won't match a search for value "6" — you'll know immediately something changed.
-5. **heistId wins for live actions** — fastest path (lookup by current-screen handle), deterministic within the committed `Screen`. Replay records should persist minimum matchers, not heistIds.
+5. **heistId wins for semantic targeting** — fastest path (lookup by current-screen handle), deterministic within the committed `Screen`. It does not imply geometry freshness. Replay records should persist minimum matchers, not heistIds.
 6. **Matching on canonical types** — `ElementMatcher` predicates resolve against `AccessibilityElement` (parser types with real `UIAccessibilityTraits`), not wire types (`HeistElement` with string trait arrays). This avoids lossy string round-trips.
 7. **Progressive disclosure on failure** — errors go from "here's what changed" to "here's what's on screen" depending on how close the miss was. Every error answers the obvious next question.
 

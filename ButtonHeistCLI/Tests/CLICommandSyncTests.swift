@@ -104,19 +104,35 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
-    func testDocumentedTopLevelCommandsMatchCLIConfiguration() throws {
-        let documentedCommands = try documentedTopLevelCommandNames()
-        let actualCommands = Set(topLevelCommandNames())
-
-        XCTAssertEqual(
-            documentedCommands,
-            actualCommands,
-            """
-            ButtonHeistCLI/README.md top-level command table differs: \
-            docs-only \(documentedCommands.subtracting(actualCommands).sorted()), \
-            missing \(actualCommands.subtracting(documentedCommands).sorted())
-            """
+    func testReadmeDoesNotHandMaintainTopLevelCommandRegistry() throws {
+        let contents = try readRepositoryFile("ButtonHeistCLI/README.md")
+        let hardCodedCounts = regexFullMatches(
+            in: contents,
+            pattern: #"\b[0-9]+(?:\s+|-)(?:[A-Za-z-]+(?:\s+|-)){0,3}(?:commands?|cases?)\b"#
         )
+
+        XCTAssertFalse(
+            contents.contains("## Top-Level Commands"),
+            "ButtonHeistCLI/README.md should not carry a second exhaustive command registry"
+        )
+        XCTAssertTrue(
+            hardCodedCounts.isEmpty,
+            "ButtonHeistCLI/README.md should not hard-code public command counts: \(hardCodedCounts)"
+        )
+        XCTAssertTrue(contents.contains("TheFence.Command"), "README should point to the Fence command contract")
+        XCTAssertTrue(contents.contains("buttonheist --help"), "README should point users to generated CLI help")
+        XCTAssertFalse(contents.contains("--index"), "README should document --ordinal, not stale --index")
+        XCTAssertTrue(contents.contains("--ordinal"), "README should document the current ordinal selector option")
+    }
+
+    func testReadmeUsesOrdinalNotLegacyIndex() throws {
+        let contents = try readRepositoryFile("ButtonHeistCLI/README.md")
+
+        XCTAssertFalse(
+            contents.contains("--index"),
+            "ButtonHeistCLI/README.md should document --ordinal, not the removed --index flag"
+        )
+        XCTAssertTrue(contents.contains("--ordinal"), "README should document the current --ordinal flag")
     }
 
     func testGetInterfaceHelpDoesNotAdvertiseScopeOrLegacyFullAlias() {
@@ -344,24 +360,13 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
-    private func documentedTopLevelCommandNames() throws -> Set<String> {
-        let data = try Data(contentsOf: repositoryRoot().appendingPathComponent("ButtonHeistCLI/README.md"))
+    private func readRepositoryFile(_ relativePath: String) throws -> String {
+        let data = try Data(contentsOf: repositoryRoot().appendingPathComponent(relativePath))
         guard let contents = String(bytes: data, encoding: .utf8) else {
-            XCTFail("ButtonHeistCLI/README.md is not UTF-8")
-            return []
+            XCTFail("\(relativePath) is not UTF-8")
+            return ""
         }
-        guard let startRange = contents.range(of: "## Top-Level Commands"),
-              let endRange = contents[startRange.upperBound...].range(of: "### activate") else {
-            XCTFail("Missing Top-Level Commands table in ButtonHeistCLI/README.md")
-            return []
-        }
-
-        let section = contents[startRange.upperBound..<endRange.lowerBound]
-        return Set(section.split(separator: "\n").compactMap { line -> String? in
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            guard trimmed.hasPrefix("| `") else { return nil }
-            return trimmed.dropFirst(3).split(separator: "`", maxSplits: 1).first.map(String.init)
-        })
+        return contents
     }
 
     private func captureGroupMatches(in contents: String, pattern: String) -> [String] {
@@ -375,6 +380,18 @@ final class CLICommandSyncTests: XCTestCase {
                   let matchRange = Range(match.range(at: 1), in: contents) else {
                 return nil
             }
+            return String(contents[matchRange])
+        }
+    }
+
+    private func regexFullMatches(in contents: String, pattern: String) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            XCTFail("Invalid regex pattern: \(pattern)")
+            return []
+        }
+        let range = NSRange(contents.startIndex..<contents.endIndex, in: contents)
+        return regex.matches(in: contents, range: range).compactMap { match in
+            guard let matchRange = Range(match.range(at: 0), in: contents) else { return nil }
             return String(contents[matchRange])
         }
     }

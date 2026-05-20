@@ -207,7 +207,7 @@ TheBrains owns all scroll orchestration (see [13-THEBRAINS.md](13-THEBRAINS.md))
 | `scrollToOppositeEdge` | UIScrollView + direction | Jump to opposite content edge (no animation) |
 | `scrollBySwipe` | CGRect + direction | Synthetic swipe gesture at 75% travel, 0.25s duration |
 
-**Auto-scroll** is driven by `Navigation.ensureOnScreen(for:)` (in `TheBrains/Navigation+Scroll.swift`) before every element-targeted interaction. It checks `accessibilityFrame` against `UIScreen.main.bounds`, uses the current screen's scroll view reference (with UIKit ancestor fallback), calls TheSafecracker's `scrollToMakeVisible` for minimum offset adjustment, waits for settle via TheTripwire, and refreshes `currentScreen`. TheStash exposes resolution and live-geometry snapshots only — it does not perform scroll orchestration or persist geometry as authority. Best-effort: never blocks or fails the command.
+**Auto-scroll** is driven by `Navigation.ensureOnScreen(for:)` (in `TheBrains/Navigation+Scroll.swift`) before every element-targeted interaction. It checks current geometry against `UIScreen.main.bounds`, uses the current screen's scroll view reference (with UIKit ancestor fallback), calls TheSafecracker's `scrollToMakeVisible` for minimum offset adjustment, waits for settle via TheTripwire, and refreshes `currentScreen`. TheStash exposes semantic resolution and fresh live-target snapshots only — it does not perform scroll orchestration or persist geometry as authority. If a known semantic target cannot be made visible or refreshed into live geometry, the command fails with a diagnostic instead of tapping stale coordinates.
 
 **Input size guards:** `touchDrawPath` limits to 10,000 points; `touchDrawBezier` limits to 1,000 segments.
 
@@ -223,18 +223,18 @@ TheBrains owns all scroll orchestration (see [13-THEBRAINS.md](13-THEBRAINS.md))
 
 > Full targeting system documentation: [12-UNIFIED-TARGETING.md](12-UNIFIED-TARGETING.md)
 
-All action executors resolve elements via `TheStash.resolveTarget(_:)` which checks heistId → match and returns `ResolvedTarget` wrapping a `ScreenElement`. The live NSObject is accessed via `screenElement.object` (a weak reference).
+Element action executors resolve in two visible stages. `TheStash.resolveTarget(_:)` checks heistId → matcher and returns semantic `ResolvedTarget` data from the current `Screen`. Immediately before dispatch, `resolveLiveActionTarget(for:)` promotes the weak object reference and returns a fresh `LiveActionTarget` with frame and activation point. If that live object or geometry is unavailable, action execution refreshes once for cell reuse and then returns a structured failure.
 
 ```mermaid
 flowchart TD
     Target["ElementTarget - .heistId(String) / .matcher(ElementMatcher)"]
-    Target --> Resolve["stash.resolveTarget(target)"]
+    Target --> Resolve["stash.resolveTarget(target)<br/>semantic target"]
     Resolve --> Found{resolved?}
-    Found -->|yes| WeakRef["screenElement.object - → live NSObject via weak ref"]
+    Found -->|yes| Live["stash.resolveLiveActionTarget(resolved)<br/>fresh object + geometry"]
     Found -->|no| Fail["elementNotFound + diagnostic message"]
-    WeakRef --> Alive{still alive?}
-    Alive -->|yes| UseElement["Return element + live object"]
-    Alive -->|no| Dealloc["nil (deallocated)"]
+    Live --> Alive{live target?}
+    Alive -->|yes| UseElement["Run action with LiveActionTarget"]
+    Alive -->|no| Dealloc["structured live-target failure"]
 ```
 
 ## Items Flagged for Review

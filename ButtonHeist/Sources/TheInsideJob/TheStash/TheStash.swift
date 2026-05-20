@@ -160,34 +160,11 @@ final class TheStash {
 
     // MARK: - Element Actions
 
-    func hasInteractiveObject(_ screenElement: ScreenElement) -> Bool {
-        Interactivity.isInteractive(element: screenElement.element, object: dispatchObject(for: screenElement))
-    }
-
     /// Outcome of `activate(_:)`.
     enum ActivateOutcome {
         case success
         case objectDeallocated
         case refused
-    }
-
-    func activate(_ screenElement: ScreenElement) -> ActivateOutcome {
-        guard let object = dispatchObject(for: screenElement) else { return .objectDeallocated }
-        return object.accessibilityActivate() ? .success : .refused
-    }
-
-    @discardableResult
-    func increment(_ screenElement: ScreenElement) -> Bool {
-        guard let object = dispatchObject(for: screenElement) else { return false }
-        object.accessibilityIncrement()
-        return true
-    }
-
-    @discardableResult
-    func decrement(_ screenElement: ScreenElement) -> Bool {
-        guard let object = dispatchObject(for: screenElement) else { return false }
-        object.accessibilityDecrement()
-        return true
     }
 
     enum CustomActionOutcome {
@@ -424,11 +401,6 @@ final class TheStash {
         return true
     }
 
-    func performCustomAction(named name: String, on screenElement: ScreenElement) -> CustomActionOutcome {
-        guard let object = dispatchObject(for: screenElement) else { return .deallocated }
-        return performCustomAction(named: name, on: object)
-    }
-
     func performCustomAction(named name: String, on liveTarget: LiveActionTarget) -> CustomActionOutcome {
         performCustomAction(named: name, on: liveTarget.object)
     }
@@ -473,9 +445,9 @@ final class TheStash {
     func performRotor(
         _ target: RotorTarget,
         direction: RotorDirection,
-        on screenElement: ScreenElement
+        on liveTarget: LiveActionTarget
     ) -> RotorOutcome {
-        guard let object = dispatchObject(for: screenElement) else { return .deallocated }
+        let object = liveTarget.object
         let rotors = object.accessibilityCustomRotors ?? []
         guard !rotors.isEmpty else { return .noRotors }
 

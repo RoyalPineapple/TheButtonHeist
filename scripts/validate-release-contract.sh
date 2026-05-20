@@ -15,46 +15,72 @@ fail() {
     exit 1
 }
 
+SEMVER_REGEX='^[0-9]+\.[0-9]+\.[0-9]+$'
+SEMVER_GREP='[0-9]+\.[0-9]+\.[0-9]+'
+
+single_value() {
+    local label="$1"
+    local value="$2"
+    local count
+
+    count=$(printf '%s\n' "$value" | sed '/^$/d' | wc -l | tr -d '[:space:]')
+    [[ "$count" == "1" ]] || fail "$label must contain exactly one release version, found $count"
+    printf '%s' "$value"
+}
+
 read_version_file() {
-    tr -d '[:space:]' < "$BUTTONHEIST_RELEASE_VERSION_FILE"
+    sed -E 's/[[:space:]]//g' "$BUTTONHEIST_RELEASE_VERSION_FILE" | sed '/^$/d'
 }
 
 extract_code_version() {
-    grep -o 'buttonHeistVersion = "[^"]*"' "$BUTTONHEIST_CODE_VERSION_FILE" | cut -d'"' -f2
+    grep -E '^[[:space:]]*public let buttonHeistVersion = "[^"]+"' "$BUTTONHEIST_CODE_VERSION_FILE" \
+        | sed -E 's/.*"([^"]+)".*/\1/'
 }
 
 extract_formula_version() {
-    grep -o 'version "[^"]*"' "$BUTTONHEIST_FORMULA_TEMPLATE" | cut -d'"' -f2
+    grep -E '^[[:space:]]*version "[^"]+"' "$BUTTONHEIST_FORMULA_TEMPLATE" \
+        | sed -E 's/.*"([^"]+)".*/\1/'
 }
 
-extract_api_docs_version() {
-    awk '
-        /^## CLI Reference$/ { in_cli = 1; next }
-        in_cli && /^\*\*Version\*\*: / {
-            sub(/^\*\*Version\*\*: /, "")
-            print
-            exit
-        }
-    ' "$BUTTONHEIST_API_DOCS_FILE"
-}
-
-extract_demo_version() {
-    grep -o 'LabeledContent("Version", value: "[^"]*")' "$BUTTONHEIST_DEMO_VERSION_FILE" | cut -d'"' -f4
-}
-
-VERSION_FILE=$(read_version_file)
-CODE_VERSION=$(extract_code_version)
-FORMULA_VERSION=$(extract_formula_version)
-API_DOCS_VERSION=$(extract_api_docs_version)
-DEMO_VERSION=$(extract_demo_version)
+VERSION_FILE=$(single_value "$BUTTONHEIST_RELEASE_VERSION_FILE" "$(read_version_file || true)")
+CODE_VERSION=$(single_value "$BUTTONHEIST_CODE_VERSION_FILE buttonHeistVersion" "$(extract_code_version || true)")
+FORMULA_VERSION=$(single_value "$BUTTONHEIST_FORMULA_TEMPLATE version" "$(extract_formula_version || true)")
 
 [[ -n "$VERSION_FILE" ]] || fail "$BUTTONHEIST_RELEASE_VERSION_FILE is empty"
+[[ "$VERSION_FILE" =~ $SEMVER_REGEX ]] || fail "$BUTTONHEIST_RELEASE_VERSION_FILE ($VERSION_FILE) is not MAJOR.MINOR.PATCH"
+[[ "$CODE_VERSION" =~ $SEMVER_REGEX ]] || fail "$BUTTONHEIST_CODE_VERSION_FILE ($CODE_VERSION) is not MAJOR.MINOR.PATCH"
+[[ "$FORMULA_VERSION" =~ $SEMVER_REGEX ]] || fail "$BUTTONHEIST_FORMULA_TEMPLATE ($FORMULA_VERSION) is not MAJOR.MINOR.PATCH"
 [[ "$VERSION_FILE" == "$CODE_VERSION" ]] || fail "$BUTTONHEIST_RELEASE_VERSION_FILE ($VERSION_FILE) != $BUTTONHEIST_CODE_VERSION_FILE ($CODE_VERSION)"
 [[ "$VERSION_FILE" == "$FORMULA_VERSION" ]] || fail "$BUTTONHEIST_RELEASE_VERSION_FILE ($VERSION_FILE) != $BUTTONHEIST_FORMULA_TEMPLATE ($FORMULA_VERSION)"
-[[ -n "$API_DOCS_VERSION" ]] || fail "$BUTTONHEIST_API_DOCS_FILE is missing a CLI Reference version"
-[[ "$VERSION_FILE" == "$API_DOCS_VERSION" ]] || fail "$BUTTONHEIST_RELEASE_VERSION_FILE ($VERSION_FILE) != $BUTTONHEIST_API_DOCS_FILE ($API_DOCS_VERSION)"
-[[ -n "$DEMO_VERSION" ]] || fail "$BUTTONHEIST_DEMO_VERSION_FILE is missing its Version labeled content"
-[[ "$VERSION_FILE" == "$DEMO_VERSION" ]] || fail "$BUTTONHEIST_RELEASE_VERSION_FILE ($VERSION_FILE) != $BUTTONHEIST_DEMO_VERSION_FILE ($DEMO_VERSION)"
+
+if grep -Fq "$VERSION_FILE" "$BUTTONHEIST_API_DOCS_FILE"; then
+    fail "$BUTTONHEIST_API_DOCS_FILE must not duplicate release version $VERSION_FILE"
+fi
+if grep -Eq "$SEMVER_GREP" "$BUTTONHEIST_API_DOCS_FILE"; then
+    fail "$BUTTONHEIST_API_DOCS_FILE must use placeholders instead of concrete release versions"
+fi
+
+if awk '
+    /^## CLI Reference$/ { in_cli = 1; next }
+    in_cli && /^## / { in_cli = 0 }
+    in_cli && /^\*\*Version\*\*:[[:space:]]*[0-9]+\.[0-9]+\.[0-9]+[[:space:]]*$/ { found = 1 }
+    END { exit found ? 0 : 1 }
+' "$BUTTONHEIST_API_DOCS_FILE"; then
+    fail "$BUTTONHEIST_API_DOCS_FILE must not duplicate the CLI release version"
+fi
+
+if grep -Fq "$VERSION_FILE" "$BUTTONHEIST_DEMO_VERSION_FILE"; then
+    fail "$BUTTONHEIST_DEMO_VERSION_FILE must not duplicate release version $VERSION_FILE"
+fi
+
+if grep -Eq "\"$SEMVER_GREP\"" "$BUTTONHEIST_DEMO_VERSION_FILE"; then
+    fail "$BUTTONHEIST_DEMO_VERSION_FILE must use buttonHeistVersion instead of a hardcoded release version"
+fi
+
+if grep -Eq 'LabeledContent\([[:space:]]*"Version"' "$BUTTONHEIST_DEMO_VERSION_FILE"; then
+    grep -Eq 'LabeledContent\([[:space:]]*"Version"[[:space:]]*,[[:space:]]*value:[[:space:]]*(TheScore\.)?buttonHeistVersion[[:space:]]*\)' "$BUTTONHEIST_DEMO_VERSION_FILE" \
+        || fail "$BUTTONHEIST_DEMO_VERSION_FILE must source Version from TheScore.buttonHeistVersion or remove the Version row"
+fi
 
 EXPECTED_HOMEPAGE="homepage \"https://github.com/$BUTTONHEIST_GITHUB_REPO\""
 grep -Fq "$EXPECTED_HOMEPAGE" "$BUTTONHEIST_FORMULA_TEMPLATE" \

@@ -22,9 +22,9 @@ public struct MinimumMatcher: Sendable, Equatable {
     /// uniqueness universe.
     ///
     /// A matcher is valid only relative to the full accessibility state that
-    /// proves its uniqueness. If the element is no longer in the capture,
-    /// return a best-effort matcher for that stale element rather than
-    /// terminating the host app.
+    /// proves its uniqueness. If the supplied element is no longer present in
+    /// the capture, append it to the uniqueness universe so recording still
+    /// emits a deterministic target instead of terminating the host app.
     public static func build(
         element: HeistElement,
         in capture: AccessibilityTrace.Capture

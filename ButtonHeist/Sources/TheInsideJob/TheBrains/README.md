@@ -38,8 +38,8 @@ TheBrains keeps the post-action delta cycle, dispatch, wait handlers, response s
    **TheGetaway-facing methods** — `observeInterface(_:)`, `currentInterface()`, `computeBackgroundAccessibilityTrace()`, `captureScreen()`, `captureScreenForRecording()`, `screenName`, `screenId`, `stakeout`. These exist so TheGetaway and TheInsideJob never reach through to TheStash. Observation policy lives here: `get_interface` requests can trigger exploration and selection, while `get_screen` performs a fresh visible parse and returns geometry with the screenshot.
 
 3. **`Actions.swift`** — Two generic pipelines and all `executeXxx` methods:
-   - `performElementAction(target:method:action:)` — `navigation.ensureOnScreen` → `stash.resolveTarget` → checkInteractivity → action closure. Used by activate, increment, decrement, customAction.
-   - `performPointAction(elementTarget:pointX:pointY:action:)` — `navigation.ensureOnScreen` when element-targeted → current live-geometry snapshot or raw coordinate passthrough → action closure → showFingerprint. Used by tap, longPress, drag, pinch, rotate, twoFingerTap.
+   - `performElementAction(target:method:action:)` — `navigation.ensureOnScreen` → semantic `stash.resolveTarget` → fresh `stash.resolveLiveActionTarget` → check interactivity → action closure with `LiveActionTarget`. Used by activate, increment, decrement, customAction, and rotor.
+   - `performPointAction(elementTarget:pointX:pointY:action:)` — `navigation.ensureOnScreen` when element-targeted → fresh live activation point or raw coordinate passthrough → action closure → showFingerprint. Used by tap, longPress, drag, pinch, rotate, twoFingerTap.
    - `executeSwipe` has two paths: unit-point (element-relative 0-1 coordinates resolved against frame) and absolute-point.
    - `executeTypeText` handles optional `navigation.ensureOnScreen` + tap-to-focus → poll for active text input → type a non-empty string → refresh → re-resolve for value readback.
 

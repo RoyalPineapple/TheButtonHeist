@@ -5,6 +5,22 @@ import TheScore
 
 private let logger = Logger(subsystem: "com.buttonheist.thefence", category: "bookkeeper")
 
+struct SessionConnectionSnapshot {
+    let connected: Bool
+    let phase: SessionConnectionPhase
+    let device: SessionDevicePayload?
+    let lastFailure: SessionFailurePayload?
+}
+
+struct RecordingSnapshot {
+    let isRecording: Bool
+    let isWaitingForCompletion: Bool
+}
+
+struct CommandExecutionSnapshot {
+    let lastAction: SessionLastActionPayload?
+}
+
 /// Stable client-side phase for connection and request failures.
 ///
 /// This is not part of the wire protocol. It classifies existing local errors
@@ -470,8 +486,143 @@ public final class TheFence {
     /// session.
     public var onAuthApproved: (@ButtonHeistActor (String?) -> Void)?
 
+    /// Owns TheHandoff-backed connection projection for session-state reads.
+    struct SessionConnectionState {
+        let handoff: TheHandoff
+
+        @ButtonHeistActor
+        var snapshot: SessionConnectionSnapshot {
+            SessionConnectionSnapshot(
+                connected: handoff.isConnected,
+                phase: sessionConnectionPhase,
+                device: sessionDevicePayload,
+                lastFailure: sessionFailurePayload
+            )
+        }
+
+        @ButtonHeistActor
+        private var sessionConnectionPhase: SessionConnectionPhase {
+            switch handoff.connectionPhase {
+            case .disconnected:
+                return .disconnected
+            case .connecting:
+                return .connecting
+            case .connected:
+                return .connected
+            case .failed:
+                return .failed
+            }
+        }
+
+        @ButtonHeistActor
+        private var sessionDevicePayload: SessionDevicePayload? {
+            handoff.connectedDevice.map { device in
+                SessionDevicePayload(
+                    deviceName: handoff.displayName(for: device),
+                    appName: device.appName,
+                    connectionType: device.connectionType,
+                    shortId: device.shortId
+                )
+            }
+        }
+
+        @ButtonHeistActor
+        private var sessionFailurePayload: SessionFailurePayload? {
+            handoff.connectionDiagnosticFailure.map { failure in
+                SessionFailurePayload(
+                    errorCode: failure.failureCode,
+                    phase: failure.phase,
+                    retryable: failure.retryable,
+                    message: failure.errorDescription,
+                    hint: failure.hint
+                )
+            }
+        }
+    }
+
+    /// Owns retained accessibility captures plus the queued background traces.
+    struct BackgroundAccessibilityState {
+        private static let defaultPendingTraceLimit = 20
+
+        private var history = AccessibilityTrace.History(retention: .dropAfterDelivery)
+        private let pendingTraceLimit: Int
+
+        init(pendingTraceLimit: Int = Self.defaultPendingTraceLimit) {
+            self.pendingTraceLimit = pendingTraceLimit
+        }
+
+        var pendingTraceCount: Int {
+            history.pendingTraceCount
+        }
+
+        var latestRef: AccessibilityTrace.CaptureRef? {
+            history.latestRef
+        }
+
+        mutating func reset() {
+            history.reset()
+            history.retention = .dropAfterDelivery
+        }
+
+        mutating func enqueue(_ trace: AccessibilityTrace) {
+            history.enqueuePendingTrace(trace, limit: pendingTraceLimit)
+        }
+
+        mutating func drainTrace() -> AccessibilityTrace? {
+            history.drainPendingTrace()
+        }
+
+        mutating func drainTraces() -> [AccessibilityTrace] {
+            history.drainPendingTraces()
+        }
+
+        func pendingTraces(startingAt startIndex: Int = 0) -> [AccessibilityTrace.PendingTrace] {
+            history.pendingTraces(startingAt: startIndex)
+        }
+
+        mutating func removePendingTrace(at index: Int) -> AccessibilityTrace.PendingTrace? {
+            history.removePendingTrace(at: index)
+        }
+
+        @discardableResult
+        mutating func append(interface: Interface) -> AccessibilityTrace.CaptureRef {
+            history.append(interface: interface)
+        }
+
+        @discardableResult
+        mutating func ingest(_ trace: AccessibilityTrace) -> AccessibilityTrace.Cursor? {
+            history.ingest(trace)
+        }
+
+        func capture(ref: AccessibilityTrace.CaptureRef) -> AccessibilityTrace.Capture? {
+            history.capture(ref: ref)
+        }
+
+        func elementLookup(captureRef: AccessibilityTrace.CaptureRef?) -> [HeistId: HeistElement] {
+            history.elementLookup(captureRef: captureRef)
+        }
+
+        mutating func markDelivered(through ref: AccessibilityTrace.CaptureRef?) {
+            history.markDelivered(through: ref)
+        }
+
+        mutating func beginRecordingRetention() {
+            history.retention = .persistForSession
+        }
+
+        mutating func endRecordingRetention() {
+            history.retention = .dropAfterDelivery
+        }
+    }
+
     var config: Configuration
-    let handoff = TheHandoff()
+    private let sessionConnectionState = SessionConnectionState(handoff: TheHandoff())
+    var handoff: TheHandoff {
+        sessionConnectionState.handoff
+    }
+    var sessionConnectionSnapshot: SessionConnectionSnapshot {
+        sessionConnectionState.snapshot
+    }
     let bookKeeper: TheBookKeeper
     var configuredAuthTokenForStatus: String?
     /// Heist playback re-entrancy state. `.playing` carries the wall-clock
@@ -486,7 +637,7 @@ public final class TheFence {
     /// Fence-owned accessibility capture history. Captures are the retained
     /// source of truth; pending trace and lookup views are derived locally from
     /// retained captures when validation or recording needs them.
-    private var accessibilityHistory = AccessibilityTrace.History(retention: .dropAfterDelivery)
+    private var backgroundAccessibilityState = BackgroundAccessibilityState()
 
     // MARK: - Pending Request Tracking
 
@@ -512,6 +663,13 @@ public final class TheFence {
 
     struct RecordingState {
         private(set) var lifecycle: RecordingLifecycle = .idle
+
+        var snapshot: RecordingSnapshot {
+            RecordingSnapshot(
+                isRecording: isRecording,
+                isWaitingForCompletion: isWaitingForCompletion
+            )
+        }
 
         var isRecording: Bool {
             switch lifecycle {
@@ -627,12 +785,15 @@ public final class TheFence {
         }
     }
     private var recordingState = RecordingState()
+    var recordingSnapshot: RecordingSnapshot {
+        recordingState.snapshot
+    }
     var isRecording: Bool {
-        recordingState.isRecording
+        recordingSnapshot.isRecording
     }
     /// Test-visible state for deterministic recording completion injection.
     var isWaitingForRecordingCompletion: Bool {
-        recordingState.isWaitingForCompletion
+        recordingSnapshot.isWaitingForCompletion
     }
 
     public init(configuration: Configuration) {
@@ -731,8 +892,7 @@ public final class TheFence {
     }
 
     func clearClientSessionState(error: Error) {
-        accessibilityHistory.reset()
-        accessibilityHistory.retention = .dropAfterDelivery
+        backgroundAccessibilityState.reset()
         commandExecutionState.reset()
         recordingState = RecordingState()
         cancelAllPendingRequests(error: error)
@@ -755,27 +915,18 @@ public final class TheFence {
         }
     }
 
-    /// Bounded FIFO of background accessibility trace boundaries received from the server.
-    ///
-    /// `AccessibilityTrace.History` owns the refs. `TheFence` asks for pending
-    /// trace projections when draining or checking expectations.
-    private static let maxBackgroundAccessibilityCursors = 20
-
     private func enqueueBackgroundAccessibilityTrace(_ trace: AccessibilityTrace) {
-        accessibilityHistory.enqueuePendingTrace(
-            trace,
-            limit: Self.maxBackgroundAccessibilityCursors
-        )
+        backgroundAccessibilityState.enqueue(trace)
     }
 
     /// Return and clear the oldest queued background accessibility trace, if any.
     public func drainBackgroundAccessibilityTrace() -> AccessibilityTrace? {
-        accessibilityHistory.drainPendingTrace()
+        backgroundAccessibilityState.drainTrace()
     }
 
     /// Return and clear all queued background accessibility traces in arrival order.
     public func drainBackgroundAccessibilityTraces() -> [AccessibilityTrace] {
-        accessibilityHistory.drainPendingTraces()
+        backgroundAccessibilityState.drainTraces()
     }
 
     /// Connect to a device and optionally enable auto-reconnect.
@@ -845,8 +996,8 @@ public final class TheFence {
             return backgroundResponse.response
         }
 
-        let preDispatchBackgroundCount = accessibilityHistory.pendingTraceCount
-        let preDispatchCaptureRef = accessibilityHistory.latestRef
+        let preDispatchBackgroundCount = backgroundAccessibilityState.pendingTraceCount
+        let preDispatchCaptureRef = backgroundAccessibilityState.latestRef
         let dispatched = try await dispatchCommand(parsed)
         commandExecutionState.noteDispatchedResponse(dispatched.response, latencyMs: dispatched.durationMs)
         logResponse(requestId: parsed.requestId, response: dispatched.response, durationMs: dispatched.durationMs)
@@ -985,7 +1136,7 @@ public final class TheFence {
         preDispatchCaptureRef: AccessibilityTrace.CaptureRef?
     ) -> PostDispatchOutcome {
         if let fullInterface = fullInterfaceCapture(from: response, parsed: parsed) {
-            let captureRef = accessibilityHistory.append(interface: fullInterface)
+            let captureRef = backgroundAccessibilityState.append(interface: fullInterface)
             return PostDispatchOutcome(
                 preActionCaptureRef: nil,
                 recordingLookupCaptureRef: nil,
@@ -1043,7 +1194,7 @@ public final class TheFence {
         guard let expectation else { return nil }
 
         var matched: (pendingTrace: AccessibilityTrace.PendingTrace, result: ActionResult, validation: ExpectationResult)?
-        for pendingTrace in accessibilityHistory.pendingTraces(startingAt: startIndex) {
+        for pendingTrace in backgroundAccessibilityState.pendingTraces(startingAt: startIndex) {
             let trace = pendingTrace.trace
             guard trace.backgroundDelta != nil else { continue }
             let syntheticResult = ActionResult(
@@ -1054,7 +1205,7 @@ public final class TheFence {
             )
             let validation = expectation.validate(
                 against: syntheticResult,
-                preActionElements: accessibilityHistory.elementLookup(captureRef: pendingTrace.firstRef)
+                preActionElements: backgroundAccessibilityState.elementLookup(captureRef: pendingTrace.firstRef)
             )
             if validation.met {
                 matched = (pendingTrace, syntheticResult, validation)
@@ -1063,7 +1214,7 @@ public final class TheFence {
         }
 
         guard let matched else { return nil }
-        guard let pendingTrace = accessibilityHistory.removePendingTrace(at: matched.pendingTrace.index) else {
+        guard let pendingTrace = backgroundAccessibilityState.removePendingTrace(at: matched.pendingTrace.index) else {
             return nil
         }
         let response = FenceResponse.action(result: matched.result, expectation: matched.validation)
@@ -1122,7 +1273,7 @@ public final class TheFence {
         guard case .idle = playbackPhase else { return }
         guard let finalReceipt = validatedResponse.heistRecordingReceipt, finalReceipt.shouldRecord else { return }
         let targetCapture = dispatchedResponse.actionResult?.accessibilityTrace?.captures.first
-            ?? lookupCaptureRef.flatMap { accessibilityHistory.capture(ref: $0) }
+            ?? lookupCaptureRef.flatMap { backgroundAccessibilityState.capture(ref: $0) }
             ?? finalReceipt.actionResult.accessibilityTrace?.captures.first
         bookKeeper.recordHeistEvidence(
             request,
@@ -1164,7 +1315,7 @@ public final class TheFence {
                         deliveredCaptureRef: nil
                     )
                 }
-                let preActionElements = accessibilityHistory.elementLookup(captureRef: preActionCaptureRef)
+                let preActionElements = backgroundAccessibilityState.elementLookup(captureRef: preActionCaptureRef)
                 let validation = expectation.validate(
                     against: actionResult, preActionElements: preActionElements
                 )
@@ -1249,19 +1400,19 @@ public final class TheFence {
 
     private func ingestActionTrace(_ actionResult: ActionResult) -> AccessibilityTrace.Cursor? {
         guard let trace = actionResult.accessibilityTrace else { return nil }
-        return accessibilityHistory.ingest(trace)
+        return backgroundAccessibilityState.ingest(trace)
     }
 
     private func finishAccessibilityDelivery(_ captureRef: AccessibilityTrace.CaptureRef?) {
-        accessibilityHistory.markDelivered(through: captureRef)
+        backgroundAccessibilityState.markDelivered(through: captureRef)
     }
 
     func beginRecordingAccessibilityHistoryRetention() {
-        accessibilityHistory.retention = .persistForSession
+        backgroundAccessibilityState.beginRecordingRetention()
     }
 
     func endRecordingAccessibilityHistoryRetention() {
-        accessibilityHistory.retention = .dropAfterDelivery
+        backgroundAccessibilityState.endRecordingRetention()
     }
 
     private func connect() async throws {
@@ -1541,6 +1692,10 @@ public final class TheFence {
         private(set) var lastActionHistory: LastActionHistory = .unrun
         private(set) var lastLatencyMs: Int = 0
 
+        var snapshot: CommandExecutionSnapshot {
+            CommandExecutionSnapshot(lastAction: lastActionPayload)
+        }
+
         var lastActionResult: ActionResult? {
             if case .completed(let result) = lastActionHistory { return result }
             return nil
@@ -1573,6 +1728,9 @@ public final class TheFence {
     }
 
     private var commandExecutionState = CommandExecutionState()
+    var commandExecutionSnapshot: CommandExecutionSnapshot {
+        commandExecutionState.snapshot
+    }
 
     var lastActionHistory: LastActionHistory {
         commandExecutionState.lastActionHistory
@@ -1584,7 +1742,7 @@ public final class TheFence {
     }
 
     var lastActionPayload: SessionLastActionPayload? {
-        commandExecutionState.lastActionPayload
+        commandExecutionSnapshot.lastAction
     }
 
     /// Round-trip time in milliseconds for the last action command that
@@ -1702,8 +1860,8 @@ public final class TheFence {
     /// Sends `start_recording`, waits for the server acknowledgement, then
     /// awaits the resulting `RecordingPayload`. On any error path after the
     /// start request is sent, sends `stop_recording` so the iOS-side recording
-    /// is not stranded. Cleanup is best-effort: if it fails, the original error
-    /// still propagates.
+    /// is not stranded. Stop cleanup is secondary: if it fails, the original
+    /// error still propagates.
     public func recordToCompletion(
         config: RecordingConfig,
         timeout: TimeInterval
