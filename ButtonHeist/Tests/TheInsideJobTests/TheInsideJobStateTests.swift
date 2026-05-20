@@ -274,6 +274,22 @@ final class TheInsideJobStateTests: XCTestCase {
         XCTAssertEqual(observedID, currentID)
     }
 
+    func testStaleFailedResumeTracksStartedTransportStop() {
+        let job = TheInsideJob()
+        job.serverPhase = .suspended
+        let staleID = UUID()
+
+        job.finishFailedResumeAttempt(staleID, startedTransport: ServerTransport())
+
+        XCTAssertFalse(
+            job.pendingTransportStopTaskIsEmpty,
+            "Stale resume cleanup must remain pending so the next start/resume waits for listener shutdown."
+        )
+        guard case .suspended = job.serverPhase else {
+            return XCTFail("Stale resume must not mutate the current server phase, got \(job.serverPhase)")
+        }
+    }
+
     func testCurrentFailedResumeAttemptSuspends() {
         let job = TheInsideJob()
         let resumeID = UUID()

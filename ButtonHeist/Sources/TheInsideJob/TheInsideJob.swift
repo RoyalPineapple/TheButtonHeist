@@ -121,35 +121,30 @@ public final class TheInsideJob {
     /// Tracks @objc lifecycle bridge Tasks that must finish before start/resume reads `serverPhase`.
     @MainActor
     final class LifecycleBoundaryTasks {
-        private var tasks: Set<Task<Void, Never>> = []
+        private var tasks: [UInt64: Task<Void, Never>] = [:]
+        private var nextTaskId: UInt64 = 0
 
         var isEmpty: Bool { tasks.isEmpty }
 
         func spawn(_ body: @escaping @MainActor () async -> Void) {
-            let holder = TaskHolder()
-            let task = Task { @MainActor [weak self, holder] in
+            nextTaskId &+= 1
+            let id = nextTaskId
+            let task = Task { @MainActor [weak self] in
                 await body()
-                guard let task = holder.task else { return }
-                self?.tasks.remove(task)
+                self?.tasks.removeValue(forKey: id)
             }
-            holder.task = task
-            tasks.insert(task)
+            tasks[id] = task
         }
 
         func drain() async {
             while !tasks.isEmpty {
-                let snapshot = tasks
+                let snapshot = Array(tasks.values)
                 tasks.removeAll()
                 for task in snapshot {
                     await task.value
                 }
             }
         }
-    }
-
-    @MainActor
-    final class TaskHolder {
-        var task: Task<Void, Never>?
     }
 
     // MARK: - Properties
@@ -222,6 +217,7 @@ public final class TheInsideJob {
     /// Test hook: exposes whether lifecycle bridge Tasks have self-removed
     /// without exposing the underlying tracker.
     var pendingLifecycleTasksIsEmpty: Bool { lifecycleBoundaryTasks.isEmpty }
+    var pendingTransportStopTaskIsEmpty: Bool { pendingTransportStopTask == nil }
 
     private static let defaultPollingTimeout: TimeInterval = 2.0
 
@@ -798,8 +794,17 @@ public final class TheInsideJob {
 
     func finishFailedResumeAttempt(_ resumeID: UUID, startedTransport: ServerTransport?) {
         let stopTask = startedTransport?.stop()
+        if let stopTask {
+            if let existingStopTask = pendingTransportStopTask {
+                pendingTransportStopTask = Task {
+                    await existingStopTask.value
+                    await stopTask.value
+                }
+            } else {
+                pendingTransportStopTask = stopTask
+            }
+        }
         guard isCurrentResumeAttempt(resumeID) else { return }
-        pendingTransportStopTask = stopTask
         serverPhase = .suspended
     }
 

@@ -12,20 +12,48 @@ import Foundation
 /// test can observe the cancellation. The Task makes no progress on its own;
 /// cancellation is the only termination signal.
 ///
-/// Implementation note: the sleep duration is intentionally absurd
-/// (`.seconds(Int.max)`) to read as "never" rather than as a meaningful timeout.
-/// `try?` swallows the `CancellationError` raised when the test cancels.
 @MainActor
 func neverEndingTask(
     onCancel: (@Sendable @MainActor () -> Void)? = nil
 ) -> Task<Void, Never> {
-    Task { @MainActor in
-        // Intentional cancellable wait: this Task only terminates when the test
-        // cancels it. `.seconds(Int.max)` reads as "never" — no wall-clock semantics.
-        // swiftlint:disable:next agent_test_task_sleep
-        try? await Task.sleep(for: .seconds(Int.max))
-        if Task.isCancelled {
-            onCancel?()
+    let gate = TestCancellationGate()
+    return Task { @MainActor in
+        await withTaskCancellationHandler {
+            await gate.wait()
+            if Task.isCancelled {
+                onCancel?()
+            }
+        } onCancel: {
+            gate.cancel()
         }
+    }
+}
+
+private final class TestCancellationGate: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var isCancelled = false
+
+    func wait() async {
+        await withCheckedContinuation { continuation in
+            lock.lock()
+            if isCancelled {
+                lock.unlock()
+                continuation.resume()
+            } else {
+                self.continuation = continuation
+                lock.unlock()
+            }
+        }
+    }
+
+    func cancel() {
+        let continuationToResume: CheckedContinuation<Void, Never>?
+        lock.lock()
+        isCancelled = true
+        continuationToResume = continuation
+        continuation = nil
+        lock.unlock()
+        continuationToResume?.resume()
     }
 }
