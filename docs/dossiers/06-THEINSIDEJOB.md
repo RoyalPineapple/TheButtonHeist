@@ -79,7 +79,7 @@ graph TD
     TB["<b>TheBrains</b><br/><i>actions — execution, scroll,<br/>explore, delta, wait handlers</i>"]
     TS["<b>TheSafecracker</b><br/><i>gestures</i>"]
     TF["<b>TheFingerprints</b><br/><i>overlay</i>"]
-    TSt["<b>TheStash</b><br/><i>registry</i>"]
+    TSt["<b>TheStash</b><br/><i>current Screen</i>"]
     TBu["<b>TheBurglar</b><br/><i>parsing, private</i>"]
 
     TIJ --> TG
@@ -102,37 +102,28 @@ graph TD
 
 Calling `shared` before `configure()` creates a default instance that ignores any subsequent `configure()` call.
 
-## Message Dispatch Flow
+## TheGetaway Message Dispatch Flow
 
 ```mermaid
 flowchart TD
     Receive["handleClientMessage"]
     Receive --> Decode["Decode RequestEnvelope"]
-    Decode --> Level1["Level 1: Protocol + Observation"]
+    Decode --> Protocol["Protocol/status/interface<br/>(clientHello/auth already handled by TheMuscle)"]
+    Decode --> Observation["Observation<br/>requestScreen / waitForIdle / waitForChange"]
+    Decode --> Recording["Recording<br/>startRecording / stopRecording"]
+    Decode --> Actions["Default action path<br/>brains.executeCommand(message)"]
 
-    Level1 --> L1Cases["ping / status / requestInterface / requestScreen / waitForIdle"]
-    Level1 --> Level2["Level 2: Recording + Interactions"]
-
-    Level2 --> RecCases["startRecording / stopRecording"]
-    Level2 --> DispatchInt["dispatchInteraction → 3 sub-dispatchers"]
-
-    DispatchInt --> AccDisp["dispatchAccessibilityAction"]
-    DispatchInt --> TouchDisp["dispatchTouchGesture"]
-    DispatchInt --> Inline["Inline: typeText, scroll, scrollToVisible,<br/>scrollToEdge, waitFor, explore"]
-    DispatchInt --> Search["performElementSearch() (dedicated path)"]
-
-    AccDisp --> Perform["performInteraction()"]
-    TouchDisp --> Perform
-    Inline --> Perform
+    Actions --> BrainDispatch["TheBrains+Dispatch<br/>accessibility / touch / text / scroll / wait / explore"]
+    BrainDispatch --> Perform["performInteraction() or dedicated search/explore path"]
 ```
 
-### `dispatchAccessibilityAction`
+### TheBrains accessibility actions
 `activate`, `increment`, `decrement`, `performCustomAction`, `editAction`, `setPasteboard`, `getPasteboard`, `resignFirstResponder`
 
-### `dispatchTouchGesture`
+### TheBrains touch gestures
 `touchTap`, `touchLongPress`, `touchSwipe`, `touchDrag`, `touchPinch`, `touchRotate`, `touchTwoFingerTap`, `touchDrawPath` (≤10,000 points), `touchDrawBezier` (≤1,000 segments)
 
-### Inline in `dispatchInteraction`
+### TheBrains inline action cases
 `typeText`, `scroll`, `scrollToVisible` (one-shot), `scrollToEdge`, `waitFor`, `explore`
 
 ### `performElementSearch` (dedicated path)
@@ -144,21 +135,20 @@ Every interaction except `elementSearch` flows through this method:
 
 ```mermaid
 flowchart TD
-    Start["performInteraction(message, interaction)"]
+    Start["TheGetaway.handleClientMessage"]
     Start --> S1["1. stakeout?.noteActivity()"]
-    S1 --> S2["2. brains.refresh()"]
+    S1 --> S2["2. brains.performInteraction() refreshes"]
     S2 --> S3["3. brains.captureBeforeState() — before"]
-    S3 --> S3b["4. tripwire.topmostViewController() — beforeVC"]
-    S3b --> S4["5. await interaction() — TheSafecracker.*"]
+    S3 --> S4["4. await interaction() — Navigation / Actions"]
     S4 --> S5{"success?"}
-    S5 -->|yes| S5a["6. await brains.actionResultWithDelta()"]
-    S5 -->|no| S5b["6. Build failure ActionResult"]
+    S5 -->|yes| S5a["5. await brains.actionResultWithDelta()"]
+    S5 -->|no| S5b["5. Build failure ActionResult"]
     S5a --> S6{"recording active?"}
     S5b --> S6
-    S6 -->|yes| S6a["7. Record InteractionEvent to Stakeout"]
-    S6 -->|no| S7["8. send(.actionResult)"]
+    S6 -->|yes| S6a["6. TheGetaway records InteractionEvent"]
+    S6 -->|no| S7["7. send(.actionResult)"]
     S6a --> S7
-    S7 --> S8["9. Return action result"]
+    S7 --> S8["8. Return action result"]
 ```
 
 `performElementSearch` is structurally identical but calls `brains.executeElementSearch` directly (handles repeated scroll+settle cycles internally) and preserves `scrollSearchResult` in the response. `scrollToVisible` is now a one-shot jump that flows through the standard `performInteraction` pipeline.
@@ -167,7 +157,7 @@ flowchart TD
 
 `status` is handled specially:
 - Allowed **pre-auth**: any client that has completed `clientHello` → `serverHello` (is in `helloValidatedClients`) can send `status` before providing a token
-- Allowed **post-auth**: routed through the Level 1 dispatch for authenticated clients
+- Allowed **post-auth**: routed through TheGetaway's status arm for authenticated clients
 - Builds `StatusPayload` via `makeStatusPayload()` from `Bundle.main`, `UIDevice.current`, and `TheMuscle` state
 
 ## Settled Change Tracking
@@ -191,7 +181,7 @@ There is **no debounce timer**. The mechanism is entirely pulse-driven:
 - `notifyChange()`, accessibility notifications, and Tripwire triggers set `tripwireParsePending = true`
 - the next `.settled` transition fires `handlePulseTransition`
 - `noteSettledChangeIfNeeded()` visible-parses, updates local state, and records only semantic changes
-- viewport-only scroll movement updates live geometry without producing trace history
+- viewport-only scroll movement updates the current live-geometry snapshot without producing trace history
 
 ### 2. Settle-driven polling (supplementary)
 

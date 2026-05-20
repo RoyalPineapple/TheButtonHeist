@@ -55,9 +55,9 @@ The element was found but has the `notEnabled` trait. The full message is `"Elem
 
 ### Invalid token
 
-`"Invalid token. Retry without a token to request a fresh session."` — the token doesn't match the app's configured token.
+`"Invalid token. Retry with the configured token."` — the token doesn't match the app's configured token.
 
-**Fix:** If you launched the app with `SIMCTL_CHILD_INSIDEJOB_TOKEN`, use that exact value. If you're hitting a simulator you didn't launch, find yours instead.
+**Fix:** If you launched the app with `SIMCTL_CHILD_INSIDEJOB_TOKEN`, use that exact value. If the error says approval is pending, stop retrying and tap Allow on the device. If you're hitting a simulator you didn't launch, find yours instead.
 
 ### Too many failed attempts
 
@@ -208,7 +208,7 @@ Sessions expire after 60 seconds of inactivity by default. If you go too long be
 
 ## "Protocol mismatch"
 
-`"Button Heist version mismatch: app/Inside Job is 0.3.9, client/CLI/MCP is 0.3.8"` — the CLI/MCP version doesn't match the app version. This happens when you rebuild one side but not the other.
+`"Button Heist version mismatch: app/Inside Job is <app-version>, client/CLI/MCP is <client-version>"` — the CLI/MCP version doesn't match the app version. This happens when you rebuild one side but not the other.
 
 **Fix:** Rebuild both sides from the same commit. Rebuild the CLI (`cd ButtonHeistCLI && swift build -c release`), rebuild the app (`xcodebuild ... build`), and reinstall. The two version strings in the error tell you which side is behind.
 

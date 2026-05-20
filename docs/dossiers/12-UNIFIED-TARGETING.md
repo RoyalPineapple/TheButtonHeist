@@ -9,7 +9,7 @@ Unified targeting turns a caller's intent ("tap the Submit button") into a concr
 
 There are exactly **two targeting strategies**, encoded as cases of the `ElementTarget` enum:
 
-1. **`.heistId(String)`** — "you gave me this token, I hand it back." Assigned by `get_interface`, valid as a current-screen handle while the element is in `currentScreen`. O(1) lookup into `currentScreen.elements`.
+1. **`.heistId(String)`** — "you gave me this token, I hand it back." Assigned by `get_interface`, valid only as a current-screen handle while the element is in `currentScreen`. O(1) lookup into `currentScreen.elements`.
 2. **`.matcher(ElementMatcher)`** — "I'm describing the element by its accessibility properties." A predicate-based search on label, identifier, value, and traits with **case-insensitive equality** (typography-folded — smart quotes, dashes, ellipsis fold to ASCII) and exact trait bitmask comparison. Matching is **exact or miss** — there is no substring fallback. On a miss the resolver returns structured suggestions through the diagnostic path. Callers can embed expectations (e.g. `value="6"`) so stale state fails early instead of acting on the wrong element.
 
 A single method, `TheStash.resolveTarget(_:)`, implements this and returns a `TargetResolution` enum (`.resolved(ResolvedTarget)`, `.notFound(diagnostics:)`, `.ambiguous(candidates:diagnostics:)`). `ResolvedTarget` has a single field: `screenElement: ScreenElement`. Every action executor calls this method — there are no alternative resolution paths.
@@ -234,7 +234,7 @@ These commands do not resolve exactly one live element through `resolveTarget()`
 2. **Single resolution path** — `resolveTarget()` is the only way to go from `ElementTarget` to a live element. No alternative code paths that could fall out of sync.
 3. **Exact matching only** — no fuzzy resolution, no partial matches. Miss → progressive diagnostic that answers the next question.
 4. **Expectations in the search** — embed value/trait expectations in the matcher so stale state fails early. A slider at value "8" won't match a search for value "6" — you'll know immediately something changed.
-5. **heistId wins for live actions** — fastest path (snapshot lookup by current-screen handle), deterministic. When a caller has a heistId from the current capture, they know exactly which element they want. Replay records should persist minimum matchers, not heistIds.
+5. **heistId wins for live actions** — fastest path (lookup by current-screen handle), deterministic within the committed `Screen`. Replay records should persist minimum matchers, not heistIds.
 6. **Matching on canonical types** — `ElementMatcher` predicates resolve against `AccessibilityElement` (parser types with real `UIAccessibilityTraits`), not wire types (`HeistElement` with string trait arrays). This avoids lossy string round-trips.
 7. **Progressive disclosure on failure** — errors go from "here's what changed" to "here's what's on screen" depending on how close the miss was. Every error answers the obvious next question.
 
@@ -260,13 +260,13 @@ Heist recording uses `MinimumMatcher` to turn the element observed in an `Access
 
 Ordinal-only replay targets are intentionally fragile. They exist so anonymous elements remain replayable, but they should be treated as a fallback because a reordered hierarchy can still make the same ordinal point at a different element.
 
-If a new capture introduces a conflict for an old matcher, the supported 0.3.7 behavior is to run a fresh minimum-matcher pass against the new capture. Playback does not self-heal or auto-repair stale steps.
+If a new capture introduces a conflict for an old matcher, run a fresh minimum-matcher pass against the new capture. Playback does not silently self-heal or auto-repair stale steps.
 
 ## Current Element State
 
-There is no element registry post-0.2.25. TheStash holds exactly one mutable field — `var currentScreen: Screen` — and rebinds it on every parse / merge. The `Screen` value type carries the heistId index, the parsed hierarchy, the reverse index, and the live scrollable container references as immutable fields. Pre-0.2.25 `screenElements: [String: ScreenElement]`, `presentedHeistIds`, `onScreen`, `heistIdByTraversalOrder`, `updateScreenElements()`, `refreshAccessibilityData()`, and the scorched-earth wipe-and-rebuild on screen change are all gone.
+There is no element registry post-0.2.25. TheStash holds exactly one mutable field — `var currentScreen: Screen` — and rebinds it on every parse / merge. The `Screen` value type carries the heistId index, the parsed hierarchy, the reverse index, and weak live scrollable-container references as current-screen projections. Pre-0.2.25 `screenElements: [String: ScreenElement]`, `presentedHeistIds`, `onScreen`, `heistIdByTraversalOrder`, `updateScreenElements()`, `refreshAccessibilityData()`, and the scorched-earth wipe-and-rebuild on screen change are all gone.
 
-`HeistId resolution` (`resolveTarget(.heistId)`) is O(1) dictionary lookup into `currentScreen.elements`. There is no presentation gate — if a heistId is in `currentScreen.elements`, it resolves. (Exploration unions older elements into `currentScreen` so heistIds for off-viewport elements still resolve until the next non-exploration `parse()` overwrites the screen.)
+`HeistId resolution` (`resolveTarget(.heistId)`) is O(1) dictionary lookup into `currentScreen.elements`. There is no presentation gate — if a heistId is in `currentScreen.elements`, it resolves as a handle into that screen value, not proof of visibility or persisted identity. Exploration unions older elements into `currentScreen` so heistIds for off-viewport elements still resolve until the next non-exploration `parse()` overwrites the screen.
 
 `Matcher resolution` walks `selectElements()` looking for matching `ScreenElement`s. This keeps live entries in traversal order and appends known-only entries retained from exploration, so matcher resolution and matcher diagnostics share the same candidate scope.
 

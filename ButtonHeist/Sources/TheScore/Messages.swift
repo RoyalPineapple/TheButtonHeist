@@ -7,8 +7,8 @@ public let buttonHeistServiceType = "_buttonheist._tcp"
 
 /// Canonical product version shared by CLI, MCP, and the iOS server.
 ///
-/// CalVer (`YYYY.MM.DD`); same-day patches append `.N`. There is no separate
-/// "wire protocol version" — the handshake requires exact equality between
+/// SemVer (`MAJOR.MINOR.PATCH`). There is no separate "wire protocol version"
+/// — the handshake requires exact equality between
 /// the server's and the client's `buttonHeistVersion`. Update this constant
 /// only via `scripts/release.sh`. See `docs/WIRE-PROTOCOL.md` and
 /// `VERSIONING.md` in bh-infra.

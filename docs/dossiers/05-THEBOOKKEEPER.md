@@ -9,14 +9,14 @@
 TheBookKeeper owns all filesystem I/O on the macOS side:
 
 1. **Session log** — append-only JSONL file recording every command dispatched through TheFence and every response returned, with timestamps and request IDs
-2. **Artifact storage** — writes screenshots (PNG) and videos (MP4) to organized session directories with deterministic, sequence-numbered filenames, then appends artifact events to the session log
+2. **Artifact storage** — writes screenshots (PNG) and videos (MP4) to organized session directories with deterministic, sequence-numbered filenames when a session is active, or to standalone artifact directories when no session is active
 3. **Path validation** — single entry point for output path safety checks (rejects `..` components, resolves via `.standardized`)
 4. **Session manifest** — writes `manifest.json` for durable session boundary data (`formatVersion`, `sessionId`, `startTime`, `endTime`); artifact and count summaries are projected from the append-only session log
 5. **Compression** — gzips session logs on close via `/usr/bin/gzip`; bundles a completed session directory into a `.tar.gz` archive on demand via `/usr/bin/tar`
 6. **Lifecycle** — creates session directory on `beginSession`, closes and compresses on `closeSession`, archives on `archiveSession`
 7. **Heist recording** — records agent sessions as replayable `.heist` scripts. Builds minimal `ElementMatcher` for each targeted element (smallest matcher that uniquely identifies it), filters out state traits and UUID-containing identifiers, falls back to ordinal when no unique matcher exists. Manages `HeistRecording` state within `ActiveSession`, writes `HeistPlayback` (envelope) and `HeistEvidence` (individual steps) to disk. Malformed evidence lines are logged and skipped on stop, not allowed to destroy the whole recording
 8. **Heist file I/O** — static `writeHeist(_:to:)` and `readHeist(from:)` for `.heist` file serialization (pretty-printed JSON with sorted keys)
-9. **Artifact orchestration** — `writeArtifactIfSinkAvailable(...)` picks the right sink (explicit output path → `writeToPath`; active session → typed `writeScreenshot`/`writeRecording`; idle with no path → nil so the caller returns base64 over the wire)
+9. **Artifact orchestration** — `writeScreenshotArtifact(...)` and `writeRecordingArtifact(...)` pick the right sink (explicit output path → `writeToPath`; active session → typed `writeScreenshot`/`writeRecording`; idle with no path → standalone default artifact)
 10. **Abandoned-session recovery** — `recoverAbandonedSessions()` scans the base directory for sessions with an uncompressed `session.jsonl` (indicating the process exited before `closeSession`), writes a recovery manifest, compresses the log, and surfaces any abandoned heist evidence. Module-internal today; not wired into a production flow yet
 
 ## Architecture Diagram
@@ -318,12 +318,14 @@ TheFence's `execute(request:)` wraps every dispatch with `logCommand` (before) a
 
 ### File write delegation
 
-TheFence handlers `handleGetScreen` and `handleStopRecording` delegate file writes to TheBookKeeper via the single orchestration entry point `writeArtifactIfSinkAvailable(base64Data:outputPath:requestId:command:metadata:)`:
+TheFence handlers `handleGetScreen` and `handleStopRecording` delegate file writes to TheBookKeeper via `writeScreenshotArtifact(...)` and `writeRecordingArtifact(...)`:
 - **Explicit `--output` path**: routes to `writeToPath`, which validates path safety (rejects `..` components). `BookKeeperError.unsafePath` is caught and converted to `.error()` for the caller.
 - **Active session, no explicit path**: auto-persists to the session directory via `writeScreenshot`/`writeRecording`, which appends an artifact event with sequence-numbered filenames and metadata. Returns a `.screenshot`/`.recording` response with the file path.
-- **No session, no explicit path**: `writeArtifactIfSinkAvailable` returns `nil`, and the caller returns raw base64 data over the wire (unchanged behavior).
+- **No session, no explicit path**: writes a standalone default artifact under the base directory and returns the file path. Raw base64 responses are opt-in at the handler layer via `inlineData`.
 
 The `ArtifactMetadata` enum (`.screenshot(ScreenshotMetadata) | .recording(RecordingMetadata)`) routes the request to the correct typed write path.
+
+The lower-level `writeScreenshotIfSinkAvailable` / `writeRecordingIfSinkAvailable` helpers still exist for tests and compatibility callers that intentionally want `nil` when no sink exists; TheFence's product path uses the artifact-first methods above.
 
 ## CLI Commands
 
@@ -390,7 +392,7 @@ Append-only (safe for crash recovery), streamable (`jq` works line-by-line), com
 
 ### Why lazy session creation?
 
-One-shot CLI commands (`buttonheist get_screen --output shot.png`) don't need session directories. TheBookKeeper starts in `.idle` and only allocates a directory when `beginSession` is called. `writeToPath` works without a session for explicit caller-specified paths. `logCommand`/`logResponse` silently no-op in idle.
+One-shot CLI commands (`buttonheist get_screen --output shot.png`) don't need session directories. TheBookKeeper starts in `.idle` and only allocates a session directory when `beginSession` is called. Explicit `writeToPath` and default standalone artifact writes work without a session. `logCommand`/`logResponse` silently no-op in idle.
 
 ### Why sequence numbers instead of timestamps in filenames?
 
@@ -404,7 +406,7 @@ MP4 (H.264) is already compressed. Gzipping an MP4 saves <1%.
 
 Real filesystem I/O against a temp directory created in `setUp` and deleted in `tearDown`. Split across two files:
 
-- `TheBookKeeperTests.swift` — session lifecycle, logging, manifest, path validation, artifact storage, orchestration via `writeArtifactIfSinkAvailable`.
+- `TheBookKeeperTests.swift` — session lifecycle, logging, manifest, path validation, artifact storage, artifact-first write orchestration.
 - `BookKeeperHeistTests.swift` — heist recording/playback, minimal matcher construction, heist file I/O, abandoned-session recovery.
 
 | Group | What they verify |

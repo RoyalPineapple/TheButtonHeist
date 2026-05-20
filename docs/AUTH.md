@@ -11,6 +11,12 @@ There are two connection modes:
 1. **Token auth** — The client sends a known token via `authenticate`. If it matches, the client is authenticated as a driver.
 2. **UI approval** — The client sends an empty token via `authenticate`. If the server is in UI approval mode, an on-device prompt asks the user to Allow or Deny the connection. On Allow, the server sends the token back so the client can reuse it.
 
+Auth outcomes are intentionally distinct:
+- Wrong non-empty token: `error(kind: "authFailure")`, then disconnect. With an explicit server token, retry with that configured token. With an auto-generated token, retry without a token only if you want to request UI approval.
+- Approval pending: `authApprovalPending`, non-terminal. The client should wait for the user to respond on the device.
+- Approval denied: `error(kind: "authFailure", message: "Connection denied by user")`, then disconnect.
+- Approval timeout: `error(kind: "authApprovalPending")`, then disconnect.
+
 ## Agent Isolation
 
 When multiple agents run in parallel, each agent must use its own simulator, port, and token to prevent cross-talk. The token doubles as a human-readable label scoped to the agent's work item.
@@ -113,6 +119,7 @@ sequenceDiagram
     TheInsideJob->>Client: authRequired
     Client->>TheInsideJob: authenticate(token:"")
     Note right of TheInsideJob: token is empty<br/>→ store in pendingApprovalClients<br/>→ show UIAlertController
+    TheInsideJob->>Client: authApprovalPending
 
     rect rgb(240, 240, 240)
         Note right of TheInsideJob: Connection Request<br/>Connection #N is requesting access.<br/>[Deny] [Allow]
@@ -142,10 +149,30 @@ sequenceDiagram
     TheInsideJob->>Client: authRequired
     Client->>TheInsideJob: authenticate(token:"")
     Note right of TheInsideJob: → show UIAlertController
+    TheInsideJob->>Client: authApprovalPending
     Note right of TheInsideJob: User taps Deny
-    TheInsideJob->>Client: authFailed
+    TheInsideJob->>Client: error(authFailure)
     Note left of Client: "Connection denied by user"
     Note right of TheInsideJob: → disconnect after 100ms
+    TheInsideJob--xClient: TCP closed
+```
+
+### UI Approval — Timeout
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant TheInsideJob as TheInsideJob (iOS)
+
+    Client->>TheInsideJob: TCP Connect
+    TheInsideJob->>Client: serverHello
+    Client->>TheInsideJob: clientHello
+    TheInsideJob->>Client: authRequired
+    Client->>TheInsideJob: authenticate(token:"")
+    TheInsideJob->>Client: authApprovalPending
+    Note right of TheInsideJob: User does not respond before auth deadline
+    TheInsideJob->>Client: error(authApprovalPending)
+    Note left of Client: "Approval timed out — user did not respond..."
     TheInsideJob--xClient: TCP closed
 ```
 
@@ -164,8 +191,8 @@ sequenceDiagram
     TheInsideJob->>Client: authRequired
     Client->>TheInsideJob: authenticate(token:"wrong")
     Note right of TheInsideJob: token doesn't match
-    TheInsideJob->>Client: authFailed
-    Note left of Client: "Invalid token. Retry without<br/>a token to request a fresh session."
+    TheInsideJob->>Client: error(authFailure)
+    Note left of Client: explicit token: retry with configured token<br/>auto-generated token: retry without token for UI approval
     Note right of TheInsideJob: → disconnect after 100ms
     TheInsideJob--xClient: TCP closed
 ```
@@ -177,21 +204,23 @@ Auth messages use the standard newline-delimited JSON format wrapped in envelope
 ### Server → Client (ResponseEnvelope)
 
 ```json
-{"buttonHeistVersion":"<calver>","requestId":null,"type":"serverHello"}
-{"buttonHeistVersion":"<calver>","requestId":null,"type":"authRequired"}
-{"buttonHeistVersion":"<calver>","requestId":null,"type":"authApproved","payload":{"token":"A1B2C3D4-E5F6-..."}}
-{"buttonHeistVersion":"<calver>","requestId":null,"type":"error","payload":{"kind":"authFailure","message":"Invalid token. Retry without a token to request a fresh session."}}
+{"buttonHeistVersion":"<semver>","requestId":null,"type":"serverHello"}
+{"buttonHeistVersion":"<semver>","requestId":null,"type":"authRequired"}
+{"buttonHeistVersion":"<semver>","requestId":null,"type":"authApprovalPending","payload":{"message":"Waiting for approval on the device.","hint":"Tap Allow on the iOS device to continue."}}
+{"buttonHeistVersion":"<semver>","requestId":null,"type":"authApproved","payload":{"token":"A1B2C3D4-E5F6-..."}}
+{"buttonHeistVersion":"<semver>","requestId":null,"type":"error","payload":{"kind":"authFailure","message":"Invalid token. Retry with the configured token."}}
+{"buttonHeistVersion":"<semver>","requestId":null,"type":"error","payload":{"kind":"authApprovalPending","message":"Approval timed out — user did not respond to the approval prompt on the device."}}
 ```
 
 ### Client → Server (RequestEnvelope)
 
 ```json
-{"buttonHeistVersion":"<calver>","requestId":null,"type":"clientHello"}
-{"buttonHeistVersion":"<calver>","requestId":"req-1","type":"authenticate","payload":{"token":"my-secret-token"}}
-{"buttonHeistVersion":"<calver>","requestId":"req-2","type":"authenticate","payload":{"token":""}}
+{"buttonHeistVersion":"<semver>","requestId":null,"type":"clientHello"}
+{"buttonHeistVersion":"<semver>","requestId":"req-1","type":"authenticate","payload":{"token":"my-secret-token"}}
+{"buttonHeistVersion":"<semver>","requestId":"req-2","type":"authenticate","payload":{"token":""}}
 ```
 
-An empty token string in `authenticate` requests UI approval. A non-empty token attempts direct authentication.
+An empty token string in `authenticate` requests UI approval when the server token was auto-generated. A non-empty token attempts direct authentication.
 
 ## Security Limits
 
@@ -202,21 +231,23 @@ These limits are enforced by `SimpleSocketServer` and apply to both authenticate
 | Max connections | 5 | Additional connections are rejected |
 | Rate limit | 30 msg/sec | Per-client, sliding 1-second window |
 | Receive buffer | 10 MB | Per-client; exceeded → disconnect |
-| Auth failure delay | 100 ms | Allows `authFailed` to arrive before TCP close |
+| Auth failure delay | 100 ms | Allows the terminal auth error to arrive before TCP close |
+| TLS listener | Required | Production listener startup fails closed if TLS identity/parameters are unavailable |
 | Bind address (simulator-only scope) | `::1` (loopback) | Automatic when `allowedScopes == [.simulator]` |
-| Bind address (USB/network scope) | `::` (all interfaces) | Accepts WiFi and USB connections |
+| Bind address (USB or network scope) | `::` (all interfaces) | Required for CoreDevice USB; scope filtering rejects disallowed sources before auth |
+| Bonjour advertisement | Network scope only | Default `simulator,usb` scope is not LAN-visible via Bonjour |
 
 ## Threat Model
 
-Button Heist is a debug-only development tool. Its security model is designed around the assumption that the attacker is not on the same machine or local network as the developer. The following documents the trust boundaries and known exposures.
+Button Heist is a debug-only development tool. By default it accepts simulator loopback and CoreDevice USB traffic, does not advertise Bonjour on the LAN, and rejects WiFi/LAN connections before authentication. Enabling `INSIDEJOB_SCOPE=network` is an explicit trust decision that makes the listener discoverable and reachable from the local network.
 
 ### Bonjour Fingerprint Exposure
 
-The TLS certificate SHA-256 fingerprint is published in a plaintext Bonjour TXT record (`TXTRecordKey.certFingerprint` in `Messages.swift`, published via `ServerTransport.swift`). Any device on the LAN can read it. This is by design — clients need the fingerprint for trust-on-first-use pinning.
+When network scope is enabled, the TLS certificate SHA-256 fingerprint is published in a plaintext Bonjour TXT record (`TXTRecordKey.certFingerprint` in `Messages.swift`, published via `ServerTransport.swift`). Any device on the LAN can read it. This is by design — clients need the fingerprint for trust-on-first-discovery pinning.
 
 **Risk**: A LAN-local attacker can read the fingerprint. However, SHA-256 is collision-resistant, so knowledge of the fingerprint does not enable certificate forgery. The fingerprint is a verifier, not a secret.
 
-**Mitigation**: For environments where LAN visibility is a concern (e.g., shared office networks), use direct connection via `BUTTONHEIST_DEVICE=host:port` which bypasses Bonjour entirely.
+**Mitigation**: Keep the default `simulator,usb` scope when LAN visibility is a concern. Use loopback or USB/direct targets instead of enabling network scope.
 
 ### Loopback TLS Bypass
 
@@ -224,7 +255,7 @@ When connecting to loopback (simulator-to-same-Mac path) without a fingerprint, 
 
 **Risk**: Any process on the same host can MITM the loopback connection.
 
-**Mitigation**: This path is simulator-only. The simulator and client run on the same machine where process isolation is the trust boundary. The bypass is logged at `.warning` level. On-device (USB/WiFi) connections always perform full fingerprint verification.
+**Mitigation**: This path is simulator-only. The simulator and client run on the same machine where process isolation is the trust boundary. The bypass is logged at `.warning` level. Non-loopback USB/WiFi connections require an explicit fingerprint and fail closed without one.
 
 ### Token as Coordination, Not Security
 
@@ -234,7 +265,7 @@ The session token prevents agent collisions, not unauthorized access. It is logg
 - `authApproved` wire messages (sent to the connecting client)
 - Environment variables (`INSIDEJOB_TOKEN`, `BUTTONHEIST_TOKEN`)
 
-The real access control is the `ConnectionScope` filter that restricts which network interfaces can connect (simulator, USB, or network). By default, only simulator and USB connections are accepted.
+The stronger access controls are TLS trust plus the `ConnectionScope` filter that restricts which network interfaces can connect (simulator, USB, or network). By default, only simulator and USB connections are accepted, and Bonjour is not published.
 
 ## Component Responsibilities
 
@@ -244,7 +275,7 @@ The real access control is the `ConnectionScope` filter that restricts which net
 | **SimpleSocketServer** | Tracks per-client auth state via `ClientPhase` enum (`.unauthenticated` / `.authenticated`). Routes messages to `onDataReceived` (authenticated) or `onUnauthenticatedData` (not yet authenticated). |
 | **TheInsideJob** | Wires TheMuscle callbacks to the socket server. Owns the server lifecycle. |
 | **DeviceConnection** | Client-side handshake and auth handling. Verifies `buttonHeistVersion`, sends `clientHello` after `serverHello`, sends token on `authRequired`, stores token from `authApproved`, and emits the connected event only after receiving `info` (post-auth). |
-| **TheHandoff** | Passes `token` to DeviceConnection. Stores approved tokens via `onAuthApproved` callback. Tracks `connectionPhase` (including `.failed(.authFailed)` or `.failed(.sessionLocked)` via `ConnectionError`). |
+| **TheHandoff** | Passes `token` to DeviceConnection. Stores approved tokens via `onAuthApproved` callback. Tracks `connectionPhase` including auth failures, approval-pending failures, and session-lock failures via `ConnectionError`. |
 
 ## TLS Certificate Lifecycle
 

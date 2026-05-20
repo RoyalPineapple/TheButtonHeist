@@ -8,7 +8,7 @@ The getaway driver — runs all comms between the wire and the crew.
 
 ### Transport wiring
 
-`wireTransport(_:)` installs five closures on TheMuscle (sendToClient, markClientAuthenticated, disconnectClient, onClientAuthenticated, onSessionActiveChanged), installs a synchronous ping fast-path on the transport via `setSyncDataInterceptor(_:)`, and starts a single long-lived consumer task that awaits `transport.events` (an ordered `AsyncStream<TransportEvent>`) and dispatches each event via `handleTransportEvent(_:)`. This is the bridge between auth and networking — TheMuscle and ServerTransport never reference each other directly. Routing every event through one stream means `clientConnected` always lands before its first `dataReceived`, the race the prior per-event `Task { @MainActor in ... }` callback bridge could lose.
+`wireTransport(_:)` installs six closures on TheMuscle (sendToClient, markClientAuthenticated, markClientAwaitingApproval, disconnectClient, onClientAuthenticated, onSessionActiveChanged), installs a synchronous ping fast-path on the transport via `setSyncDataInterceptor(_:)`, and starts a single long-lived consumer task that awaits `transport.events` (an ordered `AsyncStream<TransportEvent>`) and dispatches each event via `handleTransportEvent(_:)`. This is the bridge between auth and networking — TheMuscle and ServerTransport never reference each other directly. Routing every event through one stream means `clientConnected` always lands before its first `dataReceived`, the race the prior per-event `Task { @MainActor in ... }` callback bridge could lose.
 
 ### Message dispatch
 
@@ -25,11 +25,11 @@ Before dispatching actions, checks `brains.computeBackgroundAccessibilityTrace()
 - `encodeEnvelope(_:requestId:accessibilityTrace:)` — wraps `ServerMessage` in `ResponseEnvelope`, JSON-encodes
 - `decodeRequest(_:)` — JSON-decodes `RequestEnvelope`
 - `sendMessage(_:requestId:accessibilityTrace:respond:)` — encode + respond, with error fallback
-- `broadcastToSubscribed(_:)` / `broadcastToAll(_:)` — encode once, send to many
+- `broadcastToAll(_:)` — encode once, send lightweight recording notifications to all authenticated clients
 
 ### Recording
 
-Owns `RecordingPhase` state machine (`.idle` / `.recording(stakeout:)`). `handleStartRecording` creates a `TheStakeout`, wires `captureFrame` to `brains.captureScreenForRecording()`, and stores completed recordings until `stop_recording` retrieves them. `handleStopRecording` calls `stakeout.stopRecording(reason: .manual)` and returns the final payload to that caller.
+Owns `RecordingRouteState` (`.idle`, `.starting`, `.recording`, `.stopping`, `.invalidating`, `.completed`, `.invalidated`) plus a projected `RecordingPhase` for status. `handleStartRecording` creates a `TheStakeout`, wires `captureFrame` to `brains.captureScreenForRecording()`, and records the originator client. `handleStopRecording` parks a waiter while finalization runs; auto-finished recordings are delivered only to the originator when possible, with other clients receiving lightweight `recordingStopped` notifications.
 
 ### Settled change tracking
 

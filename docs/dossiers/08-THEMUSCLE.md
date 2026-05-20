@@ -8,11 +8,11 @@
 
 TheMuscle is declared `actor TheMuscle` (post-0.2.24 conversion from `@MainActor` class). All auth state — `clients`, `addressAuthStates`, `sessionPhase`, `lockoutTasks` — is mutated on TheMuscle's own actor. UI alert presentation lives in a separate `@MainActor` companion, `AlertPresenter` (`Server/AlertPresenter.swift`), because the alert presentation and top-view-controller lookup require MainActor isolation. The presenter is minimal: it owns the live `UIAlertController` reference and accepts `@MainActor` `onAllow` / `onDeny` closures from TheMuscle, which hop back to actor context to run the decision logic.
 
-TheMuscle controls who gets access and enforces single-driver exclusivity:
+TheMuscle controls who gets access and enforces a single active driver connection. A same-driver reconnect is allowed only while the prior session is draining after its last connection drops.
 
 1. **Token-based authentication** - validates incoming tokens against configured/auto-generated value
 2. **On-device UI approval** - shows Allow/Deny popup for empty-token connections
-3. **Session locking** - ensures only one "driver" controls the app at a time
+3. **Session locking** - ensures only one active driver connection controls the app at a time
 4. **Single-timer session release** - inactivity timer for cleanup when all connections drop
 5. **Brute-force protection** - tracks per-address rate-limiting state via `addressAuthStates: [String: AddressAuthState]`. `AddressAuthState` is an enum with two cases: `.failing(attempts: Int)` for accumulating failures and `.lockedOut(until: Date, attempts: Int)` for lockout after 5 consecutive failures. Lockout lasts 30 seconds, persists across TCP reconnections (keyed on IP, not client ID), and clears automatically on expiry. Successful authentication removes the entry for that address
 6. **Per-client lifecycle tracking** - each client traverses a `ClientPhase` enum stored in `clients: [Int: ClientPhase]`. The phases are: `.connected(address:)`, `.helloValidated(address:)`, `.pendingApproval(address:respond:driverId:)`, and `.authenticated(address:driverIdentity:)`. Disconnection removes the entry entirely. Clients must reach `.helloValidated` before auth is processed; clients still in `.connected` are rejected and disconnected
@@ -40,7 +40,7 @@ graph TD
     UIPrompt -->|Allow/Deny callback hops back into actor| AuthFlow
     AuthFlow -->|invalid| Reject["authFailed + disconnect"]
 
-    SessionMgr -->|same driver| Join["Join existing session"]
+    SessionMgr -->|same driver already active| LockSame["sessionLocked (already active)"]
     SessionMgr -->|different driver| Lock["sessionLocked"]
 
     Timer -->|all disconnected, timeout elapsed| Release["releaseSession()"]
@@ -106,16 +106,14 @@ stateDiagram-v2
     NoSession --> ActiveSession: first client authenticates
 
     state ActiveSession {
-        [*] --> SingleDriver
-        SingleDriver --> MultiConnection: same driverId connects again
-        MultiConnection --> SingleDriver: extra connection drops
+        [*] --> SingleConnection
     }
 
-    ActiveSession --> SessionLocked: different driverId tries to connect
+    ActiveSession --> SessionLocked: same or different driver tries to connect
 
     ActiveSession --> ReleaseTimer: all connections drop
     ReleaseTimer --> NoSession: timeout elapsed
-    ReleaseTimer --> ActiveSession: client reconnects
+    ReleaseTimer --> ActiveSession: same driver reconnects
 ```
 
 ## Configuration
@@ -140,8 +138,8 @@ stateDiagram-v2
 
 ### HIGH PRIORITY
 
-**Empty token allows any hello-complete network client to trigger UI prompt** (`TheMuscle.swift`)
-- Any process on the local network can connect, complete the hello handshake, and send `authenticate(token: "")`
+**Empty token can trigger UI approval on generated-token sessions** (`TheMuscle.swift`)
+- Any process on an allowed connection scope can connect, complete the hello handshake, and send `authenticate(token: "")` when the token was auto-generated and no session or approval is active
 - This triggers a `UIAlertController` on the device
 - Documented behavior, but potential for annoyance/DoS in shared network environments
 - Consider: should there be a way to disable UI approval flow entirely?

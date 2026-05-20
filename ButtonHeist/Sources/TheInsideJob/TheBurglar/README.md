@@ -16,7 +16,7 @@ Reads the live accessibility tree and builds a `Screen` value for TheStash to co
 1. `buildElementContexts(...)` walks the hierarchy with context propagation (nearest enclosing UIScrollView), computing `contentSpaceOrigin` per element via `scrollView.convert(frame.origin, from: nil)`.
 2. `IdAssignment.assign(result.hierarchy.sortedElements)` generates heistIds.
 3. Detects first responder by checking `isFirstResponder` on each element's live object.
-4. Returns a fresh `Screen` value carrying `elements`, `hierarchy`, `containerStableIds`, `heistIdByElement`, `firstResponderHeistId`, and `scrollableContainerViews`.
+4. Returns a fresh `Screen` value carrying `elements`, `hierarchy`, projected `containerStableIds`, `heistIdByElement`, `firstResponderHeistId`, and `scrollableContainerViews`.
 
 Callers decide what to do with the returned `Screen` — assign to `stash.currentScreen` for a fresh snapshot, or merge into a local accumulator during exploration. TheBurglar never reaches into TheStash.
 

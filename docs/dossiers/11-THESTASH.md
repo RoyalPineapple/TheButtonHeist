@@ -11,14 +11,14 @@ TheStash holds the goods — sole custodian of the live UIKit/accessibility obje
 Post-0.2.25 the resolution layer is **a single immutable value**, `Screen`. TheStash has exactly one mutable field — `var currentScreen: Screen = .empty` — and a single discipline: **parse-then-assign**. Callers obtain a `Screen` via `stash.parse()`, decide what to do with it (commit directly, or merge into an exploration accumulator), then write back into `stash.currentScreen`. The persistent element registry, orphan retention, invariant-checking merge pipeline, and explore-cycle mode flag are gone.
 
 1. **Resolution layer as a value type** — `Screen` bundles `elements: [String: ScreenElement]`, `hierarchy`, `containerStableIds`, `heistIdByElement`, `firstResponderHeistId`, and `scrollableContainerViews` into one immutable struct. `Screen.merging(_:)` is pure last-read-wins on heistId collision. Derived values (`name`, `id`, `heistIds`) are computed on access so they cannot drift from the hierarchy.
-2. **Target resolution** — `resolveTarget(_:)` looks only in `currentScreen.elements` / `currentScreen.hierarchy`. The off-screen rule is **strict**: an heistId not in `currentScreen.elements` returns `.notFound` with a near-miss suggestion. No fallback to a recorded scroll position from a previous parse. See [12-UNIFIED-TARGETING.md](12-UNIFIED-TARGETING.md) for the full targeting system.
+2. **Target resolution** — `resolveTarget(_:)` looks only in `currentScreen.elements` / `currentScreen.hierarchy`. The off-screen rule is **strict**: an heistId not in `currentScreen.elements` returns `.notFound` with a near-miss suggestion. No fallback to content-space observations from a previous parse. See [12-UNIFIED-TARGETING.md](12-UNIFIED-TARGETING.md) for the full targeting system.
 3. **Element matching** — `matchScreenElements(_:limit:)` walks `selectElements()` using `ElementMatcher` predicates with AND semantics and case-insensitive equality (typography-folded — smart quotes, dashes, ellipsis fold to ASCII; emoji/accents/CJK preserved). Matching sees the committed semantic state, including known-only entries retained from exploration. Matching is exact or miss; substring is reserved for the diagnostic suggestion path (`Diagnostics.findNearMiss`).
-4. **HeistId synthesis** — `IdAssignment` assigns stable, deterministic `heistId` identifiers directly from `AccessibilityElement` (developer identifier preferred, else synthesized from traits+label; value excluded for stability), with suffix disambiguation for duplicates and `_at_X_Y` content-position suffixes for spatially-distinct same-content elements seen within one parse. Synthesis is wire format — see CLAUDE.md.
+4. **HeistId synthesis** — `IdAssignment` assigns deterministic current-screen handles directly from `AccessibilityElement` (developer identifier preferred, else synthesized from traits+label; value excluded for stability), with suffix disambiguation for duplicates and `_at_X_Y` content-position suffixes for spatially-distinct same-content elements seen within one parse. Synthesis is wire format, not a durable replay selector — see CLAUDE.md.
 5. **Wire conversion at boundary** — `WireConversion.toWire()` converts `Screen.ScreenElement` → `HeistElement` at serialization boundaries. `WireConversion.toInterface(from:)` packages the parser hierarchy plus Button Heist annotations for the full interface payload. Pure transform — no stored state.
 6. **Capture inputs for deltas** — `WireConversion.toInterface(from:)` emits the interface that TheBrains stores in `AccessibilityTrace.Capture`. Compact deltas are derived later from capture endpoints in TheScore; TheStash no longer accepts snapshot-only delta inputs.
 7. **Element actions** — thin wrappers over `accessibilityActivate()`, `accessibilityIncrement()`, `accessibilityDecrement()`, `accessibilityCustomActions` on the live UIKit object. `performCustomAction` returns a `CustomActionOutcome` enum so callers can distinguish "view deallocated" from "no such action" without a raw NSObject check.
-8. **Scroll-position primitives** — `jumpToRecordedPosition(_:)`, `restoreScrollPosition(_:to:)`, and `scrollTargetOffset(for:in:)` set `contentOffset` on an element's owning scroll view from a recorded `contentSpaceOrigin`. The stash decides nothing (callers still orchestrate when to jump); it just encapsulates the UIScrollView write so the scroll view handle doesn't leak.
-9. **Live geometry readout** — `liveGeometry(for:)` promotes the weak NSObject ref internally and returns a value-typed `(frame, activationPoint, scrollView)` snapshot for callers that need to make viewport decisions.
+8. **Scroll-position primitives** — `jumpToRecordedPosition(_:)`, `restoreScrollPosition(_:to:)`, and `scrollTargetOffset(for:in:)` set `contentOffset` on an element's owning scroll view from the observed `contentSpaceOrigin` carried by the current or preserved `ScreenElement`. The stash decides nothing (callers still orchestrate when to jump); it just encapsulates the UIScrollView write so the scroll view handle doesn't leak.
+9. **Live geometry readout** — `liveGeometry(for:)` promotes the weak NSObject ref internally and returns a value-typed `(frame, activationPoint, scrollView)` snapshot for callers that need to make viewport decisions. The snapshot is not persisted as authority.
 10. **Screen capture** — renders traversable windows via `UIGraphicsImageRenderer` (TheStash+Capture.swift).
 11. **Resolution diagnostics** — near-miss suggestions, similar heistId hints, compact element summaries (`Diagnostics`).
 
@@ -35,6 +35,7 @@ TheStash is the custodian of the live accessibility/UI object world.
 - **No exported live handles** — other subsystems work through TheStash APIs that return values, frames, points, or perform actions on their behalf.
 - **Parser boundary** — TheBurglar owns `AccessibilityHierarchyParser` usage and produces `Screen` values via `buildScreen(from:)`.
 - **Fail closed on staleness** — if the weak object is gone, TheStash treats it as stale state. If an heistId is not in `currentScreen.elements`, it's unreachable — agents must scroll or refetch.
+- **Current-screen authority only** — `heistId`, `containerStableIds`, and live geometry are projections of the committed `Screen`. Replay and cross-capture matching must use matchers, not persisted container identity or geometry.
 
 ## Parse-then-Assign Discipline
 
@@ -123,7 +124,7 @@ struct Screen: Equatable {
 
 struct LiveInterface: Equatable {
     let hierarchy: [AccessibilityHierarchy]            // latest parser tree
-    let containerStableIds: [AccessibilityContainer: String]
+    let containerStableIds: [AccessibilityContainer: String] // current payload projection
     let heistIdByElement: [AccessibilityElement: String]
     let firstResponderHeistId: String?
     let scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
@@ -138,7 +139,7 @@ struct ScreenElement: @unchecked Sendable, Equatable {
 }
 ```
 
-**Conflict rule for `merging`:** last-read-always-wins. When the same heistId appears in both `self` and `other`, the entire `ScreenElement` from `other` replaces the one from `self` — no field-level merging, no special case to preserve a previously-recorded `contentSpaceOrigin`. The most recent observation is the source of truth. Codified by `ScreenTests`.
+**Conflict rule for `merging`:** last-read-always-wins. When the same heistId appears in both `self` and `other`, the entire `ScreenElement` from `other` replaces the one from `self` — no field-level merging, no special case to preserve an older `contentSpaceOrigin`. The most recent observation is the authority for that screen value. Codified by `ScreenTests`.
 
 ## Element Target Resolution
 
@@ -167,12 +168,12 @@ flowchart TD
 
 ## Instance State Inventory
 
-Post-0.3.5, TheStash has one mutable accessibility belief. Everything else
+TheStash has one mutable accessibility belief. Everything else
 lives inside `Screen` or belongs to another owner.
 
 | Store | Lifetime | Purpose |
 |-------|----------|---------|
-| `currentScreen` | Parse-or-explore-cycle | The latest committed screen value — holds elements, hierarchy, container ids, and live-view refs. |
+| `currentScreen` | Parse-or-explore-cycle | The latest committed screen value — holds elements, hierarchy, projected container ids, and live-view refs. |
 | `stakeout` (weak) | Application lifetime | Boundary back-reference for recording frame capture; not accessibility belief. |
 
 Broadcast de-duplication memory (`lastBroadcastHierarchyHash`) lives in

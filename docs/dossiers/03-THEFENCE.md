@@ -173,7 +173,7 @@ stateDiagram-v2
 - Commands are matched by enum case in the dispatch switch (compile-time exhaustiveness)
 - `supportedCommands` is `Command.allCases.map(\.rawValue)` — no hand-maintained list
 
-**Screenshot file saving uses temp directory** (`TheFence.swift`)
-- Screenshots and recordings are saved to `FileManager.default.temporaryDirectory`
-- These files persist until the OS cleans them up
-- No explicit cleanup mechanism
+**Default media responses are artifact-first**
+- `get_screen` and `stop_recording` delegate file writes to TheBookKeeper
+- Explicit `output` writes to the caller path; active sessions write under the session artifact directory; otherwise TheBookKeeper writes a standalone default artifact path
+- Inline media is opt-in via `inlineData`

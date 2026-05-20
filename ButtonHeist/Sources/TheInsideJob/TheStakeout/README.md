@@ -1,10 +1,10 @@
 # TheStakeout
 
-Screen recording engine. Captures frames at configurable FPS, encodes H.264/MP4 via `AVAssetWriter`, and delivers the video as base64 in a `RecordingPayload`.
+Screen recording engine. Captures frames at configurable FPS, encodes H.264/MP4 via `AVAssetWriter`, and returns a `RecordingPayload` to TheGetaway for routing.
 
 ## The one file
 
-**`TheStakeout.swift`** — `@MainActor final class`.
+**`TheStakeout.swift`** — `actor`.
 
 ### State machine
 
@@ -31,9 +31,9 @@ Screen recording engine. Captures frames at configurable FPS, encodes H.264/MP4 
 
 ### External wiring
 
-TheInsideJob creates the stakeout on demand and wires two closures:
+TheGetaway creates the stakeout on demand and wires two closures:
 - `captureFrame = { brains.captureScreenForRecording() }` — captures all windows including TheFingerprints overlay
-- `onRecordingComplete = { ... }` — stores the result for `stop_recording` and cleans up `recordingPhase`
+- `onRecordingComplete = { ... }` — routes the result through `RecordingRouteState` for `stop_recording`, originator delivery, or invalidation cleanup
 
 TheStash holds `weak var stakeout` for `captureActionFrame()` — a bonus frame after each action to capture the visual effect.
 

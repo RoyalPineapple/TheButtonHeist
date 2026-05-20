@@ -207,7 +207,7 @@ TheBrains owns all scroll orchestration (see [13-THEBRAINS.md](13-THEBRAINS.md))
 | `scrollToOppositeEdge` | UIScrollView + direction | Jump to opposite content edge (no animation) |
 | `scrollBySwipe` | CGRect + direction | Synthetic swipe gesture at 75% travel, 0.25s duration |
 
-**Auto-scroll** is driven by `Navigation.ensureOnScreen(for:)` (in `TheBrains/Navigation+Scroll.swift`) before every element-targeted interaction. It checks `accessibilityFrame` against `UIScreen.main.bounds`, uses the accessibility hierarchy's scroll view reference (with UIKit ancestor fallback), calls TheSafecracker's `scrollToMakeVisible` for minimum offset adjustment, waits for settle via TheTripwire, and refreshes `currentScreen`. TheStash exposes resolution and live geometry only — it does not perform scroll orchestration. Best-effort: never blocks or fails the command.
+**Auto-scroll** is driven by `Navigation.ensureOnScreen(for:)` (in `TheBrains/Navigation+Scroll.swift`) before every element-targeted interaction. It checks `accessibilityFrame` against `UIScreen.main.bounds`, uses the current screen's scroll view reference (with UIKit ancestor fallback), calls TheSafecracker's `scrollToMakeVisible` for minimum offset adjustment, waits for settle via TheTripwire, and refreshes `currentScreen`. TheStash exposes resolution and live-geometry snapshots only — it does not perform scroll orchestration or persist geometry as authority. Best-effort: never blocks or fails the command.
 
 **Input size guards:** `touchDrawPath` limits to 10,000 points; `touchDrawBezier` limits to 1,000 segments.
 

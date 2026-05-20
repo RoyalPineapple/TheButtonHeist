@@ -27,13 +27,34 @@ extract_formula_version() {
     grep -o 'version "[^"]*"' "$BUTTONHEIST_FORMULA_TEMPLATE" | cut -d'"' -f2
 }
 
+extract_api_docs_version() {
+    awk '
+        /^## CLI Reference$/ { in_cli = 1; next }
+        in_cli && /^\*\*Version\*\*: / {
+            sub(/^\*\*Version\*\*: /, "")
+            print
+            exit
+        }
+    ' "$BUTTONHEIST_API_DOCS_FILE"
+}
+
+extract_demo_version() {
+    grep -o 'LabeledContent("Version", value: "[^"]*")' "$BUTTONHEIST_DEMO_VERSION_FILE" | cut -d'"' -f4
+}
+
 VERSION_FILE=$(read_version_file)
 CODE_VERSION=$(extract_code_version)
 FORMULA_VERSION=$(extract_formula_version)
+API_DOCS_VERSION=$(extract_api_docs_version)
+DEMO_VERSION=$(extract_demo_version)
 
 [[ -n "$VERSION_FILE" ]] || fail "$BUTTONHEIST_RELEASE_VERSION_FILE is empty"
 [[ "$VERSION_FILE" == "$CODE_VERSION" ]] || fail "$BUTTONHEIST_RELEASE_VERSION_FILE ($VERSION_FILE) != $BUTTONHEIST_CODE_VERSION_FILE ($CODE_VERSION)"
 [[ "$VERSION_FILE" == "$FORMULA_VERSION" ]] || fail "$BUTTONHEIST_RELEASE_VERSION_FILE ($VERSION_FILE) != $BUTTONHEIST_FORMULA_TEMPLATE ($FORMULA_VERSION)"
+[[ -n "$API_DOCS_VERSION" ]] || fail "$BUTTONHEIST_API_DOCS_FILE is missing a CLI Reference version"
+[[ "$VERSION_FILE" == "$API_DOCS_VERSION" ]] || fail "$BUTTONHEIST_RELEASE_VERSION_FILE ($VERSION_FILE) != $BUTTONHEIST_API_DOCS_FILE ($API_DOCS_VERSION)"
+[[ -n "$DEMO_VERSION" ]] || fail "$BUTTONHEIST_DEMO_VERSION_FILE is missing its Version labeled content"
+[[ "$VERSION_FILE" == "$DEMO_VERSION" ]] || fail "$BUTTONHEIST_RELEASE_VERSION_FILE ($VERSION_FILE) != $BUTTONHEIST_DEMO_VERSION_FILE ($DEMO_VERSION)"
 
 EXPECTED_HOMEPAGE="homepage \"https://github.com/$BUTTONHEIST_GITHUB_REPO\""
 grep -Fq "$EXPECTED_HOMEPAGE" "$BUTTONHEIST_FORMULA_TEMPLATE" \
