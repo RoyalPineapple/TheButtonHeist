@@ -128,18 +128,27 @@ extension TheFence {
 
     private func decodeDrawPathTarget(_ request: [String: Any]) throws -> DrawPathTarget {
         let pointsArray = try request.requiredSchemaDictionaryArray("points")
+        try validateArrayCount(
+            field: "points",
+            count: pointsArray.count,
+            min: 2,
+            max: DecodeLimits.maxDrawPathPoints,
+            note: "at least 2 points"
+        )
         let points = try pointsArray.enumerated().map { index, point -> PathPoint in
             PathPoint(
                 x: try schemaNumber(in: point, key: "x", field: "points[\(index)].x"),
                 y: try schemaNumber(in: point, key: "y", field: "points[\(index)].y")
             )
         }
-        guard points.count >= 2 else {
-            throw FenceError.invalidRequest("Path requires at least 2 points")
-        }
+        let duration = try schemaBoundedPositiveNumber(
+            request,
+            key: "duration",
+            maximum: DecodeLimits.maxDrawGestureDurationSeconds
+        )
         return DrawPathTarget(
             points: points,
-            duration: try schemaPositiveNumber(request, key: "duration"),
+            duration: duration,
             velocity: try schemaPositiveNumber(request, key: "velocity")
         )
     }
@@ -148,6 +157,13 @@ extension TheFence {
         let startX = try request.requiredSchemaNumber("startX")
         let startY = try request.requiredSchemaNumber("startY")
         let segmentsArray = try request.requiredSchemaDictionaryArray("segments")
+        try validateArrayCount(
+            field: "segments",
+            count: segmentsArray.count,
+            min: 1,
+            max: DecodeLimits.maxDrawBezierSegments,
+            note: "At least 1 bezier segment is required"
+        )
         let segments = try segmentsArray.enumerated().map { index, segment -> BezierSegment in
             BezierSegment(
                 cp1X: try schemaNumber(in: segment, key: "cp1X", field: "segments[\(index)].cp1X"),
@@ -158,17 +174,50 @@ extension TheFence {
                 endY: try schemaNumber(in: segment, key: "endY", field: "segments[\(index)].endY")
             )
         }
-        guard !segments.isEmpty else {
-            throw FenceError.invalidRequest("At least 1 bezier segment is required")
+        let samplesPerSegment = try schemaBoundedPositiveInteger(
+            request,
+            key: "samplesPerSegment",
+            minimum: DecodeLimits.minDrawBezierSamplesPerSegment,
+            maximum: DecodeLimits.maxDrawBezierSamplesPerSegment
+        )
+        let resolvedSamplesPerSegment = samplesPerSegment ?? 20
+        let generatedPointCount = segments.count * (resolvedSamplesPerSegment - 1) + 1
+        guard generatedPointCount <= DecodeLimits.maxDrawBezierGeneratedPathPoints else {
+            throw SchemaValidationError(
+                field: "segments",
+                observed: "generated path point count \(generatedPointCount)",
+                expected: "generated path point count <= \(DecodeLimits.maxDrawBezierGeneratedPathPoints)"
+            )
         }
+        let duration = try schemaBoundedPositiveNumber(
+            request,
+            key: "duration",
+            maximum: DecodeLimits.maxDrawGestureDurationSeconds
+        )
         return DrawBezierTarget(
             startX: startX,
             startY: startY,
             segments: segments,
-            samplesPerSegment: try schemaPositiveInteger(request, key: "samplesPerSegment"),
-            duration: try schemaPositiveNumber(request, key: "duration"),
+            samplesPerSegment: samplesPerSegment,
+            duration: duration,
             velocity: try schemaPositiveNumber(request, key: "velocity")
         )
+    }
+
+    private func validateArrayCount(
+        field: String,
+        count: Int,
+        min: Int,
+        max: Int,
+        note: String
+    ) throws {
+        guard count >= min && count <= max else {
+            throw SchemaValidationError(
+                field: field,
+                observed: "array count \(count)",
+                expected: "array count \(min)...\(max) (\(note))"
+            )
+        }
     }
 
     private func requiredSchemaPositiveNumber(
@@ -192,6 +241,18 @@ extension TheFence {
         return value
     }
 
+    private func schemaBoundedPositiveNumber(
+        _ dictionary: [String: Any],
+        key: String,
+        maximum: Double
+    ) throws -> Double? {
+        guard let value = try schemaPositiveNumber(dictionary, key: key) else { return nil }
+        guard value <= maximum else {
+            throw SchemaValidationError(field: key, observed: value, expected: "number in 0...\(maximum)")
+        }
+        return value
+    }
+
     private func schemaPositiveInteger(
         _ dictionary: [String: Any],
         key: String
@@ -199,6 +260,19 @@ extension TheFence {
         guard let value = try dictionary.schemaInteger(key) else { return nil }
         guard value > 0 else {
             throw SchemaValidationError(field: key, observed: value, expected: "integer > 0")
+        }
+        return value
+    }
+
+    private func schemaBoundedPositiveInteger(
+        _ dictionary: [String: Any],
+        key: String,
+        minimum: Int,
+        maximum: Int
+    ) throws -> Int? {
+        guard let value = try dictionary.schemaInteger(key) else { return nil }
+        guard value >= minimum && value <= maximum else {
+            throw SchemaValidationError(field: key, observed: value, expected: "integer in \(minimum)...\(maximum)")
         }
         return value
     }

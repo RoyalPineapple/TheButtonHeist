@@ -840,8 +840,31 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testDrawPathInvalidPointData() async {
         await assertValidationError(
-            ["command": "draw_path", "points": [["x": "bad", "y": "data"]]],
+            ["command": "draw_path", "points": [["x": "bad", "y": "data"], ["x": 0.0, "y": 0.0]]],
             equals: "schema validation failed for points[0].x: observed string \"bad\"; expected number"
+        )
+    }
+
+    @ButtonHeistActor
+    func testDrawPathRejectsTooManyPointsBeforeExecution() async {
+        let points = (0...TheFence.DecodeLimits.maxDrawPathPoints).map { index in
+            ["x": Double(index), "y": Double(index)]
+        }
+        await assertValidationError(
+            ["command": "draw_path", "points": points],
+            equals: "schema validation failed for points: observed array count 10001; expected array count 2...10000 (at least 2 points)"
+        )
+    }
+
+    @ButtonHeistActor
+    func testDrawPathRejectsOversizedDurationBeforeExecution() async {
+        await assertValidationError(
+            [
+                "command": "draw_path",
+                "points": [["x": 0.0, "y": 0.0], ["x": 1.0, "y": 1.0]],
+                "duration": 61.0,
+            ],
+            equals: "schema validation failed for duration: observed number 61.0; expected number in 0...60.0"
         )
     }
 
@@ -888,6 +911,52 @@ final class TheFenceHandlerTests: XCTestCase {
                 ["cp1X": 1.0, "cp1Y": 2.0],
             ]],
             equals: "schema validation failed for segments[0].cp2X: observed missing; expected number"
+        )
+    }
+
+    @ButtonHeistActor
+    func testDrawBezierRejectsTooManySegmentsBeforeExecution() async {
+        let segment = [
+            "cp1X": 10.0, "cp1Y": 20.0, "cp2X": 30.0,
+            "cp2Y": 40.0, "endX": 50.0, "endY": 60.0,
+        ]
+        let segments = Array(repeating: segment, count: TheFence.DecodeLimits.maxDrawBezierSegments + 1)
+        await assertValidationError(
+            ["command": "draw_bezier", "startX": 0.0, "startY": 0.0, "segments": segments],
+            equals: "schema validation failed for segments: observed array count 1001; expected array count 1...1000 (At least 1 bezier segment is required)"
+        )
+    }
+
+    @ButtonHeistActor
+    func testDrawBezierRejectsOversizedSamplesBeforeExecution() async {
+        await assertValidationError(
+            [
+                "command": "draw_bezier",
+                "startX": 0.0,
+                "startY": 0.0,
+                "segments": [["cp1X": 10.0, "cp1Y": 20.0, "cp2X": 30.0, "cp2Y": 40.0, "endX": 50.0, "endY": 60.0]],
+                "samplesPerSegment": 1_001,
+            ],
+            equals: "schema validation failed for samplesPerSegment: observed integer 1001; expected integer in 2...1000"
+        )
+    }
+
+    @ButtonHeistActor
+    func testDrawBezierRejectsOversizedGeneratedPathBeforeExecution() async {
+        let segment = [
+            "cp1X": 10.0, "cp1Y": 20.0, "cp2X": 30.0,
+            "cp2Y": 40.0, "endX": 50.0, "endY": 60.0,
+        ]
+        let segments = Array(repeating: segment, count: 1_000)
+        await assertValidationError(
+            [
+                "command": "draw_bezier",
+                "startX": 0.0,
+                "startY": 0.0,
+                "segments": segments,
+                "samplesPerSegment": 52,
+            ],
+            equals: "schema validation failed for segments: observed generated path point count 51001; expected generated path point count <= 50000"
         )
     }
 
@@ -2320,6 +2389,31 @@ final class TheFenceHandlerTests: XCTestCase {
             batch.summaries[0].error,
             "run_batch step 0: run_batch step \"scroll\" uses the MCP mode selector; " +
                 "use canonical Fence commands scroll, scroll_to_visible, element_search, or scroll_to_edge."
+        )
+    }
+
+    @ButtonHeistActor
+    func testBatchRejectsTooManyStepsBeforeExecution() async {
+        let steps = Array(repeating: ["command": "activate", "identifier": "btn"], count: TheFence.DecodeLimits.maxRunBatchSteps + 1)
+        await assertValidationError(
+            ["command": "run_batch", "steps": steps],
+            equals: "schema validation failed for steps: observed array count 101; expected array count 1...100"
+        )
+    }
+
+    @ButtonHeistActor
+    func testBatchRejectsTooDeepRequestBeforeExecution() async {
+        func nested(_ depth: Int) -> [String: Any] {
+            depth == 0 ? ["type": "screen_changed"] : ["expectations": [nested(depth - 1)]]
+        }
+        await assertValidationError(
+            [
+                "command": "run_batch",
+                "steps": [
+                    ["command": "activate", "identifier": "btn", "expect": nested(TheFence.DecodeLimits.maxRunBatchNestingDepth)],
+                ] as [[String: Any]],
+            ],
+            contains: "expected nesting depth <= 32"
         )
     }
 

@@ -53,12 +53,25 @@ extension TheFence {
     }
 
     private func decodeRunBatchRequest(_ request: [String: Any]) throws -> RunBatchRequest {
+        try Self.validateJSONEnvelope(
+            request,
+            field: "run_batch",
+            maxBytes: DecodeLimits.maxRunBatchRequestBytes,
+            maxDepth: DecodeLimits.maxRunBatchNestingDepth
+        )
         let rawSteps = try request.requiredSchemaDictionaryArray("steps")
         guard !rawSteps.isEmpty else {
             throw SchemaValidationError(
                 field: "steps",
                 observed: "array count 0",
-                expected: "array count >= 1"
+                expected: "array count 1...\(DecodeLimits.maxRunBatchSteps)"
+            )
+        }
+        guard rawSteps.count <= DecodeLimits.maxRunBatchSteps else {
+            throw SchemaValidationError(
+                field: "steps",
+                observed: "array count \(rawSteps.count)",
+                expected: "array count 1...\(DecodeLimits.maxRunBatchSteps)"
             )
         }
         return RunBatchRequest(
@@ -147,5 +160,45 @@ extension TheFence {
             details: details,
             includeDetailsInResult: true
         )
+    }
+}
+
+private extension TheFence {
+
+    static func validateJSONEnvelope(
+        _ value: Any,
+        field: String,
+        maxBytes: Int,
+        maxDepth: Int
+    ) throws {
+        guard JSONSerialization.isValidJSONObject(value) else {
+            throw SchemaValidationError(field: field, observed: value, expected: "JSON object")
+        }
+        let byteCount = try JSONSerialization.data(withJSONObject: value).count
+        guard byteCount <= maxBytes else {
+            throw SchemaValidationError(
+                field: field,
+                observed: "\(byteCount) bytes",
+                expected: "JSON request <= \(maxBytes) bytes"
+            )
+        }
+        let depth = jsonNestingDepth(of: value)
+        guard depth <= maxDepth else {
+            throw SchemaValidationError(
+                field: field,
+                observed: "nesting depth \(depth)",
+                expected: "nesting depth <= \(maxDepth)"
+            )
+        }
+    }
+
+    static func jsonNestingDepth(of value: Any) -> Int {
+        if let dictionary = value as? [String: Any] {
+            return 1 + (dictionary.values.map(jsonNestingDepth(of:)).max() ?? 0)
+        }
+        if let array = value as? [Any] {
+            return 1 + (array.map(jsonNestingDepth(of:)).max() ?? 0)
+        }
+        return 1
     }
 }
