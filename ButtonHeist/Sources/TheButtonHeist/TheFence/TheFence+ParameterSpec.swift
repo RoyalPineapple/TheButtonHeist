@@ -96,6 +96,8 @@ extension TheFence {
         static let maxRunBatchNestingDepth = 32
         static let maxBatchResultRows = maxRunBatchSteps
         static let maxInlineScreenshotBase64Bytes = 1_000_000
+        static let maxInlineRecordingBase64Bytes = 10_000_000
+        static let maxExpandedRecordingResponseBytes = 10_000_000
 
         static let maxDrawPathPoints = 10_000
         static let maxDrawBezierSegments = 1_000
@@ -142,6 +144,7 @@ public enum FenceParameterKey: String, CaseIterable, Sendable {
     case heistId
     case identifier
     case inactivityTimeout = "inactivity_timeout"
+    case includeInteractionLog
     case includeInterface
     case inlineData
     case input
@@ -937,8 +940,8 @@ extension TheFence.Command {
 
         case Self.stopRecording.rawValue:
             return """
-                Stop an in-progress screen recording. Returns metadata only by default (raw video \
-                is too large for MCP context); pass 'output' to save the MP4 to a file path.
+                Stop an in-progress screen recording. Returns artifact path and metadata by default. \
+                Set inlineData=true and/or includeInteractionLog=true for a capped expanded JSON response.
                 """
 
         case Self.listDevices.rawValue:
@@ -1052,7 +1055,7 @@ extension TheFence.Command {
                     description: "File path to save PNG (omit for default artifact path; cannot be combined with inlineData=true)"
                 ),
                 .init(
-                    key: "inlineData", type: .boolean, optionalRole: .compatibility,
+                    key: "inlineData", type: .boolean, optionalRole: .behaviorSwitch,
                     description: """
                         Return base64 PNG data inline instead of an artifact path \
                         (default false; capped before delivery; not allowed inside run_batch)
@@ -1386,7 +1389,15 @@ extension TheFence.Command {
 
         case .stopRecording:
             return [
-                .init(key: "output", type: .string, optionalRole: .payload, description: "File path to save MP4 (metadata-only response if omitted)"),
+                .init(key: "output", type: .string, optionalRole: .payload, description: "File path to save MP4 (omit for default artifact path)"),
+                .init(
+                    key: "inlineData", type: .boolean, optionalRole: .behaviorSwitch,
+                    description: "Include base64 MP4 video data in the response (default false; capped before delivery)"
+                ),
+                .init(
+                    key: "includeInteractionLog", type: .boolean, optionalRole: .behaviorSwitch,
+                    description: "Include the full interaction log in the response (default false; capped before delivery)"
+                ),
             ]
 
         // MARK: Batch

@@ -38,7 +38,9 @@ extension TheFence {
     ) throws -> ArtifactRequest {
         ArtifactRequest(
             outputPath: try request.schemaString("output"),
-            requestId: requestId
+            requestId: requestId,
+            inlineData: try request.schemaBoolean("inlineData") ?? false,
+            includeInteractionLog: try request.schemaBoolean("includeInteractionLog") ?? false
         )
     }
 

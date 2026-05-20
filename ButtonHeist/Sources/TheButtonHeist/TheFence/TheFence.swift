@@ -1302,6 +1302,10 @@ public final class TheFence {
             responseStatus = .ok
             artifactPath = path
             errorMessage = nil
+        case .recordingExpanded(let path, _, _):
+            responseStatus = .ok
+            artifactPath = path
+            errorMessage = nil
         case .archiveResult(let path, _):
             responseStatus = .ok
             artifactPath = path

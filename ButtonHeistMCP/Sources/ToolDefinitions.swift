@@ -3,13 +3,9 @@ import MCP
 
 enum ToolDefinitions {
     // NOTE: Video data handling
-    // The MCP server intentionally omits raw base64 video data from responses.
-    // Video payloads can be tens of megabytes which would overwhelm the MCP
-    // context window. Instead, video metadata (dimensions, duration, frame count,
-    // stop reason, interaction count) is returned as a JSON summary.
-    //
-    // Agents that need the actual video file should pass the "output" parameter
-    // in stop_recording to write to disk and receive only the file path.
+    // Recording responses return artifact paths plus metadata by default.
+    // Raw base64 video data and full interaction logs are opt-in and capped
+    // before rendering because they can overwhelm the MCP context window.
 
     static var all: [Tool] {
         TheFence.Command.mcpToolContracts.map(tool(for:))

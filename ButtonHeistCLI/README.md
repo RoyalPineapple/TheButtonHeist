@@ -118,6 +118,18 @@ buttonheist start_recording --output demo.mp4 --fps 15 --scale 0.5 --action-log 
 
 Flags: `-o/--output` (default "recording.mp4"), `--fps` (default 8), `--scale`, `--inactivity-timeout` (optional early-stop; omitted disables inactivity auto-stop), `--max-duration` (default 60s), `--action-log <path>`.
 
+### stop_recording
+
+Stop an in-progress screen recording.
+
+```bash
+buttonheist stop_recording
+buttonheist stop_recording --output demo.mp4 --format json
+buttonheist stop_recording --inline-data --include-interaction-log --format json
+```
+
+Flags: `-o/--output` (default generated artifact path), `--inline-data`, `--include-interaction-log`, `-f/--format` (human/json/compact).
+
 ### list_devices
 
 Discover devices on the network.

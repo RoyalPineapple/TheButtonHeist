@@ -186,6 +186,12 @@ private extension TheFence.RequestPayload {
         case .artifact(let request):
             var arguments: [String: HeistValue] = [:]
             arguments.set(.output, request.outputPath)
+            if request.inlineData {
+                arguments.set(.inlineData, true)
+            }
+            if request.includeInteractionLog {
+                arguments.set(.includeInteractionLog, true)
+            }
             return arguments
         case .gesture(let payload):
             return payload.bookKeeperArguments(includeTarget: includeTarget)

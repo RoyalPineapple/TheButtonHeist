@@ -390,22 +390,101 @@ extension TheFence {
             fps: recording.fps,
             frameCount: recording.frameCount
         )
+        let responseOptions = RecordingResponseOptions(
+            inlineData: request.inlineData,
+            includeInteractionLog: request.includeInteractionLog
+        )
+        if let expandedResponseError = validateExpandedRecordingResponse(
+            recording,
+            options: responseOptions
+        ) {
+            return expandedResponseError
+        }
         do {
-            if let url = try bookKeeper.writeRecordingIfSinkAvailable(
+            let url = try bookKeeper.writeRecordingArtifact(
                 base64Data: recording.videoData,
                 outputPath: request.outputPath,
                 requestId: request.requestId,
                 command: .stopRecording,
                 metadata: metadata
-            ) {
-                return .recording(path: url.path, payload: recording)
+            )
+            if request.inlineData || request.includeInteractionLog {
+                let response = FenceResponse.recordingExpanded(
+                    path: url.path,
+                    payload: recording,
+                    options: responseOptions
+                )
+                if let oversizedResponseError = validateExpandedRecordingResponseSize(response) {
+                    return oversizedResponseError
+                }
+                return response
             }
+            return .recording(path: url.path, payload: recording)
         } catch BookKeeperError.unsafePath {
             return .error("Invalid output path: must not contain '..' components or control characters")
         } catch BookKeeperError.base64DecodingFailed {
             return .error("Failed to decode video data")
         }
-        return .recordingData(payload: recording)
+    }
+
+    private func validateExpandedRecordingResponse(
+        _ recording: RecordingPayload,
+        options: RecordingResponseOptions
+    ) -> FenceResponse? {
+        guard options.inlineData else { return nil }
+        let byteCount = recording.videoData.utf8.count
+        guard byteCount <= DecodeLimits.maxInlineRecordingBase64Bytes else {
+            return .error(
+                "Inline recording payload is too large: \(byteCount) bytes exceeds " +
+                    "\(DecodeLimits.maxInlineRecordingBase64Bytes) bytes",
+                details: FailureDetails(
+                    errorCode: "recording.inline_payload_too_large",
+                    phase: .client,
+                    retryable: false,
+                    hint: "Omit inlineData to receive a recording artifact path."
+                )
+            )
+        }
+        return nil
+    }
+
+    private func validateExpandedRecordingResponseSize(_ response: FenceResponse) -> FenceResponse? {
+        let dict = response.jsonDict()
+        guard JSONSerialization.isValidJSONObject(dict) else {
+            return .error(
+                "Failed to encode expanded recording response",
+                details: FailureDetails(
+                    errorCode: "recording.expanded_response_encoding_failed",
+                    phase: .client,
+                    retryable: false,
+                    hint: "Omit inlineData or includeInteractionLog and retry."
+                )
+            )
+        }
+        guard let data = try? JSONSerialization.data(withJSONObject: dict, options: [.sortedKeys]) else {
+            return .error(
+                "Failed to encode expanded recording response",
+                details: FailureDetails(
+                    errorCode: "recording.expanded_response_encoding_failed",
+                    phase: .client,
+                    retryable: false,
+                    hint: "Omit inlineData or includeInteractionLog and retry."
+                )
+            )
+        }
+        guard data.count <= DecodeLimits.maxExpandedRecordingResponseBytes else {
+            return .error(
+                "Expanded recording response is too large: \(data.count) bytes exceeds " +
+                    "\(DecodeLimits.maxExpandedRecordingResponseBytes) bytes",
+                details: FailureDetails(
+                    errorCode: "recording.expanded_response_too_large",
+                    phase: .client,
+                    retryable: false,
+                    hint: "Omit inlineData or includeInteractionLog to receive a recording artifact path and metadata."
+                )
+            )
+        }
+        return nil
     }
 
     // MARK: - Handler: BookKeeper

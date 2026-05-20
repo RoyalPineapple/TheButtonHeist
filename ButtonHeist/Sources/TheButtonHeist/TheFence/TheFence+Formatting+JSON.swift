@@ -44,7 +44,9 @@ extension FenceResponse {
         case .screenshotData(let payload, let options):
             return screenJsonDict(payload, includePNGData: true, includeInterface: options.includeInterface)
         case .recording(let path, let payload):
-            return recordingJsonDict(path: path, payload: payload)
+            return recordingJsonDict(path: path, payload: payload, options: RecordingResponseOptions())
+        case .recordingExpanded(let path, let payload, let options):
+            return recordingJsonDict(path: path, payload: payload, options: options)
         case .recordingData(let payload):
             return recordingDataJsonDict(payload)
         case .batch(let outcomes, let totalTimingMs, let accessibilityTrace):
@@ -421,10 +423,13 @@ extension FenceResponse {
         (result.errorKind ?? .actionFailed).rawValue
     }
 
-    private func recordingJsonDict(path: String, payload: RecordingPayload) -> [String: Any] {
+    private func recordingJsonDict(
+        path: String?,
+        payload: RecordingPayload,
+        options: RecordingResponseOptions
+    ) -> [String: Any] {
         var dict: [String: Any] = [
             "status": "ok",
-            "path": path,
             "width": payload.width,
             "height": payload.height,
             "duration": payload.duration,
@@ -433,28 +438,24 @@ extension FenceResponse {
             "stopReason": payload.stopReason.rawValue,
             "interactionCount": payload.interactionLog?.count ?? 0,
         ]
-        if let logDicts = encodeInteractionLog(payload.interactionLog) {
+        if let path {
+            dict["path"] = path
+        }
+        if options.inlineData {
+            dict["videoData"] = payload.videoData
+        }
+        if options.includeInteractionLog, let logDicts = encodeInteractionLog(payload.interactionLog) {
             dict["interactionLog"] = logDicts
         }
         return dict
     }
 
     private func recordingDataJsonDict(_ payload: RecordingPayload) -> [String: Any] {
-        var dict: [String: Any] = [
-            "status": "ok",
-            "videoData": payload.videoData,
-            "width": payload.width,
-            "height": payload.height,
-            "duration": payload.duration,
-            "frameCount": payload.frameCount,
-            "fps": payload.fps,
-            "stopReason": payload.stopReason.rawValue,
-            "interactionCount": payload.interactionLog?.count ?? 0,
-        ]
-        if let logDicts = encodeInteractionLog(payload.interactionLog) {
-            dict["interactionLog"] = logDicts
-        }
-        return dict
+        recordingJsonDict(
+            path: nil,
+            payload: payload,
+            options: RecordingResponseOptions(inlineData: true)
+        )
     }
 
     private func encodeInteractionLog(_ events: [InteractionEvent]?) -> [[String: Any]]? {

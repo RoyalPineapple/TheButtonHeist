@@ -48,7 +48,7 @@ ButtonHeistMCP currently exposes 24 tools backed by `TheFence`:
 - Resets an idle timeout after every tool call and disconnects when inactive
 - Returns screenshot metadata plus an artifact path by default; pass `inlineData=true` on `get_screen` to opt into capped MCP image content
 - Rejects `inlineData=true` for `get_screen` inside `run_batch` so batched responses stay bounded
-- Replaces raw base64 video payloads with a summary so recordings do not overwhelm MCP context; pass `output` to `stop_recording` to take the actual tape with you
+- Returns recording artifact paths plus metadata by default; `inlineData` and `includeInteractionLog` are explicit, size-capped expansion flags
 
 ## Environment
 
