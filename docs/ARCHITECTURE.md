@@ -12,17 +12,16 @@ reference docs linked at the end.
 
 ### Strings Only at Edges
 
-There is one product command contract: `TheFence.Command`, currently 43
-supported commands. CLI arguments, MCP JSON, session JSON, and heist files
-accept canonical command strings such as `activate`, `type_text`, and
-`scroll_to_visible`; those strings are parsed once at the boundary and routed as
-typed values inside the stack.
+There is one product command contract: `TheFence.Command`. CLI arguments, MCP
+JSON, session JSON, and heist files accept canonical command strings such as
+`activate`, `type_text`, and `scroll_to_visible`; those strings are parsed once
+at the boundary and routed as typed values inside the stack.
 
 Grouped MCP tools are adapters, not a second command model. ButtonHeistMCP
-currently exposes 24 tools; tools such as `gesture`, `scroll`, and
-`edit_action` use typed selector parameters that route to canonical Fence
-commands. Wire message discriminators live one layer lower in TheScore and are
-documented separately.
+projects tools from the Fence-owned MCP contract; tools such as `gesture`,
+`scroll`, and `edit_action` use typed selector parameters that route to
+canonical Fence commands. Wire message discriminators live one layer lower in
+TheScore and are documented separately.
 
 ### Captures and Deltas Are the Currency
 
@@ -79,12 +78,12 @@ classification used by action results, waiters, and background awareness.
 
 ```mermaid
 flowchart LR
-    Agent["Agent / CLI"] --> MCP["ButtonHeistMCP<br/>24 tools"]
+    Agent["Agent / CLI"] --> MCP["ButtonHeistMCP<br/>tool adapter"]
     Agent --> CLI["buttonheist CLI"]
-    MCP --> Fence["TheFence<br/>43 supported commands"]
+    MCP --> Fence["TheFence<br/>command contract"]
     CLI --> Fence
     Fence --> Handoff["TheHandoff<br/>discovery + TLS client"]
-    Handoff <-->|"Bonjour / USB TCP"| Inside["TheInsideJob<br/>iOS server"]
+    Handoff <-->|"scoped direct/discovery TLS"| Inside["TheInsideJob<br/>iOS server"]
     Inside --> Getaway["TheGetaway<br/>decode, route, encode"]
     Getaway --> Brains["TheBrains<br/>actions, waits, deltas"]
     Brains --> Stash["TheStash<br/>current accessibility state"]

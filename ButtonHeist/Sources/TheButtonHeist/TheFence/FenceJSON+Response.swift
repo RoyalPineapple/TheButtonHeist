@@ -1,0 +1,108 @@
+import Foundation
+
+protocol FencePublicJSONResponse: Encodable {}
+
+struct PublicStatus: Encodable {
+    static let ok = PublicStatus(value: "ok")
+    static let error = PublicStatus(value: "error")
+
+    let value: String
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(value)
+    }
+}
+
+struct PublicErrorResponse: FencePublicJSONResponse {
+    let status = PublicStatus.error
+    let message: String
+    let errorCode: String?
+    let phase: String?
+    let retryable: Bool?
+    let hint: String?
+
+    init(message: String, details: FailureDetails?) {
+        self.message = message
+        self.errorCode = details?.errorCode
+        self.phase = details?.phase.rawValue
+        self.retryable = details?.retryable
+        self.hint = details?.hint
+    }
+}
+
+struct PublicResponseModel: FencePublicJSONResponse {
+    let response: FenceResponse
+
+    func encode(to encoder: Encoder) throws {
+        switch response {
+        case .ok(let message):
+            try PublicOKResponse(message: message).encode(to: encoder)
+        case .error(let message, let details):
+            try PublicErrorResponse(message: message, details: details).encode(to: encoder)
+        case .help(let commands):
+            try PublicHelpResponse(commands: commands).encode(to: encoder)
+        case .status(let connected, let deviceName):
+            try PublicStatusResponse(connected: connected, device: deviceName).encode(to: encoder)
+        case .devices(let devices):
+            try PublicDevicesResponse(devices: devices).encode(to: encoder)
+        case .interface(let interface, let detail):
+            try PublicInterfaceResponse(interface: interface, detail: detail).encode(to: encoder)
+        case .action(let result, let expectation):
+            try PublicActionResponse(result: result, expectation: expectation).encode(to: encoder)
+        case .screenshot(let path, let payload, let options):
+            try PublicScreenshotResponse(
+                path: path,
+                payload: payload,
+                includePNGData: false,
+                includeInterface: options.includeInterface
+            ).encode(to: encoder)
+        case .screenshotData(let payload, let options):
+            try PublicScreenshotResponse(
+                path: nil,
+                payload: payload,
+                includePNGData: true,
+                includeInterface: options.includeInterface
+            ).encode(to: encoder)
+        case .recording(let path, let payload):
+            try PublicRecordingResponse(
+                path: path,
+                payload: payload,
+                options: RecordingResponseOptions()
+            ).encode(to: encoder)
+        case .recordingExpanded(let path, let payload, let options):
+            try PublicRecordingResponse(path: path, payload: payload, options: options).encode(to: encoder)
+        case .recordingData(let payload):
+            try PublicRecordingResponse(
+                path: nil,
+                payload: payload,
+                options: RecordingResponseOptions(inlineData: true)
+            ).encode(to: encoder)
+        case .batch(let outcomes, let totalTimingMs, let accessibilityTrace):
+            try PublicBatchResponse(
+                outcomes: outcomes,
+                totalTimingMs: totalTimingMs,
+                accessibilityTrace: accessibilityTrace
+            ).encode(to: encoder)
+        case .sessionState(let payload):
+            try PublicSessionStateResponse(payload: payload).encode(to: encoder)
+        case .targets(let targets, let defaultTarget):
+            try PublicTargetsResponse(targets: targets, defaultTarget: defaultTarget).encode(to: encoder)
+        case .sessionLog(let snapshot):
+            try PublicSessionLogResponse(snapshot: snapshot).encode(to: encoder)
+        case .archiveResult(let path, let snapshot):
+            try PublicSessionLogResponse(snapshot: snapshot, path: path).encode(to: encoder)
+        case .heistStarted:
+            try PublicHeistStartedResponse().encode(to: encoder)
+        case .heistStopped(let path, let stepCount):
+            try PublicHeistStoppedResponse(path: path, stepCount: stepCount).encode(to: encoder)
+        case .heistPlayback(let completedSteps, let failedIndex, let totalTimingMs, let failure, _):
+            try PublicPlaybackResponse(
+                completedSteps: completedSteps,
+                failedIndex: failedIndex,
+                totalTimingMs: totalTimingMs,
+                failure: failure
+            ).encode(to: encoder)
+        }
+    }
+}

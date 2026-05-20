@@ -1,4 +1,5 @@
 import SwiftUI
+import TheScore
 
 struct DisclosureGroupingDemo: View {
     @State private var isAdvancedExpanded = false
@@ -14,7 +15,7 @@ struct DisclosureGroupingDemo: View {
                     Toggle("Dark mode", isOn: $darkModeEnabled)
                 }
 
-                LabeledContent("Version", value: "0.4.1")
+                LabeledContent("Version", value: TheScore.buttonHeistVersion)
 
                 LabeledContent("Build", value: "42")
             }

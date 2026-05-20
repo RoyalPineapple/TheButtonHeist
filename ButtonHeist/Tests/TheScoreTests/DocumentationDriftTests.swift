@@ -83,13 +83,65 @@ final class DocumentationDriftTests: XCTestCase {
         }
     }
 
+    func testReleaseVersionSurfacesDoNotDuplicateManualBumps() throws {
+        let releaseVersion = try readText(named: "RELEASE_VERSION").trimmingCharacters(in: .whitespacesAndNewlines)
+        let apiDocs = try readText(named: "docs/API.md")
+        let demoSource = try readText(named: "TestApp/Sources/DisclosureGroupingDemo.swift")
+
+        XCTAssertEqual(
+            releaseVersion,
+            buttonHeistVersion,
+            "RELEASE_VERSION must match TheScore.buttonHeistVersion"
+        )
+
+        XCTAssertFalse(
+            apiDocs.contains(releaseVersion),
+            "docs/API.md must not duplicate the current release version"
+        )
+        XCTAssertNil(
+            apiDocs.range(
+                of: #"(?m)^\*\*Version\*\*:\s*\d+\.\d+\.\d+\s*$"#,
+                options: .regularExpression
+            ),
+            "docs/API.md CLI Reference must not carry a manually bumped release version"
+        )
+        XCTAssertNil(
+            apiDocs.range(of: #"\b\d+\.\d+\.\d+\b"#, options: .regularExpression),
+            "docs/API.md must use <semver> placeholders instead of concrete release versions"
+        )
+
+        XCTAssertFalse(
+            demoSource.contains(releaseVersion),
+            "DisclosureGroupingDemo must source the release version from TheScore.buttonHeistVersion"
+        )
+        XCTAssertNil(
+            demoSource.range(
+                of: #"LabeledContent\(\s*"Version"\s*,\s*value:\s*"\d+\.\d+\.\d+"\s*\)"#,
+                options: .regularExpression
+            ),
+            "DisclosureGroupingDemo must not hardcode a release version"
+        )
+
+        if demoSource.range(of: #"LabeledContent\(\s*"Version""#, options: .regularExpression) != nil {
+            XCTAssertNotNil(
+                demoSource.range(
+                    of: #"LabeledContent\(\s*"Version"\s*,\s*value:\s*(?:TheScore\.)?buttonHeistVersion\s*\)"#,
+                    options: .regularExpression
+                ),
+                "DisclosureGroupingDemo Version row must use TheScore.buttonHeistVersion or be removed"
+            )
+        }
+    }
+
     private func readDocs(named paths: [String]) throws -> [String: String] {
-        let root = repositoryRoot()
         return try Dictionary(uniqueKeysWithValues: paths.map { path in
-            let url = root.appendingPathComponent(path)
-            let content = try String(contentsOf: url, encoding: .utf8)
-            return (path, content)
+            try (path, readText(named: path))
         })
+    }
+
+    private func readText(named path: String) throws -> String {
+        let url = repositoryRoot().appendingPathComponent(path)
+        return try String(contentsOf: url, encoding: .utf8)
     }
 
     private func repositoryRoot() -> URL {

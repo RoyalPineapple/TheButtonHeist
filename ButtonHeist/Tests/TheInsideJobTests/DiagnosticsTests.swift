@@ -36,11 +36,11 @@ final class DiagnosticsTests: XCTestCase {
         XCTAssertTrue(message.contains("submit-button"))
         XCTAssertTrue(message.contains("cancel-button"))
         XCTAssertFalse(message.contains("header"))
-        // The "did you mean" branch still offers a refetch fallback in case
+        // The "did you mean" branch still offers a refetch recovery hint in case
         // none of the suggestions is what the agent meant.
         XCTAssertTrue(message.contains("get_interface"))
         // The near-miss branch already gives concrete heistIds, so the
-        // "or target by label/identifier with a matcher" fallback is omitted.
+        // "or target by label/identifier with a matcher" recovery hint is omitted.
         XCTAssertFalse(message.contains("matcher"))
     }
 

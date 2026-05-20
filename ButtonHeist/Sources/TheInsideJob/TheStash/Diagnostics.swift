@@ -166,12 +166,11 @@ extension TheStash {
             return "near miss: matched all fields except \(relaxation.field) — did you mean \(suggestion)\(suffix)?"
         }
 
-        // Fallback: when the matcher only has one predicate (or every relaxation
-        // empties out), retry the original matcher with substring semantics
-        // against the single remaining field so the agent who typed a partial
-        // still gets concrete suggestions. This is the only place where
-        // substring search reaches user-visible output; resolution itself
-        // remains strictly exact-or-miss.
+        // Single-predicate diagnostic pass: when every relaxation removes all
+        // predicates, run the original matcher with substring semantics so the
+        // agent who typed a partial still gets concrete suggestions. This is
+        // the only place where substring search reaches user-visible output;
+        // resolution itself remains strictly exact-or-miss.
         for relaxation in relaxations where !relaxation.relaxed.hasPredicates {
             let substringHits = matchCandidates(matcher, in: screenElements, mode: .substring, limit: suggestionCap + 1)
             guard !substringHits.isEmpty else { continue }
@@ -191,7 +190,7 @@ extension TheStash {
         return nil
     }
 
-    /// Compact summary of known elements for total-miss fallback.
+    /// Compact summary of known elements for total-miss diagnostics.
     /// Capped at 20 elements to avoid flooding the response.
     static func compactElementSummary(
         screenElements: [Screen.ScreenElement],

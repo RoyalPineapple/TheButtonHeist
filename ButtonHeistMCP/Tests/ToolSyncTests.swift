@@ -628,58 +628,79 @@ struct ToolSyncTests {
 
     // MARK: - Documentation Drift
 
-    @Test("Documented MCP tool counts match ToolDefinitions")
-    func documentedMCPToolCountsMatchToolDefinitions() throws {
-        let expectedCount = ToolDefinitions.all.count
-        for path in ["README.md", "ButtonHeistMCP/README.md", "docs/API.md", "docs/ARCHITECTURE.md"] {
-            let contents = try readRepositoryFile(path)
-            let countMatches = regexMatches(in: contents, pattern: #"expos(?:es|ing) ([0-9]+) (?:[A-Za-z-]+ )*tools"#)
-            #expect(!countMatches.isEmpty, "\(path) should document the MCP tool count")
+    @Test("Public docs do not hard-code MCP tool counts")
+    func publicDocsDoNotHardCodeMCPToolCounts() throws {
+        let paths = [
+            "README.md",
+            "ButtonHeistMCP/README.md",
+            "docs/API.md",
+            "docs/ARCHITECTURE.md",
+            "docs/REVIEWERS-GUIDE.md",
+            "docs/dossiers/02-MCP.md",
+        ]
+        let aggregate = try paths.map(readRepositoryFile).joined(separator: "\n")
 
-            for match in countMatches {
-                #expect(
-                    match == "\(expectedCount)",
-                    "\(path) documents \(match) MCP tools, expected \(expectedCount)"
-                )
-            }
+        #expect(
+            aggregate.contains("ToolDefinitions.swift"),
+            "Public MCP docs should point to ToolDefinitions.swift as the rendered tool/schema source"
+        )
+        #expect(
+            aggregate.contains("TheFence.Command.parameters") ||
+                aggregate.contains("Fence-owned MCP contract"),
+            "Public MCP docs should point to the Fence-owned command contract instead of a fixed tool count"
+        )
+
+        for path in paths {
+            let contents = try readRepositoryFile(path)
+            let hardCodedCounts = hardCodedPublicSurfaceCounts(in: contents, nouns: ["tool", "tools"])
+            #expect(
+                hardCodedCounts.isEmpty,
+                "\(path) hard-codes public MCP tool counts instead of pointing to ToolDefinitions: \(hardCodedCounts)"
+            )
         }
     }
 
-    @Test("MCP README tool surface matches ToolDefinitions")
-    func mcpReadmeToolSurfaceMatchesToolDefinitions() throws {
+    @Test("MCP README does not hand-maintain the tool registry")
+    func mcpReadmeDoesNotHandMaintainToolRegistry() throws {
         let contents = try readRepositoryFile("ButtonHeistMCP/README.md")
         let toolSurface = try section(named: "## Tool Surface", endingBefore: "## Runtime Behavior", in: contents)
-        let documentedTools = Set(
-            toolSurface.split(separator: "\n").compactMap { line -> String? in
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
-                guard trimmed.hasPrefix("- `") else { return nil }
-                return trimmed.dropFirst(3).split(separator: "`", maxSplits: 1).first.map(String.init)
-            }
-        )
-        let actualTools = Set(ToolDefinitions.all.map(\.name))
-        let docsOnly = documentedTools.subtracting(actualTools).sorted()
-        let missing = actualTools.subtracting(documentedTools).sorted()
 
         #expect(
-            documentedTools == actualTools,
-            "MCP README tool list differs: docs-only \(docsOnly), missing \(missing)"
+            contents.contains("ToolDefinitions"),
+            "MCP README should point to ToolDefinitions instead of carrying a tool registry"
+        )
+        #expect(
+            contents.contains("TheFence.Command"),
+            "MCP README should point to TheFence.Command as the product command contract"
+        )
+        let documentedToolBullets = toolSurface.split(separator: "\n").filter { line in
+            line.trimmingCharacters(in: .whitespaces).hasPrefix("- `")
+        }
+        #expect(
+            documentedToolBullets.isEmpty,
+            "MCP README should not carry a second exhaustive tool list: \(documentedToolBullets)"
         )
     }
 
-    @Test("Documented command catalog counts match TheFence.Command")
-    func documentedCommandCatalogCountsMatchFenceCommands() throws {
-        let expectedCount = TheFence.Command.allCases.count
-        let api = try readRepositoryFile("docs/API.md")
-        let totalCasesMatches = regexMatches(in: api, pattern: #"// \.\.\. ([0-9]+) total cases"#)
-        #expect(totalCasesMatches.contains("\(expectedCount)"), "docs/API.md Command snippet should document \(expectedCount) total cases")
+    @Test("Public docs do not hard-code command catalog counts")
+    func publicDocsDoNotHardCodeCommandCatalogCounts() throws {
+        let paths = [
+            "docs/API.md",
+            "docs/ARCHITECTURE.md",
+            "docs/REVIEWERS-GUIDE.md",
+            "docs/dossiers/03-THEFENCE.md",
+        ]
 
-        for path in ["docs/API.md", "docs/ARCHITECTURE.md"] {
+        for path in paths {
             let contents = try readRepositoryFile(path)
-            let countMatches = regexMatches(in: contents, pattern: #"([0-9]+) supported commands"#)
-            #expect(!countMatches.isEmpty, "\(path) should document the command catalog count")
             #expect(
-                countMatches.allSatisfy { $0 == "\(expectedCount)" },
-                "\(path) documents stale command counts: \(countMatches)"
+                contents.contains("TheFence.Command"),
+                "\(path) should point to TheFence.Command as the command catalog source of truth"
+            )
+            let hardCodedCounts = hardCodedPublicSurfaceCounts(in: contents, nouns: ["command", "commands", "case", "cases"])
+            #expect(
+                hardCodedCounts.isEmpty,
+                "\(path) hard-codes public command catalog counts instead of pointing to TheFence.Command: \(hardCodedCounts)"
             )
         }
     }
@@ -768,6 +789,23 @@ struct ToolSyncTests {
         return regex.matches(in: contents, range: range).compactMap { result in
             guard result.numberOfRanges > 1,
                   let matchRange = Range(result.range(at: 1), in: contents) else { return nil }
+            return String(contents[matchRange])
+        }
+    }
+
+    private func hardCodedPublicSurfaceCounts(in contents: String, nouns: [String]) -> [String] {
+        let nounPattern = nouns.map(NSRegularExpression.escapedPattern(for:)).joined(separator: "|")
+        return regexFullMatches(
+            in: contents,
+            pattern: #"\b[0-9]+(?:\s+|-)(?:[A-Za-z-]+(?:\s+|-)){0,3}(?:"# + nounPattern + #")\b"#
+        )
+    }
+
+    private func regexFullMatches(in contents: String, pattern: String) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        let range = NSRange(contents.startIndex..<contents.endIndex, in: contents)
+        return regex.matches(in: contents, range: range).compactMap { result in
+            guard let matchRange = Range(result.range(at: 0), in: contents) else { return nil }
             return String(contents[matchRange])
         }
     }

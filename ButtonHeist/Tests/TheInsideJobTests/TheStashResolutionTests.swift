@@ -526,8 +526,9 @@ final class TheStashResolutionTests: XCTestCase {
 
     func testKnownOnlyEntryWithStaleObjectIsNotDispatchableUntilVisible() {
         let offScreen = element(label: "Below Fold", traits: .button)
-        let object = UIButton(type: .system)
+        let object = UIAccessibilityElement(accessibilityContainer: NSObject())
         object.accessibilityFrame = CGRect(x: 0, y: 0, width: 100, height: 44)
+        object.accessibilityActivationPoint = CGPoint(x: 50, y: 22)
         let scrollView = UIScrollView()
         let entry = Screen.ScreenElement(
             heistId: "below_fold_button",
@@ -551,7 +552,10 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(resolved.screenElement.heistId, "below_fold_button")
         XCTAssertNil(bagman.screenElement(heistId: "below_fold_button", in: .visible))
         XCTAssertNil(bagman.liveGeometry(for: resolved.screenElement))
-        XCTAssertFalse(bagman.increment(resolved.screenElement))
+        guard case .objectUnavailable = bagman.resolveLiveActionTarget(for: resolved) else {
+            XCTFail("Known-only target should not have a live action target")
+            return
+        }
 
         bagman.currentScreen = Screen(
             elements: [entry.heistId: entry],
@@ -565,10 +569,15 @@ final class TheStashResolutionTests: XCTestCase {
             scrollableContainerViews: [:]
         )
 
-        let refreshed = bagman.resolveTarget(.heistId("below_fold_button")).resolved?.screenElement
+        let refreshed = bagman.resolveTarget(.heistId("below_fold_button")).resolved
         XCTAssertNotNil(bagman.screenElement(heistId: "below_fold_button", in: .visible))
-        XCTAssertTrue(refreshed.map { bagman.increment($0) } ?? false)
-        XCTAssertNotNil(refreshed.flatMap { bagman.liveGeometry(for: $0) })
+        guard let refreshed,
+              case .resolved(let liveTarget) = bagman.resolveLiveActionTarget(for: refreshed) else {
+            XCTFail("Expected refreshed visible target to have live action geometry")
+            return
+        }
+        XCTAssertTrue(bagman.increment(liveTarget))
+        XCTAssertNotNil(bagman.liveGeometry(for: refreshed.screenElement))
     }
 
     /// `hasTarget` powers wait-style predicates, so it must use the same

@@ -332,7 +332,7 @@ Type non-empty text character-by-character by injecting into the keyboard input 
 | Field | Type | Description |
 |-------|------|-------------|
 | `text` | `String` | Non-empty text to type character-by-character |
-| `elementTarget` | `ActionTarget?` | Element to tap for focus (also reads value back) |
+| `elementTarget` | `ElementTarget?` | Semantic target used to resolve fresh live geometry before focusing and reading value back |
 
 ### requestScreen
 
@@ -1010,13 +1010,13 @@ Container types:
 | `label` / `identifier` / `value` / `traits` / `excludeTraits` | matcher fields | Predicate matcher fields for accessibility-based resolution, decoded flat at the target root |
 | `ordinal` | `Int?` | 0-based index to select among matcher results. Without ordinal, multiple matches return an ambiguity error. Ordinal can stand alone only as the all-elements fallback used by minimum matcher recording. |
 
-Two resolution strategies. Resolution priority: `heistId` > matcher fields. Use handles for the current hierarchy; use minimum matcher fields for durable flows. At least one identity field or ordinal fallback should be provided.
+Two resolution strategies. Resolution priority: `heistId` > matcher fields. Use handles for the current hierarchy; use minimum matcher fields for durable flows. At least one identity field or ordinal fallback should be provided. A `heistId` is semantic targeting state, not geometry authority; action execution refreshes live geometry immediately before touching.
 
 ### TouchTapTarget
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `elementTarget` | `ActionTarget?` | Target element (taps at activation point) |
+| `elementTarget` | `ElementTarget?` | Semantic target; taps at a freshly resolved live activation point |
 | `pointX` | `Double?` | Explicit X coordinate |
 | `pointY` | `Double?` | Explicit Y coordinate |
 
@@ -1024,7 +1024,7 @@ Two resolution strategies. Resolution priority: `heistId` > matcher fields. Use 
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `elementTarget` | `ActionTarget?` | Target element |
+| `elementTarget` | `ElementTarget?` | Semantic target; long-presses a freshly resolved live point |
 | `pointX` | `Double?` | Explicit X coordinate |
 | `pointY` | `Double?` | Explicit Y coordinate |
 | `duration` | `Double` | Press duration in seconds (default: 0.5) |
@@ -1033,7 +1033,7 @@ Two resolution strategies. Resolution priority: `heistId` > matcher fields. Use 
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `elementTarget` | `ActionTarget?` | Start from element's activation point |
+| `elementTarget` | `ElementTarget?` | Semantic target; starts from freshly resolved live geometry |
 | `startX` | `Double?` | Start X coordinate |
 | `startY` | `Double?` | Start Y coordinate |
 | `endX` | `Double?` | End X coordinate |
@@ -1047,7 +1047,7 @@ Two resolution strategies. Resolution priority: `heistId` > matcher fields. Use 
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `elementTarget` | `ActionTarget?` | Start from element's activation point |
+| `elementTarget` | `ElementTarget?` | Semantic target; starts from freshly resolved live geometry |
 | `startX` | `Double?` | Start X coordinate |
 | `startY` | `Double?` | Start Y coordinate |
 | `endX` | `Double` | End X coordinate |
@@ -1058,7 +1058,7 @@ Two resolution strategies. Resolution priority: `heistId` > matcher fields. Use 
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `elementTarget` | `ActionTarget?` | Center on element's activation point |
+| `elementTarget` | `ElementTarget?` | Semantic target; centers on freshly resolved live geometry |
 | `centerX` | `Double?` | Center X coordinate |
 | `centerY` | `Double?` | Center Y coordinate |
 | `scale` | `Double` | Scale factor (>1.0 zoom in, <1.0 zoom out) |
@@ -1069,7 +1069,7 @@ Two resolution strategies. Resolution priority: `heistId` > matcher fields. Use 
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `elementTarget` | `ActionTarget?` | Center on element's activation point |
+| `elementTarget` | `ElementTarget?` | Semantic target; centers on freshly resolved live geometry |
 | `centerX` | `Double?` | Center X coordinate |
 | `centerY` | `Double?` | Center Y coordinate |
 | `angle` | `Double` | Rotation angle in radians |
@@ -1080,7 +1080,7 @@ Two resolution strategies. Resolution priority: `heistId` > matcher fields. Use 
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `elementTarget` | `ActionTarget?` | Center on element's activation point |
+| `elementTarget` | `ElementTarget?` | Semantic target; centers on freshly resolved live geometry |
 | `centerX` | `Double?` | Center X coordinate |
 | `centerY` | `Double?` | Center Y coordinate |
 | `spread` | `Double?` | Distance between fingers (default: 40pt) |
@@ -1127,7 +1127,7 @@ Two resolution strategies. Resolution priority: `heistId` > matcher fields. Use 
 | Field | Type | Description |
 |-------|------|-------------|
 | `text` | `String` | Non-empty text to type character-by-character |
-| `elementTarget` | `ActionTarget?` | Element to tap for focus and value readback |
+| `elementTarget` | `ElementTarget?` | Semantic target used to resolve fresh live geometry before focus and value readback |
 
 `text` is required and must be non-empty. If `elementTarget` is provided, it is tapped first to bring up the keyboard, and its value is read back after the operation. Use `editAction` for destructive edits such as delete or select-all/delete replacement.
 
@@ -1135,7 +1135,7 @@ Two resolution strategies. Resolution priority: `heistId` > matcher fields. Use 
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `elementTarget` | `ActionTarget` | Target element |
+| `elementTarget` | `ElementTarget` | Semantic target used to resolve fresh live geometry before custom action dispatch |
 | `actionName` | `String` | Name of the custom action |
 
 ### EditActionTarget
@@ -1159,7 +1159,7 @@ Enum values: `"up"`, `"down"`, `"left"`, `"right"`, `"next"`, `"previous"`.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `elementTarget` | `ActionTarget?` | Element that anchors the scroll action |
+| `elementTarget` | `ElementTarget?` | Semantic target anchoring the scroll action |
 | `direction` | `ScrollDirection` | Scroll direction |
 
 ### ScrollEdge
@@ -1170,7 +1170,7 @@ Enum values: `"top"`, `"bottom"`, `"left"`, `"right"`.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `elementTarget` | `ActionTarget?` | Element that anchors the edge scroll action |
+| `elementTarget` | `ElementTarget?` | Semantic target anchoring the edge scroll action |
 | `edge` | `ScrollEdge` | Which edge to scroll to |
 
 ### ElementMatcher
@@ -1292,7 +1292,12 @@ The `property` field accepts these values: `"label"`, `"value"`, `"traits"`, `"h
 
 For `compound`, nesting is allowed — a `compound` may contain other `compound` entries.
 
-**Breaking change in protocol 7.0**: prior versions used Swift's compiler-synthesized Codable shape for `ActionExpectation`, which wrapped `elementUpdated` / `elementAppeared` / `elementDisappeared` / `compound` in legacy container keys rather than using the `type` discriminator. Callers sending typed expectations must update to the new shape.
+**Breaking change in the Button Heist release that introduced typed
+expectations**: prior versions used Swift's compiler-synthesized Codable shape
+for `ActionExpectation`, which wrapped `elementUpdated` / `elementAppeared` /
+`elementDisappeared` / `compound` in legacy container keys rather than using the
+`type` discriminator. Callers sending typed expectations must update to the new
+shape.
 
 When an expectation is checked, the Fence response includes an `expectation` object:
 
@@ -1439,7 +1444,7 @@ A single recorded interaction event captured during a Stakeout recording.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `token` | `String` | Auth token for driver identification |
+| `token` | `String` | Auth token. Used as fallback session identity only when `driverId` is absent. |
 | `driverId` | `String?` | Unique driver identity for session locking. When set, used instead of token for session identity. Set via `BUTTONHEIST_DRIVER_ID` env var. |
 
 ### SessionLockedPayload
@@ -1489,7 +1494,11 @@ Token-based authentication is required for driver connections:
 6. On wrong token, denial, or explicit-token UI approval request, server sends `error` with `kind: "authFailure"` and disconnects after a brief delay
 7. While waiting for on-device UI approval, server sends `authApprovalPending`; if the prompt times out, the terminal error uses `kind: "authApprovalPending"`
 8. On session conflict, server sends `sessionLocked` and disconnects
-The token is configured via `INSIDEJOB_TOKEN` env var or `InsideJobToken` Info.plist key. If not set, a random UUID is auto-generated each launch (ephemeral — not persisted). The token is logged to the console at startup. Clients set the token via the `BUTTONHEIST_TOKEN` environment variable.
+The token is configured via `INSIDEJOB_TOKEN` env var or `InsideJobToken`
+Info.plist key. If not set, a random UUID is auto-generated each launch
+(ephemeral — not persisted) and redacted in startup logs. Clients set the token
+via `BUTTONHEIST_TOKEN`, or omit it to request UI approval and receive a reusable
+token through `authApproved`.
 
 ### Session Locking
 

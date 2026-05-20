@@ -3,7 +3,7 @@
 #
 # Performs the full release pipeline from a clean main branch:
 #   1. Validate: must be on main, in sync with origin, clean worktree
-#   2. Bump version across 5 files + regenerate Xcode projects
+#   2. Bump version across release truth files + regenerate Xcode projects
 #   3. Build CLI + MCP (in parallel)
 #   4. Rebase onto latest origin, commit/tag or tag current source, push tag
 #   5. Wait for tag-level release workflow guardrails; publish source + upgrade Homebrew on success
@@ -244,9 +244,9 @@ if [[ "$DRY_RUN" == true ]]; then
     echo ""
     echo "Would perform:"
     if [[ "$TAG_CURRENT" == true ]]; then
-        echo "  1. Validate current version in source, formula, and parser contract"
+        echo "  1. Validate current version in RELEASE_VERSION, source, formula, Homebrew rendering, and parser contract"
     else
-        echo "  1. Bump version in 5 files + regenerate Xcode projects"
+        echo "  1. Bump version in RELEASE_VERSION, source, and formula + regenerate Xcode projects"
     fi
     echo "  2. Build CLI + MCP (parallel)"
     if [[ "$RUN_TESTS" == true ]]; then
@@ -307,23 +307,14 @@ echo "  ✓ Messages.swift"
 echo "$NEW_VERSION" > "$BUTTONHEIST_RELEASE_VERSION_FILE"
 echo "  ✓ $BUTTONHEIST_RELEASE_VERSION_FILE"
 
-# 3. docs/API.md
-perl -0pi -e 's/(## CLI Reference.*?\*\*Version\*\*: )\d+\.\d+\.\d+/${1}'"$NEW_VERSION"'/s' docs/API.md
-echo "  ✓ docs/API.md"
-
-# 4. TestApp demo
-perl -0pi -e 's/LabeledContent\("Version", value: "\d+\.\d+\.\d+"\)/LabeledContent("Version", value: "'"$NEW_VERSION"'")/' \
-    TestApp/Sources/DisclosureGroupingDemo.swift
-echo "  ✓ DisclosureGroupingDemo.swift"
-
-# 5. Formula/buttonheist.rb (in-repo template — PLACEHOLDERs stay, CI fills them)
+# 3. Formula/buttonheist.rb (in-repo template — PLACEHOLDERs stay, CI fills them)
 sed -i '' "s/version \"$CURRENT_ESC\"/version \"$NEW_ESC\"/" "$BUTTONHEIST_FORMULA_TEMPLATE"
 echo "  ✓ $BUTTONHEIST_FORMULA_TEMPLATE"
 
 "$SCRIPT_DIR/validate-release-contract.sh"
 echo "  ✓ release contract"
 
-# 6. Regenerate Xcode projects so pbxproj files stay in sync
+# 4. Regenerate Xcode projects so pbxproj files stay in sync
 echo "  Regenerating Xcode projects..."
 scripts/generate-project.sh
 echo "  ✓ Xcode projects"
@@ -451,8 +442,6 @@ else
     git add \
         ButtonHeist/Sources/TheScore/Messages.swift \
         "$BUTTONHEIST_RELEASE_VERSION_FILE" \
-        docs/API.md \
-        TestApp/Sources/DisclosureGroupingDemo.swift \
         "$BUTTONHEIST_FORMULA_TEMPLATE" \
         -- '*.pbxproj' '*.xcworkspacedata' '*.xcscheme'
 

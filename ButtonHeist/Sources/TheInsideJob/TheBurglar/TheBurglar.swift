@@ -139,7 +139,7 @@ final class TheBurglar {
             hierarchy: allHierarchy,
             objects: allObjects,
             objectsByPath: allObjectsByPath,
-            scrollViews: Self.legacyScrollViews(
+            scrollViews: Self.scrollViewsByContainerForCurrentCapture(
                 hierarchy: allHierarchy,
                 scrollViewsByPath: allScrollViewsByPath
             ),
@@ -558,7 +558,7 @@ final class TheBurglar {
         return result
     }
 
-    private static func legacyScrollViews(
+    private static func scrollViewsByContainerForCurrentCapture(
         hierarchy: [AccessibilityHierarchy],
         scrollViewsByPath: [TreePath: UIView]
     ) -> [AccessibilityContainer: UIView] {

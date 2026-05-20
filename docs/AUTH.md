@@ -34,7 +34,11 @@ SIMCTL_CHILD_INSIDEJOB_ID="$TASK_SLUG" \
 xcrun simctl launch "$SIM_UDID" com.buttonheist.testapp
 ```
 
-**Why human-readable tokens?** When an agent gets an auth mismatch, the error includes the expected token. `accra-scroll-detection` tells the agent it hit the wrong simulator and whose it is. A UUID tells it nothing. Agents can reason about token ownership and self-correct.
+**Why human-readable tokens?** When an agent gets an auth mismatch, the error
+does not disclose the expected token. A human-readable explicit token such as
+`accra-scroll-detection` still helps operators and logs identify which
+simulator/work item owns the session without treating a random UUID as a
+durable secret.
 
 **Why per-task simulators?** Shared simulators lead to port collisions, stale app state, and agents killing each other's sessions. A dedicated simulator per task is cheap (`simctl create` takes milliseconds) and eliminates the entire class of interference bugs.
 
@@ -59,11 +63,12 @@ When no explicit token is set, a fresh UUID is generated each launch. Previously
 |--------|-----|---------|
 | Environment variable | `INSIDEJOB_TOKEN` | `INSIDEJOB_TOKEN=my-secret-token` |
 | Info.plist | `InsideJobToken` | `<string>my-secret-token</string>` |
-| Auto-generated | (none) | Token logged to console at startup |
+| Auto-generated | (none) | Ephemeral token redacted in startup logs; request UI approval to receive a reusable token |
 
-When no explicit token is configured, the token is logged to the console:
+When no explicit token is configured, startup logs show that the token exists
+but redact its value:
 ```
-[TheInsideJob] Auth token: A1B2C3D4-E5F6-...
+[TheInsideJob] token=<redacted>
 ```
 
 ### Client-side (macOS / CLI)

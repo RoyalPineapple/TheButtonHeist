@@ -38,6 +38,16 @@ final class TheStashRotorTests: XCTestCase {
         try await super.tearDown()
     }
 
+    private func liveTarget(
+        for screenElement: TheStash.ScreenElement
+    ) -> TheStash.LiveActionTarget? {
+        let resolved = TheStash.ResolvedTarget(screenElement: screenElement)
+        guard case .resolved(let liveTarget) = stash.resolveLiveActionTarget(for: resolved) else {
+            return nil
+        }
+        return liveTarget
+    }
+
     func testRotorNextReturnsParsedLiveResultElement() throws {
         let windowScene = try requireForegroundWindowScene()
         let viewController = UIViewController()
@@ -83,6 +93,7 @@ final class TheStashRotorTests: XCTestCase {
             XCTFail("Expected rotor host to resolve")
             return
         }
+        let liveHost = try XCTUnwrap(liveTarget(for: resolvedHost))
 
         let outcome = stash.performRotor(
             RotorTarget(
@@ -90,7 +101,7 @@ final class TheStashRotorTests: XCTestCase {
                 rotor: "Errors"
             ),
             direction: .next,
-            on: resolvedHost
+            on: liveHost
         )
 
         guard case .succeeded(let hit) = outcome else {
@@ -148,6 +159,7 @@ final class TheStashRotorTests: XCTestCase {
             XCTFail("Expected rotor host to resolve")
             return
         }
+        let liveHost = try XCTUnwrap(liveTarget(for: resolvedHost))
 
         XCTAssertEqual(rotorHost.accessibilityCustomRotors?.first?.name, "")
         XCTAssertEqual(resolvedHost.element.customRotors.map(\.name), ["Links"])
@@ -158,7 +170,7 @@ final class TheStashRotorTests: XCTestCase {
                 rotor: "Links"
             ),
             direction: .next,
-            on: resolvedHost
+            on: liveHost
         )
 
         guard case .succeeded(let hit) = outcome else {
@@ -534,6 +546,7 @@ final class TheStashRotorTests: XCTestCase {
             XCTFail("Expected text view to resolve")
             return
         }
+        let liveTextView = try XCTUnwrap(liveTarget(for: resolvedTextView))
 
         let firstOutcome = stash.performRotor(
             RotorTarget(
@@ -541,7 +554,7 @@ final class TheStashRotorTests: XCTestCase {
                 rotor: "Mentions"
             ),
             direction: .next,
-            on: resolvedTextView
+            on: liveTextView
         )
 
         guard case .succeeded(let firstHit) = firstOutcome,
@@ -563,7 +576,7 @@ final class TheStashRotorTests: XCTestCase {
                 currentTextRange: TextRangeReference(startOffset: firstStart, endOffset: firstEnd)
             ),
             direction: .next,
-            on: resolvedTextView
+            on: liveTextView
         )
 
         guard case .succeeded(let secondHit) = secondOutcome,
@@ -576,7 +589,8 @@ final class TheStashRotorTests: XCTestCase {
     }
 
     func testRotorReportsMissingRotorName() throws {
-        let host = NSObject()
+        let host = UIAccessibilityElement(accessibilityContainer: NSObject())
+        host.accessibilityFrame = CGRect(x: 20, y: 40, width: 280, height: 44)
         let element = AccessibilityElement.make(
             label: "Validation Results",
             identifier: "rotor_host",
@@ -608,7 +622,7 @@ final class TheStashRotorTests: XCTestCase {
                 rotor: "Errors"
             ),
             direction: .next,
-            on: screenElement
+            on: try XCTUnwrap(liveTarget(for: screenElement))
         )
 
         guard case .noSuchRotor(let available) = outcome else {

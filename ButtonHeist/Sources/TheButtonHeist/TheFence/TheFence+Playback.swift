@@ -64,7 +64,7 @@ extension TheFence {
             command.rawValue
         }
 
-        /// Bridge typed playback data into the legacy handler argument shape.
+        /// Bridge typed playback data into the flat handler argument shape.
         ///
         /// Playback never uses this for command selection: command routing is
         /// already bound to `TheFence.Command`. This is the single execution

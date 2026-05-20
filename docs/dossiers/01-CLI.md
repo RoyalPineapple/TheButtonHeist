@@ -93,15 +93,15 @@ The CLI is designed to mirror the MCP tool surface. Key mappings:
 | MCP Tool | CLI Command | Notes |
 |----------|-------------|-------|
 | `activate` | `activate` | Direct match; `--action` for increment/decrement/custom |
-| `gesture` | `one_finger_tap`, `long_press`, `swipe`, `drag`, `pinch`, `rotate`, `two_finger_tap` | Top-level gesture commands |
+| `gesture` | `one_finger_tap`, `long_press`, `swipe`, `drag`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier` | Top-level gesture commands |
 | `scroll` (mode: page) | `scroll` | Direct match |
 | `scroll` (mode: to_visible/search/to_edge) | `scroll_to_visible` / `element_search` / `scroll_to_edge` | CLI keeps separate commands |
 | `edit_action` | `edit_action` | Direct match for copy/paste/cut/select/selectAll |
 | `edit_action` (action: dismiss) | `dismiss_keyboard` | CLI has separate command |
-| `wait_for` | `wait_for` | Direct match; matcher-only (no --heist-id) |
-| `run_batch`, `get_session_state` | `session` (REPL only) | Available via JSON input in session mode |
-| `connect` | `session` (REPL only) | Switch connection target at runtime |
-| `list_targets` | `session` (REPL only) | List configured targets from config file |
+| `wait_for` | `wait_for` | Direct match; supports `--heist-id` and matcher fields |
+| `run_batch`, `get_session_state` | `run_batch`, `get_session_state` | Top-level commands, also available as session JSON |
+| `connect` | `connect` | Top-level command; session JSON can also switch connection target |
+| `list_targets` | `list_targets` | Top-level command; session JSON can also list configured targets |
 
 ## Session Notes
 

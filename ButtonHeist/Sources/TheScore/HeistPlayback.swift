@@ -48,7 +48,7 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
     /// iOS + macOS.
     public let command: String
     /// Element matcher fields — nil means the command doesn't target an element.
-    /// An empty matcher with `ordinal` is the fallback for anonymous elements.
+    /// An empty matcher with `ordinal` is the last-resort selector for anonymous elements.
     public let target: ElementMatcher?
     /// 0-based selection index when the matcher is ambiguous (multiple elements
     /// share the same label/traits). Nil when the matcher uniquely identifies the element.

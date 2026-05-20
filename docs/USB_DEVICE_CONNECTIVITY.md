@@ -156,11 +156,13 @@ USB connections use the same TLS wire protocol as other transports. See the [Wir
 
 ### IPv6 Dual-Stack Server
 
-The `ServerTransport` uses Network framework (`NWListener`) with IPv6 dual-stack to accept both IPv4 and IPv6 connections:
+The production `ServerTransport` uses Network framework (`NWListener`) with
+TLS parameters. Plain TCP startup exists only through explicitly named test
+helpers.
 
 ```swift
-// Network framework listener
-let parameters = NWParameters.tcp
+let tlsIdentity = try TLSIdentity.create()
+let parameters = try tlsIdentity.serverParameters()
 let host: NWEndpoint.Host = bindToLoopback ? .ipv6(.loopback) : .ipv6(.any)
 parameters.requiredLocalEndpoint = .hostPort(host: host, port: NWEndpoint.Port(rawValue: port)!)
 let listener = try NWListener(using: parameters)

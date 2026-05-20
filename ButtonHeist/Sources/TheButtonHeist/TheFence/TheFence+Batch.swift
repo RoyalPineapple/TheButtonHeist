@@ -95,46 +95,18 @@ extension TheFence {
     // MARK: - Session State
 
     func currentSessionState() -> SessionStatePayload {
-        let connected = handoff.isConnected
-        let devicePayload = handoff.connectedDevice.map { device in
-            SessionDevicePayload(
-                deviceName: handoff.displayName(for: device),
-                appName: device.appName,
-                connectionType: device.connectionType,
-                shortId: device.shortId
-            )
-        }
-        let failurePayload = handoff.connectionDiagnosticFailure.map { failure in
-            SessionFailurePayload(
-                errorCode: failure.failureCode,
-                phase: failure.phase,
-                retryable: failure.retryable,
-                message: failure.errorDescription,
-                hint: failure.hint
-            )
-        }
+        let connection = sessionConnectionSnapshot
+        let recording = recordingSnapshot
+        let commandExecution = commandExecutionSnapshot
         return SessionStatePayload(
-            connected: connected,
-            phase: currentSessionConnectionPhase(),
-            device: devicePayload,
-            isRecording: isRecording,
+            connected: connection.connected,
+            phase: connection.phase,
+            device: connection.device,
+            isRecording: recording.isRecording,
             actionTimeoutSeconds: Timeouts.actionSeconds,
             longActionTimeoutSeconds: Timeouts.longActionSeconds,
-            lastFailure: failurePayload,
-            lastAction: lastActionPayload
+            lastFailure: connection.lastFailure,
+            lastAction: commandExecution.lastAction
         )
-    }
-
-    private func currentSessionConnectionPhase() -> SessionConnectionPhase {
-        switch handoff.connectionPhase {
-        case .disconnected:
-            return .disconnected
-        case .connecting:
-            return .connecting
-        case .connected:
-            return .connected
-        case .failed:
-            return .failed
-        }
     }
 }
