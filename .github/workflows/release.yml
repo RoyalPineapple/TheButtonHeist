@@ -237,6 +237,9 @@ jobs:
           ref: ${{ github.event.inputs.tag || github.ref }}
           submodules: recursive
 
+      - name: Select Xcode 26.3
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+
       - name: Extract version from tag
         id: version
         run: |
@@ -336,7 +339,7 @@ jobs:
           xcodebuild -workspace ButtonHeist.xcworkspace -scheme "BH Demo" \
             -destination "$DEST" \
             -derivedDataPath "$DERIVED_DATA_PATH" \
-            build | tail -20
+            build
 
           APP_PATH="$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator/BHDemo.app"
           if [[ ! -d "$APP_PATH" || ! -f "$APP_PATH/Info.plist" || ! -x "$APP_PATH/BHDemo" ]]; then
