@@ -484,11 +484,20 @@ echo ""
 
 echo "==> Phase 6: Waiting for release workflow"
 
-# Find the workflow run triggered by the tag push
-for _ in 1 2 3 4 5; do
-    RUN_ID=$(gh run list --repo "$BUTTONHEIST_GITHUB_REPO" --branch "v$NEW_VERSION" --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
+# Find the workflow run triggered by this exact tag push. Branch/tag names can
+# repeat after rollback; the commit SHA is the release identity.
+RELEASE_SHA=$(git rev-parse "v$NEW_VERSION^{}" 2>/dev/null || git rev-parse HEAD)
+RUN_ID=""
+for _ in {1..30}; do
+    RUN_ID=$(gh run list \
+        --repo "$BUTTONHEIST_GITHUB_REPO" \
+        --workflow Release \
+        --commit "$RELEASE_SHA" \
+        --limit 1 \
+        --json databaseId \
+        --jq '.[0].databaseId // ""' 2>/dev/null || true)
     if [[ -n "$RUN_ID" ]]; then break; fi
-    sleep 2
+    sleep 5
 done
 
 if [[ -z "${RUN_ID:-}" ]]; then
