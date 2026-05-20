@@ -114,7 +114,7 @@ The agent can work in terms of UI intent instead of coordinates.
 cd ButtonHeistCLI && swift build -c release && cd ..
 BH=./ButtonHeistCLI/.build/release/buttonheist
 
-$BH list_devices                                          # Discover devices (WiFi + USB)
+$BH list_devices                                          # Discover scoped simulator/device targets
 $BH session                                               # Interactive REPL
 $BH activate --identifier loginButton                     # Activate an element
 $BH activate --action "Delete" --identifier cell_row_3    # Named custom action
@@ -303,18 +303,18 @@ ButtonHeist/
 ├── ButtonHeistCLI/               # CLI tool (Swift Package)
 ├── TestApp/                      # SwiftUI + UIKit test applications
 ├── AccessibilitySnapshotBH/      # Git submodule (hierarchy parsing)
-├── docs/                         # Architecture, API, protocol, auth, USB docs
+├── docs/                         # Architecture, API, protocol, auth, connectivity docs
 │   └── dossiers/                 # Per-module technical documentation
 ```
 
 ## Troubleshooting
 
-### Device not appearing (WiFi)
+### Device not appearing
 
-1. Both devices on the same network
-2. TheInsideJob framework linked to your target
+1. TheInsideJob framework linked to your target
+2. App running in the foreground
 3. Info.plist has the `_buttonheist._tcp` Bonjour service entry
-4. iOS local network permission accepted
+4. Scope allows the connection path. Defaults are simulator/device-local; LAN exposure requires explicit network scope.
 
 ### USB connection refused
 

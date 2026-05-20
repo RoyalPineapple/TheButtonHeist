@@ -42,7 +42,7 @@ TheInsideJob (the job — singleton, lifecycle, crew assembly)
 └── TheBrains (actions — execution, scroll, explore, delta, wait handlers)
     ├── TheSafecracker (gestures — touch injection, text input)
     │   └── TheFingerprints (visual overlay)
-    └── TheStash (registry — elements, resolution, wire conversion)
+    └── TheStash (current Screen — elements, resolution, wire conversion)
         └── TheBurglar (parsing — accessibility tree read, private to TheStash)
 ```
 

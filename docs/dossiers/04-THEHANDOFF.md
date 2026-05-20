@@ -142,7 +142,7 @@ Connection-attempt failures preserve the `DisconnectReason` through `TheHandoff.
 connection failed in <phase>: observed <disconnect cause>; <hint>
 ```
 
-The retry decision comes from the same typed cause. Transport drops such as `.networkError` and `.serverClosed` are retryable; TLS pinning failures, missing fingerprints, protocol mismatches, auth failures, buffer overflows, and local disconnects are not. Session locks are retryable after the current owner releases the session.
+The retry decision comes from the same typed cause. Transport drops such as `.networkError` and `.serverClosed` are retryable; TLS pinning failures, missing fingerprints, protocol mismatches, auth failures, buffer overflows, and local disconnects are not. Session locks are retryable only after TheMuscle releases the active or draining session; token-backed owner identity is not exposed to clients.
 
 ## Device Resolution (`DeviceResolver`)
 
@@ -224,7 +224,7 @@ On receiving a `ConnectionEvent.connected`, `startKeepalive()` launches a `Task`
 3. Creates `~/.buttonheist/` if needed and writes the UUID atomically
 4. Returns the UUID
 
-The driver ID is passed to `DeviceConnection` and sent in every `.authenticate` message, allowing TheInsideJob/TheMuscle to identify and lock sessions to specific clients.
+The driver ID is passed to `DeviceConnection` and sent in every `.authenticate` message, allowing TheInsideJob/TheMuscle to identify the driver for session locking without exposing auth tokens in lock messages.
 
 ## Auto-Connect and Auto-Reconnect
 

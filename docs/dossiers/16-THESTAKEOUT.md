@@ -2,7 +2,7 @@
 
 > **File:** `ButtonHeist/Sources/TheInsideJob/TheStakeout/TheStakeout.swift`
 > **Platform:** iOS 17.0+ (AVFoundation, UIKit)
-> **Role:** Screen recording engine - captures, encodes, and delivers H.264/MP4 video
+> **Role:** Screen recording engine - captures and encodes H.264/MP4 video for TheGetaway to route
 
 ## Responsibilities
 
@@ -30,15 +30,16 @@ graph TD
         IntLog["Interaction Log - in-memory InteractionEvent array"]
     end
 
-    TheInsideJob["TheInsideJob - captureScreenForRecording() (@MainActor closure)"] -->|frame closure| Capture
-    TheInsideJob -->|recordInteraction| IntLog
+    TheGetaway["TheGetaway - recording route owner"] -->|creates / finalizes| State
+    Brains["TheBrains - captureScreenForRecording() (@MainActor closure)"] -->|frame closure| Capture
+    TheGetaway -->|recordInteraction| IntLog
     Capture --> Encoder
     Encoder -->|finalized MP4| Deliver["Base64 encode + interaction log → RecordingPayload"]
 ```
 
 ## Isolation Model
 
-TheStakeout is declared `actor TheStakeout` (post-0.2.24 conversion from `@MainActor` class). The single MainActor escape hatch is `captureFrame` — the closure installed by TheInsideJob that snapshots the live window hierarchy into a `UIImage`. Every other piece of state — the `stakeoutPhase` state machine, AVAssetWriter, the pixel-buffer adaptor, sample buffers, timer tasks — lives inside the actor. AVAssetWriter and its pixel-buffer adaptor are thread-safe and do not require MainActor isolation. The AVAssetWriter `finishWriting` completion handler bridges back into the actor via `Task { await self.handleFinalize(...) }` rather than hopping through MainActor.
+TheStakeout is declared `actor TheStakeout` (post-0.2.24 conversion from `@MainActor` class). The single MainActor escape hatch is `captureFrame` — the closure installed by TheGetaway that calls `brains.captureScreenForRecording()` to snapshot the live window hierarchy into a `UIImage`. Every other piece of state — the `stakeoutPhase` state machine, AVAssetWriter, the pixel-buffer adaptor, sample buffers, timer tasks — lives inside the actor. AVAssetWriter and its pixel-buffer adaptor are thread-safe and do not require MainActor isolation. The AVAssetWriter `finishWriting` completion handler bridges back into the actor via `Task { await self.handleFinalize(...) }` rather than hopping through MainActor.
 
 ## Recording State Machine
 
@@ -61,7 +62,7 @@ flowchart TD
     SizeGuard -->|no| StopSize["stop(.fileSizeLimit)"]
     SizeGuard -->|yes| DurGuard{"elapsed < maxDuration?"}
     DurGuard -->|no| StopDur["stop(.maxDuration)"]
-    DurGuard -->|yes| CaptureFrame["TheInsideJob.captureScreenForRecording()"]
+    DurGuard -->|yes| CaptureFrame["brains.captureScreenForRecording()"]
 
     CaptureFrame --> DrawHierarchy["drawHierarchy (all windows, incl. FingerprintWindow)"]
     DrawHierarchy --> CreatePB["createPixelBuffer(from: UIImage)"]
@@ -85,7 +86,7 @@ flowchart TD
 
 ## Interaction Recording
 
-During an active recording, `TheInsideJob.performInteraction()` now captures each command as an `InteractionEvent` and appends it to Stakeout's in-memory log via `recordInteraction(event:)`.
+During an active recording, TheGetaway records each completed command/result as an `InteractionEvent` and appends it to Stakeout's in-memory log via `recordInteractionIfRecording(command:result:)`.
 
 Each `InteractionEvent` contains:
 - `timestamp: Double` (seconds since recording start, from `recordingElapsed`)
@@ -96,7 +97,7 @@ On recording completion, the log is included in `RecordingPayload.interactionLog
 
 ```mermaid
 flowchart LR
-    PerformInt["performInteraction(command:)"] --> CheckRec{recording active?}
+    PerformInt["TheGetaway action dispatch"] --> CheckRec{recording active?}
     CheckRec -->|yes| Capture["Capture InteractionEvent"]
     Capture --> Append["stakeout.recordInteraction(event)"]
     Append --> Log["interactionLog array"]
@@ -130,9 +131,9 @@ if fileSize > 7_000_000  // 7MB raw = ~9.3MB base64, under 10MB buffer limit
 - Users specifying `scale: 0.75` on a non-standard resolution might get slightly different output
 
 **Recording payload delivered on demand**
-- Completed video data is returned to the `stop_recording` caller
-- Automatic stops broadcast only a lightweight `recordingStopped` notification and cache the payload for later retrieval
-- This avoids sending large base64 MP4 payloads to every connected client
+- Completed video data is returned to the `stop_recording` waiter
+- Automatic stops deliver the payload only to the `start_recording` originator when possible; other clients get lightweight `recordingStopped`
+- Cached originator-owned payloads are cleared on owner disconnect or session release so a later driver cannot retrieve them
 
 ### LOW PRIORITY
 

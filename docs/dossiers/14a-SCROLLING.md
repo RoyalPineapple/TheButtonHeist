@@ -3,7 +3,7 @@
 > **Source:** `ButtonHeist/Sources/TheInsideJob/TheBrains/Navigation+Scroll.swift` (orchestration), `TheSafecracker/TheSafecracker+Scroll.swift` (scroll primitives)
 > **Parent dossiers:** [13-THEBRAINS.md](13-THEBRAINS.md), [14-THESAFECRACKER.md](14-THESAFECRACKER.md)
 
-TheBrains' `Navigation` component owns all scroll orchestration — three explicit scroll commands for agents, and an automatic pre-interaction scroll that ensures every action is visible on screen. TheSafecracker provides the scroll primitives (`scrollByPage`, `scrollToEdge`, `scrollToMakeVisible`, `scrollBySwipe`) but never decides what to scroll or when. `Actions` calls into `Navigation` for pre-action positioning (`ensureOnScreen`, `ensureFirstResponderOnScreen`) — TheStash exposes resolution and live geometry but performs no scroll orchestration.
+TheBrains' `Navigation` component owns all scroll orchestration — three explicit scroll commands for agents, and an automatic pre-interaction scroll that ensures every action is visible on screen. TheSafecracker provides the scroll primitives (`scrollByPage`, `scrollToEdge`, `scrollToMakeVisible`, `scrollBySwipe`) but never decides what to scroll or when. `Actions` calls into `Navigation` for pre-action positioning (`ensureOnScreen`, `ensureFirstResponderOnScreen`) — TheStash exposes resolution and current live-geometry snapshots but performs no scroll orchestration.
 
 Visible pages are physical evidence; known state is semantic memory; reconciliation is the only place evidence becomes memory. Scroll and search settle on visible page changes, while exploration commits the final reconciled union as known state.
 
@@ -64,13 +64,13 @@ It only cares whether the element's frame is geometrically within the screen rec
 
 A sequential coarse-then-fine flow:
 
-**Step 1 — Coarse jump (known off-screen target only).** If the target resolves into the current or operation-local preserved screen snapshot but is not in the latest interaction snapshot, and the stored `ScreenElement` carries both a `contentSpaceOrigin` and a live `scrollView`:
+**Step 1 — Coarse jump (known off-screen target only).** If the target resolves into the current or operation-local preserved screen snapshot but is not in the latest interaction snapshot, and the `ScreenElement` carries both an observed `contentSpaceOrigin` and a live `scrollView`:
 
 1. Calls `stash.jumpToRecordedPosition(_:)` — the stash internally computes the clamped, centered content offset via `TheStash.scrollTargetOffset(for:in:)` and sets it on the owning scroll view. Returns the previous offset so callers can revert.
 2. Waits for settle via `yieldRealFrames(20)`, then `stash.refresh()` (commits a fresh `currentScreen` value)
 3. Requires the target to resolve visibly after the jump; if it does not, `ensureOnScreen` returns a named failure and the action does not dispatch.
 
-**Step 2 — Fine-tune (any target).** Asks the stash for live geometry via `stash.liveGeometry(for:)`, which promotes the weak NSObject ref to strong internally and returns a value-typed `(frame, activationPoint, scrollView)` snapshot:
+**Step 2 — Fine-tune (any target).** Asks the stash for live geometry via `stash.liveGeometry(for:)`, which promotes the weak NSObject ref to strong internally and returns a value-typed `(frame, activationPoint, scrollView)` snapshot for immediate use:
 
 1. Checks `UIScreen.main.bounds.contains(frame)` and comfort-zone containment
 2. Calls `scrollToMakeVisible(_:in:)` — adjusts `contentOffset` by the minimum amount needed to bring the element fully within the scroll view's visible rect
@@ -108,7 +108,7 @@ flowchart TD
     Refresh --> Execute
 ```
 
-In the flowchart, `screenElement.scrollView`, `screenElement.contentSpaceOrigin`, and the coarse-jump path all read from the live `ScreenElement` stored on `currentScreen.elements[heistId]` (computed once during `buildScreen(from:)` from the parsed accessibility hierarchy and held on the `Screen` value).
+In the flowchart, `screenElement.scrollView`, `screenElement.contentSpaceOrigin`, and the coarse-jump path all read from the `ScreenElement` in the current or preserved `Screen` value. They are parse-time observations, not durable geometry authority.
 
 ### Entry points
 
@@ -130,7 +130,7 @@ Three commands expose scrolling directly to agents. These are not auto-scroll �
 | Command | Method | Behavior |
 |---------|--------|----------|
 | `scroll` | `executeScroll` → `scrollByPage` | Axis-aware page scroll on the resolved element's stored scroll view |
-| `scroll_to_visible` | `executeScrollToVisible` | One-shot jump to a known element's recorded scroll position |
+| `scroll_to_visible` | `executeScrollToVisible` | One-shot jump to a known element's observed content-space position |
 | `element_search` | `executeElementSearch` | Hierarchy-driven search with swipe fallback for non-UIScrollView containers |
 | `scroll_to_edge` | `executeScrollToEdge` → `scrollToEdge` | Axis-aware edge jump on the resolved element's stored scroll view |
 
@@ -144,13 +144,13 @@ Offsets are clamped to valid content bounds. Returns `false` if already at the e
 
 ### scroll_to_visible (known-position jump)
 
-Jumps directly to a known element's recorded scroll position. This command is for visible elements or `heistId`/matcher targets still present in the current or preserved screen snapshot, especially the state produced by the latest default `get_interface` read; a visible-only refresh before the jump must not erase that preserved target.
+Jumps directly to a known element's observed content-space position. This command is for visible elements or `heistId`/matcher targets still present in the current or preserved screen snapshot, especially the state produced by the latest default `get_interface` read; a visible-only refresh before the jump must not erase that preserved target.
 
-**Input:** `ScrollToVisibleTarget` containing an `ElementTarget`. If the element is already visible, it is comfort-scrolled if needed. If it is off-screen and has a recorded content-space position, Button Heist jumps to that position and re-resolves the target.
+**Input:** `ScrollToVisibleTarget` containing an `ElementTarget`. If the element is already visible, it is comfort-scrolled if needed. If it is off-screen and has an observed content-space position in the current or preserved screen value, Button Heist jumps to that position and re-resolves the target.
 
 Known targets guide; visible live targets prove.
 
-Fails closed when the element is not in the current or preserved screen snapshot, is ambiguous, or has no recorded scroll position. Use `element_search` for unseen elements or stale targets that have fallen out of the known snapshot.
+Fails closed when the element is not in the current or preserved screen snapshot, is ambiguous, or has no observed content-space position. Use `element_search` for unseen elements or stale targets that have fallen out of the known snapshot.
 
 ### element_search (hierarchy-driven search)
 

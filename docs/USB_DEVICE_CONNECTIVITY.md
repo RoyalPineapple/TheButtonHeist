@@ -4,9 +4,9 @@ Connecting to iOS devices over USB via CoreDevice IPv6 tunnels, bypassing WiFi/m
 
 ## Overview
 
-When WiFi is unreliable (VPN interference, network segmentation, mDNS issues), ButtonHeist automatically discovers USB-connected devices alongside WiFi devices. No extra flags or scripts needed — `buttonheist list` shows both.
+When WiFi is unreliable (VPN interference, network segmentation, mDNS issues), Button Heist can connect to physical devices over the CoreDevice USB IPv6 tunnel. USB traffic is allowed by the default `simulator,usb` scope, while WiFi/LAN traffic remains opt-in.
 
-USB discovery uses the same protocol as WiFi. The only difference is how the endpoint is found: Bonjour for WiFi, CoreDevice IPv6 tunnel for USB.
+USB uses the same TLS wire protocol as other transports. The difference is how the endpoint is found: direct/named target configuration for USB, Bonjour only when `network` scope is explicitly enabled.
 
 ## How It Works
 
@@ -20,11 +20,11 @@ When an iOS device is connected via USB and recognized by Xcode/CoreDevice:
    - Device: `fd9a:6190:eed7::1`
 3. **TCP connections can be made** directly to the device's IPv6 address
 
-### Automatic Discovery
+### USB Discovery
 
-> **Note:** `USBDeviceDiscovery` (in the ButtonHeist framework) is defined but not currently wired into `TheHandoff`. USB devices are discovered via Bonjour over the CoreDevice IPv6 tunnel — no separate USB discovery step is needed.
+> **Note:** `USBDeviceDiscovery` (in the ButtonHeist framework) is defined but not currently wired into `TheHandoff`. Public discovery starts from Bonjour and named targets. With the default `simulator,usb` scope, Bonjour is not published because LAN visibility is disabled; use a named/direct target or a fixed `INSIDEJOB_PORT` for USB workflows that must avoid network scope.
 
-The `USBDeviceDiscovery` class implements this flow:
+The `USBDeviceDiscovery` implementation is available for this flow:
 
 1. Polls `xcrun devicectl list devices` to find connected devices
 2. Parses `lsof -i -P -n` output to locate the CoreDevice IPv6 tunnel address
@@ -33,7 +33,7 @@ The `USBDeviceDiscovery` class implements this flow:
 
 ### Port Discovery
 
-TheInsideJob uses an OS-assigned port advertised via Bonjour. USB-connected devices are reachable on the same port via the CoreDevice IPv6 tunnel.
+TheInsideJob uses an OS-assigned port by default, or a fixed port from `INSIDEJOB_PORT` / `InsideJobPort`. When Bonjour is enabled, the same port is advertised and is reachable via the CoreDevice IPv6 tunnel.
 
 ### Requirements
 
@@ -47,13 +47,13 @@ TheInsideJob uses an OS-assigned port advertised via Bonjour. USB-connected devi
 ### CLI
 
 ```bash
-# List all devices (WiFi and USB appear together)
+# List Bonjour-advertised devices and named targets
 buttonheist list
 
-# Connect to a USB device by name
+# Connect to a USB device by name when advertised or configured as a target
 buttonheist --device "iPhone 15 Pro" activate --identifier myButton
 
-# Take a screenshot over USB
+# Take a screenshot over USB; writes an artifact by default
 buttonheist --device "iPhone 15 Pro" get_screen --output screen.png
 ```
 
@@ -146,22 +146,11 @@ sequenceDiagram
 
 ### Manual Connection (for debugging)
 
-**Note**: The protocol requires token authentication before any commands are accepted.
-
-```bash
-# Using netcat (must authenticate first)
-nc -6 "fd9a:6190:eed7::1" <port>   # use port from `buttonheist list --format json`
-# Server sends: {"buttonHeistVersion":"<calver>","requestId":null,"type":"serverHello"}
-# Send: {"buttonHeistVersion":"<calver>","requestId":null,"type":"clientHello"}
-# Server sends: {"buttonHeistVersion":"<calver>","requestId":null,"type":"authRequired"}
-# Send: {"buttonHeistVersion":"<calver>","requestId":null,"type":"authenticate","payload":{"token":"your-token"}}
-# Server sends: {"buttonHeistVersion":"<calver>","requestId":null,"type":"info","payload":{...}}
-# Send: {"buttonHeistVersion":"<calver>","requestId":null,"type":"requestInterface"}
-```
+The protocol requires TLS before any JSON messages and token authentication before commands. Plain `nc` is not a valid production client. For manual debugging, prefer `buttonheist connect host:port` or an MCP named target that carries the endpoint and token; non-loopback direct clients must also provide the expected TLS fingerprint.
 
 ## Message Protocol
 
-USB connections use the same wire protocol as WiFi. See the [Wire Protocol Specification](WIRE-PROTOCOL.md) for message format, authentication flow, and command reference.
+USB connections use the same TLS wire protocol as other transports. See the [Wire Protocol Specification](WIRE-PROTOCOL.md) for message format, authentication flow, and command reference.
 
 ## Implementation Details
 
@@ -177,12 +166,12 @@ parameters.requiredLocalEndpoint = .hostPort(host: host, port: NWEndpoint.Port(r
 let listener = try NWListener(using: parameters)
 ```
 
-On simulators, the server binds to loopback only (`::1`) by default. On physical devices, it binds to all interfaces (`::`) to accept USB tunnel connections. The bind address is controlled by the `bindToLoopback` parameter on `ServerTransport.start()`.
+Simulator-only scope binds to loopback (`::1`). USB or network scopes bind to all interfaces (`::`) so CoreDevice USB can reach the listener. The bind address is controlled by `ServerExposure`, and connection scope classification still rejects disallowed sources before authentication.
 
 This allows:
 - Simulator connections via `127.0.0.1` (loopback)
 - USB device connections via the CoreDevice IPv6 tunnel
-- WiFi connections via local network IPv4/IPv6
+- WiFi connections via local network IPv4/IPv6 only when `INSIDEJOB_SCOPE` includes `network`
 
 ### Why WiFi Might Fail
 
@@ -211,7 +200,7 @@ Common issues that USB bypasses:
 ### USB device not appearing in `buttonheist list`
 - Verify device shows as "connected" in `xcrun devicectl list devices`
 - Ensure app is running on the device
-- USB discovery polls every 3 seconds — wait a moment
+- Remember that default `simulator,usb` scope does not publish Bonjour; use a named/direct target or enable `network` scope only when LAN discovery is acceptable
 
 ## Connection Scopes
 

@@ -30,7 +30,7 @@ Shared wire protocol. Every type that crosses the TCP boundary lives here. No UI
 
 ## How a message round-trips
 
-**Client encodes:** `RequestEnvelope(message: .activate(.heistId("button_save")))` → encoder writes `{"buttonHeistVersion":"<calver>","type":"activate","payload":{"heistId":"button_save"}}`. The `type` string comes from `ClientMessage.wireRepresentation`.
+**Client encodes:** `RequestEnvelope(message: .activate(.heistId("button_save")))` → encoder writes `{"buttonHeistVersion":"<semver>","type":"activate","payload":{"heistId":"button_save"}}`. The `type` string comes from `ClientMessage.wireRepresentation`.
 
 **Server decodes:** `RequestEnvelope.decoded(from: data)` → reads `type` as `WireMessageType.activate` → `decodeActionMessage` calls `ElementTarget(from: payloadDecoder)` → returns `.activate(.heistId("button_save"))`.
 

@@ -562,7 +562,7 @@ Structured reason for why a connection was closed. Passed via `ConnectionEvent.d
 | `authFailed(_:)` | Authentication failed with reason |
 | `sessionLocked(_:)` | Session locked by another driver |
 | `localDisconnect` | Disconnected by client |
-| `certificateMismatch` | TLS certificate fingerprint did not match expected value from Bonjour TXT |
+| `certificateMismatch` | TLS certificate fingerprint did not match configured or explicitly approved trust |
 
 ---
 
@@ -684,7 +684,7 @@ With the default `stop_on_error` policy, the batch halts at the first mismet exp
 
 ```swift
 public let buttonHeistServiceType = "_buttonheist._tcp"
-public let buttonHeistVersion = "<calver>"  // Single product version; bumped only by scripts/release.sh
+public let buttonHeistVersion = "<semver>"  // Single product version; bumped only by scripts/release.sh
 ```
 
 ### ConnectionPhase
@@ -755,7 +755,7 @@ Represents a discovered TheInsideJob device.
 - `displayDeviceName: String?` - Human-readable device name from Bonjour TXT record
 - `instanceId: String?` - Instance identifier from Bonjour TXT record
 - `sessionActive: Bool?` - Whether the device currently has an active session
-- `certFingerprint: String?` - TLS certificate SHA-256 fingerprint from Bonjour TXT record (format: `sha256:<hex>`)
+- `certFingerprint: String?` - Advertised TLS certificate SHA-256 fingerprint (format: `sha256:<hex>`). Discovery metadata is not trust by itself; non-loopback trust must be configured, persisted, or approved.
 
 #### Computed Properties
 
@@ -827,11 +827,11 @@ Messages sent from server to client.
 - `pong` - Ping response
 - `error(String)` - Error description
 - `actionResult(ActionResult)` - Action outcome
-- `screen(ScreenPayload)` - Base64-encoded PNG
+- `screen(ScreenPayload)` - Raw wire screenshot payload. Public CLI/MCP formatting returns metadata and artifact paths by default; inline PNG data is explicit and size-bounded.
 - `sessionLocked(SessionLockedPayload)` - Session locked by another driver (sent before disconnect). See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md#session-locking).
 - `recordingStarted` - Recording has begun
 - `recordingStopped` - Recording stop acknowledged
-- `recording(RecordingPayload)` - Completed recording (H.264/MP4 as base64)
+- `recording(RecordingPayload)` - Raw wire recording payload. Public CLI/MCP formatting returns metadata and artifact paths by default; inline video/log data is explicit and size-bounded.
 - `recordingError(String)` - Recording failed
 - `status(StatusPayload)` - Lightweight server identity and session availability snapshot
 
@@ -1345,11 +1345,11 @@ The outcome of checking an `ActionExpectation` against an `ActionResult`.
 public struct ScreenPayload: Codable, Sendable
 ```
 
-Screen capture payload.
+Raw wire screen capture payload. Public CLI/MCP responses write the image as an artifact and return metadata by default; inline PNG data is opt-in and size-bounded.
 
 #### Properties
 
-- `pngData: String` - Base64-encoded PNG data
+- `pngData: String` - Base64-encoded PNG data at the wire boundary
 - `width: Double` - Screen width in points
 - `height: Double` - Screen height in points
 - `timestamp: Date` - When screenshot was captured
@@ -1375,11 +1375,11 @@ Recording configuration sent with `startRecording`.
 public struct RecordingPayload: Codable, Sendable
 ```
 
-Completed recording payload.
+Raw wire completed recording payload. Public CLI/MCP responses write the video as an artifact and return metadata by default; inline video data and full interaction logs are opt-in and size-bounded.
 
 #### Properties
 
-- `videoData: String` - Base64-encoded H.264/MP4 video data
+- `videoData: String` - Base64-encoded H.264/MP4 video data at the wire boundary
 - `width: Int` - Video width in pixels
 - `height: Int` - Video height in pixels
 - `duration: Double` - Recording duration in seconds
@@ -1420,7 +1420,7 @@ A single recorded interaction event captured during a Stakeout recording.
 ## CLI Reference
 
 **Location**: `ButtonHeistCLI/`
-**Version**: 0.3.2
+**Version**: 0.4.1
 
 All subcommands that connect to a device accept these connection options:
 

@@ -120,7 +120,7 @@ sequenceDiagram
     GW->>TB: executeCommand(.activate(target))
     Note over TB: TheBrains coordinates TheStash (resolve),<br/>TheSafecracker (gesture fallback),<br/>TheTripwire (settle), delta cycle
     TB-->>GW: ActionResult
-    GW->>GW: recordAndBroadcast
+    GW->>GW: recordAndRespond
     GW-->>DC: actionResult(delta)
     DC-->>TH: onActionResult
     TH-->>TF: callback → continuation resume
@@ -135,7 +135,6 @@ These issues span multiple crew members and warrant holistic review:
 2. ~~**Duplicate error types**~~ - Fixed: `CLIError` removed, `FenceError` is the single error type
 3. **Inconsistent timeouts** - 15s for actions, 30s for type_text/screenshots, 10s for interface requests
 4. ~~**`vendorid` TXT key**~~ - Fixed: removed from DiscoveredDevice and DeviceDiscovery
-5. ~~**Token logged in plaintext**~~ - By design: session token is logged with `privacy: .public` — it's a coordination primitive for agent isolation, not a security credential
-6. **No TheInsideJob unit tests** - TheMuscleTests added; TheStash and TheInsideJob server-side logic still untested
-7. **USBDeviceDiscovery blocks actor thread** - Subprocess calls in @ButtonHeistActor context
-8. ~~**Interaction log payload unbounded**~~ - Fixed: capped at 500 events, uses AccessibilityTrace.Delta instead of full snapshots
+5. **No TheInsideJob unit tests** - TheMuscleTests added; TheStash and TheInsideJob server-side logic still untested
+6. **USBDeviceDiscovery blocks actor thread** - Subprocess calls in @ButtonHeistActor context
+7. ~~**Interaction log payload unbounded**~~ - Fixed: capped at 500 events, uses AccessibilityTrace.Delta instead of full snapshots

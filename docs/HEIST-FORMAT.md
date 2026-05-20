@@ -145,7 +145,7 @@ Matching is exact (case-insensitive, typography-folded); the recorder builds the
 5. Stateful traits / `excludeTraits`
 6. Ordinal
 
-Every element in a capture can produce a minimum matcher that resolves back to the same element in that capture. If a later capture introduces a conflict, rerun the minimum matcher pass for the new capture. Playback in 0.3.7 does not self-heal or auto-repair stale steps.
+Every element in a capture can produce a minimum matcher that resolves back to the same element in that capture. If a later capture introduces a conflict, rerun the minimum matcher pass for the new capture. Playback does not silently self-heal stale steps; compatibility failures should be explicit and diagnostic.
 
 ## Expectations
 

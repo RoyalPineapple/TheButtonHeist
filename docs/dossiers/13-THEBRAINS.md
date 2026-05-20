@@ -50,7 +50,7 @@ graph TD
     end
 
     subgraph Crew["Crew (owned/referenced)"]
-        Stash["TheStash — registry, resolution"]
+        Stash["TheStash — current Screen, resolution"]
         Safecracker["TheSafecracker — gestures"]
         Tripwire["TheTripwire — timing, settle"]
     end

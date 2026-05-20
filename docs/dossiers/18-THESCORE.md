@@ -28,7 +28,7 @@ TheScore is the shared playbook. It defines:
 
 | File | Contents |
 |------|----------|
-| `Messages.swift` | `buttonHeistServiceType`, `buttonHeistVersion` (CalVer), `WireMessageType` (50 cases), `ButtonHeistActor`, `EnvironmentKey` |
+| `Messages.swift` | `buttonHeistServiceType`, `buttonHeistVersion` (SemVer), `WireMessageType` (50 cases), `ButtonHeistActor`, `EnvironmentKey` |
 | `ClientMessages.swift` | `RequestEnvelope`, `ClientMessage` (35 cases), all action target structs, `UnitPoint`, `RecordingConfig` |
 | `ClientMessages+TouchTargets.swift` | Touch-specific target structs (`TapTarget`, `SwipeTarget`, `DragTarget`, `PinchTarget`, `RotateTarget`, `TwoFingerTapTarget`, `DrawPathTarget`, `DrawBezierTarget`, `LongPressTarget`) |
 | `ServerMessages.swift` | `ResponseEnvelope`, `ServerMessage` (18 cases), `ActionResult`, `ErrorKind`, `StatusPayload`, `ScreenPayload`, `RecordingPayload`, `InteractionEvent`, `ServerInfo` |
@@ -373,7 +373,7 @@ classDiagram
 `SwipeTarget` supports three resolution paths:
 1. **Unit-point pair**: `start` + `end` as `UnitPoint` relative to element frame
 2. **Direction-to-unit-point**: `direction` expands to `defaultStart`/`defaultEnd` unit points
-3. **Absolute coordinates**: `startX/Y` + `endX/Y` screen points (legacy)
+3. **Absolute coordinates**: `startX/Y` + `endX/Y` screen points (legacy compatibility for coordinate-only callers)
 
 ## Wire Protocol
 

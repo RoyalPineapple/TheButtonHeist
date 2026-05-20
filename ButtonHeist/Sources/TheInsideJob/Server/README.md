@@ -6,7 +6,7 @@ TLS/TCP server infrastructure — listener, transport, authentication, and conne
 
 1. **`SimpleSocketServer.swift`** — `public actor`. `ServerPhase`: `.stopped` / `.listening(listener:, port:)`. `ClientPhase`: `.unauthenticated(connection:, timestamps:)` / `.authenticated(connection:, timestamps:)`. Max 5 concurrent clients.
 
-   `startAsync(port:tlsParameters:callbacks:)` creates an `NWListener`, uses `withCheckedThrowingContinuation` to bridge the state handler (resumes on `.ready` with the bound port). `newConnectionHandler` routes to `handleNewConnection`, which optionally checks `ConnectionScope.classify` against `allowedScopes`, starts receiving, and schedules a 10-second auth deadline.
+   `startAsync(port:tlsParameters:callbacks:)` creates an `NWListener`, uses `withCheckedThrowingContinuation` to bridge the state handler (resumes on `.ready` with the bound port). Production startup requires TLS parameters; the plaintext start path is test-only for raw socket coverage. `newConnectionHandler` routes to `handleNewConnection`, which optionally checks `ConnectionScope.classify` against `allowedScopes`, starts receiving, and schedules a 10-second auth deadline.
 
    Receive loop: `receiveNextChunk` appends to a buffer (10 MB cap), scans for `0x0A` newline delimiters, routes each complete message to `callbacks.onDataReceived` (authenticated) or `callbacks.onUnauthenticatedData` (pre-auth). Rate limiting: 30 messages/second per client.
 
@@ -16,18 +16,18 @@ TLS/TCP server infrastructure — listener, transport, authentication, and conne
 
    **`ClientPhase`**: `.connected` → `.helloValidated` → `.pendingApproval` or `.authenticated`.
 
-   **`SessionPhase`**: `.idle` → `.active(driverId:, connections:)` → `.draining(driverId:, releaseTimer:)` → `.idle`.
+   **`SessionPhase`**: `.idle` → `.active(driverId:, connections:)` → `.draining(driverId:, releaseTimer:, releaseDeadline:)` → `.idle`.
 
    Auth flow: `handleUnauthenticatedMessage` decodes the envelope, checks protocol version, then dispatches:
    - `.clientHello` → transition to `.helloValidated`, send `.authRequired`
    - `.authenticate(payload)` → check lockout → empty token: show `UIAlertController` (`.pendingApproval`) → wrong token: `recordFailedAttempt`, locked after 5 failures for 30s → correct token: `acquireSession`
    - all other pre-auth messages → send typed error, then disconnect after a short flush grace period
 
-   `acquireSession`: `.idle` → claim. Same driver → add connection. Different driver → `.sessionLocked`, disconnect after 100ms grace. Draining same driver → cancel release timer, re-activate.
+   `acquireSession`: `.idle` → claim. Active session, even for the same driver → `.sessionLocked`, disconnect after 100ms grace. Draining same driver → cancel release timer, re-activate.
 
    Session release: when all connections drop, starts a 30s drain timer (configurable via `INSIDEJOB_SESSION_TIMEOUT`). If no reconnect arrives, transitions to `.idle`.
 
-   Communicates outward entirely through injected closures (`sendToClient`, `markClientAuthenticated`, `disconnectClient`, `onClientAuthenticated`, `onSessionActiveChanged`).
+   Communicates outward entirely through injected closures (`sendToClient`, `markClientAuthenticated`, `markClientAwaitingApproval`, `disconnectClient`, `onClientAuthenticated`, `onSessionActiveChanged`).
 
 3. **`ServerTransport.swift`** — `public final class ServerTransport: NSObject`. Wraps `SimpleSocketServer` + `NetService`. Created by TheInsideJob, wired to TheMuscle by TheGetaway's `wireTransport(_:)`. `start(port:)` gets TLS parameters from `tlsIdentity`, starts the server. `advertise(serviceName:...)` creates a `NetService` with TXT record (cert fingerprint, simulator UDID, instance ID, etc.). `updateTXTRecord(_:)` merges entries and re-publishes.
 
