@@ -151,12 +151,36 @@ final class TheHandoff {
         case failed(ConnectionError)
     }
 
+    /// Concrete device identity auto-reconnect is allowed to recover. The
+    /// filter is user input; the target is the product invariant. Once a
+    /// session drops, reconnect must recover that same target instead of
+    /// reselecting an arbitrary newly-discovered app that happens to match
+    /// the old filter.
+    struct ReconnectTarget: Equatable {
+        let filter: String?
+        let device: DiscoveredDevice
+
+        var displayName: String { device.name }
+
+        func resolve(from discoveredDevices: [DiscoveredDevice]) -> DiscoveredDevice? {
+            if device.reconnectsWithoutDiscovery {
+                return device
+            }
+
+            return discoveredDevices.first { candidate in
+                candidate.discoveryIdentity == device.discoveryIdentity && (
+                    filter.map { candidate.matches(filter: $0) } ?? true
+                )
+            }
+        }
+    }
+
     /// Whether auto-reconnect fires on disconnect. The reconnect task lives
     /// inside `.enabled` because it only runs when the policy is active and
     /// a disconnect has occurred.
     enum ReconnectPolicy {
         case disabled
-        case enabled(filter: String?, reconnectTask: Task<Void, Never>?)
+        case enabled(filter: String?, target: ReconnectTarget?, reconnectTask: Task<Void, Never>?)
     }
 
     // MARK: - State
@@ -167,6 +191,7 @@ final class TheHandoff {
     private(set) var reconnectPolicy: ReconnectPolicy = .disabled
     private var connectionAttemptFailure: ConnectionError?
     private var terminalConnectionAttemptID: UUID?
+    private var discoverySessionID: UUID?
 
     /// Continuations awaiting a terminal connection-phase transition. Each
     /// continuation is tied to the connection attempt that was active when
@@ -425,6 +450,11 @@ final class TheHandoff {
 
     /// Interval between auto-reconnect attempts. Default is 1 second.
     var reconnectInterval: TimeInterval = 1.0
+    /// Max attempts before reconnect becomes terminal. Internal so tests can
+    /// drive bounded retries without waiting on the production limit.
+    var reconnectMaxAttempts = 60
+    /// Per-attempt connection timeout used by the reconnect runner.
+    var reconnectAttemptTimeout: TimeInterval = 10
     private static let keepaliveInterval: Duration = .seconds(5)
     private static let maxMissedPongs = 6
 
@@ -513,10 +543,14 @@ final class TheHandoff {
             return
         }
 
+        let sessionID = UUID()
         discoveredDevices.removeAll()
-        discovery = makeDiscovery()
-        discovery?.onEvent = { [weak self] event in
-            guard let self else { return }
+        isDiscovering = false
+        let activeDiscovery = makeDiscovery()
+        discovery = activeDiscovery
+        discoverySessionID = sessionID
+        activeDiscovery.onEvent = { [weak self, sessionID] event in
+            guard let self, self.isCurrentDiscoverySession(sessionID) else { return }
             switch event {
             case .found(let device):
                 logger.info("Device found: \(device.name)")
@@ -531,15 +565,21 @@ final class TheHandoff {
                 self.isDiscovering = isReady
             }
         }
-        discovery?.start()
+        activeDiscovery.start()
         logger.info("Discovery started")
     }
 
     func stopDiscovery() {
-        discovery?.stop()
+        let activeDiscovery = discovery
+        discoverySessionID = nil
         discovery = nil
         isDiscovering = false
         discoveredDevices = []
+        activeDiscovery?.stop()
+    }
+
+    private func isCurrentDiscoverySession(_ sessionID: UUID) -> Bool {
+        discoverySessionID == sessionID && discovery != nil
     }
 
     // MARK: - Reachability Probing
@@ -611,8 +651,8 @@ final class TheHandoff {
     // MARK: - Connection
 
     @discardableResult
-    func connect(to device: DiscoveredDevice) -> UUID {
-        disconnectForReplacement()
+    func connect(to device: DiscoveredDevice, cancelReconnectTaskOnReplacement: Bool = true) -> UUID {
+        disconnectForReplacement(cancelReconnectTask: cancelReconnectTaskOnReplacement)
         let attemptID = transitionToConnecting(device: device)
 
         connection = makeConnection(device, token, effectiveDriverId)
@@ -633,12 +673,8 @@ final class TheHandoff {
                     return
                 }
                 guard self.transitionToDisconnected(reason: reason, attemptID: attemptID) else { return }
-                if reason.retryable, case .enabled(let filter, let existingReconnectTask) = self.reconnectPolicy {
-                    existingReconnectTask?.cancel()
-                    let reconnectTask = Task<Void, Never> { [weak self] in
-                        await self?.runAutoReconnect(filter: filter)
-                    }
-                    self.reconnectPolicy = .enabled(filter: filter, reconnectTask: reconnectTask)
+                if reason.retryable {
+                    self.scheduleAutoReconnectIfNeeded(disconnectedDevice: device)
                 }
             case .sendFailed(let failure, let requestId):
                 guard self.isCurrentOrTerminalConnectionAttempt(attemptID) else { return }
@@ -740,9 +776,9 @@ final class TheHandoff {
     }
 
     func disconnect() {
-        if case .enabled(let filter, let reconnectTask) = reconnectPolicy {
+        if case .enabled(let filter, _, let reconnectTask) = reconnectPolicy {
             reconnectTask?.cancel()
-            reconnectPolicy = .enabled(filter: filter, reconnectTask: nil)
+            reconnectPolicy = .enabled(filter: filter, target: nil, reconnectTask: nil)
         }
         connection?.disconnect()
         connection = nil
@@ -750,11 +786,11 @@ final class TheHandoff {
     }
 
     @discardableResult
-    private func disconnectForReplacement() -> Bool {
+    private func disconnectForReplacement(cancelReconnectTask: Bool = true) -> Bool {
         let hadActiveSession = activeConnectionAttemptID != nil
-        if case .enabled(let filter, let reconnectTask) = reconnectPolicy {
+        if cancelReconnectTask, case .enabled(let filter, _, let reconnectTask) = reconnectPolicy {
             reconnectTask?.cancel()
-            reconnectPolicy = .enabled(filter: filter, reconnectTask: nil)
+            reconnectPolicy = .enabled(filter: filter, target: nil, reconnectTask: nil)
         }
         connection?.disconnect()
         connection = nil
@@ -768,7 +804,7 @@ final class TheHandoff {
     }
 
     func disableAutoReconnect() {
-        if case .enabled(_, let reconnectTask) = reconnectPolicy {
+        if case .enabled(_, _, let reconnectTask) = reconnectPolicy {
             reconnectTask?.cancel()
         }
         reconnectPolicy = .disabled
@@ -858,19 +894,16 @@ final class TheHandoff {
     func forceDisconnect() {
         guard isConnected else { return }
         logger.warning("Force-disconnecting stale connection")
-        if case .enabled(let filter, let reconnectTask) = reconnectPolicy {
+        let reconnectDevice = connectedDevice
+        if case .enabled(let filter, _, let reconnectTask) = reconnectPolicy {
             reconnectTask?.cancel()
-            reconnectPolicy = .enabled(filter: filter, reconnectTask: nil)
+            reconnectPolicy = .enabled(filter: filter, target: nil, reconnectTask: nil)
         }
         connection?.disconnect()
         connection = nil
         transitionToDisconnected(reason: .localDisconnect)
-        if case .enabled(let filter, let existingReconnectTask) = reconnectPolicy {
-            existingReconnectTask?.cancel()
-            let reconnectTask = Task<Void, Never> { [weak self] in
-                await self?.runAutoReconnect(filter: filter)
-            }
-            reconnectPolicy = .enabled(filter: filter, reconnectTask: reconnectTask)
+        if let reconnectDevice {
+            scheduleAutoReconnectIfNeeded(disconnectedDevice: reconnectDevice)
         }
     }
 
@@ -977,51 +1010,79 @@ final class TheHandoff {
     func setupAutoReconnect(filter: String?) {
         switch reconnectPolicy {
         case .disabled:
-            reconnectPolicy = .enabled(filter: filter, reconnectTask: nil)
-        case .enabled(let currentFilter, let reconnectTask):
+            reconnectPolicy = .enabled(filter: filter, target: nil, reconnectTask: nil)
+        case .enabled(let currentFilter, _, let reconnectTask):
             guard currentFilter != filter else { return }
             reconnectTask?.cancel()
-            reconnectPolicy = .enabled(filter: filter, reconnectTask: nil)
+            reconnectPolicy = .enabled(filter: filter, target: nil, reconnectTask: nil)
         }
     }
 
-    private func runAutoReconnect(filter: String?) async {
+    private func scheduleAutoReconnectIfNeeded(disconnectedDevice: DiscoveredDevice) {
+        guard case .enabled(let filter, let existingTarget, let existingReconnectTask) = reconnectPolicy else {
+            return
+        }
+        // A running reconnect loop owns retries for its target. A failed
+        // attempt must not cancel or replace that runner from inside its own
+        // disconnect callback.
+        guard existingReconnectTask == nil else { return }
+
+        let target = existingTarget ?? ReconnectTarget(filter: filter, device: disconnectedDevice)
+        let reconnectTask = Task<Void, Never> { [weak self, target] in
+            await self?.runAutoReconnect(target: target)
+        }
+        reconnectPolicy = .enabled(filter: filter, target: target, reconnectTask: reconnectTask)
+    }
+
+    private func runAutoReconnect(target: ReconnectTarget) async {
         onStatus?("Device disconnected — watching for reconnection...")
         var consecutiveMisses = 0
-        for _ in 0..<60 {
+        for _ in 0..<reconnectMaxAttempts {
             guard !Task.isCancelled else { return }
-            guard isAutoReconnectCurrent(filter: filter) else { return }
+            guard isAutoReconnectCurrent(target: target) else { return }
             // Backoff grows while no device is visible; resets after each connection attempt
             let delay = min(reconnectInterval * pow(2.0, Double(min(consecutiveMisses, 5))), 30.0)
             let jitter = Double.random(in: 0...(delay * 0.2))
             guard await Task.cancellableSleep(for: .seconds(delay + jitter)) else { return }
             guard !Task.isCancelled else { return }
-            guard isAutoReconnectCurrent(filter: filter) else { return }
-            if let device = discoveredDevices.first(matching: filter) {
+            guard isAutoReconnectCurrent(target: target) else { return }
+            if let device = target.resolve(from: discoveredDevices) {
                 consecutiveMisses = 0
                 onStatus?("Reconnecting to \(device.name)...")
-                connect(to: device)
-                let deadline = Date().addingTimeInterval(10)
-                while !isConnected {
-                    if Task.isCancelled || Date() > deadline { break }
-                    guard await Task.cancellableSleep(for: .milliseconds(100)) else { return }
+                let attemptID = connect(to: device, cancelReconnectTaskOnReplacement: false)
+                do {
+                    try await waitForConnectionResult(timeout: reconnectAttemptTimeout)
+                } catch let error as ConnectionError where error == .timeout {
+                    disconnectConnectionAttempt(attemptID, failure: .timeout)
+                } catch is CancellationError {
+                    return
+                } catch {
+                    // The connection event already moved the phase; continue bounded retries.
                 }
                 if Task.isCancelled { return }
                 if isConnected {
                     onStatus?("Reconnected to \(device.name)")
+                    if isAutoReconnectCurrent(target: target) {
+                        reconnectPolicy = .enabled(filter: target.filter, target: target, reconnectTask: nil)
+                    }
                     return
                 }
             } else {
                 consecutiveMisses += 1
             }
         }
-        onStatus?("Auto-reconnect gave up after 60 attempts")
+        let failure = ConnectionError.connectionFailed(
+            "Auto-reconnect gave up after \(reconnectMaxAttempts) attempts to \(target.displayName). Retry the connection or choose a new target."
+        )
+        onStatus?(failure.errorDescription ?? "Auto-reconnect gave up")
+        guard isAutoReconnectCurrent(target: target) else { return }
         reconnectPolicy = .disabled
+        transitionToFailed(failure)
     }
 
-    private func isAutoReconnectCurrent(filter: String?) -> Bool {
-        guard case .enabled(let currentFilter, _) = reconnectPolicy else { return false }
-        return currentFilter == filter
+    private func isAutoReconnectCurrent(target: ReconnectTarget) -> Bool {
+        guard case .enabled(_, let currentTarget?, _) = reconnectPolicy else { return false }
+        return currentTarget == target
     }
 
     // MARK: - Display Names
@@ -1051,10 +1112,19 @@ extension TheHandoff.ReconnectPolicy: Equatable {
         switch (lhs, rhs) {
         case (.disabled, .disabled):
             return true
-        case (.enabled(let lhsFilter, _), .enabled(let rhsFilter, _)):
-            return lhsFilter == rhsFilter
+        case (.enabled(let lhsFilter, let lhsTarget, _), .enabled(let rhsFilter, let rhsTarget, _)):
+            return lhsFilter == rhsFilter && lhsTarget == rhsTarget
         default:
             return false
         }
+    }
+}
+
+private extension DiscoveredDevice {
+    var reconnectsWithoutDiscovery: Bool {
+        if case .hostPort = endpoint {
+            return true
+        }
+        return false
     }
 }

@@ -1452,7 +1452,7 @@ final class TheFenceTests: XCTestCase {
         fence.handoff.setupAutoReconnect(filter: "MockApp")
         fence.handoff.connect(to: device)
 
-        guard case .enabled(filter: "MockApp", reconnectTask: let reconnectTask?) = fence.handoff.reconnectPolicy else {
+        guard case .enabled(filter: "MockApp", target: _, reconnectTask: let reconnectTask?) = fence.handoff.reconnectPolicy else {
             return XCTFail("Expected reconnect task before stop")
         }
 
