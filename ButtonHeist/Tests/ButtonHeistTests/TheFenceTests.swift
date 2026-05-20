@@ -2494,8 +2494,13 @@ final class TheFenceTests: XCTestCase {
     @ButtonHeistActor
     func testDirectConnectTimeoutTearsDownAttempt() async {
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let probeConnection = MockConnection()
+        probeConnection.emitTransportReadyOnConnect = true
         let mockConnection = MockConnection()
         mockConnection.connectEventsOverride = []
+        let previousFactory = makeReachabilityConnection
+        makeReachabilityConnection = { _ in probeConnection }
+        defer { makeReachabilityConnection = previousFactory }
 
         let fence = TheFence(configuration: .init(
             connectionTimeout: 0.05,
@@ -2514,6 +2519,72 @@ final class TheFenceTests: XCTestCase {
         }
 
         XCTAssertFalse(mockConnection.isConnected)
+        assertDisconnected(fence.handoff.connectionPhase)
+    }
+
+    @ButtonHeistActor
+    func testDirectConnectUnreachableFailsBeforeSessionHandshake() async {
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let probeConnection = MockConnection()
+        probeConnection.connectEventsOverride = [.disconnected(.serverClosed)]
+        let sessionConnection = MockConnection()
+        let previousFactory = makeReachabilityConnection
+        makeReachabilityConnection = { _ in probeConnection }
+        defer { makeReachabilityConnection = previousFactory }
+
+        let fence = TheFence(configuration: .init(
+            connectionTimeout: 30,
+            autoReconnect: false,
+            directDevice: device
+        ))
+        fence.handoff.makeConnection = { _, _, _ in sessionConnection }
+
+        do {
+            try await fence.start()
+            XCTFail("Expected endpoint unreachable failure")
+        } catch FenceError.connectionFailure(let failure) {
+            XCTAssertEqual(failure.errorCode, "connection.endpoint_unreachable")
+            XCTAssertEqual(failure.phase, .transport)
+            XCTAssertTrue(failure.retryable)
+        } catch {
+            XCTFail("Expected endpoint unreachable failure, got \(error)")
+        }
+
+        XCTAssertEqual(sessionConnection.connectCount, 0)
+        XCTAssertFalse(probeConnection.isConnected)
+        assertDisconnected(fence.handoff.connectionPhase)
+    }
+
+    @ButtonHeistActor
+    func testDirectConnectReachabilityPreservesTLSFailure() async {
+        let device = DiscoveredDevice(host: "192.0.2.1", port: 1234)
+        let probeConnection = MockConnection()
+        probeConnection.connectEventsOverride = [.disconnected(.missingFingerprint)]
+        let sessionConnection = MockConnection()
+        let previousFactory = makeReachabilityConnection
+        makeReachabilityConnection = { _ in probeConnection }
+        defer { makeReachabilityConnection = previousFactory }
+
+        let fence = TheFence(configuration: .init(
+            connectionTimeout: 30,
+            autoReconnect: false,
+            directDevice: device
+        ))
+        fence.handoff.makeConnection = { _, _, _ in sessionConnection }
+
+        do {
+            try await fence.start()
+            XCTFail("Expected TLS failure")
+        } catch FenceError.connectionFailure(let failure) {
+            XCTAssertEqual(failure.errorCode, "tls.missing_fingerprint")
+            XCTAssertEqual(failure.phase, .tls)
+            XCTAssertFalse(failure.retryable)
+        } catch {
+            XCTFail("Expected TLS failure, got \(error)")
+        }
+
+        XCTAssertEqual(sessionConnection.connectCount, 0)
+        XCTAssertFalse(probeConnection.isConnected)
         assertDisconnected(fence.handoff.connectionPhase)
     }
 

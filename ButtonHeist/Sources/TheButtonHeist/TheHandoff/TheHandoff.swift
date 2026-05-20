@@ -957,8 +957,8 @@ final class TheHandoff {
 
     /// Discover a device (optionally matching a filter) and connect to it.
     /// Starts discovery if not already active, polls until a matching device appears
-    /// or the timeout expires. Suspends on `waitForConnectionResult` for the
-    /// connection outcome.
+    /// or the bounded resolution window expires. Suspends on
+    /// `waitForConnectionResult` for the connection outcome.
     func connectWithDiscovery(
         filter: String?,
         timeout: TimeInterval = 30
@@ -968,10 +968,15 @@ final class TheHandoff {
         let startedDiscovery = !hasActiveDiscoverySession
         if startedDiscovery { startDiscovery() }
 
-        let discoveryTimeout = UInt64(max(timeout, 5) * 1_000_000_000)
+        let resolutionTimeout = Self.connectionResolutionTimeout(for: timeout)
+        let discoveryTimeout = UInt64(resolutionTimeout * 1_000_000_000)
         let device: DiscoveredDevice
         do {
-            device = try await resolveReachableDevice(filter: filter, discoveryTimeout: discoveryTimeout)
+            device = try await resolveReachableDevice(
+                filter: filter,
+                discoveryTimeout: discoveryTimeout,
+                reachabilityTimeout: resolutionTimeout
+            )
         } catch {
             if startedDiscovery { stopDiscovery() }
             if let connectionError = error as? ConnectionError {
@@ -995,14 +1000,20 @@ final class TheHandoff {
 
     private func resolveReachableDevice(
         filter: String?,
-        discoveryTimeout: UInt64
+        discoveryTimeout: UInt64,
+        reachabilityTimeout: TimeInterval
     ) async throws -> DiscoveredDevice {
         let resolver = DeviceResolver(
             filter: filter,
             discoveryTimeout: discoveryTimeout,
+            reachabilityTimeout: reachabilityTimeout,
             getDiscoveredDevices: { [weak self] in self?.discoveredDevices ?? [] }
         )
         return try await resolver.resolve()
+    }
+
+    static func connectionResolutionTimeout(for timeout: TimeInterval) -> TimeInterval {
+        min(max(timeout, 0.05), 2.0)
     }
 
     /// Set up auto-reconnect: when disconnected, poll for the device and reconnect.

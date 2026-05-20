@@ -1248,6 +1248,22 @@ public final class TheFence {
 
     private func connectDirect(to device: DiscoveredDevice) async throws {
         handoff.onStatus?("Connecting to \(device.name)...")
+        let resolutionTimeout = TheHandoff.connectionResolutionTimeout(for: config.connectionTimeout)
+        switch await device.reachability(timeout: resolutionTimeout) {
+        case .reachable:
+            break
+        case .failed(let reason):
+            throw FenceError(TheHandoff.ConnectionError.disconnected(reason))
+        case .unavailable:
+            throw FenceError.connectionFailure(ConnectionFailure(
+                message: "Could not reach ButtonHeist server at \(device.name)",
+                errorCode: "connection.endpoint_unreachable",
+                phase: .transport,
+                retryable: true,
+                hint: "Check that the app is running at \(device.name), then retry the command."
+            ))
+        }
+
         let attemptID = handoff.connect(to: device)
         do {
             try await handoff.waitForConnectionResult(timeout: config.connectionTimeout)

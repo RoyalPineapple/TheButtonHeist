@@ -109,6 +109,41 @@ final class DeviceResolverTests: XCTestCase {
         }
     }
 
+    @ButtonHeistActor
+    func testResolveFilterWaitsForMatchingDeviceAfterReachableNonMatch() async throws {
+        let previousFactory = makeReachabilityConnection
+        makeReachabilityConnection = { _ in
+            let connection = MockConnection()
+            connection.connectEventsOverride = [.transportReady]
+            return connection
+        }
+        defer { makeReachabilityConnection = previousFactory }
+
+        let otherDevice = makeDevice(id: "other", name: "OtherApp-iPhone#aaa")
+        let targetDevice = makeDevice(id: "target", name: "DemoApp-iPhone#bbb")
+        var discoveryCallCount = 0
+        let resolver = DeviceResolver(
+            filter: "DemoApp",
+            discoveryTimeout: 2_000_000_000,
+            reachabilityTimeout: 0.01,
+            getDiscoveredDevices: {
+                discoveryCallCount += 1
+                return discoveryCallCount < 8 ? [otherDevice] : [otherDevice, targetDevice]
+            }
+        )
+
+        let device = try await resolver.resolve()
+
+        XCTAssertEqual(device, targetDevice)
+    }
+
+    @ButtonHeistActor
+    func testConnectionResolutionTimeoutCapsLongHandshakeTimeout() async {
+        XCTAssertEqual(TheHandoff.connectionResolutionTimeout(for: 30), 2)
+        XCTAssertEqual(TheHandoff.connectionResolutionTimeout(for: 1.25), 1.25)
+        XCTAssertEqual(TheHandoff.connectionResolutionTimeout(for: 0.01), 0.05)
+    }
+
     // MARK: - Helpers
 
     private func makeDevice(id: String, name: String) -> DiscoveredDevice {
