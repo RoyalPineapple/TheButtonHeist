@@ -58,7 +58,7 @@ final class TheInsideJobStateTests: XCTestCase {
         let resumeTask = neverEndingTask {
             cancellationExpectation.fulfill()
         }
-        job.serverPhase = .resuming(task: resumeTask)
+        job.serverPhase = .resuming(id: UUID(), task: resumeTask)
 
         await job.stop()
 
@@ -90,7 +90,7 @@ final class TheInsideJobStateTests: XCTestCase {
         let resumeTask = neverEndingTask {
             cancellationExpectation.fulfill()
         }
-        job.serverPhase = .resuming(task: resumeTask)
+        job.serverPhase = .resuming(id: UUID(), task: resumeTask)
 
         await job.suspend()
 
@@ -138,7 +138,7 @@ final class TheInsideJobStateTests: XCTestCase {
 
     func testResumingStateCarriesTask() {
         let task = Task { @MainActor in }
-        let state = TheInsideJob.ServerPhase.resuming(task: task)
+        let state = TheInsideJob.ServerPhase.resuming(id: UUID(), task: task)
         guard case .resuming = state else {
             XCTFail("Expected .resuming")
             return
@@ -245,7 +245,7 @@ final class TheInsideJobStateTests: XCTestCase {
     func testSuspendFromResumingPausesActivePolling() async {
         let job = TheInsideJob()
         let resumeTask = neverEndingTask()
-        job.serverPhase = .resuming(task: resumeTask)
+        job.serverPhase = .resuming(id: UUID(), task: resumeTask)
         job.startPolling(interval: 4.0)
 
         await job.suspend()
@@ -257,6 +257,49 @@ final class TheInsideJobStateTests: XCTestCase {
         XCTAssertEqual(interval, 4.0)
 
         job.stopPolling()
+    }
+
+    func testStaleResumeAttemptCannotSuspendNewerResume() {
+        let job = TheInsideJob()
+        let staleID = UUID()
+        let currentID = UUID()
+        let currentTask = neverEndingTask()
+        job.serverPhase = .resuming(id: currentID, task: currentTask)
+
+        job.finishFailedResumeAttempt(staleID, startedTransport: nil)
+
+        guard case .resuming(let observedID, _) = job.serverPhase else {
+            return XCTFail("Expected newer resume attempt to stay active, got \(job.serverPhase)")
+        }
+        XCTAssertEqual(observedID, currentID)
+    }
+
+    func testStaleFailedResumeTracksStartedTransportStop() {
+        let job = TheInsideJob()
+        job.serverPhase = .suspended
+        let staleID = UUID()
+
+        job.finishFailedResumeAttempt(staleID, startedTransport: ServerTransport())
+
+        XCTAssertFalse(
+            job.pendingTransportStopTaskIsEmpty,
+            "Stale resume cleanup must remain pending so the next start/resume waits for listener shutdown."
+        )
+        guard case .suspended = job.serverPhase else {
+            return XCTFail("Stale resume must not mutate the current server phase, got \(job.serverPhase)")
+        }
+    }
+
+    func testCurrentFailedResumeAttemptSuspends() {
+        let job = TheInsideJob()
+        let resumeID = UUID()
+        job.serverPhase = .resuming(id: resumeID, task: neverEndingTask())
+
+        job.finishFailedResumeAttempt(resumeID, startedTransport: nil)
+
+        guard case .suspended = job.serverPhase else {
+            return XCTFail("Expected current failed resume attempt to suspend, got \(job.serverPhase)")
+        }
     }
 
     // MARK: - PollingPhase: Computed properties
@@ -282,41 +325,43 @@ final class TheInsideJobStateTests: XCTestCase {
     }
 
     func testSettledBackgroundParseRequiresRunningActiveAndNoParserWorkInFlight() {
+        var readyState = BackgroundChangeState()
+        readyState.noteChange()
         XCTAssertTrue(TheInsideJob.canRunSettledBackgroundParse(
             isRunning: true,
             applicationState: .active,
-            commandParseInFlight: false,
-            settledTripwireParseInFlight: false
+            backgroundChangeState: readyState
         ))
         XCTAssertFalse(TheInsideJob.canRunSettledBackgroundParse(
             isRunning: false,
             applicationState: .active,
-            commandParseInFlight: false,
-            settledTripwireParseInFlight: false
+            backgroundChangeState: readyState
         ))
         XCTAssertFalse(TheInsideJob.canRunSettledBackgroundParse(
             isRunning: true,
             applicationState: .inactive,
-            commandParseInFlight: false,
-            settledTripwireParseInFlight: false
+            backgroundChangeState: readyState
         ))
         XCTAssertFalse(TheInsideJob.canRunSettledBackgroundParse(
             isRunning: true,
             applicationState: .background,
-            commandParseInFlight: false,
-            settledTripwireParseInFlight: false
+            backgroundChangeState: readyState
         ))
+
+        var commandState = readyState
+        commandState.beginCommand()
         XCTAssertFalse(TheInsideJob.canRunSettledBackgroundParse(
             isRunning: true,
             applicationState: .active,
-            commandParseInFlight: true,
-            settledTripwireParseInFlight: false
+            backgroundChangeState: commandState
         ))
+
+        var parseState = readyState
+        _ = parseState.beginSettledParse()
         XCTAssertFalse(TheInsideJob.canRunSettledBackgroundParse(
             isRunning: true,
             applicationState: .active,
-            commandParseInFlight: false,
-            settledTripwireParseInFlight: true
+            backgroundChangeState: parseState
         ))
     }
 

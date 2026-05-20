@@ -38,7 +38,6 @@ final class TheBrains {
     }
 
     private var waitForChangePhase: WaitForChangePhase = .idle
-    private var settledTripwireParseInFlight = false
 
     enum InterfaceObservation {
         case success(Interface)
@@ -402,12 +401,6 @@ final class TheBrains {
     /// semantic screen, and classify the result. Same-screen parses patch local
     /// state; screen changes perform the full exploration pass before returning.
     func parseSettledTripwireChange() async -> SettledTripwireParse {
-        guard !settledTripwireParseInFlight else {
-            return SettledTripwireParse(changed: false, isScreenChange: false, accessibilityTrace: nil)
-        }
-        settledTripwireParseInFlight = true
-        defer { settledTripwireParseInFlight = false }
-
         let baseline = captureSemanticState()
         guard refresh() != nil else {
             return SettledTripwireParse(changed: false, isScreenChange: false, accessibilityTrace: nil)
@@ -556,9 +549,10 @@ final class TheBrains {
 
         let baseline = sentBaseline ?? initial
         let preWaitElements = Dictionary(
-            uniqueKeysWithValues: TheStash.WireConversion.toWire(baseline.snapshot).map {
+            TheStash.WireConversion.toWire(baseline.snapshot).map {
                 ($0.heistId, $0)
-            }
+            },
+            uniquingKeysWith: { _, newest in newest }
         )
 
         if let expectation = predicate.expectation,

@@ -101,7 +101,7 @@ public final class TheInsideJob {
         case stopped
         case running(transport: ServerTransport)
         case suspended
-        case resuming(task: Task<Void, Never>)
+        case resuming(id: UUID, task: Task<Void, Never>)
     }
 
     enum PollingPhase {
@@ -121,35 +121,30 @@ public final class TheInsideJob {
     /// Tracks @objc lifecycle bridge Tasks that must finish before start/resume reads `serverPhase`.
     @MainActor
     final class LifecycleBoundaryTasks {
-        private var tasks: Set<Task<Void, Never>> = []
+        private var tasks: [UInt64: Task<Void, Never>] = [:]
+        private var nextTaskId: UInt64 = 0
 
         var isEmpty: Bool { tasks.isEmpty }
 
         func spawn(_ body: @escaping @MainActor () async -> Void) {
-            let holder = TaskHolder()
-            let task = Task { @MainActor [weak self, holder] in
+            nextTaskId &+= 1
+            let id = nextTaskId
+            let task = Task { @MainActor [weak self] in
                 await body()
-                guard let task = holder.task else { return }
-                self?.tasks.remove(task)
+                self?.tasks.removeValue(forKey: id)
             }
-            holder.task = task
-            tasks.insert(task)
+            tasks[id] = task
         }
 
         func drain() async {
             while !tasks.isEmpty {
-                let snapshot = tasks
+                let snapshot = Array(tasks.values)
                 tasks.removeAll()
                 for task in snapshot {
                     await task.value
                 }
             }
         }
-    }
-
-    @MainActor
-    final class TaskHolder {
-        var task: Task<Void, Never>?
     }
 
     // MARK: - Properties
@@ -222,6 +217,7 @@ public final class TheInsideJob {
     /// Test hook: exposes whether lifecycle bridge Tasks have self-removed
     /// without exposing the underlying tracker.
     var pendingLifecycleTasksIsEmpty: Bool { lifecycleBoundaryTasks.isEmpty }
+    var pendingTransportStopTaskIsEmpty: Bool { pendingTransportStopTask == nil }
 
     private static let defaultPollingTimeout: TimeInterval = 2.0
 
@@ -361,7 +357,7 @@ public final class TheInsideJob {
     }
 
     public func stop() async {
-        if case .resuming(let task) = serverPhase {
+        if case .resuming(_, let task) = serverPhase {
             task.cancel()
         }
 
@@ -393,7 +389,7 @@ public final class TheInsideJob {
 
     public func notifyChange() {
         guard isRunning else { return }
-        getaway.tripwireParsePending = true
+        getaway.noteBackgroundChange()
         if canRunSettledBackgroundParse, tripwire.latestReading?.isSettled == true {
             let getaway = self.getaway
             Task { await getaway.noteSettledChangeIfNeeded() }
@@ -422,14 +418,14 @@ public final class TheInsideJob {
     private func handlePulseTransition(_ transition: TheTripwire.PulseTransition) {
         switch transition {
         case .tripwireTriggered:
-            getaway.tripwireParsePending = true
+            getaway.noteBackgroundChange()
             if canRunSettledBackgroundParse, tripwire.latestReading?.isSettled == true {
                 let getaway = self.getaway
                 Task { await getaway.noteSettledChangeIfNeeded() }
             }
         case .unsettled:
-            getaway.tripwireParsePending = true
-        case .settled where getaway.tripwireParsePending && canRunSettledBackgroundParse:
+            getaway.noteBackgroundChange()
+        case .settled where getaway.hasPendingBackgroundChange && canRunSettledBackgroundParse:
             let getaway = self.getaway
             Task { await getaway.noteSettledChangeIfNeeded() }
         case .settled:
@@ -454,21 +450,18 @@ public final class TheInsideJob {
         Self.canRunSettledBackgroundParse(
             isRunning: isRunning,
             applicationState: UIApplication.shared.applicationState,
-            commandParseInFlight: getaway.commandParseInFlight,
-            settledTripwireParseInFlight: getaway.settledTripwireParseInFlight
+            backgroundChangeState: getaway.backgroundChangeState
         )
     }
 
     static func canRunSettledBackgroundParse(
         isRunning: Bool,
         applicationState: UIApplication.State,
-        commandParseInFlight: Bool,
-        settledTripwireParseInFlight: Bool
+        backgroundChangeState: BackgroundChangeState
     ) -> Bool {
         isRunning
             && applicationState == .active
-            && !commandParseInFlight
-            && !settledTripwireParseInFlight
+            && backgroundChangeState.canBeginSettledParse
     }
 
     // MARK: - Service Advertisement
@@ -556,7 +549,7 @@ public final class TheInsideJob {
     }
 
     @objc private func accessibilityDidChange() {
-        getaway.tripwireParsePending = true
+        getaway.noteBackgroundChange()
         if canRunSettledBackgroundParse, tripwire.latestReading?.isSettled == true {
             let getaway = self.getaway
             Task { await getaway.noteSettledChangeIfNeeded() }
@@ -567,6 +560,10 @@ public final class TheInsideJob {
 
     private func startLifecycleObservation() {
         NotificationCenter.default.addObserver(
+            self, selector: #selector(appWillResignActive),
+            name: UIApplication.willResignActiveNotification, object: nil
+        )
+        NotificationCenter.default.addObserver(
             self, selector: #selector(appDidEnterBackground),
             name: UIApplication.didEnterBackgroundNotification, object: nil
         )
@@ -575,20 +572,35 @@ public final class TheInsideJob {
             name: UIApplication.willEnterForegroundNotification, object: nil
         )
         NotificationCenter.default.addObserver(
+            self, selector: #selector(appDidBecomeActive),
+            name: UIApplication.didBecomeActiveNotification, object: nil
+        )
+        NotificationCenter.default.addObserver(
             self, selector: #selector(appWillTerminate),
             name: UIApplication.willTerminateNotification, object: nil
         )
     }
 
     private func stopLifecycleObservation() {
+        NotificationCenter.default.removeObserver(self, name: UIApplication.willResignActiveNotification, object: nil)
         NotificationCenter.default.removeObserver(self, name: UIApplication.didEnterBackgroundNotification, object: nil)
         NotificationCenter.default.removeObserver(self, name: UIApplication.willEnterForegroundNotification, object: nil)
+        NotificationCenter.default.removeObserver(self, name: UIApplication.didBecomeActiveNotification, object: nil)
         NotificationCenter.default.removeObserver(self, name: UIApplication.willTerminateNotification, object: nil)
     }
 
+    @objc private func appWillResignActive() {
+        beginLifecycleSuspension()
+    }
+
     @objc private func appDidEnterBackground() {
+        beginLifecycleSuspension()
+    }
+
+    private func beginLifecycleSuspension() {
+        guard beginSuspension() else { return }
         spawnLifecycleTask { [weak self] in
-            await self?.suspend()
+            await self?.finishSuspension()
         }
     }
 
@@ -599,7 +611,19 @@ public final class TheInsideJob {
         // and deadlock. Tracked entries are reserved for shutdown wrappers
         // (suspend/stop) that start()/resume() observe before re-arming. We
         // store the handle in a dedicated field so tests can observe it.
-        pendingForegroundResumeTask?.cancel()
+        scheduleForegroundResume(replacingExisting: true)
+    }
+
+    @objc private func appDidBecomeActive() {
+        scheduleForegroundResume(replacingExisting: false)
+    }
+
+    private func scheduleForegroundResume(replacingExisting: Bool) {
+        if replacingExisting {
+            pendingForegroundResumeTask?.cancel()
+        } else if pendingForegroundResumeTask != nil {
+            return
+        }
         pendingForegroundResumeTask = Task { @MainActor [weak self] in
             await self?.resume()
             self?.pendingForegroundResumeTask = nil
@@ -636,13 +660,19 @@ public final class TheInsideJob {
     // MARK: - Suspend / Resume
 
     func suspend() async {
+        guard beginSuspension() else { return }
+        await finishSuspension()
+    }
+
+    @discardableResult
+    private func beginSuspension() -> Bool {
         switch serverPhase {
         case .running(let activeTransport):
             pendingTransportStopTask = activeTransport.stop()
-        case .resuming(let task):
+        case .resuming(_, let task):
             task.cancel()
         case .stopped, .suspended:
-            return
+            return false
         }
 
         if case .active(let pollingTask, let interval) = pollingPhase {
@@ -653,15 +683,19 @@ public final class TheInsideJob {
         tripwire.stopPulse()
         brains.stopKeyboardObservation()
 
-        await muscle.tearDown()
-        await getaway.tearDown()
-
         stopAccessibilityObservation()
 
         brains.clearCache()
         restoreIdleTimerProtection(clearBaseline: false)
 
         serverPhase = .suspended
+
+        return true
+    }
+
+    private func finishSuspension() async {
+        await muscle.tearDown()
+        await getaway.tearDown()
 
         insideJobLogger.info("Server suspended")
     }
@@ -680,6 +714,7 @@ public final class TheInsideJob {
 
         insideJobLogger.info("Resuming server...")
 
+        let resumeID = UUID()
         let task = Task { @MainActor [weak self] in
             guard let self else { return }
             var startedTransport: ServerTransport?
@@ -713,6 +748,13 @@ public final class TheInsideJob {
 
                 try Task.checkCancellation()
 
+                guard self.isCurrentResumeAttempt(resumeID) else {
+                    if let startedTransport {
+                        _ = startedTransport.stop()
+                    }
+                    return
+                }
+
                 self.serverPhase = .running(transport: transport)
                 startedTransport = nil
 
@@ -735,21 +777,35 @@ public final class TheInsideJob {
 
                 insideJobLogger.info("Server resume complete")
             } catch is CancellationError {
-                if let startedTransport {
-                    self.pendingTransportStopTask = startedTransport.stop()
-                }
+                self.finishFailedResumeAttempt(resumeID, startedTransport: startedTransport)
                 insideJobLogger.info("Server resume cancelled")
             } catch {
-                if let startedTransport {
-                    self.pendingTransportStopTask = startedTransport.stop()
-                }
                 insideJobLogger.error("Failed to resume server: \(error)")
-                if case .resuming = self.serverPhase {
-                    self.serverPhase = .suspended
-                }
+                self.finishFailedResumeAttempt(resumeID, startedTransport: startedTransport)
             }
         }
-        serverPhase = .resuming(task: task)
+        serverPhase = .resuming(id: resumeID, task: task)
+    }
+
+    func isCurrentResumeAttempt(_ resumeID: UUID) -> Bool {
+        guard case .resuming(let currentID, _) = serverPhase else { return false }
+        return currentID == resumeID
+    }
+
+    func finishFailedResumeAttempt(_ resumeID: UUID, startedTransport: ServerTransport?) {
+        let stopTask = startedTransport?.stop()
+        if let stopTask {
+            if let existingStopTask = pendingTransportStopTask {
+                pendingTransportStopTask = Task {
+                    await existingStopTask.value
+                    await stopTask.value
+                }
+            } else {
+                pendingTransportStopTask = stopTask
+            }
+        }
+        guard isCurrentResumeAttempt(resumeID) else { return }
+        serverPhase = .suspended
     }
 
     private func engageIdleTimerProtection() {

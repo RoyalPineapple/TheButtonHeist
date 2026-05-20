@@ -5,6 +5,97 @@ import os.log
 
 import TheScore
 
+struct BackgroundChangeState: Sendable, Equatable {
+    private(set) var latestGeneration: UInt64 = 0
+    private(set) var parsedThroughGeneration: UInt64 = 0
+    private(set) var phase: Phase = .idle
+
+    enum Phase: Sendable, Equatable {
+        case idle
+        case command(count: Int)
+        case settledParse(claimedGeneration: UInt64, commandCount: Int)
+    }
+
+    var hasPendingSettledChange: Bool {
+        latestGeneration > parsedThroughGeneration
+    }
+
+    var canBeginSettledParse: Bool {
+        phase == .idle && hasPendingSettledChange
+    }
+
+    var isCommandInFlight: Bool {
+        switch phase {
+        case .command(let count), .settledParse(_, let count):
+            return count > 0
+        case .idle:
+            return false
+        }
+    }
+
+    var isSettledParseInFlight: Bool {
+        if case .settledParse = phase { return true }
+        return false
+    }
+
+    mutating func noteChange() {
+        latestGeneration &+= 1
+    }
+
+    mutating func markObserved(through generation: UInt64) {
+        parsedThroughGeneration = max(parsedThroughGeneration, min(generation, latestGeneration))
+    }
+
+    mutating func beginCommand() {
+        switch phase {
+        case .idle:
+            phase = .command(count: 1)
+        case .command(let count):
+            phase = .command(count: count + 1)
+        case .settledParse(let claimedGeneration, let commandCount):
+            phase = .settledParse(claimedGeneration: claimedGeneration, commandCount: commandCount + 1)
+        }
+    }
+
+    mutating func finishCommand() {
+        switch phase {
+        case .idle:
+            return
+        case .command(let count):
+            phase = count > 1 ? .command(count: count - 1) : .idle
+        case .settledParse(let claimedGeneration, let commandCount):
+            guard commandCount > 0 else { return }
+            phase = .settledParse(claimedGeneration: claimedGeneration, commandCount: commandCount - 1)
+        }
+    }
+
+    mutating func beginSettledParse() -> UInt64? {
+        guard phase == .idle, hasPendingSettledChange else { return nil }
+        let claim = latestGeneration
+        phase = .settledParse(claimedGeneration: claim, commandCount: 0)
+        return claim
+    }
+
+    mutating func finishSettledParse(claimedGeneration: UInt64) {
+        guard case .settledParse(let currentClaim, let commandCount) = phase,
+              currentClaim == claimedGeneration else {
+            return
+        }
+        parsedThroughGeneration = max(parsedThroughGeneration, claimedGeneration)
+        if commandCount > 0 {
+            phase = .command(count: commandCount)
+        } else {
+            phase = .idle
+        }
+    }
+
+    mutating func reset() {
+        latestGeneration = 0
+        parsedThroughGeneration = 0
+        phase = .idle
+    }
+}
+
 /// The getaway driver — runs comms between the wire and the crew.
 ///
 /// TheGetaway owns all message routing, encoding, broadcasting, and transport
@@ -34,9 +125,7 @@ final class TheGetaway {
     // `RecordingRouteState`, `RecordingPhase`, `RecordingOutcome`, and their handlers live in
     // TheGetaway+Recording.swift.
     private(set) var recordingRouteState: RecordingRouteState = .idle
-    var tripwireParsePending = false
-    var commandParseInFlight = false
-    var settledTripwireParseInFlight = false
+    private(set) var backgroundChangeState = BackgroundChangeState()
 
     /// Current transport — set by `wireTransport`, cleared on teardown.
     private(set) weak var transport: ServerTransport?
@@ -93,6 +182,14 @@ final class TheGetaway {
     /// TheGetaway methods so no other component can assign the lifecycle store.
     func replaceRecordingRouteState(_ state: RecordingRouteState) {
         recordingRouteState = state
+    }
+
+    func noteBackgroundChange() {
+        backgroundChangeState.noteChange()
+    }
+
+    var hasPendingBackgroundChange: Bool {
+        backgroundChangeState.hasPendingSettledChange
     }
 
     // MARK: - Init
@@ -239,9 +336,7 @@ final class TheGetaway {
         await invalidateRecordingForSessionRelease()
         pendingRecordingTasks.cancelAll()
         transport = nil
-        tripwireParsePending = false
-        commandParseInFlight = false
-        settledTripwireParseInFlight = false
+        backgroundChangeState.reset()
         replaceRecordingRouteState(.idle)
     }
 
@@ -287,17 +382,19 @@ final class TheGetaway {
             handleScreen(requestId: requestId, respond: respond)
         case .waitForIdle(let target):
             brains.clearPendingRotorResult()
+            let observedGeneration = backgroundChangeState.latestGeneration
             let result = await brains.executeWaitForIdle(timeout: min(target.timeout ?? 5.0, 60.0))
             sendMessage(.actionResult(result), requestId: requestId, respond: respond)
-            noteCommandParseSatisfiedIfNeeded(result.accessibilityTrace)
+            noteCommandParseSatisfiedIfNeeded(result.accessibilityTrace, observedGeneration: observedGeneration)
             brains.recordSentState()
         case .waitForChange(let target):
             brains.clearPendingRotorResult()
+            let observedGeneration = backgroundChangeState.latestGeneration
             let result = await brains.executeWaitForChange(
                 timeout: target.resolvedTimeout, expectation: target.expect
             )
             sendMessage(.actionResult(result), requestId: requestId, respond: respond)
-            noteCommandParseSatisfiedIfNeeded(result.accessibilityTrace)
+            noteCommandParseSatisfiedIfNeeded(result.accessibilityTrace, observedGeneration: observedGeneration)
             brains.recordSentState()
 
         // Recording & interactions
@@ -313,10 +410,17 @@ final class TheGetaway {
                 if let stakeout {
                     await stakeout.noteActivity()
                 }
+                let observedBackgroundGeneration = backgroundChangeState.latestGeneration
                 let backgroundTrace = await brains.computeBackgroundAccessibilityTrace()
 
                 if let actionResult = staleTargetedActionFailure(for: message, backgroundTrace: backgroundTrace) {
-                    await recordAndRespond(command: message, actionResult: actionResult, requestId: requestId, respond: respond)
+                    await recordAndRespond(
+                        command: message,
+                        actionResult: actionResult,
+                        requestId: requestId,
+                        observedBackgroundGeneration: observedBackgroundGeneration,
+                        respond: respond
+                    )
                     return
                 }
 
@@ -328,6 +432,7 @@ final class TheGetaway {
                     actionResult: actionResult,
                     requestId: requestId,
                     accessibilityTrace: backgroundTrace,
+                    observedBackgroundGeneration: observedBackgroundGeneration,
                     respond: respond
                 )
             }
@@ -335,8 +440,8 @@ final class TheGetaway {
     }
 
     private func withCommandParseInFlight<T>(_ operation: () async -> T) async -> T {
-        commandParseInFlight = true
-        defer { commandParseInFlight = false }
+        backgroundChangeState.beginCommand()
+        defer { backgroundChangeState.finishCommand() }
         return await operation()
     }
 
@@ -483,6 +588,7 @@ final class TheGetaway {
         actionResult: ActionResult,
         requestId: String?,
         accessibilityTrace: AccessibilityTrace? = nil,
+        observedBackgroundGeneration: UInt64,
         respond: @escaping (Data) -> Void
     ) async {
         if let stakeout {
@@ -495,30 +601,29 @@ final class TheGetaway {
             accessibilityTrace: accessibilityTrace,
             respond: respond
         )
-        noteCommandParseSatisfiedIfNeeded(actionResult.accessibilityTrace ?? accessibilityTrace)
+        noteCommandParseSatisfiedIfNeeded(
+            actionResult.accessibilityTrace ?? accessibilityTrace,
+            observedGeneration: observedBackgroundGeneration
+        )
         brains.recordSentState()
     }
 
-    private func noteCommandParseSatisfiedIfNeeded(_ accessibilityTrace: AccessibilityTrace?) {
+    private func noteCommandParseSatisfiedIfNeeded(_ accessibilityTrace: AccessibilityTrace?, observedGeneration: UInt64) {
         guard accessibilityTrace != nil else { return }
-        tripwireParsePending = false
+        backgroundChangeState.markObserved(through: observedGeneration)
     }
 
     // MARK: - Settled Change Tracking
 
     func noteSettledChangeIfNeeded() async {
-        guard tripwireParsePending, !commandParseInFlight, !settledTripwireParseInFlight else { return }
-        tripwireParsePending = false
-        settledTripwireParseInFlight = true
-        defer {
-            settledTripwireParseInFlight = false
-            tripwireParsePending = false
-        }
-        let result = await brains.parseSettledTripwireChange()
-        guard result.changed else { return }
+        while let claimedGeneration = backgroundChangeState.beginSettledParse() {
+            let result = await brains.parseSettledTripwireChange()
+            backgroundChangeState.finishSettledParse(claimedGeneration: claimedGeneration)
+            guard result.changed else { continue }
 
-        if let stakeout {
-            await stakeout.noteScreenChange()
+            if let stakeout {
+                await stakeout.noteScreenChange()
+            }
         }
     }
 
@@ -527,6 +632,7 @@ final class TheGetaway {
         requestId: String? = nil,
         respond: @escaping (Data) -> Void
     ) async {
+        let observedGeneration = backgroundChangeState.latestGeneration
         switch await brains.observeInterface(query) {
         case .success(let interface):
             insideJobLogger.info("Interface: \(interface.elements.count) elements")
@@ -535,7 +641,7 @@ final class TheGetaway {
                 requestId: requestId,
                 respond: respond
             )
-            tripwireParsePending = false
+            backgroundChangeState.markObserved(through: observedGeneration)
             brains.recordSentState()
         case .failure(let error):
             sendMessage(.error(ServerError(kind: .general, message: error.message)), requestId: requestId, respond: respond)
@@ -546,6 +652,7 @@ final class TheGetaway {
 
     func handleScreen(requestId: String? = nil, respond: @escaping (Data) -> Void) {
         insideJobLogger.debug("Screen requested")
+        let observedGeneration = backgroundChangeState.latestGeneration
 
         guard brains.refresh() != nil else {
             sendMessage(.error(ServerError(kind: .general, message: "Could not access accessibility tree")), requestId: requestId, respond: respond)
@@ -570,7 +677,7 @@ final class TheGetaway {
         )
 
         sendMessage(.screen(payload), requestId: requestId, respond: respond)
-        tripwireParsePending = false
+        backgroundChangeState.markObserved(through: observedGeneration)
         insideJobLogger.debug("Screen sent: \(pngData.count) bytes")
     }
 }
