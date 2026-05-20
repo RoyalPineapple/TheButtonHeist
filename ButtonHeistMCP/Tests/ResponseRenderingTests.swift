@@ -97,6 +97,43 @@ struct ResponseRenderingTests {
         #expect(texts == ["activate: error[elementNotFound]: No element matching label \"Buy\""])
     }
 
+    @Test("MCP renders expanded recording responses as bounded JSON text")
+    func rendersExpandedRecordingAsJSONText() throws {
+        let payload = RecordingPayload(
+            videoData: Data("video".utf8).base64EncodedString(),
+            width: 390,
+            height: 844,
+            duration: 2.0,
+            frameCount: 16,
+            fps: 8,
+            startTime: Date(timeIntervalSince1970: 0),
+            endTime: Date(timeIntervalSince1970: 2),
+            stopReason: .manual,
+            interactionLog: [
+                InteractionEvent(
+                    timestamp: 0,
+                    command: .activate(.matcher(ElementMatcher(label: "Buy"))),
+                    result: ActionResult(success: true, method: .activate)
+                ),
+            ]
+        )
+        let response = FenceResponse.recordingExpanded(
+            path: "/tmp/rec.mp4",
+            payload: payload,
+            options: RecordingResponseOptions(inlineData: true, includeInteractionLog: true)
+        )
+
+        let result = ButtonHeistMCPServer.renderResponse(response, backgroundAccessibilityTraces: [])
+        let texts = textContents(result)
+
+        #expect(texts.count == 1)
+        let data = try #require(texts[0].data(using: .utf8))
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(object["path"] as? String == "/tmp/rec.mp4")
+        #expect(object["videoData"] as? String == payload.videoData)
+        #expect((object["interactionLog"] as? [[String: Any]])?.count == 1)
+    }
+
     private func textContents(_ result: CallTool.Result) -> [String] {
         result.content.compactMap { content in
             if case .text(let text, _, _) = content { return text }

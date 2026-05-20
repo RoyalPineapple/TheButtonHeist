@@ -30,12 +30,18 @@ extension FenceResponse {
             return lines.joined(separator: "\n")
         case .action(let result, let expectation):
             return compactActionResult(result, expectation: expectation)
-        case .screenshot(let path, let payload):
+        case .screenshot(let path, let payload, _):
             return "screenshot: \(path) (\(Int(payload.width))x\(Int(payload.height)))"
-        case .screenshotData(let payload):
+        case .screenshotData(let payload, _):
             return "screenshot: \(Int(payload.width))x\(Int(payload.height))"
         case .recording(let path, let payload):
             return "recording: \(path) (\(String(format: "%.1f", payload.duration))s, \(payload.frameCount) frames)"
+        case .recordingExpanded(let path, let payload, let options):
+            var suffixes: [String] = []
+            if options.inlineData { suffixes.append("inlineData") }
+            if options.includeInteractionLog { suffixes.append("interactionLog") }
+            let suffix = suffixes.isEmpty ? "" : ", \(suffixes.joined(separator: "+"))"
+            return "recording: \(path) (\(String(format: "%.1f", payload.duration))s, \(payload.frameCount) frames\(suffix))"
         case .recordingData(let payload):
             return "recording: \(String(format: "%.1f", payload.duration))s, \(payload.frameCount) frames"
         case .batch(let outcomes, let totalTimingMs, let accessibilityTrace):

@@ -10,7 +10,7 @@ This is the clean handshake between an AI agent and the rest of the crew:
 
 1. **24 typed tools** backed by `TheFence`
 2. **Tool-to-command routing** for direct, grouped, and hybrid tools
-3. **Response adaptation** for MCP clients: screenshots inline as MCP image content, video summarized
+3. **Response adaptation** for MCP clients: screenshots as artifact-first metadata with opt-in image content, video summarized
 4. **Idle disconnects** with automatic reconnect on the next tool call
 5. **File-based target configuration** via `TargetConfigResolver` (`.buttonheist.json` or `~/.config/buttonheist/config.json`)
 6. **Environment-based configuration** for device selection, auth, and timeout
@@ -114,7 +114,7 @@ flowchart TD
 
 ## Response Behavior
 
-- `get_screen` returns inline MCP image content (`image/png`) plus JSON metadata as text
+- `get_screen` returns JSON metadata plus an artifact path by default; `inlineData=true` opts into capped MCP image content (`image/png`) outside `run_batch`
 - `stop_recording` omits raw base64 video data; agents must use the `output` parameter for a file path
 - Errors set `isError: true` on the MCP result
 - All responses append `response.compactFormatted()` as the text content item

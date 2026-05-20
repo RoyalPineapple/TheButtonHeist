@@ -462,11 +462,36 @@ final class FenceResponseTests: XCTestCase {
 
     func testRecordingJsonIncludesInteractionLog() {
         let payload = makeRecordingPayloadWithInteractions(count: 3)
-        let response = FenceResponse.recording(path: "/tmp/rec.mp4", payload: payload)
+        let response = FenceResponse.recordingExpanded(
+            path: "/tmp/rec.mp4",
+            payload: payload,
+            options: RecordingResponseOptions(includeInteractionLog: true)
+        )
         let dict = response.jsonDict()
         let log = dict["interactionLog"] as? [[String: Any]]
         XCTAssertNotNil(log)
         XCTAssertEqual(log?.count, 3)
+    }
+
+    func testRecordingJsonOmitsInteractionLogUnlessExplicitlyRequested() {
+        let payload = makeRecordingPayloadWithInteractions(count: 3)
+        let response = FenceResponse.recording(path: "/tmp/rec.mp4", payload: payload)
+        let dict = response.jsonDict()
+        XCTAssertEqual(dict["interactionCount"] as? Int, 3)
+        XCTAssertNil(dict["interactionLog"])
+    }
+
+    func testRecordingExpandedJsonIncludesInlineVideoWhenExplicitlyRequested() {
+        let payload = makeRecordingPayloadWithInteractions(count: 2)
+        let response = FenceResponse.recordingExpanded(
+            path: "/tmp/rec.mp4",
+            payload: payload,
+            options: RecordingResponseOptions(inlineData: true, includeInteractionLog: true)
+        )
+        let dict = response.jsonDict()
+        XCTAssertEqual(dict["path"] as? String, "/tmp/rec.mp4")
+        XCTAssertEqual(dict["videoData"] as? String, "AAAAIGZ0eXBpc29t")
+        XCTAssertEqual((dict["interactionLog"] as? [[String: Any]])?.count, 2)
     }
 
     func testRecordingJsonOmitsInteractionLogWhenNil() {

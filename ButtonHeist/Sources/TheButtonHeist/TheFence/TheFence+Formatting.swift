@@ -8,6 +8,24 @@ public enum InterfaceDetail: String, CaseIterable, Sendable {
     case full
 }
 
+public struct ScreenshotResponseOptions: Sendable, Equatable {
+    public let includeInterface: Bool
+
+    public init(includeInterface: Bool = false) {
+        self.includeInterface = includeInterface
+    }
+}
+
+public struct RecordingResponseOptions: Sendable, Equatable {
+    public let inlineData: Bool
+    public let includeInteractionLog: Bool
+
+    public init(inlineData: Bool = false, includeInteractionLog: Bool = false) {
+        self.inlineData = inlineData
+        self.includeInteractionLog = includeInteractionLog
+    }
+}
+
 /// Summary of a single step within a batch execution.
 ///
 /// Consumed by batch formatters to build per-step human/JSON rows. `deltaKind`
@@ -319,11 +337,10 @@ enum FenceRequestErrorCode {
 
 /// Typed response from TheFence command execution.
 ///
-/// Cases marked `…Data` carry the raw payload in memory (base64-encoded) and are
-/// returned when no session is active and no explicit `output:` path was given.
+/// Cases marked `…Data` carry the raw payload in memory (base64-encoded).
+/// Screenshot data and expanded recording data are opt-in.
 /// Cases without the `Data` suffix carry a filesystem path where the artifact
-/// has been written and are returned when a session is active or `output:` was
-/// specified.
+/// has been written.
 public enum FenceResponse {
     case ok(message: String)
     case error(String, details: FailureDetails? = nil)
@@ -333,14 +350,16 @@ public enum FenceResponse {
     case interface(Interface, detail: InterfaceDetail = .summary)
     case action(result: ActionResult, expectation: ExpectationResult? = nil)
     /// Screenshot written to disk. `path` is the resolved filesystem location.
-    case screenshot(path: String, payload: ScreenPayload)
-    /// Screenshot held in memory as base64 PNG. Returned when no session is
-    /// active and no explicit output path was requested.
-    case screenshotData(payload: ScreenPayload)
+    case screenshot(path: String, payload: ScreenPayload, options: ScreenshotResponseOptions = ScreenshotResponseOptions())
+    /// Screenshot held in memory as base64 PNG. Returned only when inline data
+    /// is explicitly requested.
+    case screenshotData(payload: ScreenPayload, options: ScreenshotResponseOptions = ScreenshotResponseOptions())
     /// Recording written to disk. `path` is the resolved filesystem location.
     case recording(path: String, payload: RecordingPayload)
-    /// Recording held in memory. Returned when no session is active and no
-    /// explicit output path was requested.
+    /// Recording written to disk with explicitly requested expanded response fields.
+    case recordingExpanded(path: String, payload: RecordingPayload, options: RecordingResponseOptions)
+    /// Recording held in memory. Kept for callers that explicitly work with
+    /// in-memory recording payloads.
     case recordingData(payload: RecordingPayload)
     case batch(
         outcomes: [BatchStepOutcome],
@@ -436,12 +455,14 @@ public enum FenceResponse {
                 }
             }
             return text
-        case .screenshot(let path, let payload):
+        case .screenshot(let path, let payload, _):
             return "✓ Screenshot saved: \(path)  (\(Int(payload.width)) × \(Int(payload.height)))"
-        case .screenshotData(let payload):
+        case .screenshotData(let payload, _):
             return "✓ Screenshot captured (\(Int(payload.width)) × \(Int(payload.height))) — base64 PNG follows\n\(payload.pngData)"
         case .recording(let path, let payload):
             return formatRecordingHuman(path: path, payload: payload)
+        case .recordingExpanded(let path, let payload, let options):
+            return formatRecordingHuman(path: path, payload: payload, options: options)
         case .recordingData(let payload):
             return formatRecordingDataHuman(payload)
         case .batch(let outcomes, let totalTimingMs, _):
@@ -594,13 +615,24 @@ public enum FenceResponse {
         return output.trimmingCharacters(in: .newlines)
     }
 
-    private func formatRecordingHuman(path: String, payload: RecordingPayload) -> String {
+    private func formatRecordingHuman(
+        path: String,
+        payload: RecordingPayload,
+        options: RecordingResponseOptions = RecordingResponseOptions()
+    ) -> String {
         let duration = String(format: "%.1f", payload.duration)
         var text = "✓ Recording saved: \(path)  " +
             "(\(payload.width)×\(payload.height), \(duration)s, " +
             "\(payload.frameCount) frames, \(payload.stopReason.rawValue))"
         if let log = payload.interactionLog {
             text += "\n  Interactions: \(log.count)"
+        }
+        if options.inlineData {
+            let sizeKB = payload.videoData.count * 3 / 4 / 1024
+            text += "\n  Inline video data included in JSON response (~\(sizeKB)KB)"
+        }
+        if options.includeInteractionLog {
+            text += "\n  Interaction log included in JSON response"
         }
         return text
     }

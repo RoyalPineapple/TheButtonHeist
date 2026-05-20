@@ -509,6 +509,36 @@ final class TheBookKeeper {
         )
     }
 
+    /// Write a screenshot to an explicit path, the active session artifact
+    /// directory, or a standalone artifact directory when no session exists.
+    func writeScreenshotArtifact(
+        base64Data: String,
+        outputPath: String?,
+        requestId: String,
+        command: TheFence.Command,
+        metadata: ScreenshotMetadata
+    ) throws -> URL {
+        if let url = try writeScreenshotIfSinkAvailable(
+            base64Data: base64Data,
+            outputPath: outputPath,
+            requestId: requestId,
+            command: command,
+            metadata: metadata
+        ) {
+            return url
+        }
+        guard let data = Data(base64Encoded: base64Data) else {
+            throw BookKeeperError.base64DecodingFailed
+        }
+
+        let subdirectory = baseDirectory.appendingPathComponent("screenshots")
+        try FileManager.default.createDirectory(at: subdirectory, withIntermediateDirectories: true)
+        let filename = "\(Self.timestampString())-\(UUID().uuidString)-\(command.rawValue).png"
+        let fileURL = subdirectory.appendingPathComponent(filename)
+        try data.write(to: fileURL)
+        return fileURL
+    }
+
     /// Write a recording to whichever sink is available. Resolution rules
     /// match `writeScreenshotIfSinkAvailable` — outputPath wins, then session,
     /// then nil.
@@ -532,6 +562,36 @@ final class TheBookKeeper {
             base64Data: base64Data, requestId: requestId,
             command: command, metadata: metadata
         )
+    }
+
+    /// Write a recording to an explicit path, the active session artifact
+    /// directory, or a standalone artifact directory when no session exists.
+    func writeRecordingArtifact(
+        base64Data: String,
+        outputPath: String?,
+        requestId: String,
+        command: TheFence.Command,
+        metadata: RecordingMetadata
+    ) throws -> URL {
+        if let url = try writeRecordingIfSinkAvailable(
+            base64Data: base64Data,
+            outputPath: outputPath,
+            requestId: requestId,
+            command: command,
+            metadata: metadata
+        ) {
+            return url
+        }
+        guard let data = Data(base64Encoded: base64Data) else {
+            throw BookKeeperError.base64DecodingFailed
+        }
+
+        let subdirectory = baseDirectory.appendingPathComponent("recordings")
+        try FileManager.default.createDirectory(at: subdirectory, withIntermediateDirectories: true)
+        let filename = "\(Self.timestampString())-\(UUID().uuidString)-\(command.rawValue).mp4"
+        let fileURL = subdirectory.appendingPathComponent(filename)
+        try data.write(to: fileURL)
+        return fileURL
     }
 
     // MARK: - Heist Recording
