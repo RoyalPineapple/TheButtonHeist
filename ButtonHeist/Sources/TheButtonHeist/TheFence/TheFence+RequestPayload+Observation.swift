@@ -12,7 +12,9 @@ extension TheFence {
         switch command {
         case .getInterface:
             return .getInterface(try decodeGetInterfaceRequest(request))
-        case .getScreen, .stopRecording:
+        case .getScreen:
+            return .screen(try decodeScreenRequest(request, requestId: requestId))
+        case .stopRecording:
             return .artifact(try decodeArtifactRequest(request, requestId: requestId))
         default:
             throw FenceError.invalidRequest("Unexpected observation command: \(command.rawValue)")
@@ -37,6 +39,27 @@ extension TheFence {
         ArtifactRequest(
             outputPath: try request.schemaString("output"),
             requestId: requestId
+        )
+    }
+
+    private func decodeScreenRequest(
+        _ request: [String: Any],
+        requestId: String
+    ) throws -> ScreenRequest {
+        let outputPath = try request.schemaString("output")
+        let inlineData = try request.schemaBoolean("inlineData") ?? false
+        if inlineData, outputPath != nil {
+            throw SchemaValidationError(
+                field: "inlineData/output",
+                observed: "inlineData=true with output",
+                expected: "choose output for an artifact path or inlineData=true for inline PNG data, not both"
+            )
+        }
+        return ScreenRequest(
+            outputPath: outputPath,
+            requestId: requestId,
+            inlineData: inlineData,
+            includeInterface: try request.schemaBoolean("includeInterface") ?? false
         )
     }
 

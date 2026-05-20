@@ -321,7 +321,8 @@ final class TheFenceTests: XCTestCase {
                 width: 390,
                 height: 844,
                 interface: makeReceiptTestInterface([element])
-            )
+            ),
+            options: ScreenshotResponseOptions(includeInterface: true)
         )
         let json = response.jsonDict()
         XCTAssertEqual(json["status"] as? String, "ok")

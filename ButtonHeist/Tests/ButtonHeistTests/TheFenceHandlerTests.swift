@@ -2468,6 +2468,38 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testBatchRejectsInlineGetScreenBeforeExecution() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        mockConn.autoResponse = { _ in
+            .actionResult(ActionResult(success: true, method: .activate))
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "run_batch",
+            "steps": [
+                ["command": "get_screen", "inlineData": true],
+                ["command": "activate", "identifier": "skipped"],
+            ] as [[String: Any]],
+        ])
+
+        guard let batch = inspectBatch(response) else {
+            XCTFail("Expected batch response, got \(response)")
+            return
+        }
+        let expectedError = "schema validation failed for steps[0].inlineData: observed boolean true; " +
+            "expected not allowed for get_screen inside run_batch; omit inlineData or call get_screen outside run_batch"
+        XCTAssertEqual(batch.results.count, 1)
+        XCTAssertEqual(batch.failedIndex, 0)
+        XCTAssertEqual(batch.summaries.map(\.command), ["get_screen", "activate"])
+        XCTAssertEqual(batch.summaries[0].error, expectedError)
+        XCTAssertEqual(batch.summaries[1].error, "skipped: stop_on_error stopped batch after step 0")
+        XCTAssertFalse(mockConn.sent.contains { sent in
+            if case .requestScreen = sent.0 { return true }
+            return false
+        })
+    }
+
+    @ButtonHeistActor
     func testBatchStillAcceptsCanonicalFenceCommandShapes() async throws {
         let (fence, mockConn) = makeConnectedFence()
         mockConn.autoResponse = { _ in
