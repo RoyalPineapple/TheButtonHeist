@@ -6,6 +6,18 @@ import TheScore
 private let logger = Logger(subsystem: "com.buttonheist.fence", category: "handlers")
 private let accessibilityAdjustmentCountRange = 1...100
 
+private extension ScreenPayload {
+    func responsePayload(includeInterface: Bool) -> ScreenPayload {
+        ScreenPayload(
+            pngData: pngData,
+            width: width,
+            height: height,
+            timestamp: timestamp,
+            interface: includeInterface ? interface : Interface(timestamp: timestamp, tree: [])
+        )
+    }
+}
+
 @ButtonHeistActor
 extension TheFence {
 
@@ -21,25 +33,43 @@ extension TheFence {
 
     // MARK: - Handler: Screen
 
-    func handleGetScreen(_ request: ArtifactRequest) async throws -> FenceResponse {
+    func handleGetScreen(_ request: ScreenRequest) async throws -> FenceResponse {
         let screen = try await sendAndAwaitScreen(.requestScreen, timeout: 30)
         let metadata = ScreenshotMetadata(width: screen.width, height: screen.height)
+        let responsePayload = screen.responsePayload(includeInterface: request.includeInterface)
+        let options = ScreenshotResponseOptions(includeInterface: request.includeInterface)
+
+        if request.inlineData {
+            let byteCount = screen.pngData.utf8.count
+            guard byteCount <= DecodeLimits.maxInlineScreenshotBase64Bytes else {
+                return .error(
+                    "Inline screenshot payload is too large: \(byteCount) bytes exceeds " +
+                        "\(DecodeLimits.maxInlineScreenshotBase64Bytes) bytes",
+                    details: FailureDetails(
+                        errorCode: "screen.inline_payload_too_large",
+                        phase: .client,
+                        retryable: false,
+                        hint: "Omit inlineData or pass output to receive a screenshot artifact path."
+                    )
+                )
+            }
+            return .screenshotData(payload: responsePayload, options: options)
+        }
+
         do {
-            if let url = try bookKeeper.writeScreenshotIfSinkAvailable(
+            let url = try bookKeeper.writeScreenshotArtifact(
                 base64Data: screen.pngData,
                 outputPath: request.outputPath,
                 requestId: request.requestId,
                 command: .getScreen,
                 metadata: metadata
-            ) {
-                return .screenshot(path: url.path, payload: screen)
-            }
+            )
+            return .screenshot(path: url.path, payload: responsePayload, options: options)
         } catch BookKeeperError.unsafePath {
             return .error("Invalid output path: must not contain '..' components or control characters")
         } catch BookKeeperError.base64DecodingFailed {
             return .error("Failed to decode screenshot data")
         }
-        return .screenshotData(payload: screen)
     }
 
     // MARK: - Handler: Gestures
@@ -313,13 +343,15 @@ extension TheFence {
         stop()
 
         handoff.token = resolvedToken
+        configuredAuthTokenForStatus = resolvedToken
         let newConfig = Configuration(
             deviceFilter: resolvedDevice,
             connectionTimeout: config.connectionTimeout,
             token: resolvedToken,
             autoReconnect: config.autoReconnect,
             fileConfig: config.fileConfig,
-            directDevice: resolvedDirectDevice
+            directDevice: resolvedDirectDevice,
+            bookKeeperBaseDirectory: config.bookKeeperBaseDirectory
         )
         config = newConfig
 
@@ -358,22 +390,101 @@ extension TheFence {
             fps: recording.fps,
             frameCount: recording.frameCount
         )
+        let responseOptions = RecordingResponseOptions(
+            inlineData: request.inlineData,
+            includeInteractionLog: request.includeInteractionLog
+        )
+        if let expandedResponseError = validateExpandedRecordingResponse(
+            recording,
+            options: responseOptions
+        ) {
+            return expandedResponseError
+        }
         do {
-            if let url = try bookKeeper.writeRecordingIfSinkAvailable(
+            let url = try bookKeeper.writeRecordingArtifact(
                 base64Data: recording.videoData,
                 outputPath: request.outputPath,
                 requestId: request.requestId,
                 command: .stopRecording,
                 metadata: metadata
-            ) {
-                return .recording(path: url.path, payload: recording)
+            )
+            if request.inlineData || request.includeInteractionLog {
+                let response = FenceResponse.recordingExpanded(
+                    path: url.path,
+                    payload: recording,
+                    options: responseOptions
+                )
+                if let oversizedResponseError = validateExpandedRecordingResponseSize(response) {
+                    return oversizedResponseError
+                }
+                return response
             }
+            return .recording(path: url.path, payload: recording)
         } catch BookKeeperError.unsafePath {
             return .error("Invalid output path: must not contain '..' components or control characters")
         } catch BookKeeperError.base64DecodingFailed {
             return .error("Failed to decode video data")
         }
-        return .recordingData(payload: recording)
+    }
+
+    private func validateExpandedRecordingResponse(
+        _ recording: RecordingPayload,
+        options: RecordingResponseOptions
+    ) -> FenceResponse? {
+        guard options.inlineData else { return nil }
+        let byteCount = recording.videoData.utf8.count
+        guard byteCount <= DecodeLimits.maxInlineRecordingBase64Bytes else {
+            return .error(
+                "Inline recording payload is too large: \(byteCount) bytes exceeds " +
+                    "\(DecodeLimits.maxInlineRecordingBase64Bytes) bytes",
+                details: FailureDetails(
+                    errorCode: "recording.inline_payload_too_large",
+                    phase: .client,
+                    retryable: false,
+                    hint: "Omit inlineData to receive a recording artifact path."
+                )
+            )
+        }
+        return nil
+    }
+
+    private func validateExpandedRecordingResponseSize(_ response: FenceResponse) -> FenceResponse? {
+        let dict = response.jsonDict()
+        guard JSONSerialization.isValidJSONObject(dict) else {
+            return .error(
+                "Failed to encode expanded recording response",
+                details: FailureDetails(
+                    errorCode: "recording.expanded_response_encoding_failed",
+                    phase: .client,
+                    retryable: false,
+                    hint: "Omit inlineData or includeInteractionLog and retry."
+                )
+            )
+        }
+        guard let data = try? JSONSerialization.data(withJSONObject: dict, options: [.sortedKeys]) else {
+            return .error(
+                "Failed to encode expanded recording response",
+                details: FailureDetails(
+                    errorCode: "recording.expanded_response_encoding_failed",
+                    phase: .client,
+                    retryable: false,
+                    hint: "Omit inlineData or includeInteractionLog and retry."
+                )
+            )
+        }
+        guard data.count <= DecodeLimits.maxExpandedRecordingResponseBytes else {
+            return .error(
+                "Expanded recording response is too large: \(data.count) bytes exceeds " +
+                    "\(DecodeLimits.maxExpandedRecordingResponseBytes) bytes",
+                details: FailureDetails(
+                    errorCode: "recording.expanded_response_too_large",
+                    phase: .client,
+                    retryable: false,
+                    hint: "Omit inlineData or includeInteractionLog to receive a recording artifact path and metadata."
+                )
+            )
+        }
+        return nil
     }
 
     // MARK: - Handler: BookKeeper

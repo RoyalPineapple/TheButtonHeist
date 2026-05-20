@@ -472,9 +472,10 @@ Typed response enum with `humanFormatted() -> String`, `jsonDict() -> [String: A
 | `interface(_:)` | UI element state |
 | `action(result:expectation:)` | Action outcome with delta and optional expectation validation result |
 | `screenshot(path:payload:)` | Screenshot saved to path plus screen payload metadata |
-| `screenshotData(payload:)` | Screenshot as base64 PNG plus visible accessibility geometry |
-| `recording(path:payload:)` | Recording saved to path |
-| `recordingData(payload:)` | Recording as base64 video |
+| `screenshotData(payload:)` | Opt-in inline screenshot as base64 PNG plus metadata; visible interface data is included only when requested |
+| `recording(path:payload:)` | Recording saved to path with metadata summary |
+| `recordingExpanded(path:payload:options:)` | Recording saved to path with explicitly requested bounded inline video and/or interaction log |
+| `recordingData(payload:)` | In-memory recording payload for callers that explicitly request base64 video |
 | `batch(results:completedSteps:failedIndex:totalTimingMs:expectationsChecked:expectationsMet:)` | Batched command results with aggregate timing, optional failure index, and expectation stats |
 | `sessionState(payload:)` | Read-only client-side session summary for `get_session_state` |
 | `targets(_:defaultTarget:)` | Named targets from config file with optional default |
@@ -667,7 +668,7 @@ With the default `stop_on_error` policy, the batch halts at the first mismet exp
 
 ### Response Handling
 
-- Screenshots are returned as inline MCP image content items alongside the JSON payload.
+- Screenshots return metadata plus an artifact path by default. `get_screen` with `inlineData=true` opts into capped MCP image content; `run_batch` rejects inline screenshots so batch responses stay bounded.
 - Recording video data is replaced with a size summary to keep responses readable.
 - Error responses set `isError: true` on the MCP result.
 
@@ -801,7 +802,7 @@ Messages sent from client to server.
 - `waitForIdle(WaitForIdleTarget)` - Wait for animations to settle (internal)
 - `waitForChange(WaitForChangeTarget)` - Wait for UI to change, optionally matching an expectation
 - `waitFor(WaitForTarget)` - Wait for an element matching a predicate to appear or disappear
-- `requestScreen` - Request PNG screenshot plus visible accessibility geometry
+- `requestScreen` - Request PNG screenshot plus visible accessibility data; public responses expose the interface only when explicitly requested
 - `startRecording(RecordingConfig)` - Start screen recording (H.264/MP4)
 - `stopRecording` - Stop active screen recording
 - `status` - Lightweight status probe allowed after the hello handshake and before auth (identity + availability, no session claim)
@@ -1710,13 +1711,14 @@ This command is useful for persistent connections where multiple commands need t
 
 ### buttonheist get_screen
 
-Capture a screenshot from the connected device. JSON responses include the screenshot metadata and visible accessibility geometry; raw stdout remains PNG bytes.
+Capture a screenshot from the connected device. By default, responses include screenshot metadata and an artifact path. Raw PNG stdout is available only through the compatibility `--inline` flag, and `--inline` cannot be combined with `--output`.
 
 ```
 USAGE: buttonheist get_screen [OPTIONS]
 
 OPTIONS:
-  -o, --output <path>     Output file path (default: stdout as raw PNG)
+  -o, --output <path>     Output file path (default: generated artifact path)
+  --inline                Write raw PNG bytes to stdout for compatibility
   -t, --timeout <seconds> Timeout in seconds (default: 10)
   -q, --quiet             Suppress status messages
   --device <filter>       Target a specific device
@@ -1742,15 +1744,18 @@ OPTIONS:
 
 ### buttonheist stop_recording
 
-Explicitly stop an in-progress recording or retrieve a cached auto-finished recording. The response contains the completed recording payload for the caller.
+Explicitly stop an in-progress recording or retrieve a cached auto-finished recording. The response contains artifact path and metadata by default; inline video and full interaction logs require explicit opt-in flags and are size-capped before delivery.
 
 ```
 USAGE: buttonheist stop_recording [OPTIONS]
 
 OPTIONS:
-  --timeout <seconds>     Connection timeout (default: 10)
-  -q, --quiet             Suppress status messages
-  --device <filter>       Target a specific device
+  -o, --output <path>         Output file path (default: generated artifact path)
+  --inline-data               Include base64 MP4 data in JSON output
+  --include-interaction-log   Include the full interaction log in JSON output
+  -f, --format <format>       Output format: human, json, compact
+  -q, --quiet                 Suppress status messages
+  --device <filter>           Target a specific device
 ```
 
 ### buttonheist wait_for

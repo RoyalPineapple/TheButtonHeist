@@ -94,6 +94,12 @@ extension TheFence {
         let originalCommandName = step["command"] as? String ?? "?"
         switch FenceOperationCatalog.normalizeBatchStep(step) {
         case .success(let operation):
+            if let failure = batchBoundedResponseFailure(operation: operation, index: index) {
+                return .invalid(
+                    commandName: operation.command.rawValue,
+                    failure: failure
+                )
+            }
             do {
                 return .decoded(try parseRequest(
                     command: operation.command,
@@ -145,6 +151,26 @@ extension TheFence {
                 )
             )
         }
+    }
+
+    private func batchBoundedResponseFailure(
+        operation: NormalizedOperation,
+        index: Int
+    ) -> BatchStepDecodeFailure? {
+        guard operation.command == .getScreen,
+              operation.arguments["inlineData"] as? Bool == true
+        else { return nil }
+
+        let error = SchemaValidationError(
+            field: "steps[\(index)].inlineData",
+            observed: true,
+            expected: "not allowed for get_screen inside run_batch; omit inlineData or call get_screen outside run_batch"
+        )
+        return BatchStepDecodeFailure(
+            message: error.message,
+            details: nil,
+            includeDetailsInResult: true
+        )
     }
 
     private func batchStepFailure(from response: FenceResponse) -> BatchStepDecodeFailure {

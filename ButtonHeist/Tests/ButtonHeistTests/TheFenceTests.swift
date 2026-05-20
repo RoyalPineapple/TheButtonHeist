@@ -115,6 +115,12 @@ final class TheFenceTests: XCTestCase {
         )
     }
 
+    func testAuthApprovedStatusDoesNotEchoApprovalTokenWhenUserConfiguredDifferentToken() {
+        XCTAssertNil(
+            TheFence.authApprovedStatusMessage(token: "generated-token", configuredToken: "user-specified-token")
+        )
+    }
+
     func testAuthApprovedStatusIgnoresMissingToken() {
         XCTAssertNil(TheFence.authApprovedStatusMessage(token: nil, configuredToken: nil))
     }
@@ -315,7 +321,8 @@ final class TheFenceTests: XCTestCase {
                 width: 390,
                 height: 844,
                 interface: makeReceiptTestInterface([element])
-            )
+            ),
+            options: ScreenshotResponseOptions(includeInterface: true)
         )
         let json = response.jsonDict()
         XCTAssertEqual(json["status"] as? String, "ok")

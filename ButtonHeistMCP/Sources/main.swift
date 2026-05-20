@@ -162,12 +162,27 @@ struct ButtonHeistMCPServer {
 
         // Screenshots: embed as image content. File-based screenshots fall through
         // to the compact text below.
-        if case .screenshotData(let payload) = response {
+        if case .screenshotData(let payload, _) = response {
             content.append(.image(data: payload.pngData, mimeType: "image/png", annotations: nil, _meta: nil))
         }
 
-        content.append(.text(text: response.compactFormatted(), annotations: nil, _meta: nil))
+        if case .recordingExpanded = response,
+           let jsonText = Self.jsonText(response) {
+            content.append(.text(text: jsonText, annotations: nil, _meta: nil))
+        } else {
+            content.append(.text(text: response.compactFormatted(), annotations: nil, _meta: nil))
+        }
         return .init(content: content, isError: response.isFailure)
+    }
+
+    private static func jsonText(_ response: FenceResponse) -> String? {
+        let dict = response.jsonDict()
+        guard JSONSerialization.isValidJSONObject(dict),
+              let data = try? JSONSerialization.data(withJSONObject: dict, options: [.sortedKeys])
+        else {
+            return nil
+        }
+        return String(data: data, encoding: .utf8)
     }
 
     private static func compactBackgroundElement(_ element: HeistElement) -> String {

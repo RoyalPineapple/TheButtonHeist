@@ -11,6 +11,7 @@ extension TheFence {
     enum RequestPayload {
         case none
         case getInterface(GetInterfaceRequest)
+        case screen(ScreenRequest)
         case artifact(ArtifactRequest)
         case gesture(GesturePayload)
         case scroll(ScrollPayload)
@@ -35,9 +36,18 @@ extension TheFence {
         let query: InterfaceQuery
     }
 
+    struct ScreenRequest {
+        let outputPath: String?
+        let requestId: String
+        let inlineData: Bool
+        let includeInterface: Bool
+    }
+
     struct ArtifactRequest {
         let outputPath: String?
         let requestId: String
+        let inlineData: Bool
+        let includeInteractionLog: Bool
     }
 
     enum GesturePayload {

@@ -101,10 +101,11 @@ Capture a PNG screenshot.
 
 ```bash
 buttonheist get_screen --output screen.png
-buttonheist get_screen | imgcat
+buttonheist get_screen
+buttonheist get_screen --inline | imgcat
 ```
 
-Flags: `-o/--output <path>` (default: raw PNG to stdout).
+Flags: `-o/--output <path>` (default: generated artifact path), `--inline` (compatibility mode: raw PNG to stdout). `--inline` cannot be combined with `--output`.
 
 ### start_recording
 
@@ -116,6 +117,18 @@ buttonheist start_recording --output demo.mp4 --fps 15 --scale 0.5 --action-log 
 ```
 
 Flags: `-o/--output` (default "recording.mp4"), `--fps` (default 8), `--scale`, `--inactivity-timeout` (optional early-stop; omitted disables inactivity auto-stop), `--max-duration` (default 60s), `--action-log <path>`.
+
+### stop_recording
+
+Stop an in-progress screen recording.
+
+```bash
+buttonheist stop_recording
+buttonheist stop_recording --output demo.mp4 --format json
+buttonheist stop_recording --inline-data --include-interaction-log --format json
+```
+
+Flags: `-o/--output` (default generated artifact path), `--inline-data`, `--include-interaction-log`, `-f/--format` (human/json/compact).
 
 ### list_devices
 
@@ -139,7 +152,7 @@ buttonheist get_interface --format json
 
 Flags: `-f/--format`.
 
-Use `buttonheist get_screen` when you need pixels plus fresh visible geometry.
+Use `buttonheist get_screen` when you need pixels and a durable artifact path. Use `get_interface` for hierarchy data, or MCP/session `get_screen` with `includeInterface=true` when you explicitly need the visible tree with the screenshot metadata.
 
 MCP and session JSON requests can pass `subtree` to project the returned hierarchy from a selected leaf or container, for example `{"command":"get_interface","subtree":{"container":{"stableId":"semantic_actions__actions"}}}`.
 
