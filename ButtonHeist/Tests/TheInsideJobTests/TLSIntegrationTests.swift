@@ -26,8 +26,8 @@ final class TLSIntegrationTests: XCTestCase {
 
     func testTLSHandshakeWithFingerprintPinning() async throws {
         let identity = try TLSIdentity.createEphemeral()
-        let tlsParams = await identity.makeTLSParameters()
-        XCTAssertNotNil(tlsParams, "TLS parameters must be created")
+        let generatedTLSParams = await identity.makeTLSParameters()
+        let tlsParams = try XCTUnwrap(generatedTLSParams, "TLS parameters must be created")
 
         let connected = expectation(description: "client connected to server")
         let callbacks = SimpleSocketServer.Callbacks(

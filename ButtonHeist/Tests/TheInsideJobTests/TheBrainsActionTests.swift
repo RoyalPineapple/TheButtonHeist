@@ -31,6 +31,30 @@ private final class ActionGeometryView: UIView {
     }
 }
 
+private final class AdjustableGeometryView: UIView {
+    private let testActivationPoint: CGPoint
+    private(set) var incrementCount = 0
+
+    init(frame: CGRect, activationPoint: CGPoint) {
+        self.testActivationPoint = activationPoint
+        super.init(frame: frame)
+        accessibilityFrame = frame
+    }
+
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    override var accessibilityActivationPoint: CGPoint {
+        get { testActivationPoint }
+        set {}
+    }
+
+    override func accessibilityIncrement() {
+        incrementCount += 1
+    }
+}
+
 @MainActor
 final class TheBrainsActionTests: XCTestCase {
 
@@ -268,7 +292,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     func testExecuteCustomActionMissingReportsAvailableCustomActions() async {
         let heistId = "options_button"
-        let liveObject = UIButton(type: .system)
+        let liveObject = ActionActivationOverrideView()
         registerScreenElement(
             heistId: heistId,
             element: makeElement(
@@ -297,7 +321,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     func testExecuteCustomActionDeclinedReportsAlternatives() async {
         let heistId = "options_button"
-        let liveObject = UIButton(type: .system)
+        let liveObject = ActionActivationOverrideView()
         liveObject.accessibilityCustomActions = [
             UIAccessibilityCustomAction(name: "Delete") { _ in false },
             UIAccessibilityCustomAction(name: "Archive") { _ in true },
@@ -396,6 +420,64 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .increment)
+    }
+
+    func testElementActionUsesFreshLiveGeometryAfterLayoutMovement() async {
+        let heistId = "moving_slider"
+        let stalePoint = CGPoint(x: 20, y: 20)
+        let livePoint = CGPoint(x: 190, y: 302)
+        let liveFrame = CGRect(x: 150, y: 280, width: 80, height: 44)
+        let element = AccessibilityElement.make(
+            label: "Moving",
+            traits: .adjustable,
+            shape: .frame(CGRect(x: 0, y: 0, width: 40, height: 40)),
+            activationPoint: stalePoint
+        )
+        let liveObject = AdjustableGeometryView(frame: liveFrame, activationPoint: livePoint)
+        installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
+
+        let resolved = brains.stash.resolveTarget(.heistId(heistId)).resolved
+        let liveTarget = resolved.flatMap { brains.stash.liveActionTarget(for: $0) }
+
+        XCTAssertEqual(liveTarget?.frame, liveFrame)
+        XCTAssertEqual(liveTarget?.activationPoint, livePoint)
+        XCTAssertNotEqual(liveTarget?.activationPoint, stalePoint)
+
+        let result = await brains.actions.executeIncrement(.heistId(heistId))
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(result.method, .increment)
+        XCTAssertEqual(liveObject.incrementCount, 1)
+    }
+
+    func testElementActionFailsWhenSemanticTargetHasNoLiveGeometry() async {
+        let heistId = "geometry_missing_slider"
+        let element = AccessibilityElement.make(
+            label: "Geometry Missing",
+            traits: .adjustable,
+            shape: .frame(CGRect(x: 20, y: 20, width: 120, height: 44)),
+            activationPoint: CGPoint(x: 80, y: 42)
+        )
+        let liveObject = AdjustableGeometryView(frame: .zero, activationPoint: CGPoint(x: 80, y: 42))
+        installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
+
+        let resolved = brains.stash.resolveTarget(.heistId(heistId)).resolved
+        let liveTarget = resolved.flatMap { brains.stash.liveActionTarget(for: $0) }
+        let result = await brains.actions.executeIncrement(.heistId(heistId))
+
+        XCTAssertNotNil(resolved)
+        XCTAssertNil(liveTarget)
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .increment)
+        XCTAssertEqual(liveObject.incrementCount, 0)
+        XCTAssertDiagnostic(result.message, contains: [
+            "gesture target unavailable",
+            "method=increment",
+            "phase=targeting",
+            "heistId=\"geometry_missing_slider\"",
+            "visible=true",
+            "refresh with get_interface",
+        ])
     }
 
     func testExecuteTypeTextWithoutActiveInputReportsFocusState() async {
@@ -750,6 +832,9 @@ final class TheBrainsActionTests: XCTestCase {
         element: AccessibilityElement,
         object: NSObject?
     ) {
+        if let object {
+            object.accessibilityFrame = element.shape.frame
+        }
         installScreen(elements: [(element, heistId)], objects: [heistId: object])
     }
 
@@ -777,9 +862,12 @@ final class TheBrainsActionTests: XCTestCase {
         customActions: [AccessibilityElement.CustomAction] = [],
         customRotors: [AccessibilityElement.CustomRotor] = []
     ) -> AccessibilityElement {
-        .make(
+        let frame = CGRect(x: 20, y: 20, width: 120, height: 44)
+        return .make(
             label: label,
             traits: traits,
+            shape: .frame(frame),
+            activationPoint: CGPoint(x: frame.midX, y: frame.midY),
             customActions: customActions,
             customRotors: customRotors,
             respondsToUserInteraction: false

@@ -29,8 +29,8 @@ private let logger = Logger(subsystem: "com.buttonheist.theinsidejob", category:
 /// `sessionPhase`, `lockoutTasks` — is mutated exclusively on TheMuscle's
 /// own actor. UI alert presentation lives in a `@MainActor AlertPresenter`
 /// companion (see `AlertPresenter.swift`); callbacks installed by TheGetaway
-/// (`sendToClient`, `markClientAuthenticated`, `disconnectClient`,
-/// `onClientAuthenticated`, `onSessionActiveChanged`) are `@Sendable` and
+/// (`sendToClient`, `markClientAuthenticated`, `markClientAwaitingApproval`,
+/// `disconnectClient`, `onClientAuthenticated`, `onSessionActiveChanged`) are `@Sendable` and
 /// hop to the appropriate context inside their implementations.
 actor TheMuscle {
 
@@ -212,6 +212,7 @@ actor TheMuscle {
 
     private var sendToClient: (@Sendable (_ data: Data, _ clientId: Int) async -> ServerSendOutcome)?
     private var markClientAuthenticated: (@Sendable (_ clientId: Int) async -> Void)?
+    private var markClientAwaitingApproval: (@Sendable (_ clientId: Int) async -> Void)?
     private var disconnectClient: (@Sendable (_ clientId: Int) async -> Void)?
     /// Invoked on `@MainActor` after a client completes authentication. The
     /// isolation is encoded in the closure type so callers can satisfy the
@@ -250,12 +251,14 @@ actor TheMuscle {
     func installCallbacks(
         sendToClient: @escaping @Sendable (Data, Int) async -> ServerSendOutcome,
         markClientAuthenticated: @escaping @Sendable (Int) async -> Void,
+        markClientAwaitingApproval: @escaping @Sendable (Int) async -> Void = { _ in },
         disconnectClient: @escaping @Sendable (Int) async -> Void,
         onClientAuthenticated: @escaping @MainActor @Sendable (Int, @escaping @Sendable (Data) -> Void) -> Void,
         onSessionActiveChanged: @escaping @MainActor @Sendable (Bool) async -> Void
     ) {
         self.sendToClient = sendToClient
         self.markClientAuthenticated = markClientAuthenticated
+        self.markClientAwaitingApproval = markClientAwaitingApproval
         self.disconnectClient = disconnectClient
         self.onClientAuthenticated = onClientAuthenticated
         self.onSessionActiveChanged = onSessionActiveChanged
@@ -421,6 +424,8 @@ actor TheMuscle {
 
             logger.info("Client \(clientId) requesting UI approval (no token)")
             clients[clientId] = .pendingApproval(address: address, respond: respond, driverId: payload.driverId)
+            await markClientAwaitingApproval?(clientId)
+            sendMessage(.authApprovalPending(AuthApprovalPendingPayload()), respond: respond)
             showApprovalAlert(clientId: clientId)
             return
         }

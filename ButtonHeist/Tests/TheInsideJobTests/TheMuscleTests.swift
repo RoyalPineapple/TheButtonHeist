@@ -14,6 +14,7 @@ import TheScore
 private final class CallbackSink: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
     private var sentMessagesStorage: [(data: Data, clientId: Int)] = []
     private var markedAuthenticatedStorage: [Int] = []
+    private var markedApprovalPendingStorage: [Int] = []
     private var disconnectedClientsStorage: [Int] = []
     private var authenticatedCallbacksStorage: [(clientId: Int, respond: @Sendable (Data) -> Void)] = []
     private var sessionChangesStorage: [Bool] = []
@@ -21,6 +22,7 @@ private final class CallbackSink: @unchecked Sendable { // swiftlint:disable:thi
 
     var sentMessages: [(data: Data, clientId: Int)] { lock.withLock { sentMessagesStorage } }
     var markedAuthenticated: [Int] { lock.withLock { markedAuthenticatedStorage } }
+    var markedApprovalPending: [Int] { lock.withLock { markedApprovalPendingStorage } }
     var disconnectedClients: [Int] { lock.withLock { disconnectedClientsStorage } }
     var authenticatedCallbacks: [(clientId: Int, respond: @Sendable (Data) -> Void)] {
         lock.withLock { authenticatedCallbacksStorage }
@@ -29,6 +31,7 @@ private final class CallbackSink: @unchecked Sendable { // swiftlint:disable:thi
 
     func appendSent(_ entry: (Data, Int)) { lock.withLock { sentMessagesStorage.append(entry) } }
     func appendAuthenticated(_ clientId: Int) { lock.withLock { markedAuthenticatedStorage.append(clientId) } }
+    func appendApprovalPending(_ clientId: Int) { lock.withLock { markedApprovalPendingStorage.append(clientId) } }
     func appendDisconnected(_ clientId: Int) { lock.withLock { disconnectedClientsStorage.append(clientId) } }
     func appendAuthenticatedCallback(_ entry: (Int, @Sendable (Data) -> Void)) {
         lock.withLock { authenticatedCallbacksStorage.append(entry) }
@@ -60,6 +63,7 @@ final class TheMuscleTests: XCTestCase {
 
     private var sentMessages: [(data: Data, clientId: Int)] { sink.sentMessages }
     private var markedAuthenticated: [Int] { sink.markedAuthenticated }
+    private var markedApprovalPending: [Int] { sink.markedApprovalPending }
     private var disconnectedClients: [Int] { sink.disconnectedClients }
     private var authenticatedCallbacks: [(clientId: Int, respond: @Sendable (Data) -> Void)] {
         sink.authenticatedCallbacks
@@ -77,6 +81,9 @@ final class TheMuscleTests: XCTestCase {
         let markAuth: @Sendable (Int) async -> Void = { clientId in
             sink.appendAuthenticated(clientId)
         }
+        let markApprovalPending: @Sendable (Int) async -> Void = { clientId in
+            sink.appendApprovalPending(clientId)
+        }
         let disconnect: @Sendable (Int) async -> Void = { clientId in
             sink.appendDisconnected(clientId)
         }
@@ -91,6 +98,7 @@ final class TheMuscleTests: XCTestCase {
         await muscle.installCallbacks(
             sendToClient: sendToClient,
             markClientAuthenticated: markAuth,
+            markClientAwaitingApproval: markApprovalPending,
             disconnectClient: disconnect,
             onClientAuthenticated: onAuthenticated,
             onSessionActiveChanged: onSessionActiveChanged
@@ -125,6 +133,13 @@ final class TheMuscleTests: XCTestCase {
     private func authApprovedPayloads(from responses: [Data]) -> [AuthApprovedPayload] {
         responses.compactMap { data in
             guard case .authApproved(let payload) = decodeServerMessage(data) else { return nil }
+            return payload
+        }
+    }
+
+    private func authApprovalPendingPayloads(from responses: [Data]) -> [AuthApprovalPendingPayload] {
+        responses.compactMap { data in
+            guard case .authApprovalPending(let payload) = decodeServerMessage(data) else { return nil }
             return payload
         }
     }
@@ -245,6 +260,21 @@ final class TheMuscleTests: XCTestCase {
 
         let payload = try XCTUnwrap(authApprovedPayloads(from: responses()).first)
         XCTAssertNotNil(payload.token)
+    }
+
+    func testGeneratedTokenEmptyTokenReportsApprovalPendingBeforePromptResponse() async throws {
+        await muscle.tearDown()
+        muscle = TheMuscle(explicitToken: nil)
+        sink = CallbackSink()
+        await installCallbacks(observeSessionChanges: false)
+        let (respond, responses) = collectResponses()
+
+        try await authenticate(clientId: 1, token: "", respond: respond)
+
+        XCTAssertEqual(markedApprovalPending, [1])
+        let payload = try XCTUnwrap(authApprovalPendingPayloads(from: responses()).first)
+        XCTAssertEqual(payload.message, "Waiting for approval on the device.")
+        XCTAssertEqual(payload.hint, "Tap Allow on the iOS device to continue.")
     }
 
     func testGeneratedTokenIsReturnedAfterUIApproval() async throws {

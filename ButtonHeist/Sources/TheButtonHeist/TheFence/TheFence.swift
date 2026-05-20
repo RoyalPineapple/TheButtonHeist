@@ -69,6 +69,7 @@ public enum FenceError: Error, LocalizedError {
     case connectionFailure(ConnectionFailure)
     case sessionLocked(String)
     case authFailed(String)
+    case authApprovalPending(String)
     case notConnected
     case actionTimeout
     case actionFailed(String)
@@ -108,9 +109,16 @@ public enum FenceError: Error, LocalizedError {
                   or restart the app to release it.
                 """
         case .authFailed(let message):
+            let base = "Auth failed: \(message)"
+            guard let hint = Self.authFailureRecoveryHint(for: message) else { return base }
             return """
-                Auth failed: \(message)
-                  \(Self.authFailureRecoveryHint(for: message))
+                \(base)
+                  \(hint)
+                """
+        case .authApprovalPending(let message):
+            return """
+                Auth approval pending: \(message)
+                  Waiting for approval on the device. Tap Allow on the iOS device to continue.
                 """
         case .notConnected:
             return """
@@ -148,6 +156,8 @@ public enum FenceError: Error, LocalizedError {
             return "session.locked"
         case .authFailed:
             return "auth.failed"
+        case .authApprovalPending:
+            return "auth.approval_pending"
         case .notConnected:
             return "connection.not_connected"
         case .actionTimeout:
@@ -173,7 +183,7 @@ public enum FenceError: Error, LocalizedError {
             return failure.phase
         case .sessionLocked:
             return .session
-        case .authFailed:
+        case .authFailed, .authApprovalPending:
             return .authentication
         case .serverError(let serverError):
             return serverError.phase
@@ -187,6 +197,8 @@ public enum FenceError: Error, LocalizedError {
             return true
         case .connectionFailure(let failure):
             return failure.retryable
+        case .authApprovalPending:
+            return true
         case .invalidRequest, .noMatchingDevice, .authFailed, .actionFailed:
             return false
         case .serverError(let serverError):
@@ -213,6 +225,8 @@ public enum FenceError: Error, LocalizedError {
                 "If this is your own stale session, retry with the same BUTTONHEIST_DRIVER_ID or restart the app."
         case .authFailed(let message):
             return Self.authFailureRecoveryHint(for: message)
+        case .authApprovalPending:
+            return "Waiting for approval on the device. Tap Allow on the iOS device to continue."
         case .notConnected:
             return "Check that the app is running, then retry the command. Use 'buttonheist list' to see available devices."
         case .actionTimeout:
@@ -224,11 +238,14 @@ public enum FenceError: Error, LocalizedError {
         }
     }
 
-    private static func authFailureRecoveryHint(for message: String) -> String {
+    fileprivate static func authFailureRecoveryHint(for message: String) -> String? {
         if message.localizedCaseInsensitiveContains("configured token") {
             return "Retry with the configured token."
         }
-        return "Retry without --token to request a fresh session."
+        if message.localizedCaseInsensitiveContains("retry without") {
+            return "Retry without --token to request a fresh session."
+        }
+        return nil
     }
 }
 
@@ -246,7 +263,10 @@ public extension ServerError {
     }
 
     var hint: String? {
-        kind.hint
+        if kind == .authFailure {
+            return FenceError.authFailureRecoveryHint(for: message)
+        }
+        return kind.hint
     }
 }
 
@@ -267,6 +287,8 @@ private extension ErrorKind {
             return "request.action_failed"
         case .authFailure:
             return "auth.failed"
+        case .authApprovalPending:
+            return "auth.approval_pending"
         case .recording:
             return "recording.failed"
         case .general:
@@ -279,7 +301,7 @@ private extension ErrorKind {
         case .elementNotFound, .timeout, .unsupported, .inputError,
              .validationError, .actionFailed:
             return .request
-        case .authFailure:
+        case .authFailure, .authApprovalPending:
             return .authentication
         case .recording:
             return .recording
@@ -291,6 +313,8 @@ private extension ErrorKind {
     var retryable: Bool {
         switch self {
         case .timeout:
+            return true
+        case .authApprovalPending:
             return true
         case .elementNotFound, .unsupported, .inputError, .validationError,
              .actionFailed, .authFailure, .recording, .general:
@@ -313,7 +337,9 @@ private extension ErrorKind {
         case .actionFailed:
             return nil
         case .authFailure:
-            return "Retry without a token to request a fresh session."
+            return nil
+        case .authApprovalPending:
+            return "Waiting for approval on the device. Tap Allow on the iOS device to continue."
         case .recording:
             return "Stop any in-progress recording and retry after resolving the recording error."
         case .general:
@@ -355,6 +381,7 @@ extension FenceError {
         switch connectionError {
         case .connectionFailed(let message): self = .connectionFailed(message)
         case .disconnected(.authFailed(let reason)): self = .authFailed(reason)
+        case .disconnected(.authApprovalPending(let message)): self = .authApprovalPending(message)
         case .disconnected(.sessionLocked(let message)): self = .sessionLocked(message)
         case .disconnected(let reason): self = .connectionFailure(ConnectionFailure(disconnectReason: reason))
         case .timeout: self = .connectionTimeout

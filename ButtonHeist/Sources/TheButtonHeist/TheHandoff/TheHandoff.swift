@@ -35,6 +35,7 @@ final class TheHandoff {
             switch self {
             case .connectionFailed(let message): return message
             case .disconnected(.authFailed(let reason)): return "Authentication failed: \(reason)"
+            case .disconnected(.authApprovalPending(let message)): return "Authentication approval pending: \(message)"
             case .disconnected(.sessionLocked(let message)): return "Session locked: \(message)"
             case .disconnected(let reason): return reason.connectionFailureMessage
             case .timeout: return "Connection timed out"
@@ -703,7 +704,7 @@ final class TheHandoff {
             forwardServerMessage(message, requestId: requestId)
         // Terminal request recovery only completes request-scoped trackers; state-mutating messages are consumed while active.
         // swiftlint:disable:next agent_wire_message_arm_no_op_break
-        case .info, .recordingStarted, .recording, .authApproved, .sessionLocked, .status,
+        case .info, .recordingStarted, .recording, .authApproved, .authApprovalPending, .sessionLocked, .status,
              .protocolMismatch, .pong, .recordingStopped, .serverHello, .authRequired, .interaction:
             break
         }
@@ -730,6 +731,8 @@ final class TheHandoff {
                 emitRecordingEvent(.failed(serverError.message))
             case .authFailure:
                 transitionToFailed(.disconnected(.authFailed(serverError.message)))
+            case .authApprovalPending:
+                transitionToFailed(.disconnected(.authApprovalPending(serverError.message)))
             default:
                 if let requestId {
                     forwardServerMessage(message, requestId: requestId)
@@ -740,6 +743,9 @@ final class TheHandoff {
         case .authApproved(let payload):
             token = payload.token
             onAuthApproved?(payload.token)
+        case .authApprovalPending(let payload):
+            connectionAttemptFailure = .disconnected(.authApprovalPending(payload.message))
+            onStatus?(payload.hint)
         case .sessionLocked(let payload):
             transitionToFailed(.disconnected(.sessionLocked(payload.message)))
         case .status(let payload):

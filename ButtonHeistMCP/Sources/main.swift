@@ -176,12 +176,7 @@ struct ButtonHeistMCPServer {
     }
 
     private static func jsonText(_ response: FenceResponse) -> String? {
-        let dict = response.jsonDict()
-        guard JSONSerialization.isValidJSONObject(dict),
-              let data = try? JSONSerialization.data(withJSONObject: dict, options: [.sortedKeys])
-        else {
-            return nil
-        }
+        guard let data = try? response.jsonData() else { return nil }
         return String(data: data, encoding: .utf8)
     }
 

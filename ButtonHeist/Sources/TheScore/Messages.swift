@@ -21,6 +21,7 @@ public enum WireMessageType: String, Codable, CaseIterable, Sendable {
     case protocolMismatch
     case authenticate
     case authRequired
+    case authApprovalPending
     case authApproved
     case info
     case requestInterface

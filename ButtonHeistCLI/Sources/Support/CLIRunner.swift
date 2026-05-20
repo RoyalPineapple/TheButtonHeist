@@ -92,9 +92,8 @@ enum CLIRunner {
         case .compact:
             writeOutput(response.compactFormatted())
         case .json:
-            let dictionary = response.jsonDict()
             do {
-                let data = try JSONSerialization.data(withJSONObject: dictionary, options: [.sortedKeys])
+                let data = try response.jsonData()
                 if let json = String(data: data, encoding: .utf8) {
                     writeOutput(json)
                 } else {

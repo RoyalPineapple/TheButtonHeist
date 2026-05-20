@@ -54,6 +54,7 @@ extension ServerMessage {
         switch self {
         case .serverHello: return (.serverHello, nil)
         case .authRequired: return (.authRequired, nil)
+        case .authApprovalPending(let payload): return (.authApprovalPending, payload)
         case .pong: return (.pong, nil)
         case .recordingStarted: return (.recordingStarted, nil)
         case .recordingStopped: return (.recordingStopped, nil)
@@ -81,6 +82,7 @@ extension ServerMessage {
         switch type {
         case .serverHello: return .serverHello
         case .authRequired: return .authRequired
+        case .authApprovalPending: return .authApprovalPending(try AuthApprovalPendingPayload(from: try payload()))
         case .pong: return .pong
         case .recordingStarted: return .recordingStarted
         case .recordingStopped: return .recordingStopped

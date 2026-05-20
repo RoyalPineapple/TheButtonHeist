@@ -21,6 +21,7 @@ enum DisconnectReason: Error, LocalizedError {
     case eventBacklogOverflow(maxEvents: Int)
     case serverClosed
     case authFailed(String)
+    case authApprovalPending(String)
     case sessionLocked(String)
     case protocolMismatch(String)
     case localDisconnect
@@ -50,6 +51,8 @@ enum DisconnectReason: Error, LocalizedError {
             return "Connection closed by server"
         case .authFailed(let reason):
             return "Auth failed: \(reason)"
+        case .authApprovalPending(let message):
+            return "Auth approval pending: \(message)"
         case .sessionLocked(let message):
             return "Session locked: \(message)"
         case .protocolMismatch(let message):
@@ -75,6 +78,8 @@ enum DisconnectReason: Error, LocalizedError {
             return "transport.server_closed"
         case .authFailed:
             return "auth.failed"
+        case .authApprovalPending:
+            return "auth.approval_pending"
         case .sessionLocked:
             return "session.locked"
         case .protocolMismatch:
@@ -92,7 +97,7 @@ enum DisconnectReason: Error, LocalizedError {
         switch self {
         case .networkError, .bufferOverflow, .eventBacklogOverflow, .serverClosed:
             return .transport
-        case .authFailed:
+        case .authFailed, .authApprovalPending:
             return .authentication
         case .sessionLocked:
             return .session
@@ -107,7 +112,7 @@ enum DisconnectReason: Error, LocalizedError {
 
     var retryable: Bool {
         switch self {
-        case .networkError, .eventBacklogOverflow, .serverClosed, .sessionLocked:
+        case .networkError, .eventBacklogOverflow, .serverClosed, .sessionLocked, .authApprovalPending:
             return true
         case .bufferOverflow, .authFailed, .protocolMismatch, .localDisconnect,
              .certificateMismatch, .missingFingerprint:
@@ -127,7 +132,12 @@ enum DisconnectReason: Error, LocalizedError {
             if reason.localizedCaseInsensitiveContains("configured token") {
                 return "Retry with the configured token."
             }
-            return "Retry without a token to request a fresh session."
+            if reason.localizedCaseInsensitiveContains("retry without") {
+                return "Retry without a token to request a fresh session."
+            }
+            return nil
+        case .authApprovalPending:
+            return "Waiting for approval on the device. Tap Allow on the iOS device to continue."
         case .sessionLocked:
             return "Wait for the current driver to disconnect or for the session to time out. " +
                 "If this is your own stale session, retry with the same BUTTONHEIST_DRIVER_ID or restart the app."
@@ -172,6 +182,8 @@ extension DisconnectReason: Equatable {
             return lhsMaxEvents == rhsMaxEvents
         case (.authFailed(let lhsReason), .authFailed(let rhsReason)):
             return lhsReason == rhsReason
+        case (.authApprovalPending(let lhsMessage), .authApprovalPending(let rhsMessage)):
+            return lhsMessage == rhsMessage
         case (.sessionLocked(let lhsMessage), .sessionLocked(let rhsMessage)):
             return lhsMessage == rhsMessage
         case (.protocolMismatch(let lhsMessage), .protocolMismatch(let rhsMessage)):
@@ -611,11 +623,19 @@ final class DeviceConnection: DeviceConnecting {
             } else {
                 emitMessage(.authRequired, requestId: nil)
             }
+        case .authApprovalPending(let payload):
+            logger.info("Auth approval pending: \(payload.message, privacy: .public)")
+            emitMessage(.authApprovalPending(payload), requestId: envelope.requestId)
         case .error(let serverError) where serverError.kind == .authFailure:
             logger.error("Auth failed: \(serverError.message)")
             emitMessage(.error(serverError), requestId: nil)
             disconnect()
             onEvent?(.disconnected(.authFailed(serverError.message)))
+        case .error(let serverError) where serverError.kind == .authApprovalPending:
+            logger.error("Auth approval timed out: \(serverError.message)")
+            emitMessage(.error(serverError), requestId: nil)
+            disconnect()
+            onEvent?(.disconnected(.authApprovalPending(serverError.message)))
         case .authApproved(let payload):
             logger.info("Auth approved via UI, received token")
             token = payload.token

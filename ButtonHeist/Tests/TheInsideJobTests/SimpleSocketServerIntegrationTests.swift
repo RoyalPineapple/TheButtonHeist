@@ -48,16 +48,35 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
     // MARK: - ServerPhase transitions
 
     func testStartTransitionsToListening() async throws {
-        let port = try await server.startAsync(port: 0, bindToLoopback: true)
+        let port = try await server.startPlaintextForTests(port: 0, bindToLoopback: true)
         XCTAssertGreaterThan(port, 0)
         XCTAssertEqual(server.listeningPort, port)
     }
 
+    func testProductionStartRequiresExplicitTLSParameters() throws {
+        let packageRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let sourceURL = packageRoot
+            .appendingPathComponent("Sources")
+            .appendingPathComponent("TheInsideJob")
+            .appendingPathComponent("Server")
+            .appendingPathComponent("SimpleSocketServer.swift")
+        let source = try String(contentsOf: sourceURL)
+
+        XCTAssertTrue(source.contains("func startAsync("))
+        XCTAssertTrue(source.contains("tlsParameters: NWParameters,"))
+        XCTAssertFalse(source.contains("tlsParameters: NWParameters?"))
+        XCTAssertFalse(source.contains("tlsParameters: NWParameters? = nil"))
+        XCTAssertTrue(source.contains("func startPlaintextForTests("))
+    }
+
     func testDoubleStartThrowsAlreadyRunning() async throws {
-        _ = try await server.startAsync(port: 0, bindToLoopback: true)
+        _ = try await server.startPlaintextForTests(port: 0, bindToLoopback: true)
 
         do {
-            _ = try await server.startAsync(port: 0, bindToLoopback: true)
+            _ = try await server.startPlaintextForTests(port: 0, bindToLoopback: true)
             XCTFail("Expected alreadyRunning error on double start")
         } catch let error as SimpleSocketServer.ServerError {
             XCTAssertEqual(error, .alreadyRunning)
@@ -65,7 +84,7 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
     }
 
     func testStopFromListeningResetsPort() async throws {
-        _ = try await server.startAsync(port: 0, bindToLoopback: true)
+        _ = try await server.startPlaintextForTests(port: 0, bindToLoopback: true)
         XCTAssertGreaterThan(server.listeningPort, 0)
 
         await server.stop()
@@ -101,7 +120,7 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
                 sendFailed.fulfill()
             }
         )
-        let port = try await server.startAsync(port: 0, bindToLoopback: true, callbacks: callbacks)
+        let port = try await server.startPlaintextForTests(port: 0, bindToLoopback: true, callbacks: callbacks)
         await server.setSendContentForTesting { _, _, completion in
             if case .contentProcessed(let handler) = completion {
                 handler(.posix(.ECONNRESET))
@@ -136,12 +155,12 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
     }
 
     func testCanRestartAfterStop() async throws {
-        let firstPort = try await server.startAsync(port: 0, bindToLoopback: true)
+        let firstPort = try await server.startPlaintextForTests(port: 0, bindToLoopback: true)
         XCTAssertGreaterThan(firstPort, 0)
 
         await server.stop()
 
-        let secondPort = try await server.startAsync(port: 0, bindToLoopback: true)
+        let secondPort = try await server.startPlaintextForTests(port: 0, bindToLoopback: true)
         XCTAssertGreaterThan(secondPort, 0)
     }
 
@@ -157,7 +176,7 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
                 clientConnected.fulfill()
             }
         )
-        let port = try await server.startAsync(port: 0, bindToLoopback: true, callbacks: callbacks)
+        let port = try await server.startPlaintextForTests(port: 0, bindToLoopback: true, callbacks: callbacks)
 
         let connection = NWConnection(
             host: .ipv6(.loopback),
@@ -189,7 +208,7 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
                 clientConnected.fulfill()
             }
         )
-        let port = try await server.startAsync(port: 0, bindToLoopback: true, callbacks: callbacks)
+        let port = try await server.startPlaintextForTests(port: 0, bindToLoopback: true, callbacks: callbacks)
 
         let connection = NWConnection(
             host: .ipv6(.loopback),
@@ -223,7 +242,7 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
                 clientConnected.fulfill()
             }
         )
-        let port = try await server.startAsync(port: 0, bindToLoopback: true, callbacks: callbacks)
+        let port = try await server.startPlaintextForTests(port: 0, bindToLoopback: true, callbacks: callbacks)
 
         let connection = NWConnection(
             host: .ipv6(.loopback),
@@ -262,7 +281,7 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
                 clientDisconnected.fulfill()
             }
         )
-        let port = try await server.startAsync(port: 0, bindToLoopback: true, callbacks: callbacks)
+        let port = try await server.startPlaintextForTests(port: 0, bindToLoopback: true, callbacks: callbacks)
 
         let connection = NWConnection(
             host: .ipv6(.loopback),
@@ -297,7 +316,7 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
             onClientConnected: { _, _ in clientConnected.fulfill() }
         )
 
-        let port = try await server.startAsync(port: 0, bindToLoopback: true, callbacks: callbacks)
+        let port = try await server.startPlaintextForTests(port: 0, bindToLoopback: true, callbacks: callbacks)
         let connection = NWConnection(
             host: .ipv6(.loopback),
             port: NWEndpoint.Port(rawValue: port)!,
@@ -339,7 +358,7 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
                 if count == 2 { secondConnected.fulfill() }
             }
         )
-        let port = try await server.startAsync(port: 0, bindToLoopback: true, callbacks: callbacks)
+        let port = try await server.startPlaintextForTests(port: 0, bindToLoopback: true, callbacks: callbacks)
 
         let connection1 = NWConnection(host: .ipv6(.loopback), port: NWEndpoint.Port(rawValue: port)!, using: .tcp)
         let ready1 = expectation(description: "client 1 ready")

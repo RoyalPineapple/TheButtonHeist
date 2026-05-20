@@ -89,7 +89,7 @@ enum ServerTransportError: Error, LocalizedError, Equatable, Sendable {
 /// Isolation: lifecycle methods (`start`, `stop`, `advertise`, `setSyncDataInterceptor`)
 /// are `@MainActor`-isolated because they mutate Bonjour and lifecycle state that the
 /// owning `TheInsideJob` (also MainActor) reads synchronously. The pass-through helpers
-/// (`send`, `broadcastToAll`, `markAuthenticated`, `disconnect`, `listeningPort`) only
+/// (`send`, `broadcastToAll`, `markAuthenticated`, `markApprovalPending`, `disconnect`, `listeningPort`) only
 /// touch the inner `SimpleSocketServer` actor reference and are nonisolated, so callers
 /// on any context can use them without an actor hop.
 final class ServerTransport: NSObject {
@@ -470,6 +470,11 @@ final class ServerTransport: NSObject {
     /// Mark a client as authenticated.
     nonisolated func markAuthenticated(_ clientId: Int) async {
         await server.markAuthenticated(clientId)
+    }
+
+    /// Mark a client as waiting on the on-device approval prompt.
+    nonisolated func markApprovalPending(_ clientId: Int) async {
+        await server.markApprovalPending(clientId)
     }
 
     /// Disconnect a specific client.

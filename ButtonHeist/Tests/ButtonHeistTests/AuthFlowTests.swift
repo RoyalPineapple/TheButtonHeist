@@ -167,6 +167,63 @@ final class AuthFlowTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testAuthApprovalPendingIsNonTerminalStatus() async throws {
+        let conn = DeviceConnection(device: makeDummyDevice(), token: "")
+        conn.simulateConnected()
+
+        var pendingPayload: AuthApprovalPendingPayload?
+        var disconnected = false
+        conn.onEvent = { event in
+            switch event {
+            case .message(.authApprovalPending(let payload), _, _):
+                pendingPayload = payload
+            case .disconnected:
+                disconnected = true
+            default:
+                break
+            }
+        }
+
+        let payload = AuthApprovalPendingPayload()
+        try conn.handleMessage(encode(.authApprovalPending(payload)))
+
+        XCTAssertEqual(pendingPayload, payload)
+        XCTAssertTrue(conn.isConnected)
+        XCTAssertFalse(disconnected)
+    }
+
+    @ButtonHeistActor
+    func testAuthApprovalPendingErrorDisconnectsWithDistinctReason() async throws {
+        let conn = DeviceConnection(device: makeDummyDevice(), token: "")
+        conn.simulateConnected()
+
+        var serverError: ServerError?
+        var disconnectReason: DisconnectReason?
+        conn.onEvent = { event in
+            switch event {
+            case .message(.error(let error), _, _):
+                serverError = error
+            case .disconnected(let reason):
+                disconnectReason = reason
+            default:
+                break
+            }
+        }
+
+        try conn.handleMessage(encode(.error(ServerError(
+            kind: .authApprovalPending,
+            message: "Approval timed out — user did not respond to the approval prompt on the device."
+        ))))
+
+        XCTAssertEqual(serverError?.kind, .authApprovalPending)
+        XCTAssertFalse(conn.isConnected)
+        XCTAssertEqual(
+            disconnectReason,
+            .authApprovalPending("Approval timed out — user did not respond to the approval prompt on the device.")
+        )
+    }
+
+    @ButtonHeistActor
     func testAuthRequiredOnlyUsesAuthenticate() async throws {
         let conn = DeviceConnection(device: makeDummyDevice(), token: "my-token")
         conn.simulateConnected()

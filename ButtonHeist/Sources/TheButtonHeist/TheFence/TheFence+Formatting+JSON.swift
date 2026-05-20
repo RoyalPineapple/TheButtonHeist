@@ -7,402 +7,1027 @@ import TheScore
 
 private let logger = Logger(subsystem: "com.buttonheist.thefence", category: "formatting")
 
+private protocol FencePublicJSONResponse: Encodable {}
+
+private struct PublicStatus: Encodable {
+    static let ok = PublicStatus(value: "ok")
+    static let error = PublicStatus(value: "error")
+
+    let value: String
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(value)
+    }
+}
+
+private struct PublicErrorResponse: FencePublicJSONResponse {
+    let status = PublicStatus.error
+    let message: String
+    let errorCode: String?
+    let phase: String?
+    let retryable: Bool?
+    let hint: String?
+
+    init(message: String, details: FailureDetails?) {
+        self.message = message
+        self.errorCode = details?.errorCode
+        self.phase = details?.phase.rawValue
+        self.retryable = details?.retryable
+        self.hint = details?.hint
+    }
+}
+
+private struct PublicInterfaceResponse: FencePublicJSONResponse {
+    let status = PublicStatus.ok
+    let detail: String
+    let interface: PublicInterface
+
+    init(interface: Interface, detail: InterfaceDetail) {
+        self.detail = detail.rawValue
+        self.interface = PublicInterface(interface: interface, detail: detail)
+    }
+}
+
+private struct PublicInterface: Encodable {
+    let timestamp: String
+    let screenDescription: String
+    let screenId: String?
+    let navigation: PublicNavigation
+    let tree: [PublicTreeNode]
+
+    init(interface: Interface, detail: InterfaceDetail) {
+        let formatter = ISO8601DateFormatter()
+        self.timestamp = formatter.string(from: interface.timestamp)
+        self.screenDescription = interface.screenDescription
+        self.screenId = interface.screenId
+        self.navigation = PublicNavigation(navigation: interface.navigation)
+        let counter = PublicIndexCounter()
+        self.tree = PublicTreeNode.nodes(
+            from: interface.tree,
+            detail: detail,
+            counter: counter,
+            elementAnnotations: interface.annotations.elementByPath,
+            containerAnnotations: interface.annotations.containerByPath
+        )
+    }
+}
+
+private struct PublicNavigation: Encodable {
+    let screenTitle: String?
+    let backButton: PublicNavigationItem?
+    let tabBarItems: [PublicTabBarItem]?
+
+    init(navigation: NavigationContext) {
+        self.screenTitle = navigation.screenTitle
+        self.backButton = navigation.backButton.map { PublicNavigationItem(item: $0) }
+        self.tabBarItems = navigation.tabBarItems?.map { PublicTabBarItem(item: $0) }
+    }
+}
+
+private struct PublicNavigationItem: Encodable {
+    let heistId: String
+    let label: String?
+    let value: String?
+
+    init(item: NavigationContext.NavigationItem) {
+        self.heistId = item.heistId
+        self.label = item.label
+        self.value = item.value
+    }
+}
+
+private struct PublicTabBarItem: Encodable {
+    let heistId: String
+    let label: String?
+    let value: String?
+    let selected: Bool?
+
+    init(item: NavigationContext.TabBarItem) {
+        self.heistId = item.heistId
+        self.label = item.label
+        self.value = item.value
+        self.selected = item.selected ? true : nil
+    }
+}
+
+private final class PublicIndexCounter {
+    var value = 0
+}
+
+private enum PublicTreeNode: Encodable {
+    case element(PublicElement)
+    case container(PublicContainer)
+
+    private enum CodingKeys: String, CodingKey {
+        case element
+        case container
+    }
+
+    static func nodes(
+        from tree: [AccessibilityHierarchy],
+        detail: InterfaceDetail,
+        counter: PublicIndexCounter?,
+        elementAnnotations: [TreePath: InterfaceElementAnnotation],
+        containerAnnotations: [TreePath: InterfaceContainerAnnotation]
+    ) -> [PublicTreeNode] {
+        tree.enumerated().map { index, node in
+            Self.node(
+                from: node,
+                path: TreePath([index]),
+                detail: detail,
+                counter: counter,
+                elementAnnotations: elementAnnotations,
+                containerAnnotations: containerAnnotations
+            )
+        }
+    }
+
+    static func node(
+        from node: AccessibilityHierarchy,
+        path: TreePath,
+        detail: InterfaceDetail,
+        counter: PublicIndexCounter?,
+        elementAnnotations: [TreePath: InterfaceElementAnnotation],
+        containerAnnotations: [TreePath: InterfaceContainerAnnotation]
+    ) -> PublicTreeNode {
+        switch node {
+        case .element(let element, _):
+            let projected = HeistElement(
+                accessibilityElement: element,
+                annotation: elementAnnotations[path]
+            )
+            let order = counter?.value
+            counter?.value += 1
+            return .element(PublicElement(element: projected, detail: detail, order: order))
+        case .container(let container, let children):
+            let childNodes = children.enumerated().map { index, child in
+                Self.node(
+                    from: child,
+                    path: path.appending(index),
+                    detail: detail,
+                    counter: counter,
+                    elementAnnotations: elementAnnotations,
+                    containerAnnotations: containerAnnotations
+                )
+            }
+            return .container(PublicContainer(
+                container: container,
+                annotation: containerAnnotations[path],
+                detail: detail,
+                children: childNodes
+            ))
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .element(let element):
+            try container.encode(element, forKey: .element)
+        case .container(let node):
+            try container.encode(node, forKey: .container)
+        }
+    }
+}
+
+private struct PublicElement: Encodable {
+    let heistId: String
+    let traits: [String]
+    let actions: [String]?
+    let rotors: [String]?
+    let label: String?
+    let value: String?
+    let identifier: String?
+    let hint: String?
+    let customContent: PublicCustomContent?
+    let frameX: Double?
+    let frameY: Double?
+    let frameWidth: Double?
+    let frameHeight: Double?
+    let activationPointX: Double?
+    let activationPointY: Double?
+    let order: Int?
+
+    init(element: HeistElement, detail: InterfaceDetail, order: Int? = nil) {
+        self.heistId = element.heistId
+        self.traits = element.traits.map(\.rawValue)
+        let meaningfulActions = FenceResponse.meaningfulActions(element)
+        self.actions = meaningfulActions.isEmpty ? nil : meaningfulActions.map(\.description)
+        self.rotors = element.rotors?.isEmpty == false ? element.rotors?.map(\.name) : nil
+        self.label = element.label
+        self.value = element.value
+        self.identifier = element.identifier
+        self.order = order
+        guard detail == .full else {
+            self.hint = nil
+            self.customContent = nil
+            self.frameX = nil
+            self.frameY = nil
+            self.frameWidth = nil
+            self.frameHeight = nil
+            self.activationPointX = nil
+            self.activationPointY = nil
+            return
+        }
+        self.hint = element.hint
+        self.customContent = element.customContent.map { PublicCustomContent(items: $0) }
+        self.frameX = element.frameX
+        self.frameY = element.frameY
+        self.frameWidth = element.frameWidth
+        self.frameHeight = element.frameHeight
+        self.activationPointX = element.activationPointX
+        self.activationPointY = element.activationPointY
+    }
+}
+
+private struct PublicCustomContent: Encodable {
+    let important: [PublicCustomContentEntry]?
+    let `default`: [PublicCustomContentEntry]?
+
+    init(items: [HeistCustomContent]) {
+        let importantItems = items.filter(\.isImportant)
+        let defaultItems = items.filter { !$0.isImportant }
+        self.important = importantItems.isEmpty ? nil : importantItems.map { PublicCustomContentEntry(item: $0) }
+        self.default = defaultItems.isEmpty ? nil : defaultItems.map { PublicCustomContentEntry(item: $0) }
+    }
+}
+
+private struct PublicCustomContentEntry: Encodable {
+    let label: String?
+    let value: String?
+
+    init(item: HeistCustomContent) {
+        self.label = item.label.isEmpty ? nil : item.label
+        self.value = item.value.isEmpty ? nil : item.value
+    }
+}
+
+private struct PublicContainer: Encodable {
+    let type: String
+    let label: String?
+    let value: String?
+    let identifier: String?
+    let rowCount: Int?
+    let columnCount: Int?
+    let contentWidth: Double?
+    let contentHeight: Double?
+    let isModalBoundary: Bool?
+    let stableId: String?
+    let frameX: Double?
+    let frameY: Double?
+    let frameWidth: Double?
+    let frameHeight: Double?
+    let children: [PublicTreeNode]
+
+    init(
+        container: AccessibilityContainer,
+        annotation: InterfaceContainerAnnotation?,
+        detail: InterfaceDetail,
+        children: [PublicTreeNode]
+    ) {
+        switch container.type {
+        case .semanticGroup(let label, let value, let identifier):
+            self.type = "semanticGroup"
+            self.label = label
+            self.value = value
+            self.identifier = identifier
+            self.rowCount = nil
+            self.columnCount = nil
+            self.contentWidth = nil
+            self.contentHeight = nil
+        case .list:
+            self.type = "list"
+            self.label = nil
+            self.value = nil
+            self.identifier = nil
+            self.rowCount = nil
+            self.columnCount = nil
+            self.contentWidth = nil
+            self.contentHeight = nil
+        case .landmark:
+            self.type = "landmark"
+            self.label = nil
+            self.value = nil
+            self.identifier = nil
+            self.rowCount = nil
+            self.columnCount = nil
+            self.contentWidth = nil
+            self.contentHeight = nil
+        case .dataTable(let rowCount, let columnCount):
+            self.type = "dataTable"
+            self.label = nil
+            self.value = nil
+            self.identifier = nil
+            self.rowCount = rowCount
+            self.columnCount = columnCount
+            self.contentWidth = nil
+            self.contentHeight = nil
+        case .tabBar:
+            self.type = "tabBar"
+            self.label = nil
+            self.value = nil
+            self.identifier = nil
+            self.rowCount = nil
+            self.columnCount = nil
+            self.contentWidth = nil
+            self.contentHeight = nil
+        case .scrollable(let contentSize):
+            self.type = "scrollable"
+            self.label = nil
+            self.value = nil
+            self.identifier = nil
+            self.rowCount = nil
+            self.columnCount = nil
+            self.contentWidth = Self.sanitizedDouble(contentSize.width)
+            self.contentHeight = Self.sanitizedDouble(contentSize.height)
+        }
+        self.isModalBoundary = container.isModalBoundary ? true : nil
+        self.stableId = annotation?.stableId
+        self.children = children
+        guard detail == .full else {
+            self.frameX = nil
+            self.frameY = nil
+            self.frameWidth = nil
+            self.frameHeight = nil
+            return
+        }
+        self.frameX = Self.sanitizedDouble(container.frame.origin.x)
+        self.frameY = Self.sanitizedDouble(container.frame.origin.y)
+        self.frameWidth = Self.sanitizedDouble(container.frame.size.width)
+        self.frameHeight = Self.sanitizedDouble(container.frame.size.height)
+    }
+
+    private static func sanitizedDouble(_ value: CGFloat) -> Double {
+        value.isFinite ? Double(value) : 0
+    }
+}
+
+private struct PublicSessionStateResponse: FencePublicJSONResponse {
+    let status = PublicStatus.ok
+    let connected: Bool
+    let phase: String
+    let isRecording: Bool
+    let actionTimeoutSeconds: TimeInterval
+    let longActionTimeoutSeconds: TimeInterval
+    let deviceName: String?
+    let appName: String?
+    let connectionType: String?
+    let shortId: String?
+    let lastFailure: PublicSessionFailure?
+    let lastAction: PublicSessionLastAction?
+
+    init(payload: SessionStatePayload) {
+        self.connected = payload.connected
+        self.phase = payload.phase.rawValue
+        self.isRecording = payload.isRecording
+        self.actionTimeoutSeconds = payload.actionTimeoutSeconds
+        self.longActionTimeoutSeconds = payload.longActionTimeoutSeconds
+        self.deviceName = payload.device?.deviceName
+        self.appName = payload.device?.appName
+        self.connectionType = payload.device?.connectionType.rawValue
+        self.shortId = payload.device?.shortId
+        self.lastFailure = payload.lastFailure.map { PublicSessionFailure(payload: $0) }
+        self.lastAction = payload.lastAction.map { PublicSessionLastAction(payload: $0) }
+    }
+}
+
+private struct PublicSessionFailure: Encodable {
+    let errorCode: String
+    let phase: String
+    let retryable: Bool
+    let message: String?
+    let hint: String?
+
+    init(payload: SessionFailurePayload) {
+        self.errorCode = payload.errorCode
+        self.phase = payload.phase.rawValue
+        self.retryable = payload.retryable
+        self.message = payload.message
+        self.hint = payload.hint
+    }
+}
+
+private struct PublicSessionLastAction: Encodable {
+    let method: String
+    let success: Bool
+    let message: String?
+    let latencyMs: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case method
+        case success
+        case message
+        case latencyMs = "latency_ms"
+    }
+
+    init(payload: SessionLastActionPayload) {
+        self.method = payload.method.rawValue
+        self.success = payload.success
+        self.message = payload.message
+        self.latencyMs = payload.latencyMs
+    }
+}
+
+private struct PublicActionResponse: FencePublicJSONResponse {
+    let status: PublicStatus
+    let method: String
+    let message: String?
+    let value: String?
+    let rotor: PublicRotorResult?
+    let animating: Bool?
+    let delta: PublicDelta?
+    let screenName: String?
+    let screenId: String?
+    let explore: PublicExploreResult?
+    let errorClass: String?
+    let errorCode: String?
+    let phase: String?
+    let retryable: Bool?
+    let hint: String?
+    let expectation: PublicExpectationResult?
+
+    init(result: ActionResult, expectation: ExpectationResult?) {
+        if let expectation, !expectation.met {
+            self.status = PublicStatus(value: "expectation_failed")
+        } else {
+            self.status = result.success ? .ok : .error
+        }
+        self.method = result.method.rawValue
+        self.message = result.message
+        if case .value(let value) = result.payload {
+            self.value = value
+        } else {
+            self.value = nil
+        }
+        if case .rotor(let rotor) = result.payload {
+            self.rotor = PublicRotorResult(result: rotor)
+        } else {
+            self.rotor = nil
+        }
+        self.animating = result.animating == true ? true : nil
+        self.delta = result.accessibilityDelta.map(PublicDelta.init)
+        self.screenName = result.screenName
+        self.screenId = result.screenId
+        if case .explore(let explore) = result.payload {
+            self.explore = PublicExploreResult(result: explore)
+        } else {
+            self.explore = nil
+        }
+        if result.success {
+            self.errorClass = nil
+            self.errorCode = nil
+            self.phase = nil
+            self.retryable = nil
+            self.hint = nil
+        } else {
+            self.errorClass = (result.errorKind ?? .actionFailed).rawValue
+            let details = FenceResponse.actionFailureDetails(result)
+            self.errorCode = details?.errorCode
+            self.phase = details?.phase.rawValue
+            self.retryable = details?.retryable
+            self.hint = details?.hint
+        }
+        self.expectation = expectation.map { PublicExpectationResult(result: $0) }
+    }
+}
+
+private struct PublicRotorResult: Encodable {
+    let name: String
+    let direction: String
+    let foundElement: PublicElement?
+    let textRange: PublicRotorTextRange?
+
+    init(result: RotorResult) {
+        self.name = result.rotor
+        self.direction = result.direction.rawValue
+        self.foundElement = result.foundElement.map { PublicElement(element: $0, detail: .summary) }
+        self.textRange = result.textRange.map { PublicRotorTextRange(range: $0) }
+    }
+}
+
+private struct PublicRotorTextRange: Encodable {
+    let rangeDescription: String
+    let text: String?
+    let startOffset: Int?
+    let endOffset: Int?
+
+    init(range: RotorTextRange) {
+        self.rangeDescription = range.rangeDescription
+        self.text = range.text
+        self.startOffset = range.startOffset
+        self.endOffset = range.endOffset
+    }
+}
+
+private struct PublicExploreResult: Encodable {
+    let elementCount: Int
+    let scrollCount: Int
+    let containersExplored: Int
+    let explorationTime: String
+
+    init(result: ExploreResult) {
+        self.elementCount = result.elementCount
+        self.scrollCount = result.scrollCount
+        self.containersExplored = result.containersExplored
+        self.explorationTime = String(format: "%.2f", result.explorationTime)
+    }
+}
+
+private struct PublicExpectationResult: Encodable {
+    let met: Bool
+    let actual: String?
+    let expected: ActionExpectation?
+
+    init(result: ExpectationResult) {
+        self.met = result.met
+        self.actual = result.actual
+        self.expected = result.expectation
+    }
+}
+
+private struct PublicDelta: Encodable {
+    let kind: String
+    let elementCount: Int
+    let captureEdge: AccessibilityTrace.CaptureEdge?
+    let transient: [PublicElement]?
+    let edits: PublicElementEdits?
+    let newInterface: PublicInterface?
+
+    init(delta: AccessibilityTrace.Delta) {
+        self.kind = delta.kindRawValue
+        self.elementCount = delta.elementCount
+        self.captureEdge = delta.captureEdge
+        self.transient = delta.transient.isEmpty ? nil : delta.transient.map { PublicElement(element: $0, detail: .summary) }
+        switch delta {
+        case .noChange:
+            self.edits = nil
+            self.newInterface = nil
+        case .elementsChanged(let payload):
+            let edits = PublicElementEdits(edits: payload.edits)
+            self.edits = edits.isEmpty ? nil : edits
+            self.newInterface = nil
+        case .screenChanged(let payload):
+            self.edits = nil
+            self.newInterface = PublicInterface(interface: payload.newInterface, detail: .summary)
+        }
+    }
+}
+
+private struct PublicElementEdits: Encodable {
+    let added: [PublicElement]?
+    let removed: [String]?
+    let updated: [PublicElementUpdate]?
+    let treeInserted: [PublicTreeInsertion]?
+    let treeRemoved: [TreeRemoval]?
+    let treeMoved: [TreeMove]?
+
+    var isEmpty: Bool {
+        added == nil && removed == nil && updated == nil && treeInserted == nil && treeRemoved == nil && treeMoved == nil
+    }
+
+    init(edits: ElementEdits) {
+        self.added = edits.added.isEmpty ? nil : edits.added.map { PublicElement(element: $0, detail: .summary) }
+        self.removed = edits.removed.isEmpty ? nil : edits.removed
+        let filteredUpdates = edits.updated.compactMap { PublicElementUpdate(update: $0) }
+        self.updated = filteredUpdates.isEmpty ? nil : filteredUpdates
+        self.treeInserted = edits.treeInserted.isEmpty ? nil : edits.treeInserted.map { PublicTreeInsertion(insertion: $0) }
+        self.treeRemoved = edits.treeRemoved.isEmpty ? nil : edits.treeRemoved
+        self.treeMoved = edits.treeMoved.isEmpty ? nil : edits.treeMoved
+    }
+}
+
+private struct PublicElementUpdate: Encodable {
+    let heistId: String
+    let changes: [PropertyChange]
+
+    init?(update: ElementUpdate) {
+        let meaningfulChanges = update.changes.filter { !$0.property.isGeometry }
+        guard !meaningfulChanges.isEmpty else { return nil }
+        self.heistId = update.heistId
+        self.changes = meaningfulChanges
+    }
+}
+
+private struct PublicTreeInsertion: Encodable {
+    let location: TreeLocation
+    let node: PublicTreeNode
+
+    init(insertion: TreeInsertion) {
+        self.location = insertion.location
+        self.node = PublicTreeNode.node(
+            from: insertion.node,
+            path: .root,
+            detail: .summary,
+            counter: nil,
+            elementAnnotations: insertion.annotations.elementByPath,
+            containerAnnotations: insertion.annotations.containerByPath
+        )
+    }
+}
+
+private struct PublicRecordingResponse: FencePublicJSONResponse {
+    let status = PublicStatus.ok
+    let width: Int
+    let height: Int
+    let duration: Double
+    let frameCount: Int
+    let fps: Int
+    let stopReason: String
+    let interactionCount: Int
+    let path: String?
+    let videoData: String?
+    let interactionLog: [InteractionEvent]?
+
+    init(path: String?, payload: RecordingPayload, options: RecordingResponseOptions) {
+        self.width = payload.width
+        self.height = payload.height
+        self.duration = payload.duration
+        self.frameCount = payload.frameCount
+        self.fps = payload.fps
+        self.stopReason = payload.stopReason.rawValue
+        self.interactionCount = payload.interactionLog?.count ?? 0
+        self.path = path
+        self.videoData = options.inlineData ? payload.videoData : nil
+        self.interactionLog = options.includeInteractionLog ? payload.interactionLog : nil
+    }
+}
+
+private struct PublicOKResponse: FencePublicJSONResponse {
+    let status = PublicStatus.ok
+    let message: String
+}
+
+private struct PublicHelpResponse: FencePublicJSONResponse {
+    let status = PublicStatus.ok
+    let commands: [String]
+}
+
+private struct PublicStatusResponse: FencePublicJSONResponse {
+    let status = PublicStatus.ok
+    let connected: Bool
+    let device: String?
+}
+
+private struct PublicDevicesResponse: FencePublicJSONResponse {
+    let status = PublicStatus.ok
+    let devices: [PublicDiscoveredDevice]
+
+    init(devices: [DiscoveredDevice]) {
+        self.devices = devices.map(PublicDiscoveredDevice.init)
+    }
+}
+
+private struct PublicDiscoveredDevice: Encodable {
+    let name: String
+    let appName: String
+    let deviceName: String
+    let connectionType: String
+    let shortId: String?
+    let simulatorUDID: String?
+
+    init(device: DiscoveredDevice) {
+        self.name = device.name
+        self.appName = device.appName
+        self.deviceName = device.deviceName
+        self.connectionType = device.connectionType.rawValue
+        self.shortId = device.shortId
+        self.simulatorUDID = device.simulatorUDID
+    }
+}
+
+private struct PublicScreenshotResponse: FencePublicJSONResponse {
+    let status = PublicStatus.ok
+    let width: Double
+    let height: Double
+    let pngData: String?
+    let interface: PublicInterface?
+    let path: String?
+
+    init(path: String?, payload: ScreenPayload, includePNGData: Bool, includeInterface: Bool) {
+        self.width = payload.width
+        self.height = payload.height
+        self.pngData = includePNGData ? payload.pngData : nil
+        self.interface = includeInterface ? PublicInterface(interface: payload.interface, detail: .full) : nil
+        self.path = path
+    }
+}
+
+private struct PublicBatchResponse: FencePublicJSONResponse {
+    let status: PublicStatus
+    let results: [PublicResponseModel]
+    let completedSteps: Int
+    let totalTimingMs: Int
+    let failedIndex: Int?
+    let expectations: PublicBatchExpectations?
+    let stepSummaries: [PublicBatchStepSummary]?
+    let netDelta: PublicDelta?
+
+    init(outcomes: [BatchStepOutcome], totalTimingMs: Int, accessibilityTrace: AccessibilityTrace?) {
+        let failedIndex = outcomes.stoppedFailedIndex
+        self.status = PublicStatus(value: failedIndex == nil ? "ok" : "partial")
+        self.results = outcomes.compactMap(\.response).map(PublicResponseModel.init)
+        self.completedSteps = outcomes.completedStepCount
+        self.totalTimingMs = totalTimingMs
+        self.failedIndex = failedIndex
+        let checked = outcomes.expectationsChecked
+        self.expectations = checked > 0
+            ? PublicBatchExpectations(checked: checked, met: outcomes.expectationsMet)
+            : nil
+        let summaries = outcomes.stepSummaries.enumerated().map { index, summary in
+            PublicBatchStepSummary(index: index, summary: summary)
+        }
+        self.stepSummaries = summaries.isEmpty ? nil : summaries
+        self.netDelta = accessibilityTrace?.meaningfulCaptureEndpointDelta.map(PublicDelta.init)
+    }
+}
+
+private struct PublicBatchExpectations: Encodable {
+    let checked: Int
+    let met: Int
+    let allMet: Bool
+
+    init(checked: Int, met: Int) {
+        self.checked = checked
+        self.met = met
+        self.allMet = checked == met
+    }
+}
+
+private struct PublicBatchStepSummary: Encodable {
+    let index: Int
+    let command: String
+    let deltaKind: String?
+    let screenName: String?
+    let screenId: String?
+    let expectationMet: Bool?
+    let elementCount: Int?
+    let error: String?
+    let errorCode: String?
+    let phase: String?
+    let nextCommand: String?
+
+    init(index: Int, summary: BatchStepSummary) {
+        self.index = index
+        self.command = summary.command
+        self.deltaKind = summary.deltaKind
+        self.screenName = summary.screenName
+        self.screenId = summary.screenId
+        self.expectationMet = summary.expectationMet
+        self.elementCount = summary.elementCount
+        self.error = summary.error
+        self.errorCode = summary.errorCode
+        self.phase = summary.phase
+        self.nextCommand = summary.nextCommand
+    }
+}
+
+private struct PublicTargetsResponse: FencePublicJSONResponse {
+    let status = PublicStatus.ok
+    let targets: [String: PublicTargetConfig]
+    let `default`: String?
+
+    init(targets: [String: TargetConfig], defaultTarget: String?) {
+        self.targets = targets.mapValues(PublicTargetConfig.init)
+        self.default = defaultTarget
+    }
+}
+
+private struct PublicTargetConfig: Encodable {
+    let device: String
+    let hasToken: Bool?
+
+    init(target: TargetConfig) {
+        self.device = target.device
+        self.hasToken = target.token == nil ? nil : true
+    }
+}
+
+private struct PublicSessionLogResponse: FencePublicJSONResponse {
+    let status = PublicStatus.ok
+    let formatVersion: String
+    let sessionId: String
+    let startTime: Date
+    let endTime: Date?
+    let commandCount: Int
+    let errorCount: Int
+    let artifactCount: Int
+    let projectionStatus: PublicProjectionStatus?
+    let artifacts: [PublicArtifactEntry]
+    let path: String?
+
+    init(snapshot: SessionLogSnapshot, path: String? = nil) {
+        self.formatVersion = snapshot.manifest.formatVersion
+        self.sessionId = snapshot.manifest.sessionId
+        self.startTime = snapshot.manifest.startTime
+        self.endTime = snapshot.manifest.endTime
+        self.commandCount = snapshot.counts.commandCount
+        self.errorCount = snapshot.counts.errorCount
+        self.artifactCount = snapshot.artifacts.count
+        self.projectionStatus = snapshot.projectionStatus.isDegraded
+            ? PublicProjectionStatus(status: snapshot.projectionStatus)
+            : nil
+        self.artifacts = snapshot.artifacts.map(PublicArtifactEntry.init)
+        self.path = path
+    }
+}
+
+private struct PublicArtifactEntry: Encodable {
+    let type: String
+    let path: String
+    let size: Int
+    let timestamp: Date
+    let command: String
+    let metadata: [String: Double]?
+
+    init(artifact: ArtifactEntry) {
+        self.type = artifact.type.rawValue
+        self.path = artifact.path
+        self.size = artifact.size
+        self.timestamp = artifact.timestamp
+        self.command = artifact.command
+        self.metadata = artifact.metadata.isEmpty ? nil : artifact.metadata
+    }
+}
+
+private struct PublicProjectionStatus: Encodable {
+    let degraded = true
+    let malformedLineCount: Int
+    let firstMalformedLineNumber: Int?
+    let firstMalformedLineCause: String?
+    let malformedArtifactCount: Int
+
+    init(status: SessionLogProjectionStatus) {
+        self.malformedLineCount = status.malformedLineCount
+        self.firstMalformedLineNumber = status.firstMalformedLineNumber
+        self.firstMalformedLineCause = status.firstMalformedLineCause
+        self.malformedArtifactCount = status.malformedArtifactCount
+    }
+}
+
+private struct PublicHeistStartedResponse: FencePublicJSONResponse {
+    let status = PublicStatus.ok
+    let recording = true
+}
+
+private struct PublicHeistStoppedResponse: FencePublicJSONResponse {
+    let status = PublicStatus.ok
+    let path: String
+    let stepCount: Int
+}
+
+private struct PublicPlaybackResponse: FencePublicJSONResponse {
+    let status: PublicStatus
+    let completedSteps: Int
+    let failedIndex: Int?
+    let totalTimingMs: Int
+    let failure: PublicPlaybackFailure?
+
+    init(completedSteps: Int, failedIndex: Int?, totalTimingMs: Int, failure: PlaybackFailure?) {
+        self.status = PublicStatus(value: failedIndex == nil ? "ok" : "error")
+        self.completedSteps = completedSteps
+        self.failedIndex = failedIndex
+        self.totalTimingMs = totalTimingMs
+        self.failure = failure.map(PublicPlaybackFailure.init)
+    }
+}
+
+private struct PublicPlaybackFailure: Encodable {
+    let command: String
+    let error: String
+    let target: PublicPlaybackTarget?
+    let actionResult: PublicActionResponse?
+    let expectation: PublicExpectationResult?
+    let interface: PublicInterface?
+
+    init(failure: PlaybackFailure) {
+        self.command = failure.step.command
+        self.error = failure.errorMessage
+        self.target = failure.step.target.map(PublicPlaybackTarget.init)
+        switch failure {
+        case .actionFailed(_, let result, let expectation, let interface):
+            self.actionResult = PublicActionResponse(result: result, expectation: nil)
+            if let expectation, !expectation.met {
+                self.expectation = PublicExpectationResult(result: expectation)
+            } else {
+                self.expectation = nil
+            }
+            self.interface = interface.map { PublicInterface(interface: $0, detail: .summary) }
+        case .fenceError(_, _, let interface), .thrown(_, _, let interface):
+            self.actionResult = nil
+            self.expectation = nil
+            self.interface = interface.map { PublicInterface(interface: $0, detail: .summary) }
+        }
+    }
+}
+
+private struct PublicPlaybackTarget: Encodable {
+    let label: String?
+    let identifier: String?
+    let value: String?
+    let traits: [String]?
+
+    init(target: ElementMatcher) {
+        self.label = target.label
+        self.identifier = target.identifier
+        self.value = target.value
+        self.traits = target.traits?.map(\.rawValue)
+    }
+}
+
+private struct PublicResponseModel: FencePublicJSONResponse {
+    let response: FenceResponse
+
+    func encode(to encoder: Encoder) throws {
+        switch response {
+        case .ok(let message):
+            try PublicOKResponse(message: message).encode(to: encoder)
+        case .error(let message, let details):
+            try PublicErrorResponse(message: message, details: details).encode(to: encoder)
+        case .help(let commands):
+            try PublicHelpResponse(commands: commands).encode(to: encoder)
+        case .status(let connected, let deviceName):
+            try PublicStatusResponse(connected: connected, device: deviceName).encode(to: encoder)
+        case .devices(let devices):
+            try PublicDevicesResponse(devices: devices).encode(to: encoder)
+        case .interface(let interface, let detail):
+            try PublicInterfaceResponse(interface: interface, detail: detail).encode(to: encoder)
+        case .action(let result, let expectation):
+            try PublicActionResponse(result: result, expectation: expectation).encode(to: encoder)
+        case .screenshot(let path, let payload, let options):
+            try PublicScreenshotResponse(
+                path: path,
+                payload: payload,
+                includePNGData: false,
+                includeInterface: options.includeInterface
+            ).encode(to: encoder)
+        case .screenshotData(let payload, let options):
+            try PublicScreenshotResponse(
+                path: nil,
+                payload: payload,
+                includePNGData: true,
+                includeInterface: options.includeInterface
+            ).encode(to: encoder)
+        case .recording(let path, let payload):
+            try PublicRecordingResponse(
+                path: path,
+                payload: payload,
+                options: RecordingResponseOptions()
+            ).encode(to: encoder)
+        case .recordingExpanded(let path, let payload, let options):
+            try PublicRecordingResponse(path: path, payload: payload, options: options).encode(to: encoder)
+        case .recordingData(let payload):
+            try PublicRecordingResponse(
+                path: nil,
+                payload: payload,
+                options: RecordingResponseOptions(inlineData: true)
+            ).encode(to: encoder)
+        case .batch(let outcomes, let totalTimingMs, let accessibilityTrace):
+            try PublicBatchResponse(
+                outcomes: outcomes,
+                totalTimingMs: totalTimingMs,
+                accessibilityTrace: accessibilityTrace
+            ).encode(to: encoder)
+        case .sessionState(let payload):
+            try PublicSessionStateResponse(payload: payload).encode(to: encoder)
+        case .targets(let targets, let defaultTarget):
+            try PublicTargetsResponse(targets: targets, defaultTarget: defaultTarget).encode(to: encoder)
+        case .sessionLog(let snapshot):
+            try PublicSessionLogResponse(snapshot: snapshot).encode(to: encoder)
+        case .archiveResult(let path, let snapshot):
+            try PublicSessionLogResponse(snapshot: snapshot, path: path).encode(to: encoder)
+        case .heistStarted:
+            try PublicHeistStartedResponse().encode(to: encoder)
+        case .heistStopped(let path, let stepCount):
+            try PublicHeistStoppedResponse(path: path, stepCount: stepCount).encode(to: encoder)
+        case .heistPlayback(let completedSteps, let failedIndex, let totalTimingMs, let failure, _):
+            try PublicPlaybackResponse(
+                completedSteps: completedSteps,
+                failedIndex: failedIndex,
+                totalTimingMs: totalTimingMs,
+                failure: failure
+            ).encode(to: encoder)
+        }
+    }
+}
+
 extension FenceResponse {
 
     // MARK: - JSON Encoding
 
+    public func jsonData(outputFormatting: JSONEncoder.OutputFormatting = [.sortedKeys]) throws -> Data {
+        do {
+            return try Self.encodePublicJSON(PublicResponseModel(response: self), outputFormatting: outputFormatting)
+        } catch {
+            return try Self.encodePublicJSON(Self.jsonEncodingFailureResponse(), outputFormatting: outputFormatting)
+        }
+    }
+
     public func jsonDict() -> [String: Any] {
-        let dict = unvalidatedJsonDict()
-        guard JSONSerialization.isValidJSONObject(dict) else {
-            return Self.jsonEncodingFailureDict()
-        }
+        guard let data = try? jsonData(outputFormatting: []),
+              let dict = try? Self.jsonObjectDictionary(from: data)
+        else { return Self.jsonEncodingFailureDict() }
         return dict
-    }
-
-    private func unvalidatedJsonDict() -> [String: Any] {
-        switch self {
-        case .ok(let message):
-            return ["status": "ok", "message": message]
-        case .error(let message, let details):
-            return errorJsonDict(message, details: details)
-        case .help(let commands):
-            return ["status": "ok", "commands": commands]
-        case .status(let connected, let deviceName):
-            var payload: [String: Any] = ["status": "ok", "connected": connected]
-            if let deviceName { payload["device"] = deviceName }
-            return payload
-        case .devices(let devices):
-            return devicesJsonDict(devices)
-        case .interface(let interface, let detail):
-            return interfaceJsonDict(interface, detail: detail)
-        case .action(let result, let expectation):
-            return actionWithExpectationJsonDict(result, expectation: expectation)
-        case .screenshot(let path, let payload, let options):
-            var dict = screenJsonDict(payload, includePNGData: false, includeInterface: options.includeInterface)
-            dict["path"] = path
-            return dict
-        case .screenshotData(let payload, let options):
-            return screenJsonDict(payload, includePNGData: true, includeInterface: options.includeInterface)
-        case .recording(let path, let payload):
-            return recordingJsonDict(path: path, payload: payload, options: RecordingResponseOptions())
-        case .recordingExpanded(let path, let payload, let options):
-            return recordingJsonDict(path: path, payload: payload, options: options)
-        case .recordingData(let payload):
-            return recordingDataJsonDict(payload)
-        case .batch(let outcomes, let totalTimingMs, let accessibilityTrace):
-            return batchJsonDict(
-                outcomes: outcomes,
-                totalTimingMs: totalTimingMs,
-                accessibilityTrace: accessibilityTrace
-            )
-        case .sessionState(let payload):
-            return sessionStateJsonDict(payload)
-        case .targets(let targets, let defaultTarget):
-            var info: [String: [String: Any]] = [:]
-            for (name, target) in targets {
-                var entry: [String: Any] = ["device": target.device]
-                if target.token != nil { entry["hasToken"] = true }
-                info[name] = entry
-            }
-            var result: [String: Any] = ["status": "ok", "targets": info]
-            if let defaultTarget { result["default"] = defaultTarget }
-            return result
-        case .sessionLog(let snapshot):
-            return sessionLogJsonDict(snapshot)
-        case .archiveResult(let path, let snapshot):
-            var dict = sessionLogJsonDict(snapshot)
-            dict["path"] = path
-            return dict
-        case .heistStarted:
-            return ["status": "ok", "recording": true]
-        case .heistStopped(let path, let stepCount):
-            return ["status": "ok", "path": path, "stepCount": stepCount]
-        case .heistPlayback(let completedSteps, let failedIndex, let totalTimingMs, let failure, _):
-            var dict: [String: Any] = [
-                "status": failedIndex == nil ? "ok" : "error",
-                "completedSteps": completedSteps,
-                "totalTimingMs": totalTimingMs,
-            ]
-            if let failedIndex { dict["failedIndex"] = failedIndex }
-            if let failure {
-                dict["failure"] = playbackFailureDict(failure)
-            }
-            return dict
-        }
-    }
-
-    private static func jsonEncodingFailureDict() -> [String: Any] {
-        [
-            "status": "error",
-            "message": "Failed to encode JSON response: response contained non-JSON values",
-            "errorCode": "formatting.json_encoding_failed",
-            "phase": FailurePhase.client.rawValue,
-            "retryable": false,
-            "hint": "Report this diagnostic with the command that produced it.",
-        ]
-    }
-
-    private func screenJsonDict(
-        _ payload: ScreenPayload,
-        includePNGData: Bool,
-        includeInterface: Bool
-    ) -> [String: Any] {
-        var dict: [String: Any] = [
-            "status": "ok",
-            "width": payload.width,
-            "height": payload.height,
-        ]
-        if includePNGData {
-            dict["pngData"] = payload.pngData
-        }
-        if includeInterface {
-            dict["interface"] = interfaceDictionary(payload.interface, detail: .full)
-        }
-        return dict
-    }
-
-    private func playbackFailureDict(_ failure: PlaybackFailure) -> [String: Any] {
-        var dict: [String: Any] = [
-            "command": failure.step.command,
-            "error": failure.errorMessage,
-        ]
-        if let target = failure.step.target {
-            var targetDict: [String: Any] = [:]
-            if let label = target.label { targetDict["label"] = label }
-            if let identifier = target.identifier { targetDict["identifier"] = identifier }
-            if let value = target.value { targetDict["value"] = value }
-            if let traits = target.traits { targetDict["traits"] = traits.map(\.rawValue) }
-            dict["target"] = targetDict
-        }
-        switch failure {
-        case .actionFailed(_, let result, let expectation, let interface):
-            dict["actionResult"] = actionJsonDict(result)
-            if let expectation, !expectation.met {
-                dict["expectation"] = Self.expectationResultDict(expectation)
-            }
-            if let interface {
-                dict["interface"] = interfaceDictionary(interface, detail: .summary)
-            }
-        case .fenceError(_, _, let interface), .thrown(_, _, let interface):
-            if let interface {
-                dict["interface"] = interfaceDictionary(interface, detail: .summary)
-            }
-        }
-        return dict
-    }
-
-    private func errorJsonDict(_ message: String, details: FailureDetails?) -> [String: Any] {
-        var dict: [String: Any] = [
-            "status": "error",
-            "message": message,
-        ]
-        if let details {
-            dict["errorCode"] = details.errorCode
-            dict["phase"] = details.phase.rawValue
-            dict["retryable"] = details.retryable
-            if let hint = details.hint {
-                dict["hint"] = hint
-            }
-        }
-        return dict
-    }
-
-    private func sessionLogJsonDict(_ snapshot: SessionLogSnapshot) -> [String: Any] {
-        let manifest = snapshot.manifest
-        let formatter = ISO8601DateFormatter()
-        var dict: [String: Any] = [
-            "status": "ok",
-            "formatVersion": manifest.formatVersion,
-            "sessionId": manifest.sessionId,
-            "startTime": formatter.string(from: manifest.startTime),
-            "commandCount": snapshot.counts.commandCount,
-            "errorCount": snapshot.counts.errorCount,
-            "artifactCount": snapshot.artifacts.count,
-        ]
-        if let endTime = manifest.endTime {
-            dict["endTime"] = formatter.string(from: endTime)
-        }
-        if snapshot.projectionStatus.isDegraded {
-            dict["projectionStatus"] = projectionStatusJsonDict(snapshot.projectionStatus)
-        }
-        dict["artifacts"] = snapshot.artifacts.map { artifact -> [String: Any] in
-            var entry: [String: Any] = [
-                "type": artifact.type.rawValue,
-                "path": artifact.path,
-                "size": artifact.size,
-                "timestamp": formatter.string(from: artifact.timestamp),
-                "command": artifact.command,
-            ]
-            if !artifact.metadata.isEmpty {
-                entry["metadata"] = artifact.metadata
-            }
-            return entry
-        }
-        return dict
-    }
-
-    private func projectionStatusJsonDict(_ status: SessionLogProjectionStatus) -> [String: Any] {
-        var dict: [String: Any] = [
-            "degraded": true,
-            "malformedLineCount": status.malformedLineCount,
-            "malformedArtifactCount": status.malformedArtifactCount,
-        ]
-        if let firstMalformedLineNumber = status.firstMalformedLineNumber {
-            dict["firstMalformedLineNumber"] = firstMalformedLineNumber
-        }
-        if let firstMalformedLineCause = status.firstMalformedLineCause {
-            dict["firstMalformedLineCause"] = firstMalformedLineCause
-        }
-        return dict
-    }
-
-    private func interfaceJsonDict(
-        _ interface: Interface, detail: InterfaceDetail
-    ) -> [String: Any] {
-        [
-            "status": "ok",
-            "detail": detail.rawValue,
-            "interface": interfaceDictionary(interface, detail: detail),
-        ]
-    }
-
-    private func actionWithExpectationJsonDict(
-        _ result: ActionResult, expectation: ExpectationResult?
-    ) -> [String: Any] {
-        var dict = actionJsonDict(result)
-        if let expectation {
-            dict["expectation"] = Self.expectationResultDict(expectation)
-            if !expectation.met {
-                dict["status"] = "expectation_failed"
-            }
-        }
-        return dict
-    }
-
-    private func batchJsonDict(
-        outcomes: [BatchStepOutcome],
-        totalTimingMs: Int,
-        accessibilityTrace: AccessibilityTrace?
-    ) -> [String: Any] {
-        let failedIndex = outcomes.stoppedFailedIndex
-        let checked = outcomes.expectationsChecked
-        let met = outcomes.expectationsMet
-        let stepSummaries = outcomes.stepSummaries
-        var dict: [String: Any] = [
-            "status": failedIndex == nil ? "ok" : "partial",
-            "results": outcomes.jsonResultRows,
-            "completedSteps": outcomes.completedStepCount,
-            "totalTimingMs": totalTimingMs,
-        ]
-        if let failedIndex { dict["failedIndex"] = failedIndex }
-        if checked > 0 {
-            dict["expectations"] = [
-                "checked": checked,
-                "met": met,
-                "allMet": checked == met,
-            ]
-        }
-        if !stepSummaries.isEmpty {
-            dict["stepSummaries"] = stepSummaries.enumerated().map { index, summary in
-                Self.stepSummaryDict(index: index, summary: summary)
-            }
-        }
-        if let netDelta = accessibilityTrace?.meaningfulCaptureEndpointDelta {
-            dict["netDelta"] = deltaDictionary(netDelta)
-        }
-        return dict
-    }
-
-    private func sessionStateJsonDict(_ payload: SessionStatePayload) -> [String: Any] {
-        var dict: [String: Any] = [
-            "status": "ok",
-            "connected": payload.connected,
-            "phase": payload.phase.rawValue,
-            "isRecording": payload.isRecording,
-            "actionTimeoutSeconds": payload.actionTimeoutSeconds,
-            "longActionTimeoutSeconds": payload.longActionTimeoutSeconds,
-        ]
-        if let device = payload.device {
-            dict["deviceName"] = device.deviceName
-            dict["appName"] = device.appName
-            dict["connectionType"] = device.connectionType.rawValue
-            if let shortId = device.shortId {
-                dict["shortId"] = shortId
-            }
-        }
-        if let failure = payload.lastFailure {
-            var failurePayload: [String: Any] = [
-                "errorCode": failure.errorCode,
-                "phase": failure.phase.rawValue,
-                "retryable": failure.retryable,
-            ]
-            if let message = failure.message {
-                failurePayload["message"] = message
-            }
-            if let hint = failure.hint {
-                failurePayload["hint"] = hint
-            }
-            dict["lastFailure"] = failurePayload
-        }
-        if let lastAction = payload.lastAction {
-            var lastActionPayload: [String: Any] = [
-                "method": lastAction.method.rawValue,
-                "success": lastAction.success,
-                "latency_ms": lastAction.latencyMs,
-            ]
-            if let message = lastAction.message {
-                lastActionPayload["message"] = message
-            }
-            dict["lastAction"] = lastActionPayload
-        }
-        return dict
-    }
-
-    private static func stepSummaryDict(index: Int, summary: BatchStepSummary) -> [String: Any] {
-        var entry: [String: Any] = ["index": index, "command": summary.command]
-        if let kind = summary.deltaKind { entry["deltaKind"] = kind }
-        if let screen = summary.screenName { entry["screenName"] = screen }
-        if let screenId = summary.screenId { entry["screenId"] = screenId }
-        if let met = summary.expectationMet { entry["expectationMet"] = met }
-        if let count = summary.elementCount { entry["elementCount"] = count }
-        if let error = summary.error { entry["error"] = error }
-        if let errorCode = summary.errorCode { entry["errorCode"] = errorCode }
-        if let phase = summary.phase { entry["phase"] = phase }
-        if let nextCommand = summary.nextCommand { entry["nextCommand"] = nextCommand }
-        return entry
-    }
-
-    private func devicesJsonDict(_ devices: [DiscoveredDevice]) -> [String: Any] {
-        let info = devices.map { device -> [String: Any] in
-            var payload: [String: Any] = [
-                "name": device.name,
-                "appName": device.appName,
-                "deviceName": device.deviceName,
-                "connectionType": device.connectionType.rawValue,
-            ]
-            if let shortId = device.shortId { payload["shortId"] = shortId }
-            if let simulatorUDID = device.simulatorUDID { payload["simulatorUDID"] = simulatorUDID }
-            return payload
-        }
-        return ["status": "ok", "devices": info]
-    }
-
-    private func actionJsonDict(_ result: ActionResult) -> [String: Any] {
-        var payload: [String: Any] = [
-            "status": result.success ? "ok" : "error",
-            "method": result.method.rawValue,
-        ]
-        if let message = result.message { payload["message"] = message }
-        if case .value(let value) = result.payload { payload["value"] = value }
-        if case .rotor(let search) = result.payload {
-            var rotor: [String: Any] = [
-                "name": search.rotor,
-                "direction": search.direction.rawValue,
-            ]
-            if let foundElement = search.foundElement {
-                rotor["foundElement"] = elementDictionary(foundElement, detail: .summary)
-            }
-            if let textRange = search.textRange {
-                var range: [String: Any] = [
-                    "rangeDescription": textRange.rangeDescription,
-                ]
-                if let text = textRange.text { range["text"] = text }
-                if let startOffset = textRange.startOffset { range["startOffset"] = startOffset }
-                if let endOffset = textRange.endOffset { range["endOffset"] = endOffset }
-                rotor["textRange"] = range
-            }
-            payload["rotor"] = rotor
-        }
-        if result.animating == true { payload["animating"] = true }
-        if let delta = result.accessibilityDelta {
-            payload["delta"] = deltaDictionary(delta)
-        }
-
-        if let screenName = result.screenName { payload["screenName"] = screenName }
-        if let screenId = result.screenId { payload["screenId"] = screenId }
-
-        if case .explore(let explore) = result.payload {
-            payload["explore"] = [
-                "elementCount": explore.elementCount,
-                "scrollCount": explore.scrollCount,
-                "containersExplored": explore.containersExplored,
-                "explorationTime": String(format: "%.2f", explore.explorationTime),
-            ] as [String: Any]
-        }
-
-        if !result.success {
-            payload["errorClass"] = Self.actionErrorClass(result)
-            if let details = Self.actionFailureDetails(result) {
-                payload["errorCode"] = details.errorCode
-                payload["phase"] = details.phase.rawValue
-                payload["retryable"] = details.retryable
-                if let hint = details.hint {
-                    payload["hint"] = hint
-                }
-            }
-        }
-
-        return payload
     }
 
     static func expectationResultDict(_ result: ExpectationResult) -> [String: Any] {
@@ -419,397 +1044,49 @@ extension FenceResponse {
         return dict
     }
 
-    private static func actionErrorClass(_ result: ActionResult) -> String {
-        (result.errorKind ?? .actionFailed).rawValue
+    private static func encodePublicJSON<T: Encodable>(
+        _ response: T,
+        outputFormatting: JSONEncoder.OutputFormatting
+    ) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = outputFormatting
+        encoder.dateEncodingStrategy = .iso8601
+        return try encoder.encode(response)
     }
 
-    private func recordingJsonDict(
-        path: String?,
-        payload: RecordingPayload,
-        options: RecordingResponseOptions
-    ) -> [String: Any] {
-        var dict: [String: Any] = [
-            "status": "ok",
-            "width": payload.width,
-            "height": payload.height,
-            "duration": payload.duration,
-            "frameCount": payload.frameCount,
-            "fps": payload.fps,
-            "stopReason": payload.stopReason.rawValue,
-            "interactionCount": payload.interactionLog?.count ?? 0,
-        ]
-        if let path {
-            dict["path"] = path
-        }
-        if options.inlineData {
-            dict["videoData"] = payload.videoData
-        }
-        if options.includeInteractionLog, let logDicts = encodeInteractionLog(payload.interactionLog) {
-            dict["interactionLog"] = logDicts
+    private static func jsonObjectDictionary(from data: Data) throws -> [String: Any] {
+        guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw EncodingError.invalidValue(
+                String(data: data, encoding: .utf8) ?? "<non-utf8>",
+                EncodingError.Context(
+                    codingPath: [],
+                    debugDescription: "Encoded public JSON response was not an object"
+                )
+            )
         }
         return dict
     }
 
-    private func recordingDataJsonDict(_ payload: RecordingPayload) -> [String: Any] {
-        recordingJsonDict(
-            path: nil,
-            payload: payload,
-            options: RecordingResponseOptions(inlineData: true)
+    private static func jsonEncodingFailureDict() -> [String: Any] {
+        [
+            "status": "error",
+            "message": "Failed to encode JSON response: response contained non-JSON values",
+            "errorCode": "formatting.json_encoding_failed",
+            "phase": FailurePhase.client.rawValue,
+            "retryable": false,
+            "hint": "Report this diagnostic with the command that produced it.",
+        ]
+    }
+
+    private static func jsonEncodingFailureResponse() -> PublicErrorResponse {
+        PublicErrorResponse(
+            message: "Failed to encode JSON response: response contained non-JSON values",
+            details: FailureDetails(
+                errorCode: "formatting.json_encoding_failed",
+                phase: .client,
+                retryable: false,
+                hint: "Report this diagnostic with the command that produced it."
+            )
         )
-    }
-
-    private func encodeInteractionLog(_ events: [InteractionEvent]?) -> [[String: Any]]? {
-        guard let events, !events.isEmpty else { return nil }
-        do {
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
-            let data = try encoder.encode(events)
-            guard let array = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-                logger.warning("Interaction log serialized to non-array JSON")
-                return nil
-            }
-            return array
-        } catch {
-            logger.warning("Failed to encode interaction log: \(error.localizedDescription)")
-            return nil
-        }
-    }
-
-    // MARK: - JSON Dictionary Helpers
-
-    private func interfaceDictionary(_ interface: Interface, detail: InterfaceDetail = .full) -> [String: Any] {
-        let formatter = ISO8601DateFormatter()
-        var payload: [String: Any] = [
-            "timestamp": formatter.string(from: interface.timestamp),
-            "tree": interfaceTreeDictionaries(interface, detail: detail)
-        ]
-        payload["screenDescription"] = interface.screenDescription
-        if let screenId = interface.screenId { payload["screenId"] = screenId }
-        payload["navigation"] = navigationDictionary(interface.navigation)
-        return payload
-    }
-
-    private func interfaceTreeDictionaries(_ interface: Interface, detail: InterfaceDetail) -> [[String: Any]] {
-        let counter = IndexCounter()
-        let elementAnnotations = interface.annotations.elementByPath
-        let containerAnnotations = interface.annotations.containerByPath
-        return interface.tree.enumerated().map { index, node in
-            nodeDictionary(
-                node,
-                path: TreePath([index]),
-                detail: detail,
-                counter: counter,
-                elementAnnotations: elementAnnotations,
-                containerAnnotations: containerAnnotations
-            )
-        }
-    }
-
-    /// Reference-typed leaf counter so a single counter threads through the
-    /// `folded()` recursion without needing inout state in the closures.
-    private final class IndexCounter {
-        var value: Int = 0
-    }
-
-    /// Recursive projection over the parser hierarchy. The tree stays
-    /// `AccessibilityHierarchy`; Button Heist metadata is attached from capture
-    /// annotations at formatting time.
-    private func nodeDictionary(
-        _ node: AccessibilityHierarchy,
-        path: TreePath,
-        detail: InterfaceDetail,
-        counter: IndexCounter?,
-        elementAnnotations: [TreePath: InterfaceElementAnnotation],
-        containerAnnotations: [TreePath: InterfaceContainerAnnotation]
-    ) -> [String: Any] {
-        switch node {
-        case .element(let element, _):
-            let projected = HeistElement(
-                accessibilityElement: element,
-                annotation: elementAnnotations[path]
-            )
-            var payload = elementDictionary(projected, detail: detail)
-            if let counter {
-                payload["order"] = counter.value
-                counter.value += 1
-            }
-            return ["element": payload]
-
-        case .container(let container, let children):
-            var payload = containerDictionary(
-                container,
-                annotation: containerAnnotations[path],
-                detail: detail
-            )
-            payload["children"] = children.enumerated().map { index, child in
-                nodeDictionary(
-                    child,
-                    path: path.appending(index),
-                    detail: detail,
-                    counter: counter,
-                    elementAnnotations: elementAnnotations,
-                    containerAnnotations: containerAnnotations
-                )
-            }
-            return ["container": payload]
-        }
-    }
-
-    private func navigationDictionary(_ navigation: NavigationContext) -> [String: Any] {
-        var payload: [String: Any] = [:]
-        if let screenTitle = navigation.screenTitle { payload["screenTitle"] = screenTitle }
-        if let backButton = navigation.backButton {
-            var entry: [String: Any] = ["heistId": backButton.heistId]
-            if let label = backButton.label { entry["label"] = label }
-            if let value = backButton.value { entry["value"] = value }
-            payload["backButton"] = entry
-        }
-        if let tabBarItems = navigation.tabBarItems {
-            payload["tabBarItems"] = tabBarItems.map { tab in
-                var entry: [String: Any] = ["heistId": tab.heistId]
-                if let label = tab.label { entry["label"] = label }
-                if let value = tab.value { entry["value"] = value }
-                if tab.selected { entry["selected"] = true }
-                return entry
-            }
-        }
-        return payload
-    }
-
-    /// JSON shape for a single element.
-    ///
-    /// Summary keeps the identity fields (heistId, label, value, identifier,
-    /// traits, meaningful actions) and drops the heavy fields. Full adds the
-    /// heavy semantic fields (`hint`, `customContent`) and geometry
-    /// (`frame*`, `activationPoint*`). The MCP tool description promises
-    /// "summary (default, no geometry)" — agents that ask for summary expect
-    /// thin payloads suitable for repeated polling, not the full semantic
-    /// surface area.
-    private func elementDictionary(_ element: HeistElement, detail: InterfaceDetail = .full) -> [String: Any] {
-        var payload: [String: Any] = [
-            "heistId": element.heistId,
-            "traits": element.traits.map(\.rawValue),
-        ]
-        // Only include non-obvious actions (activate is implied by button trait)
-        let meaningfulActions = Self.meaningfulActions(element)
-        if !meaningfulActions.isEmpty {
-            payload["actions"] = meaningfulActions.map(\.description)
-        }
-        if let rotors = element.rotors, !rotors.isEmpty {
-            payload["rotors"] = rotors.map(\.name)
-        }
-        if let label = element.label { payload["label"] = label }
-        if let value = element.value { payload["value"] = value }
-        if let identifier = element.identifier { payload["identifier"] = identifier }
-
-        // Heavy semantic fields and geometry are full-detail only.
-        if detail == .full {
-            if let hint = element.hint { payload["hint"] = hint }
-            if let customContent = element.customContent {
-                let important = customContent.filter(\.isImportant)
-                let defaultContent = customContent.filter { !$0.isImportant }
-                var content: [String: Any] = [:]
-                if !important.isEmpty {
-                    content["important"] = important.map(Self.customContentEntry)
-                }
-                if !defaultContent.isEmpty {
-                    content["default"] = defaultContent.map(Self.customContentEntry)
-                }
-                payload["customContent"] = content
-            }
-            payload["frameX"] = element.frameX
-            payload["frameY"] = element.frameY
-            payload["frameWidth"] = element.frameWidth
-            payload["frameHeight"] = element.frameHeight
-            payload["activationPointX"] = element.activationPointX
-            payload["activationPointY"] = element.activationPointY
-        }
-        return payload
-    }
-
-    private static func customContentEntry(_ item: HeistCustomContent) -> [String: String] {
-        var entry: [String: String] = [:]
-        if !item.label.isEmpty { entry["label"] = item.label }
-        if !item.value.isEmpty { entry["value"] = item.value }
-        return entry
-    }
-
-    /// Delta payloads serialize inserted subtrees at summary detail (no
-    /// geometry, no heavy semantics) and never carry traversal-order indices.
-    private func deltaNodeDictionary(_ insertion: TreeInsertion) -> [String: Any] {
-        nodeDictionary(
-            insertion.node,
-            path: .root,
-            detail: .summary,
-            counter: nil,
-            elementAnnotations: insertion.annotations.elementByPath,
-            containerAnnotations: insertion.annotations.containerByPath
-        )
-    }
-
-    private func containerDictionary(
-        _ container: AccessibilityContainer,
-        annotation: InterfaceContainerAnnotation?,
-        detail: InterfaceDetail
-    ) -> [String: Any] {
-        var payload: [String: Any] = [:]
-        switch container.type {
-        case .semanticGroup(let label, let value, let identifier):
-            payload["type"] = "semanticGroup"
-            if let label { payload["label"] = label }
-            if let value { payload["value"] = value }
-            if let identifier { payload["identifier"] = identifier }
-        case .list:
-            payload["type"] = "list"
-        case .landmark:
-            payload["type"] = "landmark"
-        case .dataTable(let rowCount, let columnCount):
-            payload["type"] = "dataTable"
-            payload["rowCount"] = rowCount
-            payload["columnCount"] = columnCount
-        case .tabBar:
-            payload["type"] = "tabBar"
-        case .scrollable(let contentSize):
-            payload["type"] = "scrollable"
-            payload["contentWidth"] = sanitizedDouble(contentSize.width)
-            payload["contentHeight"] = sanitizedDouble(contentSize.height)
-        }
-        if container.isModalBoundary {
-            payload["isModalBoundary"] = true
-        }
-        if let stableId = annotation?.stableId {
-            payload["stableId"] = stableId
-        }
-        if detail == .full {
-            payload["frameX"] = sanitizedDouble(container.frame.origin.x)
-            payload["frameY"] = sanitizedDouble(container.frame.origin.y)
-            payload["frameWidth"] = sanitizedDouble(container.frame.size.width)
-            payload["frameHeight"] = sanitizedDouble(container.frame.size.height)
-        }
-        return payload
-    }
-
-    private func sanitizedDouble(_ value: CGFloat) -> Double {
-        value.isFinite ? Double(value) : 0
-    }
-
-    /// Delta dictionaries are always summary-level — geometry changes are filtered out.
-    /// Callers who need full geometry should use `get_interface --detail full`.
-    private func deltaDictionary(_ delta: AccessibilityTrace.Delta) -> [String: Any] {
-        var payload: [String: Any] = [
-            "kind": delta.kindRawValue,
-            "elementCount": delta.elementCount,
-        ]
-        if let captureEdge = delta.captureEdge {
-            payload["captureEdge"] = captureEdgeDictionary(captureEdge)
-        }
-        let transient = delta.transient
-        if !transient.isEmpty {
-            payload["transient"] = transient.map { elementDictionary($0, detail: .summary) }
-        }
-        switch delta {
-        case .noChange:
-            break
-        case .elementsChanged(let casePayload):
-            if !casePayload.edits.isEmpty {
-                var editsDict: [String: Any] = [:]
-                mergeEditDictionary(casePayload.edits, into: &editsDict)
-                if !editsDict.isEmpty {
-                    payload["edits"] = editsDict
-                }
-            }
-        case .screenChanged(let casePayload):
-            payload["newInterface"] = interfaceDictionary(casePayload.newInterface, detail: .summary)
-        }
-        return payload
-    }
-
-    private func captureEdgeDictionary(_ edge: AccessibilityTrace.CaptureEdge) -> [String: Any] {
-        [
-            "before": captureRefDictionary(edge.before),
-            "after": captureRefDictionary(edge.after),
-        ]
-    }
-
-    private func captureRefDictionary(_ ref: AccessibilityTrace.CaptureRef) -> [String: Any] {
-        [
-            "sequence": ref.sequence,
-            "hash": ref.hash,
-        ]
-    }
-
-    private func mergeEditDictionary(_ edits: ElementEdits, into payload: inout [String: Any]) {
-        if !edits.added.isEmpty {
-            payload["added"] = edits.added.map { elementDictionary($0, detail: .summary) }
-        }
-        if !edits.removed.isEmpty {
-            payload["removed"] = edits.removed
-        }
-        if !edits.updated.isEmpty {
-            // Omit geometry changes (frame/activationPoint) — layout shifts are structural noise
-            let filtered: [ElementUpdate] = edits.updated.compactMap { update in
-                let meaningful = update.changes.filter { !$0.property.isGeometry }
-                return meaningful.isEmpty ? nil : ElementUpdate(heistId: update.heistId, changes: meaningful)
-            }
-            if !filtered.isEmpty {
-                payload["updated"] = filtered.map { update -> [String: Any] in
-                    [
-                        "heistId": update.heistId,
-                        "changes": update.changes.map { change -> [String: Any] in
-                            var entry: [String: Any] = ["property": change.property.rawValue]
-                            if let old = change.old { entry["old"] = old }
-                            if let new = change.new { entry["new"] = new }
-                            return entry
-                        },
-                    ]
-                }
-            }
-        }
-        if !edits.treeInserted.isEmpty {
-            payload["treeInserted"] = edits.treeInserted.map(treeInsertionDictionary)
-        }
-        if !edits.treeRemoved.isEmpty {
-            payload["treeRemoved"] = edits.treeRemoved.map(treeRemovalDictionary)
-        }
-        if !edits.treeMoved.isEmpty {
-            payload["treeMoved"] = edits.treeMoved.map(treeMoveDictionary)
-        }
-    }
-
-    private func treeInsertionDictionary(_ insertion: TreeInsertion) -> [String: Any] {
-        [
-            "location": treeLocationDictionary(insertion.location),
-            "node": deltaNodeDictionary(insertion),
-        ]
-    }
-
-    private func treeRemovalDictionary(_ removal: TreeRemoval) -> [String: Any] {
-        [
-            "ref": treeNodeRefDictionary(removal.ref),
-            "location": treeLocationDictionary(removal.location),
-        ]
-    }
-
-    private func treeMoveDictionary(_ move: TreeMove) -> [String: Any] {
-        [
-            "ref": treeNodeRefDictionary(move.ref),
-            "from": treeLocationDictionary(move.from),
-            "to": treeLocationDictionary(move.to),
-        ]
-    }
-
-    private func treeNodeRefDictionary(_ ref: TreeNodeRef) -> [String: Any] {
-        [
-            "id": ref.id,
-            "kind": ref.kind.rawValue,
-        ]
-    }
-
-    private func treeLocationDictionary(_ location: TreeLocation) -> [String: Any] {
-        var payload: [String: Any] = ["index": location.index]
-        if let parentId = location.parentId {
-            payload["parentId"] = parentId
-        }
-        return payload
     }
 }

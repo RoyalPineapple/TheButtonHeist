@@ -240,6 +240,9 @@ final class TheGetaway {
         let markAuth: @Sendable (Int) async -> Void = { clientId in
             await server.markAuthenticated(clientId)
         }
+        let markApprovalPending: @Sendable (Int) async -> Void = { clientId in
+            await server.markApprovalPending(clientId)
+        }
         let disconnect: @Sendable (Int) async -> Void = { clientId in
             await server.disconnect(clientId: clientId)
         }
@@ -264,6 +267,7 @@ final class TheGetaway {
         await muscle.installCallbacks(
             sendToClient: sendToClient,
             markClientAuthenticated: markAuth,
+            markClientAwaitingApproval: markApprovalPending,
             disconnectClient: disconnect,
             onClientAuthenticated: onAuthenticated,
             onSessionActiveChanged: onSessionActiveChanged

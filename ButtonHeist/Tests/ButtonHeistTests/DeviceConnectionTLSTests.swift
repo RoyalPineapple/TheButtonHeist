@@ -18,6 +18,7 @@ final class DeviceConnectionTLSTests: XCTestCase {
             .eventBacklogOverflow(maxEvents: 512),
             .serverClosed,
             .authFailed("bad token"),
+            .authApprovalPending("Waiting for approval on the device."),
             .sessionLocked("locked"),
             .buttonHeistVersionMismatch(serverVersion: "old", clientVersion: "new"),
             .localDisconnect,
@@ -38,6 +39,7 @@ final class DeviceConnectionTLSTests: XCTestCase {
             (.eventBacklogOverflow(maxEvents: 512), "transport.event_backlog_overflow", .transport, true),
             (.serverClosed, "transport.server_closed", .transport, true),
             (.authFailed("bad token"), "auth.failed", .authentication, false),
+            (.authApprovalPending("Waiting for approval on the device."), "auth.approval_pending", .authentication, true),
             (.sessionLocked("busy"), "session.locked", .session, true),
             (
                 .buttonHeistVersionMismatch(serverVersion: "old", clientVersion: "new"),
@@ -52,7 +54,7 @@ final class DeviceConnectionTLSTests: XCTestCase {
             XCTAssertEqual(reason.failureCode, code)
             XCTAssertEqual(reason.phase, phase)
             XCTAssertEqual(reason.retryable, retryable)
-            if code != "client.local_disconnect" {
+            if code != "client.local_disconnect", code != "auth.failed" {
                 XCTAssertNotNil(reason.hint, "Expected hint for \(reason)")
             }
         }

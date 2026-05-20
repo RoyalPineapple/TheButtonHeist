@@ -269,7 +269,7 @@ final class TheFenceTests: XCTestCase {
         XCTAssertEqual(json["errorCode"] as? String, "auth.failed")
         XCTAssertEqual(json["phase"] as? String, "auth")
         XCTAssertEqual(json["retryable"] as? Bool, false)
-        XCTAssertEqual(json["hint"] as? String, "Retry without --token to request a fresh session.")
+        XCTAssertNil(json["hint"])
     }
 
     func testAuthFailureHintPreservesConfiguredTokenRemediation() {
@@ -498,6 +498,35 @@ final class TheFenceTests: XCTestCase {
         XCTAssertNotNil(customContent?["important"])
         XCTAssertNotNil(customContent?["default"])
         XCTAssertEqual(nestedElement["frameY"] as? Double, 44)
+    }
+
+    func testInterfacePublicJSONDataMatchesJsonDictModel() throws {
+        let element = HeistElement(
+            heistId: "receipt_total",
+            description: "Total $12.34",
+            label: "Total",
+            value: "$12.34",
+            identifier: "total",
+            traits: [.staticText],
+            frameX: 12,
+            frameY: 680,
+            frameWidth: 240,
+            frameHeight: 32,
+            actions: []
+        )
+        let response = FenceResponse.interface(makeReceiptTestInterface([element]), detail: .summary)
+
+        let encoded = try Self.jsonObject(from: response.jsonData())
+        let dict = response.jsonDict()
+
+        XCTAssertEqual(encoded["status"] as? String, dict["status"] as? String)
+        XCTAssertEqual(encoded["detail"] as? String, "summary")
+        let interface = try XCTUnwrap(encoded["interface"] as? [String: Any])
+        XCTAssertNil(interface["elements"])
+        let tree = try XCTUnwrap(interface["tree"] as? [[String: Any]])
+        let node = try XCTUnwrap(tree.first?["element"] as? [String: Any])
+        XCTAssertEqual(node["heistId"] as? String, "receipt_total")
+        XCTAssertNil(node["frameY"])
     }
 
     func testCompactInterfaceUsesTreeAndSemanticFields() {
@@ -765,6 +794,26 @@ final class TheFenceTests: XCTestCase {
         XCTAssertNil(json["expectation"])
     }
 
+    func testActionSuccessPublicJSONDataMatchesJsonDictModel() throws {
+        let result = ActionResult(
+            success: true,
+            method: .getPasteboard,
+            payload: .value("copied"),
+            screenName: "Receipt",
+            screenId: "receipt"
+        )
+        let response = FenceResponse.action(result: result)
+
+        let encoded = try Self.jsonObject(from: response.jsonData())
+        let dict = response.jsonDict()
+
+        XCTAssertEqual(encoded["status"] as? String, dict["status"] as? String)
+        XCTAssertEqual(encoded["method"] as? String, "getPasteboard")
+        XCTAssertEqual(encoded["value"] as? String, "copied")
+        XCTAssertEqual(encoded["screenId"] as? String, "receipt")
+        XCTAssertNil(encoded["errorClass"])
+    }
+
     func testTreeUnavailableActionJSONIncludesLocalDiagnosticDetails() {
         let result = ActionResult(
             success: false,
@@ -782,6 +831,25 @@ final class TheFenceTests: XCTestCase {
         XCTAssertEqual(json["phase"] as? String, "request")
         XCTAssertEqual(json["retryable"] as? Bool, true)
         XCTAssertTrue((json["hint"] as? String)?.contains("traversable app window") == true)
+    }
+
+    func testActionFailurePublicJSONDataMatchesJsonDictModel() throws {
+        let result = ActionResult(
+            success: false,
+            method: .waitFor,
+            message: "Could not access accessibility tree: no traversable app windows",
+            errorKind: .actionFailed
+        )
+        let response = FenceResponse.action(result: result)
+
+        let encoded = try Self.jsonObject(from: response.jsonData())
+        let dict = response.jsonDict()
+
+        XCTAssertEqual(encoded["status"] as? String, dict["status"] as? String)
+        XCTAssertEqual(encoded["errorClass"] as? String, "actionFailed")
+        XCTAssertEqual(encoded["errorCode"] as? String, "request.accessibility_tree_unavailable")
+        XCTAssertEqual(encoded["phase"] as? String, "request")
+        XCTAssertEqual(encoded["retryable"] as? Bool, true)
     }
 
     func testTreeUnavailableActionWithNilErrorKindStillUsesLocalDiagnosticDetails() {
@@ -977,6 +1045,72 @@ final class TheFenceTests: XCTestCase {
         XCTAssertEqual(lastAction["success"] as? Bool, true)
         XCTAssertEqual(lastAction["latency_ms"] as? Int, 17)
         XCTAssertNil(lastAction["message"])
+    }
+
+    func testSessionStatePublicJSONDataMatchesJsonDictModel() throws {
+        let response = FenceResponse.sessionState(payload: SessionStatePayload(
+            connected: false,
+            phase: .failed,
+            device: nil,
+            isRecording: true,
+            actionTimeoutSeconds: 3,
+            longActionTimeoutSeconds: 9,
+            lastFailure: SessionFailurePayload(
+                errorCode: "connection.failed",
+                phase: .transport,
+                retryable: true,
+                message: "Connection dropped",
+                hint: "Reconnect"
+            ),
+            lastAction: nil
+        ))
+
+        let encoded = try Self.jsonObject(from: response.jsonData())
+        let dict = response.jsonDict()
+
+        XCTAssertEqual(encoded["status"] as? String, dict["status"] as? String)
+        XCTAssertEqual(encoded["phase"] as? String, "failed")
+        XCTAssertEqual(encoded["isRecording"] as? Bool, true)
+        let failure = try XCTUnwrap(encoded["lastFailure"] as? [String: Any])
+        XCTAssertEqual(failure["errorCode"] as? String, "connection.failed")
+        XCTAssertEqual(failure["phase"] as? String, "transport")
+        XCTAssertEqual(failure["retryable"] as? Bool, true)
+    }
+
+    func testRecordingPublicJSONDataMatchesJsonDictModel() throws {
+        let start = Date(timeIntervalSince1970: 0)
+        let payload = RecordingPayload(
+            videoData: Data("video".utf8).base64EncodedString(),
+            width: 390,
+            height: 844,
+            duration: 2.0,
+            frameCount: 16,
+            fps: 8,
+            startTime: start,
+            endTime: start.addingTimeInterval(2.0),
+            stopReason: .manual,
+            interactionLog: [
+                InteractionEvent(
+                    timestamp: 0,
+                    command: .activate(.matcher(ElementMatcher(label: "Pay"))),
+                    result: ActionResult(success: true, method: .activate)
+                )
+            ]
+        )
+        let response = FenceResponse.recordingExpanded(
+            path: "/tmp/recording.mp4",
+            payload: payload,
+            options: RecordingResponseOptions(inlineData: true, includeInteractionLog: true)
+        )
+
+        let encoded = try Self.jsonObject(from: response.jsonData())
+        let dict = response.jsonDict()
+
+        XCTAssertEqual(encoded["status"] as? String, dict["status"] as? String)
+        XCTAssertEqual(encoded["path"] as? String, "/tmp/recording.mp4")
+        XCTAssertEqual(encoded["videoData"] as? String, payload.videoData)
+        XCTAssertEqual(encoded["interactionCount"] as? Int, 1)
+        XCTAssertEqual((encoded["interactionLog"] as? [[String: Any]])?.count, 1)
     }
 
     func testJSONEncodingFailureReturnsDiagnosticErrorInsteadOfSuccess() {
@@ -1294,7 +1428,15 @@ final class TheFenceTests: XCTestCase {
                 "tls.missing_fingerprint", .tls, false, "TLS certificate fingerprint"
             ),
             (.sessionLocked("busy"), "session.locked", .session, true, "current driver"),
-            (.authFailed("denied"), "auth.failed", .authentication, false, "without --token"),
+            (.authFailed("denied"), "auth.failed", .authentication, false, nil),
+            (
+                .authFailed("Invalid token. Retry without a token to request a fresh session."),
+                "auth.failed", .authentication, false, "without --token"
+            ),
+            (
+                .authApprovalPending("Waiting for approval on the device."),
+                "auth.approval_pending", .authentication, true, "Tap Allow"
+            ),
             (.notConnected, "connection.not_connected", .request, true, "retry the command"),
             (.actionTimeout, "request.timeout", .request, true, "same session"),
             (.actionFailed("boom"), "request.action_failed", .request, false, nil),
@@ -1323,7 +1465,8 @@ final class TheFenceTests: XCTestCase {
             (.inputError, "request.input_error", .request, false, "request input"),
             (.validationError, "request.validation_error", .request, false, "validation rules"),
             (.actionFailed, "request.action_failed", .request, false, nil),
-            (.authFailure, "auth.failed", .authentication, false, "fresh session"),
+            (.authFailure, "auth.failed", .authentication, false, nil),
+            (.authApprovalPending, "auth.approval_pending", .authentication, true, "Tap Allow"),
             (.recording, "recording.failed", .recording, false, "recording error"),
             (.general, "server.general", .server, false, nil),
         ]
@@ -1342,6 +1485,12 @@ final class TheFenceTests: XCTestCase {
                 XCTAssertNil(error.hint)
             }
         }
+
+        let wrongToken = ServerError(
+            kind: .authFailure,
+            message: "Invalid token. Retry without a token to request a fresh session."
+        )
+        XCTAssertEqual(wrongToken.hint, "Retry without --token to request a fresh session.")
     }
 
     func testFenceErrorDistinguishesSetupAndRequestTimeoutTaxonomy() {
@@ -1770,7 +1919,7 @@ final class TheFenceTests: XCTestCase {
         XCTAssertEqual(failure.phase, .authentication)
         XCTAssertEqual(failure.retryable, false)
         XCTAssertEqual(failure.message, "Authentication failed: bad token")
-        XCTAssertEqual(failure.hint, "Retry without a token to request a fresh session.")
+        XCTAssertNil(failure.hint)
     }
 
     @ButtonHeistActor
@@ -3838,5 +3987,9 @@ final class TheFenceTests: XCTestCase {
         recording.fileHandle.synchronizeFile()
         guard let data = try? Data(contentsOf: recording.filePath) else { return nil }
         return data.split(separator: 0x0A).count
+    }
+
+    private static func jsonObject(from data: Data) throws -> [String: Any] {
+        try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 }

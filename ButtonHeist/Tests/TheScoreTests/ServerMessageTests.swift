@@ -54,6 +54,22 @@ final class ServerMessageTests: XCTestCase {
         }
     }
 
+    func testAuthApprovalPendingEncodeDecode() throws {
+        let payload = AuthApprovalPendingPayload(
+            message: "Waiting for approval on the device.",
+            hint: "Tap Allow on the iOS device to continue."
+        )
+        let message = ServerMessage.authApprovalPending(payload)
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
+
+        if case .authApprovalPending(let decodedPayload) = decoded {
+            XCTAssertEqual(decodedPayload, payload)
+        } else {
+            XCTFail("Expected authApprovalPending, got \(decoded)")
+        }
+    }
+
     func testInterfaceEncodeDecode() throws {
         let element = HeistElement(
             description: "Button",

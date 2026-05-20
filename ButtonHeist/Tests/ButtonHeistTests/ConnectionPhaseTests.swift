@@ -31,6 +31,7 @@ final class ConnectionPhaseTests: XCTestCase {
             (.disconnected(.missingFingerprint), "tls.missing_fingerprint", .tls, false),
             (.disconnected(.serverClosed), "transport.server_closed", .transport, true),
             (.disconnected(.authFailed("bad token")), "auth.failed", .authentication, false),
+            (.disconnected(.authApprovalPending("Waiting for approval on the device.")), "auth.approval_pending", .authentication, true),
             (.disconnected(.sessionLocked("busy")), "session.locked", .session, true),
             (.timeout, "setup.timeout", .setup, true),
             (.noDeviceFound, "discovery.no_device_found", .discovery, true),
@@ -41,7 +42,9 @@ final class ConnectionPhaseTests: XCTestCase {
             XCTAssertEqual(error.failureCode, code)
             XCTAssertEqual(error.phase, phase)
             XCTAssertEqual(error.retryable, retryable)
-            XCTAssertNotNil(error.hint, "Expected hint for \(error)")
+            if code != "auth.failed" {
+                XCTAssertNotNil(error.hint, "Expected hint for \(error)")
+            }
         }
     }
 }

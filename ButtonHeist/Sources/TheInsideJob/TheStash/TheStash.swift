@@ -112,7 +112,11 @@ final class TheStash {
 
     // MARK: - Unified Element Resolution
 
-    /// Result of resolving an ElementTarget to a concrete element.
+    /// Result of resolving an ElementTarget to known semantic target data.
+    ///
+    /// This does not prove the backing UIKit object, frame, or activation
+    /// point are still live. Actions must resolve a `LiveActionTarget`
+    /// immediately before dispatch.
     struct ResolvedTarget {
         let screenElement: ScreenElement
 
@@ -234,6 +238,22 @@ final class TheStash {
         let scrollView: UIScrollView
     }
 
+    struct LiveActionTarget {
+        let resolvedTarget: ResolvedTarget
+        let object: NSObject
+        let frame: CGRect
+        let activationPoint: CGPoint
+
+        var screenElement: ScreenElement { resolvedTarget.screenElement }
+        var element: AccessibilityElement { resolvedTarget.element }
+    }
+
+    enum LiveActionTargetResolution {
+        case resolved(LiveActionTarget)
+        case objectUnavailable
+        case geometryUnavailable
+    }
+
     enum KnownTargetInflationFailure: Equatable {
         case missingContentOrigin
         case noLiveScrollableAncestor
@@ -336,28 +356,84 @@ final class TheStash {
         )
     }
 
+    func resolveLiveActionTarget(for resolvedTarget: ResolvedTarget) -> LiveActionTargetResolution {
+        guard let object = dispatchObject(for: resolvedTarget.screenElement) else {
+            return .objectUnavailable
+        }
+        let frame = object.accessibilityFrame
+        let activationPoint = object.accessibilityActivationPoint
+        guard Self.isUsableFrame(frame),
+              Self.isUsablePoint(activationPoint) else {
+            return .geometryUnavailable
+        }
+        return .resolved(LiveActionTarget(
+            resolvedTarget: resolvedTarget,
+            object: object,
+            frame: frame,
+            activationPoint: activationPoint
+        ))
+    }
+
+    func liveActionTarget(for resolvedTarget: ResolvedTarget) -> LiveActionTarget? {
+        guard case .resolved(let target) = resolveLiveActionTarget(for: resolvedTarget) else {
+            return nil
+        }
+        return target
+    }
+
     func liveActivationPoint(for screenElement: ScreenElement) -> CGPoint? {
         guard let object = dispatchObject(for: screenElement) else { return nil }
         let point = object.accessibilityActivationPoint
-        guard point.x.isFinite, point.y.isFinite else { return nil }
+        guard Self.isUsablePoint(point) else { return nil }
         return point
     }
 
     func liveFrame(for screenElement: ScreenElement) -> CGRect? {
         guard let object = dispatchObject(for: screenElement) else { return nil }
         let frame = object.accessibilityFrame
-        guard !frame.isNull,
-              !frame.isEmpty,
-              frame.origin.x.isFinite,
-              frame.origin.y.isFinite,
-              frame.size.width.isFinite,
-              frame.size.height.isFinite
-        else { return nil }
+        guard Self.isUsableFrame(frame) else { return nil }
         return frame
+    }
+
+    private static func isUsableFrame(_ frame: CGRect) -> Bool {
+        !frame.isNull
+            && !frame.isEmpty
+            && frame.origin.x.isFinite
+            && frame.origin.y.isFinite
+            && frame.size.width.isFinite
+            && frame.size.height.isFinite
+    }
+
+    private static func isUsablePoint(_ point: CGPoint) -> Bool {
+        point.x.isFinite && point.y.isFinite
+    }
+
+    func activate(_ liveTarget: LiveActionTarget) -> ActivateOutcome {
+        liveTarget.object.accessibilityActivate() ? .success : .refused
+    }
+
+    @discardableResult
+    func increment(_ liveTarget: LiveActionTarget) -> Bool {
+        liveTarget.object.accessibilityIncrement()
+        return true
+    }
+
+    @discardableResult
+    func decrement(_ liveTarget: LiveActionTarget) -> Bool {
+        liveTarget.object.accessibilityDecrement()
+        return true
     }
 
     func performCustomAction(named name: String, on screenElement: ScreenElement) -> CustomActionOutcome {
         guard let object = dispatchObject(for: screenElement) else { return .deallocated }
+        return performCustomAction(named: name, on: object)
+    }
+
+    func performCustomAction(named name: String, on liveTarget: LiveActionTarget) -> CustomActionOutcome {
+        performCustomAction(named: name, on: liveTarget.object)
+    }
+
+    private func performCustomAction(named name: String, on object: NSObject) -> CustomActionOutcome {
         guard let action = object.accessibilityCustomActions?
             .first(where: { $0.name == name }) else {
             return .noSuchAction

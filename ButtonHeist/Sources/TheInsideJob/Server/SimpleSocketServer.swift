@@ -102,9 +102,15 @@ actor SimpleSocketServer {
         case listening(listener: NWListener, port: UInt16)
     }
 
+    private enum AuthDeadlinePhase: Sendable {
+        case awaitingAuthentication
+        case awaitingApproval
+    }
+
     private struct ClientState {
         let connection: NWConnection
         var isAuthenticated: Bool
+        var authDeadlinePhase: AuthDeadlinePhase
         var timestamps: [Date]
         var rateLimitNotified: Bool
         /// Bytes currently queued in NWConnection send buffers.
@@ -192,28 +198,55 @@ actor SimpleSocketServer {
 
     // MARK: - Public API (async, actor-isolated)
 
-    /// Start the server on the specified port (async version).
+    /// Start the production server on the specified port with TLS.
     /// Uses structured concurrency to wait for the listener to become ready.
     /// - Parameters:
     ///   - port: Port to listen on (0 = any available)
     ///   - bindToLoopback: If true, bind to loopback only (simulator builds)
+    ///   - tlsParameters: Non-optional TLS parameters. Production startup must not fall back to plaintext.
     ///   - callbacks: Optional callbacks to install before starting
     /// - Returns: Actual port number bound
     func startAsync(
         port: UInt16 = 0,
         bindToLoopback: Bool = false,
-        tlsParameters: NWParameters? = nil,
+        tlsParameters: NWParameters,
         callbacks: Callbacks? = nil
+    ) async throws -> UInt16 {
+        logger.info("TLS configured for server")
+        return try await startListening(
+            port: port,
+            bindToLoopback: bindToLoopback,
+            parameters: tlsParameters,
+            callbacks: callbacks
+        )
+    }
+
+    /// Start a plaintext listener for tests that exercise raw socket behavior.
+    /// Production callers must use `startAsync(... tlsParameters:)`.
+    func startPlaintextForTests(
+        port: UInt16 = 0,
+        bindToLoopback: Bool = false,
+        callbacks: Callbacks? = nil
+    ) async throws -> UInt16 {
+        try await startListening(
+            port: port,
+            bindToLoopback: bindToLoopback,
+            parameters: .tcp,
+            callbacks: callbacks
+        )
+    }
+
+    private func startListening(
+        port: UInt16,
+        bindToLoopback: Bool,
+        parameters: NWParameters,
+        callbacks: Callbacks?
     ) async throws -> UInt16 {
         guard case .stopped = serverPhase else {
             throw ServerError.alreadyRunning
         }
 
         if let callbacks { self.callbacks = callbacks }
-        let parameters: NWParameters = tlsParameters ?? NWParameters.tcp
-        if tlsParameters != nil {
-            logger.info("TLS configured for server")
-        }
         let host: NWEndpoint.Host = bindToLoopback ? .ipv6(.loopback) : .ipv6(.any)
         parameters.requiredLocalEndpoint = .hostPort(
             host: host,
@@ -423,6 +456,14 @@ actor SimpleSocketServer {
         authDeadlineTasks[clientId] = nil
     }
 
+    /// Mark a connected client as waiting on the on-device approval prompt.
+    func markApprovalPending(_ clientId: Int) {
+        guard var state = clients[clientId], !state.isAuthenticated else { return }
+        state.authDeadlinePhase = .awaitingApproval
+        clients[clientId] = state
+        logger.info("Client \(clientId): approval pending — waiting for user to tap Allow on device")
+    }
+
     /// Check if a client is authenticated.
     func isAuthenticated(_ clientId: Int) -> Bool {
         clients[clientId]?.isAuthenticated == true
@@ -510,6 +551,7 @@ actor SimpleSocketServer {
         clients[clientId] = ClientState(
             connection: connection,
             isAuthenticated: false,
+            authDeadlinePhase: .awaitingAuthentication,
             timestamps: [],
             rateLimitNotified: false,
             pendingBytes: 0
@@ -531,12 +573,22 @@ actor SimpleSocketServer {
             }
             guard let self else { return }
             if let state = await self.clients[clientId], !state.isAuthenticated {
-                logger.warning("Client \(clientId) did not authenticate within \(Self.authDeadlineSeconds)s deadline")
-                await self.rejectClientWithServerError(
-                    clientId,
-                    kind: .authFailure,
-                    message: "Authentication timed out after \(Self.authDeadlineSeconds) seconds."
-                )
+                switch state.authDeadlinePhase {
+                case .awaitingAuthentication:
+                    logger.warning("Client \(clientId) did not authenticate within \(Self.authDeadlineSeconds)s deadline")
+                    await self.rejectClientWithServerError(
+                        clientId,
+                        kind: .authFailure,
+                        message: "Authentication timed out after \(Self.authDeadlineSeconds) seconds."
+                    )
+                case .awaitingApproval:
+                    logger.warning("Client \(clientId): approval timed out — user did not respond to the approval prompt on the device")
+                    await self.rejectClientWithServerError(
+                        clientId,
+                        kind: .authApprovalPending,
+                        message: "Approval timed out — user did not respond to the approval prompt on the device."
+                    )
+                }
             }
         }
     }

@@ -49,6 +49,9 @@ public enum ServerMessage: Codable, Sendable {
     /// Server requires authentication (sent after successful hello handshake)
     case authRequired
 
+    /// Server is waiting on the on-device approval prompt for this connection.
+    case authApprovalPending(AuthApprovalPendingPayload)
+
     /// Authentication approved via on-device UI — includes token for future reconnections
     case authApproved(AuthApprovedPayload)
 
@@ -178,6 +181,8 @@ public enum ErrorKind: String, Codable, Sendable, CaseIterable {
     case actionFailed
     /// Authentication failed (rejected token, denied UI prompt, rate-limited).
     case authFailure
+    /// Authentication is blocked on the on-device approval prompt.
+    case authApprovalPending
     /// Recording-pipeline failure (start, stop, capture, encode).
     case recording
     /// General server error not tied to a specific action or recording.
@@ -192,6 +197,20 @@ public struct ServerError: Codable, Sendable, Equatable {
     public init(kind: ErrorKind, message: String) {
         self.kind = kind
         self.message = message
+    }
+}
+
+/// Non-terminal auth status sent while InsideJob waits for user approval.
+public struct AuthApprovalPendingPayload: Codable, Sendable, Equatable {
+    public let message: String
+    public let hint: String
+
+    public init(
+        message: String = "Waiting for approval on the device.",
+        hint: String = "Tap Allow on the iOS device to continue."
+    ) {
+        self.message = message
+        self.hint = hint
     }
 }
 
