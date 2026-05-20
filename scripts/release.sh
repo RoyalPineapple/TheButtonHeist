@@ -6,10 +6,11 @@
 #   2. Bump version across 5 files + regenerate Xcode projects
 #   3. Build CLI + MCP (in parallel)
 #   4. Rebase onto latest origin, commit/tag or tag current source, push
-#   5. Wait for CI release workflow; upgrade Homebrew on success, rollback on failure
+#   5. Wait for tag-level release workflow guardrails; upgrade Homebrew on success, rollback on failure
 #
-# Tests are skipped by default — CI already ran them on the same commit.
-# Use --full to run local tests before committing.
+# Local tests are skipped by default — the release workflow reruns the full
+# macOS/iOS guardrail on the exact tag before publishing artifacts.
+# Use --full for an optional local preflight before committing.
 #
 # Versioning: SemVer (MAJOR.MINOR.PATCH). Default bump is patch.
 #
@@ -21,7 +22,7 @@
 #          ./scripts/release.sh 0.5.0        # Explicit version
 #          ./scripts/release.sh --tag-current # Publish the already-bumped source version
 #          ./scripts/release.sh --dry-run    # Preview only
-#          ./scripts/release.sh --full       # Run local tests before committing
+#          ./scripts/release.sh --full       # Run optional local tests before committing
 
 set -euo pipefail
 
@@ -193,7 +194,7 @@ if [[ "$RUN_TESTS" == false ]]; then
     if [[ -z "$CI_RUN_ID" || "$CI_RUN_ID" == "null" ]]; then
         echo "Error: no CI run found after 20 minutes"
         echo "  Check: https://github.com/$BUTTONHEIST_GITHUB_REPO/actions"
-        echo "  Or run with --full to test locally"
+        echo "  Or run with --full to test locally before the tag-level release guardrail"
         exit 1
     fi
     if ! gh run watch "$CI_RUN_ID" --repo "$BUTTONHEIST_GITHUB_REPO" --exit-status; then
@@ -251,14 +252,14 @@ if [[ "$DRY_RUN" == true ]]; then
     if [[ "$RUN_TESTS" == true ]]; then
         echo "  3. Run TheScoreTests, ButtonHeistTests, TheInsideJobTests"
     else
-        echo "  3. (tests skipped — CI already ran them. Use --full to run locally)"
+        echo "  3. (local tests skipped — release workflow reruns full guardrails on the tag. Use --full for local preflight)"
     fi
     if [[ "$TAG_CURRENT" == true ]]; then
         echo "  4. Tag current HEAD as v$NEW_VERSION and push the tag"
     else
         echo "  4. Rebase, commit 'Release $NEW_VERSION', tag v$NEW_VERSION, push"
     fi
-    echo "  5. Wait for CI release workflow"
+    echo "  5. Wait for tag-level release workflow guardrails"
     echo "  6. On success: upgrade Homebrew. On failure: rollback tag + commit"
     exit 0
 fi
