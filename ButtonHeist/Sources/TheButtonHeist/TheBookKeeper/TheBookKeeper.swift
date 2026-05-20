@@ -221,10 +221,10 @@ final class TheBookKeeper {
         let timestamp = Self.timestampString()
         let sessionId = "\(identifier)-\(timestamp)"
         let directory = baseDirectory.appendingPathComponent(sessionId)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Self.createPrivateDirectory(at: directory)
 
         let logPath = directory.appendingPathComponent("session.jsonl")
-        FileManager.default.createFile(atPath: logPath.path, contents: nil)
+        try Self.createPrivateFile(at: logPath)
         let logHandle = try FileHandle(forWritingTo: logPath)
 
         try appendLogLine(buildHeaderLogEntry(sessionId: sessionId), to: logHandle)
@@ -551,7 +551,7 @@ final class TheBookKeeper {
         }
 
         let heistPath = session.directory.appendingPathComponent("heist.jsonl")
-        FileManager.default.createFile(atPath: heistPath.path, contents: nil)
+        try Self.createPrivateFile(at: heistPath)
         let heistHandle = try FileHandle(forWritingTo: heistPath)
 
         session.heistRecording = .recording(HeistRecording(
@@ -760,7 +760,7 @@ final class TheBookKeeper {
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(script)
-        try data.write(to: path, options: .atomic)
+        try writePrivateData(data, to: path)
     }
 
     static func readHeist(from path: URL) throws -> HeistPlayback {
@@ -808,13 +808,66 @@ final class TheBookKeeper {
         return formatter.string(from: Date())
     }
 
+    nonisolated private static func createPrivateDirectory(at directory: URL) throws {
+        let fileManager = FileManager.default
+        let attributes: [FileAttributeKey: Any] = [.posixPermissions: 0o700]
+        try fileManager.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true,
+            attributes: attributes
+        )
+        try fileManager.setAttributes(attributes, ofItemAtPath: directory.path)
+    }
+
+    nonisolated private static func createPrivateFile(at url: URL, contents: Data? = nil) throws {
+        let fileManager = FileManager.default
+        let attributes: [FileAttributeKey: Any] = [.posixPermissions: 0o600]
+        if fileManager.fileExists(atPath: url.path) {
+            try fileManager.setAttributes(attributes, ofItemAtPath: url.path)
+            if let contents {
+                let handle = try FileHandle(forWritingTo: url)
+                defer { try? handle.close() }
+                try handle.truncate(atOffset: 0)
+                try handle.write(contentsOf: contents)
+            }
+            return
+        }
+
+        guard fileManager.createFile(
+            atPath: url.path,
+            contents: contents,
+            attributes: attributes
+        ) else {
+            throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
+        }
+        try fileManager.setAttributes(attributes, ofItemAtPath: url.path)
+    }
+
+    nonisolated private static func writePrivateData(_ data: Data, to url: URL) throws {
+        let fileManager = FileManager.default
+        let attributes: [FileAttributeKey: Any] = [.posixPermissions: 0o600]
+        let temporaryURL = url.deletingLastPathComponent()
+            .appendingPathComponent(".\(url.lastPathComponent).\(UUID().uuidString).tmp")
+        try createPrivateFile(at: temporaryURL, contents: data)
+        do {
+            if fileManager.fileExists(atPath: url.path) {
+                try fileManager.removeItem(at: url)
+            }
+            try fileManager.moveItem(at: temporaryURL, to: url)
+            try fileManager.setAttributes(attributes, ofItemAtPath: url.path)
+        } catch {
+            try? fileManager.removeItem(at: temporaryURL)
+            throw error
+        }
+    }
+
     private func flushManifest(manifest: SessionManifest, directory: URL) throws {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(manifest)
         let manifestPath = directory.appendingPathComponent("manifest.json")
-        try data.write(to: manifestPath, options: .atomic)
+        try Self.writePrivateData(data, to: manifestPath)
     }
 
     private func sessionLogSnapshot(manifest: SessionManifest, directory: URL) throws -> SessionLogSnapshot {

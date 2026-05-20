@@ -442,6 +442,7 @@ public final class TheFence {
     var config: Configuration
     let handoff = TheHandoff()
     let bookKeeper = TheBookKeeper()
+    var configuredAuthTokenForStatus: String?
     /// Heist playback re-entrancy state. `.playing` carries the wall-clock
     /// timestamp playback started so callers can reason about how long the
     /// current playback has been running.
@@ -606,10 +607,11 @@ public final class TheFence {
     public init(configuration: Configuration) {
         self.config = configuration
         let configuredToken = configuration.token ?? EnvironmentKey.buttonheistToken.value
+        self.configuredAuthTokenForStatus = configuredToken
         self.handoff.token = configuredToken
         self.handoff.driverId = EnvironmentKey.buttonheistDriverId.value
         self.handoff.onAuthApproved = { [weak self] token in
-            self?.handleAuthApproved(token, configuredToken: configuredToken)
+            self?.handleAuthApproved(token)
         }
         wireUpResponseCallbacks()
     }
@@ -619,8 +621,8 @@ public final class TheFence {
         return "BUTTONHEIST_TOKEN=\(token)"
     }
 
-    private func handleAuthApproved(_ token: String?, configuredToken: String?) {
-        if let message = Self.authApprovedStatusMessage(token: token, configuredToken: configuredToken) {
+    private func handleAuthApproved(_ token: String?) {
+        if let message = Self.authApprovedStatusMessage(token: token, configuredToken: configuredAuthTokenForStatus) {
             onStatus?(message)
         }
         onAuthApproved?(token)

@@ -2,6 +2,8 @@ import Foundation
 
 import TheScore
 
+private let redactedTokenLogValue = "<redacted>"
+
 // MARK: - Typed Request Recording
 
 private extension HeistValue {
@@ -678,7 +680,9 @@ private extension TheFence.ConnectRequest {
         var arguments: [String: HeistValue] = [:]
         arguments.set(.target, targetName)
         arguments.set(.device, device)
-        arguments.set(.token, token)
+        if token != nil {
+            arguments.set(.token, redactedTokenLogValue)
+        }
         return arguments
     }
 }

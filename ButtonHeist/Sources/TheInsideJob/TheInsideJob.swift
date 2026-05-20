@@ -383,11 +383,9 @@ public final class TheInsideJob {
         getaway.identity.tlsActive = true
         serverPhase = .running(transport: transport)
 
-        let token = await muscle.sessionToken
         let serviceName = advertiseService(port: actualPort, exposure: exposure)
         logStartupSummary(
             actualPort: actualPort,
-            token: token,
             tlsFingerprint: identity.fingerprint,
             bonjourServiceName: serviceName
         )
@@ -602,7 +600,6 @@ public final class TheInsideJob {
 
     private func logStartupSummary(
         actualPort: UInt16,
-        token: String,
         tlsFingerprint: String,
         bonjourServiceName: String?
     ) {
@@ -628,7 +625,7 @@ public final class TheInsideJob {
             bonjourDescription
         ].joined(separator: " ")
         if tokenSource == .generated {
-            insideJobLogger.info("Startup summary: \(fields, privacy: .public) token=\(token, privacy: .public)")
+            insideJobLogger.info("Startup summary: \(fields, privacy: .public) token=<redacted>")
         } else {
             insideJobLogger.info("Startup summary: \(fields, privacy: .public)")
         }

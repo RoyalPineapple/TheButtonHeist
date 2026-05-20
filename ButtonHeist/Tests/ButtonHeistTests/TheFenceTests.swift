@@ -115,6 +115,12 @@ final class TheFenceTests: XCTestCase {
         )
     }
 
+    func testAuthApprovedStatusDoesNotEchoApprovalTokenWhenUserConfiguredDifferentToken() {
+        XCTAssertNil(
+            TheFence.authApprovedStatusMessage(token: "generated-token", configuredToken: "user-specified-token")
+        )
+    }
+
     func testAuthApprovedStatusIgnoresMissingToken() {
         XCTAssertNil(TheFence.authApprovedStatusMessage(token: nil, configuredToken: nil))
     }

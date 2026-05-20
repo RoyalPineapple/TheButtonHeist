@@ -313,6 +313,7 @@ extension TheFence {
         stop()
 
         handoff.token = resolvedToken
+        configuredAuthTokenForStatus = resolvedToken
         let newConfig = Configuration(
             deviceFilter: resolvedDevice,
             connectionTimeout: config.connectionTimeout,

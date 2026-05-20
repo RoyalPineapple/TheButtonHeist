@@ -79,6 +79,35 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testSessionCoordinationFilesUseRestrictivePermissions() async throws {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        try bookKeeper.beginSession(identifier: "test-private-files")
+        guard case .active(let activeSession) = bookKeeper.phase else {
+            return XCTFail("Expected active phase")
+        }
+
+        let logPath = activeSession.directory.appendingPathComponent("session.jsonl")
+        XCTAssertEqual(try posixPermissions(at: activeSession.directory), 0o700)
+        XCTAssertEqual(try posixPermissions(at: logPath), 0o600)
+
+        try bookKeeper.startHeistRecording(app: "com.test.app")
+        let heistPath = activeSession.directory.appendingPathComponent("heist.jsonl")
+        XCTAssertEqual(try posixPermissions(at: heistPath), 0o600)
+
+        try await bookKeeper.closeSession()
+        guard case .closed(let closedSession) = bookKeeper.phase else {
+            return XCTFail("Expected closed phase")
+        }
+        let manifestPath = closedSession.directory.appendingPathComponent("manifest.json")
+        XCTAssertEqual(try posixPermissions(at: manifestPath), 0o600)
+        XCTAssertEqual(try posixPermissions(at: closedSession.compressedLogPath), 0o600)
+
+        let (archivePath, _) = try await bookKeeper.archiveSession(deleteSource: false)
+        defer { try? FileManager.default.removeItem(at: archivePath) }
+        XCTAssertEqual(try posixPermissions(at: archivePath), 0o600)
+    }
+
+    @ButtonHeistActor
     func testCloseSessionTransitionsToClosed() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-close")
@@ -522,6 +551,67 @@ final class TheBookKeeperTests: XCTestCase {
         let args = json?["args"] as? [String: Any]
 
         XCTAssertEqual(args?["text"] as? String, "<1500 chars>")
+    }
+
+    @ButtonHeistActor
+    func testConnectTokenIsRedactedInSessionLog() async throws {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        try bookKeeper.beginSession(identifier: "test-connect-redaction")
+
+        try logCommand(bookKeeper,
+            requestId: "r1",
+            command: .connect,
+            arguments: [
+                "device": "127.0.0.1:1455",
+                "token": "user-specified-token",
+            ]
+        )
+
+        guard case .active(let session) = bookKeeper.phase else {
+            return XCTFail("Expected active phase")
+        }
+        let logPath = session.directory.appendingPathComponent("session.jsonl")
+        let content = try String(contentsOf: logPath, encoding: .utf8)
+        let lines = content.split(separator: "\n")
+        let json = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
+        let args = json?["args"] as? [String: Any]
+
+        XCTAssertEqual(args?["token"] as? String, "<redacted>")
+        XCTAssertFalse(content.contains("user-specified-token"))
+    }
+
+    @ButtonHeistActor
+    func testRunBatchConnectTokenIsRedactedInSessionLog() async throws {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        try bookKeeper.beginSession(identifier: "test-batch-connect-redaction")
+
+        try logCommand(bookKeeper,
+            requestId: "r1",
+            command: .runBatch,
+            arguments: [
+                "steps": [
+                    [
+                        "command": "connect",
+                        "device": "127.0.0.1:1455",
+                        "token": "nested-user-token",
+                    ],
+                ],
+            ]
+        )
+
+        guard case .active(let session) = bookKeeper.phase else {
+            return XCTFail("Expected active phase")
+        }
+        let logPath = session.directory.appendingPathComponent("session.jsonl")
+        let content = try String(contentsOf: logPath, encoding: .utf8)
+        let lines = content.split(separator: "\n")
+        let json = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
+        let args = json?["args"] as? [String: Any]
+        let steps = args?["steps"] as? [[String: Any]]
+        let step = try XCTUnwrap(steps?.first)
+
+        XCTAssertEqual(step["token"] as? String, "<redacted>")
+        XCTAssertFalse(content.contains("nested-user-token"))
     }
 
     @ButtonHeistActor
@@ -1078,4 +1168,10 @@ private func XCTAssertHasNoStoredPhaseTimingMirrors<T>(
     let storedLabels = Set(Mirror(reflecting: value).children.compactMap(\.label))
     XCTAssertFalse(storedLabels.contains("startTime"), file: file, line: line)
     XCTAssertFalse(storedLabels.contains("endTime"), file: file, line: line)
+}
+
+private func posixPermissions(at url: URL) throws -> Int {
+    let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+    let permissions = try XCTUnwrap(attributes[.posixPermissions] as? NSNumber)
+    return permissions.intValue & 0o777
 }
