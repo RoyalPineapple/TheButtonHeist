@@ -46,6 +46,8 @@ extension TheFence {
     struct ArtifactRequest {
         let outputPath: String?
         let requestId: String
+        let inlineData: Bool
+        let includeInteractionLog: Bool
     }
 
     enum GesturePayload {

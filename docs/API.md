@@ -473,8 +473,9 @@ Typed response enum with `humanFormatted() -> String`, `jsonDict() -> [String: A
 | `action(result:expectation:)` | Action outcome with delta and optional expectation validation result |
 | `screenshot(path:payload:)` | Screenshot saved to path plus screen payload metadata |
 | `screenshotData(payload:)` | Opt-in inline screenshot as base64 PNG plus metadata; visible interface data is included only when requested |
-| `recording(path:payload:)` | Recording saved to path |
-| `recordingData(payload:)` | Recording as base64 video |
+| `recording(path:payload:)` | Recording saved to path with metadata summary |
+| `recordingExpanded(path:payload:options:)` | Recording saved to path with explicitly requested bounded inline video and/or interaction log |
+| `recordingData(payload:)` | In-memory recording payload for callers that explicitly request base64 video |
 | `batch(results:completedSteps:failedIndex:totalTimingMs:expectationsChecked:expectationsMet:)` | Batched command results with aggregate timing, optional failure index, and expectation stats |
 | `sessionState(payload:)` | Read-only client-side session summary for `get_session_state` |
 | `targets(_:defaultTarget:)` | Named targets from config file with optional default |
@@ -1743,15 +1744,18 @@ OPTIONS:
 
 ### buttonheist stop_recording
 
-Explicitly stop an in-progress recording or retrieve a cached auto-finished recording. The response contains the completed recording payload for the caller.
+Explicitly stop an in-progress recording or retrieve a cached auto-finished recording. The response contains artifact path and metadata by default; inline video and full interaction logs require explicit opt-in flags and are size-capped before delivery.
 
 ```
 USAGE: buttonheist stop_recording [OPTIONS]
 
 OPTIONS:
-  --timeout <seconds>     Connection timeout (default: 10)
-  -q, --quiet             Suppress status messages
-  --device <filter>       Target a specific device
+  -o, --output <path>         Output file path (default: generated artifact path)
+  --inline-data               Include base64 MP4 data in JSON output
+  --include-interaction-log   Include the full interaction log in JSON output
+  -f, --format <format>       Output format: human, json, compact
+  -q, --quiet                 Suppress status messages
+  --device <filter>           Target a specific device
 ```
 
 ### buttonheist wait_for
