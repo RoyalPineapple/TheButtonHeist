@@ -404,6 +404,8 @@ public final class TheFence {
         var fileConfig: ButtonHeistFileConfig?
         /// Direct host:port target with optional TLS fingerprint from config.
         var directDevice: DiscoveredDevice?
+        /// Test/config override for BookKeeper's session and artifact root.
+        var bookKeeperBaseDirectory: URL?
         /// Extra client-side headroom beyond a server-owned wait timeout.
         var postActionExpectationTimeoutBuffer: TimeInterval
 
@@ -414,6 +416,7 @@ public final class TheFence {
             autoReconnect: Bool = true,
             fileConfig: ButtonHeistFileConfig? = nil,
             directDevice: DiscoveredDevice? = nil,
+            bookKeeperBaseDirectory: URL? = nil,
             postActionExpectationTimeoutBuffer: TimeInterval = 5
         ) {
             self.deviceFilter = deviceFilter
@@ -422,6 +425,7 @@ public final class TheFence {
             self.autoReconnect = autoReconnect
             self.fileConfig = fileConfig
             self.directDevice = directDevice
+            self.bookKeeperBaseDirectory = bookKeeperBaseDirectory
             self.postActionExpectationTimeoutBuffer = postActionExpectationTimeoutBuffer
         }
     }
@@ -441,7 +445,8 @@ public final class TheFence {
 
     var config: Configuration
     let handoff = TheHandoff()
-    let bookKeeper = TheBookKeeper()
+    let bookKeeper: TheBookKeeper
+    var configuredAuthTokenForStatus: String?
     /// Heist playback re-entrancy state. `.playing` carries the wall-clock
     /// timestamp playback started so callers can reason about how long the
     /// current playback has been running.
@@ -605,11 +610,13 @@ public final class TheFence {
 
     public init(configuration: Configuration) {
         self.config = configuration
+        self.bookKeeper = TheBookKeeper(baseDirectory: configuration.bookKeeperBaseDirectory)
         let configuredToken = configuration.token ?? EnvironmentKey.buttonheistToken.value
+        self.configuredAuthTokenForStatus = configuredToken
         self.handoff.token = configuredToken
         self.handoff.driverId = EnvironmentKey.buttonheistDriverId.value
         self.handoff.onAuthApproved = { [weak self] token in
-            self?.handleAuthApproved(token, configuredToken: configuredToken)
+            self?.handleAuthApproved(token)
         }
         wireUpResponseCallbacks()
     }
@@ -619,8 +626,8 @@ public final class TheFence {
         return "BUTTONHEIST_TOKEN=\(token)"
     }
 
-    private func handleAuthApproved(_ token: String?, configuredToken: String?) {
-        if let message = Self.authApprovedStatusMessage(token: token, configuredToken: configuredToken) {
+    private func handleAuthApproved(_ token: String?) {
+        if let message = Self.authApprovedStatusMessage(token: token, configuredToken: configuredAuthTokenForStatus) {
             onStatus?(message)
         }
         onAuthApproved?(token)
@@ -1248,6 +1255,22 @@ public final class TheFence {
 
     private func connectDirect(to device: DiscoveredDevice) async throws {
         handoff.onStatus?("Connecting to \(device.name)...")
+        let resolutionTimeout = TheHandoff.connectionResolutionTimeout(for: config.connectionTimeout)
+        switch await device.reachability(timeout: resolutionTimeout) {
+        case .reachable:
+            break
+        case .failed(let reason):
+            throw FenceError(TheHandoff.ConnectionError.disconnected(reason))
+        case .unavailable:
+            throw FenceError.connectionFailure(ConnectionFailure(
+                message: "Could not reach ButtonHeist server at \(device.name)",
+                errorCode: "connection.endpoint_unreachable",
+                phase: .transport,
+                retryable: true,
+                hint: "Check that the app is running at \(device.name), then retry the command."
+            ))
+        }
+
         let attemptID = handoff.connect(to: device)
         do {
             try await handoff.waitForConnectionResult(timeout: config.connectionTimeout)
@@ -1271,11 +1294,15 @@ public final class TheFence {
             responseStatus = .error
             artifactPath = nil
             errorMessage = message
-        case .screenshot(let path, _):
+        case .screenshot(let path, _, _):
             responseStatus = .ok
             artifactPath = path
             errorMessage = nil
         case .recording(let path, _):
+            responseStatus = .ok
+            artifactPath = path
+            errorMessage = nil
+        case .recordingExpanded(let path, _, _):
             responseStatus = .ok
             artifactPath = path
             errorMessage = nil
@@ -1317,7 +1344,7 @@ public final class TheFence {
             return try await handleListDevices()
         case (.getInterface, .getInterface(let request)):
             return try await handleGetInterface(request)
-        case (.getScreen, .artifact(let request)):
+        case (.getScreen, .screen(let request)):
             return try await handleGetScreen(request)
         case (.waitForChange, .waitForChange(let payload)):
             return try await handleWaitForChange(payload)

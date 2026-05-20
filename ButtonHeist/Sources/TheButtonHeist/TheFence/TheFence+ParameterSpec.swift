@@ -41,6 +41,8 @@ public struct FenceParameterSpec: Sendable, Equatable {
     public let minimum: Double?
     public let maximum: Double?
     public let minLength: Int?
+    public let minItems: Int?
+    public let maxItems: Int?
     public let objectProperties: [FenceParameterSpec]
     public let objectAdditionalProperties: Bool
     public let arrayItemType: ParamType?
@@ -59,6 +61,8 @@ public struct FenceParameterSpec: Sendable, Equatable {
         minimum: Double? = nil,
         maximum: Double? = nil,
         minLength: Int? = nil,
+        minItems: Int? = nil,
+        maxItems: Int? = nil,
         objectProperties: [FenceParameterSpec] = [],
         objectAdditionalProperties: Bool = false,
         arrayItemType: ParamType? = nil,
@@ -74,11 +78,33 @@ public struct FenceParameterSpec: Sendable, Equatable {
         self.minimum = minimum
         self.maximum = maximum
         self.minLength = minLength
+        self.minItems = minItems
+        self.maxItems = maxItems
         self.objectProperties = objectProperties
         self.objectAdditionalProperties = objectAdditionalProperties
         self.arrayItemType = arrayItemType
         self.arrayItemProperties = arrayItemProperties
         self.arrayItemAdditionalProperties = arrayItemAdditionalProperties
+    }
+}
+
+extension TheFence {
+
+    enum DecodeLimits {
+        static let maxRunBatchSteps = 100
+        static let maxRunBatchRequestBytes = 1_000_000
+        static let maxRunBatchNestingDepth = 32
+        static let maxBatchResultRows = maxRunBatchSteps
+        static let maxInlineScreenshotBase64Bytes = 1_000_000
+        static let maxInlineRecordingBase64Bytes = 10_000_000
+        static let maxExpandedRecordingResponseBytes = 10_000_000
+
+        static let maxDrawPathPoints = 10_000
+        static let maxDrawBezierSegments = 1_000
+        static let minDrawBezierSamplesPerSegment = 2
+        static let maxDrawBezierSamplesPerSegment = 1_000
+        static let maxDrawBezierGeneratedPathPoints = 50_000
+        static let maxDrawGestureDurationSeconds = 60.0
     }
 }
 
@@ -118,6 +144,9 @@ public enum FenceParameterKey: String, CaseIterable, Sendable {
     case heistId
     case identifier
     case inactivityTimeout = "inactivity_timeout"
+    case includeInteractionLog
+    case includeInterface
+    case inlineData
     case input
     case isModalBoundary
     case label
@@ -404,6 +433,8 @@ public extension FenceParameterSpec {
         if let minimum = spec.minimum { schema["minimum"] = jsonSchemaNumber(minimum) }
         if let maximum = spec.maximum { schema["maximum"] = jsonSchemaNumber(maximum) }
         if let minLength = spec.minLength { schema["minLength"] = .int(minLength) }
+        if let minItems = spec.minItems { schema["minItems"] = .int(minItems) }
+        if let maxItems = spec.maxItems { schema["maxItems"] = .int(maxItems) }
 
         switch spec.type {
         case .stringArray:
@@ -819,8 +850,9 @@ extension TheFence.Command {
 
         case Self.getScreen.rawValue:
             return """
-                Capture a PNG screenshot from the connected device and include the fresh visible \
-                accessibility tree. Returns inline base64 PNG image data; use output to save the image to a file.
+                Capture a PNG screenshot from the connected device. Returns metadata plus an artifact path \
+                by default. Set inlineData=true to return capped base64 PNG data inline; set includeInterface=true \
+                to include the fresh visible accessibility tree.
                 """
 
         case Self.waitForChange.rawValue:
@@ -908,8 +940,8 @@ extension TheFence.Command {
 
         case Self.stopRecording.rawValue:
             return """
-                Stop an in-progress screen recording. Returns metadata only by default (raw video \
-                is too large for MCP context); pass 'output' to save the MP4 to a file path.
+                Stop an in-progress screen recording. Returns artifact path and metadata by default. \
+                Set inlineData=true and/or includeInteractionLog=true for a capped expanded JSON response.
                 """
 
         case Self.listDevices.rawValue:
@@ -1018,7 +1050,21 @@ extension TheFence.Command {
 
         case .getScreen:
             return [
-                .init(key: "output", type: .string, optionalRole: .payload, description: "File path to save PNG (omit for inline base64)"),
+                .init(
+                    key: "output", type: .string, optionalRole: .payload,
+                    description: "File path to save PNG (omit for default artifact path; cannot be combined with inlineData=true)"
+                ),
+                .init(
+                    key: "inlineData", type: .boolean, optionalRole: .behaviorSwitch,
+                    description: """
+                        Return base64 PNG data inline instead of an artifact path \
+                        (default false; capped before delivery; not allowed inside run_batch)
+                        """
+                ),
+                .init(
+                    key: "includeInterface", type: .boolean, optionalRole: .behaviorSwitch,
+                    description: "Include the fresh visible interface tree in the response (default false)"
+                ),
             ]
 
         case .waitForChange:
@@ -1042,7 +1088,11 @@ extension TheFence.Command {
             return target + [
                 .init(key: "x", type: .number, optionalRole: .payload, description: "X coordinate"),
                 .init(key: "y", type: .number, optionalRole: .payload, description: "Y coordinate"),
-                .init(key: "duration", type: .number, optionalRole: .payload, description: "Duration in seconds (default 0.5)"),
+                .init(
+                    key: "duration", type: .number, optionalRole: .payload,
+                    description: "Duration in seconds (default 0.5, max 60)",
+                    maximum: TheFence.DecodeLimits.maxDrawGestureDurationSeconds
+                ),
             ] + expectation
 
         case .swipe:
@@ -1068,7 +1118,8 @@ extension TheFence.Command {
                 .init(key: "endY", type: .number, optionalRole: .payload, description: "End Y coordinate (swipe, drag)"),
                 .init(
                     key: "duration", type: .number, optionalRole: .payload,
-                    description: "Duration in seconds (swipe, long_press default 0.5, draw_path, draw_bezier)"
+                    description: "Duration in seconds (max 60)",
+                    maximum: TheFence.DecodeLimits.maxDrawGestureDurationSeconds
                 ),
             ] + expectation
 
@@ -1078,7 +1129,11 @@ extension TheFence.Command {
                 .init(key: "endY", type: .number, required: true, description: "End Y coordinate (swipe, drag)"),
                 .init(key: "startX", type: .number, optionalRole: .payload, description: "Start X coordinate (swipe, draw_bezier)"),
                 .init(key: "startY", type: .number, optionalRole: .payload, description: "Start Y coordinate (swipe, draw_bezier)"),
-                .init(key: "duration", type: .number, optionalRole: .payload, description: "Duration in seconds"),
+                .init(
+                    key: "duration", type: .number, optionalRole: .payload,
+                    description: "Duration in seconds (max 60)",
+                    maximum: TheFence.DecodeLimits.maxDrawGestureDurationSeconds
+                ),
             ] + expectation
 
         case .pinch:
@@ -1093,7 +1148,11 @@ extension TheFence.Command {
                     description: "Center Y (pinch, rotate, two_finger_tap; defaults to element center)"
                 ),
                 .init(key: "spread", type: .number, optionalRole: .payload, description: "Finger spread distance (pinch, two_finger_tap)"),
-                .init(key: "duration", type: .number, optionalRole: .payload, description: "Duration in seconds"),
+                .init(
+                    key: "duration", type: .number, optionalRole: .payload,
+                    description: "Duration in seconds (max 60)",
+                    maximum: TheFence.DecodeLimits.maxDrawGestureDurationSeconds
+                ),
             ] + expectation
 
         case .rotate:
@@ -1108,7 +1167,11 @@ extension TheFence.Command {
                     description: "Center Y (pinch, rotate, two_finger_tap; defaults to element center)"
                 ),
                 .init(key: "radius", type: .number, optionalRole: .payload, description: "Rotation radius (rotate)"),
-                .init(key: "duration", type: .number, optionalRole: .payload, description: "Duration in seconds"),
+                .init(
+                    key: "duration", type: .number, optionalRole: .payload,
+                    description: "Duration in seconds (max 60)",
+                    maximum: TheFence.DecodeLimits.maxDrawGestureDurationSeconds
+                ),
             ] + expectation
 
         case .twoFingerTap:
@@ -1128,7 +1191,9 @@ extension TheFence.Command {
             return [
                 .init(
                     key: "points", type: .array, required: true,
-                    description: "Array of {x, y} waypoints (draw_path)",
+                    description: "Array of {x, y} waypoints (draw_path), 2...10,000 points",
+                    minItems: 2,
+                    maxItems: TheFence.DecodeLimits.maxDrawPathPoints,
                     arrayItemType: .object,
                     arrayItemProperties: [
                         .init(key: "x", type: .number, required: true, description: "X coordinate"),
@@ -1137,7 +1202,8 @@ extension TheFence.Command {
                 ),
                 .init(
                     key: "duration", type: .number, optionalRole: .payload,
-                    description: "Duration in seconds (swipe, long_press default 0.5, draw_path, draw_bezier)"
+                    description: "Duration in seconds (draw_path, max 60)",
+                    maximum: TheFence.DecodeLimits.maxDrawGestureDurationSeconds
                 ),
                 .init(key: "velocity", type: .number, optionalRole: .payload, description: "Drawing velocity in points/sec (draw_path, draw_bezier)"),
             ] + expectation
@@ -1148,7 +1214,9 @@ extension TheFence.Command {
                 .init(key: "startY", type: .number, required: true, description: "Start Y coordinate (swipe, draw_bezier)"),
                 .init(
                     key: "segments", type: .array, required: true,
-                    description: "Array of bezier segments: {cp1X, cp1Y, cp2X, cp2Y, endX, endY} (draw_bezier)",
+                    description: "Array of bezier segments: {cp1X, cp1Y, cp2X, cp2Y, endX, endY} (draw_bezier), 1...1,000 segments",
+                    minItems: 1,
+                    maxItems: TheFence.DecodeLimits.maxDrawBezierSegments,
                     arrayItemType: .object,
                     arrayItemProperties: [
                         .init(key: "cp1X", type: .number, required: true, description: "First control point X coordinate"),
@@ -1159,10 +1227,16 @@ extension TheFence.Command {
                         .init(key: "endY", type: .number, required: true, description: "Segment end Y coordinate"),
                     ]
                 ),
-                .init(key: "samplesPerSegment", type: .integer, optionalRole: .payload, description: "Bezier curve sampling resolution (draw_bezier)"),
+                .init(
+                    key: "samplesPerSegment", type: .integer, optionalRole: .payload,
+                    description: "Bezier curve sampling resolution (draw_bezier), 2...1,000; generated path max 50,000 points",
+                    minimum: Double(TheFence.DecodeLimits.minDrawBezierSamplesPerSegment),
+                    maximum: Double(TheFence.DecodeLimits.maxDrawBezierSamplesPerSegment)
+                ),
                 .init(
                     key: "duration", type: .number, optionalRole: .payload,
-                    description: "Duration in seconds (swipe, long_press default 0.5, draw_path, draw_bezier)"
+                    description: "Duration in seconds (draw_bezier, max 60)",
+                    maximum: TheFence.DecodeLimits.maxDrawGestureDurationSeconds
                 ),
                 .init(key: "velocity", type: .number, optionalRole: .payload, description: "Drawing velocity in points/sec (draw_path, draw_bezier)"),
             ] + expectation
@@ -1315,7 +1389,15 @@ extension TheFence.Command {
 
         case .stopRecording:
             return [
-                .init(key: "output", type: .string, optionalRole: .payload, description: "File path to save MP4 (metadata-only response if omitted)"),
+                .init(key: "output", type: .string, optionalRole: .payload, description: "File path to save MP4 (omit for default artifact path)"),
+                .init(
+                    key: "inlineData", type: .boolean, optionalRole: .behaviorSwitch,
+                    description: "Include base64 MP4 video data in the response (default false; capped before delivery)"
+                ),
+                .init(
+                    key: "includeInteractionLog", type: .boolean, optionalRole: .behaviorSwitch,
+                    description: "Include the full interaction log in the response (default false; capped before delivery)"
+                ),
             ]
 
         // MARK: Batch
@@ -1323,7 +1405,12 @@ extension TheFence.Command {
             return [
                 .init(
                     key: "steps", type: .array, required: true,
-                    description: "Ordered list of batch-executable canonical Fence command requests to execute",
+                    description: """
+                    Ordered list of batch-executable canonical Fence command requests to execute \
+                    (max 100 steps; max request size 1 MB; max nesting depth 32)
+                    """,
+                    minItems: 1,
+                    maxItems: TheFence.DecodeLimits.maxRunBatchSteps,
                     arrayItemType: .object,
                     arrayItemProperties: [
                         .init(

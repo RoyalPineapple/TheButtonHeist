@@ -95,6 +95,7 @@ final class MockConnection: DeviceConnecting {
     var onEvent: (@ButtonHeistActor (ConnectionEvent) -> Void)?
     var sent: [(ClientMessage, String?)] = []
     var connectCount = 0
+    var disconnectCount = 0
     var emitTransportReadyOnConnect = false
     var connectEventsOverride: [ConnectionEvent]?
     var sendOutcome: DeviceSendOutcome = .enqueued
@@ -121,6 +122,7 @@ final class MockConnection: DeviceConnecting {
     }
 
     func disconnect() {
+        disconnectCount += 1
         isConnected = false
     }
 

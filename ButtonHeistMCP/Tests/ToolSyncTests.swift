@@ -850,6 +850,12 @@ struct ToolSyncTests {
         if let minLength = spec.minLength {
             #expect(extractIntField(from: schema, key: "minLength") == minLength, "\(context) minLength should match FenceParameterSpec")
         }
+        if let minItems = spec.minItems {
+            #expect(extractIntField(from: schema, key: "minItems") == minItems, "\(context) minItems should match FenceParameterSpec")
+        }
+        if let maxItems = spec.maxItems {
+            #expect(extractIntField(from: schema, key: "maxItems") == maxItems, "\(context) maxItems should match FenceParameterSpec")
+        }
 
         if spec.type == .stringArray {
             guard let items = extractObjectField(from: schema, key: "items") else {

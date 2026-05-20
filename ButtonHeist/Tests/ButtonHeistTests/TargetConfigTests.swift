@@ -400,7 +400,7 @@ final class TargetConfigTests: XCTestCase {
         XCTAssertEqual(payload.connected, true)
         XCTAssertEqual(fence.config.deviceFilter, "127.0.0.1:1456")
         XCTAssertEqual(fence.config.token, "tok2")
-        XCTAssertEqual(fence.handoff.reconnectPolicy, .enabled(filter: "127.0.0.1:1456", reconnectTask: nil))
+        XCTAssertEqual(fence.handoff.reconnectPolicy, .enabled(filter: "127.0.0.1:1456", target: nil, reconnectTask: nil))
     }
 
     @ButtonHeistActor
@@ -420,7 +420,7 @@ final class TargetConfigTests: XCTestCase {
         XCTAssertEqual(payload.connected, true)
         XCTAssertEqual(fence.config.deviceFilter, "127.0.0.1:9999")
         XCTAssertEqual(fence.config.token, "direct-tok")
-        XCTAssertEqual(fence.handoff.reconnectPolicy, .enabled(filter: "127.0.0.1:9999", reconnectTask: nil))
+        XCTAssertEqual(fence.handoff.reconnectPolicy, .enabled(filter: "127.0.0.1:9999", target: nil, reconnectTask: nil))
     }
 
     @ButtonHeistActor

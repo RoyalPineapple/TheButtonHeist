@@ -53,12 +53,25 @@ extension TheFence {
     }
 
     private func decodeRunBatchRequest(_ request: [String: Any]) throws -> RunBatchRequest {
+        try Self.validateJSONEnvelope(
+            request,
+            field: "run_batch",
+            maxBytes: DecodeLimits.maxRunBatchRequestBytes,
+            maxDepth: DecodeLimits.maxRunBatchNestingDepth
+        )
         let rawSteps = try request.requiredSchemaDictionaryArray("steps")
         guard !rawSteps.isEmpty else {
             throw SchemaValidationError(
                 field: "steps",
                 observed: "array count 0",
-                expected: "array count >= 1"
+                expected: "array count 1...\(DecodeLimits.maxRunBatchSteps)"
+            )
+        }
+        guard rawSteps.count <= DecodeLimits.maxRunBatchSteps else {
+            throw SchemaValidationError(
+                field: "steps",
+                observed: "array count \(rawSteps.count)",
+                expected: "array count 1...\(DecodeLimits.maxRunBatchSteps)"
             )
         }
         return RunBatchRequest(
@@ -81,6 +94,12 @@ extension TheFence {
         let originalCommandName = step["command"] as? String ?? "?"
         switch FenceOperationCatalog.normalizeBatchStep(step) {
         case .success(let operation):
+            if let failure = batchBoundedResponseFailure(operation: operation, index: index) {
+                return .invalid(
+                    commandName: operation.command.rawValue,
+                    failure: failure
+                )
+            }
             do {
                 return .decoded(try parseRequest(
                     command: operation.command,
@@ -134,6 +153,26 @@ extension TheFence {
         }
     }
 
+    private func batchBoundedResponseFailure(
+        operation: NormalizedOperation,
+        index: Int
+    ) -> BatchStepDecodeFailure? {
+        guard operation.command == .getScreen,
+              operation.arguments["inlineData"] as? Bool == true
+        else { return nil }
+
+        let error = SchemaValidationError(
+            field: "steps[\(index)].inlineData",
+            observed: true,
+            expected: "not allowed for get_screen inside run_batch; omit inlineData or call get_screen outside run_batch"
+        )
+        return BatchStepDecodeFailure(
+            message: error.message,
+            details: nil,
+            includeDetailsInResult: true
+        )
+    }
+
     private func batchStepFailure(from response: FenceResponse) -> BatchStepDecodeFailure {
         guard case .error(let message, let details) = response else {
             return BatchStepDecodeFailure(
@@ -148,4 +187,125 @@ extension TheFence {
             includeDetailsInResult: true
         )
     }
+}
+
+private extension TheFence {
+
+    static func validateJSONEnvelope(
+        _ value: Any,
+        field: String,
+        maxBytes: Int,
+        maxDepth: Int
+    ) throws {
+        let byteCount = try jsonEncodedSize(
+            of: value,
+            field: field,
+            maxBytes: maxBytes,
+            maxDepth: maxDepth
+        )
+        guard byteCount <= maxBytes else {
+            throw SchemaValidationError(
+                field: field,
+                observed: "\(byteCount) bytes",
+                expected: "JSON request <= \(maxBytes) bytes"
+            )
+        }
+    }
+
+    static func jsonEncodedSize(
+        of value: Any,
+        field: String,
+        maxBytes: Int,
+        maxDepth: Int,
+        depth: Int = 1
+    ) throws -> Int {
+        guard depth <= maxDepth else {
+            throw SchemaValidationError(
+                field: field,
+                observed: "nesting depth \(depth)",
+                expected: "nesting depth <= \(maxDepth)"
+            )
+        }
+
+        func bounded(_ size: Int) throws -> Int {
+            guard size <= maxBytes else {
+                throw SchemaValidationError(
+                    field: field,
+                    observed: "\(size) bytes",
+                    expected: "JSON request <= \(maxBytes) bytes"
+                )
+            }
+            return size
+        }
+
+        if let dictionary = value as? [String: Any] {
+            var size = 2
+            for (index, entry) in dictionary.enumerated() {
+                if index > 0 { size = try bounded(size + 1) }
+                size = try bounded(size + jsonStringEncodedSize(entry.key) + 1)
+                let valueSize = try jsonEncodedSize(
+                    of: entry.value,
+                    field: field,
+                    maxBytes: maxBytes,
+                    maxDepth: maxDepth,
+                    depth: depth + 1
+                )
+                size = try bounded(size + valueSize)
+            }
+            return size
+        }
+
+        if let array = value as? [Any] {
+            var size = 2
+            for (index, item) in array.enumerated() {
+                if index > 0 { size = try bounded(size + 1) }
+                let itemSize = try jsonEncodedSize(
+                    of: item,
+                    field: field,
+                    maxBytes: maxBytes,
+                    maxDepth: maxDepth,
+                    depth: depth + 1
+                )
+                size = try bounded(size + itemSize)
+            }
+            return size
+        }
+
+        if let string = value as? String {
+            return try bounded(jsonStringEncodedSize(string))
+        }
+
+        if let bool = value as? Bool {
+            return bool ? 4 : 5
+        }
+
+        if value is NSNull {
+            return 4
+        }
+
+        if let number = value as? NSNumber {
+            guard number.doubleValue.isFinite else {
+                throw SchemaValidationError(field: field, observed: number, expected: "finite JSON number")
+            }
+            return try bounded(String(describing: number).utf8.count)
+        }
+
+        throw SchemaValidationError(field: field, observed: value, expected: "JSON value")
+    }
+
+    static func jsonStringEncodedSize(_ value: String) -> Int {
+        var size = 2
+        for scalar in value.unicodeScalars {
+            switch scalar.value {
+            case 0x22, 0x5C:
+                size += 2
+            case 0x00...0x1F:
+                size += 6
+            default:
+                size += scalar.utf8.count
+            }
+        }
+        return size
+    }
+
 }

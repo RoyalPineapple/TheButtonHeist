@@ -22,6 +22,29 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
         try await super.tearDown()
     }
 
+    // MARK: - Connection admission
+
+    func testConnectionAdmissionRejectsReadyAfterEarlyCancel() {
+        let admission = ConnectionAdmission()
+
+        XCTAssertNil(admission.cancel())
+        XCTAssertFalse(admission.shouldAccept)
+    }
+
+    func testConnectionAdmissionRequestsCleanupWhenCancelArrivesBeforeAssignCompletes() {
+        let admission = ConnectionAdmission()
+
+        XCTAssertNil(admission.cancel())
+        XCTAssertTrue(admission.assign(7))
+    }
+
+    func testConnectionAdmissionReturnsAcceptedClientForLateCancel() {
+        let admission = ConnectionAdmission()
+
+        XCTAssertFalse(admission.assign(7))
+        XCTAssertEqual(admission.cancel(), 7)
+    }
+
     // MARK: - ServerPhase transitions
 
     func testStartTransitionsToListening() async throws {
@@ -268,8 +291,13 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
     func testScopeRejectionSendsServerErrorBeforeDisconnect() async throws {
         await server.stop()
         server = SimpleSocketServer(allowedScopes: [.usb])
+        let clientConnected = expectation(description: "scope-rejected client must not be accepted")
+        clientConnected.isInverted = true
+        let callbacks = SimpleSocketServer.Callbacks(
+            onClientConnected: { _, _ in clientConnected.fulfill() }
+        )
 
-        let port = try await server.startAsync(port: 0, bindToLoopback: true)
+        let port = try await server.startAsync(port: 0, bindToLoopback: true, callbacks: callbacks)
         let connection = NWConnection(
             host: .ipv6(.loopback),
             port: NWEndpoint.Port(rawValue: port)!,
@@ -291,6 +319,7 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
         }
         XCTAssertEqual(error.kind, .general)
         XCTAssertEqual(error.message, "Connection rejected: simulator connections are not allowed by this server.")
+        await fulfillment(of: [clientConnected], timeout: 0.2)
 
         connection.cancel()
     }

@@ -9,6 +9,44 @@ import TheScore
 /// Actor-isolated — all mutable state is protected by Swift concurrency.
 private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "server")
 
+/// Cross-queue admission state for a connection while Network.framework
+/// delivers `.ready` and `.cancelled` callbacks. The server actor owns the
+/// client table, but those callbacks arrive on the NWConnection queue before
+/// the actor has necessarily accepted the ready connection.
+final class ConnectionAdmission: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+    private struct State {
+        var clientId: Int?
+        var isCancelled = false
+    }
+
+    private let state = OSAllocatedUnfairLock<State>(initialState: State())
+
+    var shouldAccept: Bool {
+        state.withLock { !$0.isCancelled }
+    }
+
+    /// Records the accepted client id. Returns true if cancellation already
+    /// arrived and the caller should immediately remove the just-accepted
+    /// client from the actor table.
+    func assign(_ clientId: Int?) -> Bool {
+        state.withLock { current in
+            if let clientId {
+                current.clientId = clientId
+            }
+            return current.isCancelled
+        }
+    }
+
+    /// Marks the connection cancelled/failed. Returns an already-accepted
+    /// client id when cleanup must be scheduled on the server actor.
+    func cancel() -> Int? {
+        state.withLock { current in
+            current.isCancelled = true
+            return current.clientId
+        }
+    }
+}
+
 /// Synchronous outcome for handing bytes to a client socket.
 enum ServerSendOutcome: Equatable, Sendable {
     case enqueued
@@ -400,16 +438,71 @@ actor SimpleSocketServer {
     // MARK: - Private
 
     private func handleNewConnection(_ connection: NWConnection) {
-        let currentCount = clients.count
+        let admission = ConnectionAdmission()
+        connection.stateUpdateHandler = { [weak self] state in
+            guard let self else { return }
+            switch state {
+            case .ready:
+                self.spawnTrackedTask { server in
+                    guard admission.shouldAccept else { return }
+                    let clientId = await server.acceptReadyConnection(connection)
+                    if admission.assign(clientId), let clientId {
+                        await server.removeClient(clientId)
+                    }
+                }
+            case .failed(let error):
+                logger.error("Client connection failed: \(error)")
+                if let clientId = admission.cancel() {
+                    self.spawnTrackedTask { server in await server.removeClient(clientId) }
+                }
+            case .cancelled:
+                if let clientId = admission.cancel() {
+                    self.spawnTrackedTask { server in await server.removeClient(clientId) }
+                }
+            default:
+                break
+            }
+        }
 
-        if currentCount >= Self.maxConnections {
+        connection.start(queue: queue)
+    }
+
+    private func acceptReadyConnection(_ connection: NWConnection) -> Int? {
+        if clients.count >= Self.maxConnections {
             logger.warning("Max connections (\(Self.maxConnections)) reached, rejecting")
-            rejectUnregisteredConnectionWithServerError(
+            rejectStartedConnectionWithServerError(
                 connection,
                 kind: .general,
                 message: "Connection rejected: server already has the maximum number of clients."
             )
-            return
+            return nil
+        }
+
+        let scopeFilter = allowedScopes != ConnectionScope.all ? allowedScopes : nil
+        if let scopeFilter {
+            guard let host = Self.extractRemoteHost(from: connection) else {
+                logger.warning("Cannot classify connection endpoint, rejecting (scope filter active)")
+                rejectStartedConnectionWithServerError(
+                    connection,
+                    kind: .general,
+                    message: "Connection rejected: server could not classify the connection scope."
+                )
+                return nil
+            }
+            let interfaceNameList = (connection.currentPath?.availableInterfaces ?? []).map(\.name)
+            let scope = ConnectionScope.classify(host: host, interfaceNames: interfaceNameList)
+            let hostDescription = "\(host)"
+            let interfaceNames = interfaceNameList.joined(separator: ", ")
+            if !scopeFilter.contains(scope) {
+                logger.warning("Rejecting \(scope.rawValue) connection from \(hostDescription) via [\(interfaceNames)]")
+                rejectStartedConnectionWithServerError(
+                    connection,
+                    kind: .general,
+                    message: "Connection rejected: \(scope.rawValue) connections are not allowed by this server."
+                )
+                return nil
+            }
+            logger.info("Accepted \(scope.rawValue) connection from \(hostDescription) via [\(interfaceNames)]")
         }
 
         clientCounter += 1
@@ -421,60 +514,12 @@ actor SimpleSocketServer {
             rateLimitNotified: false,
             pendingBytes: 0
         )
-        let scopeFilter = allowedScopes != ConnectionScope.all ? allowedScopes : nil
-
-        connection.stateUpdateHandler = { [weak self] state in
-            guard let self else { return }
-            switch state {
-            case .ready:
-                // Scope filtering at .ready: interface info is now available for precise USB detection
-                if let scopeFilter {
-                    guard let host = Self.extractRemoteHost(from: connection) else {
-                        logger.warning("Cannot classify connection endpoint, rejecting (scope filter active)")
-                        self.spawnTrackedTask { server in
-                            await server.rejectClientWithServerError(
-                                clientId,
-                                kind: .general,
-                                message: "Connection rejected: server could not classify the connection scope."
-                            )
-                        }
-                        return
-                    }
-                    let interfaceNameList = (connection.currentPath?.availableInterfaces ?? []).map(\.name)
-                    let scope = ConnectionScope.classify(host: host, interfaceNames: interfaceNameList)
-                    let hostDescription = "\(host)"
-                    let interfaceNames = interfaceNameList.joined(separator: ", ")
-                    if !scopeFilter.contains(scope) {
-                        logger.warning("Rejecting \(scope.rawValue) connection from \(hostDescription) via [\(interfaceNames)]")
-                        self.spawnTrackedTask { server in
-                            await server.rejectClientWithServerError(
-                                clientId,
-                                kind: .general,
-                                message: "Connection rejected: \(scope.rawValue) connections are not allowed by this server."
-                            )
-                        }
-                        return
-                    }
-                    logger.info("Accepted \(scope.rawValue) connection from \(hostDescription) via [\(interfaceNames)]")
-                }
-                let remoteAddress = Self.extractRemoteHost(from: connection).map { "\($0)" }
-                logger.info("Client \(clientId) connected")
-                self.spawnTrackedTask { server in
-                    await server.notifyClientConnected(clientId, address: remoteAddress)
-                }
-            case .failed(let error):
-                logger.error("Client \(clientId) failed: \(error)")
-                self.spawnTrackedTask { server in await server.removeClient(clientId) }
-            case .cancelled:
-                self.spawnTrackedTask { server in await server.removeClient(clientId) }
-            default:
-                break
-            }
-        }
-
-        connection.start(queue: queue)
+        let remoteAddress = Self.extractRemoteHost(from: connection).map { "\($0)" }
+        logger.info("Client \(clientId) connected")
+        notifyClientConnected(clientId, address: remoteAddress)
         startReceiving(clientId: clientId, connection: connection)
         scheduleAuthDeadline(for: clientId)
+        return clientId
     }
 
     private func scheduleAuthDeadline(for clientId: Int) {
@@ -512,7 +557,7 @@ actor SimpleSocketServer {
         notifyClientDisconnected(clientId)
     }
 
-    private func rejectUnregisteredConnectionWithServerError(_ connection: NWConnection, kind: ErrorKind, message: String) {
+    private func rejectStartedConnectionWithServerError(_ connection: NWConnection, kind: ErrorKind, message: String) {
         let response: Data
         do {
             response = try ResponseEnvelope(message: .error(TheScore.ServerError(kind: kind, message: message))).encoded()
@@ -527,7 +572,6 @@ actor SimpleSocketServer {
             data.append(0x0A)
         }
 
-        connection.start(queue: queue)
         sendContent(connection, data, .contentProcessed { error in
             if let error {
                 logger.error("Send error while rejecting unregistered connection: \(error)")

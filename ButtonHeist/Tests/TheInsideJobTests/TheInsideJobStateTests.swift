@@ -6,6 +6,35 @@ import TheScore
 @MainActor
 final class TheInsideJobStateTests: XCTestCase {
 
+    private struct TestTLSFailure: Error, LocalizedError {
+        var errorDescription: String? { "test TLS identity failure" }
+    }
+
+    private struct TestTransportStartFailure: Error {}
+
+    private static let failingTransportFactory: @MainActor @Sendable (
+        _ identity: TLSIdentity,
+        _ allowedScopes: Set<ConnectionScope>
+    ) -> ServerTransport = { identity, allowedScopes in
+        let transport = ServerTransport(tlsIdentity: identity, allowedScopes: allowedScopes)
+        transport.startOverride = { _, _ in
+            throw TestTransportStartFailure()
+        }
+        return transport
+    }
+
+    private func waitUntil(
+        timeout: TimeInterval = 2.0,
+        _ condition: @MainActor () -> Bool
+    ) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if condition() { return true }
+            await Task.yield()
+        }
+        return condition()
+    }
+
     // MARK: - ServerPhase: Initial
 
     func testInitialServerPhaseIsStopped() {
@@ -300,6 +329,84 @@ final class TheInsideJobStateTests: XCTestCase {
         guard case .suspended = job.serverPhase else {
             return XCTFail("Expected current failed resume attempt to suspend, got \(job.serverPhase)")
         }
+    }
+
+    func testTransportEventBacklogOverflowStopsServer() async {
+        let job = TheInsideJob()
+        job.serverPhase = .running(transport: ServerTransport())
+
+        await job.handleTransportEventBacklogOverflow(maxEvents: ServerTransport.eventStreamBufferLimit)
+
+        guard case .stopped = job.serverPhase else {
+            return XCTFail("Expected overflow to stop server, got \(job.serverPhase)")
+        }
+    }
+
+    func testStartFailsClosedWhenTLSIdentityUnavailable() async throws {
+        let job = TheInsideJob(token: "test-token", tlsIdentityProvider: {
+            throw TestTLSFailure()
+        })
+
+        do {
+            try await job.start()
+            XCTFail("Expected startup to fail before listener creation")
+        } catch let error as InsideJobStartupError {
+            XCTAssertEqual(
+                error,
+                .tlsIdentityUnavailable(phase: "startup", reason: "test TLS identity failure")
+            )
+        } catch {
+            XCTFail("Expected InsideJobStartupError, got \(error)")
+        }
+
+        guard case .stopped = job.serverPhase else {
+            return XCTFail("Expected startup failure to leave server stopped, got \(job.serverPhase)")
+        }
+        XCTAssertFalse(job.getaway.identity.tlsActive)
+    }
+
+    func testStartFailsClosedWhenListenerStartFails() async throws {
+        let identity = try TLSIdentity.createEphemeral()
+        let job = TheInsideJob(
+            token: "test-token",
+            tlsIdentityProvider: { identity },
+            transportFactory: Self.failingTransportFactory
+        )
+
+        do {
+            try await job.start()
+            XCTFail("Expected startup to fail before publishing a half-wired transport")
+        } catch is TestTransportStartFailure {
+            // The invariant is fail-closed cleanup after listener startup fails.
+        } catch {
+            XCTFail("Expected TestTransportStartFailure, got \(error)")
+        }
+
+        guard case .stopped = job.serverPhase else {
+            return XCTFail("Expected listener startup failure to leave server stopped, got \(job.serverPhase)")
+        }
+        XCTAssertFalse(job.getaway.identity.tlsActive)
+        XCTAssertNil(job.getaway.transport)
+    }
+
+    func testResumeFailsClosedWhenListenerStartFails() async throws {
+        let identity = try TLSIdentity.createEphemeral()
+        let job = TheInsideJob(
+            token: "test-token",
+            tlsIdentityProvider: { identity },
+            transportFactory: Self.failingTransportFactory
+        )
+        job.serverPhase = TheInsideJob.ServerPhase.suspended
+
+        await job.resume()
+        let settled = await waitUntil {
+            if case .suspended = job.serverPhase { return true }
+            return false
+        }
+
+        XCTAssertTrue(settled, "Expected failed resume to settle back to suspended")
+        XCTAssertFalse(job.getaway.identity.tlsActive)
+        XCTAssertNil(job.getaway.transport)
     }
 
     // MARK: - PollingPhase: Computed properties

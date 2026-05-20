@@ -27,6 +27,7 @@ extension TheBookKeeper {
                 "Expected compressed file not found at \(compressedPath.path)"
             )
         }
+        try Self.restrictPrivateFilePermissions(at: compressedPath)
         return compressedPath
     }
 
@@ -55,7 +56,12 @@ extension TheBookKeeper {
                 "Expected archive not found at \(archivePath.path)"
             )
         }
+        try Self.restrictPrivateFilePermissions(at: archivePath)
         return archivePath
+    }
+
+    nonisolated private static func restrictPrivateFilePermissions(at url: URL) throws {
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
     }
 
     private nonisolated static func runProcess(_ process: Process) async throws {

@@ -209,7 +209,7 @@ extension Array where Element == DiscoveredDevice {
         await withTaskGroup(of: (Int, DiscoveredDevice?).self) { group in
             for (index, device) in self.enumerated() {
                 group.addTask {
-                    let reachable = await device.isReachable(timeout: timeout)
+                    let reachable = await device.reachability(timeout: timeout).isReachable
                     return reachable ? (index, device) : (index, nil)
                 }
             }
@@ -229,73 +229,102 @@ var makeReachabilityConnection: (DiscoveredDevice) -> any DeviceConnecting = { d
     return connection
 }
 
+enum DeviceReachability: Equatable {
+    case reachable
+    case unavailable
+    case failed(DisconnectReason)
+
+    var isReachable: Bool {
+        if case .reachable = self {
+            return true
+        }
+        return false
+    }
+}
+
 extension DiscoveredDevice {
     @ButtonHeistActor
     func isReachable(timeout: TimeInterval = 1.5) async -> Bool {
+        await reachability(timeout: timeout).isReachable
+    }
+
+    @ButtonHeistActor
+    func reachability(timeout: TimeInterval = 1.5) async -> DeviceReachability {
         let connection = makeReachabilityConnection(self)
         let deviceName = name
         let resolver = ReachabilityResolver()
 
         // Wire the connection's onEvent callback to resolve the probe:
-        // `.transportReady` resolves true; `.disconnected` resolves false.
+        // `.transportReady` resolves reachable; `.disconnected` records
+        // contract failures that should not be flattened into transport misses.
         // The resolver is one-shot so a subsequent `.disconnected` after a
         // successful transport-ready signal is a no-op.
         connection.onEvent = { event in
             switch event {
             case .transportReady:
                 reachabilityLogger.debug("Transport reachable: \(deviceName, privacy: .public)")
-                resolver.resolve(true)
+                resolver.resolve(.reachable)
             case .connected:
                 break
             case .message:
                 break
             case .sendFailed:
                 break
-            case .disconnected:
-                resolver.resolve(false)
+            case .disconnected(let reason):
+                resolver.resolve(Self.reachabilityDisconnectResult(reason))
             }
         }
 
         connection.connect()
 
-        // Schedule a timeout that resolves false if the probe hasn't completed.
+        // Schedule a timeout that resolves unavailable if the probe hasn't completed.
         let timeoutTask = Task { @ButtonHeistActor in
             guard await Task.cancellableSleep(for: .seconds(timeout)) else { return }
-            resolver.resolve(false)
+            resolver.resolve(.unavailable)
         }
         defer { timeoutTask.cancel() }
 
-        let reachable = await resolver.value
+        let reachability = await resolver.value
         connection.disconnect()
-        if !reachable {
+        if !reachability.isReachable {
             reachabilityLogger.debug("Transport probe miss: \(deviceName, privacy: .public)")
         }
-        return reachable
+        return reachability
+    }
+
+    private static func reachabilityDisconnectResult(_ reason: DisconnectReason) -> DeviceReachability {
+        switch reason.phase {
+        case .tls:
+            return .failed(reason)
+        case .discovery, .setup, .transport, .authentication, .session,
+             .request, .recording, .protocolNegotiation, .client, .server:
+            return .unavailable
+        }
     }
 }
 
-/// One-shot bool resolver backing `DiscoveredDevice.isReachable`. Holds a
+/// One-shot resolver backing `DiscoveredDevice.reachability`. Holds a
 /// continuation that is resumed exactly once by whichever signal arrives
 /// first: a successful transport-ready signal, a disconnect, or the timeout.
 @ButtonHeistActor
 private final class ReachabilityResolver {
     /// Explicit three-state lifecycle replacing the prior
-    /// `(continuation: CheckedContinuation?, pendingResult: Bool?)` pair.
+    /// `(continuation: CheckedContinuation?, pendingResult: DeviceReachability?)` pair.
     private enum State {
         /// No awaiter has registered and no result has arrived.
         case idle
         /// Awaiters are parked, waiting for the first `resolve(_:)` to fire.
-        case awaiting([CheckedContinuation<Bool, Never>])
+        case awaiting([CheckedContinuation<DeviceReachability, Never>])
         /// A result arrived before any awaiter registered. The next
         /// `await value` returns immediately.
-        case resolved(Bool)
+        case resolved(DeviceReachability)
     }
 
     private var state: State = .idle
 
-    var value: Bool {
+    var value: DeviceReachability {
         get async {
-            await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+            await withCheckedContinuation { (continuation: CheckedContinuation<DeviceReachability, Never>) in
                 switch state {
                 case .resolved(let value):
                     continuation.resume(returning: value)
@@ -309,7 +338,7 @@ private final class ReachabilityResolver {
         }
     }
 
-    func resolve(_ value: Bool) {
+    func resolve(_ value: DeviceReachability) {
         switch state {
         case .awaiting(let continuations):
             state = .resolved(value)

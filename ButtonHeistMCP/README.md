@@ -46,8 +46,9 @@ ButtonHeistMCP currently exposes 24 tools backed by `TheFence`:
 - Uses `StdioTransport`, so MCP traffic is JSON-RPC over stdin/stdout
 - Reuses a single `TheFence` instance and auto-reconnects when the next tool call arrives
 - Resets an idle timeout after every tool call and disconnects when inactive
-- Returns screenshots as MCP image content
-- Replaces raw base64 video payloads with a summary so recordings do not overwhelm MCP context; pass `output` to `stop_recording` to take the actual tape with you
+- Returns screenshot metadata plus an artifact path by default; pass `inlineData=true` on `get_screen` to opt into capped MCP image content
+- Rejects `inlineData=true` for `get_screen` inside `run_batch` so batched responses stay bounded
+- Returns recording artifact paths plus metadata by default; `inlineData` and `includeInteractionLog` are explicit, size-capped expansion flags
 
 ## Environment
 

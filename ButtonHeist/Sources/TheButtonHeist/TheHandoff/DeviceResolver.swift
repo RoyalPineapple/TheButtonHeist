@@ -6,15 +6,18 @@ import Foundation
 struct DeviceResolver {
     let filter: String?
     let discoveryTimeout: UInt64
+    let reachabilityTimeout: TimeInterval
     let getDiscoveredDevices: () -> [DiscoveredDevice]
 
     init(
         filter: String?,
         discoveryTimeout: UInt64,
+        reachabilityTimeout: TimeInterval = 1.0,
         getDiscoveredDevices: @escaping () -> [DiscoveredDevice]
     ) {
         self.filter = filter
         self.discoveryTimeout = discoveryTimeout
+        self.reachabilityTimeout = reachabilityTimeout
         self.getDiscoveredDevices = getDiscoveredDevices
     }
 
@@ -52,7 +55,7 @@ struct DeviceResolver {
             let shouldProbe = stabilized && (lastProbeAt == nil || now - (lastProbeAt ?? 0) >= probeInterval)
             if shouldProbe {
                 lastProbeAt = now
-                let reachable = await discovered.reachable()
+                let reachable = await discovered.reachable(timeout: reachabilityTimeout)
                 if let device = Self.selectDevice(from: reachable, filter: filter) {
                     return device
                 }
@@ -75,7 +78,7 @@ struct DeviceResolver {
     }
 
     private func finalSelection() async throws(TheHandoff.ConnectionError) -> DiscoveredDevice {
-        let reachable = await getDiscoveredDevices().reachable()
+        let reachable = await getDiscoveredDevices().reachable(timeout: reachabilityTimeout)
         if let device = Self.selectDevice(from: reachable, filter: filter) {
             return device
         }

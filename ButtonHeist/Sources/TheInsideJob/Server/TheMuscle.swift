@@ -10,7 +10,7 @@ import TheScore
 ///
 /// The session token is a coordination primitive — it keeps agents from stepping on each
 /// other's sessions, not a security credential. Anyone with debug access to the device
-/// can read it from the logs and connect.
+/// can approve an empty-token connection and receive the generated token for reconnects.
 ///
 /// Token resolution order:
 /// 1. Explicit token (from API, INSIDEJOB_TOKEN env var, or InsideJobToken plist key)

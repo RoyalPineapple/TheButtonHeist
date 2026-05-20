@@ -10,7 +10,7 @@ private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "
 ///
 /// Kept separate from FenceError because DisconnectReason is a value type
 /// used by `ConnectionEvent.disconnected`, not a thrown error. It carries
-/// transport-level detail (bufferOverflow,
+/// transport-level detail (bufferOverflow, eventBacklogOverflow,
 /// serverClosed, networkError, certificateMismatch, protocolMismatch,
 /// localDisconnect) that callers never need to catch. FenceError is
 /// the single thrown error type for all of TheFence, TheHandoff, and
@@ -18,6 +18,7 @@ private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "
 enum DisconnectReason: Error, LocalizedError {
     case networkError(Error)
     case bufferOverflow
+    case eventBacklogOverflow(maxEvents: Int)
     case serverClosed
     case authFailed(String)
     case sessionLocked(String)
@@ -43,6 +44,8 @@ enum DisconnectReason: Error, LocalizedError {
             return "Network error: \(error.localizedDescription)"
         case .bufferOverflow:
             return "Server exceeded max buffer size"
+        case .eventBacklogOverflow(let maxEvents):
+            return "Connection event backlog exceeded \(maxEvents) buffered events"
         case .serverClosed:
             return "Connection closed by server"
         case .authFailed(let reason):
@@ -66,6 +69,8 @@ enum DisconnectReason: Error, LocalizedError {
             return "transport.network_error"
         case .bufferOverflow:
             return "transport.buffer_overflow"
+        case .eventBacklogOverflow:
+            return "transport.event_backlog_overflow"
         case .serverClosed:
             return "transport.server_closed"
         case .authFailed:
@@ -85,7 +90,7 @@ enum DisconnectReason: Error, LocalizedError {
 
     var phase: FailurePhase {
         switch self {
-        case .networkError, .bufferOverflow, .serverClosed:
+        case .networkError, .bufferOverflow, .eventBacklogOverflow, .serverClosed:
             return .transport
         case .authFailed:
             return .authentication
@@ -102,7 +107,7 @@ enum DisconnectReason: Error, LocalizedError {
 
     var retryable: Bool {
         switch self {
-        case .networkError, .serverClosed, .sessionLocked:
+        case .networkError, .eventBacklogOverflow, .serverClosed, .sessionLocked:
             return true
         case .bufferOverflow, .authFailed, .protocolMismatch, .localDisconnect,
              .certificateMismatch, .missingFingerprint:
@@ -116,6 +121,8 @@ enum DisconnectReason: Error, LocalizedError {
             return "Check that the app is still running and reachable, then retry."
         case .bufferOverflow:
             return "Request a smaller payload or narrow the interface query before retrying."
+        case .eventBacklogOverflow:
+            return "Reconnect and retry after reducing event volume or response size."
         case .authFailed(let reason):
             if reason.localizedCaseInsensitiveContains("configured token") {
                 return "Retry with the configured token."
@@ -161,6 +168,8 @@ extension DisconnectReason: Equatable {
              (.certificateMismatch, .certificateMismatch),
              (.missingFingerprint, .missingFingerprint):
             return true
+        case (.eventBacklogOverflow(let lhsMaxEvents), .eventBacklogOverflow(let rhsMaxEvents)):
+            return lhsMaxEvents == rhsMaxEvents
         case (.authFailed(let lhsReason), .authFailed(let rhsReason)):
             return lhsReason == rhsReason
         case (.sessionLocked(let lhsMessage), .sessionLocked(let rhsMessage)):
@@ -206,6 +215,7 @@ enum DeviceConnectionEvent: Sendable {
 final class DeviceConnection: DeviceConnecting {
 
     private static let maxBufferSize = 64 * 1024 * 1024
+    nonisolated static let eventStreamBufferLimit = 512
 
     struct ActiveConnection {
         let connection: NWConnection
@@ -291,13 +301,16 @@ final class DeviceConnection: DeviceConnecting {
         eventConsumerTask?.cancel()
         eventContinuation?.finish()
 
-        let (stream, continuation) = AsyncStream<DeviceConnectionEvent>.makeStream(
-            bufferingPolicy: .unbounded
-        )
+        let (stream, continuation) = Self.makeEventStream()
         eventContinuation = continuation
 
         conn.stateUpdateHandler = { state in
-            continuation.yield(.state(state, connection: conn))
+            Self.yieldEvent(.state(state, connection: conn), to: continuation) { [weak self, weak conn] in
+                guard let conn else { return }
+                Task { @ButtonHeistActor [weak self] in
+                    self?.handleEventStreamOverflow(connection: conn)
+                }
+            }
         }
 
         eventConsumerTask = Task { @ButtonHeistActor [weak self] in
@@ -441,8 +454,51 @@ final class DeviceConnection: DeviceConnecting {
         // the actor in arrival order.
         let continuation = eventContinuation
         connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { content, _, isComplete, error in
-            continuation?.yield(.received(content: content, isComplete: isComplete, error: error, connection: connection))
+            guard let continuation else { return }
+            Self.yieldEvent(
+                .received(content: content, isComplete: isComplete, error: error, connection: connection),
+                to: continuation
+            ) { [weak self, weak connection] in
+                guard let connection else { return }
+                Task { @ButtonHeistActor [weak self] in
+                    self?.handleEventStreamOverflow(connection: connection)
+                }
+            }
         }
+    }
+
+    nonisolated static func makeEventStream() -> (
+        AsyncStream<DeviceConnectionEvent>,
+        AsyncStream<DeviceConnectionEvent>.Continuation
+    ) {
+        AsyncStream<DeviceConnectionEvent>.makeStream(
+            bufferingPolicy: .bufferingOldest(eventStreamBufferLimit)
+        )
+    }
+
+    nonisolated static func yieldEvent(
+        _ event: DeviceConnectionEvent,
+        to continuation: AsyncStream<DeviceConnectionEvent>.Continuation,
+        onOverflow: @escaping @Sendable () -> Void
+    ) {
+        switch continuation.yield(event) {
+        case .enqueued, .terminated:
+            return
+        case .dropped:
+            continuation.finish()
+            onOverflow()
+        @unknown default:
+            continuation.finish()
+            onOverflow()
+        }
+    }
+
+    /// Internal for testing and overflow handling from NW callbacks.
+    func handleEventStreamOverflow(connection: NWConnection) {
+        guard let current = currentConnection, current === connection else { return }
+        logger.error("Connection event backlog exceeded \(Self.eventStreamBufferLimit), disconnecting")
+        disconnect()
+        onEvent?(.disconnected(.eventBacklogOverflow(maxEvents: Self.eventStreamBufferLimit)))
     }
 
     // Internal for testing stale-callback handling.
