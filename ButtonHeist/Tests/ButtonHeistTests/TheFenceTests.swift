@@ -1976,6 +1976,219 @@ final class TheFenceTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testStartRecordingRejectsWhileCompletionWaitIsPendingAfterStopped() async throws {
+        let (fence, _) = makeConnectedFence()
+        try await fence.start()
+        fence.handoff.onRecordingEvent?(.started)
+
+        let completionWait = Task { @ButtonHeistActor in
+            try await fence.waitForRecording(timeout: 5.0)
+        }
+        while !fence.isWaitingForRecordingCompletion {
+            await Task.yield()
+        }
+
+        fence.handoff.onRecordingEvent?(.stopped)
+        XCTAssertFalse(fence.isRecording)
+        XCTAssertTrue(fence.isWaitingForRecordingCompletion)
+
+        do {
+            _ = try await fence.execute(request: ["command": "start_recording"])
+            XCTFail("Expected start_recording conflict while completion wait is pending")
+        } catch let error as FenceError {
+            guard case .invalidRequest(let message) = error else {
+                completionWait.cancel()
+                return XCTFail("Expected invalidRequest, got \(error)")
+            }
+            XCTAssertTrue(
+                message.contains("already waiting for completion"),
+                "Expected completion wait conflict, got: \(message)"
+            )
+        } catch {
+            completionWait.cancel()
+            XCTFail("Expected FenceError.invalidRequest, got \(error)")
+        }
+
+        completionWait.cancel()
+        do {
+            _ = try await completionWait.value
+            XCTFail("Expected completion waiter cancellation")
+        } catch is CancellationError {
+            // expected
+        } catch {
+            XCTFail("Expected CancellationError, got \(error)")
+        }
+    }
+
+    @ButtonHeistActor
+    func testStoppedKeepsCompletionWaitUntilPayload() async throws {
+        let fence = TheFence(configuration: .init())
+        fence.handoff.onRecordingEvent?(.started)
+        let expectedPayload = RecordingPayload(
+            videoData: "dGVzdA==", width: 390, height: 844,
+            duration: 2.0, frameCount: 16, fps: 8,
+            startTime: Date(), endTime: Date(), stopReason: .manual
+        )
+
+        let completionWait = Task { @ButtonHeistActor in
+            try await fence.waitForRecording(timeout: 5.0)
+        }
+        while !fence.isWaitingForRecordingCompletion {
+            await Task.yield()
+        }
+
+        fence.handoff.onRecordingEvent?(.stopped)
+        XCTAssertFalse(fence.isRecording)
+        XCTAssertTrue(fence.isWaitingForRecordingCompletion)
+
+        fence.handoff.onRecordingEvent?(.completed(expectedPayload))
+
+        let payload = try await completionWait.value
+        XCTAssertEqual(payload.videoData, expectedPayload.videoData)
+        XCTAssertFalse(fence.isWaitingForRecordingCompletion)
+    }
+
+    @ButtonHeistActor
+    func testStartRecordingErrorResolvesStartWaitAndAllowsNextStart() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        try await fence.start()
+        mockConn.autoResponse = { message in
+            if case .startRecording = message {
+                Task { @ButtonHeistActor in
+                    fence.handoff.onRecordingEvent?(.failed("permission denied"))
+                }
+            }
+            return .actionResult(ActionResult(success: true, method: .activate))
+        }
+
+        do {
+            try await fence.startRecordingAndWait(
+                config: RecordingConfig(fps: 8, maxDuration: 60),
+                timeout: 5.0
+            )
+            XCTFail("Expected start recording failure")
+        } catch let error as FenceError {
+            guard case .actionFailed(let message) = error else {
+                return XCTFail("Expected actionFailed, got \(error)")
+            }
+            XCTAssertTrue(message.contains("permission denied"))
+        }
+
+        mockConn.autoResponse = { message in
+            if case .startRecording = message {
+                return .recordingStarted
+            }
+            return .actionResult(ActionResult(success: true, method: .activate))
+        }
+
+        try await fence.startRecordingAndWait(
+            config: RecordingConfig(fps: 8, maxDuration: 60),
+            timeout: 5.0
+        )
+        XCTAssertTrue(fence.isRecording)
+    }
+
+    @ButtonHeistActor
+    func testCompletionFailureClearsStateAndAllowsNextStart() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        try await fence.start()
+        mockConn.autoResponse = { message in
+            if case .startRecording = message {
+                Task { @ButtonHeistActor in
+                    for _ in 0..<200 where !fence.isWaitingForRecordingCompletion {
+                        await Task.yield()
+                    }
+                    fence.handoff.onRecordingEvent?(.failed("encoder failed"))
+                }
+                return .recordingStarted
+            }
+            return .actionResult(ActionResult(success: true, method: .activate))
+        }
+
+        do {
+            _ = try await fence.recordToCompletion(
+                config: RecordingConfig(fps: 8, maxDuration: 60),
+                timeout: 5.0
+            )
+            XCTFail("Expected completion failure")
+        } catch let error as FenceError {
+            guard case .actionFailed(let message) = error else {
+                return XCTFail("Expected actionFailed, got \(error)")
+            }
+            XCTAssertTrue(message.contains("encoder failed"))
+        }
+
+        mockConn.autoResponse = { message in
+            if case .startRecording = message {
+                return .recordingStarted
+            }
+            return .actionResult(ActionResult(success: true, method: .activate))
+        }
+
+        try await fence.startRecordingAndWait(
+            config: RecordingConfig(fps: 8, maxDuration: 60),
+            timeout: 5.0
+        )
+        XCTAssertTrue(fence.isRecording)
+    }
+
+    @ButtonHeistActor
+    func testDisconnectCancelsPendingRecordingStartAndCompletionWaits() async throws {
+        do {
+            let (fence, mockConn) = makeConnectedFence()
+            try await fence.start()
+            mockConn.autoResponse = nil
+
+            let startWait = Task { @ButtonHeistActor in
+                try await fence.startRecordingAndWait(
+                    config: RecordingConfig(fps: 8, maxDuration: 60),
+                    timeout: 5.0
+                )
+            }
+            while mockConn.sent.isEmpty {
+                await Task.yield()
+            }
+
+            mockConn.onEvent?(.disconnected(.serverClosed))
+
+            do {
+                try await startWait.value
+                XCTFail("Expected pending start wait to fail on disconnect")
+            } catch let error as FenceError {
+                guard case .connectionFailure(let failure) = error else {
+                    return XCTFail("Expected connectionFailure, got \(error)")
+                }
+                XCTAssertEqual(failure.errorCode, "transport.server_closed")
+            }
+        }
+
+        do {
+            let (fence, mockConn) = makeConnectedFence()
+            try await fence.start()
+            fence.handoff.onRecordingEvent?(.started)
+
+            let completionWait = Task { @ButtonHeistActor in
+                try await fence.waitForRecording(timeout: 5.0)
+            }
+            while !fence.isWaitingForRecordingCompletion {
+                await Task.yield()
+            }
+
+            mockConn.onEvent?(.disconnected(.serverClosed))
+
+            do {
+                _ = try await completionWait.value
+                XCTFail("Expected pending completion wait to fail on disconnect")
+            } catch let error as FenceError {
+                guard case .connectionFailure(let failure) = error else {
+                    return XCTFail("Expected connectionFailure, got \(error)")
+                }
+                XCTAssertEqual(failure.errorCode, "transport.server_closed")
+            }
+        }
+    }
+
+    @ButtonHeistActor
     func testStopRecordingRetrievesCachedPayloadWhenLocalRecordingPhaseIsIdle() async throws {
         let (fence, mockConn) = makeConnectedFence()
         let tempDirectory = TempDirectoryFixture.make(prefix: "cached-recording")
