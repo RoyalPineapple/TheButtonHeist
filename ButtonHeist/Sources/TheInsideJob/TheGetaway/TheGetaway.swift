@@ -340,6 +340,11 @@ final class TheGetaway {
         replaceRecordingRouteState(.idle)
     }
 
+    func tearDownIfWired(to expectedTransport: ServerTransport) async {
+        guard transport === expectedTransport else { return }
+        await tearDown()
+    }
+
     /// Insert a Task into `pendingRecordingTasks` and prune already-completed
     /// handles so the set does not grow across many recordings.
     func trackRecordingTask(_ task: Task<Void, Never>) {

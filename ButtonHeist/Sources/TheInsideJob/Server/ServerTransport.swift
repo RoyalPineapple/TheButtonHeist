@@ -49,6 +49,20 @@ private final class TransportOverflowStopper: @unchecked Sendable { // swiftlint
     }
 }
 
+enum ServerTransportError: Error, LocalizedError, Equatable, Sendable {
+    case tlsIdentityRequired
+    case tlsParametersUnavailable(fingerprint: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .tlsIdentityRequired:
+            return "TLS identity is required before listener startup; listener was not started and Bonjour was not published."
+        case .tlsParametersUnavailable(let fingerprint):
+            return "TLS parameters could not be created for identity \(fingerprint); listener was not started and Bonjour was not published."
+        }
+    }
+}
+
 /// Server-side transport layer for TheInsideJob.
 ///
 /// Combines `SimpleSocketServer` (TCP) with Bonjour `NetService` advertisement
@@ -89,7 +103,10 @@ final class ServerTransport: NSObject {
     /// The underlying TCP server (actor-isolated).
     nonisolated let server: SimpleSocketServer
 
-    /// TLS identity for encrypted transport (nil = plain TCP).
+    /// TLS identity for encrypted transport.
+    ///
+    /// A nil identity is accepted only so tests can build an inert transport.
+    /// `start` and `advertise` fail closed when no identity is present.
     private nonisolated let tlsIdentity: TLSIdentity?
 
     /// The Bonjour service, if advertising.
@@ -138,6 +155,9 @@ final class ServerTransport: NSObject {
     /// frozen; later assignments would be silently captured-by-value at
     /// `makeCallbacks()` time and have no effect on the running transport.
     @MainActor private var hasStarted = false
+
+    /// Test hook for deterministic listener-start failures after TLS setup.
+    @MainActor var startOverride: ((_ port: UInt16, _ bindToLoopback: Bool) async throws -> UInt16)?
 
     /// Install a synchronous data interceptor. Must be called before
     /// `start()`; calls after start are ignored because `makeCallbacks()`
@@ -201,10 +221,26 @@ final class ServerTransport: NSObject {
             self.stopTask = nil
         }
 
-        let params = await tlsIdentity?.makeTLSParameters()
+        guard let tlsIdentity else {
+            throw ServerTransportError.tlsIdentityRequired
+        }
+        guard let params = await tlsIdentity.makeTLSParameters() else {
+            throw ServerTransportError.tlsParametersUnavailable(fingerprint: tlsIdentity.fingerprint)
+        }
+        if let startOverride {
+            let actualPort = try await startOverride(port, bindToLoopback)
+            hasStarted = true
+            return actualPort
+        }
         let callbacks = makeCallbacks()
+        let actualPort = try await server.startAsync(
+            port: port,
+            bindToLoopback: bindToLoopback,
+            tlsParameters: params,
+            callbacks: callbacks
+        )
         hasStarted = true
-        return try await server.startAsync(port: port, bindToLoopback: bindToLoopback, tlsParameters: params, callbacks: callbacks)
+        return actualPort
     }
 
     /// Build the bridge callbacks that yield onto `eventContinuation`.
@@ -337,6 +373,10 @@ final class ServerTransport: NSObject {
         let port = server.listeningPort
         guard port > 0 else {
             logger.error("Cannot advertise: server not started")
+            return
+        }
+        guard tlsIdentity != nil else {
+            logger.error("Cannot advertise: TLS identity is not active")
             return
         }
 

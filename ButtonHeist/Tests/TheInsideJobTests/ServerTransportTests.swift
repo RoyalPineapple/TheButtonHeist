@@ -23,6 +23,22 @@ final class ServerTransportTests: XCTestCase {
         XCTAssertEqual(observedMaxEvents, ServerTransport.eventStreamBufferLimit)
     }
 
+    @MainActor
+    func testStartWithoutTLSIdentityFailsClosedBeforeListenerStarts() async throws {
+        let transport = ServerTransport()
+
+        do {
+            _ = try await transport.start(port: 0, bindToLoopback: true)
+            XCTFail("Expected ServerTransport to reject listener startup without TLS")
+        } catch let error as ServerTransportError {
+            XCTAssertEqual(error, .tlsIdentityRequired)
+        } catch {
+            XCTFail("Expected ServerTransportError, got \(error)")
+        }
+
+        XCTAssertEqual(transport.listeningPort, 0)
+    }
+
     func testTransportEventStreamDropsNewestWhenBufferLimitIsReached() {
         let (stream, continuation) = ServerTransport.makeEventStream()
         defer {

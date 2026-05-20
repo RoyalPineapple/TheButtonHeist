@@ -9,6 +9,17 @@ import AccessibilitySnapshotParser
 
 let insideJobLogger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "server")
 
+enum InsideJobStartupError: Error, LocalizedError, Equatable, Sendable {
+    case tlsIdentityUnavailable(phase: String, reason: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .tlsIdentityUnavailable(let phase, let reason):
+            return "TLS identity unavailable during \(phase); listener was not started and Bonjour was not published. \(reason)"
+        }
+    }
+}
+
 /// The job itself — assembles the crew, manages the operation lifecycle.
 ///
 /// TheInsideJob is the public API singleton. It creates every crew member,
@@ -167,6 +178,8 @@ public final class TheInsideJob {
     private let allowedScopesSource: StartupConfigurationSource
     private let pollingInterval: ResolvedStartupValue<TimeInterval>?
     private let sessionReleaseTimeout: ResolvedStartupValue<TimeInterval>
+    private let tlsIdentityProvider: @MainActor () throws -> TLSIdentity
+    private let transportFactory: @MainActor (TLSIdentity, Set<ConnectionScope>) -> ServerTransport
     private let installationId: String
     private let sessionId = UUID()
     private let allowedScopes: Set<ConnectionScope>
@@ -240,7 +253,36 @@ public final class TheInsideJob {
             port: port,
             preferredPortSource: port == 0 ? .defaultValue : .api,
             pollingInterval: nil,
-            sessionReleaseTimeout: startupConfiguration.sessionTimeout
+            sessionReleaseTimeout: startupConfiguration.sessionTimeout,
+            tlsIdentityProvider: Self.defaultTLSIdentityProvider,
+            transportFactory: Self.makeDefaultTransport
+        )
+    }
+
+    convenience init(
+        token: String? = nil,
+        instanceId: String? = nil,
+        allowedScopes: Set<ConnectionScope>? = nil,
+        port: UInt16 = 0,
+        tlsIdentityProvider: @escaping @MainActor () throws -> TLSIdentity,
+        transportFactory: @escaping @MainActor (TLSIdentity, Set<ConnectionScope>) -> ServerTransport = {
+            ServerTransport(tlsIdentity: $0, allowedScopes: $1)
+        }
+    ) {
+        let startupConfiguration = StartupConfiguration.resolve()
+        self.init(
+            token: token,
+            tokenSource: token == nil ? .generated : .api,
+            instanceId: instanceId,
+            instanceIdSource: instanceId == nil ? .generated : .api,
+            allowedScopes: allowedScopes ?? startupConfiguration.allowedScopes.value,
+            allowedScopesSource: allowedScopes == nil ? startupConfiguration.allowedScopes.source : .api,
+            port: port,
+            preferredPortSource: port == 0 ? .defaultValue : .api,
+            pollingInterval: nil,
+            sessionReleaseTimeout: startupConfiguration.sessionTimeout,
+            tlsIdentityProvider: tlsIdentityProvider,
+            transportFactory: transportFactory
         )
     }
 
@@ -255,7 +297,9 @@ public final class TheInsideJob {
             port: startupConfiguration.preferredPort.value,
             preferredPortSource: startupConfiguration.preferredPort.source,
             pollingInterval: startupConfiguration.pollingInterval,
-            sessionReleaseTimeout: startupConfiguration.sessionTimeout
+            sessionReleaseTimeout: startupConfiguration.sessionTimeout,
+            tlsIdentityProvider: Self.defaultTLSIdentityProvider,
+            transportFactory: Self.makeDefaultTransport
         )
     }
 
@@ -269,7 +313,9 @@ public final class TheInsideJob {
         port: UInt16,
         preferredPortSource: StartupConfigurationSource,
         pollingInterval: ResolvedStartupValue<TimeInterval>?,
-        sessionReleaseTimeout: ResolvedStartupValue<TimeInterval>
+        sessionReleaseTimeout: ResolvedStartupValue<TimeInterval>,
+        tlsIdentityProvider: @escaping @MainActor () throws -> TLSIdentity,
+        transportFactory: @escaping @MainActor (TLSIdentity, Set<ConnectionScope>) -> ServerTransport
     ) {
         self.muscle = TheMuscle(
             explicitToken: token,
@@ -283,6 +329,8 @@ public final class TheInsideJob {
         self.allowedScopesSource = allowedScopesSource
         self.pollingInterval = pollingInterval
         self.sessionReleaseTimeout = sessionReleaseTimeout
+        self.tlsIdentityProvider = tlsIdentityProvider
+        self.transportFactory = transportFactory
         self.installationId = Self.loadInstallationId()
         self.brains = TheBrains(tripwire: self.tripwire)
         self.getaway = TheGetaway(
@@ -316,26 +364,27 @@ public final class TheInsideJob {
 
         insideJobLogger.info("Starting TheInsideJob with ServerTransport...")
 
-        let identity: TLSIdentity
-        do {
-            identity = try TLSIdentity.getOrCreate()
-            insideJobLogger.info("TLS identity ready: \(identity.fingerprint)")
-        } catch {
-            insideJobLogger.warning("Keychain identity failed, using ephemeral: \(error)")
-            identity = try TLSIdentity.createEphemeral()
-        }
-        self.tlsActive = true
-        getaway.identity.tlsActive = true
-        let transport = ServerTransport(tlsIdentity: identity, allowedScopes: allowedScopes)
+        let identity = try makeTLSIdentity(phase: "startup")
+        insideJobLogger.info("TLS identity ready: \(identity.fingerprint)")
+        let transport = transportFactory(identity, allowedScopes)
         installTransportOverflowHandler(transport)
         await getaway.wireTransport(transport)
 
-        let useLoopback = allowedScopes == [.simulator]
-        let actualPort = try await transport.start(port: preferredPort, bindToLoopback: useLoopback)
+        let exposure = ServerExposure(allowedScopes: allowedScopes)
+        let actualPort: UInt16
+        do {
+            actualPort = try await transport.start(port: preferredPort, bindToLoopback: exposure.bindsToLoopbackOnly)
+        } catch {
+            await cleanupFailedTransportStartup(transport)
+            serverPhase = .stopped
+            throw error
+        }
+        self.tlsActive = true
+        getaway.identity.tlsActive = true
         serverPhase = .running(transport: transport)
 
         let token = await muscle.sessionToken
-        let serviceName = advertiseService(port: actualPort)
+        let serviceName = advertiseService(port: actualPort, exposure: exposure)
         logStartupSummary(
             actualPort: actualPort,
             token: token,
@@ -475,6 +524,46 @@ public final class TheInsideJob {
         instanceId ?? shortId
     }
 
+    private static func defaultTLSIdentityProvider() throws -> TLSIdentity {
+        do {
+            return try TLSIdentity.getOrCreate()
+        } catch {
+            insideJobLogger.warning("Stored TLS identity failed, trying ephemeral identity: \(error.localizedDescription, privacy: .public)")
+            do {
+                return try TLSIdentity.createEphemeral()
+            } catch {
+                throw InsideJobStartupError.tlsIdentityUnavailable(
+                    phase: "identity-creation",
+                    reason: error.localizedDescription
+                )
+            }
+        }
+    }
+
+    private static func makeDefaultTransport(
+        identity: TLSIdentity,
+        allowedScopes: Set<ConnectionScope>
+    ) -> ServerTransport {
+        ServerTransport(tlsIdentity: identity, allowedScopes: allowedScopes)
+    }
+
+    private func makeTLSIdentity(phase: String) throws -> TLSIdentity {
+        do {
+            return try tlsIdentityProvider()
+        } catch let error as InsideJobStartupError {
+            tlsActive = false
+            getaway.identity.tlsActive = false
+            throw error
+        } catch {
+            tlsActive = false
+            getaway.identity.tlsActive = false
+            throw InsideJobStartupError.tlsIdentityUnavailable(
+                phase: phase,
+                reason: error.localizedDescription
+            )
+        }
+    }
+
     private static func loadInstallationId() -> String {
         let bundleId = Bundle.main.bundleIdentifier ?? "com.buttonheist.theinsidejob"
         let defaultsKey = "\(bundleId).installation-id"
@@ -489,7 +578,12 @@ public final class TheInsideJob {
     }
 
     @discardableResult
-    private func advertiseService(port: UInt16) -> String {
+    private func advertiseService(port: UInt16, exposure: ServerExposure) -> String? {
+        guard exposure.publishesBonjour else {
+            insideJobLogger.info("Bonjour advertisement disabled: \(exposure.bonjourDisabledReason ?? "unknown", privacy: .public)")
+            return nil
+        }
+
         let appName = Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "App"
         let serviceName = "\(appName)#\(effectiveInstanceId)"
 
@@ -510,12 +604,17 @@ public final class TheInsideJob {
         actualPort: UInt16,
         token: String,
         tlsFingerprint: String,
-        bonjourServiceName: String
+        bonjourServiceName: String?
     ) {
         let scopeNames = allowedScopes.map(\.rawValue).sorted().joined(separator: ",")
         let pollingDescription = pollingInterval.map {
             "\($0.value)s(\($0.source.label))"
         } ?? "not-started"
+        let bonjourDescription = if let bonjourServiceName {
+            "bonjour=advertising service=\(bonjourServiceName)"
+        } else {
+            "bonjour=disabled reason=network-scope-not-enabled"
+        }
         let fields = [
             "actualPort=\(actualPort)",
             "preferredPort=\(preferredPort)(\(preferredPortSource.label))",
@@ -526,7 +625,7 @@ public final class TheInsideJob {
             "pollingInterval=\(pollingDescription)",
             "sessionTimeout=\(sessionReleaseTimeout.value)s(\(sessionReleaseTimeout.source.label))",
             "tls=enabled fingerprint=\(tlsFingerprint)",
-            "bonjour=advertising service=\(bonjourServiceName)"
+            bonjourDescription
         ].joined(separator: " ")
         if tokenSource == .generated {
             insideJobLogger.info("Startup summary: \(fields, privacy: .public) token=\(token, privacy: .public)")
@@ -731,41 +830,37 @@ public final class TheInsideJob {
                     self.pendingTransportStopTask = nil
                 }
 
-                let identity: TLSIdentity
-                do {
-                    identity = try TLSIdentity.getOrCreate()
-                } catch {
-                    insideJobLogger.warning("Keychain identity failed on resume, using ephemeral: \(error)")
-                    identity = try TLSIdentity.createEphemeral()
-                }
+                let identity = try self.makeTLSIdentity(phase: "resume")
 
                 try Task.checkCancellation()
 
-                self.tlsActive = true
-                self.getaway.identity.tlsActive = true
-
-                let transport = ServerTransport(tlsIdentity: identity, allowedScopes: self.allowedScopes)
+                let transport = self.transportFactory(identity, self.allowedScopes)
                 self.installTransportOverflowHandler(transport)
                 await self.getaway.wireTransport(transport)
                 startedTransport = transport
 
-                let useLoopback = self.allowedScopes == [.simulator]
-                let actualPort = try await transport.start(port: preferredPort, bindToLoopback: useLoopback)
+                let exposure = ServerExposure(allowedScopes: self.allowedScopes)
+                let actualPort = try await transport.start(
+                    port: preferredPort,
+                    bindToLoopback: exposure.bindsToLoopbackOnly
+                )
 
                 try Task.checkCancellation()
 
                 guard self.isCurrentResumeAttempt(resumeID) else {
                     if let startedTransport {
-                        _ = startedTransport.stop()
+                        await self.cleanupFailedTransportStartup(startedTransport)
                     }
                     return
                 }
 
+                self.tlsActive = true
+                self.getaway.identity.tlsActive = true
                 self.serverPhase = .running(transport: transport)
                 startedTransport = nil
 
                 insideJobLogger.info("Server resumed on port \(actualPort)")
-                self.advertiseService(port: actualPort)
+                self.advertiseService(port: actualPort, exposure: exposure)
 
                 self.startAccessibilityObservation()
                 self.engageIdleTimerProtection()
@@ -783,10 +878,14 @@ public final class TheInsideJob {
 
                 insideJobLogger.info("Server resume complete")
             } catch is CancellationError {
+                await self.cleanupFailedTransportStartup(startedTransport)
+                startedTransport = nil
                 self.finishFailedResumeAttempt(resumeID, startedTransport: startedTransport)
                 insideJobLogger.info("Server resume cancelled")
             } catch {
                 insideJobLogger.error("Failed to resume server: \(error)")
+                await self.cleanupFailedTransportStartup(startedTransport)
+                startedTransport = nil
                 self.finishFailedResumeAttempt(resumeID, startedTransport: startedTransport)
             }
         }
@@ -802,6 +901,16 @@ public final class TheInsideJob {
     func handleTransportEventBacklogOverflow(maxEvents: Int) async {
         insideJobLogger.error("Transport event backlog exceeded \(maxEvents), stopping server")
         await stop()
+    }
+
+    private func cleanupFailedTransportStartup(_ transport: ServerTransport?) async {
+        if let transport {
+            let stopTask = transport.stop()
+            await stopTask.value
+            await getaway.tearDownIfWired(to: transport)
+        }
+        tlsActive = false
+        getaway.identity.tlsActive = false
     }
 
     func isCurrentResumeAttempt(_ resumeID: UUID) -> Bool {
