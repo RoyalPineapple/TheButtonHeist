@@ -3124,17 +3124,17 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testTypedPlaybackAcceptsCanonicalBatchExecutableCommands() async throws {
+    func testTypedPlaybackAcceptsCanonicalPlaybackExecutableCommands() async throws {
         let playback = try TheFence.TypedHeistPlayback(
             wire: HeistPlayback(
                 app: "com.test.mock",
-                steps: TheFence.Command.batchExecutableCases.map { command in
+                steps: TheFence.Command.playbackExecutableCases.map { command in
                     HeistEvidence(command: command.rawValue)
                 }
             )
         )
 
-        XCTAssertEqual(playback.steps.map(\.command), TheFence.Command.batchExecutableCases)
+        XCTAssertEqual(playback.steps.map(\.command), TheFence.Command.playbackExecutableCases)
     }
 
     @ButtonHeistActor
@@ -3178,7 +3178,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testTypedPlaybackRejectsNonExecutableCommands() async throws {
-        for command in [TheFence.Command.help, .status, .quit, .exit, .runBatch] {
+        for command in TheFence.Command.allCases where !command.isPlaybackExecutable {
             XCTAssertThrowsError(
                 try TheFence.TypedHeistPlayback(
                     wire: HeistPlayback(app: "com.test.mock", steps: [HeistEvidence(command: command.rawValue)])
@@ -3399,34 +3399,24 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testPlayHeistReentrantGuard() async throws {
-        // Create a heist that itself tries to play another heist (play_heist nested in play_heist)
-        let innerHeist = HeistPlayback(app: "com.test.mock", steps: [])
-        let innerURL = try writeTemporaryHeist(innerHeist)
-        defer { try? FileManager.default.removeItem(at: innerURL) }
-
-        let steps = [
-            HeistEvidence(
-                command: "play_heist",
-                arguments: ["input": .string(innerURL.path)]
-            ),
-        ]
-        let outerHeist = HeistPlayback(app: "com.test.mock", steps: steps)
-        let outerURL = try writeTemporaryHeist(outerHeist)
-        defer { try? FileManager.default.removeItem(at: outerURL) }
+        let heist = HeistPlayback(app: "com.test.mock", steps: [])
+        let heistURL = try writeTemporaryHeist(heist)
+        defer { try? FileManager.default.removeItem(at: heistURL) }
 
         let (fence, _) = makeConnectedFence()
-        let response = try await fence.execute(request: [
-            "command": "play_heist", "input": outerURL.path
-        ])
+        fence.playbackPhase = .playing(startedAt: Date())
+        defer { fence.playbackPhase = .idle }
 
-        guard case .heistPlayback(let completedSteps, let failedIndex, _, let failure, _) = response else {
-            return XCTFail("Expected heistPlayback response, got \(response)")
+        do {
+            _ = try await fence.execute(request: [
+                "command": "play_heist", "input": heistURL.path,
+            ])
+            XCTFail("Expected re-entrant playback to fail")
+        } catch FenceError.invalidRequest(let message) {
+            XCTAssertEqual(message, "Cannot nest play_heist inside an active playback")
+        } catch {
+            XCTFail("Expected invalidRequest, got \(error)")
         }
-        // The nested play_heist should fail (re-entrant guard), stopping playback at step 0
-        XCTAssertEqual(completedSteps, 0)
-        XCTAssertEqual(failedIndex, 0)
-        XCTAssertNotNil(failure)
-        XCTAssertEqual(failure?.step.command, "play_heist")
     }
 
     @ButtonHeistActor

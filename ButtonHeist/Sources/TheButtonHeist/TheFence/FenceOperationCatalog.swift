@@ -62,7 +62,8 @@ public enum FenceOperationCatalog {
         normalizeCanonicalStep(
             step,
             context: "run_batch step",
-            nonExecutableLabel: "batch-executable"
+            nonExecutableLabel: "batch-executable",
+            isExecutable: \.isBatchExecutable
         )
     }
 
@@ -72,7 +73,8 @@ public enum FenceOperationCatalog {
         normalizeCanonicalStep(
             step,
             context: "heist step",
-            nonExecutableLabel: "playback-executable"
+            nonExecutableLabel: "playback-executable",
+            isExecutable: \.isPlaybackExecutable
         )
     }
 
@@ -84,14 +86,16 @@ public enum FenceOperationCatalog {
             commandName: commandName,
             arguments: arguments,
             context: "heist step",
-            nonExecutableLabel: "playback-executable"
+            nonExecutableLabel: "playback-executable",
+            isExecutable: \.isPlaybackExecutable
         )
     }
 
     private static func normalizeCanonicalStep(
         _ step: [String: Any],
         context: String,
-        nonExecutableLabel: String
+        nonExecutableLabel: String,
+        isExecutable: KeyPath<TheFence.Command, Bool>
     ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
         let commandName: String
         do {
@@ -109,7 +113,8 @@ public enum FenceOperationCatalog {
             commandName: commandName,
             arguments: arguments,
             context: context,
-            nonExecutableLabel: nonExecutableLabel
+            nonExecutableLabel: nonExecutableLabel,
+            isExecutable: isExecutable
         )
     }
 
@@ -117,7 +122,8 @@ public enum FenceOperationCatalog {
         commandName: String,
         arguments: [String: Any],
         context: String,
-        nonExecutableLabel: String
+        nonExecutableLabel: String,
+        isExecutable: KeyPath<TheFence.Command, Bool>
     ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
         guard let command = TheFence.Command(rawValue: commandName) else {
             return .failure(FenceOperationRoutingError(
@@ -125,7 +131,7 @@ public enum FenceOperationCatalog {
             ))
         }
 
-        guard command.isBatchExecutable else {
+        guard command[keyPath: isExecutable] else {
             return .failure(FenceOperationRoutingError(
                 message: "\(context) command \"\(command.rawValue)\" is not \(nonExecutableLabel)"
             ))

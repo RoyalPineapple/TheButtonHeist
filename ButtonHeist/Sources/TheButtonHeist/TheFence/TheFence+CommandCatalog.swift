@@ -81,6 +81,8 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
     public let cliExposure: CLIExposure
     public let mcpExposure: MCPExposure
     public let isBatchExecutable: Bool
+    public let isPlaybackExecutable: Bool
+    public let isHeistRecordable: Bool
     public let humanPositionalSyntax: FenceHumanPositionalSyntax
     public let parameters: [FenceParameterSpec]
     public let description: String
@@ -92,6 +94,8 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
         cliExposure: CLIExposure,
         mcpExposure: MCPExposure,
         isBatchExecutable: Bool,
+        isPlaybackExecutable: Bool? = nil,
+        isHeistRecordable: Bool? = nil,
         humanPositionalSyntax: FenceHumanPositionalSyntax = .target,
         parameters: [FenceParameterSpec],
         description: String
@@ -103,6 +107,9 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
         self.cliExposure = cliExposure
         self.mcpExposure = mcpExposure
         self.isBatchExecutable = isBatchExecutable
+        let resolvedPlaybackExecutable = isPlaybackExecutable ?? isBatchExecutable
+        self.isPlaybackExecutable = resolvedPlaybackExecutable
+        self.isHeistRecordable = isHeistRecordable ?? resolvedPlaybackExecutable
         self.humanPositionalSyntax = humanPositionalSyntax
         self.parameters = parameters
         self.description = description
@@ -242,6 +249,20 @@ public extension TheFence.Command {
         allCases.filter(\.catalogBatchExecutable)
     }
 
+    /// Commands that can execute as a heist playback step.
+    var isPlaybackExecutable: Bool {
+        descriptor.isPlaybackExecutable
+    }
+
+    static var playbackExecutableCases: [Self] {
+        allCases.filter(\.catalogPlaybackExecutable)
+    }
+
+    /// Commands that are persisted when a heist recording is active.
+    var isHeistRecordable: Bool {
+        descriptor.isHeistRecordable
+    }
+
     static var mcpToolContracts: [MCPToolContract] {
         var toolNames: [String] = []
         var commandsByToolName: [String: [Self]] = [:]
@@ -290,6 +311,8 @@ extension TheFence.Command {
             cliExposure: command.catalogCLIExposure,
             mcpExposure: command.catalogMCPExposure,
             isBatchExecutable: command.catalogBatchExecutable,
+            isPlaybackExecutable: command.catalogPlaybackExecutable,
+            isHeistRecordable: command.catalogHeistRecordable,
             humanPositionalSyntax: command.catalogHumanPositionalSyntax,
             parameters: command.catalogParameters,
             description: mcpDescription(for: command.rawValue)
@@ -339,6 +362,24 @@ extension TheFence.Command {
         default:
             return true
         }
+    }
+
+    var catalogPlaybackExecutable: Bool {
+        switch self {
+        case .help, .status, .quit, .exit,
+             .listDevices, .getInterface, .getScreen, .getPasteboard,
+             .getSessionState, .connect, .listTargets,
+             .getSessionLog, .archiveSession,
+             .startRecording, .stopRecording, .runBatch,
+             .startHeist, .stopHeist, .playHeist:
+            return false
+        default:
+            return catalogBatchExecutable
+        }
+    }
+
+    var catalogHeistRecordable: Bool {
+        catalogPlaybackExecutable
     }
 
     var catalogHumanPositionalSyntax: FenceHumanPositionalSyntax {

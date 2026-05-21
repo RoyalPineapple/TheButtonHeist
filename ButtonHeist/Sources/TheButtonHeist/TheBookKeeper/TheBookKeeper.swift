@@ -671,18 +671,6 @@ final class TheBookKeeper {
         }
     }
 
-    /// Commands that should not appear in heist playbacks.
-    private static let excludedHeistCommands: Set<TheFence.Command> = [
-        .help, .status, .quit, .exit,
-        .listDevices, .getInterface, .getScreen,
-        .getPasteboard,
-        .getSessionState, .connect, .listTargets,
-        .getSessionLog, .archiveSession,
-        .startRecording, .stopRecording,
-        .runBatch,
-        .startHeist, .stopHeist, .playHeist,
-    ]
-
     /// Record a successfully executed command for heist playback.
     /// Only records commands that succeeded — failed actions are skipped.
     /// - Parameters:
@@ -699,7 +687,7 @@ final class TheBookKeeper {
     ) {
         guard case .active(let session) = phase,
               case .recording(let recording) = session.heistRecording else { return }
-        guard !Self.excludedHeistCommands.contains(request.command) else { return }
+        guard request.command.isHeistRecordable else { return }
         guard actionResult?.success != false else { return }
         guard expectation?.met != false else { return }
 
