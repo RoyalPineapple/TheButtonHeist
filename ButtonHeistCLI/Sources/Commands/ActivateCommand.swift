@@ -1,8 +1,8 @@
 import ArgumentParser
 import ButtonHeist
 
-struct ActivateCommand: AsyncParsableCommand, CatalogBackedCLICommand {
-    static let fenceCommandProjection: TheFence.Command.CLIProjection = .activate
+struct ActivateCommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.activate
 
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
