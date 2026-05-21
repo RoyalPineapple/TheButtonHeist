@@ -641,11 +641,44 @@ public final class TheFence {
 
     // MARK: - Pending Request Tracking
 
-    private let actionTracker = PendingRequestTracker<ActionResult>()
-    private let interfaceTracker = PendingRequestTracker<Interface>()
-    private let screenTracker = PendingRequestTracker<ScreenPayload>()
-    private let recordingStartTracker = PendingRequestTracker<Bool>()
-    private let recordingTracker = PendingRequestTracker<RecordingPayload>()
+    struct PendingRequestTrackers {
+        let action = PendingRequestTracker<ActionResult>()
+        let interface = PendingRequestTracker<Interface>()
+        let screen = PendingRequestTracker<ScreenPayload>()
+
+        @ButtonHeistActor
+        func resolveTransientResponse(_ message: ServerMessage, requestId: String) -> Bool {
+            switch message {
+            case .interface(let payload):
+                interface.resolve(requestId: requestId, result: .success(payload))
+            case .actionResult(let result):
+                action.resolve(requestId: requestId, result: .success(result))
+            case .screen(let payload):
+                screen.resolve(requestId: requestId, result: .success(payload))
+            case .error(let serverError):
+                resolveTransientFailure(FenceError.serverError(serverError), requestId: requestId)
+            default:
+                return false
+            }
+            return true
+        }
+
+        @ButtonHeistActor
+        func resolveTransientFailure(_ error: Error, requestId: String) {
+            action.resolve(requestId: requestId, result: .failure(error))
+            interface.resolve(requestId: requestId, result: .failure(error))
+            screen.resolve(requestId: requestId, result: .failure(error))
+        }
+
+        @ButtonHeistActor
+        func cancelAll(error: Error) {
+            action.cancelAll(error: error)
+            interface.cancelAll(error: error)
+            screen.cancelAll(error: error)
+        }
+    }
+
+    private let pendingRequests = PendingRequestTrackers()
 
     /// Fence-owned recording state. Handoff forwards server recording
     /// messages, but request decisions and wait ownership live here.
@@ -784,9 +817,111 @@ public final class TheFence {
             return pendingWait
         }
     }
-    private var recordingState = RecordingState()
+
+    struct RecordingCoordinator {
+        private var state = RecordingState()
+        private let startTracker = PendingRequestTracker<Bool>()
+        private let completionTracker = PendingRequestTracker<RecordingPayload>()
+
+        var snapshot: RecordingSnapshot {
+            state.snapshot
+        }
+
+        mutating func reset() {
+            state = RecordingState()
+        }
+
+        @ButtonHeistActor
+        func cancelAll(error: Error) {
+            startTracker.cancelAll(error: error)
+            completionTracker.cancelAll(error: error)
+        }
+
+        mutating func beginStartWait(syntheticId: String) throws {
+            guard state.beginStartWait(syntheticId: syntheticId) else {
+                throw state.startRecordingConflictError
+            }
+        }
+
+        mutating func finishStartWait(syntheticId: String) {
+            state.finishStartWait(syntheticId: syntheticId)
+        }
+
+        @ButtonHeistActor
+        func waitForStart(
+            requestId: String,
+            timeout: TimeInterval,
+            afterRegister: (() -> Void)?
+        ) async throws {
+            _ = try await startTracker.wait(requestId: requestId, timeout: timeout, afterRegister: afterRegister)
+        }
+
+        @ButtonHeistActor
+        func resolveStartWait(_ result: Result<Bool, Error>) {
+            guard let syntheticId = state.startWaitId else { return }
+            startTracker.resolve(requestId: syntheticId, result: result)
+        }
+
+        @ButtonHeistActor
+        func resolveStartWait(requestId: String, result: Result<Bool, Error>) {
+            startTracker.resolve(requestId: requestId, result: result)
+        }
+
+        mutating func beginCompletionWait(syntheticId: String) throws {
+            guard state.beginCompletionWait(syntheticId: syntheticId) else {
+                throw FenceError.invalidRequest("stop_recording already waiting for completion")
+            }
+        }
+
+        mutating func finishCompletionWait(syntheticId: String) {
+            state.finishCompletionWait(syntheticId: syntheticId)
+        }
+
+        @ButtonHeistActor
+        func waitForCompletion(
+            requestId: String,
+            timeout: TimeInterval,
+            afterRegister: (() -> Void)?
+        ) async throws -> RecordingPayload {
+            try await completionTracker.wait(requestId: requestId, timeout: timeout, afterRegister: afterRegister)
+        }
+
+        @ButtonHeistActor
+        func resolveCompletionWait(_ result: Result<RecordingPayload, Error>) {
+            guard let syntheticId = state.completionWaitId else { return }
+            completionTracker.resolve(requestId: syntheticId, result: result)
+        }
+
+        @ButtonHeistActor
+        mutating func handleEvent(_ event: RecordingEvent) {
+            switch event {
+            case .started:
+                if let syntheticId = state.noteStarted() {
+                    startTracker.resolve(requestId: syntheticId, result: .success(true))
+                }
+            case .stopped:
+                state.noteFinished()
+            case .completed(let payload):
+                if let syntheticId = state.noteCompleted() {
+                    completionTracker.resolve(requestId: syntheticId, result: .success(payload))
+                }
+            case .failed(let message):
+                let error = FenceError.actionFailed("Recording failed: \(message)")
+                switch state.noteFailed() {
+                case .start(let syntheticId):
+                    startTracker.resolve(requestId: syntheticId, result: .failure(error))
+                case .completion(let syntheticId):
+                    completionTracker.resolve(requestId: syntheticId, result: .failure(error))
+                case nil:
+                    break
+                }
+            }
+        }
+    }
+
+    private var recording = RecordingCoordinator()
     var recordingSnapshot: RecordingSnapshot {
-        recordingState.snapshot
+        recording.snapshot
     }
     var isRecording: Bool {
         recordingSnapshot.isRecording
@@ -845,29 +980,12 @@ public final class TheFence {
 
     private func handleServerMessage(_ message: ServerMessage, requestId: String?) {
         guard let requestId else { return }
-        switch message {
-        case .interface(let payload):
-            interfaceTracker.resolve(requestId: requestId, result: .success(payload))
-        case .actionResult(let result):
-            actionTracker.resolve(requestId: requestId, result: .success(result))
-        case .screen(let payload):
-            screenTracker.resolve(requestId: requestId, result: .success(payload))
-        case .error(let serverError):
-            let error = FenceError.serverError(serverError)
-            actionTracker.resolve(requestId: requestId, result: .failure(error))
-            interfaceTracker.resolve(requestId: requestId, result: .failure(error))
-            screenTracker.resolve(requestId: requestId, result: .failure(error))
-        default:
-            break
-        }
+        _ = pendingRequests.resolveTransientResponse(message, requestId: requestId)
     }
 
     private func handleSendFailure(_ failure: DeviceSendFailure, requestId: String?) {
         guard let requestId else { return }
-        let error = FenceError(failure)
-        actionTracker.resolve(requestId: requestId, result: .failure(error))
-        interfaceTracker.resolve(requestId: requestId, result: .failure(error))
-        screenTracker.resolve(requestId: requestId, result: .failure(error))
+        pendingRequests.resolveTransientFailure(FenceError(failure), requestId: requestId)
     }
 
     private func handleHandoffConnectionStateChanged(_ state: TheHandoff.ConnectionPhase) {
@@ -894,25 +1012,12 @@ public final class TheFence {
     func clearClientSessionState(error: Error) {
         backgroundAccessibilityState.reset()
         commandExecutionState.reset()
-        recordingState = RecordingState()
+        recording.reset()
         cancelAllPendingRequests(error: error)
     }
 
     private func handleRecordingEvent(_ event: RecordingEvent) {
-        switch event {
-        case .started:
-            if let syntheticId = recordingState.noteStarted() {
-                recordingStartTracker.resolve(requestId: syntheticId, result: .success(true))
-            }
-        case .stopped:
-            recordingState.noteFinished()
-        case .completed(let payload):
-            if let syntheticId = recordingState.noteCompleted() {
-                recordingTracker.resolve(requestId: syntheticId, result: .success(payload))
-            }
-        case .failed(let message):
-            resolveRecordingError(message, pendingWait: recordingState.noteFailed())
-        }
+        recording.handleEvent(event)
     }
 
     private func enqueueBackgroundAccessibilityTrace(_ trace: AccessibilityTrace) {
@@ -1598,15 +1703,15 @@ public final class TheFence {
     }
 
     func sendAndAwaitAction(_ message: ClientMessage, timeout: TimeInterval) async throws -> ActionResult {
-        try await sendAndAwait(message, tracker: actionTracker, timeout: timeout)
+        try await sendAndAwait(message, tracker: pendingRequests.action, timeout: timeout)
     }
 
     func sendAndAwaitInterface(_ message: ClientMessage, timeout: TimeInterval) async throws -> Interface {
-        try await sendAndAwait(message, tracker: interfaceTracker, timeout: timeout)
+        try await sendAndAwait(message, tracker: pendingRequests.interface, timeout: timeout)
     }
 
     func sendAndAwaitScreen(_ message: ClientMessage, timeout: TimeInterval) async throws -> ScreenPayload {
-        try await sendAndAwait(message, tracker: screenTracker, timeout: timeout)
+        try await sendAndAwait(message, tracker: pendingRequests.screen, timeout: timeout)
     }
 
     private func sendAndAwait<T: Sendable>(
@@ -1775,15 +1880,15 @@ public final class TheFence {
     // MARK: - Async Wait Methods
 
     func waitForActionResult(requestId: String, timeout: TimeInterval) async throws -> ActionResult {
-        try await actionTracker.wait(requestId: requestId, timeout: timeout)
+        try await pendingRequests.action.wait(requestId: requestId, timeout: timeout)
     }
 
     func waitForInterface(requestId: String, timeout: TimeInterval = 10.0) async throws -> Interface {
-        try await interfaceTracker.wait(requestId: requestId, timeout: timeout)
+        try await pendingRequests.interface.wait(requestId: requestId, timeout: timeout)
     }
 
     func waitForScreen(requestId: String, timeout: TimeInterval = 30.0) async throws -> ScreenPayload {
-        try await screenTracker.wait(requestId: requestId, timeout: timeout)
+        try await pendingRequests.screen.wait(requestId: requestId, timeout: timeout)
     }
 
     // Recording responses do not carry request IDs, so synthesize a single key
@@ -1809,20 +1914,18 @@ public final class TheFence {
             throw FenceError.invalidRequest("Recording already in progress — use stop_recording first")
         }
         let syntheticId = "recording-start"
-        guard recordingState.beginStartWait(syntheticId: syntheticId) else {
-            throw recordingState.startRecordingConflictError
-        }
-        defer { recordingState.finishStartWait(syntheticId: syntheticId) }
+        try recording.beginStartWait(syntheticId: syntheticId)
+        defer { recording.finishStartWait(syntheticId: syntheticId) }
 
         var didSendStart = false
         do {
-            _ = try await recordingStartTracker.wait(requestId: syntheticId, timeout: timeout) {
+            try await recording.waitForStart(requestId: syntheticId, timeout: timeout) {
                 let outcome = self.handoff.send(.startRecording(config), requestId: UUID().uuidString)
                 switch outcome {
                 case .enqueued:
                     didSendStart = true
                 case .failed(let failure):
-                    self.recordingStartTracker.resolve(requestId: syntheticId, result: .failure(FenceError(failure)))
+                    self.recording.resolveStartWait(requestId: syntheticId, result: .failure(FenceError(failure)))
                 }
             }
         } catch {
@@ -1834,25 +1937,11 @@ public final class TheFence {
     }
 
     private func resolveRecordingStart(_ result: Result<Bool, Error>) {
-        guard let syntheticId = recordingState.startWaitId else { return }
-        recordingStartTracker.resolve(requestId: syntheticId, result: result)
+        recording.resolveStartWait(result)
     }
 
     private func resolveRecordingCompletion(_ result: Result<RecordingPayload, Error>) {
-        guard let syntheticId = recordingState.completionWaitId else { return }
-        recordingTracker.resolve(requestId: syntheticId, result: result)
-    }
-
-    private func resolveRecordingError(_ message: String, pendingWait: RecordingPendingWait?) {
-        let error = FenceError.actionFailed("Recording failed: \(message)")
-        switch pendingWait {
-        case .start(let syntheticId):
-            recordingStartTracker.resolve(requestId: syntheticId, result: .failure(error))
-        case .completion(let syntheticId):
-            recordingTracker.resolve(requestId: syntheticId, result: .failure(error))
-        case nil:
-            break
-        }
+        recording.resolveCompletionWait(result)
     }
 
     /// Run a recording from start to completion as a single async unit.
@@ -1909,19 +1998,14 @@ public final class TheFence {
         afterRegister: (() -> Void)?
     ) async throws -> RecordingPayload {
         let syntheticId = "recording"
-        guard recordingState.beginCompletionWait(syntheticId: syntheticId) else {
-            throw FenceError.invalidRequest("stop_recording already waiting for completion")
-        }
-        defer { recordingState.finishCompletionWait(syntheticId: syntheticId) }
-        return try await recordingTracker.wait(requestId: syntheticId, timeout: timeout, afterRegister: afterRegister)
+        try recording.beginCompletionWait(syntheticId: syntheticId)
+        defer { recording.finishCompletionWait(syntheticId: syntheticId) }
+        return try await recording.waitForCompletion(requestId: syntheticId, timeout: timeout, afterRegister: afterRegister)
     }
 
     private func cancelAllPendingRequests(error: Error = FenceError.actionTimeout) {
-        actionTracker.cancelAll(error: error)
-        interfaceTracker.cancelAll(error: error)
-        screenTracker.cancelAll(error: error)
-        recordingStartTracker.cancelAll(error: error)
-        recordingTracker.cancelAll(error: error)
+        pendingRequests.cancelAll(error: error)
+        recording.cancelAll(error: error)
     }
 
 }

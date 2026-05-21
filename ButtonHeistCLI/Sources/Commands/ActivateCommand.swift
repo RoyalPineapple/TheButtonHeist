@@ -1,8 +1,8 @@
 import ArgumentParser
 import ButtonHeist
 
-struct ActivateCommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = TheFence.Command.activate
+struct ActivateCommand: AsyncParsableCommand, CatalogBackedCLICommand {
+    static let fenceCommandProjection: TheFence.Command.CLIProjection = .activate
 
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
@@ -41,19 +41,8 @@ struct ActivateCommand: AsyncParsableCommand, CLICommandContract {
     mutating func run() async throws {
         _ = try element.requireTarget()
 
-        var request: [String: Any]
-        switch action.flatMap({ TheFence.Command(rawValue: $0.lowercased()) }) {
-        case .increment:
-            request = TheFence.Command.increment.cliRequest()
-        case .decrement:
-            request = TheFence.Command.decrement.cliRequest()
-        default:
-            if let action {
-                request = TheFence.Command.performCustomAction.cliRequest([.action: .string(action)])
-            } else {
-                request = Self.fenceRequest()
-            }
-        }
+        let commandAlias = TheFence.Command.activationAlias(forActionName: action)
+        var request = commandAlias.command.cliRequest(commandAlias.parameters)
 
         try element.applyTo(&request)
         request.set(.timeout, timeoutOption.timeout)
