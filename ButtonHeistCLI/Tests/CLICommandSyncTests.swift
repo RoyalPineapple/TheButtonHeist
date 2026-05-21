@@ -380,6 +380,18 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertFalse(source.contains("directionCommands"), "REPL command-role metadata should live in TheFence.Command.humanPositionalSyntax")
     }
 
+    func testHumanParserResolvesCanonicalCommandsThroughDescriptors() {
+        for descriptor in TheFence.Command.descriptors {
+            let request = ReplSession.parseHumanInput(descriptor.canonicalName)
+
+            XCTAssertEqual(
+                request[.command] as? String,
+                descriptor.command.rawValue,
+                "\(descriptor.canonicalName) should resolve through the command descriptor catalog"
+            )
+        }
+    }
+
     func testGestureCommandsDoNotMirrorFenceCommandCases() throws {
         let source = try String(
             contentsOf: repositoryRoot()
@@ -390,6 +402,31 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertFalse(
             source.contains("TheFence.Command."),
             "Gesture command identity should project through GestureType and Fence descriptors"
+        )
+        XCTAssertFalse(
+            source.contains("fenceCommand ="),
+            "Gesture wrappers should not assign Fence command identity directly"
+        )
+        XCTAssertFalse(
+            source.contains("cliFenceCommand"),
+            "Gesture wrappers should use GestureCLICommandContract instead of a second command lookup helper"
+        )
+        XCTAssertTrue(
+            source.contains("GestureCLICommandContract"),
+            "Gesture wrappers should project command identity through descriptor-backed CLI contract"
+        )
+    }
+
+    func testActivateCommandDoesNotMirrorActivationCommandCase() throws {
+        let source = try String(
+            contentsOf: repositoryRoot()
+                .appendingPathComponent("ButtonHeistCLI/Sources/Commands/ActivateCommand.swift"),
+            encoding: .utf8
+        )
+
+        XCTAssertFalse(
+            source.contains("TheFence.Command.activate"),
+            "ActivateCommand should derive its base command from the shared activation alias contract"
         )
     }
 

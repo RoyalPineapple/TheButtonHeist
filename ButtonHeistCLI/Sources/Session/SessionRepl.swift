@@ -307,8 +307,8 @@ nonisolated extension ReplSession {
 
         if let alias = TheFence.Command.humanAlias(named: rawCommand) {
             request = HumanCommandRequest(alias: alias)
-        } else if let command = TheFence.Command(rawValue: rawCommand) {
-            request = HumanCommandRequest(command: command)
+        } else if let descriptor = humanCommandDescriptor(named: rawCommand) {
+            request = HumanCommandRequest(command: descriptor.command)
         } else {
             request = HumanCommandRequest(rawCommand: rawCommand)
         }
@@ -333,6 +333,12 @@ nonisolated extension ReplSession {
         normalizeExpectationArgument(in: &request)
 
         return request.fenceRequest()
+    }
+
+    private static func humanCommandDescriptor(named name: String) -> FenceCommandDescriptor? {
+        TheFence.Command.descriptors.first { descriptor in
+            descriptor.canonicalName == name
+        }
     }
 
     private static func parseHumanValue(
