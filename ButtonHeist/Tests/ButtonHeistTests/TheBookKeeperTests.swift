@@ -522,6 +522,57 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testParsedRequestBuildsTypedLogProjections() async throws {
+        let connect = try parsedRequest(
+            requestId: "r1",
+            command: .connect,
+            arguments: [
+                "device": "127.0.0.1:1455",
+                "token": "user-specified-token",
+            ]
+        )
+        let commandProjection = connect.commandLogProjection
+
+        XCTAssertEqual(commandProjection.requestId, "r1")
+        XCTAssertEqual(commandProjection.command, .connect)
+        XCTAssertEqual(commandProjection.arguments["device"], .string("127.0.0.1:1455"))
+        XCTAssertEqual(commandProjection.arguments["token"], .string("<redacted>"))
+
+        let activate = try parsedRequest(
+            requestId: "r2",
+            command: .activate,
+            arguments: ["heistId": "login_button"]
+        )
+        let heistProjection = activate.heistEvidenceProjection
+
+        XCTAssertEqual(heistProjection.command, .activate)
+        XCTAssertEqual(heistProjection.elementTarget, .heistId("login_button"))
+        XCTAssertNil(heistProjection.arguments["heistId"])
+    }
+
+    @ButtonHeistActor
+    func testBookKeeperLogsTypedCommandProjection() async throws {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        try bookKeeper.beginSession(identifier: "test-log-projection")
+
+        try bookKeeper.logCommand(TheFence.CommandLogProjection(
+            requestId: "r1",
+            command: .typeText,
+            arguments: ["text": .string("hello")]
+        ))
+
+        guard case .active(let session) = bookKeeper.phase else {
+            return XCTFail("Expected active phase")
+        }
+        let lines = try sessionLogLines(for: session)
+        let command = try decodeSessionLogLine(DecodedCommandLogEntry.self, from: lines[1])
+
+        XCTAssertEqual(command.requestId, "r1")
+        XCTAssertEqual(command.command, "type_text")
+        XCTAssertEqual(command.args?["text"], .string("hello"))
+    }
+
+    @ButtonHeistActor
     func testLongStringIsTruncatedInLog() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-truncate")
