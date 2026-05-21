@@ -135,6 +135,35 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertTrue(contents.contains("--ordinal"), "README should document the current --ordinal flag")
     }
 
+    func testSessionHelpProjectsFromFenceDescriptors() {
+        let help = ReplSession.humanHelp
+        let exposedDescriptors = TheFence.Command.descriptors
+            .filter { $0.cliExposure != .notExposed }
+
+        for descriptor in exposedDescriptors {
+            XCTAssertTrue(
+                help.contains(descriptor.canonicalName),
+                "REPL help should include descriptor command \(descriptor.canonicalName)"
+            )
+            XCTAssertTrue(
+                help.contains(firstLine(of: descriptor.description)),
+                "REPL help should include descriptor description for \(descriptor.canonicalName)"
+            )
+
+            for alias in descriptor.humanAliases.keys {
+                XCTAssertTrue(
+                    help.contains(alias),
+                    "REPL help should include descriptor alias \(alias)"
+                )
+            }
+        }
+
+        XCTAssertFalse(help.contains("Quick reference:"), "REPL help should not carry a hand-maintained command registry")
+        XCTAssertFalse(help.contains("Inspect:"), "REPL help should not carry a hand-maintained command registry")
+        XCTAssertFalse(help.contains("Gestures:"), "REPL help should not carry a hand-maintained command registry")
+        XCTAssertFalse(help.contains("Scrolling:"), "REPL help should not carry a hand-maintained command registry")
+    }
+
     func testGetInterfaceHelpDoesNotAdvertiseScopeOrLegacyFullAlias() {
         let help = GetInterfaceCommand.helpMessage()
 
@@ -401,6 +430,13 @@ final class CLICommandSyncTests: XCTestCase {
 
         XCTAssertEqual(request[.command] as? String, TheFence.Command.activate.rawValue)
         XCTAssertEqual(request[.heistId] as? String, "button_save")
+    }
+
+    private func firstLine(of description: String) -> String {
+        description
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first(where: { !$0.isEmpty }) ?? ""
     }
 
     private func topLevelCommandNames() -> [String] {
