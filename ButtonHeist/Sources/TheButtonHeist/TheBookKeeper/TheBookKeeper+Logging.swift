@@ -27,28 +27,26 @@ private extension HeistValue {
         }
     }
 
-    func logJSONValue(maxStringLength: Int) -> Any {
+    func sanitizedLogValue(maxStringLength: Int) -> HeistValue {
         switch self {
         case .string(let value):
-            return value.logJSONValue(maxStringLength: maxStringLength)
+            return .string(value.sanitizedLogValue(maxStringLength: maxStringLength))
         case .int(let value):
-            return value
+            return .int(value)
         case .double(let value):
-            return value
+            return .double(value)
         case .bool(let value):
-            return value
+            return .bool(value)
         case .array(let values):
-            return values.map { $0.logJSONValue(maxStringLength: maxStringLength) }
+            return .array(values.map { $0.sanitizedLogValue(maxStringLength: maxStringLength) })
         case .object(let values):
-            return values.reduce(into: [String: Any]()) { result, pair in
-                result[pair.key] = pair.value.logJSONValue(maxStringLength: maxStringLength)
-            }
+            return .object(values.mapValues { $0.sanitizedLogValue(maxStringLength: maxStringLength) })
         }
     }
 }
 
 private extension String {
-    func logJSONValue(maxStringLength: Int) -> String {
+    func sanitizedLogValue(maxStringLength: Int) -> String {
         if count > maxStringLength {
             return "<\(count) chars>"
         }
@@ -730,6 +728,103 @@ private extension TheFence.RunBatchStepRequest {
     }
 }
 
+enum SessionLogEntry: Encodable {
+    case header(HeaderLogEntry)
+    case command(CommandLogEntry)
+    case response(ResponseLogEntry)
+    case artifact(ArtifactLogEntry)
+
+    func encode(to encoder: Encoder) throws {
+        switch self {
+        case .header(let entry):
+            try entry.encode(to: encoder)
+        case .command(let entry):
+            try entry.encode(to: encoder)
+        case .response(let entry):
+            try entry.encode(to: encoder)
+        case .artifact(let entry):
+            try entry.encode(to: encoder)
+        }
+    }
+}
+
+enum SessionLogEntryType: String, Encodable {
+    case header
+    case command
+    case response
+    case artifact
+}
+
+struct HeaderLogEntry: Encodable {
+    let type = SessionLogEntryType.header
+    let formatVersion: String
+    let sessionId: String
+}
+
+struct CommandLogEntry: Encodable {
+    let t: String
+    let type = SessionLogEntryType.command
+    let requestId: String
+    let command: CommandLogName
+    let args: CommandLogArguments?
+}
+
+struct CommandLogName: Encodable {
+    let command: TheFence.Command
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(command.rawValue)
+    }
+}
+
+struct CommandLogArguments: Encodable {
+    let values: [String: HeistValue]
+
+    init?(_ values: [String: HeistValue], maxStringLength: Int) {
+        let sanitizedValues = values.mapValues {
+            $0.sanitizedLogValue(maxStringLength: maxStringLength)
+        }
+        guard !sanitizedValues.isEmpty else { return nil }
+        self.values = sanitizedValues
+    }
+
+    func encode(to encoder: Encoder) throws {
+        try values.encode(to: encoder)
+    }
+}
+
+struct ResponseLogEntry: Encodable {
+    let t: String
+    let type = SessionLogEntryType.response
+    let requestId: String
+    let status: ResponseStatus
+    let durationMilliseconds: Int
+    let artifact: String?
+    let error: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case t
+        case type
+        case requestId
+        case status
+        case durationMilliseconds = "duration_ms"
+        case artifact
+        case error
+    }
+}
+
+struct ArtifactLogEntry: Encodable {
+    let t: String
+    let type = SessionLogEntryType.artifact
+    let artifactType: ArtifactType
+    let path: String
+    let size: Int
+    let requestId: String
+    let command: String
+    let metadata: [String: Double]?
+}
+
 extension TheBookKeeper {
 
     // MARK: - Session Log Construction
@@ -737,29 +832,24 @@ extension TheBookKeeper {
     private static let maxLoggedStringLength = 1000
 
     /// Build the header entry that identifies a session log stream.
-    func buildHeaderLogEntry(sessionId: String) -> [String: Any] {
-        [
-            "type": "header",
-            "formatVersion": SessionFormatVersion.current,
-            "sessionId": sessionId,
-        ]
+    func buildHeaderLogEntry(sessionId: String) -> SessionLogEntry {
+        .header(HeaderLogEntry(
+            formatVersion: SessionFormatVersion.current,
+            sessionId: sessionId
+        ))
     }
 
     /// Build a sanitized log entry for an incoming command.
-    func buildCommandLogEntry(_ request: TheFence.ParsedRequest) -> [String: Any] {
-        var entry: [String: Any] = [
-            "t": iso8601Now(),
-            "type": "command",
-            "requestId": request.requestId,
-            "command": request.command.rawValue,
-        ]
-        let sanitizedArgs = request.bookKeeperLogArguments.reduce(into: [:]) { result, pair in
-            result[pair.key] = pair.value.logJSONValue(maxStringLength: Self.maxLoggedStringLength)
-        }
-        if !sanitizedArgs.isEmpty {
-            entry["args"] = sanitizedArgs
-        }
-        return entry
+    func buildCommandLogEntry(_ request: TheFence.ParsedRequest) -> SessionLogEntry {
+        return .command(CommandLogEntry(
+            t: iso8601Now(),
+            requestId: request.requestId,
+            command: CommandLogName(command: request.command),
+            args: CommandLogArguments(
+                request.bookKeeperLogArguments,
+                maxStringLength: Self.maxLoggedStringLength
+            )
+        ))
     }
 
     /// Build a sanitized log entry for a command response.
@@ -769,44 +859,40 @@ extension TheBookKeeper {
         durationMilliseconds: Int,
         artifact: String?,
         error: String?
-    ) -> [String: Any] {
-        var entry: [String: Any] = [
-            "t": iso8601Now(),
-            "type": "response",
-            "requestId": requestId,
-            "status": status.rawValue,
-            "duration_ms": durationMilliseconds,
-        ]
-        if let artifact {
-            entry["artifact"] = artifact
-        }
-        if let error {
-            entry["error"] = error
-        }
-        return entry
+    ) -> SessionLogEntry {
+        .response(ResponseLogEntry(
+            t: iso8601Now(),
+            requestId: requestId,
+            status: status,
+            durationMilliseconds: durationMilliseconds,
+            artifact: artifact,
+            error: error
+        ))
     }
 
     /// Build an artifact event. This is the durable artifact index source;
     /// session responses derive artifact summaries from these append-only events.
-    func buildArtifactLogEntry(_ artifact: ArtifactEntry) -> [String: Any] {
-        var entry: [String: Any] = [
-            "t": iso8601String(from: artifact.timestamp),
-            "type": "artifact",
-            "artifactType": artifact.type.rawValue,
-            "path": artifact.path,
-            "size": artifact.size,
-            "requestId": artifact.requestId,
-            "command": artifact.command,
-        ]
-        if !artifact.metadata.isEmpty {
-            entry["metadata"] = artifact.metadata
-        }
-        return entry
+    func buildArtifactLogEntry(_ artifact: ArtifactEntry) -> SessionLogEntry {
+        .artifact(ArtifactLogEntry(
+            t: iso8601String(from: artifact.timestamp),
+            artifactType: artifact.type,
+            path: artifact.path,
+            size: artifact.size,
+            requestId: artifact.requestId,
+            command: artifact.command,
+            metadata: artifact.metadata.isEmpty ? nil : artifact.metadata
+        ))
     }
 
     /// Serialize a log entry as JSON and append it to the session log file.
-    func appendLogLine(_ entry: [String: Any], to handle: FileHandle) throws {
-        let jsonData = try JSONSerialization.data(withJSONObject: entry, options: [.sortedKeys])
+    private static let sessionLogEncoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return encoder
+    }()
+
+    func appendLogLine(_ entry: SessionLogEntry, to handle: FileHandle) throws {
+        let jsonData = try Self.sessionLogEncoder.encode(entry)
         var lineData = jsonData
         lineData.append(contentsOf: [0x0A]) // newline
         try handle.write(contentsOf: lineData)

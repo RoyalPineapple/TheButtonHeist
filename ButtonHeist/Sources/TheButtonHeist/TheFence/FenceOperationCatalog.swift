@@ -76,6 +76,18 @@ public enum FenceOperationCatalog {
         )
     }
 
+    public static func normalizePlaybackStep(
+        commandName: String,
+        arguments: [String: Any]
+    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
+        normalizeCanonicalStep(
+            commandName: commandName,
+            arguments: arguments,
+            context: "heist step",
+            nonExecutableLabel: "playback-executable"
+        )
+    }
+
     private static func normalizeCanonicalStep(
         _ step: [String: Any],
         context: String,
@@ -93,6 +105,20 @@ public enum FenceOperationCatalog {
         var arguments = step
         arguments.removeValue(forKey: "command")
 
+        return normalizeCanonicalStep(
+            commandName: commandName,
+            arguments: arguments,
+            context: context,
+            nonExecutableLabel: nonExecutableLabel
+        )
+    }
+
+    private static func normalizeCanonicalStep(
+        commandName: String,
+        arguments: [String: Any],
+        context: String,
+        nonExecutableLabel: String
+    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
         guard let command = TheFence.Command(rawValue: commandName) else {
             return .failure(FenceOperationRoutingError(
                 message: "\(context) command must be a canonical TheFence.Command; unknown command \"\(commandName)\""

@@ -415,21 +415,19 @@ final class TheBookKeeperTests: XCTestCase {
         guard case .active(let session) = bookKeeper.phase else {
             return XCTFail("Expected active phase")
         }
-        let logPath = session.directory.appendingPathComponent("session.jsonl")
-        let content = try String(contentsOf: logPath, encoding: .utf8)
-        let lines = content.split(separator: "\n")
+        let lines = try sessionLogLines(for: session)
         XCTAssertEqual(lines.count, 2) // header + command
-        let header = try JSONSerialization.jsonObject(with: Data(lines[0].utf8)) as? [String: Any]
-        XCTAssertEqual(header?["type"] as? String, "header")
-        XCTAssertEqual(header?["formatVersion"] as? String, SessionFormatVersion.current)
-        let json = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
-        XCTAssertEqual(json?["type"] as? String, "command")
-        XCTAssertEqual(json?["requestId"] as? String, "req-1")
-        XCTAssertEqual(json?["command"] as? String, "activate")
-        XCTAssertNotNil(json?["t"])
-        let args = json?["args"] as? [String: Any]
-        XCTAssertNil(args?["command"])
-        XCTAssertEqual(args?["identifier"] as? String, "loginButton")
+        let header = try decodeSessionLogLine(DecodedHeaderLogEntry.self, from: lines[0])
+        let command = try decodeSessionLogLine(DecodedCommandLogEntry.self, from: lines[1])
+
+        XCTAssertEqual(header.type, "header")
+        XCTAssertEqual(header.formatVersion, SessionFormatVersion.current)
+        XCTAssertEqual(command.type, "command")
+        XCTAssertEqual(command.requestId, "req-1")
+        XCTAssertEqual(command.command, "activate")
+        XCTAssertFalse(command.t.isEmpty)
+        XCTAssertNil(command.args?["command"])
+        XCTAssertEqual(command.args?["identifier"], .string("loginButton"))
     }
 
     @ButtonHeistActor
@@ -444,15 +442,14 @@ final class TheBookKeeperTests: XCTestCase {
         guard case .active(let session) = bookKeeper.phase else {
             return XCTFail("Expected active phase")
         }
-        let logPath = session.directory.appendingPathComponent("session.jsonl")
-        let content = try String(contentsOf: logPath, encoding: .utf8)
-        let lines = content.split(separator: "\n")
+        let lines = try sessionLogLines(for: session)
         XCTAssertEqual(lines.count, 2) // header + response
-        let json = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
-        XCTAssertEqual(json?["type"] as? String, "response")
-        XCTAssertEqual(json?["requestId"] as? String, "req-1")
-        XCTAssertEqual(json?["status"] as? String, "ok")
-        XCTAssertEqual(json?["duration_ms"] as? Int, 42)
+        let response = try decodeSessionLogLine(DecodedResponseLogEntry.self, from: lines[1])
+
+        XCTAssertEqual(response.type, "response")
+        XCTAssertEqual(response.requestId, "req-1")
+        XCTAssertEqual(response.status, .ok)
+        XCTAssertEqual(response.durationMilliseconds, 42)
     }
 
     @ButtonHeistActor
@@ -517,14 +514,11 @@ final class TheBookKeeperTests: XCTestCase {
         guard case .active(let session) = bookKeeper.phase else {
             return XCTFail("Expected active phase")
         }
-        let logPath = session.directory.appendingPathComponent("session.jsonl")
-        let content = try String(contentsOf: logPath, encoding: .utf8)
-        let lines = content.split(separator: "\n")
-        let json = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
-        let args = json?["args"] as? [String: Any]
+        let lines = try sessionLogLines(for: session)
+        let command = try decodeSessionLogLine(DecodedCommandLogEntry.self, from: lines[1])
 
-        XCTAssertEqual(args?["output"] as? String, "screen.png")
-        XCTAssertNil(args?["command"])
+        XCTAssertEqual(command.args?["output"], .string("screen.png"))
+        XCTAssertNil(command.args?["command"])
     }
 
     @ButtonHeistActor
@@ -544,13 +538,10 @@ final class TheBookKeeperTests: XCTestCase {
         guard case .active(let session) = bookKeeper.phase else {
             return XCTFail("Expected active phase")
         }
-        let logPath = session.directory.appendingPathComponent("session.jsonl")
-        let content = try String(contentsOf: logPath, encoding: .utf8)
-        let lines = content.split(separator: "\n")
-        let json = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
-        let args = json?["args"] as? [String: Any]
+        let lines = try sessionLogLines(for: session)
+        let command = try decodeSessionLogLine(DecodedCommandLogEntry.self, from: lines[1])
 
-        XCTAssertEqual(args?["text"] as? String, "<1500 chars>")
+        XCTAssertEqual(command.args?["text"], .string("<1500 chars>"))
     }
 
     @ButtonHeistActor
@@ -570,13 +561,11 @@ final class TheBookKeeperTests: XCTestCase {
         guard case .active(let session) = bookKeeper.phase else {
             return XCTFail("Expected active phase")
         }
-        let logPath = session.directory.appendingPathComponent("session.jsonl")
-        let content = try String(contentsOf: logPath, encoding: .utf8)
+        let content = try sessionLogContent(for: session)
         let lines = content.split(separator: "\n")
-        let json = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
-        let args = json?["args"] as? [String: Any]
+        let command = try decodeSessionLogLine(DecodedCommandLogEntry.self, from: lines[1])
 
-        XCTAssertEqual(args?["token"] as? String, "<redacted>")
+        XCTAssertEqual(command.args?["token"], .string("<redacted>"))
         XCTAssertFalse(content.contains("user-specified-token"))
     }
 
@@ -602,15 +591,17 @@ final class TheBookKeeperTests: XCTestCase {
         guard case .active(let session) = bookKeeper.phase else {
             return XCTFail("Expected active phase")
         }
-        let logPath = session.directory.appendingPathComponent("session.jsonl")
-        let content = try String(contentsOf: logPath, encoding: .utf8)
+        let content = try sessionLogContent(for: session)
         let lines = content.split(separator: "\n")
-        let json = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
-        let args = json?["args"] as? [String: Any]
-        let steps = args?["steps"] as? [[String: Any]]
-        let step = try XCTUnwrap(steps?.first)
+        let command = try decodeSessionLogLine(DecodedCommandLogEntry.self, from: lines[1])
+        let steps = try XCTUnwrap(command.args?["steps"])
+        guard case .array(let stepValues) = steps,
+              let firstStep = stepValues.first,
+              case .object(let step) = firstStep else {
+            return XCTFail("Expected typed batch step values")
+        }
 
-        XCTAssertEqual(step["token"] as? String, "<redacted>")
+        XCTAssertEqual(step["token"], .string("<redacted>"))
         XCTAssertFalse(content.contains("nested-user-token"))
     }
 
@@ -655,19 +646,17 @@ final class TheBookKeeperTests: XCTestCase {
         guard case .active(let session) = bookKeeper.phase else {
             return XCTFail("Expected active phase")
         }
-        let logPath = session.directory.appendingPathComponent("session.jsonl")
-        let content = try String(contentsOf: logPath, encoding: .utf8)
-        let lines = content.split(separator: "\n")
-        let json = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
-        let args = json?["args"] as? [String: Any]
-        let expect = args?["expect"] as? [String: Any]
-        let matcher = expect?["matcher"] as? [String: Any]
+        let lines = try sessionLogLines(for: session)
+        let command = try decodeSessionLogLine(DecodedCommandLogEntry.self, from: lines[1])
 
-        XCTAssertEqual(expect?["type"] as? String, "element_appeared")
-        XCTAssertEqual(args?["timeout"] as? Double, 2.5)
-        XCTAssertNil(expect?["required"])
-        XCTAssertEqual(matcher?["label"] as? String, "Submit")
-        XCTAssertEqual(matcher?["traits"] as? [String], ["button"])
+        XCTAssertEqual(command.args?["expect"], .object([
+            "type": .string("element_appeared"),
+            "matcher": .object([
+                "label": .string("Submit"),
+                "traits": .array([.string("button")]),
+            ]),
+        ]))
+        XCTAssertEqual(command.args?["timeout"], .double(2.5))
     }
 
     @ButtonHeistActor
@@ -898,20 +887,18 @@ final class TheBookKeeperTests: XCTestCase {
         guard case .active(let session) = bookKeeper.phase else {
             return XCTFail("Expected active phase")
         }
-        let logPath = session.directory.appendingPathComponent("session.jsonl")
-        let content = try String(contentsOf: logPath, encoding: .utf8)
-        let lines = content.split(separator: "\n")
+        let lines = try sessionLogLines(for: session)
         XCTAssertEqual(lines.count, 3) // header + command + response
 
-        let commandEntry = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
-        let responseEntry = try JSONSerialization.jsonObject(with: Data(lines[2].utf8)) as? [String: Any]
+        let commandEntry = try decodeSessionLogLine(DecodedCommandLogEntry.self, from: lines[1])
+        let responseEntry = try decodeSessionLogLine(DecodedResponseLogEntry.self, from: lines[2])
 
-        XCTAssertEqual(commandEntry?["requestId"] as? String, "req-42")
-        XCTAssertEqual(commandEntry?["type"] as? String, "command")
-        XCTAssertEqual(responseEntry?["requestId"] as? String, "req-42")
-        XCTAssertEqual(responseEntry?["type"] as? String, "response")
-        XCTAssertEqual(responseEntry?["artifact"] as? String, "screenshots/001-get_screen.png")
-        XCTAssertEqual(responseEntry?["duration_ms"] as? Int, 120)
+        XCTAssertEqual(commandEntry.requestId, "req-42")
+        XCTAssertEqual(commandEntry.type, "command")
+        XCTAssertEqual(responseEntry.requestId, "req-42")
+        XCTAssertEqual(responseEntry.type, "response")
+        XCTAssertEqual(responseEntry.artifact, "screenshots/001-get_screen.png")
+        XCTAssertEqual(responseEntry.durationMilliseconds, 120)
     }
 
     @ButtonHeistActor
@@ -927,12 +914,10 @@ final class TheBookKeeperTests: XCTestCase {
         guard case .active(let session) = bookKeeper.phase else {
             return XCTFail("Expected active phase")
         }
-        let logPath = session.directory.appendingPathComponent("session.jsonl")
-        let content = try String(contentsOf: logPath, encoding: .utf8)
-        let lines = content.split(separator: "\n")
+        let lines = try sessionLogLines(for: session)
         XCTAssertEqual(lines.count, 2) // header + response
-        let json = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
-        XCTAssertEqual(json?["artifact"] as? String, "recordings/001-stop_recording.mp4")
+        let response = try decodeSessionLogLine(DecodedResponseLogEntry.self, from: lines[1])
+        XCTAssertEqual(response.artifact, "recordings/001-stop_recording.mp4")
     }
 
     @ButtonHeistActor
@@ -1136,6 +1121,56 @@ final class TheBookKeeperTests: XCTestCase {
         let snapshot = try XCTUnwrap(bookKeeper.sessionLogSnapshot())
         XCTAssertEqual(snapshot.artifacts.first?.type, .recording)
     }
+}
+
+private struct DecodedHeaderLogEntry: Decodable {
+    let type: String
+    let formatVersion: String
+    let sessionId: String
+}
+
+private struct DecodedCommandLogEntry: Decodable {
+    let t: String
+    let type: String
+    let requestId: String
+    let command: String
+    let args: [String: HeistValue]?
+}
+
+private struct DecodedResponseLogEntry: Decodable {
+    let t: String
+    let type: String
+    let requestId: String
+    let status: ResponseStatus
+    let durationMilliseconds: Int
+    let artifact: String?
+    let error: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case t
+        case type
+        case requestId
+        case status
+        case durationMilliseconds = "duration_ms"
+        case artifact
+        case error
+    }
+}
+
+private func sessionLogContent(for session: ActiveSession) throws -> String {
+    let logPath = session.directory.appendingPathComponent("session.jsonl")
+    return try String(contentsOf: logPath, encoding: .utf8)
+}
+
+private func sessionLogLines(for session: ActiveSession) throws -> [Substring] {
+    try sessionLogContent(for: session).split(separator: "\n")
+}
+
+private func decodeSessionLogLine<Entry: Decodable>(
+    _ entryType: Entry.Type,
+    from line: Substring
+) throws -> Entry {
+    try JSONDecoder().decode(entryType, from: Data(line.utf8))
 }
 
 @ButtonHeistActor

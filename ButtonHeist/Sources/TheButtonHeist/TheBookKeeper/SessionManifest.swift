@@ -16,7 +16,7 @@ public enum ArtifactType: String, Codable, Sendable, CaseIterable {
 }
 
 /// Success or failure classification for logged command responses.
-enum ResponseStatus: String, Sendable, CaseIterable {
+enum ResponseStatus: String, Codable, Sendable, CaseIterable {
     case ok
     case error
 }

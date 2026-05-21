@@ -27,11 +27,12 @@ extension TheFence {
 
         init(evidence: HeistEvidence, index: Int) throws {
             let payload = PlaybackPayload(values: evidence.arguments)
-            var operationArguments = payload.dispatchBridgeArguments()
-            operationArguments["command"] = evidence.command
 
             let operation: NormalizedOperation
-            switch FenceOperationCatalog.normalizePlaybackStep(operationArguments) {
+            switch FenceOperationCatalog.normalizePlaybackStep(
+                commandName: evidence.command,
+                arguments: payload.dispatchBridgeArguments()
+            ) {
             case .success(let normalized):
                 operation = normalized
             case .failure(let error):
@@ -70,9 +71,8 @@ extension TheFence {
         /// already bound to `TheFence.Command`. This is the single execution
         /// edge where existing handlers still consume schema-checked
         /// `[String: Any]` arguments.
-        func dispatchBridgeArguments() -> [String: Any] {
+        func requestArguments() -> [String: Any] {
             var arguments = payload.dispatchBridgeArguments()
-            arguments["command"] = command.rawValue
 
             if let target {
                 if let label = target.label { arguments["label"] = label }
@@ -83,6 +83,14 @@ extension TheFence {
             }
             if let ordinal { arguments["ordinal"] = ordinal }
 
+            return arguments
+        }
+
+        /// Compatibility bridge for tests/callers that still inspect playback
+        /// as the historical flat request dictionary.
+        func dispatchBridgeArguments() -> [String: Any] {
+            var arguments = requestArguments()
+            arguments["command"] = command.rawValue
             return arguments
         }
     }

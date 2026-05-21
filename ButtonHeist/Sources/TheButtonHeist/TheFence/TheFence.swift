@@ -1,9 +1,6 @@
 import Foundation
-import os.log
 
 import TheScore
-
-private let logger = Logger(subsystem: "com.buttonheist.thefence", category: "bookkeeper")
 
 struct SessionConnectionSnapshot {
     let connected: Bool
@@ -15,34 +12,6 @@ struct SessionConnectionSnapshot {
 struct RecordingSnapshot {
     let isRecording: Bool
     let isWaitingForCompletion: Bool
-}
-
-private extension TheFence.Command {
-    var requiresConnectionBeforeDispatch: Bool {
-        switch self {
-        case .getSessionState, .listDevices, .connect, .listTargets,
-             .getSessionLog, .archiveSession, .startHeist, .stopHeist:
-            return false
-        default:
-            return true
-        }
-    }
-}
-
-private extension FenceResponse {
-    struct HeistRecordingReceipt {
-        let actionResult: ActionResult
-        let expectation: ExpectationResult?
-
-        var shouldRecord: Bool {
-            actionResult.success && expectation?.met != false
-        }
-    }
-
-    var heistRecordingReceipt: HeistRecordingReceipt? {
-        guard case .action(let result, let expectation) = self else { return nil }
-        return HeistRecordingReceipt(actionResult: result, expectation: expectation)
-    }
 }
 
 /// Named timeout constants for TheFence operations.
@@ -134,11 +103,11 @@ public final class TheFence {
     /// Fence-owned accessibility capture history. Captures are the retained
     /// source of truth; pending trace and lookup views are derived locally from
     /// retained captures when validation or recording needs them.
-    private var backgroundAccessibilityState = BackgroundAccessibilityState()
+    var backgroundAccessibilityState = BackgroundAccessibilityState()
 
-    private let pendingRequests = PendingRequestTrackers()
+    let pendingRequests = PendingRequestTrackers()
 
-    private var recording = RecordingCoordinator()
+    var recording = RecordingCoordinator()
     var recordingSnapshot: RecordingSnapshot {
         recording.snapshot
     }
@@ -210,34 +179,6 @@ public final class TheFence {
         pendingRequests.resolveTransientFailure(FenceError(failure), requestId: requestId)
     }
 
-    private func handleHandoffConnectionStateChanged(_ state: TheHandoff.ConnectionPhase) {
-        switch state {
-        case .failed(let failure):
-            clearClientSessionState(error: sessionStateError(for: failure))
-        case .disconnected:
-            guard let failure = handoff.connectionDiagnosticFailure,
-                  case .disconnected = failure
-            else { return }
-            clearClientSessionState(error: sessionStateError(for: failure))
-        case .connecting, .connected:
-            break
-        }
-    }
-
-    private func sessionStateError(for failure: TheHandoff.ConnectionError) -> Error {
-        if case .disconnected(let reason) = failure {
-            return FenceError.connectionFailure(ConnectionFailure(disconnectReason: reason))
-        }
-        return FenceError(failure)
-    }
-
-    func clearClientSessionState(error: Error) {
-        backgroundAccessibilityState.reset()
-        commandExecutionState.reset()
-        cancelAllPendingRequests(error: error)
-        recording.reset()
-    }
-
     private func handleRecordingEvent(_ event: RecordingEvent) {
         recording.handleEvent(event)
     }
@@ -254,29 +195,6 @@ public final class TheFence {
     /// Return and clear all queued background accessibility traces in arrival order.
     public func drainBackgroundAccessibilityTraces() -> [AccessibilityTrace] {
         backgroundAccessibilityState.drainTraces()
-    }
-
-    /// Connect to a device and optionally enable auto-reconnect.
-    public func start() async throws {
-        if handoff.isConnected {
-            return
-        }
-
-        try await connect()
-        if config.autoReconnect {
-            let filter = config.deviceFilter ?? EnvironmentKey.buttonheistDevice.value
-            handoff.setupAutoReconnect(filter: filter)
-        }
-    }
-
-    /// Disconnect and cancel all pending requests.
-    public func stop() {
-        clearClientSessionState(
-            error: FenceError.connectionFailure(ConnectionFailure(disconnectReason: .localDisconnect))
-        )
-        handoff.disableAutoReconnect()
-        handoff.disconnect()
-        handoff.stopDiscovery()
     }
 
     /// Execute a command from a dictionary request. Auto-connects if not
@@ -317,123 +235,13 @@ public final class TheFence {
     }
 
     func execute(playback operation: PlaybackOperation) async throws -> FenceResponse {
-        let request = operation.dispatchBridgeArguments()
         let parsed: ParsedRequest
         do {
-            parsed = try parsePlaybackOperation(operation, bridgeArguments: request)
+            parsed = try parsePlaybackOperation(operation)
         } catch let error as SchemaValidationError {
             return .error(error.message)
         }
         return try await execute(parsed: parsed)
-    }
-
-    func execute(parsed: ParsedRequest) async throws -> FenceResponse {
-        if let immediate = parsed.immediateResponse { return immediate }
-
-        logCommand(parsed)
-
-        if parsed.command == .waitForChange,
-           let backgroundResponse = responseIfBackgroundExpectationMet(
-            parsed.expectationPayload.expectation, requestId: parsed.requestId
-           ) {
-            finishAccessibilityDelivery(backgroundResponse.deliveredCaptureRef)
-            return backgroundResponse.response
-        }
-
-        let preDispatchBackgroundCount = backgroundAccessibilityState.pendingTraceCount
-        let preDispatchCaptureRef = backgroundAccessibilityState.latestRef
-        let dispatched = try await dispatchCommand(parsed)
-        commandExecutionState.noteDispatchedResponse(dispatched.response, latencyMs: dispatched.durationMs)
-        logResponse(requestId: parsed.requestId, response: dispatched.response, durationMs: dispatched.durationMs)
-
-        let postDispatch = capturePostDispatchEffects(
-            parsed: parsed,
-            response: dispatched.response,
-            preDispatchCaptureRef: preDispatchCaptureRef
-        )
-        let validatedResponse = try await validateActionResponse(
-            dispatched.response,
-            command: parsed.command,
-            expectation: parsed.expectationPayload.expectation,
-            expectationTimeout: parsed.expectationPayload.postActionValidationTimeout,
-            preActionCaptureRef: postDispatch.preActionCaptureRef,
-            postDispatchBackgroundStartIndex: preDispatchBackgroundCount
-        )
-        recordHeistEvidence(
-            parsed,
-            dispatchedResponse: dispatched.response,
-            validatedResponse: validatedResponse.response,
-            lookupCaptureRef: postDispatch.recordingLookupCaptureRef
-        )
-        finishAccessibilityDelivery(validatedResponse.deliveredCaptureRef ?? postDispatch.deliveredCaptureRef)
-        return validatedResponse.response
-    }
-
-    // MARK: - Execute Pipeline
-
-    private struct DispatchResult {
-        let response: FenceResponse
-        let durationMs: Int
-    }
-
-    private struct PostDispatchOutcome {
-        let preActionCaptureRef: AccessibilityTrace.CaptureRef?
-        let recordingLookupCaptureRef: AccessibilityTrace.CaptureRef?
-        let deliveredCaptureRef: AccessibilityTrace.CaptureRef?
-    }
-
-    private struct ValidatedResponse {
-        let response: FenceResponse
-        let deliveredCaptureRef: AccessibilityTrace.CaptureRef?
-    }
-
-    private struct BackgroundExpectationResponse {
-        let response: FenceResponse
-        let deliveredCaptureRef: AccessibilityTrace.CaptureRef?
-    }
-
-    /// Ensure the connection is up if the command needs it, then dispatch
-    /// the command and capture wall-clock duration.
-    private func dispatchCommand(_ parsed: ParsedRequest) async throws -> DispatchResult {
-        try await ensureConnectedIfNeeded(for: parsed.command)
-        return try await dispatchWithErrorLogging(
-            parsed,
-            requestId: parsed.requestId
-        )
-    }
-
-    /// Ingest capture evidence from the just-dispatched response. The returned
-    /// refs let later steps derive request-local element lookups from a concrete
-    /// capture without retaining a semantic element map on TheFence.
-    private func capturePostDispatchEffects(
-        parsed: ParsedRequest,
-        response: FenceResponse,
-        preDispatchCaptureRef: AccessibilityTrace.CaptureRef?
-    ) -> PostDispatchOutcome {
-        if let fullInterface = fullInterfaceCapture(from: response, parsed: parsed) {
-            let captureRef = backgroundAccessibilityState.append(interface: fullInterface)
-            return PostDispatchOutcome(
-                preActionCaptureRef: nil,
-                recordingLookupCaptureRef: nil,
-                deliveredCaptureRef: captureRef
-            )
-        }
-
-        guard let actionResult = response.actionResult else {
-            return PostDispatchOutcome(
-                preActionCaptureRef: nil,
-                recordingLookupCaptureRef: nil,
-                deliveredCaptureRef: nil
-            )
-        }
-
-        let cursor = ingestActionTrace(actionResult)
-        let beforeRef = cursor?.first ?? preDispatchCaptureRef
-        return PostDispatchOutcome(
-            preActionCaptureRef: beforeRef,
-            recordingLookupCaptureRef: beforeRef,
-            deliveredCaptureRef: cursor?.last
-        )
     }
 
     func handleImmediateCommand(_ command: Command) -> FenceResponse? {
@@ -448,240 +256,6 @@ public final class TheFence {
         }
     }
 
-    private func logCommand(_ request: ParsedRequest) {
-        do {
-            try bookKeeper.logCommand(request)
-        } catch {
-            logger.warning(
-                """
-                Failed to log command \(request.command.rawValue, privacy: .public): \
-                \(error.localizedDescription, privacy: .public)
-                """
-            )
-        }
-    }
-
-    private func responseIfBackgroundExpectationMet(
-        _ expectation: ActionExpectation?,
-        requestId: String,
-        startingAt startIndex: Int = 0
-    ) -> BackgroundExpectationResponse? {
-        guard let expectation else { return nil }
-
-        var matched: (pendingTrace: AccessibilityTrace.PendingTrace, result: ActionResult, validation: ExpectationResult)?
-        for pendingTrace in backgroundAccessibilityState.pendingTraces(startingAt: startIndex) {
-            let trace = pendingTrace.trace
-            guard trace.backgroundDelta != nil else { continue }
-            let syntheticResult = ActionResult(
-                success: true,
-                method: .waitForChange,
-                message: "expectation already met by background change",
-                accessibilityTrace: trace
-            )
-            let validation = expectation.validate(
-                against: syntheticResult,
-                preActionElements: backgroundAccessibilityState.elementLookup(captureRef: pendingTrace.firstRef)
-            )
-            if validation.met {
-                matched = (pendingTrace, syntheticResult, validation)
-                break
-            }
-        }
-
-        guard let matched else { return nil }
-        guard let pendingTrace = backgroundAccessibilityState.removePendingTrace(at: matched.pendingTrace.index) else {
-            return nil
-        }
-        let response = FenceResponse.action(result: matched.result, expectation: matched.validation)
-        logResponse(requestId: requestId, response: response, durationMs: 0)
-        return BackgroundExpectationResponse(response: response, deliveredCaptureRef: pendingTrace.lastRef)
-    }
-
-    private func ensureConnectedIfNeeded(for command: Command) async throws {
-        guard !handoff.isConnected, command.requiresConnectionBeforeDispatch else { return }
-        try await start()
-    }
-
-    private func dispatchWithErrorLogging(
-        _ parsed: ParsedRequest,
-        requestId: String
-    ) async throws -> DispatchResult {
-        let start = CFAbsoluteTimeGetCurrent()
-        do {
-            let response = try await dispatch(parsed)
-            return DispatchResult(response: response, durationMs: elapsedMilliseconds(since: start))
-        } catch let error as SchemaValidationError {
-            return DispatchResult(
-                response: .error(error.message),
-                durationMs: elapsedMilliseconds(since: start)
-            )
-        } catch {
-            let durationMs = elapsedMilliseconds(since: start)
-            logErrorResponse(requestId: requestId, error: error, durationMs: durationMs)
-            throw error
-        }
-    }
-
-    private func elapsedMilliseconds(since start: CFAbsoluteTime) -> Int {
-        Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
-    }
-
-    private func logErrorResponse(requestId: String, error: Error, durationMs: Int) {
-        do {
-            try bookKeeper.logResponse(
-                requestId: requestId,
-                status: .error,
-                durationMilliseconds: durationMs,
-                error: error.localizedDescription
-            )
-        } catch let logError {
-            logger.warning("Failed to log error response for \(requestId, privacy: .public): \(logError.localizedDescription, privacy: .public)")
-        }
-    }
-
-    private func recordHeistEvidence(
-        _ request: ParsedRequest,
-        dispatchedResponse: FenceResponse,
-        validatedResponse: FenceResponse,
-        lookupCaptureRef: AccessibilityTrace.CaptureRef?
-    ) {
-        guard case .idle = playbackPhase else { return }
-        guard let finalReceipt = validatedResponse.heistRecordingReceipt, finalReceipt.shouldRecord else { return }
-        let targetCapture = dispatchedResponse.actionResult?.accessibilityTrace?.captures.first
-            ?? lookupCaptureRef.flatMap { backgroundAccessibilityState.capture(ref: $0) }
-            ?? finalReceipt.actionResult.accessibilityTrace?.captures.first
-        bookKeeper.recordHeistEvidence(
-            request,
-            actionResult: finalReceipt.actionResult,
-            expectation: finalReceipt.expectation,
-            targetCapture: targetCapture
-        )
-    }
-
-    private func validateActionResponse(
-        _ response: FenceResponse,
-        command: Command,
-        expectation: ActionExpectation?,
-        expectationTimeout: Double?,
-        preActionCaptureRef: AccessibilityTrace.CaptureRef?,
-        postDispatchBackgroundStartIndex: Int
-    ) async throws -> ValidatedResponse {
-        if let actionResult = response.actionResult {
-            let delivery = ActionExpectation.validateDelivery(actionResult)
-            if !delivery.met {
-                return ValidatedResponse(
-                    response: .action(result: actionResult, expectation: delivery),
-                    deliveredCaptureRef: nil
-                )
-            }
-            if let expectation {
-                // wait_for_change sends the expectation to the iOS server; a
-                // successful result means the server observed or already held it.
-                if command == .waitForChange {
-                    return ValidatedResponse(
-                        response: .action(
-                            result: actionResult,
-                            expectation: ExpectationResult(
-                                met: actionResult.success,
-                                expectation: expectation,
-                                actual: actionResult.message ?? actionResult.accessibilityDelta?.kindRawValue
-                            )
-                        ),
-                        deliveredCaptureRef: nil
-                    )
-                }
-                let preActionElements = backgroundAccessibilityState.elementLookup(captureRef: preActionCaptureRef)
-                let validation = expectation.validate(
-                    against: actionResult, preActionElements: preActionElements
-                )
-                if validation.met {
-                    return ValidatedResponse(
-                        response: .action(result: actionResult, expectation: validation),
-                        deliveredCaptureRef: nil
-                    )
-                }
-                return try await waitForPostActionExpectation(
-                    expectation,
-                    initialResult: actionResult,
-                    initialValidation: validation,
-                    preActionElements: preActionElements,
-                    timeout: expectationTimeout,
-                    backgroundStartIndex: postDispatchBackgroundStartIndex
-                )
-            }
-        }
-
-        return ValidatedResponse(response: response, deliveredCaptureRef: nil)
-    }
-
-    private func waitForPostActionExpectation(
-        _ expectation: ActionExpectation,
-        initialResult: ActionResult,
-        initialValidation: ExpectationResult,
-        preActionElements: [HeistId: HeistElement],
-        timeout: Double?,
-        backgroundStartIndex: Int
-    ) async throws -> ValidatedResponse {
-        if let backgroundResponse = responseIfBackgroundExpectationMet(
-            expectation,
-            requestId: UUID().uuidString,
-            startingAt: backgroundStartIndex
-        ) {
-            return ValidatedResponse(
-                response: backgroundResponse.response,
-                deliveredCaptureRef: backgroundResponse.deliveredCaptureRef
-            )
-        }
-
-        let target = WaitForChangeTarget(expect: expectation, timeout: timeout)
-        do {
-            let waitResult = try await sendAndAwaitAction(
-                .waitForChange(target),
-                timeout: target.resolvedTimeout + config.postActionExpectationTimeoutBuffer
-            )
-            recordCompletedAction(waitResult)
-            let waitCursor = ingestActionTrace(waitResult)
-            let waitValidation: ExpectationResult = if waitResult.method == .waitForChange {
-                ExpectationResult(
-                    met: waitResult.success,
-                    expectation: expectation,
-                    actual: waitResult.message ?? waitResult.accessibilityDelta?.kindRawValue
-                )
-            } else {
-                expectation.validate(against: waitResult, preActionElements: preActionElements)
-            }
-            return ValidatedResponse(
-                response: .action(
-                    result: waitResult,
-                    expectation: waitValidation
-                ),
-                deliveredCaptureRef: waitCursor?.last
-            )
-        } catch FenceError.actionTimeout {
-            return ValidatedResponse(
-                response: .action(result: initialResult, expectation: initialValidation),
-                deliveredCaptureRef: nil
-            )
-        }
-    }
-
-    private func fullInterfaceCapture(from response: FenceResponse, parsed: ParsedRequest) -> Interface? {
-        guard case .getInterface = parsed.payload,
-              case .interface(let iface, _) = response else {
-            return nil
-        }
-        return iface
-    }
-
-    private func ingestActionTrace(_ actionResult: ActionResult) -> AccessibilityTrace.Cursor? {
-        guard let trace = actionResult.accessibilityTrace else { return nil }
-        return backgroundAccessibilityState.ingest(trace)
-    }
-
-    private func finishAccessibilityDelivery(_ captureRef: AccessibilityTrace.CaptureRef?) {
-        backgroundAccessibilityState.markDelivered(through: captureRef)
-    }
-
     func beginRecordingAccessibilityHistoryRetention() {
         backgroundAccessibilityState.beginRecordingRetention()
     }
@@ -690,103 +264,9 @@ public final class TheFence {
         backgroundAccessibilityState.endRecordingRetention()
     }
 
-    private func connect() async throws {
-        if let directDevice = config.directDevice {
-            try await connectDirect(to: directDevice)
-            return
-        }
-        let filter = config.deviceFilter ?? EnvironmentKey.buttonheistDevice.value
-        do {
-            try await handoff.connectWithDiscovery(
-                filter: filter,
-                timeout: config.connectionTimeout
-            )
-        } catch let error as TheHandoff.ConnectionError {
-            throw FenceError(error)
-        }
-    }
-
-    private func connectDirect(to device: DiscoveredDevice) async throws {
-        handoff.onStatus?("Connecting to \(device.name)...")
-        let resolutionTimeout = TheHandoff.connectionResolutionTimeout(for: config.connectionTimeout)
-        switch await device.reachability(timeout: resolutionTimeout) {
-        case .reachable:
-            break
-        case .failed(let reason):
-            throw FenceError(TheHandoff.ConnectionError.disconnected(reason))
-        case .unavailable:
-            throw FenceError.connectionFailure(ConnectionFailure(
-                message: "Could not reach ButtonHeist server at \(device.name)",
-                errorCode: "connection.endpoint_unreachable",
-                phase: .transport,
-                retryable: true,
-                hint: "Check that the app is running at \(device.name), then retry the command."
-            ))
-        }
-
-        let attemptID = handoff.connect(to: device)
-        do {
-            try await handoff.waitForConnectionResult(timeout: config.connectionTimeout)
-        } catch let error as TheHandoff.ConnectionError where error == .timeout {
-            handoff.disconnectConnectionAttempt(attemptID, failure: .timeout)
-            throw FenceError(error)
-        } catch let error as TheHandoff.ConnectionError {
-            throw FenceError(error)
-        }
-        handoff.onStatus?("Connected to \(device.name)")
-    }
-
-    // MARK: - Response Logging
-
-    private func logResponse(requestId: String, response: FenceResponse, durationMs: Int) {
-        let responseStatus: ResponseStatus
-        let artifactPath: String?
-        let errorMessage: String?
-        switch response {
-        case .error(let message, _):
-            responseStatus = .error
-            artifactPath = nil
-            errorMessage = message
-        case .screenshot(let path, _, _):
-            responseStatus = .ok
-            artifactPath = path
-            errorMessage = nil
-        case .recording(let path, _):
-            responseStatus = .ok
-            artifactPath = path
-            errorMessage = nil
-        case .recordingExpanded(let path, _, _):
-            responseStatus = .ok
-            artifactPath = path
-            errorMessage = nil
-        case .archiveResult(let path, _):
-            responseStatus = .ok
-            artifactPath = path
-            errorMessage = nil
-        case .ok, .help, .status, .devices, .interface, .action,
-             .screenshotData, .recordingData, .batch, .sessionState,
-             .targets, .sessionLog, .heistStarted, .heistStopped,
-             .heistPlayback:
-            responseStatus = .ok
-            artifactPath = nil
-            errorMessage = nil
-        }
-        do {
-            try bookKeeper.logResponse(
-                requestId: requestId,
-                status: responseStatus,
-                durationMilliseconds: durationMs,
-                artifact: artifactPath,
-                error: errorMessage
-            )
-        } catch {
-            logger.warning("Failed to log response for \(requestId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-        }
-    }
-
     // MARK: - Command Dispatch (thin router)
 
-    private func dispatch(_ parsed: ParsedRequest) async throws -> FenceResponse {
+    func dispatch(_ parsed: ParsedRequest) async throws -> FenceResponse {
         switch (parsed.command, parsed.payload) {
         case (.status, _):
             return .status(
@@ -872,85 +352,10 @@ public final class TheFence {
         }
     }
 
-    // MARK: - Send Action (shared)
-
-    func sendAction(_ message: ClientMessage) async throws -> FenceResponse {
-        let result = try await sendAndAwaitAction(message, timeout: Timeouts.actionSeconds)
-        recordCompletedAction(result)
-        return .action(result: result)
-    }
-
-    func sendAndAwaitAction(_ message: ClientMessage, timeout: TimeInterval) async throws -> ActionResult {
-        guard handoff.isConnected else { throw FenceError.notConnected }
-        let requestId = UUID().uuidString
-        do {
-            return try await pendingRequests.waitForAction(requestId: requestId, timeout: timeout) {
-                let outcome = self.handoff.send(message, requestId: requestId)
-                if case .failed(let failure) = outcome {
-                    self.pendingRequests.resolveAction(
-                        requestId: requestId,
-                        result: Result<ActionResult, Error>.failure(FenceError(failure))
-                    )
-                }
-            }
-        } catch let error as CancellationError {
-            throw error
-        } catch {
-            throw mapCaughtError(error)
-        }
-    }
-
-    func sendAndAwaitInterface(_ message: ClientMessage, timeout: TimeInterval) async throws -> Interface {
-        guard handoff.isConnected else { throw FenceError.notConnected }
-        let requestId = UUID().uuidString
-        do {
-            return try await pendingRequests.waitForInterface(requestId: requestId, timeout: timeout) {
-                let outcome = self.handoff.send(message, requestId: requestId)
-                if case .failed(let failure) = outcome {
-                    self.pendingRequests.resolveInterface(
-                        requestId: requestId,
-                        result: Result<Interface, Error>.failure(FenceError(failure))
-                    )
-                }
-            }
-        } catch let error as CancellationError {
-            throw error
-        } catch {
-            throw mapCaughtError(error)
-        }
-    }
-
-    func sendAndAwaitScreen(_ message: ClientMessage, timeout: TimeInterval) async throws -> ScreenPayload {
-        guard handoff.isConnected else { throw FenceError.notConnected }
-        let requestId = UUID().uuidString
-        do {
-            return try await pendingRequests.waitForScreen(requestId: requestId, timeout: timeout) {
-                let outcome = self.handoff.send(message, requestId: requestId)
-                if case .failed(let failure) = outcome {
-                    self.pendingRequests.resolveScreen(
-                        requestId: requestId,
-                        result: Result<ScreenPayload, Error>.failure(FenceError(failure))
-                    )
-                }
-            }
-        } catch let error as CancellationError {
-            throw error
-        } catch {
-            throw mapCaughtError(error)
-        }
-    }
-
-    private func mapCaughtError(_ error: Error) -> FenceError {
-        if let fenceError = error as? FenceError {
-            return fenceError
-        }
-        return .actionFailed(error.localizedDescription)
-    }
-
     // Expectation parsing (`parseExpectation` and its helpers) lives in
     // TheFence+ExpectationParsing.swift.
 
-    private(set) var commandExecutionState = CommandExecutionState()
+    var commandExecutionState = CommandExecutionState()
 
     func recordCompletedAction(_ result: ActionResult) {
         commandExecutionState.completeAction(result)
@@ -971,127 +376,6 @@ public final class TheFence {
             ) else { return nil }
             return device
         }
-    }
-
-    // MARK: - Async Wait Methods
-
-    func waitForActionResult(requestId: String, timeout: TimeInterval) async throws -> ActionResult {
-        try await pendingRequests.waitForAction(requestId: requestId, timeout: timeout)
-    }
-
-    func waitForInterface(requestId: String, timeout: TimeInterval = 10.0) async throws -> Interface {
-        try await pendingRequests.waitForInterface(requestId: requestId, timeout: timeout)
-    }
-
-    func waitForScreen(requestId: String, timeout: TimeInterval = 30.0) async throws -> ScreenPayload {
-        try await pendingRequests.waitForScreen(requestId: requestId, timeout: timeout)
-    }
-
-    // Recording responses do not carry request IDs. The recording lifecycle
-    // carries the active start/completion wait so disconnect handling can fail
-    // it immediately instead of letting the caller time out.
-    public func waitForRecording(timeout: TimeInterval = 120.0) async throws -> RecordingPayload {
-        try await waitForRecording(timeout: timeout, afterRegister: nil)
-    }
-
-    func stopRecordingAndWait(timeout: TimeInterval = 120.0) async throws -> RecordingPayload {
-        guard handoff.isConnected else { throw FenceError.notConnected }
-        return try await waitForRecording(timeout: timeout) {
-            let outcome = self.handoff.send(.stopRecording, requestId: nil)
-            if case .failed(let failure) = outcome {
-                self.recording.resolveActiveCompletion(.failure(FenceError(failure)))
-            }
-        }
-    }
-
-    func startRecordingAndWait(config: RecordingConfig, timeout: TimeInterval = Timeouts.actionSeconds) async throws {
-        guard handoff.isConnected else { throw FenceError.notConnected }
-        guard !isRecording else {
-            throw FenceError.invalidRequest("Recording already in progress — use stop_recording first")
-        }
-        let wait = try recording.beginStartWait()
-        defer { recording.finishStartWait(wait) }
-
-        var didSendStart = false
-        do {
-            try await wait.wait(timeout: timeout) {
-                let outcome = self.handoff.send(.startRecording(config), requestId: nil)
-                switch outcome {
-                case .enqueued:
-                    didSendStart = true
-                case .failed(let failure):
-                    wait.resolve(.failure(FenceError(failure)))
-                }
-            }
-        } catch {
-            if didSendStart {
-                cleanUpServerRecording()
-            }
-            throw error
-        }
-    }
-
-    /// Run a recording from start to completion as a single async unit.
-    ///
-    /// Sends `start_recording`, waits for the server acknowledgement, then
-    /// awaits the resulting `RecordingPayload`. On any error path after the
-    /// start request is sent, sends `stop_recording` so the iOS-side recording
-    /// is not stranded. Stop cleanup is secondary: if it fails, the original
-    /// error still propagates.
-    public func recordToCompletion(
-        config: RecordingConfig,
-        timeout: TimeInterval
-    ) async throws -> RecordingPayload {
-        guard handoff.isConnected else { throw FenceError.notConnected }
-        guard !isRecording else {
-            throw FenceError.invalidRequest("Recording already in progress — use stop_recording first")
-        }
-
-        // Cancellation that arrived before we could send the start request: do
-        // nothing to clean up server-side, since nothing was started.
-        try Task.checkCancellation()
-
-        var didStart = false
-        do {
-            try await startRecordingAndWait(config: config, timeout: timeout)
-            didStart = true
-            return try await waitForRecording(timeout: timeout)
-        } catch let error as CancellationError {
-            if didStart {
-                cleanUpServerRecording()
-            }
-            throw error
-        } catch {
-            if didStart {
-                cleanUpServerRecording()
-            }
-            throw error
-        }
-    }
-
-    /// Best-effort drain of an in-flight server-side recording. Used as the
-    /// cleanup branch of `recordToCompletion` — failures are intentionally
-    /// swallowed so the caller's original error still surfaces.
-    private func cleanUpServerRecording() {
-        guard handoff.isConnected else { return }
-        handoff.send(.stopRecording, requestId: nil)
-    }
-
-    /// Internal overload exposing `afterRegister` for test injection. The hook
-    /// fires synchronously after the recording callback is registered, letting
-    /// tests deliver a payload deterministically without sleeping.
-    func waitForRecording(
-        timeout: TimeInterval,
-        afterRegister: (() -> Void)?
-    ) async throws -> RecordingPayload {
-        let wait = try recording.beginCompletionWait()
-        defer { recording.finishCompletionWait(wait) }
-        return try await wait.wait(timeout: timeout, afterRegister: afterRegister)
-    }
-
-    private func cancelAllPendingRequests(error: Error = FenceError.actionTimeout) {
-        pendingRequests.cancelAll(error: error)
-        recording.cancelAll(error: error)
     }
 
 }

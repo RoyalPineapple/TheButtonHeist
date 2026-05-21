@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import ButtonHeistMCP
 import ButtonHeist
@@ -120,7 +121,8 @@ struct ToolRoutingTests {
                     "mode": ScrollMode.search.rawValue,
                     "label": "Done",
                 ],
-                "run_batch step \"scroll\" uses the MCP mode selector; use canonical Fence commands scroll, scroll_to_visible, element_search, or scroll_to_edge."
+                "run_batch step \"scroll\" uses the MCP mode selector; use canonical Fence commands scroll, " +
+                    "scroll_to_visible, element_search, or scroll_to_edge."
             ),
             (
                 ["command": TheFence.Command.editAction.rawValue, "action": "dismiss"],
@@ -227,6 +229,30 @@ struct ToolRoutingTests {
             let operation = try routed(tool.name, minimalArguments(for: tool.name))
 
             #expect(!operation.command.rawValue.isEmpty, "\(tool.name) did not produce a command")
+        }
+    }
+
+    @Test("server tool routing delegates to shared Fence catalog")
+    func serverToolRoutingDelegatesToSharedFenceCatalog() throws {
+        for tool in ToolDefinitions.all {
+            let arguments = minimalArguments(for: tool.name)
+            let serverResult = ButtonHeistMCPServer.routeToolRequest(name: tool.name, arguments: arguments)
+            let catalogResult = FenceOperationCatalog.normalizeToolCall(name: tool.name, arguments: arguments)
+
+            switch (serverResult, catalogResult) {
+            case (.success(let serverOperation), .success(let catalogOperation)):
+                #expect(serverOperation.command == catalogOperation.command)
+                #expect(
+                    NSDictionary(dictionary: serverOperation.arguments)
+                        .isEqual(to: catalogOperation.arguments)
+                )
+
+            case (.failure(let serverError), .failure(let catalogError)):
+                #expect(serverError.message == catalogError.message)
+
+            case (.success, .failure), (.failure, .success):
+                Issue.record("\(tool.name) server routing diverged from FenceOperationCatalog")
+            }
         }
     }
 

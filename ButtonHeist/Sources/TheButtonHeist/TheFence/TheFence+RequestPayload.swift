@@ -374,11 +374,8 @@ extension TheFence {
         )
     }
 
-    func parsePlaybackOperation(
-        _ operation: PlaybackOperation,
-        bridgeArguments request: [String: Any]
-    ) throws -> ParsedRequest {
-        try parseRequest(command: operation.command, request: request)
+    func parsePlaybackOperation(_ operation: PlaybackOperation) throws -> ParsedRequest {
+        try parseRequest(command: operation.command, arguments: operation.requestArguments())
     }
 
     func decodeRequestPayload(
