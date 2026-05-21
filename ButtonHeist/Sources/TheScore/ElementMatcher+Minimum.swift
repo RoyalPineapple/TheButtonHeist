@@ -228,3 +228,13 @@ public struct MinimumMatcher: Sendable, Equatable {
         return found
     }
 }
+
+extension MinimumMatcher: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("minimumMatcher", [
+            ScoreDescription.stringField("element", element.heistId),
+            matcher.description,
+            ScoreDescription.valueField("ordinal", ordinal),
+        ].compactMap { $0 })
+    }
+}

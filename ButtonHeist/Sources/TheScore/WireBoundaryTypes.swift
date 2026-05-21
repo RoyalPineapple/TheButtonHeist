@@ -30,6 +30,10 @@ public enum ScrollMode: String, CaseIterable, Sendable {
     }
 }
 
+extension ScrollMode: CustomStringConvertible {
+    public var description: String { rawValue }
+}
+
 /// MCP `gesture` tool's `type` argument. Selects which underlying TheFence
 /// gesture command the boundary dispatches to. The rawValues match TheFence
 /// command names directly.
@@ -43,4 +47,8 @@ public enum GestureType: String, CaseIterable, Sendable {
     case twoFingerTap = "two_finger_tap"
     case drawPath = "draw_path"
     case drawBezier = "draw_bezier"
+}
+
+extension GestureType: CustomStringConvertible {
+    public var description: String { rawValue }
 }

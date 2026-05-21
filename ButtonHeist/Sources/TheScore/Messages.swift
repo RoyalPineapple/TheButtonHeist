@@ -69,6 +69,10 @@ public enum WireMessageType: String, Codable, CaseIterable, Sendable {
     case interaction
 }
 
+extension WireMessageType: CustomStringConvertible {
+    public var description: String { rawValue }
+}
+
 // MARK: - TXT Record Keys
 
 /// Bonjour TXT record keys used for service advertisement and discovery.
@@ -80,6 +84,10 @@ public enum TXTRecordKey: String, Sendable {
     case certFingerprint = "certfp"
     case transport = "transport"
     case sessionActive = "sessionactive"
+}
+
+extension TXTRecordKey: CustomStringConvertible {
+    public var description: String { rawValue }
 }
 
 // MARK: - Environment Keys
@@ -101,6 +109,10 @@ public enum EnvironmentKey: String, Sendable {
     case insideJobId = "INSIDEJOB_ID"
     case insideJobScope = "INSIDEJOB_SCOPE"
     case insideJobSessionTimeout = "INSIDEJOB_SESSION_TIMEOUT"
+}
+
+extension EnvironmentKey: CustomStringConvertible {
+    public var description: String { rawValue }
 }
 
 extension EnvironmentKey {

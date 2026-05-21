@@ -33,6 +33,16 @@ public struct HeistPlayback: Codable, Sendable, Equatable {
     }
 }
 
+extension HeistPlayback: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("heist", [
+            ScoreDescription.valueField("version", version),
+            ScoreDescription.stringField("app", app),
+            "steps=\(steps.count)",
+        ].compactMap { $0 })
+    }
+}
+
 // MARK: - Heist Step
 
 /// A single command in a heist playback. Contains the command name, matcher-based
@@ -147,6 +157,25 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
 
 }
 
+extension HeistEvidence: CustomStringConvertible {
+    public var description: String {
+        let argumentSummary = arguments.isEmpty ? nil : "args=\(ScoreDescription.call("arguments", argumentsDescriptionFields))"
+        return ScoreDescription.call("step", [
+            ScoreDescription.stringField("command", command),
+            target?.description,
+            ScoreDescription.valueField("ordinal", ordinal),
+            argumentSummary,
+            recorded?.description,
+        ].compactMap { $0 })
+    }
+
+    private var argumentsDescriptionFields: [String] {
+        arguments
+            .sorted { $0.key < $1.key }
+            .map { "\(ScoreDescription.quoted($0.key))=\($0.value)" }
+    }
+}
+
 // MARK: - Heist Value
 
 /// A JSON-compatible value type for command arguments.
@@ -240,6 +269,28 @@ public enum HeistValue: Codable, Sendable, Equatable {
     }
 }
 
+extension HeistValue: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .string(let stringValue):
+            return ScoreDescription.quoted(stringValue)
+        case .int(let intValue):
+            return "\(intValue)"
+        case .double(let doubleValue):
+            return ScoreDescription.decimal(doubleValue)
+        case .bool(let boolValue):
+            return "\(boolValue)"
+        case .array(let arrayValue):
+            return "[\(arrayValue.map(\.description).joined(separator: ", "))]"
+        case .object(let objectValue):
+            let fields = objectValue
+                .sorted { $0.key < $1.key }
+                .map { "\(ScoreDescription.quoted($0.key))=\($0.value)" }
+            return "{\(fields.joined(separator: ", "))}"
+        }
+    }
+}
+
 // MARK: - Recorded Metadata
 
 /// Debugging metadata captured at recording time. Preserved in the `.heist` file
@@ -306,6 +357,21 @@ public struct RecordedMetadata: Codable, Sendable, Equatable {
     }
 }
 
+extension RecordedMetadata: CustomStringConvertible {
+    public var description: String {
+        let traceReceiptCount = accessibilityTrace?.receipts.count
+        return ScoreDescription.call("recorded", [
+            ScoreDescription.stringField("heistId", heistId),
+            frame?.description,
+            ScoreDescription.valueField("coordinateOnly", coordinateOnly),
+            unsupportedArguments.map { "unsupported=\($0.count)" },
+            caps.map { "caps=\($0.count)" },
+            traceReceiptCount.map { "traceReceipts=\($0)" },
+            expectation?.description,
+        ].compactMap { $0 })
+    }
+}
+
 /// Frame captured at recording time for debugging and visual alignment.
 public struct RecordedFrame: Codable, Sendable, Equatable {
     public let x: Double
@@ -318,6 +384,12 @@ public struct RecordedFrame: Codable, Sendable, Equatable {
         self.y = y
         self.width = width
         self.height = height
+    }
+}
+
+extension RecordedFrame: CustomStringConvertible {
+    public var description: String {
+        "frame(\(ScoreDescription.decimal(x)),\(ScoreDescription.decimal(y)),\(ScoreDescription.decimal(width)),\(ScoreDescription.decimal(height)))"
     }
 }
 

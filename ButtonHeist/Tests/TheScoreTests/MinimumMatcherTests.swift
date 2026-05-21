@@ -208,6 +208,20 @@ final class MinimumMatcherTests: XCTestCase {
         XCTAssertEqual(resolve(minimumMatcher, in: capture), element)
     }
 
+    func testDescriptionComposesElementMatcherAndOrdinal() {
+        let element = makeElement(heistId: "item_2", label: "Item", traits: [.staticText])
+        let minimumMatcher = MinimumMatcher(
+            element: element,
+            matcher: ElementMatcher(label: "Item", traits: [.staticText]),
+            ordinal: 1
+        )
+
+        XCTAssertEqual(
+            minimumMatcher.description,
+            #"minimumMatcher(element="item_2" matcher(label="Item" traits=[staticText]) ordinal=1)"#
+        )
+    }
+
     private func resolve(_ minimumMatcher: MinimumMatcher, in capture: AccessibilityTrace.Capture) -> HeistElement? {
         let matches = capture.interface.elements.filter { $0.matches(minimumMatcher.matcher) }
         return matches[safe: minimumMatcher.ordinal ?? 0]

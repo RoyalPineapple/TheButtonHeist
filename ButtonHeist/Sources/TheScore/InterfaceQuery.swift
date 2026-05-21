@@ -15,3 +15,13 @@ public struct InterfaceQuery: Codable, Sendable, Equatable {
         self.elementIds = elementIds
     }
 }
+
+extension InterfaceQuery: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("interfaceQuery", [
+            subtree?.description,
+            matcher.hasPredicates ? matcher.description : nil,
+            ScoreDescription.quotedListField("elementIds", elementIds),
+        ].compactMap { $0 })
+    }
+}
