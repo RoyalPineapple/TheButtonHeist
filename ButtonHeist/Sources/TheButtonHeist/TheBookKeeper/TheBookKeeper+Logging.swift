@@ -137,21 +137,37 @@ private extension Dictionary where Key == String, Value == HeistValue {
     }
 }
 
+extension TheFence {
+    struct CommandLogProjection {
+        let requestId: String
+        let command: Command
+        let arguments: [String: HeistValue]
+    }
+
+    struct HeistEvidenceProjection {
+        let command: Command
+        let arguments: [String: HeistValue]
+        let elementTarget: ElementTarget?
+        let coordinateOnly: Bool
+    }
+}
+
 extension TheFence.ParsedRequest {
-    var bookKeeperLogArguments: [String: HeistValue] {
-        bookKeeperArguments(includeTarget: true)
+    var commandLogProjection: TheFence.CommandLogProjection {
+        TheFence.CommandLogProjection(
+            requestId: requestId,
+            command: command,
+            arguments: bookKeeperArguments(includeTarget: true)
+        )
     }
 
-    var bookKeeperHeistArguments: [String: HeistValue] {
-        bookKeeperArguments(includeTarget: false)
-    }
-
-    var bookKeeperElementTarget: ElementTarget? {
-        payload.bookKeeperElementTarget
-    }
-
-    var bookKeeperCoordinateOnly: Bool {
-        payload.bookKeeperCoordinateOnly
+    var heistEvidenceProjection: TheFence.HeistEvidenceProjection {
+        TheFence.HeistEvidenceProjection(
+            command: command,
+            arguments: bookKeeperArguments(includeTarget: false),
+            elementTarget: payload.bookKeeperElementTarget,
+            coordinateOnly: payload.bookKeeperCoordinateOnly
+        )
     }
 
     private func bookKeeperArguments(includeTarget: Bool) -> [String: HeistValue] {
@@ -716,7 +732,7 @@ private extension TheFence.RunBatchStepRequest {
     var bookKeeperValue: HeistValue {
         switch self {
         case .decoded(let request):
-            var values = request.bookKeeperLogArguments
+            var values = request.commandLogProjection.arguments
             values[.command] = .string(request.command.rawValue)
             return .object(values)
         case .invalid(let commandName, let failure):
@@ -840,13 +856,13 @@ extension TheBookKeeper {
     }
 
     /// Build a sanitized log entry for an incoming command.
-    func buildCommandLogEntry(_ request: TheFence.ParsedRequest) -> SessionLogEntry {
+    func buildCommandLogEntry(_ projection: TheFence.CommandLogProjection) -> SessionLogEntry {
         return .command(CommandLogEntry(
             t: iso8601Now(),
-            requestId: request.requestId,
-            command: CommandLogName(command: request.command),
+            requestId: projection.requestId,
+            command: CommandLogName(command: projection.command),
             args: CommandLogArguments(
-                request.bookKeeperLogArguments,
+                projection.arguments,
                 maxStringLength: Self.maxLoggedStringLength
             )
         ))

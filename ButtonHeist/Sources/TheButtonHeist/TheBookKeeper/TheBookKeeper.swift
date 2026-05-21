@@ -366,8 +366,12 @@ final class TheBookKeeper {
     // MARK: - Logging
 
     func logCommand(_ request: TheFence.ParsedRequest) throws {
+        try logCommand(request.commandLogProjection)
+    }
+
+    func logCommand(_ projection: TheFence.CommandLogProjection) throws {
         guard case .active(let session) = phase else { return }
-        let entry = buildCommandLogEntry(request)
+        let entry = buildCommandLogEntry(projection)
         try appendLogLine(entry, to: session.logHandle)
     }
 
@@ -691,8 +695,9 @@ final class TheBookKeeper {
         guard actionResult?.success != false else { return }
         guard expectation?.met != false else { return }
 
+        let projection = request.heistEvidenceProjection
         let step = buildStep(
-            request: request,
+            projection: projection,
             targetCapture: targetCapture,
             actionResult: actionResult,
             expectation: expectation
@@ -708,7 +713,7 @@ final class TheBookKeeper {
             recording.fileHandle.write(lineData)
         } catch {
             logger.error(
-                "Failed to encode heist evidence for \(request.command.rawValue): \(error.localizedDescription)"
+                "Failed to encode heist evidence for \(projection.command.rawValue): \(error.localizedDescription)"
             )
             return
         }
@@ -717,7 +722,7 @@ final class TheBookKeeper {
     // MARK: - Heist Step Construction
 
     private func buildStep(
-        request: TheFence.ParsedRequest,
+        projection: TheFence.HeistEvidenceProjection,
         targetCapture: AccessibilityTrace.Capture?,
         actionResult: ActionResult?,
         expectation: ExpectationResult?
@@ -728,7 +733,7 @@ final class TheBookKeeper {
         var recordedFrame: RecordedFrame?
         var coordinateOnly: Bool?
 
-        if case .heistId(let heistId)? = request.bookKeeperElementTarget,
+        if case .heistId(let heistId)? = projection.elementTarget,
            let source = matcherSource(
             heistId: heistId,
             targetCapture: targetCapture
@@ -741,18 +746,18 @@ final class TheBookKeeper {
                 x: source.element.frameX, y: source.element.frameY,
                 width: source.element.frameWidth, height: source.element.frameHeight
             )
-        } else if case .matcher(let matcher, let matchedOrdinal)? = request.bookKeeperElementTarget {
+        } else if case .matcher(let matcher, let matchedOrdinal)? = projection.elementTarget {
             target = matcher
             ordinal = matchedOrdinal
-        } else if request.bookKeeperCoordinateOnly {
+        } else if projection.coordinateOnly {
             coordinateOnly = true
         }
 
         return HeistEvidence(
-            command: request.command.rawValue,
+            command: projection.command.rawValue,
             target: target,
             ordinal: ordinal,
-            arguments: request.bookKeeperHeistArguments,
+            arguments: projection.arguments,
             recorded: buildRecordedMetadata(
                 heistId: recordedHeistId,
                 frame: recordedFrame,
