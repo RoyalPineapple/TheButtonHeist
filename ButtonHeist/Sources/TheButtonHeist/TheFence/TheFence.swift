@@ -234,8 +234,8 @@ public final class TheFence {
     func clearClientSessionState(error: Error) {
         backgroundAccessibilityState.reset()
         commandExecutionState.reset()
-        recording.reset()
         cancelAllPendingRequests(error: error)
+        recording.reset()
     }
 
     private func handleRecordingEvent(_ event: RecordingEvent) {
@@ -979,9 +979,9 @@ public final class TheFence {
         try await pendingRequests.waitForScreen(requestId: requestId, timeout: timeout)
     }
 
-    // Recording responses do not carry request IDs, so synthesize a single key
-    // while a stop_recording wait is in flight. Keeping the tracker on TheFence
-    // lets disconnect handling fail the wait immediately instead of timing out.
+    // Recording responses do not carry request IDs. The recording lifecycle
+    // carries the active start/completion wait so disconnect handling can fail
+    // it immediately instead of letting the caller time out.
     public func waitForRecording(timeout: TimeInterval = 120.0) async throws -> RecordingPayload {
         try await waitForRecording(timeout: timeout, afterRegister: nil)
     }
@@ -991,7 +991,7 @@ public final class TheFence {
         return try await waitForRecording(timeout: timeout) {
             let outcome = self.handoff.send(.stopRecording, requestId: UUID().uuidString)
             if case .failed(let failure) = outcome {
-                self.resolveRecordingCompletion(.failure(FenceError(failure)))
+                self.recording.resolveActiveCompletion(.failure(FenceError(failure)))
             }
         }
     }
@@ -1001,22 +1001,18 @@ public final class TheFence {
         guard !isRecording else {
             throw FenceError.invalidRequest("Recording already in progress — use stop_recording first")
         }
-        let syntheticId = "recording-start"
-        try recording.beginStartWait(syntheticId: syntheticId)
-        defer { recording.finishStartWait(syntheticId: syntheticId) }
+        let wait = try recording.beginStartWait()
+        defer { recording.finishStartWait(wait) }
 
         var didSendStart = false
         do {
-            try await recording.waitForStart(requestId: syntheticId, timeout: timeout) {
+            try await wait.wait(timeout: timeout) {
                 let outcome = self.handoff.send(.startRecording(config), requestId: UUID().uuidString)
                 switch outcome {
                 case .enqueued:
                     didSendStart = true
                 case .failed(let failure):
-                    self.recording.resolveStartWait(
-                        requestId: syntheticId,
-                        result: Result<Bool, Error>.failure(FenceError(failure))
-                    )
+                    wait.resolve(.failure(FenceError(failure)))
                 }
             }
         } catch {
@@ -1025,14 +1021,6 @@ public final class TheFence {
             }
             throw error
         }
-    }
-
-    private func resolveRecordingStart(_ result: Result<Bool, Error>) {
-        recording.resolveStartWait(result)
-    }
-
-    private func resolveRecordingCompletion(_ result: Result<RecordingPayload, Error>) {
-        recording.resolveCompletionWait(result)
     }
 
     /// Run a recording from start to completion as a single async unit.
@@ -1088,10 +1076,9 @@ public final class TheFence {
         timeout: TimeInterval,
         afterRegister: (() -> Void)?
     ) async throws -> RecordingPayload {
-        let syntheticId = "recording"
-        try recording.beginCompletionWait(syntheticId: syntheticId)
-        defer { recording.finishCompletionWait(syntheticId: syntheticId) }
-        return try await recording.waitForCompletion(requestId: syntheticId, timeout: timeout, afterRegister: afterRegister)
+        let wait = try recording.beginCompletionWait()
+        defer { recording.finishCompletionWait(wait) }
+        return try await wait.wait(timeout: timeout, afterRegister: afterRegister)
     }
 
     private func cancelAllPendingRequests(error: Error = FenceError.actionTimeout) {

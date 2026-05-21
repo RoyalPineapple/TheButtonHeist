@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 import TheScore
 
@@ -6,11 +7,6 @@ private enum PendingRequestStore {
     case action(PendingRequestTracker<ActionResult>)
     case interface(PendingRequestTracker<Interface>)
     case screen(PendingRequestTracker<ScreenPayload>)
-}
-
-private enum RecordingWaiter {
-    case start(PendingRequestTracker<Bool>)
-    case completion(PendingRequestTracker<RecordingPayload>)
 }
 
 extension TheFence {
@@ -269,24 +265,96 @@ extension TheFence {
 
     // MARK: - Recording State
 
+    @ButtonHeistActor
+    final class RecordingWait<Value: Sendable> {
+        private struct Pending: Sendable {
+            let owner: UUID
+            let callback: @Sendable (Result<Value, Error>) -> Void
+        }
+
+        private var pending: Pending?
+
+        func wait(
+            timeout: TimeInterval,
+            afterRegister: (() -> Void)? = nil
+        ) async throws -> Value {
+            let owner = UUID()
+
+            return try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { continuation in
+                    if Task.isCancelled {
+                        continuation.resume(throwing: CancellationError())
+                        return
+                    }
+
+                    guard pending == nil else {
+                        continuation.resume(
+                            throwing: FenceError.invalidRequest("Recording wait already registered")
+                        )
+                        return
+                    }
+
+                    let didResume = OSAllocatedUnfairLock(initialState: false)
+                    let timeoutTask = Task {
+                        guard await Task.cancellableSleep(for: .seconds(timeout)) else { return }
+                        if let callback = self.removePending(owner: owner) {
+                            callback(.failure(FenceError.actionTimeout))
+                        }
+                    }
+
+                    pending = Pending(owner: owner) { result in
+                        let shouldResume = didResume.withLock { flag -> Bool in
+                            guard !flag else { return false }
+                            flag = true
+                            return true
+                        }
+                        if shouldResume {
+                            timeoutTask.cancel()
+                            continuation.resume(with: result)
+                        }
+                    }
+                    afterRegister?()
+                }
+            } onCancel: {
+                Task { @ButtonHeistActor [weak self] in
+                    if let callback = self?.removePending(owner: owner) {
+                        callback(.failure(CancellationError()))
+                    }
+                }
+            }
+        }
+
+        func resolve(_ result: Result<Value, Error>) {
+            guard let pending else { return }
+            self.pending = nil
+            pending.callback(result)
+        }
+
+        func cancel(error: Error) {
+            resolve(.failure(error))
+        }
+
+        private func removePending(owner: UUID) -> (@Sendable (Result<Value, Error>) -> Void)? {
+            guard let pending, pending.owner == owner else { return nil }
+            self.pending = nil
+            return pending.callback
+        }
+    }
+
     enum RecordingLifecycle {
         case idle
-        case starting(waitId: String)
+        case starting(wait: RecordingWait<Void>)
         case recording
-        case completing(waitId: String, serverRecording: Bool)
+        case completing(wait: RecordingWait<RecordingPayload>, serverRecording: Bool)
     }
 
     struct RecordingCoordinator {
         private var lifecycle: RecordingLifecycle = .idle
-        private let waiters: [RecordingWaiter] = [
-            .start(PendingRequestTracker<Bool>()),
-            .completion(PendingRequestTracker<RecordingPayload>()),
-        ]
 
         var snapshot: RecordingSnapshot {
             RecordingSnapshot(
                 isRecording: isRecording,
-                isWaitingForCompletion: completionWaitId != nil
+                isWaitingForCompletion: isWaitingForCompletion
             )
         }
 
@@ -301,18 +369,11 @@ extension TheFence {
             }
         }
 
-        private var startWaitId: String? {
-            if case .starting(let waitId) = lifecycle {
-                return waitId
+        private var isWaitingForCompletion: Bool {
+            if case .completing = lifecycle {
+                return true
             }
-            return nil
-        }
-
-        private var completionWaitId: String? {
-            if case .completing(let waitId, _) = lifecycle {
-                return waitId
-            }
-            return nil
+            return false
         }
 
         mutating func reset() {
@@ -321,108 +382,90 @@ extension TheFence {
 
         @ButtonHeistActor
         func cancelAll(error: Error) {
-            startWaiter?.cancelAll(error: error)
-            completionWaiter?.cancelAll(error: error)
+            switch lifecycle {
+            case .starting(let wait):
+                wait.cancel(error: error)
+            case .completing(let wait, _):
+                wait.cancel(error: error)
+            case .idle, .recording:
+                break
+            }
         }
 
-        mutating func beginStartWait(syntheticId: String) throws {
+        mutating func beginStartWait() throws -> RecordingWait<Void> {
             guard case .idle = lifecycle else {
                 throw startRecordingConflictError
             }
-            lifecycle = .starting(waitId: syntheticId)
+            let wait = RecordingWait<Void>()
+            lifecycle = .starting(wait: wait)
+            return wait
         }
 
-        mutating func finishStartWait(syntheticId: String) {
-            guard case .starting(let waitId) = lifecycle, waitId == syntheticId else { return }
+        mutating func finishStartWait(_ wait: RecordingWait<Void>) {
+            guard case .starting(let activeWait) = lifecycle, activeWait === wait else { return }
             lifecycle = .idle
         }
 
-        @ButtonHeistActor
-        func waitForStart(
-            requestId: String,
-            timeout: TimeInterval,
-            afterRegister: (() -> Void)?
-        ) async throws {
-            guard let waiter = startWaiter else { throw unavailableWaiterError }
-            _ = try await waiter.wait(requestId: requestId, timeout: timeout, afterRegister: afterRegister)
-        }
-
-        @ButtonHeistActor
-        func resolveStartWait(_ result: Result<Bool, Error>) {
-            guard let syntheticId = startWaitId else { return }
-            startWaiter?.resolve(requestId: syntheticId, result: result)
-        }
-
-        @ButtonHeistActor
-        func resolveStartWait(requestId: String, result: Result<Bool, Error>) {
-            startWaiter?.resolve(requestId: requestId, result: result)
-        }
-
-        mutating func beginCompletionWait(syntheticId: String) throws {
+        mutating func beginCompletionWait() throws -> RecordingWait<RecordingPayload> {
+            let wait = RecordingWait<RecordingPayload>()
             switch lifecycle {
             case .idle:
-                lifecycle = .completing(waitId: syntheticId, serverRecording: false)
+                lifecycle = .completing(wait: wait, serverRecording: false)
             case .recording:
-                lifecycle = .completing(waitId: syntheticId, serverRecording: true)
+                lifecycle = .completing(wait: wait, serverRecording: true)
             case .starting, .completing:
                 throw FenceError.invalidRequest("stop_recording already waiting for completion")
             }
+            return wait
         }
 
-        mutating func finishCompletionWait(syntheticId: String) {
-            guard case .completing(let waitId, _) = lifecycle, waitId == syntheticId else { return }
+        mutating func finishCompletionWait(_ wait: RecordingWait<RecordingPayload>) {
+            guard case .completing(let activeWait, _) = lifecycle, activeWait === wait else { return }
             lifecycle = .idle
         }
 
         @ButtonHeistActor
-        func waitForCompletion(
-            requestId: String,
-            timeout: TimeInterval,
-            afterRegister: (() -> Void)?
-        ) async throws -> RecordingPayload {
-            guard let waiter = completionWaiter else { throw unavailableWaiterError }
-            return try await waiter.wait(requestId: requestId, timeout: timeout, afterRegister: afterRegister)
-        }
-
-        @ButtonHeistActor
-        func resolveCompletionWait(_ result: Result<RecordingPayload, Error>) {
-            guard let syntheticId = completionWaitId else { return }
-            completionWaiter?.resolve(requestId: syntheticId, result: result)
+        func resolveActiveCompletion(_ result: Result<RecordingPayload, Error>) {
+            guard case .completing(let wait, _) = lifecycle else { return }
+            wait.resolve(result)
         }
 
         @ButtonHeistActor
         mutating func handleEvent(_ event: RecordingEvent) {
             switch event {
             case .started:
-                if let syntheticId = startWaitId {
+                if case .starting(let wait) = lifecycle {
                     lifecycle = .recording
-                    startWaiter?.resolve(requestId: syntheticId, result: .success(true))
-                } else if case .completing(let waitId, _) = lifecycle {
-                    lifecycle = .completing(waitId: waitId, serverRecording: true)
+                    wait.resolve(.success(()))
+                } else if case .completing(let wait, _) = lifecycle {
+                    lifecycle = .completing(wait: wait, serverRecording: true)
                 } else {
                     lifecycle = .recording
                 }
             case .stopped:
-                if case .completing(let waitId, _) = lifecycle {
-                    lifecycle = .completing(waitId: waitId, serverRecording: false)
+                if case .completing(let wait, _) = lifecycle {
+                    lifecycle = .completing(wait: wait, serverRecording: false)
                 } else {
                     lifecycle = .idle
                 }
             case .completed(let payload):
-                let waitId = completionWaitId
-                lifecycle = .idle
-                if let waitId {
-                    completionWaiter?.resolve(requestId: waitId, result: .success(payload))
+                let wait: RecordingWait<RecordingPayload>?
+                if case .completing(let activeWait, _) = lifecycle {
+                    wait = activeWait
+                } else {
+                    wait = nil
                 }
+                lifecycle = .idle
+                wait?.resolve(.success(payload))
             case .failed(let message):
                 let error = FenceError.actionFailed("Recording failed: \(message)")
                 switch lifecycle {
-                case .starting(let waitId):
+                case .starting(let wait):
                     lifecycle = .idle
-                    startWaiter?.resolve(requestId: waitId, result: .failure(error))
-                case .completing(let waitId, _):
+                    wait.resolve(.failure(error))
+                case .completing(let wait, _):
                     lifecycle = .idle
-                    completionWaiter?.resolve(requestId: waitId, result: .failure(error))
+                    wait.resolve(.failure(error))
                 case .idle, .recording:
                     lifecycle = .idle
                 }
@@ -440,24 +483,6 @@ extension TheFence {
             case .completing:
                 return .invalidRequest("stop_recording already waiting for completion")
             }
-        }
-
-        private var startWaiter: PendingRequestTracker<Bool>? {
-            waiters.compactMap {
-                if case .start(let tracker) = $0 { return tracker }
-                return nil
-            }.first
-        }
-
-        private var completionWaiter: PendingRequestTracker<RecordingPayload>? {
-            waiters.compactMap {
-                if case .completion(let tracker) = $0 { return tracker }
-                return nil
-            }.first
-        }
-
-        private var unavailableWaiterError: FenceError {
-            .actionFailed("Internal recording waiter unavailable")
         }
     }
 
