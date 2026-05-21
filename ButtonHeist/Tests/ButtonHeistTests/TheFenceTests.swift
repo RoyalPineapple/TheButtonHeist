@@ -729,7 +729,7 @@ final class TheFenceTests: XCTestCase {
 
         let text = FenceResponse.action(result: result).compactFormatted()
 
-        XCTAssertEqual(text, "checkout | waitFor: error[timeout]: Timed out after 2.0s waiting for element")
+        XCTAssertEqual(text, "checkout | wait_for: error[timeout]: Timed out after 2.0s waiting for element")
     }
 
     func testCompactUnsupportedCommandUsesDiagnosticMethod() {
@@ -757,7 +757,7 @@ final class TheFenceTests: XCTestCase {
 
         XCTAssertEqual(
             text,
-            "waitFor: error[request.accessibility_tree_unavailable]: Could not access accessibility tree: no traversable app windows"
+            "wait_for: error[request.accessibility_tree_unavailable]: Could not access accessibility tree: no traversable app windows"
         )
     }
 
@@ -924,7 +924,7 @@ final class TheFenceTests: XCTestCase {
         XCTAssertEqual(details?.errorCode, "request.accessibility_tree_unavailable")
         XCTAssertEqual(
             compact,
-            "waitFor: error[request.accessibility_tree_unavailable]: Could not access accessibility tree: no traversable app windows"
+            "wait_for: error[request.accessibility_tree_unavailable]: Could not access accessibility tree: no traversable app windows"
         )
         XCTAssertEqual(json["errorClass"] as? String, "actionFailed")
         XCTAssertEqual(json["errorCode"] as? String, "request.accessibility_tree_unavailable")

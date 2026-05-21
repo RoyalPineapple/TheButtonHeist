@@ -76,6 +76,8 @@ public struct FenceCommandAlias: Sendable, Equatable {
 public struct FenceCommandDescriptor: Sendable, Equatable {
     public let command: TheFence.Command
     public let canonicalName: String
+    /// The server action method that unambiguously projects back to this public command.
+    public let actionResultMethod: ActionMethod?
     public let humanAliases: [String: FenceCommandAlias]
     public let cliName: String?
     public let cliExposure: CLIExposure
@@ -90,6 +92,7 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
 
     public init(
         command: TheFence.Command,
+        actionResultMethod: ActionMethod? = nil,
         humanAliases: [String: FenceCommandAlias] = [:],
         cliName: String? = nil,
         cliExposure: CLIExposure,
@@ -104,6 +107,7 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
     ) {
         self.command = command
         self.canonicalName = command.rawValue
+        self.actionResultMethod = actionResultMethod
         self.humanAliases = humanAliases
         self.cliName = cliName ?? Self.defaultCLIName(for: command, exposure: cliExposure)
         self.cliExposure = cliExposure
@@ -175,6 +179,14 @@ public extension TheFence.Command {
 
     var descriptor: FenceCommandDescriptor {
         Self.descriptor(for: self)
+    }
+
+    static func descriptor(forActionResultMethod method: ActionMethod) -> FenceCommandDescriptor? {
+        descriptors.first { $0.actionResultMethod == method }
+    }
+
+    static func canonicalName(forActionResultMethod method: ActionMethod) -> String {
+        descriptor(forActionResultMethod: method)?.canonicalName ?? method.rawValue
     }
 
     static var descriptors: [FenceCommandDescriptor] {
@@ -328,6 +340,7 @@ extension TheFence.Command {
     static func descriptor(for command: Self) -> FenceCommandDescriptor {
         FenceCommandDescriptor(
             command: command,
+            actionResultMethod: command.catalogActionResultMethod,
             humanAliases: command.catalogHumanAliases,
             cliExposure: command.catalogCLIExposure,
             mcpExposure: command.catalogMCPExposure,
@@ -339,6 +352,66 @@ extension TheFence.Command {
             parameters: command.catalogParameters,
             description: mcpDescription(for: command.rawValue)
         )
+    }
+
+    var catalogActionResultMethod: ActionMethod? {
+        switch self {
+        case .waitForChange:
+            return .waitForChange
+        case .longPress:
+            return .syntheticLongPress
+        case .swipe:
+            return .syntheticSwipe
+        case .drag:
+            return .syntheticDrag
+        case .pinch:
+            return .syntheticPinch
+        case .rotate:
+            return .syntheticRotate
+        case .twoFingerTap:
+            return .syntheticTwoFingerTap
+        case .scroll:
+            return .scroll
+        case .scrollToVisible:
+            return .scrollToVisible
+        case .elementSearch:
+            return .elementSearch
+        case .scrollToEdge:
+            return .scrollToEdge
+        case .activate:
+            return .activate
+        case .increment:
+            return .increment
+        case .decrement:
+            return .decrement
+        case .performCustomAction:
+            return .customAction
+        case .rotor:
+            return .rotor
+        case .typeText:
+            return .typeText
+        case .editAction:
+            return .editAction
+        case .setPasteboard:
+            return .setPasteboard
+        case .getPasteboard:
+            return .getPasteboard
+        case .waitFor:
+            return .waitFor
+        case .dismissKeyboard:
+            return .resignFirstResponder
+        case .oneFingerTap, .drawPath, .drawBezier:
+            // `syntheticTap` and `syntheticDrawPath` can come from multiple
+            // public commands, so keep those action methods diagnostic-only.
+            return nil
+        case .help, .status, .quit, .exit,
+             .listDevices, .getInterface, .getScreen,
+             .startRecording, .stopRecording, .runBatch,
+             .getSessionState, .connect, .listTargets,
+             .getSessionLog, .archiveSession,
+             .startHeist, .stopHeist, .playHeist:
+            return nil
+        }
     }
 
     var catalogCLIExposure: CLIExposure {

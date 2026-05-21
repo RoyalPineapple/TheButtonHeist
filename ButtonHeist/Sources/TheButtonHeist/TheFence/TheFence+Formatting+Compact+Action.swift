@@ -5,29 +5,30 @@ import TheScore
 extension FenceResponse {
 
     func compactActionResult(_ result: ActionResult, expectation: ExpectationResult?) -> String {
+        let commandName = Self.compactCommandName(for: result.method)
         guard result.success else {
             if case .scrollSearch(let search) = result.payload {
                 return Self.compactScrollSearchNotFound(
                     search,
-                    method: result.method,
+                    commandName: commandName,
                     errorKind: Self.compactActionErrorKind(result),
                     screenId: result.screenId
                 )
             }
-            return Self.compactActionFailure(result)
+            return Self.compactActionFailure(result, commandName: commandName)
         }
 
         var text: String
         switch result.payload {
         case .scrollSearch(let search):
-            text = Self.compactScrollSearchFound(search, method: result.method)
+            text = Self.compactScrollSearchFound(search, commandName: commandName)
         case .rotor(let search):
             text = Self.compactRotor(search)
         case .value, .explore, .none:
             if let delta = result.accessibilityDelta {
-                text = Self.compactDelta(delta, method: result.method.rawValue)
+                text = Self.compactDelta(delta, method: commandName)
             } else {
-                text = "\(result.method.rawValue): ok"
+                text = "\(commandName): ok"
             }
         }
         if let screenId = result.screenId {
@@ -68,10 +69,10 @@ extension FenceResponse {
             "or wait_for_change when the UI may settle asynchronously"
     }
 
-    private static func compactActionFailure(_ result: ActionResult) -> String {
-        let message = result.message ?? result.method.rawValue
+    private static func compactActionFailure(_ result: ActionResult, commandName: String) -> String {
+        let message = result.message ?? commandName
         let errorCode = Self.actionFailureDetails(result)?.errorCode ?? compactActionErrorKind(result).rawValue
-        var text = "\(result.method.rawValue): error[\(errorCode)]: \(message)"
+        var text = "\(commandName): error[\(errorCode)]: \(message)"
         if let screenId = result.screenId {
             text = "\(screenId) | \(text)"
         }
@@ -95,9 +96,8 @@ extension FenceResponse {
 
     private static func compactScrollSearchFound(
         _ search: ScrollSearchResult,
-        method: ActionMethod
+        commandName: String
     ) -> String {
-        let commandName = method.compactScrollSearchCommandName
         var header: String
         if search.scrollCount == 0 {
             header = "\(commandName): already visible"
@@ -113,11 +113,10 @@ extension FenceResponse {
 
     private static func compactScrollSearchNotFound(
         _ search: ScrollSearchResult,
-        method: ActionMethod,
+        commandName: String,
         errorKind: ErrorKind,
         screenId: String?
     ) -> String {
-        let commandName = method.compactScrollSearchCommandName
         var text: String
         if search.exhaustive {
             let itemInfo = scrollSearchItemInfo(search)
@@ -144,17 +143,8 @@ extension FenceResponse {
         return ""
     }
 
-}
-
-private extension ActionMethod {
-    var compactScrollSearchCommandName: String {
-        switch self {
-        case .elementSearch:
-            return TheFence.Command.command(for: .search).rawValue
-        case .scrollToVisible:
-            return TheFence.Command.command(for: .toVisible).rawValue
-        default:
-            return rawValue
-        }
+    private static func compactCommandName(for method: ActionMethod) -> String {
+        TheFence.Command.canonicalName(forActionResultMethod: method)
     }
+
 }
