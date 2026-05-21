@@ -56,6 +56,35 @@ final class TheFenceParameterSpecTests: XCTestCase {
         )
     }
 
+    func testCommandDescriptorsCoverCommandIdentities() {
+        let descriptors = TheFence.Command.descriptors
+
+        XCTAssertEqual(descriptors.map(\.command), TheFence.Command.allCases)
+        XCTAssertEqual(descriptors.map(\.canonicalName), TheFence.Command.allCases.map(\.rawValue))
+
+        for command in TheFence.Command.allCases {
+            let descriptor = command.descriptor
+            XCTAssertEqual(descriptor.command, command)
+            XCTAssertEqual(descriptor.canonicalName, command.rawValue)
+            XCTAssertEqual(descriptor.parameters, command.parameters)
+            XCTAssertEqual(descriptor.cliExposure, command.cliExposure)
+            XCTAssertEqual(descriptor.mcpExposure, command.mcpExposure)
+            XCTAssertEqual(descriptor.isBatchExecutable, command.isBatchExecutable)
+            XCTAssertFalse(descriptor.description.isEmpty)
+        }
+    }
+
+    func testCommandAliasesAreDescriptorOwned() {
+        let descriptorAliases = Dictionary(
+            TheFence.Command.descriptors.flatMap { descriptor in
+                descriptor.humanAliases.map { ($0.key, $0.value) }
+            },
+            uniquingKeysWith: { _, newest in newest }
+        )
+
+        XCTAssertEqual(TheFence.Command.humanCommandAliases, descriptorAliases)
+    }
+
     private func optionalParameterRoleIssues() -> [String] {
         var issues: [String] = []
 

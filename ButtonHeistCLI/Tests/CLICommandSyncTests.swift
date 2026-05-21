@@ -339,6 +339,55 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertFalse(source.contains("compoundAliases:"), "REPL compound aliases should live in TheFence.Command.humanCommandAliases")
     }
 
+    func testSessionReplDoesNotDeclareCommandSpecificPositionalTables() throws {
+        let source = try String(
+            contentsOf: repositoryRoot()
+                .appendingPathComponent("ButtonHeistCLI/Sources/Session/SessionRepl.swift"),
+            encoding: .utf8
+        )
+
+        XCTAssertFalse(source.contains("directionWords"), "REPL direction metadata should live in TheFence.Command.humanPositionalSyntax")
+        XCTAssertFalse(source.contains("edgeWords"), "REPL edge metadata should live in TheFence.Command.humanPositionalSyntax")
+        XCTAssertFalse(source.contains("directionCommands"), "REPL command-role metadata should live in TheFence.Command.humanPositionalSyntax")
+    }
+
+    func testGestureCommandsDoNotMirrorFenceCommandCases() throws {
+        let source = try String(
+            contentsOf: repositoryRoot()
+                .appendingPathComponent("ButtonHeistCLI/Sources/Commands/GestureCommands.swift"),
+            encoding: .utf8
+        )
+
+        XCTAssertFalse(
+            source.contains("TheFence.Command."),
+            "Gesture command identity should project through GestureType and Fence descriptors"
+        )
+    }
+
+    func testHumanParserUsesCatalogPositionalDirectionSyntax() {
+        let request = ReplSession.parseHumanInput("swipe up checkout_list")
+
+        XCTAssertEqual(request[.command] as? String, TheFence.Command.swipe.rawValue)
+        XCTAssertEqual(request[.direction] as? String, "up")
+        XCTAssertEqual(request[.heistId] as? String, "checkout_list")
+    }
+
+    func testHumanParserUsesCatalogPositionalEdgeSyntax() {
+        let request = ReplSession.parseHumanInput("scroll_to_edge top checkout_list")
+
+        XCTAssertEqual(request[.command] as? String, TheFence.Command.scrollToEdge.rawValue)
+        XCTAssertEqual(request[.edge] as? String, "top")
+        XCTAssertEqual(request[.heistId] as? String, "checkout_list")
+    }
+
+    func testHumanParserUsesCatalogTargetThenActionSyntax() {
+        let request = ReplSession.parseHumanInput("perform_custom_action checkout_button Magic Tap")
+
+        XCTAssertEqual(request[.command] as? String, TheFence.Command.performCustomAction.rawValue)
+        XCTAssertEqual(request[.heistId] as? String, "checkout_button")
+        XCTAssertEqual(request[.action] as? String, "Magic Tap")
+    }
+
     func testHumanParserMapsCoordinateTapAlias() {
         let request = ReplSession.parseHumanInput("tap 100 200")
 

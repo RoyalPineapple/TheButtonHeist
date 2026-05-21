@@ -239,18 +239,6 @@ nonisolated extension ReplSession {
         JSON input still works: {"command":"activate","heistId":"button_save"}
         """
 
-    private static let directionWords: Set<String> = [
-        "up", "down", "left", "right", "next", "previous"
-    ]
-
-    private static let edgeWords: Set<String> = [
-        "top", "bottom", "left", "right"
-    ]
-
-    private static let directionCommands: Set<TheFence.Command> = [
-        .swipe, .scroll, .rotor,
-    ]
-
     private struct HumanCommandRequest {
         let command: TheFence.Command?
         let rawCommand: String
@@ -406,59 +394,58 @@ nonisolated extension ReplSession {
     ) {
         guard !positional.isEmpty else { return }
 
-        switch request.command {
-        case .some(.typeText):
-            // Everything after "type" is the text to type
-            if request[.text] == nil {
-                request[.text] = .string(positional.joined(separator: " "))
+        switch request.command?.humanPositionalSyntax ?? .target {
+        case .joinedText(let parameter):
+            if request[parameter] == nil {
+                request[parameter] = .string(positional.joined(separator: " "))
             }
 
-        case .some(.editAction):
-            if request[.action] == nil, let action = positional.first {
-                request[.action] = .string(action)
+        case .firstToken(let parameter):
+            if request[parameter] == nil, let token = positional.first {
+                request[parameter] = .string(token)
             }
 
-        case .some(.scrollToEdge):
-            // First positional: edge or identifier; second: identifier
+        case .leadingEdgeThenTarget(let edgeValues):
             var remaining = positional
-            if let first = remaining.first, edgeWords.contains(first.lowercased()) {
+            if let first = remaining.first, edgeValues.contains(first.lowercased()) {
                 request[.edge] = .string(first.lowercased())
                 remaining.removeFirst()
             }
             applyElementTarget(remaining, into: &request)
 
-        case .some(.performCustomAction):
-            // First positional: identifier, rest: actionName
+        case .targetThenJoinedText(let parameter):
             if let first = positional.first {
                 applyElementTarget([first], into: &request)
                 if positional.count > 1 {
-                    request[.action] = .string(positional.dropFirst().joined(separator: " "))
+                    request[parameter] = .string(positional.dropFirst().joined(separator: " "))
                 }
             }
 
-        default:
-            // Generic positional handling
+        case .leadingDirectionThenTarget(let directionValues):
             var remaining = positional
 
-            // For direction commands, consume a direction word first
-            if let command = request.command, directionCommands.contains(command),
-               let first = remaining.first, directionWords.contains(first.lowercased()) {
+            if let first = remaining.first, directionValues.contains(first.lowercased()) {
                 request[.direction] = .string(first.lowercased())
                 remaining.removeFirst()
             }
+            applyGenericTargetOrCoordinates(remaining, into: &request)
 
-            // Two bare numbers → x, y coordinates
-            if remaining.count >= 2,
-               let x = Double(remaining[0]),
-               let y = Double(remaining[1]) {
-                request[.x] = .double(x)
-                request[.y] = .double(y)
-                remaining.removeFirst(2)
-            } else {
-                // Otherwise treat as element target
-                applyElementTarget(remaining, into: &request)
-                remaining = []
-            }
+        case .target:
+            applyGenericTargetOrCoordinates(positional, into: &request)
+        }
+    }
+
+    private static func applyGenericTargetOrCoordinates(
+        _ tokens: [String],
+        into request: inout HumanCommandRequest
+    ) {
+        if tokens.count >= 2,
+           let x = Double(tokens[0]),
+           let y = Double(tokens[1]) {
+            request[.x] = .double(x)
+            request[.y] = .double(y)
+        } else {
+            applyElementTarget(tokens, into: &request)
         }
     }
 

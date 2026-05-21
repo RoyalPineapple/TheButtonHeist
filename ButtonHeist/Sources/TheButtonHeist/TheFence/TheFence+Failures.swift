@@ -2,60 +2,6 @@ import Foundation
 
 import TheScore
 
-/// Stable client-side phase for connection and request failures.
-///
-/// This is not part of the wire protocol. It classifies existing local errors
-/// so CLI/MCP surfaces and tests can reason about failures without parsing
-/// human messages.
-public enum FailurePhase: String, Sendable, Equatable, CaseIterable {
-    case discovery
-    case setup
-    case transport
-    case authentication = "auth"
-    case session
-    case request
-    case recording
-    case protocolNegotiation = "protocol"
-    case tls
-    case client
-    case server
-}
-
-/// Typed connection-attempt failure preserved from the lower-level disconnect cause.
-public struct ConnectionFailure: Equatable, Sendable {
-    public let message: String
-    public let errorCode: String
-    public let phase: FailurePhase
-    public let retryable: Bool
-    public let hint: String?
-
-    public init(
-        message: String,
-        errorCode: String,
-        phase: FailurePhase,
-        retryable: Bool,
-        hint: String?
-    ) {
-        self.message = message
-        self.errorCode = errorCode
-        self.phase = phase
-        self.retryable = retryable
-        self.hint = hint
-    }
-}
-
-extension ConnectionFailure {
-    init(disconnectReason reason: DisconnectReason) {
-        self.init(
-            message: reason.connectionFailureMessage,
-            errorCode: reason.failureCode,
-            phase: reason.phase,
-            retryable: reason.retryable,
-            hint: reason.hint
-        )
-    }
-}
-
 /// Errors thrown by TheFence during command dispatch, connection, and action execution.
 public enum FenceError: Error, LocalizedError {
     case invalidRequest(String)
@@ -235,7 +181,7 @@ public enum FenceError: Error, LocalizedError {
         }
     }
 
-    fileprivate static func authFailureRecoveryHint(for message: String) -> String? {
+    static func authFailureRecoveryHint(for message: String) -> String? {
         if message.localizedCaseInsensitiveContains("configured token") {
             return "Retry with the configured token."
         }
@@ -243,130 +189,5 @@ public enum FenceError: Error, LocalizedError {
             return "Retry without --token to request a fresh session."
         }
         return nil
-    }
-}
-
-public extension ServerError {
-    var errorCode: String {
-        kind.errorCode
-    }
-
-    var phase: FailurePhase {
-        kind.phase
-    }
-
-    var retryable: Bool {
-        kind.retryable
-    }
-
-    var hint: String? {
-        if kind == .authFailure {
-            return FenceError.authFailureRecoveryHint(for: message)
-        }
-        return kind.hint
-    }
-}
-
-private extension ErrorKind {
-    var errorCode: String {
-        switch self {
-        case .elementNotFound:
-            return "request.element_not_found"
-        case .timeout:
-            return "request.timeout"
-        case .unsupported:
-            return "request.unsupported"
-        case .inputError:
-            return "request.input_error"
-        case .validationError:
-            return "request.validation_error"
-        case .actionFailed:
-            return "request.action_failed"
-        case .authFailure:
-            return "auth.failed"
-        case .authApprovalPending:
-            return "auth.approval_pending"
-        case .recording:
-            return "recording.failed"
-        case .general:
-            return "server.general"
-        }
-    }
-
-    var phase: FailurePhase {
-        switch self {
-        case .elementNotFound, .timeout, .unsupported, .inputError,
-             .validationError, .actionFailed:
-            return .request
-        case .authFailure, .authApprovalPending:
-            return .authentication
-        case .recording:
-            return .recording
-        case .general:
-            return .server
-        }
-    }
-
-    var retryable: Bool {
-        switch self {
-        case .timeout:
-            return true
-        case .authApprovalPending:
-            return true
-        case .elementNotFound, .unsupported, .inputError, .validationError,
-             .actionFailed, .authFailure, .recording, .general:
-            return false
-        }
-    }
-
-    var hint: String? {
-        switch self {
-        case .elementNotFound:
-            return "Refresh the interface and verify the target's accessibility properties."
-        case .timeout:
-            return "The request timed out; retry on the same session if the app is responsive."
-        case .unsupported:
-            return "Use a supported command or target for this element."
-        case .inputError:
-            return "Fix the request input before retrying."
-        case .validationError:
-            return "Fix the request so it satisfies the server-side validation rules."
-        case .actionFailed:
-            return nil
-        case .authFailure:
-            return nil
-        case .authApprovalPending:
-            return "Waiting for approval on the device. Tap Allow on the iOS device to continue."
-        case .recording:
-            return "Stop any in-progress recording and retry after resolving the recording error."
-        case .general:
-            return nil
-        }
-    }
-}
-
-extension FenceError {
-    init(_ connectionError: TheHandoff.ConnectionError) {
-        switch connectionError {
-        case .connectionFailed(let message): self = .connectionFailed(message)
-        case .disconnected(.authFailed(let reason)): self = .authFailed(reason)
-        case .disconnected(.authApprovalPending(let message)): self = .authApprovalPending(message)
-        case .disconnected(.sessionLocked(let message)): self = .sessionLocked(message)
-        case .disconnected(let reason): self = .connectionFailure(ConnectionFailure(disconnectReason: reason))
-        case .timeout: self = .connectionTimeout
-        case .noDeviceFound: self = .noDeviceFound
-        case .noMatchingDevice(let filter, let available): self = .noMatchingDevice(filter: filter, available: available)
-        }
-    }
-
-    init(_ sendFailure: DeviceSendFailure) {
-        switch sendFailure {
-        case .notConnected:
-            self = .notConnected
-        case .encodingFailed(let message):
-            self = .actionFailed("Failed to send request: \(message)")
-        case .transportFailed(let message):
-            self = .actionFailed("Transport send failed: \(message)")
-        }
     }
 }
