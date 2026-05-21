@@ -70,8 +70,29 @@ final class TheFenceParameterSpecTests: XCTestCase {
             XCTAssertEqual(descriptor.cliExposure, command.cliExposure)
             XCTAssertEqual(descriptor.mcpExposure, command.mcpExposure)
             XCTAssertEqual(descriptor.isBatchExecutable, command.isBatchExecutable)
+            XCTAssertEqual(descriptor.isPlaybackExecutable, command.isPlaybackExecutable)
+            XCTAssertEqual(descriptor.isHeistRecordable, command.isHeistRecordable)
             XCTAssertFalse(descriptor.description.isEmpty)
         }
+    }
+
+    func testCommandExecutionEligibilityIsDescriptorOwned() {
+        XCTAssertEqual(TheFence.Command.batchExecutableCases, TheFence.Command.allCases.filter(\.isBatchExecutable))
+        XCTAssertEqual(TheFence.Command.playbackExecutableCases, TheFence.Command.allCases.filter(\.isPlaybackExecutable))
+
+        let nonPlaybackCommands = TheFence.Command.allCases.filter { !$0.isPlaybackExecutable }
+        XCTAssertEqual(
+            Set(nonPlaybackCommands),
+            [
+                .help, .status, .quit, .exit,
+                .listDevices, .getInterface, .getScreen, .getPasteboard,
+                .getSessionState, .connect, .listTargets,
+                .getSessionLog, .archiveSession,
+                .startRecording, .stopRecording, .runBatch,
+                .startHeist, .stopHeist, .playHeist,
+            ]
+        )
+        XCTAssertTrue(TheFence.Command.allCases.allSatisfy { !$0.isHeistRecordable || $0.isPlaybackExecutable })
     }
 
     func testCommandAliasesAreDescriptorOwned() {

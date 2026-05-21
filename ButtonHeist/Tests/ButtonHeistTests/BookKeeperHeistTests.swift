@@ -331,16 +331,9 @@ final class BookKeeperHeistTests: XCTestCase {
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
 
-        let excluded: [TheFence.Command] = [
-            .help, .status, .quit, .exit, .listDevices,
-            .getInterface, .getScreen, .getSessionState,
-            .connect, .listTargets, .startHeist, .stopHeist,
-        ]
+        let excluded = TheFence.Command.allCases.filter { !$0.isHeistRecordable }
         for command in excluded {
-            var args: [String: Any] = ["command": command.rawValue]
-            if command == .stopHeist {
-                args["output"] = "ignored.heist"
-            }
+            let args = minimalHeistTestArguments(for: command)
             try recordHeistEvidence(bookKeeper, command: command, args: args, targetCapture: nil)
         }
 
@@ -721,6 +714,19 @@ final class BookKeeperHeistTests: XCTestCase {
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
             actions: []
         )
+    }
+}
+
+private func minimalHeistTestArguments(for command: TheFence.Command) -> [String: Any] {
+    switch command {
+    case .runBatch:
+        return ["steps": [["command": TheFence.Command.activate.rawValue, "label": "Ignored"]]]
+    case .stopHeist:
+        return ["output": "ignored.heist"]
+    case .playHeist:
+        return ["input": "ignored.heist"]
+    default:
+        return [:]
     }
 }
 
