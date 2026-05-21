@@ -15,7 +15,7 @@ struct ToolRoutingTests {
 
     @Test("gesture type routes to command and removes type")
     func gestureTypeRoutesToCommand() throws {
-        let operation = try routed("gesture", ["type": TheFence.Command.swipe.rawValue, "direction": "left"])
+        let operation = try routed(TheFence.Command.gestureMCPToolName, ["type": TheFence.Command.swipe.rawValue, "direction": "left"])
 
         #expect(operation.command == .swipe)
         #expect(operation.arguments["type"] == nil)
@@ -24,16 +24,16 @@ struct ToolRoutingTests {
 
     @Test("gesture requires type")
     func gestureRequiresType() {
-        let result = ButtonHeistMCPServer.routeToolRequest(name: "gesture", arguments: [:])
+        let result = ButtonHeistMCPServer.routeToolRequest(name: TheFence.Command.gestureMCPToolName, arguments: [:])
 
         guard case .failure(let error) = result else {
             Issue.record("Expected routing failure")
             return
         }
+        let gestureSelector = TheFence.Command.mcpToolContract(named: TheFence.Command.gestureMCPToolName)!.selector!
         #expect(
-            error.message == "schema validation failed for type: observed missing; " +
-                "expected enum one of one_finger_tap, long_press, swipe, drag, " +
-                "pinch, rotate, two_finger_tap, draw_path, draw_bezier"
+            error.message == "schema validation failed for \(gestureSelector.parameter.key): observed missing; " +
+                "expected \(SchemaValidationError.expectedEnumValues(gestureSelector.parameter.enumValues!))"
         )
     }
 
@@ -71,7 +71,12 @@ struct ToolRoutingTests {
             Issue.record("Expected routing failure")
             return
         }
-        #expect(error.message == "schema validation failed for mode: observed string \"sideways\"; expected enum one of page, to_visible, search, to_edge")
+        let scrollSelector = TheFence.Command.mcpToolContract(named: TheFence.Command.scroll.rawValue)!.selector!
+        #expect(
+            error.message == "schema validation failed for \(scrollSelector.parameter.key): " +
+                "observed string \"sideways\"; " +
+                "expected \(SchemaValidationError.expectedEnumValues(scrollSelector.parameter.enumValues!))"
+        )
     }
 
     @Test("edit_action dismiss routes to dismiss_keyboard")
@@ -110,10 +115,23 @@ struct ToolRoutingTests {
 
     @Test("run_batch rejects grouped MCP tool shapes")
     func runBatchRejectsGroupedMCPToolShapes() {
+        let scrollContract = TheFence.Command.mcpToolContract(named: TheFence.Command.scroll.rawValue)!
+        let scrollSelector = scrollContract.selector!
+        let editActionContract = TheFence.Command.mcpToolContract(named: TheFence.Command.editAction.rawValue)!
+        let editActionSelector = editActionContract.selector!
+        let dismissSelectorValue = editActionSelector.consumedValues
+            .first(where: { editActionSelector.command(for: $0) == .dismissKeyboard })!
+        let dismissCommand = editActionSelector.command(for: dismissSelectorValue)!
+
         let cases: [(step: [String: Any], message: String)] = [
             (
-                ["command": "gesture", "type": TheFence.Command.swipe.rawValue, "direction": "left"],
-                "run_batch step command must be a canonical TheFence.Command; unknown command \"gesture\""
+                [
+                    "command": TheFence.Command.gestureMCPToolName,
+                    "type": TheFence.Command.swipe.rawValue,
+                    "direction": "left",
+                ],
+                "run_batch step command must be a canonical TheFence.Command; " +
+                    "unknown command \"\(TheFence.Command.gestureMCPToolName)\""
             ),
             (
                 [
@@ -121,12 +139,14 @@ struct ToolRoutingTests {
                     "mode": ScrollMode.search.rawValue,
                     "label": "Done",
                 ],
-                "run_batch step \"scroll\" uses the MCP mode selector; use canonical Fence commands scroll, " +
-                    "scroll_to_visible, element_search, or scroll_to_edge."
+                "run_batch step \"\(TheFence.Command.scroll.rawValue)\" uses the MCP " +
+                    "\(scrollSelector.parameter.key) selector; use canonical Fence commands " +
+                    "\(rawCommandList(scrollContract.commands))."
             ),
             (
-                ["command": TheFence.Command.editAction.rawValue, "action": "dismiss"],
-                "run_batch step \"edit_action\" uses the MCP dismiss selector; use canonical Fence command dismiss_keyboard."
+                ["command": TheFence.Command.editAction.rawValue, "action": dismissSelectorValue],
+                "run_batch step \"\(TheFence.Command.editAction.rawValue)\" uses the MCP " +
+                    "\(dismissSelectorValue) selector; use canonical Fence command \(dismissCommand.rawValue)."
             ),
         ]
 
@@ -157,8 +177,9 @@ struct ToolRoutingTests {
         let cases: [(toolName: String, message: String)] = [
             (
                 TheFence.Command.swipe.rawValue,
-                "Tool \"\(TheFence.Command.swipe.rawValue)\" is grouped under \"gesture\"; " +
-                    "call gesture with type=\"\(TheFence.Command.swipe.rawValue)\"."
+                "Tool \"\(TheFence.Command.swipe.rawValue)\" is grouped under " +
+                    "\"\(TheFence.Command.gestureMCPToolName)\"; " +
+                    "call \(TheFence.Command.gestureMCPToolName) with type=\"\(TheFence.Command.swipe.rawValue)\"."
             ),
             (
                 TheFence.Command.scrollToVisible.rawValue,
@@ -232,6 +253,24 @@ struct ToolRoutingTests {
         }
     }
 
+    @Test("selector-backed MCP tools route every selector value through command contracts")
+    func selectorBackedToolsRouteEverySelectorValueThroughCommandContracts() throws {
+        for contract in TheFence.Command.mcpToolContracts {
+            guard let selector = contract.selector else { continue }
+            for selectorValue in selector.parameter.enumValues ?? [] {
+                let operation = try routed(contract.name, [selector.parameter.key: selectorValue])
+                let expectedCommand = try #require(selector.command(for: selectorValue))
+
+                #expect(operation.command == expectedCommand)
+                if selector.consumesValue(selectorValue) {
+                    #expect(operation.arguments[selector.parameter.key] == nil)
+                } else {
+                    #expect(operation.arguments[selector.parameter.key] as? String == selectorValue)
+                }
+            }
+        }
+    }
+
     @Test("server tool routing delegates to shared Fence catalog")
     func serverToolRoutingDelegatesToSharedFenceCatalog() throws {
         for tool in ToolDefinitions.all {
@@ -294,7 +333,7 @@ struct ToolRoutingTests {
 
     private func minimalArguments(for toolName: String) -> [String: Any] {
         switch toolName {
-        case "gesture":
+        case TheFence.Command.gestureMCPToolName:
             return ["type": TheFence.Command.swipe.rawValue]
         case TheFence.Command.editAction.rawValue:
             return ["action": "copy"]
@@ -302,6 +341,21 @@ struct ToolRoutingTests {
             return ["steps": [["command": TheFence.Command.getSessionState.rawValue]]]
         default:
             return [:]
+        }
+    }
+
+    /// Mirrors the formatting logic in `FenceOperationCatalog.rawCommandList` for test assertions.
+    private func rawCommandList(_ commands: [TheFence.Command]) -> String {
+        let names = commands.map(\.rawValue)
+        switch names.count {
+        case 0:
+            return ""
+        case 1:
+            return names[0]
+        case 2:
+            return "\(names[0]) or \(names[1])"
+        default:
+            return names.dropLast().joined(separator: ", ") + ", or \(names.last!)"
         }
     }
 }
