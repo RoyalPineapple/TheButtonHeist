@@ -243,21 +243,37 @@ final class TheStash {
         case failed(KnownTargetInflationFailure)
     }
 
+    enum TargetInflationResolution {
+        case alreadyInflated
+        case inflated(UIScrollView)
+        case failed(KnownTargetInflationFailure)
+
+        var didScroll: Bool {
+            if case .inflated = self { return true }
+            return false
+        }
+    }
+
     /// Make a known target live by scrolling a live parent derived from the
     /// current graph. Known-only semantic elements intentionally carry no
     /// scroll path; until `Screen` retains semantic container ancestry, a
     /// known-only target can be inflated only when the current live graph
     /// exposes exactly one plausible scroll parent for its content origin.
+    /// Inflation is an internal positioning step, so the default is a
+    /// non-animated jump that lets the next parse observe settled geometry.
     @discardableResult
-    func inflateKnownTarget(_ screenElement: ScreenElement, animated: Bool = true) -> KnownTargetInflationResolution {
+    func inflateTarget(_ screenElement: ScreenElement) -> TargetInflationResolution {
+        if visibleIds.contains(screenElement.heistId) {
+            return .alreadyInflated
+        }
         switch resolveInflationScrollView(for: screenElement) {
         case .resolved(let scrollView):
             guard let origin = screenElement.contentSpaceOrigin else {
                 return .failed(.missingContentOrigin)
             }
             let targetOffset = Self.scrollTargetOffset(for: origin, in: scrollView)
-            scrollView.setContentOffset(targetOffset, animated: animated)
-            return .resolved(scrollView)
+            scrollView.setContentOffset(targetOffset, animated: false)
+            return .inflated(scrollView)
         case .failed(let failure):
             return .failed(failure)
         }

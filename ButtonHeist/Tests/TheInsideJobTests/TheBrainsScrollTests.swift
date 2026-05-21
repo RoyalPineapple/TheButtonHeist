@@ -606,6 +606,51 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(entry?.heistId, "button_item")
     }
 
+    func testTargetInflationNoOpsWhenAlreadyInflated() {
+        let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        scrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let visibleEntry = Screen.ScreenElement(
+            heistId: "visible_element",
+            contentSpaceOrigin: CGPoint(x: 0, y: 120),
+            element: makeElement(label: "Visible")
+        )
+        installLiveScrollTarget(visibleEntry, scrollView: scrollView, stableId: "visible_scroll")
+
+        let result = brains.stash.inflateTarget(visibleEntry)
+
+        guard case .alreadyInflated = result else {
+            return XCTFail("Expected already-inflated no-op, got \(result)")
+        }
+        XCTAssertEqual(scrollView.setContentOffsetAnimations, [])
+        XCTAssertEqual(scrollView.contentOffset, .zero)
+    }
+
+    func testTargetInflationUsesNonAnimatedJumpForKnownOffscreenElement() throws {
+        let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        scrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let visible = makeElement(label: "Visible")
+        let offscreen = makeElement(label: "Settings")
+        let contentOrigin = CGPoint(x: 0, y: 1_200)
+        installScreenWithKnownOffscreen(
+            visible: (visible, "visible_element"),
+            offscreen: (offscreen, "settings_button", contentOrigin, scrollView)
+        )
+
+        let entry = try XCTUnwrap(
+            brains.navigation.knownOffscreenEntry(for: .matcher(ElementMatcher(label: "Settings")))
+        )
+        let result = brains.stash.inflateTarget(entry)
+
+        guard case .inflated(let resolvedScrollView) = result else {
+            return XCTFail("Expected inflation to resolve, got \(result)")
+        }
+        XCTAssertTrue(resolvedScrollView === scrollView)
+        XCTAssertEqual(scrollView.setContentOffsetAnimations, [false])
+        let expectedOffset = TheStash.scrollTargetOffset(for: contentOrigin, in: scrollView)
+        XCTAssertEqual(scrollView.contentOffset.x, expectedOffset.x, accuracy: 0.01)
+        XCTAssertEqual(scrollView.contentOffset.y, expectedOffset.y, accuracy: 0.01)
+    }
+
     func testKnownOffscreenEntryByMatcherUsesRecordedScreenAfterVisibleRefresh() {
         let visible = makeElement(label: "Visible")
         let element = makeElement(label: "Item")
@@ -1428,6 +1473,15 @@ final class TheBrainsScrollTests: XCTestCase {
             for element in revealedElements {
                 element.isAccessibilityElement = isRevealed
             }
+        }
+    }
+
+    private final class RecordingScrollView: UIScrollView {
+        var setContentOffsetAnimations: [Bool] = []
+
+        override func setContentOffset(_ contentOffset: CGPoint, animated: Bool) {
+            setContentOffsetAnimations.append(animated)
+            super.setContentOffset(contentOffset, animated: animated)
         }
     }
 }
