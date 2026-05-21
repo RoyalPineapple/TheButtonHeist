@@ -5,6 +5,104 @@ import TheScore
 
 final class PublicContractGoldenTests: XCTestCase {
 
+    func testPublicJSONFormattingCentralFileRemainsCompatibilityShim() throws {
+        let source = try sourceFile("ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+Formatting+JSON.swift")
+
+        XCTAssertLessThanOrEqual(
+            lineCount(source),
+            110,
+            "TheFence+Formatting+JSON.swift should stay a small encoding/jsonDict compatibility shell."
+        )
+        XCTAssertTrue(
+            source.contains("PublicResponseModel(response: self)"),
+            "FenceResponse.jsonData should encode the typed public response model."
+        )
+
+        let forbiddenRuntimeFormatting = [
+            "case .interface",
+            "case .action",
+            "case .screenshot",
+            "case .recording",
+            "case .batch",
+            "case .sessionState",
+            "case .heistPlayback",
+            "PublicInterfaceResponse(",
+            "PublicActionResponse(",
+            "PublicScreenshotResponse(",
+            "PublicRecordingResponse(",
+            "PublicBatchResponse(",
+            "PublicSessionStateResponse(",
+            "PublicPlaybackResponse(",
+        ]
+
+        for pattern in forbiddenRuntimeFormatting {
+            XCTAssertFalse(
+                source.contains(pattern),
+                "The central JSON shim should not hand-shape public JSON with \(pattern)."
+            )
+        }
+    }
+
+    func testPublicJSONResponseFamiliesStaySplitByDomain() throws {
+        let expectedFamilies: [(path: String, maximumLines: Int, requiredTypes: [String])] = [
+            (
+                "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+Observation.swift",
+                400,
+                ["PublicInterfaceResponse", "PublicScreenshotResponse"]
+            ),
+            (
+                "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+Action.swift",
+                350,
+                ["PublicActionResponse", "PublicBatchResponse"]
+            ),
+            (
+                "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+Recording.swift",
+                120,
+                ["PublicRecordingResponse", "PublicHeistStartedResponse", "PublicHeistStoppedResponse"]
+            ),
+            (
+                "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+Session.swift",
+                260,
+                ["PublicSessionStateResponse", "PublicOKResponse", "PublicHelpResponse"]
+            ),
+            (
+                "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+Playback.swift",
+                120,
+                ["PublicPlaybackResponse"]
+            ),
+            (
+                "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+Response.swift",
+                160,
+                ["PublicResponseModel", "PublicErrorResponse"]
+            ),
+        ]
+
+        for family in expectedFamilies {
+            let source = try sourceFile(family.path)
+
+            XCTAssertLessThanOrEqual(
+                lineCount(source),
+                family.maximumLines,
+                "\(family.path) is getting too broad; split new public JSON behavior by response family."
+            )
+            XCTAssertFalse(
+                source.contains("[String: Any]"),
+                "\(family.path) should encode typed public JSON models, not hand-shaped dictionaries."
+            )
+            XCTAssertFalse(
+                source.contains("JSONSerialization"),
+                "\(family.path) should stay typed; JSONSerialization belongs only at compatibility adapter edges."
+            )
+
+            for type in family.requiredTypes {
+                XCTAssertTrue(
+                    source.contains(type),
+                    "\(type) should stay in \(family.path) so public JSON formatting remains split by domain."
+                )
+            }
+        }
+    }
+
     func testGetInterfacePublicJSONGolden() throws {
         let interface = makeReceiptTestInterface([
             makeReceiptTestElement(heistId: "pay_button", label: "Pay", traits: [.button]),
@@ -294,5 +392,19 @@ final class PublicContractGoldenTests: XCTestCase {
         encoder.dateEncodingStrategy = dateEncodingStrategy
         let data = try encoder.encode(value)
         return try XCTUnwrap(String(data: data, encoding: .utf8))
+    }
+
+    private func sourceFile(_ relativePath: String) throws -> String {
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let url = repoRoot.appendingPathComponent(relativePath)
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func lineCount(_ source: String) -> Int {
+        source.split(separator: "\n", omittingEmptySubsequences: false).count
     }
 }
