@@ -295,6 +295,16 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertEqual(HeistValue.bool(true).toAny() as? Bool, true)
     }
 
+    func testHeistValueDescriptionIsDeterministicAndQuoted() {
+        let value = HeistValue.object([
+            "text": .string(#"Save "Now""#),
+            "count": .int(2),
+            "flags": .array([.bool(true), .double(3.5)]),
+        ])
+
+        XCTAssertEqual(value.description, #"{"count"=2, "flags"=[true, 3.5], "text"="Save \"Now\""}"#)
+    }
+
     // MARK: - RecordedMetadata
 
     func testRecordedMetadataRoundTrip() throws {
@@ -340,6 +350,53 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertNil(decoded.heistId)
         XCTAssertNil(decoded.frame)
         XCTAssertEqual(decoded.coordinateOnly, true)
+    }
+
+    func testHeistEvidenceDescriptionComposesTargetArgumentsAndRecording() {
+        let step = HeistEvidence(
+            command: "activate",
+            target: ElementMatcher(label: "Save", traits: [.button]),
+            arguments: [
+                "count": .int(2),
+                "text": .string("hello"),
+            ],
+            recorded: RecordedMetadata(
+                heistId: "save_button",
+                frame: RecordedFrame(x: 1, y: 2, width: 3, height: 4),
+                coordinateOnly: false,
+                expectation: ExpectationResult(met: true, expectation: .screenChanged, actual: "screenChanged")
+            )
+        )
+
+        let expected = #"step(command="activate" matcher(label="Save" traits=[button]) "#
+            + #"args=arguments("count"=2 "text"="hello") "#
+            + #"recorded(heistId="save_button" frame(1,2,3,4) coordinateOnly=false "#
+            + #"expectation(met=true expected=screen_changed actual="screenChanged")))"#
+        XCTAssertEqual(step.description, expected)
+    }
+
+    func testRecordedEvidenceDescriptionsCompose() {
+        let cap = RecordedInputCap(
+            name: "duration",
+            requested: .double(120),
+            applied: .double(60),
+            maximum: .double(60),
+            reason: "maximum duration"
+        )
+        let unsupported = RecordedUnsupportedInput(
+            name: "metadata",
+            valueType: "Data",
+            reason: "not JSON-compatible"
+        )
+
+        XCTAssertEqual(
+            cap.description,
+            #"cap(name="duration" requested=120 applied=60 maximum=60 reason="maximum duration")"#
+        )
+        XCTAssertEqual(
+            unsupported.description,
+            #"unsupportedInput(name="metadata" valueType="Data" reason="not JSON-compatible")"#
+        )
     }
 
     // MARK: - Full Heist JSON Shape

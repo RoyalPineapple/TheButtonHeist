@@ -203,6 +203,31 @@ final class InterfaceComputedTests: XCTestCase {
         XCTAssertEqual(expectation.summaryDescription, "compound(2 expectations)")
     }
 
+    func testActionExpectationDescriptionComposesMatchers() {
+        let expectation = ActionExpectation.compound([
+            .elementAppeared(ElementMatcher(label: "Done", traits: [.button])),
+            .elementUpdated(heistId: "status", property: .value, oldValue: "Off", newValue: "On"),
+        ])
+
+        XCTAssertEqual(
+            expectation.description,
+            #"compound(element_appeared(matcher(label="Done" traits=[button])), element_updated(heistId="status" property=value oldValue="Off" newValue="On"))"#
+        )
+    }
+
+    func testExpectationResultDescriptionComposesExpectationAndActual() {
+        let result = ExpectationResult(
+            met: false,
+            expectation: .elementDisappeared(ElementMatcher(identifier: "spinner")),
+            actual: "still visible"
+        )
+
+        XCTAssertEqual(
+            result.description,
+            #"expectation(met=false expected=element_disappeared(matcher(identifier="spinner")) actual="still visible")"#
+        )
+    }
+
     // MARK: - Interface.navigation
 
     func testNavigationScreenTitleFromHeader() {

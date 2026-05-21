@@ -245,6 +245,66 @@ public enum ClientMessage: Codable, Sendable {
     }
 }
 
+extension ClientMessage: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .clientHello, .ping, .status, .requestScreen, .explore, .stopRecording,
+             .resignFirstResponder, .getPasteboard:
+            return canonicalName
+        case .authenticate:
+            return "\(canonicalName)(token=<redacted>)"
+        case .requestInterface(let query):
+            return "\(canonicalName)(\(query))"
+        case .activate(let target), .increment(let target), .decrement(let target):
+            return "\(canonicalName)(\(target))"
+        case .performCustomAction(let target):
+            return "\(canonicalName)(\(target))"
+        case .rotor(let target):
+            return "\(canonicalName)(\(target))"
+        case .touchTap(let target):
+            return "\(canonicalName)(\(target))"
+        case .touchLongPress(let target):
+            return "\(canonicalName)(\(target))"
+        case .touchSwipe(let target):
+            return "\(canonicalName)(\(target))"
+        case .touchDrag(let target):
+            return "\(canonicalName)(\(target))"
+        case .touchPinch(let target):
+            return "\(canonicalName)(\(target))"
+        case .touchRotate(let target):
+            return "\(canonicalName)(\(target))"
+        case .touchTwoFingerTap(let target):
+            return "\(canonicalName)(\(target))"
+        case .touchDrawPath(let target):
+            return "\(canonicalName)(\(target))"
+        case .touchDrawBezier(let target):
+            return "\(canonicalName)(\(target))"
+        case .typeText(let target):
+            return "\(canonicalName)(\(target))"
+        case .editAction(let target):
+            return "\(canonicalName)(\(target))"
+        case .scroll(let target):
+            return "\(canonicalName)(\(target))"
+        case .scrollToVisible(let target):
+            return "\(canonicalName)(\(target))"
+        case .elementSearch(let target):
+            return "\(canonicalName)(\(target))"
+        case .scrollToEdge(let target):
+            return "\(canonicalName)(\(target))"
+        case .setPasteboard(let target):
+            return "\(canonicalName)(\(target))"
+        case .waitForIdle(let target):
+            return "\(canonicalName)(\(target))"
+        case .waitFor(let target):
+            return "\(canonicalName)(\(target))"
+        case .waitForChange(let target):
+            return "\(canonicalName)(\(target))"
+        case .startRecording(let config):
+            return "\(canonicalName)(\(config))"
+        }
+    }
+}
+
 // MARK: - Action Targets
 
 /// Target for element actions.
@@ -277,6 +337,22 @@ public enum ElementTarget: Sendable, Equatable {
             self = .matcher(matcher, ordinal: ordinal)
         } else {
             return nil
+        }
+    }
+}
+
+extension ElementTarget: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .heistId(let heistId):
+            return ScoreDescription.call("target", [
+                ScoreDescription.stringField("heistId", heistId),
+            ].compactMap { $0 })
+        case .matcher(let matcher, let ordinal):
+            return ScoreDescription.call("target", [
+                matcher.description,
+                ScoreDescription.valueField("ordinal", ordinal),
+            ].compactMap { $0 })
         }
     }
 }
@@ -375,10 +451,23 @@ public struct CustomActionTarget: Codable, Sendable {
     }
 }
 
+extension CustomActionTarget: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("customAction", [
+            elementTarget.description,
+            ScoreDescription.stringField("action", actionName),
+        ].compactMap { $0 })
+    }
+}
+
 /// Direction for a rotor step.
 public enum RotorDirection: String, Codable, Sendable, CaseIterable {
     case next
     case previous
+}
+
+extension RotorDirection: CustomStringConvertible {
+    public var description: String { rawValue }
 }
 
 /// Text-range cursor for continuing through rotor results inside one text input.
@@ -389,6 +478,12 @@ public struct TextRangeReference: Codable, Equatable, Hashable, Sendable {
     public init(startOffset: Int, endOffset: Int) {
         self.startOffset = startOffset
         self.endOffset = endOffset
+    }
+}
+
+extension TextRangeReference: CustomStringConvertible {
+    public var description: String {
+        "textRange(\(startOffset)..<\(endOffset))"
     }
 }
 
@@ -426,6 +521,19 @@ public struct RotorTarget: Sendable {
     }
 
     public var resolvedDirection: RotorDirection { direction ?? .next }
+}
+
+extension RotorTarget: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("rotor", [
+            elementTarget.description,
+            ScoreDescription.stringField("name", rotor),
+            ScoreDescription.valueField("index", rotorIndex),
+            ScoreDescription.valueField("direction", direction),
+            ScoreDescription.stringField("currentHeistId", currentHeistId),
+            currentTextRange?.description,
+        ].compactMap { $0 })
+    }
 }
 
 extension RotorTarget: Codable {
@@ -518,9 +626,22 @@ public struct TypeTextTarget: Codable, Sendable {
     }
 }
 
+extension TypeTextTarget: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("typeText", [
+            ScoreDescription.stringField("text", text),
+            elementTarget?.description,
+        ].compactMap { $0 })
+    }
+}
+
 /// Standard edit actions that can be dispatched via the responder chain.
 public enum EditAction: String, Codable, Sendable, CaseIterable {
     case copy, paste, cut, select, selectAll, delete
+}
+
+extension EditAction: CustomStringConvertible {
+    public var description: String { rawValue }
 }
 
 /// Target for writing text to the general pasteboard.
@@ -530,6 +651,14 @@ public struct SetPasteboardTarget: Codable, Sendable {
 
     public init(text: String) {
         self.text = text
+    }
+}
+
+extension SetPasteboardTarget: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("pasteboard", [
+            ScoreDescription.stringField("text", text),
+        ].compactMap { $0 })
     }
 }
 
@@ -543,6 +672,14 @@ public struct EditActionTarget: Codable, Sendable {
     }
 }
 
+extension EditActionTarget: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("editAction", [
+            ScoreDescription.valueField("action", action),
+        ].compactMap { $0 })
+    }
+}
+
 /// Target for waitForIdle command
 public struct WaitForIdleTarget: Codable, Sendable {
     /// Maximum time to wait in seconds (default 5.0)
@@ -550,6 +687,14 @@ public struct WaitForIdleTarget: Codable, Sendable {
 
     public init(timeout: Double? = nil) {
         self.timeout = timeout
+    }
+}
+
+extension WaitForIdleTarget: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("waitForIdle", [
+            timeout.map { "timeout=\(ScoreDescription.decimal($0))" },
+        ].compactMap { $0 })
     }
 }
 
@@ -567,6 +712,15 @@ public struct WaitForChangeTarget: Codable, Sendable {
     }
 
     public var resolvedTimeout: Double { min(timeout ?? 30, 30) }
+}
+
+extension WaitForChangeTarget: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("waitForChange", [
+            expect?.description,
+            timeout.map { "timeout=\(ScoreDescription.decimal($0))" },
+        ].compactMap { $0 })
+    }
 }
 
 /// Target for wait_for command — wait for an element to appear or disappear.
@@ -587,6 +741,16 @@ public struct WaitForTarget: Sendable {
 
     public var resolvedAbsent: Bool { absent ?? false }
     public var resolvedTimeout: Double { min(timeout ?? 10, 30) }
+}
+
+extension WaitForTarget: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("waitFor", [
+            elementTarget.description,
+            ScoreDescription.valueField("absent", absent),
+            timeout.map { "timeout=\(ScoreDescription.decimal($0))" },
+        ].compactMap { $0 })
+    }
 }
 
 extension WaitForTarget: Codable {
@@ -662,6 +826,17 @@ public struct RecordingConfig: Sendable {
     }
 }
 
+extension RecordingConfig: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("recordingConfig", [
+            ScoreDescription.valueField("fps", fps),
+            scale.map { "scale=\(ScoreDescription.decimal($0))" },
+            inactivityTimeout.map { "inactivityTimeout=\(ScoreDescription.decimal($0))" },
+            maxDuration.map { "maxDuration=\(ScoreDescription.decimal($0))" },
+        ].compactMap { $0 })
+    }
+}
+
 extension RecordingConfig: Codable {
     private enum CodingKeys: String, CodingKey {
         case fps, scale, inactivityTimeout, maxDuration
@@ -715,9 +890,17 @@ public enum SwipeDirection: String, Codable, Sendable, CaseIterable {
     }
 }
 
+extension SwipeDirection: CustomStringConvertible {
+    public var description: String { rawValue }
+}
+
 /// Direction for scroll actions
 public enum ScrollDirection: String, Codable, Sendable, CaseIterable {
     case up, down, left, right, next, previous
+}
+
+extension ScrollDirection: CustomStringConvertible {
+    public var description: String { rawValue }
 }
 
 /// Target for scroll command
@@ -733,9 +916,22 @@ public struct ScrollTarget: Codable, Sendable {
     }
 }
 
+extension ScrollTarget: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("scroll", [
+            elementTarget?.description,
+            ScoreDescription.valueField("direction", direction),
+        ].compactMap { $0 })
+    }
+}
+
 /// Direction for scroll search
 public enum ScrollSearchDirection: String, Codable, Sendable, CaseIterable {
     case down, up, left, right
+}
+
+extension ScrollSearchDirection: CustomStringConvertible {
+    public var description: String { rawValue }
 }
 
 /// Target for one-shot scroll-to-visible.
@@ -746,6 +942,14 @@ public struct ScrollToVisibleTarget: Sendable {
     public let elementTarget: ElementTarget?
     public init(elementTarget: ElementTarget? = nil) {
         self.elementTarget = elementTarget
+    }
+}
+
+extension ScrollToVisibleTarget: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("scrollToVisible", [
+            elementTarget?.description,
+        ].compactMap { $0 })
     }
 }
 
@@ -765,6 +969,15 @@ public struct ElementSearchTarget: Sendable {
     }
 
     public var resolvedDirection: ScrollSearchDirection { direction ?? .down }
+}
+
+extension ElementSearchTarget: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("elementSearch", [
+            elementTarget?.description,
+            ScoreDescription.valueField("direction", direction),
+        ].compactMap { $0 })
+    }
 }
 
 extension ScrollToVisibleTarget: Codable {
@@ -800,6 +1013,10 @@ public enum ScrollEdge: String, Codable, Sendable, CaseIterable {
     case top, bottom, left, right
 }
 
+extension ScrollEdge: CustomStringConvertible {
+    public var description: String { rawValue }
+}
+
 /// Target for scroll-to-edge command
 public struct ScrollToEdgeTarget: Codable, Sendable {
     /// Element whose scrollable container to scroll
@@ -810,5 +1027,14 @@ public struct ScrollToEdgeTarget: Codable, Sendable {
     public init(elementTarget: ElementTarget? = nil, edge: ScrollEdge) {
         self.elementTarget = elementTarget
         self.edge = edge
+    }
+}
+
+extension ScrollToEdgeTarget: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("scrollToEdge", [
+            elementTarget?.description,
+            ScoreDescription.valueField("edge", edge),
+        ].compactMap { $0 })
     }
 }

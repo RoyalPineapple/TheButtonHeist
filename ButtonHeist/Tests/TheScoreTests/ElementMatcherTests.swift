@@ -45,6 +45,45 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertEqual(ordinal, 2)
     }
 
+    func testElementMatcherDescriptionComposesFields() {
+        let matcher = ElementMatcher(
+            heistId: "save_button",
+            label: #"Save "Now""#,
+            identifier: "primary.save",
+            value: "Ready",
+            traits: [.button, .selected],
+            excludeTraits: [.notEnabled]
+        )
+
+        XCTAssertEqual(
+            matcher.description,
+            #"matcher(heistId="save_button" label="Save \"Now\"" identifier="primary.save" value="Ready" traits=[button, selected] excludeTraits=[notEnabled])"#
+        )
+    }
+
+    func testElementMatcherDescriptionTreatsEmptyStringsAsUnset() {
+        let matcher = ElementMatcher(label: "", identifier: "", value: "", traits: [])
+
+        XCTAssertEqual(matcher.description, "matcher(*)")
+    }
+
+    func testElementTargetDescriptionComposesMatcherAndOrdinal() {
+        let target = ElementTarget.matcher(ElementMatcher(label: "Save", traits: [.button]), ordinal: 1)
+
+        XCTAssertEqual(target.description, #"target(matcher(label="Save" traits=[button]) ordinal=1)"#)
+    }
+
+    func testClientMessageDescriptionComposesCommandAndPayload() {
+        let message = ClientMessage.scrollToVisible(.init(
+            elementTarget: .matcher(ElementMatcher(label: "Delivery", traits: [.button]))
+        ))
+
+        XCTAssertEqual(
+            message.description,
+            #"scroll_to_visible(scrollToVisible(target(matcher(label="Delivery" traits=[button]))))"#
+        )
+    }
+
     func testElementTargetDecodesOrdinalOnlyFallback() throws {
         let data = Data(#"{"ordinal":1}"#.utf8)
         let target = try JSONDecoder().decode(ElementTarget.self, from: data)

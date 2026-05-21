@@ -8,6 +8,63 @@ public typealias HeistId = String
 /// Button Heist container handle carried over the wire as a string.
 public typealias HeistContainer = String
 
+enum ScoreDescription {
+    static func quoted(_ value: String) -> String {
+        if let data = try? JSONEncoder().encode(value),
+           let encoded = String(data: data, encoding: .utf8) {
+            return encoded
+        }
+        return "\"\(value.replacingOccurrences(of: "\"", with: "\\\""))\""
+    }
+
+    static func nonEmpty(_ value: String?) -> String? {
+        guard let value, !value.isEmpty else { return nil }
+        return value
+    }
+
+    static func stringField(_ name: String, _ value: String?) -> String? {
+        nonEmpty(value).map { "\(name)=\(quoted($0))" }
+    }
+
+    static func valueField<T>(_ name: String, _ value: T?) -> String? {
+        value.map { "\(name)=\($0)" }
+    }
+
+    static func listField<T: CustomStringConvertible>(_ name: String, _ values: [T]?) -> String? {
+        guard let values, !values.isEmpty else { return nil }
+        return "\(name)=\(list(values))"
+    }
+
+    static func quotedListField(_ name: String, _ values: [String]?) -> String? {
+        guard let values, !values.isEmpty else { return nil }
+        return "\(name)=\(quotedList(values))"
+    }
+
+    static func list<T: CustomStringConvertible>(_ values: [T]) -> String {
+        "[\(values.map(\.description).joined(separator: ", "))]"
+    }
+
+    static func quotedList(_ values: [String]) -> String {
+        "[\(values.map(quoted).joined(separator: ", "))]"
+    }
+
+    static func call(_ name: String, _ fields: [String]) -> String {
+        fields.isEmpty ? "\(name)(*)" : "\(name)(\(fields.joined(separator: " ")))"
+    }
+
+    static func decimal(_ value: Double) -> String {
+        guard value.isFinite else { return "\(value)" }
+        let rounded = value.rounded()
+        if abs(value - rounded) < 0.000_001 {
+            return "\(Int(rounded))"
+        }
+        var text = String(format: "%.6f", locale: Locale(identifier: "en_US_POSIX"), value)
+        while text.last == "0" { text.removeLast() }
+        if text.last == "." { text.removeLast() }
+        return text
+    }
+}
+
 // MARK: - Element Actions
 
 /// Actions that can be performed on a UI element.
@@ -143,12 +200,58 @@ extension HeistTrait: RawRepresentable {
     /// The string name for known cases. `.unknown` stores its own value.
     private var nameValue: String {
         switch self {
+        case .button: return "button"
+        case .link: return "link"
+        case .image: return "image"
+        case .staticText: return "staticText"
+        case .header: return "header"
+        case .adjustable: return "adjustable"
+        case .searchField: return "searchField"
+        case .selected: return "selected"
+        case .notEnabled: return "notEnabled"
+        case .keyboardKey: return "keyboardKey"
+        case .summaryElement: return "summaryElement"
+        case .updatesFrequently: return "updatesFrequently"
+        case .playsSound: return "playsSound"
+        case .startsMediaSession: return "startsMediaSession"
+        case .allowsDirectInteraction: return "allowsDirectInteraction"
+        case .causesPageTurn: return "causesPageTurn"
+        case .tabBar: return "tabBar"
+        case .textEntry: return "textEntry"
+        case .isEditing: return "isEditing"
+        case .backButton: return "backButton"
+        case .tabBarItem: return "tabBarItem"
+        case .textArea: return "textArea"
+        case .switchButton: return "switchButton"
+        case .webContent: return "webContent"
+        case .pickerElement: return "pickerElement"
+        case .radioButton: return "radioButton"
+        case .launchIcon: return "launchIcon"
+        case .statusBarElement: return "statusBarElement"
+        case .secureTextField: return "secureTextField"
+        case .inactive: return "inactive"
+        case .footer: return "footer"
+        case .autoCorrectCandidate: return "autoCorrectCandidate"
+        case .deleteKey: return "deleteKey"
+        case .selectionDismissesItem: return "selectionDismissesItem"
+        case .visited: return "visited"
+        case .spacer: return "spacer"
+        case .tableIndex: return "tableIndex"
+        case .map: return "map"
+        case .textOperationsAvailable: return "textOperationsAvailable"
+        case .draggable: return "draggable"
+        case .popupButton: return "popupButton"
+        case .menuItem: return "menuItem"
+        case .alert: return "alert"
         case .unknown(let value): return value
-        default: return String(describing: self)
         }
     }
 
     public var rawValue: String { nameValue }
+}
+
+extension HeistTrait: CustomStringConvertible {
+    public var description: String { rawValue }
 }
 
 extension HeistTrait: Codable {
@@ -724,6 +827,23 @@ public struct ContainerMatcher: Codable, Sendable, Equatable {
     }
 }
 
+extension ContainerTypeName: CustomStringConvertible {
+    public var description: String { rawValue }
+}
+
+extension ContainerMatcher: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("containerMatcher", [
+            ScoreDescription.stringField("stableId", stableId),
+            ScoreDescription.valueField("type", type),
+            ScoreDescription.stringField("label", label),
+            ScoreDescription.stringField("value", value),
+            ScoreDescription.stringField("identifier", identifier),
+            ScoreDescription.valueField("modal", isModalBoundary),
+        ].compactMap { $0 })
+    }
+}
+
 // MARK: - Heist Element
 
 /// A UI element captured from the accessibility hierarchy.
@@ -964,6 +1084,19 @@ public struct ElementMatcher: Codable, Sendable, Equatable {
     public var nonEmpty: Self? { hasPredicates ? self : nil }
 }
 
+extension ElementMatcher: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("matcher", [
+            ScoreDescription.stringField("heistId", heistId),
+            ScoreDescription.stringField("label", label),
+            ScoreDescription.stringField("identifier", identifier),
+            ScoreDescription.stringField("value", value),
+            ScoreDescription.listField("traits", traits),
+            ScoreDescription.listField("excludeTraits", excludeTraits),
+        ].compactMap { $0 })
+    }
+}
+
 /// Selector for projecting an `Interface` to one matched node.
 ///
 /// `.element` searches leaf `HeistElement` nodes with `ElementMatcher`.
@@ -1024,6 +1157,23 @@ public enum SubtreeSelector: Codable, Sendable, Equatable {
             return matcher.hasPredicates
         case .container(let matcher, _):
             return matcher.hasPredicates
+        }
+    }
+}
+
+extension SubtreeSelector: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .element(let matcher, let ordinal):
+            return ScoreDescription.call("subtree.element", [
+                matcher.description,
+                ScoreDescription.valueField("ordinal", ordinal),
+            ].compactMap { $0 })
+        case .container(let matcher, let ordinal):
+            return ScoreDescription.call("subtree.container", [
+                matcher.description,
+                ScoreDescription.valueField("ordinal", ordinal),
+            ].compactMap { $0 })
         }
     }
 }

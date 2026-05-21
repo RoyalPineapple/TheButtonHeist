@@ -77,6 +77,30 @@ public enum ActionExpectation: Sendable, Equatable {
     }
 }
 
+extension ActionExpectation: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .screenChanged:
+            return "screen_changed"
+        case .elementsChanged:
+            return "elements_changed"
+        case .elementUpdated(let heistId, let property, let oldValue, let newValue):
+            return ScoreDescription.call("element_updated", [
+                ScoreDescription.stringField("heistId", heistId),
+                ScoreDescription.valueField("property", property?.rawValue),
+                ScoreDescription.stringField("oldValue", oldValue),
+                ScoreDescription.stringField("newValue", newValue),
+            ].compactMap { $0 })
+        case .elementAppeared(let matcher):
+            return ScoreDescription.call("element_appeared", [matcher.description])
+        case .elementDisappeared(let matcher):
+            return ScoreDescription.call("element_disappeared", [matcher.description])
+        case .compound(let expectations):
+            return "compound(\(expectations.map(\.description).joined(separator: ", ")))"
+        }
+    }
+}
+
 // MARK: - ActionExpectation Codable
 
 extension ActionExpectation: Codable {
@@ -190,6 +214,16 @@ public struct ExpectationResult: Codable, Sendable, Equatable {
         self.met = met
         self.expectation = expectation
         self.actual = actual
+    }
+}
+
+extension ExpectationResult: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("expectation", [
+            ScoreDescription.valueField("met", met),
+            expectation.map { "expected=\($0)" },
+            ScoreDescription.stringField("actual", actual),
+        ].compactMap { $0 })
     }
 }
 

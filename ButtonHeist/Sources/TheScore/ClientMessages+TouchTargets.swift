@@ -22,6 +22,16 @@ public struct TouchTapTarget: Codable, Sendable {
     }
 }
 
+extension TouchTapTarget: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("tap", [
+            elementTarget?.description,
+            pointX.map { "x=\(ScoreDescription.decimal($0))" },
+            pointY.map { "y=\(ScoreDescription.decimal($0))" },
+        ].compactMap { $0 })
+    }
+}
+
 /// Target for long press gesture
 public struct LongPressTarget: Codable, Sendable {
     public let elementTarget: ElementTarget?
@@ -43,6 +53,17 @@ public struct LongPressTarget: Codable, Sendable {
     }
 }
 
+extension LongPressTarget: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("longPress", [
+            elementTarget?.description,
+            pointX.map { "x=\(ScoreDescription.decimal($0))" },
+            pointY.map { "y=\(ScoreDescription.decimal($0))" },
+            "duration=\(ScoreDescription.decimal(duration))",
+        ].compactMap { $0 })
+    }
+}
+
 /// A point in unit coordinates (0-1) relative to an element's accessibility frame.
 /// `(0, 0)` is top-left, `(1, 1)` is bottom-right, `(0.5, 0.5)` is center.
 /// Values outside 0-1 extend beyond the element's frame.
@@ -53,6 +74,12 @@ public struct UnitPoint: Codable, Sendable, Equatable {
     public init(x: Double, y: Double) {
         self.x = x
         self.y = y
+    }
+}
+
+extension UnitPoint: CustomStringConvertible {
+    public var description: String {
+        "unitPoint(\(ScoreDescription.decimal(x)),\(ScoreDescription.decimal(y)))"
     }
 }
 
@@ -97,6 +124,22 @@ public struct SwipeTarget: Codable, Sendable {
     }
 }
 
+extension SwipeTarget: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("swipe", [
+            elementTarget?.description,
+            startX.map { "startX=\(ScoreDescription.decimal($0))" },
+            startY.map { "startY=\(ScoreDescription.decimal($0))" },
+            endX.map { "endX=\(ScoreDescription.decimal($0))" },
+            endY.map { "endY=\(ScoreDescription.decimal($0))" },
+            ScoreDescription.valueField("direction", direction),
+            duration.map { "duration=\(ScoreDescription.decimal($0))" },
+            start.map { "start=\($0)" },
+            end.map { "end=\($0)" },
+        ].compactMap { $0 })
+    }
+}
+
 /// Target for drag gesture
 public struct DragTarget: Codable, Sendable {
     public let elementTarget: ElementTarget?
@@ -129,6 +172,19 @@ public struct DragTarget: Codable, Sendable {
     }
 }
 
+extension DragTarget: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("drag", [
+            elementTarget?.description,
+            startX.map { "startX=\(ScoreDescription.decimal($0))" },
+            startY.map { "startY=\(ScoreDescription.decimal($0))" },
+            "endX=\(ScoreDescription.decimal(endX))",
+            "endY=\(ScoreDescription.decimal(endY))",
+            duration.map { "duration=\(ScoreDescription.decimal($0))" },
+        ].compactMap { $0 })
+    }
+}
+
 /// Target for pinch/zoom gesture
 public struct PinchTarget: Codable, Sendable {
     public let elementTarget: ElementTarget?
@@ -150,6 +206,19 @@ public struct PinchTarget: Codable, Sendable {
         self.centerX = centerX; self.centerY = centerY
         self.scale = scale; self.spread = spread
         self.duration = duration
+    }
+}
+
+extension PinchTarget: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("pinch", [
+            elementTarget?.description,
+            centerX.map { "centerX=\(ScoreDescription.decimal($0))" },
+            centerY.map { "centerY=\(ScoreDescription.decimal($0))" },
+            "scale=\(ScoreDescription.decimal(scale))",
+            spread.map { "spread=\(ScoreDescription.decimal($0))" },
+            duration.map { "duration=\(ScoreDescription.decimal($0))" },
+        ].compactMap { $0 })
     }
 }
 
@@ -177,6 +246,19 @@ public struct RotateTarget: Codable, Sendable {
     }
 }
 
+extension RotateTarget: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("rotate", [
+            elementTarget?.description,
+            centerX.map { "centerX=\(ScoreDescription.decimal($0))" },
+            centerY.map { "centerY=\(ScoreDescription.decimal($0))" },
+            "angle=\(ScoreDescription.decimal(angle))",
+            radius.map { "radius=\(ScoreDescription.decimal($0))" },
+            duration.map { "duration=\(ScoreDescription.decimal($0))" },
+        ].compactMap { $0 })
+    }
+}
+
 /// Target for two-finger tap gesture
 public struct TwoFingerTapTarget: Codable, Sendable {
     public let elementTarget: ElementTarget?
@@ -196,6 +278,17 @@ public struct TwoFingerTapTarget: Codable, Sendable {
     }
 }
 
+extension TwoFingerTapTarget: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("twoFingerTap", [
+            elementTarget?.description,
+            centerX.map { "centerX=\(ScoreDescription.decimal($0))" },
+            centerY.map { "centerY=\(ScoreDescription.decimal($0))" },
+            spread.map { "spread=\(ScoreDescription.decimal($0))" },
+        ].compactMap { $0 })
+    }
+}
+
 /// A point in a draw path
 public struct PathPoint: Codable, Sendable, Equatable {
     public let x: Double
@@ -208,6 +301,12 @@ public struct PathPoint: Codable, Sendable, Equatable {
 
     public var cgPoint: CGPoint {
         CGPoint(x: x, y: y)
+    }
+}
+
+extension PathPoint: CustomStringConvertible {
+    public var description: String {
+        "point(\(ScoreDescription.decimal(x)),\(ScoreDescription.decimal(y)))"
     }
 }
 
@@ -224,6 +323,18 @@ public struct DrawPathTarget: Codable, Sendable {
         self.points = points
         self.duration = duration
         self.velocity = velocity
+    }
+}
+
+extension DrawPathTarget: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("drawPath", [
+            "points=\(points.count)",
+            points.first.map { "first=\($0)" },
+            points.last.map { "last=\($0)" },
+            duration.map { "duration=\(ScoreDescription.decimal($0))" },
+            velocity.map { "velocity=\(ScoreDescription.decimal($0))" },
+        ].compactMap { $0 })
     }
 }
 
@@ -246,6 +357,16 @@ public struct BezierSegment: Codable, Sendable {
     public var cp1: CGPoint { CGPoint(x: cp1X, y: cp1Y) }
     public var cp2: CGPoint { CGPoint(x: cp2X, y: cp2Y) }
     public var end: CGPoint { CGPoint(x: endX, y: endY) }
+}
+
+extension BezierSegment: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("bezierSegment", [
+            "cp1=(\(ScoreDescription.decimal(cp1X)),\(ScoreDescription.decimal(cp1Y)))",
+            "cp2=(\(ScoreDescription.decimal(cp2X)),\(ScoreDescription.decimal(cp2Y)))",
+            "end=(\(ScoreDescription.decimal(endX)),\(ScoreDescription.decimal(endY)))",
+        ])
+    }
 }
 
 /// Target for draw-bezier gesture (cubic bezier curves sampled to polyline)
@@ -276,5 +397,19 @@ public struct DrawBezierTarget: Codable, Sendable {
 
     public var startPoint: CGPoint {
         CGPoint(x: startX, y: startY)
+    }
+}
+
+extension DrawBezierTarget: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("drawBezier", [
+            "start=(\(ScoreDescription.decimal(startX)),\(ScoreDescription.decimal(startY)))",
+            "segments=\(segments.count)",
+            segments.first.map { "first=\($0)" },
+            segments.last.map { "last=\($0)" },
+            ScoreDescription.valueField("samplesPerSegment", samplesPerSegment),
+            duration.map { "duration=\(ScoreDescription.decimal($0))" },
+            velocity.map { "velocity=\(ScoreDescription.decimal($0))" },
+        ].compactMap { $0 })
     }
 }

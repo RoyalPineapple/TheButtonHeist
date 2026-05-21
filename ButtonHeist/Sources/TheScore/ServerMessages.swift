@@ -189,6 +189,10 @@ public enum ErrorKind: String, Codable, Sendable, CaseIterable {
     case general
 }
 
+extension ErrorKind: CustomStringConvertible {
+    public var description: String { rawValue }
+}
+
 /// Structured payload for server-broadcast error messages.
 public struct ServerError: Codable, Sendable, Equatable {
     public let kind: ErrorKind
@@ -518,6 +522,10 @@ public enum TreeNodeKind: String, Codable, Sendable, Equatable, Hashable {
     case container
 }
 
+extension TreeNodeKind: CustomStringConvertible {
+    public var description: String { rawValue }
+}
+
 /// A stable reference to an existing tree node.
 public struct TreeNodeRef: Codable, Sendable, Equatable, Hashable {
     public let id: String
@@ -597,6 +605,10 @@ public enum ElementProperty: String, Codable, Sendable, CaseIterable {
     public var isGeometry: Bool {
         self == .frame || self == .activationPoint
     }
+}
+
+extension ElementProperty: CustomStringConvertible {
+    public var description: String { rawValue }
 }
 
 /// A single property change: what property, old value, new value.
@@ -706,6 +718,10 @@ public struct RecordingPayload: Codable, Sendable {
     }
 }
 
+extension RecordingPayload.StopReason: CustomStringConvertible {
+    public var description: String { rawValue }
+}
+
 /// Diagnostic evidence attached to a completed screen recording.
 ///
 /// These fields describe what happened while collecting evidence: requested
@@ -737,6 +753,20 @@ public struct RecordingPayloadEvidence: Codable, Sendable, Equatable {
         self.interactionLogLimit = interactionLogLimit
         self.droppedInteractionCount = droppedInteractionCount
         self.fileSizeLimitBytes = fileSizeLimitBytes
+    }
+}
+
+extension RecordingPayloadEvidence: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("recordingEvidence", [
+            requestedConfig.map { "requested=\($0)" },
+            appliedConfig.map { "applied=\($0)" },
+            caps.map { "caps=\($0.count)" },
+            unsupportedInputs.map { "unsupported=\($0.count)" },
+            ScoreDescription.valueField("interactionLogLimit", interactionLogLimit),
+            ScoreDescription.valueField("droppedInteractionCount", droppedInteractionCount),
+            ScoreDescription.valueField("fileSizeLimitBytes", fileSizeLimitBytes),
+        ].compactMap { $0 })
     }
 }
 
@@ -772,6 +802,17 @@ public struct RecordingConfigurationEvidence: Codable, Sendable, Equatable {
     }
 }
 
+extension RecordingConfigurationEvidence: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("recordingConfiguration", [
+            ScoreDescription.valueField("fps", fps),
+            scale.map { "scale=\(ScoreDescription.decimal($0))" },
+            inactivityTimeout.map { "inactivityTimeout=\(ScoreDescription.decimal($0))" },
+            maxDuration.map { "maxDuration=\(ScoreDescription.decimal($0))" },
+        ].compactMap { $0 })
+    }
+}
+
 /// Evidence that an input value was clamped before execution or recording.
 public struct RecordedInputCap: Codable, Sendable, Equatable {
     public let name: String
@@ -798,6 +839,19 @@ public struct RecordedInputCap: Codable, Sendable, Equatable {
     }
 }
 
+extension RecordedInputCap: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("cap", [
+            ScoreDescription.stringField("name", name),
+            requested.map { "requested=\($0)" },
+            "applied=\(applied)",
+            minimum.map { "minimum=\($0)" },
+            maximum.map { "maximum=\($0)" },
+            ScoreDescription.stringField("reason", reason),
+        ].compactMap { $0 })
+    }
+}
+
 /// Evidence that an input was omitted from the replay contract.
 public struct RecordedUnsupportedInput: Codable, Sendable, Equatable {
     public let name: String
@@ -808,6 +862,16 @@ public struct RecordedUnsupportedInput: Codable, Sendable, Equatable {
         self.name = name
         self.valueType = valueType
         self.reason = reason
+    }
+}
+
+extension RecordedUnsupportedInput: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("unsupportedInput", [
+            ScoreDescription.stringField("name", name),
+            ScoreDescription.stringField("valueType", valueType),
+            ScoreDescription.stringField("reason", reason),
+        ].compactMap { $0 })
     }
 }
 
@@ -862,6 +926,10 @@ public enum ActionMethod: String, Codable, Sendable {
     case unsupportedCommand
     case elementNotFound
     case elementDeallocated
+}
+
+extension ActionMethod: CustomStringConvertible {
+    public var description: String { rawValue }
 }
 
 /// Payload sent when a connection is approved via the on-device UI
