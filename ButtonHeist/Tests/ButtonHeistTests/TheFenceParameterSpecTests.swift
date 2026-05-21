@@ -81,8 +81,14 @@ final class TheFenceParameterSpecTests: XCTestCase {
     }
 
     func testCommandExecutionEligibilityIsDescriptorOwned() {
-        XCTAssertEqual(TheFence.Command.batchExecutableCases, TheFence.Command.allCases.filter(\.isBatchExecutable))
-        XCTAssertEqual(TheFence.Command.playbackExecutableCases, TheFence.Command.allCases.filter(\.isPlaybackExecutable))
+        let descriptors = TheFence.Command.descriptors
+
+        XCTAssertEqual(TheFence.Command.batchExecutableCases, descriptors.filter(\.isBatchExecutable).map(\.command))
+        XCTAssertEqual(TheFence.Command.playbackExecutableCases, descriptors.filter(\.isPlaybackExecutable).map(\.command))
+        XCTAssertEqual(
+            TheFence.Command.allCases.filter(\.isHeistRecordable),
+            descriptors.filter(\.isHeistRecordable).map(\.command)
+        )
 
         let nonPlaybackCommands = TheFence.Command.allCases.filter { !$0.isPlaybackExecutable }
         XCTAssertEqual(
@@ -97,6 +103,24 @@ final class TheFenceParameterSpecTests: XCTestCase {
             ]
         )
         XCTAssertTrue(TheFence.Command.allCases.allSatisfy { !$0.isHeistRecordable || $0.isPlaybackExecutable })
+    }
+
+    func testExecutionEligibilityCountsAreExplicit() {
+        XCTAssertEqual(
+            TheFence.Command.batchExecutableCases.count,
+            38,
+            "Batch-eligible command count changed - update run_batch schema tests and this canary"
+        )
+        XCTAssertEqual(
+            TheFence.Command.playbackExecutableCases.count,
+            24,
+            "Playback-eligible command count changed - update heist playback tests and this canary"
+        )
+        XCTAssertEqual(
+            TheFence.Command.allCases.filter(\.isHeistRecordable).count,
+            24,
+            "Heist-recordable command count changed - update BookKeeper guardrails and this canary"
+        )
     }
 
     func testConnectionDispatchPolicyIsDescriptorOwned() {
@@ -119,6 +143,66 @@ final class TheFenceParameterSpecTests: XCTestCase {
         )
 
         XCTAssertEqual(TheFence.Command.humanCommandAliases, descriptorAliases)
+    }
+
+    func testHumanAliasCountIsExplicit() {
+        XCTAssertEqual(
+            TheFence.Command.humanCommandAliases.count,
+            18,
+            "Human alias count changed - update descriptor-owned aliases and REPL help tests"
+        )
+    }
+
+    func testEveryParameterSpecKeyIsBackedByFenceParameterKey() {
+        let knownKeys = Set(FenceParameterKey.allCases.map(\.rawValue))
+
+        for command in TheFence.Command.allCases {
+            assertParameterKeysAreBacked(
+                command.parameters,
+                knownKeys: knownKeys,
+                context: command.rawValue
+            )
+        }
+
+        for contract in TheFence.Command.mcpToolContracts {
+            guard let selector = contract.selector else { continue }
+            assertParameterKeysAreBacked(
+                [selector.parameter],
+                knownKeys: knownKeys,
+                context: "\(contract.name).selector"
+            )
+        }
+    }
+
+    private func assertParameterKeysAreBacked(
+        _ specs: [FenceParameterSpec],
+        knownKeys: Set<String>,
+        context: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        for spec in specs {
+            XCTAssertTrue(
+                knownKeys.contains(spec.key),
+                "\(context).\(spec.key) is not in FenceParameterKey - add a case or fix the spec key",
+                file: file,
+                line: line
+            )
+            assertParameterKeysAreBacked(
+                spec.objectProperties,
+                knownKeys: knownKeys,
+                context: "\(context).\(spec.key)",
+                file: file,
+                line: line
+            )
+            assertParameterKeysAreBacked(
+                spec.arrayItemProperties,
+                knownKeys: knownKeys,
+                context: "\(context).\(spec.key)[]",
+                file: file,
+                line: line
+            )
+        }
     }
 
     private func optionalParameterRoleIssues() -> [String] {

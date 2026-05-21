@@ -30,6 +30,31 @@ final class PublicCommandContractTests: XCTestCase {
         )
     }
 
+    func testPublicCommandCatalogCountIsExplicit() {
+        XCTAssertEqual(
+            TheFence.Command.allCases.count,
+            43,
+            "Public command catalog count changed - update samples, adapter projections, and contract guardrails"
+        )
+    }
+
+    func testPublicCommandNamesAreDescriptorOwned() {
+        let descriptors = TheFence.Command.descriptors
+        let canonicalNames = descriptors.map(\.canonicalName)
+
+        XCTAssertEqual(descriptors.map(\.command), TheFence.Command.allCases)
+        XCTAssertEqual(canonicalNames, descriptors.map { $0.command.rawValue })
+        XCTAssertEqual(Set(canonicalNames).count, canonicalNames.count)
+
+        for descriptor in descriptors {
+            XCTAssertEqual(
+                descriptor.command.canonicalName,
+                descriptor.canonicalName,
+                "\(descriptor.command.rawValue) should expose its public name through FenceCommandDescriptor"
+            )
+        }
+    }
+
     @ButtonHeistActor
     func testEveryPublicCommandRejectsUnknownRequestKeysFromFenceSpecs() async {
         let fence = TheFence(configuration: .init())
