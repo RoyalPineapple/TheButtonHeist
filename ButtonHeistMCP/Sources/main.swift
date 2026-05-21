@@ -27,19 +27,56 @@ struct ButtonHeistMCPServer {
         await server.waitUntilCompleted()
     }
 
-    static let instructions = """
-        Button Heist drives iOS apps through the accessibility layer — the same interface \
-        VoiceOver uses. Target elements by heistId, label, value, and traits, not by screen \
-        coordinates. The core loop is: `get_interface` to read the app accessibility state, \
-        then `activate`/`type_text`/`scroll`/`gesture` to act with an `expect` attached. \
-        Every response carries a \
-        `[while_idle: ...]` block describing what changed since your last call — read it \
-        before deciding to re-fetch. When an action produces a transient state (spinner, \
-        loading overlay), call `wait_for_change` with the same expectation to ride through \
-        intermediate states. Use `run_batch` for multi-step sequences with per-step expects. \
-        Use `start_heist`/`stop_heist` to record replayable .heist files. \
-        Full guide: docs/MCP-AGENT-GUIDE.md.
-        """
+    static var instructions: String {
+        let matcherKeys = inlineList(matcherParameterKeys(for: .activate))
+        let expectationKey = parameterKey(.expect, in: .activate)
+        return """
+            Button Heist drives iOS apps through the accessibility layer — the same interface \
+            VoiceOver uses. Target elements with schema matcher fields: \(matcherKeys), not \
+            by screen coordinates. The core loop is: \(inlineToolName(for: .getInterface)) \
+            to read the app accessibility state, then \(inlineToolName(for: .activate))/\
+            \(inlineToolName(for: .typeText))/\(inlineToolName(for: .scroll))/\
+            \(inlineToolName(for: .swipe)) to act with an \(inlineCode(expectationKey)) \
+            attached. Every response carries a \
+            `[while_idle: ...]` block describing what changed since your last call — read it \
+            before deciding to re-fetch. When an action produces a transient state (spinner, \
+            loading overlay), call \(inlineToolName(for: .waitForChange)) with the same \
+            expectation to ride through intermediate states. Use \
+            \(inlineToolName(for: .runBatch)) for multi-step sequences with per-step \
+            expectations. Use \(inlineToolName(for: .startHeist))/\
+            \(inlineToolName(for: .stopHeist)) to record replayable .heist files. \
+            Full guide: docs/MCP-AGENT-GUIDE.md.
+            """
+    }
+
+    private static func toolName(for command: TheFence.Command) -> String {
+        TheFence.Command.mcpToolContracts.first { $0.commands.contains(command) }?.name ?? command.canonicalName
+    }
+
+    private static func inlineToolName(for command: TheFence.Command) -> String {
+        inlineCode(toolName(for: command))
+    }
+
+    private static func parameterKey(
+        _ key: FenceParameterKey,
+        in command: TheFence.Command
+    ) -> String {
+        command.parameters.first { $0.key == key.rawValue }?.key ?? key.rawValue
+    }
+
+    private static func matcherParameterKeys(for command: TheFence.Command) -> [String] {
+        command.parameters
+            .filter { $0.optionalRole == .matcher }
+            .map(\.key)
+    }
+
+    private static func inlineList(_ values: [String]) -> String {
+        values.map { inlineCode($0) }.joined(separator: ", ")
+    }
+
+    private static func inlineCode(_ value: String) -> String {
+        "`\(value)`"
+    }
 
     @ButtonHeistActor
     private static func setUp() -> (TheFence, IdleMonitor) {

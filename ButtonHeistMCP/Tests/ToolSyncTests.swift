@@ -261,9 +261,10 @@ struct ToolSyncTests {
         #expect(extractEnumValues(from: gesture, property: "type") == Set(GestureType.allCases.map(\.rawValue)))
 
         let editAction = ToolDefinitions.all.first { $0.name == TheFence.Command.editAction.rawValue }
+        let editActionSelector = TheFence.Command.mcpToolContract(named: TheFence.Command.editAction.rawValue)!.selector!
         #expect(
             extractEnumValues(from: editAction, property: "action") ==
-                Set(EditAction.allCases.map(\.rawValue) + ["dismiss"])
+                Set(editActionSelector.parameter.enumValues!)
         )
     }
 
@@ -544,6 +545,49 @@ struct ToolSyncTests {
         )
     }
 
+    @Test("MCP server entry point does not hard-code catalog literals")
+    func mcpServerEntryPointDoesNotHardCodeCatalogLiterals() throws {
+        let source = try readRepositoryFile("ButtonHeistMCP/Sources/main.swift")
+        let sourceForLiteralScan = Self.removingLineComments(from: source)
+        let literalCounts = Self.stringLiteralCounts(in: sourceForLiteralScan)
+        let literalMirrors = Set(literalCounts.keys).intersection(Self.fenceCatalogLiterals)
+        #expect(
+            literalMirrors.isEmpty,
+            "main.swift should not hard-code catalog command or parameter literals: \(literalMirrors.sorted())"
+        )
+    }
+
+    @Test("MCP server instructions render descriptor-backed tool names")
+    func mcpServerInstructionsRenderDescriptorBackedToolNames() {
+        let instructions = ButtonHeistMCPServer.instructions
+        let representedCommands: [TheFence.Command] = [
+            .getInterface,
+            .activate,
+            .typeText,
+            .scroll,
+            .swipe,
+            .waitForChange,
+            .runBatch,
+            .startHeist,
+            .stopHeist,
+        ]
+
+        for command in representedCommands {
+            #expect(
+                instructions.contains(inlineCode(mcpToolName(for: command))),
+                "Server instructions should render the MCP tool name for \(command.rawValue) from command exposure"
+            )
+        }
+        for key in TheFence.Command.activate.parameters
+            .filter({ $0.optionalRole == .matcher || $0.key == FenceParameterKey.expect.rawValue })
+            .map(\.key) {
+            #expect(
+                instructions.contains(inlineCode(key)),
+                "Server instructions should render \(key) from command parameter specs"
+            )
+        }
+    }
+
     @Test("FenceParameterKey covers every advertised command parameter")
     func fenceParameterKeyCoversEveryAdvertisedCommandParameter() {
         let advertisedKeys = Self.fenceCatalogLiterals
@@ -560,6 +604,7 @@ struct ToolSyncTests {
 
     @Test("Grouped MCP selectors are owned by command contracts")
     func groupedMCPSelectorsAreOwnedByCommandContracts() {
+        let editActionSelectorContract = TheFence.Command.mcpToolContract(named: TheFence.Command.editAction.rawValue)!
         assertSelectorContract(
             toolName: TheFence.Command.gestureMCPToolName,
             key: "type",
@@ -574,9 +619,9 @@ struct ToolSyncTests {
         )
         assertSelectorContract(
             toolName: TheFence.Command.editAction.rawValue,
-            key: "action",
-            requiredKeys: ["action"],
-            enumValues: EditAction.allCases.map(\.rawValue) + ["dismiss"]
+            key: editActionSelectorContract.selector!.parameter.key,
+            requiredKeys: Set(editActionSelectorContract.requiredParameterKeys),
+            enumValues: editActionSelectorContract.selector!.parameter.enumValues!
         )
     }
 
@@ -799,6 +844,14 @@ struct ToolSyncTests {
             in: contents,
             pattern: #"\b[0-9]+(?:\s+|-)(?:[A-Za-z-]+(?:\s+|-)){0,3}(?:"# + nounPattern + #")\b"#
         )
+    }
+
+    private func mcpToolName(for command: TheFence.Command) -> String {
+        TheFence.Command.mcpToolContracts.first { $0.commands.contains(command) }?.name ?? command.canonicalName
+    }
+
+    private func inlineCode(_ value: String) -> String {
+        "`\(value)`"
     }
 
     private func regexFullMatches(in contents: String, pattern: String) -> [String] {
