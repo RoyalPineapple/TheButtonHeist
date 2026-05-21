@@ -112,7 +112,7 @@ final class TheBurglar {
                             value: "windowLevel: \(window.windowLevel.rawValue)",
                             identifier: nil
                         ),
-                        frame: window.frame
+                        frame: AccessibilityRect(window.frame)
                     )
                     allHierarchy.append(.container(container, children: windowTree))
                 } else {

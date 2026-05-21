@@ -75,9 +75,8 @@ extension ElementAction: Codable {
 
 // MARK: - Heist Trait
 
-/// Named accessibility traits — aligned 1:1 with the AccessibilitySnapshot parser's
-/// `knownTraits` in `AccessibilityHierarchy+Codable.swift`.
-/// Standard UIAccessibilityTraits plus private traits the parser exposes.
+/// Named accessibility traits ButtonHeist exposes publicly.
+/// Standard UIAccessibilityTraits plus private UIKit traits the parser can capture.
 public enum HeistTrait: Equatable, Hashable, Sendable {
     // Standard traits (public UIAccessibilityTraits, bits 0-14, 16-17)
     case button, link, image, staticText, header, adjustable
@@ -600,14 +599,75 @@ public extension Array where Element == AccessibilityHierarchy {
 }
 
 public extension AccessibilityTraits {
+    private static let heistKnownTraits: [(trait: AccessibilityTraits, name: String)] = [
+        (.button, HeistTrait.button.rawValue),
+        (.link, HeistTrait.link.rawValue),
+        (.image, HeistTrait.image.rawValue),
+        (.selected, HeistTrait.selected.rawValue),
+        (.playsSound, HeistTrait.playsSound.rawValue),
+        (.keyboardKey, HeistTrait.keyboardKey.rawValue),
+        (.staticText, HeistTrait.staticText.rawValue),
+        (.summaryElement, HeistTrait.summaryElement.rawValue),
+        (.notEnabled, HeistTrait.notEnabled.rawValue),
+        (.updatesFrequently, HeistTrait.updatesFrequently.rawValue),
+        (.searchField, HeistTrait.searchField.rawValue),
+        (.startsMediaSession, HeistTrait.startsMediaSession.rawValue),
+        (.adjustable, HeistTrait.adjustable.rawValue),
+        (.allowsDirectInteraction, HeistTrait.allowsDirectInteraction.rawValue),
+        (.causesPageTurn, HeistTrait.causesPageTurn.rawValue),
+        (.header, HeistTrait.header.rawValue),
+        (.tabBar, HeistTrait.tabBar.rawValue),
+        (AccessibilityTraits(rawValue: UInt64(1) << 17), HeistTrait.webContent.rawValue),
+        (.textEntry, HeistTrait.textEntry.rawValue),
+        (AccessibilityTraits(rawValue: UInt64(1) << 19), HeistTrait.pickerElement.rawValue),
+        (AccessibilityTraits(rawValue: UInt64(1) << 20), HeistTrait.radioButton.rawValue),
+        (.isEditing, HeistTrait.isEditing.rawValue),
+        (AccessibilityTraits(rawValue: UInt64(1) << 22), HeistTrait.launchIcon.rawValue),
+        (AccessibilityTraits(rawValue: UInt64(1) << 23), HeistTrait.statusBarElement.rawValue),
+        (.secureTextField, HeistTrait.secureTextField.rawValue),
+        (AccessibilityTraits(rawValue: UInt64(1) << 25), HeistTrait.inactive.rawValue),
+        (AccessibilityTraits(rawValue: UInt64(1) << 26), HeistTrait.footer.rawValue),
+        (.backButton, HeistTrait.backButton.rawValue),
+        (.tabBarItem, HeistTrait.tabBarItem.rawValue),
+        (AccessibilityTraits(rawValue: UInt64(1) << 29), HeistTrait.autoCorrectCandidate.rawValue),
+        (AccessibilityTraits(rawValue: UInt64(1) << 30), HeistTrait.deleteKey.rawValue),
+        (AccessibilityTraits(rawValue: UInt64(1) << 31), HeistTrait.selectionDismissesItem.rawValue),
+        (AccessibilityTraits(rawValue: UInt64(1) << 32), HeistTrait.visited.rawValue),
+        (AccessibilityTraits(rawValue: UInt64(1) << 34), HeistTrait.spacer.rawValue),
+        (AccessibilityTraits(rawValue: UInt64(1) << 35), HeistTrait.tableIndex.rawValue),
+        (AccessibilityTraits(rawValue: UInt64(1) << 36), HeistTrait.map.rawValue),
+        (AccessibilityTraits(rawValue: UInt64(1) << 37), HeistTrait.textOperationsAvailable.rawValue),
+        (AccessibilityTraits(rawValue: UInt64(1) << 38), HeistTrait.draggable.rawValue),
+        (AccessibilityTraits(rawValue: UInt64(1) << 40), HeistTrait.popupButton.rawValue),
+        (.textArea, HeistTrait.textArea.rawValue),
+        (AccessibilityTraits(rawValue: UInt64(1) << 52), HeistTrait.menuItem.rawValue),
+        (.switchButton, HeistTrait.switchButton.rawValue),
+        (.alert, HeistTrait.alert.rawValue),
+    ]
+
+    static var knownTraitNames: Set<String> {
+        Set(heistKnownTraits.map(\.name))
+    }
+
+    static func fromNames(_ names: [String]) -> AccessibilityTraits {
+        var value: UInt64 = 0
+        for name in names {
+            if let known = heistKnownTraits.first(where: { $0.name == name }) {
+                value |= known.trait.rawValue
+            }
+        }
+        return AccessibilityTraits(rawValue: value)
+    }
+
     var heistTraits: [HeistTrait] {
         namesIncludingUnknownBits.map { HeistTrait(rawValue: $0) ?? .unknown($0) }
     }
 
     var namesIncludingUnknownBits: [String] {
-        var result = traitNames
+        var result: [String] = []
         var remaining = rawValue
-        for (trait, _) in Self.knownTraits where contains(trait) {
+        for (trait, name) in Self.heistKnownTraits where contains(trait) {
+            result.append(name)
             remaining &= ~trait.rawValue
         }
         if remaining != 0 {
@@ -737,7 +797,7 @@ public extension HeistElement {
         accessibilityElement element: AccessibilityElement,
         annotation: InterfaceElementAnnotation? = nil
     ) {
-        let frame = element.shape.frame
+        let frame = accessibilityFrame(for: element.shape)
         let validCustomContent = element.customContent.filter { !$0.label.isEmpty || !$0.value.isEmpty }
         let validRotors = element.customRotors.filter { !$0.name.isEmpty }
         self.init(
@@ -761,6 +821,50 @@ public extension HeistElement {
             rotors: validRotors.isEmpty ? nil : validRotors.map { HeistRotor(name: $0.name) },
             actions: annotation?.actions ?? []
         )
+    }
+}
+
+private func accessibilityFrame(for shape: AccessibilityShape) -> CGRect {
+    switch shape {
+    case .frame(let rect):
+        return CGRect(
+            x: CGFloat(rect.origin.x),
+            y: CGFloat(rect.origin.y),
+            width: CGFloat(rect.size.width),
+            height: CGFloat(rect.size.height)
+        )
+    case .path(let elements):
+        let path = CGMutablePath()
+        for element in elements {
+            switch element {
+            case .move(let point):
+                path.move(to: CGPoint(x: CGFloat(point.x), y: CGFloat(point.y)))
+            case .line(let point):
+                path.addLine(to: CGPoint(x: CGFloat(point.x), y: CGFloat(point.y)))
+            case .quadCurve(let point, let control):
+                path.addQuadCurve(
+                    to: CGPoint(x: CGFloat(point.x), y: CGFloat(point.y)),
+                    control: CGPoint(x: CGFloat(control.x), y: CGFloat(control.y))
+                )
+            case .curve(let point, let control1, let control2):
+                path.addCurve(
+                    to: CGPoint(x: CGFloat(point.x), y: CGFloat(point.y)),
+                    control1: CGPoint(x: CGFloat(control1.x), y: CGFloat(control1.y)),
+                    control2: CGPoint(x: CGFloat(control2.x), y: CGFloat(control2.y))
+                )
+            case .closeSubpath:
+                path.closeSubpath()
+            }
+        }
+        let bounds = path.boundingBoxOfPath
+        guard !bounds.isNull,
+              bounds.origin.x.isFinite,
+              bounds.origin.y.isFinite,
+              bounds.size.width.isFinite,
+              bounds.size.height.isFinite else {
+            return .zero
+        }
+        return bounds
     }
 }
 

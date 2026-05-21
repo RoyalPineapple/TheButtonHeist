@@ -1275,7 +1275,7 @@ final class TheBrainsScrollTests: XCTestCase {
         // bottom clear line. A swipe rectangle that overlaps the tab bar
         // must be clipped to end at its top edge.
         let tabBarFrame = CGRect(x: 0, y: 700, width: 400, height: 80)
-        let tabBarContainer = AccessibilityContainer(type: .tabBar, frame: tabBarFrame)
+        let tabBarContainer = AccessibilityContainer(type: .tabBar, frame: AccessibilityRect(tabBarFrame))
         brains.stash.currentScreen = Screen(
             elements: [:],
             hierarchy: [.container(tabBarContainer, children: [])],
@@ -1306,7 +1306,7 @@ final class TheBrainsScrollTests: XCTestCase {
     private func makeElement(
         label: String? = nil,
         traits: UIAccessibilityTraits = .none,
-        shape: AccessibilityElement.Shape = .frame(.zero)
+        shape: AccessibilityElement.Shape = .frame(AccessibilityRect.zero)
     ) -> AccessibilityElement {
         .make(label: label, traits: traits, shape: shape, respondsToUserInteraction: false)
     }
@@ -1317,7 +1317,7 @@ final class TheBrainsScrollTests: XCTestCase {
     ) -> AccessibilityContainer {
         AccessibilityContainer(
             type: .scrollable(contentSize: AccessibilitySize(contentSize)),
-            frame: frame
+            frame: AccessibilityRect(frame)
         )
     }
 

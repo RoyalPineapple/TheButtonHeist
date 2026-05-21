@@ -19,7 +19,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
     func testTopLevelContainerKeepsScreenSpaceFrame() {
         let container = AccessibilityContainer(
             type: .list,
-            frame: CGRect(x: 0, y: 100, width: 320, height: 400)
+            frame: AccessibilityRect(x: 0, y: 100, width: 320, height: 400)
         )
         let element = makeElement()
         let hierarchy: [AccessibilityHierarchy] = [
@@ -47,11 +47,11 @@ final class TheBurglarContainerFramesTests: XCTestCase {
 
         let outer = AccessibilityContainer(
             type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 5000)),
-            frame: CGRect(x: 0, y: 0, width: 320, height: 480)
+            frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 480)
         )
         let inner = AccessibilityContainer(
             type: .list,
-            frame: CGRect(x: 0, y: 200, width: 320, height: 200)
+            frame: AccessibilityRect(x: 0, y: 200, width: 320, height: 200)
         )
         let element = makeElement()
         let hierarchy: [AccessibilityHierarchy] = [
@@ -69,7 +69,8 @@ final class TheBurglarContainerFramesTests: XCTestCase {
                        "Top-level scrollable: no enclosing scrollable, frame stays in screen space")
         XCTAssertFalse(result.nestedInScrollView.contains(outer))
 
-        let innerContent = try? XCTUnwrap(result.contentFrames[inner])
+        let innerContent = result.contentFrames[inner]
+        XCTAssertNotNil(innerContent)
         XCTAssertEqual(innerContent?.origin.x ?? .nan, 0, accuracy: 0.5)
         XCTAssertEqual(innerContent?.origin.y ?? .nan, 300, accuracy: 0.5,
                        "screen-y 200 + contentOffset.y 100 = content-y 300")
@@ -90,14 +91,14 @@ final class TheBurglarContainerFramesTests: XCTestCase {
 
         let outer = AccessibilityContainer(
             type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 5000)),
-            frame: CGRect(x: 0, y: 0, width: 320, height: 480)
+            frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 480)
         )
 
         // Parse 1: contentOffset 0, inner is at screen-y 200 → content-y 200.
         scrollView.contentOffset = .zero
         let innerParse1 = AccessibilityContainer(
             type: .list,
-            frame: CGRect(x: 0, y: 200, width: 320, height: 200)
+            frame: AccessibilityRect(x: 0, y: 200, width: 320, height: 200)
         )
         let result1 = TheBurglar.buildContainerIdentityContext(
             hierarchy: [.container(outer, children: [
@@ -112,7 +113,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
         scrollView.contentOffset = CGPoint(x: 0, y: 1000)
         let innerParse2 = AccessibilityContainer(
             type: .list,
-            frame: CGRect(x: 0, y: -800, width: 320, height: 200)
+            frame: AccessibilityRect(x: 0, y: -800, width: 320, height: 200)
         )
         let result2 = TheBurglar.buildContainerIdentityContext(
             hierarchy: [.container(outer, children: [
@@ -202,11 +203,11 @@ final class TheBurglarContainerFramesTests: XCTestCase {
         let frame = CGRect(x: 0, y: 0, width: 320, height: 400)
         let firstContainer = AccessibilityContainer(
             type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 1_000)),
-            frame: frame
+            frame: AccessibilityRect(frame)
         )
         let secondContainer = AccessibilityContainer(
             type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 2_000)),
-            frame: frame
+            frame: AccessibilityRect(frame)
         )
         let firstElement = makeElement(label: "First")
         let secondElement = makeElement(label: "Second")
@@ -240,19 +241,19 @@ final class TheBurglarContainerFramesTests: XCTestCase {
         let repeatedContentSize = AccessibilitySize(width: 320, height: 800)
         let outer = AccessibilityContainer(
             type: .scrollable(contentSize: repeatedContentSize),
-            frame: frame
+            frame: AccessibilityRect(frame)
         )
         let pager = AccessibilityContainer(
             type: .scrollable(contentSize: AccessibilitySize(width: 960, height: 400)),
-            frame: pagerFrame
+            frame: AccessibilityRect(pagerFrame)
         )
         let page = AccessibilityContainer(
             type: .scrollable(contentSize: repeatedContentSize),
-            frame: frame
+            frame: AccessibilityRect(frame)
         )
         let list = AccessibilityContainer(
             type: .scrollable(contentSize: repeatedContentSize),
-            frame: frame
+            frame: AccessibilityRect(frame)
         )
         let outerScrollView = UIScrollView(frame: frame)
         let pagerScrollView = UIScrollView(frame: frame)
@@ -299,7 +300,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
     func testUniqueContainerKeepsReadableIdWithoutHashSuffix() {
         let container = AccessibilityContainer(
             type: .list,
-            frame: CGRect(x: 0, y: 0, width: 320, height: 400)
+            frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 400)
         )
         let screen = TheBurglar.buildScreen(from: TheBurglar.ParseResult(
             hierarchy: [

@@ -26,7 +26,7 @@ final class SettleSessionTests: XCTestCase {
             value: value,
             identifier: identifier,
             traits: traits,
-            shape: .frame(frame)
+            shape: .frame(AccessibilityRect(frame))
         )
     }
 

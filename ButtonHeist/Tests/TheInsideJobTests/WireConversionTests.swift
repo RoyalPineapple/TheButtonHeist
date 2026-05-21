@@ -63,7 +63,7 @@ final class WireConverterTests: XCTestCase {
             identifier: identifier,
             hint: hint,
             traits: UIAccessibilityTraits.fromNames(traits.map(\.rawValue)),
-            shape: .frame(frame),
+            shape: .frame(AccessibilityRect(frame)),
             activationPoint: activationPoint,
             usesDefaultActivationPoint: activationPointX == 0 && activationPointY == 0,
             customContent: customContent,
@@ -238,7 +238,7 @@ final class WireConverterTests: XCTestCase {
         let parserNames = AccessibilityTraits.knownTraitNames
         let wireNames = Set(HeistTrait.allCases.map(\.rawValue))
         XCTAssertEqual(wireNames, parserNames,
-                       "HeistTrait.allCases must match parser's knownTraitNames")
+                       "HeistTrait.allCases must match parser's UIKit knownTraitNames")
     }
 
     /// Guards against duplicate `(trait, name)` rows in the parser's `knownTraits` table.
@@ -246,7 +246,7 @@ final class WireConverterTests: XCTestCase {
     /// duplicate row would silently double-emit on the wire — invisible to the `Set`-based
     /// `testHeistTraitAllCasesMatchParser` above. Asserts row count equals name-set count.
     func testParserKnownTraitsHasNoDuplicateRows() {
-        let rowCount = AccessibilityTraits.knownTraits.count
+        let rowCount = UIAccessibilityTraits.knownTraits.count
         let uniqueNameCount = AccessibilityTraits.knownTraitNames.count
         XCTAssertEqual(rowCount, uniqueNameCount,
                        "knownTraits table contains duplicate (trait, name) rows")

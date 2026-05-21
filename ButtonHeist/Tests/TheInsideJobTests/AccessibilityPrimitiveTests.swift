@@ -37,26 +37,21 @@ final class AccessibilityPrimitiveTests: XCTestCase {
         )
 
         XCTAssertEqual(decoded, shape)
-        XCTAssertEqual(decoded.frame, CGRect(x: 1, y: 2, width: 3, height: 4))
+        guard case .frame(let rect) = decoded else {
+            return XCTFail("Expected frame shape")
+        }
+        XCTAssertEqual(rect.cgRect, CGRect(x: 1, y: 2, width: 3, height: 4))
     }
 
-    func testCustomActionPreservesLegacyImageDataKeys() throws {
-        let action = AccessibilityElement.CustomAction(
-            name: "Share",
-            image: AccessibilityImageData(pngData: Data([1, 2, 3]), scale: 2)
-        )
+    func testCustomActionEncodesAsActionName() throws {
+        let action = AccessibilityElement.CustomAction("Share")
 
         let encoded = try JSONEncoder().encode(action)
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        let value = try JSONDecoder().decode(String.self, from: encoded)
 
-        XCTAssertEqual(object["name"] as? String, "Share")
-        XCTAssertNotNil(object["imageData"])
-        XCTAssertEqual(object["imageScale"] as? Double, 2)
-
+        XCTAssertEqual(value, "Share")
         let decoded = try JSONDecoder().decode(AccessibilityElement.CustomAction.self, from: encoded)
-        XCTAssertEqual(decoded.name, "Share")
-        XCTAssertEqual(decoded.image?.pngData, Data([1, 2, 3]))
-        XCTAssertEqual(decoded.image?.scale, 2)
+        XCTAssertEqual(decoded, "Share")
     }
 }
 

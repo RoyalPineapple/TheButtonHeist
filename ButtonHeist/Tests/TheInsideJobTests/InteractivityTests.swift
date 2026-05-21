@@ -71,7 +71,7 @@ final class InteractivityTests: XCTestCase {
     }
 
     func testCustomActionsIsInteractive() {
-        let element = makeElement(customActions: [.init(name: "Delete")])
+        let element = makeElement(customActions: ["Delete"])
         XCTAssertTrue(TheStash.Interactivity.isInteractive(element: element))
     }
 

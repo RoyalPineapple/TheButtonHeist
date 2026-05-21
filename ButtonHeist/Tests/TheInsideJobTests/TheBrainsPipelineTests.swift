@@ -462,7 +462,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let beforeElement = AccessibilityElement.make(
             label: "Chicken Tikka",
             traits: .button,
-            shape: .frame(CGRect(x: 0, y: 0, width: 200, height: 44)),
+            shape: .frame(AccessibilityRect(CGRect(x: 0, y: 0, width: 200, height: 44))),
             activationPoint: CGPoint(x: 100, y: 22),
             respondsToUserInteraction: false
         )
@@ -472,7 +472,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let afterElement = AccessibilityElement.make(
             label: "Chicken Tikka",
             traits: .button,
-            shape: .frame(CGRect(x: 0, y: -300, width: 200, height: 44)),
+            shape: .frame(AccessibilityRect(CGRect(x: 0, y: -300, width: 200, height: 44))),
             activationPoint: CGPoint(x: 100, y: -278),
             respondsToUserInteraction: false
         )

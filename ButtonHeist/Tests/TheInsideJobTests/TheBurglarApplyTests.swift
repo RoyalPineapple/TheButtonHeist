@@ -258,7 +258,7 @@ final class TheBurglarApplyTests: XCTestCase {
 
         let scrollableContainer = AccessibilityContainer(
             type: .scrollable(contentSize: AccessibilitySize(scrollView.contentSize)),
-            frame: scrollView.frame
+            frame: AccessibilityRect(scrollView.frame)
         )
         let childFrame = CGRect(x: 10, y: 150, width: 50, height: 30)
         let child = makeElement(label: "Cell", traits: .button, frame: childFrame)
@@ -309,7 +309,7 @@ final class TheBurglarApplyTests: XCTestCase {
             label: label,
             value: value,
             traits: traits,
-            shape: .frame(frame),
+            shape: .frame(AccessibilityRect(frame)),
             respondsToUserInteraction: false
         )
     }

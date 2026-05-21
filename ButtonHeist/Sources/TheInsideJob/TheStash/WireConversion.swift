@@ -19,6 +19,14 @@ extension CGFloat {
     }
 }
 
+extension Double {
+    /// Replace NaN/infinity with 0 so JSONEncoder doesn't throw.
+    /// Portable parser points use Double instead of UIKit's CGFloat.
+    var sanitizedForJSON: Double {
+        isFinite ? self : 0
+    }
+}
+
 // MARK: - Wire Conversion
 
 extension TheStash {
@@ -79,7 +87,7 @@ extension TheStash {
         let adjustable: [ElementAction] = (isInteractive && element.traits.contains(.adjustable))
             ? [.increment, .decrement]
             : []
-        let custom = element.customActions.map { ElementAction.custom($0.name) }
+        let custom = element.customActions.map(ElementAction.custom)
         return activate + adjustable + custom
     }
 

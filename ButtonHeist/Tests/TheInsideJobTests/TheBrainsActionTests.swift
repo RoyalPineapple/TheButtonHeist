@@ -307,7 +307,7 @@ final class TheBrainsActionTests: XCTestCase {
             element: makeElement(
                 label: "Options",
                 traits: .button,
-                customActions: [.init(name: "Delete"), .init(name: "Archive")]
+                customActions: ["Delete", "Archive"]
             ),
             object: liveObject
         )
@@ -340,7 +340,7 @@ final class TheBrainsActionTests: XCTestCase {
             element: makeElement(
                 label: "Options",
                 traits: .button,
-                customActions: [.init(name: "Delete"), .init(name: "Archive")]
+                customActions: ["Delete", "Archive"]
             ),
             object: liveObject
         )
@@ -465,7 +465,7 @@ final class TheBrainsActionTests: XCTestCase {
         let element = AccessibilityElement.make(
             label: "Moving",
             traits: .adjustable,
-            shape: .frame(CGRect(x: 0, y: 0, width: 40, height: 40)),
+            shape: .frame(AccessibilityRect(CGRect(x: 0, y: 0, width: 40, height: 40))),
             activationPoint: stalePoint
         )
         let liveObject = AdjustableGeometryView(frame: liveFrame, activationPoint: livePoint)
@@ -490,7 +490,7 @@ final class TheBrainsActionTests: XCTestCase {
         let element = AccessibilityElement.make(
             label: "Geometry Missing",
             traits: .adjustable,
-            shape: .frame(CGRect(x: 20, y: 20, width: 120, height: 44)),
+            shape: .frame(AccessibilityRect(CGRect(x: 20, y: 20, width: 120, height: 44))),
             activationPoint: CGPoint(x: 80, y: 42)
         )
         let liveObject = AdjustableGeometryView(frame: .zero, activationPoint: CGPoint(x: 80, y: 42))
@@ -675,7 +675,7 @@ final class TheBrainsActionTests: XCTestCase {
         let element = AccessibilityElement.make(
             label: "Below Fold",
             traits: .button,
-            shape: .frame(CGRect(x: 300, y: 750, width: 66, height: 54)),
+            shape: .frame(AccessibilityRect(CGRect(x: 300, y: 750, width: 66, height: 54))),
             activationPoint: stalePoint
         )
         installScreen(offViewport: [.init(element, heistId: "below_fold_button")])
@@ -709,7 +709,7 @@ final class TheBrainsActionTests: XCTestCase {
         let element = AccessibilityElement.make(
             label: "Live",
             traits: .button,
-            shape: .frame(CGRect(x: 0, y: 0, width: 40, height: 40)),
+            shape: .frame(AccessibilityRect(CGRect(x: 0, y: 0, width: 40, height: 40))),
             activationPoint: stalePoint
         )
         let liveObject = ActionGeometryView(activationPoint: livePoint)
@@ -1000,7 +1000,7 @@ final class TheBrainsActionTests: XCTestCase {
         return .make(
             label: label,
             traits: traits,
-            shape: .frame(frame),
+            shape: .frame(AccessibilityRect(frame)),
             activationPoint: CGPoint(x: frame.midX, y: frame.midY),
             customActions: customActions,
             customRotors: customRotors,

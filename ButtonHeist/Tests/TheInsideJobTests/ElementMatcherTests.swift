@@ -172,11 +172,11 @@ final class ElementMatcherTests: XCTestCase {
 
     func testStableKeyFallsBackToFrameWhenNoSemanticIdentity() {
         let a = AccessibilityElement.make(
-            shape: .frame(CGRect(x: 0, y: 0, width: 44, height: 44)),
+            shape: .frame(AccessibilityRect(CGRect(x: 0, y: 0, width: 44, height: 44))),
             activationPoint: CGPoint(x: 22, y: 22)
         )
         let b = AccessibilityElement.make(
-            shape: .frame(CGRect(x: 0, y: 200, width: 44, height: 44)),
+            shape: .frame(AccessibilityRect(CGRect(x: 0, y: 200, width: 44, height: 44))),
             activationPoint: CGPoint(x: 22, y: 222)
         )
         XCTAssertNotEqual(a.stableKey, b.stableKey, "Unlabeled elements at different positions must hash differently")

@@ -216,7 +216,7 @@ import AccessibilitySnapshotParser
             names.append(ElementAction.increment.description)
             names.append(ElementAction.decrement.description)
         }
-        appendUnique(element.customActions.map(\.name).filter { !$0.isEmpty }, to: &names)
+        appendUnique(element.customActions.filter { !$0.isEmpty }, to: &names)
         let liveNames = liveObject?.accessibilityCustomActions?
             .map(\.name)
             .filter { !$0.isEmpty } ?? []
@@ -232,7 +232,7 @@ import AccessibilitySnapshotParser
         for screenElement: TheStash.ScreenElement,
         liveObject: NSObject? = nil
     ) -> [String] {
-        var names = screenElement.element.customActions.map(\.name).filter { !$0.isEmpty }
+        var names = screenElement.element.customActions.filter { !$0.isEmpty }
         let liveNames = liveObject?.accessibilityCustomActions?
             .map(\.name)
             .filter { !$0.isEmpty } ?? []

@@ -14,7 +14,7 @@ final class ScreenManifestTests: XCTestCase {
     ) -> AccessibilityContainer {
         AccessibilityContainer(
             type: .scrollable(contentSize: AccessibilitySize(contentSize)),
-            frame: frame
+            frame: AccessibilityRect(frame)
         )
     }
 

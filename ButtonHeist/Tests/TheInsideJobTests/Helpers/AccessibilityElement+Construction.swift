@@ -15,6 +15,7 @@ import UIKit
 /// `.make(label:heistTraits:...)` when traits should be expressed as
 /// `[HeistTrait]` (mapped through `UIAccessibilityTraits.fromNames`).
 extension AccessibilityElement {
+    typealias Shape = AccessibilityShape
 
     static func make(
         description: String? = nil,
@@ -35,12 +36,12 @@ extension AccessibilityElement {
             description: description ?? label ?? "",
             label: label,
             value: value,
-            traits: traits,
+            traits: AccessibilityTraits(traits),
             identifier: identifier,
             hint: hint,
             userInputLabels: nil,
             shape: shape,
-            activationPoint: activationPoint,
+            activationPoint: AccessibilityPoint(activationPoint),
             usesDefaultActivationPoint: usesDefaultActivationPoint,
             customActions: customActions,
             customContent: customContent,
@@ -98,7 +99,7 @@ extension AccessibilityElement {
             value: value,
             identifier: identifier,
             traits: traits,
-            shape: .frame(frame),
+            shape: .frame(AccessibilityRect(frame)),
             activationPoint: CGPoint(x: frame.midX, y: frame.midY),
             respondsToUserInteraction: respondsToUserInteraction
         )
