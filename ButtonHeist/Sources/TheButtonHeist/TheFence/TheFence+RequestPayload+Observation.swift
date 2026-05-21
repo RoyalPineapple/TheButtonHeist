@@ -69,7 +69,6 @@ extension TheFence {
         ParsedRequest(
             command: .getInterface,
             requestId: UUID().uuidString,
-            originalRequest: ["command": Command.getInterface.rawValue],
             payload: .getInterface(GetInterfaceRequest(
                 detail: .summary,
                 query: InterfaceQuery()

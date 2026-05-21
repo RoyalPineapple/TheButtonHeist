@@ -61,15 +61,15 @@ struct ButtonHeistMCPServer {
         do {
             let arguments = decodeArguments(params.arguments)
             let routed = routeToolRequest(name: params.name, arguments: arguments)
-            let request: [String: Any]
+            let operation: NormalizedOperation
             switch routed {
             case .success(let value):
-                request = value
+                operation = value
             case .failure(let error):
                 return .init(content: [.text(text: error.message, annotations: nil, _meta: nil)], isError: true)
             }
 
-            let response = try await fence.execute(request: request)
+            let response = try await fence.execute(operation: operation)
             let backgroundAccessibilityTraces = fence.drainBackgroundAccessibilityTraces()
             return renderResponse(response, backgroundAccessibilityTraces: backgroundAccessibilityTraces)
         } catch {
@@ -81,9 +81,8 @@ struct ButtonHeistMCPServer {
     static func routeToolRequest(
         name: String,
         arguments: [String: Any]
-    ) -> Result<[String: Any], FenceOperationRoutingError> {
+    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
         FenceOperationCatalog.normalizeToolCall(name: name, arguments: arguments)
-            .map(\.requestDictionary)
     }
 
     private static func decodeArguments(_ arguments: [String: Value]?) -> [String: Any] {

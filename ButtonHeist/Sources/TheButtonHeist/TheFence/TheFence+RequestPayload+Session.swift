@@ -101,10 +101,7 @@ extension TheFence {
                 )
             }
             do {
-                return .decoded(try parseRequest(
-                    command: operation.command,
-                    request: operation.requestDictionary
-                ))
+                return .decoded(try parseRequest(operation: operation))
             } catch let error as SchemaValidationError {
                 return .invalid(
                     commandName: operation.command.rawValue,

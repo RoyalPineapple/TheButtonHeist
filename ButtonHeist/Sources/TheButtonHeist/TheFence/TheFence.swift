@@ -672,6 +672,23 @@ public final class TheFence {
         return try await execute(parsed: parsed)
     }
 
+    /// Execute an operation that has already been normalized by the shared command catalog.
+    ///
+    /// This keeps adapters from rebuilding command dictionaries after routing.
+    public func execute(operation: NormalizedOperation) async throws -> FenceResponse {
+        let parsed: ParsedRequest
+        do {
+            parsed = try parseRequest(operation: operation)
+        } catch let error as SchemaValidationError {
+            return .error(error.message)
+        } catch let error as MissingElementTarget {
+            return missingElementTargetResponse(command: error.command)
+        } catch let error as FenceError {
+            return .error(error.coreMessage, details: error.failureDetails)
+        }
+        return try await execute(parsed: parsed)
+    }
+
     func execute(playback operation: PlaybackOperation) async throws -> FenceResponse {
         let request = operation.dispatchBridgeArguments()
         let parsed: ParsedRequest
@@ -748,75 +765,6 @@ public final class TheFence {
         let deliveredCaptureRef: AccessibilityTrace.CaptureRef?
     }
 
-    /// Parse and validate a raw request dictionary into typed fields.
-    /// Returns an ImmediateResponse-bearing `ParsedRequest` for help/quit/exit
-    /// so the caller short-circuits without logging or dispatching.
-    func parseRequest(_ request: [String: Any]) throws -> ParsedRequest {
-        let commandString = try request.requiredSchemaString("command")
-        guard let command = Command(rawValue: commandString) else {
-            return ParsedRequest(
-                command: .help,
-                requestId: "",
-                originalRequest: request,
-                payload: .none,
-                expectationPayload: ExpectationPayload(expectation: nil, timeout: nil),
-                immediateResponse: .error("Unknown command: \(commandString). Use 'help' for available commands.")
-            )
-        }
-        return try parseRequest(command: command, request: request)
-    }
-
-    func parseRequest(command: Command, request: [String: Any]) throws -> ParsedRequest {
-        try validateRequestKeys(command: command, request: request)
-        if let immediate = handleImmediateCommand(command) {
-            return ParsedRequest(
-                command: command,
-                requestId: "",
-                originalRequest: request,
-                payload: .none,
-                expectationPayload: ExpectationPayload(expectation: nil, timeout: nil),
-                immediateResponse: immediate
-            )
-        }
-        let requestId = (request["requestId"] as? String) ?? UUID().uuidString
-        let expectationPayload = try parseExpectationPayload(request)
-        let payload: RequestPayload = if command == .waitForChange {
-            .waitForChange(expectationPayload)
-        } else {
-            try decodeRequestPayload(command: command, request: request, requestId: requestId)
-        }
-
-        return ParsedRequest(
-            command: command,
-            requestId: requestId,
-            originalRequest: request,
-            payload: payload,
-            expectationPayload: expectationPayload,
-            immediateResponse: nil
-        )
-    }
-
-    private func validateRequestKeys(command: Command, request: [String: Any]) throws {
-        let metadataKeys = Set(["command", "requestId"])
-        let parameterKeys = Set(command.parameters.map(\.key))
-        let allowedKeys = metadataKeys.union(parameterKeys)
-        guard let unexpectedKey = request.keys.sorted().first(where: { !allowedKeys.contains($0) }) else {
-            return
-        }
-        throw SchemaValidationError(
-            field: unexpectedKey,
-            observed: request[unexpectedKey],
-            expected: "valid \(command.rawValue) parameter"
-        )
-    }
-
-    private func parsePlaybackOperation(
-        _ operation: PlaybackOperation,
-        bridgeArguments request: [String: Any]
-    ) throws -> ParsedRequest {
-        try parseRequest(command: operation.command, request: request)
-    }
-
     /// Ensure the connection is up if the command needs it, then dispatch
     /// the command and capture wall-clock duration.
     private func dispatchCommand(_ parsed: ParsedRequest) async throws -> DispatchResult {
@@ -861,7 +809,7 @@ public final class TheFence {
         )
     }
 
-    private func handleImmediateCommand(_ command: Command) -> FenceResponse? {
+    func handleImmediateCommand(_ command: Command) -> FenceResponse? {
         switch command {
         case .help:
             return .help(commands: Self.supportedCommands)

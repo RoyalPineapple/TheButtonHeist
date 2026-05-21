@@ -26,6 +26,9 @@ public struct NormalizedOperation {
         self.arguments = sanitizedArguments
     }
 
+    /// Compatibility bridge for callers/tests that still need the historical
+    /// flat request shape. Runtime execution should prefer `command` plus
+    /// `arguments` directly.
     public var requestDictionary: [String: Any] {
         var request = arguments
         request["command"] = command.rawValue
