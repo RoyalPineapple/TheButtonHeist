@@ -7,6 +7,10 @@ protocol CLICommandContract {
     static var fenceCommand: TheFence.Command { get }
 }
 
+protocol GestureCLICommandContract: CLICommandContract {
+    static var gestureType: GestureType { get }
+}
+
 extension CLICommandContract {
     static var cliCommandName: String {
         fenceCommand.cliCommandName
@@ -29,9 +33,9 @@ extension TheFence.Command {
     }
 }
 
-extension GestureType {
-    var cliFenceCommand: TheFence.Command {
-        TheFence.Command.command(for: self)
+extension GestureCLICommandContract {
+    static var fenceCommand: TheFence.Command {
+        TheFence.Command.command(for: gestureType)
     }
 }
 

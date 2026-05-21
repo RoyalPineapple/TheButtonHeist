@@ -3,8 +3,8 @@ import ButtonHeist
 
 // MARK: - Tap
 
-struct TapSubcommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = GestureType.oneFingerTap.cliFenceCommand
+struct TapSubcommand: AsyncParsableCommand, GestureCLICommandContract {
+    static let gestureType = GestureType.oneFingerTap
 
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
@@ -54,8 +54,8 @@ struct TapSubcommand: AsyncParsableCommand, CLICommandContract {
 
 // MARK: - Long Press
 
-struct LongPressSubcommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = GestureType.longPress.cliFenceCommand
+struct LongPressSubcommand: AsyncParsableCommand, GestureCLICommandContract {
+    static let gestureType = GestureType.longPress
 
     static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Long press at a point or element")
 
@@ -95,8 +95,8 @@ struct LongPressSubcommand: AsyncParsableCommand, CLICommandContract {
 
 // MARK: - Swipe
 
-struct SwipeSubcommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = GestureType.swipe.cliFenceCommand
+struct SwipeSubcommand: AsyncParsableCommand, GestureCLICommandContract {
+    static let gestureType = GestureType.swipe
 
     static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Swipe between two points or in a direction")
 
@@ -199,8 +199,8 @@ struct SwipeSubcommand: AsyncParsableCommand, CLICommandContract {
 
 // MARK: - Drag
 
-struct DragSubcommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = GestureType.drag.cliFenceCommand
+struct DragSubcommand: AsyncParsableCommand, GestureCLICommandContract {
+    static let gestureType = GestureType.drag
 
     static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Drag from one point to another")
 
@@ -250,8 +250,8 @@ struct DragSubcommand: AsyncParsableCommand, CLICommandContract {
 
 // MARK: - Pinch
 
-struct PinchSubcommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = GestureType.pinch.cliFenceCommand
+struct PinchSubcommand: AsyncParsableCommand, GestureCLICommandContract {
+    static let gestureType = GestureType.pinch
 
     static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Pinch/zoom at a point or element")
 
@@ -299,8 +299,8 @@ struct PinchSubcommand: AsyncParsableCommand, CLICommandContract {
 
 // MARK: - Rotate
 
-struct RotateSubcommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = GestureType.rotate.cliFenceCommand
+struct RotateSubcommand: AsyncParsableCommand, GestureCLICommandContract {
+    static let gestureType = GestureType.rotate
 
     static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Rotate at a point or element")
 
@@ -348,8 +348,8 @@ struct RotateSubcommand: AsyncParsableCommand, CLICommandContract {
 
 // MARK: - Two-Finger Tap
 
-struct TwoFingerTapSubcommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = GestureType.twoFingerTap.cliFenceCommand
+struct TwoFingerTapSubcommand: AsyncParsableCommand, GestureCLICommandContract {
+    static let gestureType = GestureType.twoFingerTap
 
     static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Tap with two fingers at a point or element")
 
