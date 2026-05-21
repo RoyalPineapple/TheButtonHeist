@@ -7,7 +7,20 @@ extension TheFence {
         let app: String
         let steps: [PlaybackOperation]
 
+        @ButtonHeistActor
+        init(contentsOf url: URL) throws {
+            try self.init(wire: TheBookKeeper.readHeist(from: url))
+        }
+
         init(wire playback: HeistPlayback) throws {
+            guard playback.version == HeistPlayback.currentVersion else {
+                throw FenceError.invalidRequest(
+                    "Unsupported heist file version \(playback.version). " +
+                        "This Button Heist build supports version \(HeistPlayback.currentVersion). " +
+                        "Re-record the heist with the current format."
+                )
+            }
+
             app = playback.app
             steps = try playback.steps.enumerated().map { index, evidence in
                 try PlaybackOperation(evidence: evidence, index: index)
@@ -28,13 +41,13 @@ extension TheFence {
         init(evidence: HeistEvidence, index: Int) throws {
             let payload = PlaybackPayload(values: evidence.arguments)
 
-            let operation: NormalizedOperation
+            let command: Command
             switch FenceOperationCatalog.normalizePlaybackStep(
                 commandName: evidence.command,
-                arguments: payload.dispatchBridgeArguments()
+                arguments: payload.values
             ) {
-            case .success(let normalized):
-                operation = normalized
+            case .success(let normalizedCommand):
+                command = normalizedCommand
             case .failure(let error):
                 throw FenceError.invalidRequest(
                     "Invalid heist step \(index): \(error.message)"
@@ -42,7 +55,7 @@ extension TheFence {
             }
 
             self.init(
-                command: operation.command,
+                command: command,
                 target: evidence.target,
                 ordinal: evidence.ordinal,
                 payload: payload
@@ -86,6 +99,10 @@ extension TheFence {
             return arguments
         }
 
+        func normalizedOperation() -> NormalizedOperation {
+            NormalizedOperation(command: command, arguments: requestArguments())
+        }
+
         /// Compatibility bridge for tests/callers that still inspect playback
         /// as the historical flat request dictionary.
         func dispatchBridgeArguments() -> [String: Any] {
@@ -96,7 +113,7 @@ extension TheFence {
     }
 
     struct PlaybackPayload: Sendable, Equatable {
-        private let values: [String: HeistValue]
+        let values: [String: HeistValue]
 
         init(values: [String: HeistValue]) {
             self.values = values
