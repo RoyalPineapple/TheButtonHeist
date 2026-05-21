@@ -801,16 +801,24 @@ public final class TheFence {
             return try await handleGetScreen(request)
         case (.waitForChange, .waitForChange(let payload)):
             return try await handleWaitForChange(payload)
-        case (.oneFingerTap, .gesture(let payload)),
-             (.longPress, .gesture(let payload)),
-             (.swipe, .gesture(let payload)),
-             (.drag, .gesture(let payload)),
-             (.pinch, .gesture(let payload)),
-             (.rotate, .gesture(let payload)),
-             (.twoFingerTap, .gesture(let payload)),
-             (.drawPath, .gesture(let payload)),
-             (.drawBezier, .gesture(let payload)):
-            return try await handleGesture(payload)
+        case (.oneFingerTap, .gesture(.oneFingerTap(let payload))):
+            return try await handleOneFingerTap(payload)
+        case (.longPress, .gesture(.longPress(let payload))):
+            return try await handleLongPress(payload)
+        case (.swipe, .gesture(.swipe(let payload))):
+            return try await handleSwipe(payload)
+        case (.drag, .gesture(.drag(let payload))):
+            return try await handleDrag(payload)
+        case (.pinch, .gesture(.pinch(let payload))):
+            return try await handlePinch(payload)
+        case (.rotate, .gesture(.rotate(let payload))):
+            return try await handleRotate(payload)
+        case (.twoFingerTap, .gesture(.twoFingerTap(let payload))):
+            return try await handleTwoFingerTap(payload)
+        case (.drawPath, .gesture(.drawPath(let payload))):
+            return try await handleDrawPath(payload)
+        case (.drawBezier, .gesture(.drawBezier(let payload))):
+            return try await handleDrawBezier(payload)
         case (.scroll, .scroll(let payload)),
              (.scrollToVisible, .scroll(let payload)),
              (.elementSearch, .scroll(let payload)),
@@ -989,7 +997,7 @@ public final class TheFence {
     func stopRecordingAndWait(timeout: TimeInterval = 120.0) async throws -> RecordingPayload {
         guard handoff.isConnected else { throw FenceError.notConnected }
         return try await waitForRecording(timeout: timeout) {
-            let outcome = self.handoff.send(.stopRecording, requestId: UUID().uuidString)
+            let outcome = self.handoff.send(.stopRecording, requestId: nil)
             if case .failed(let failure) = outcome {
                 self.recording.resolveActiveCompletion(.failure(FenceError(failure)))
             }
@@ -1007,7 +1015,7 @@ public final class TheFence {
         var didSendStart = false
         do {
             try await wait.wait(timeout: timeout) {
-                let outcome = self.handoff.send(.startRecording(config), requestId: UUID().uuidString)
+                let outcome = self.handoff.send(.startRecording(config), requestId: nil)
                 switch outcome {
                 case .enqueued:
                     didSendStart = true
@@ -1066,7 +1074,7 @@ public final class TheFence {
     /// swallowed so the caller's original error still surfaces.
     private func cleanUpServerRecording() {
         guard handoff.isConnected else { return }
-        handoff.send(.stopRecording, requestId: UUID().uuidString)
+        handoff.send(.stopRecording, requestId: nil)
     }
 
     /// Internal overload exposing `afterRegister` for test injection. The hook

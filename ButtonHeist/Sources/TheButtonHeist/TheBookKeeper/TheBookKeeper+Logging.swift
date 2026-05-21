@@ -333,43 +333,43 @@ private extension ContainerMatcher {
 private extension TheFence.GesturePayload {
     func bookKeeperArguments(includeTarget: Bool) -> [String: HeistValue] {
         switch self {
-        case .oneFingerTap(let target):
-            return target.bookKeeperArguments(includeTarget: includeTarget)
-        case .longPress(let target):
-            return target.bookKeeperArguments(includeTarget: includeTarget)
-        case .swipe(let target):
-            return target.bookKeeperArguments(includeTarget: includeTarget)
-        case .drag(let target):
-            return target.bookKeeperArguments(includeTarget: includeTarget)
-        case .pinch(let target):
-            return target.bookKeeperArguments(includeTarget: includeTarget)
-        case .rotate(let target):
-            return target.bookKeeperArguments(includeTarget: includeTarget)
-        case .twoFingerTap(let target):
-            return target.bookKeeperArguments(includeTarget: includeTarget)
-        case .drawPath(let target):
-            return target.bookKeeperArguments
-        case .drawBezier(let target):
-            return target.bookKeeperArguments
+        case .oneFingerTap(let payload):
+            return payload.target.bookKeeperArguments(includeTarget: includeTarget)
+        case .longPress(let payload):
+            return payload.target.bookKeeperArguments(includeTarget: includeTarget)
+        case .swipe(let payload):
+            return payload.target.bookKeeperArguments(includeTarget: includeTarget)
+        case .drag(let payload):
+            return payload.target.bookKeeperArguments(includeTarget: includeTarget)
+        case .pinch(let payload):
+            return payload.target.bookKeeperArguments(includeTarget: includeTarget)
+        case .rotate(let payload):
+            return payload.target.bookKeeperArguments(includeTarget: includeTarget)
+        case .twoFingerTap(let payload):
+            return payload.target.bookKeeperArguments(includeTarget: includeTarget)
+        case .drawPath(let payload):
+            return payload.target.bookKeeperArguments
+        case .drawBezier(let payload):
+            return payload.target.bookKeeperArguments
         }
     }
 
     var bookKeeperElementTarget: ElementTarget? {
         switch self {
-        case .oneFingerTap(let target):
-            return target.elementTarget
-        case .longPress(let target):
-            return target.elementTarget
-        case .swipe(let target):
-            return target.elementTarget
-        case .drag(let target):
-            return target.elementTarget
-        case .pinch(let target):
-            return target.elementTarget
-        case .rotate(let target):
-            return target.elementTarget
-        case .twoFingerTap(let target):
-            return target.elementTarget
+        case .oneFingerTap(let payload):
+            return payload.elementTarget
+        case .longPress(let payload):
+            return payload.elementTarget
+        case .swipe(let payload):
+            return payload.elementTarget
+        case .drag(let payload):
+            return payload.elementTarget
+        case .pinch(let payload):
+            return payload.elementTarget
+        case .rotate(let payload):
+            return payload.elementTarget
+        case .twoFingerTap(let payload):
+            return payload.elementTarget
         case .drawPath, .drawBezier:
             return nil
         }
@@ -377,20 +377,20 @@ private extension TheFence.GesturePayload {
 
     var bookKeeperCoordinateOnly: Bool {
         switch self {
-        case .oneFingerTap(let target):
-            return target.elementTarget == nil && target.point != nil
-        case .longPress(let target):
-            return target.elementTarget == nil && target.point != nil
-        case .swipe(let target):
-            return target.elementTarget == nil
-        case .drag(let target):
-            return target.elementTarget == nil
-        case .pinch(let target):
-            return target.elementTarget == nil
-        case .rotate(let target):
-            return target.elementTarget == nil
-        case .twoFingerTap(let target):
-            return target.elementTarget == nil
+        case .oneFingerTap(let payload):
+            return payload.elementTarget == nil && payload.target.point != nil
+        case .longPress(let payload):
+            return payload.elementTarget == nil && payload.target.point != nil
+        case .swipe(let payload):
+            return payload.elementTarget == nil
+        case .drag(let payload):
+            return payload.elementTarget == nil
+        case .pinch(let payload):
+            return payload.elementTarget == nil
+        case .rotate(let payload):
+            return payload.elementTarget == nil
+        case .twoFingerTap(let payload):
+            return payload.elementTarget == nil
         case .drawPath, .drawBezier:
             return true
         }

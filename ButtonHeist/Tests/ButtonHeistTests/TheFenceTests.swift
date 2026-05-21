@@ -2483,6 +2483,11 @@ final class TheFenceTests: XCTestCase {
             if case .stopRecording = sent.0 { return true }
             return false
         }, "Expected stop_recording to be sent even when local recording phase is idle")
+        let stopRequestId = mockConn.sent.first { sent in
+            if case .stopRecording = sent.0 { return true }
+            return false
+        }?.1
+        XCTAssertNil(stopRequestId)
         guard case .recording(let path, let payload) = response else {
             return XCTFail("Expected .recording response, got \(response)")
         }
@@ -2523,6 +2528,11 @@ final class TheFenceTests: XCTestCase {
         }
 
         XCTAssertTrue(startSent, "Expected start_recording to be sent")
+        let startRequestId = mockConn.sent.first { sent in
+            if case .startRecording = sent.0 { return true }
+            return false
+        }?.1
+        XCTAssertNil(startRequestId)
         await Task.yield()
         XCTAssertFalse(didReturn, "start_recording should not return before recordingStarted arrives")
 
@@ -2610,6 +2620,11 @@ final class TheFenceTests: XCTestCase {
             return false
         }
         XCTAssertTrue(stopSent, "Expected stop_recording to be sent on cancel-mid-wait")
+        let stopRequestId = mockConn.sent.first { sent in
+            if case .stopRecording = sent.0 { return true }
+            return false
+        }?.1
+        XCTAssertNil(stopRequestId)
     }
 
     @ButtonHeistActor
