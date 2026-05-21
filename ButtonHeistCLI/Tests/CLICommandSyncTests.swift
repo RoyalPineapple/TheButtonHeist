@@ -46,6 +46,61 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
+    func testCLITopLevelCommandsMatchDescriptorIntent() {
+        let cliOnlyCommands: Set<String> = ["session"]
+        let expectedNames = Set(
+            TheFence.Command.descriptors.compactMap { descriptor -> String? in
+                guard case .directCommand = descriptor.cliExposure else { return nil }
+                return descriptor.cliName
+            }
+        ).union(cliOnlyCommands)
+        let actualNames = Set(topLevelCommandNames())
+
+        XCTAssertEqual(
+            actualNames,
+            expectedNames,
+            "Top-level CLI commands should be the descriptor directCommand projection plus CLI-only commands"
+        )
+    }
+
+    func testCLIAdapterFenceCommandsMatchDirectDescriptorExposure() {
+        let adapterFenceCommands = Set(
+            ButtonHeistApp.configuration.subcommands.compactMap { commandType -> TheFence.Command? in
+                (commandType as? CLICommandContract.Type)?.fenceCommand
+            }
+        )
+        let directDescriptorCommands = Set(
+            TheFence.Command.descriptors.compactMap { descriptor -> TheFence.Command? in
+                guard case .directCommand = descriptor.cliExposure else { return nil }
+                return descriptor.command
+            }
+        )
+        let missingAdapters = directDescriptorCommands.subtracting(adapterFenceCommands)
+        let extraAdapters = adapterFenceCommands.subtracting(directDescriptorCommands)
+
+        XCTAssertTrue(
+            missingAdapters.isEmpty,
+            "Direct CLI descriptor commands missing adapters: \(missingAdapters.map(\.rawValue).sorted())"
+        )
+        XCTAssertTrue(
+            extraAdapters.isEmpty,
+            "CLI adapters expose commands not marked directCommand: \(extraAdapters.map(\.rawValue).sorted())"
+        )
+    }
+
+    func testCLIDirectCommandCountIsExplicit() {
+        let directCount = TheFence.Command.descriptors.filter {
+            if case .directCommand = $0.cliExposure { return true }
+            return false
+        }.count
+
+        XCTAssertEqual(
+            directCount,
+            36,
+            "CLI direct command count changed - update ButtonHeistApp and CLI sync guardrails"
+        )
+    }
+
     func testTopLevelFenceCommandAdaptersRenderNamesFromCanonicalContract() {
         let cliOnlyCommands: Set<String> = ["session"]
 

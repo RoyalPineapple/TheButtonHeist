@@ -100,6 +100,84 @@ struct ToolSyncTests {
         )
     }
 
+    @Test("MCP tool names match descriptor exposure intent")
+    func mcpToolNamesMatchDescriptorExposureIntent() {
+        let expectedToolNames = Set(
+            TheFence.Command.descriptors.compactMap { descriptor -> String? in
+                switch descriptor.mcpExposure {
+                case .directTool:
+                    return descriptor.canonicalName
+                case .groupedUnder(let toolName):
+                    return toolName
+                case .notExposed:
+                    return nil
+                }
+            }
+        )
+        let actualToolNames = Set(ToolDefinitions.all.map(\.name))
+
+        #expect(
+            actualToolNames == expectedToolNames,
+            "MCP tools should be the descriptor MCP exposure projection"
+        )
+    }
+
+    @Test("MCP tool count matches catalog contract projection")
+    func mcpToolCountMatchesCatalogContractProjection() {
+        #expect(
+            ToolDefinitions.all.count == TheFence.Command.mcpToolContracts.count,
+            "MCP tool count (\(ToolDefinitions.all.count)) != catalog contracts (\(TheFence.Command.mcpToolContracts.count))"
+        )
+    }
+
+    @Test("MCP tool contract count is explicit")
+    func mcpToolContractCountIsExplicit() {
+        #expect(
+            TheFence.Command.mcpToolContracts.count == 24,
+            "MCP tool contract count changed - update ToolDefinitions and schema guardrails"
+        )
+    }
+
+    @Test("Grouped tool selector values route to distinct consumed commands")
+    func groupedToolSelectorValuesRouteToDistinctConsumedCommands() {
+        for contract in TheFence.Command.mcpToolContracts {
+            guard let selector = contract.selector else { continue }
+            var seenCommandsByConsumedValue: [TheFence.Command: String] = [:]
+
+            for enumValue in selector.parameter.enumValues ?? [] {
+                guard let command = selector.command(for: enumValue) else {
+                    Issue.record("\(contract.name) selector value '\(enumValue)' routes to nil")
+                    continue
+                }
+                guard selector.consumesValue(enumValue) else { continue }
+
+                if let existing = seenCommandsByConsumedValue[command] {
+                    Issue.record(
+                        "\(contract.name) consumed selector values '\(existing)' and '\(enumValue)' both route to \(command.rawValue)"
+                    )
+                }
+                seenCommandsByConsumedValue[command] = enumValue
+            }
+        }
+    }
+
+    @Test("Every grouped command is reachable through its group tool selector")
+    func everyGroupedCommandIsReachableThroughSelector() {
+        for contract in TheFence.Command.mcpToolContracts {
+            guard let selector = contract.selector else { continue }
+
+            for command in contract.commands {
+                let reachable = (selector.parameter.enumValues ?? []).contains {
+                    selector.command(for: $0) == command
+                }
+                #expect(
+                    reachable,
+                    "\(contract.name) contains \(command.rawValue) but no selector value routes to it"
+                )
+            }
+        }
+    }
+
     // MARK: - Parameter Schema Sync
 
     // Hybrid tools: their MCP tool name matches a direct command, but the tool
