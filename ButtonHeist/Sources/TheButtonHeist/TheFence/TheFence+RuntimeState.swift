@@ -463,62 +463,43 @@ extension TheFence {
 
     // MARK: - Command Execution State
 
-    /// Two-phase action history: `.unrun` before any action has completed,
-    /// `.completed` once one has. Display state derives from the active case.
-    enum LastActionHistory {
-        case unrun
-        case completed(ActionResult, latencyMs: Int)
+    /// Last completed action, if any. Session display state derives from the
+    /// active case instead of sibling cached projections.
+    enum LastAction {
+        case none
+        case completed(result: ActionResult, latencyMs: Int)
 
-        var result: ActionResult? {
-            if case .completed(let result, _) = self { return result }
-            return nil
+        var sessionPayload: SessionLastActionPayload? {
+            guard case .completed(let result, let latencyMs) = self else { return nil }
+            return SessionLastActionPayload(
+                method: result.method,
+                success: result.success,
+                message: result.message,
+                latencyMs: latencyMs
+            )
         }
 
-        var latencyMs: Int {
-            if case .completed(_, let latencyMs) = self { return latencyMs }
-            return 0
+        var latencyMsForReplacement: Int {
+            guard case .completed(_, let latencyMs) = self else { return 0 }
+            return latencyMs
         }
     }
 
     /// Owns command-execution state derived from dispatched action responses.
     struct CommandExecutionState {
-        private(set) var lastActionHistory: LastActionHistory = .unrun
-
-        var snapshot: CommandExecutionSnapshot {
-            CommandExecutionSnapshot(lastAction: lastActionPayload)
-        }
-
-        var lastActionResult: ActionResult? {
-            lastActionHistory.result
-        }
-
-        var lastActionPayload: SessionLastActionPayload? {
-            lastActionResult.map { last in
-                SessionLastActionPayload(
-                    method: last.method,
-                    success: last.success,
-                    message: last.message,
-                    latencyMs: lastLatencyMs
-                )
-            }
-        }
-
-        var lastLatencyMs: Int {
-            lastActionHistory.latencyMs
-        }
+        private(set) var lastAction: LastAction = .none
 
         mutating func noteDispatchedResponse(_ response: FenceResponse, latencyMs: Int) {
             guard let result = response.actionResult else { return }
-            lastActionHistory = .completed(result, latencyMs: latencyMs)
+            lastAction = .completed(result: result, latencyMs: latencyMs)
         }
 
         mutating func completeAction(_ result: ActionResult) {
-            let latencyMs = lastActionHistory.latencyMs
-            lastActionHistory = .completed(result, latencyMs: latencyMs)
+            lastAction = .completed(result: result, latencyMs: lastAction.latencyMsForReplacement)
         }
 
         mutating func reset() {
-            lastActionHistory = .unrun
+            lastAction = .none
         }
     }
 }

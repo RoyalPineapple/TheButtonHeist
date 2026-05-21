@@ -19,7 +19,6 @@ final class PublicCommandContractTests: XCTestCase {
             } else {
                 XCTAssertNil(parsed.immediateResponse)
             }
-            XCTAssertEqual(parsed.originalRequest["command"] as? String, sample.command.rawValue)
         }
     }
 

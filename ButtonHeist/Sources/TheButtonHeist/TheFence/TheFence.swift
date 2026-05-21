@@ -17,10 +17,6 @@ struct RecordingSnapshot {
     let isWaitingForCompletion: Bool
 }
 
-struct CommandExecutionSnapshot {
-    let lastAction: SessionLastActionPayload?
-}
-
 private extension TheFence.Command {
     var requiresConnectionBeforeDispatch: Bool {
         switch self {
@@ -946,29 +942,7 @@ public final class TheFence {
     // Expectation parsing (`parseExpectation` and its helpers) lives in
     // TheFence+ExpectationParsing.swift.
 
-    private var commandExecutionState = CommandExecutionState()
-    var commandExecutionSnapshot: CommandExecutionSnapshot {
-        commandExecutionState.snapshot
-    }
-
-    var lastActionHistory: LastActionHistory {
-        commandExecutionState.lastActionHistory
-    }
-
-    /// Convenience read of the last completed action's result, if any.
-    var lastActionResult: ActionResult? {
-        commandExecutionState.lastActionResult
-    }
-
-    var lastActionPayload: SessionLastActionPayload? {
-        commandExecutionSnapshot.lastAction
-    }
-
-    /// Round-trip time in milliseconds for the last action command that
-    /// completed (request issued → response received).
-    var lastLatencyMs: Int {
-        commandExecutionState.lastLatencyMs
-    }
+    private(set) var commandExecutionState = CommandExecutionState()
 
     func recordCompletedAction(_ result: ActionResult) {
         commandExecutionState.completeAction(result)

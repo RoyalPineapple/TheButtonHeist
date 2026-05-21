@@ -1624,34 +1624,56 @@ final class TheFenceTests: XCTestCase {
         let (fence, mockConnection) = makeConnectedFence()
         fence.handoff.connect(to: TheFenceFixtures.testDevice)
         fence.recordCompletedAction(ActionResult(success: true, method: .activate))
-        XCTAssertNotNil(fence.lastActionResult)
+        XCTAssertNotNil(fence.currentSessionState().lastAction)
 
         mockConnection.onEvent?(.disconnected(.serverClosed))
 
-        XCTAssertNil(fence.lastActionResult)
         XCTAssertNil(fence.currentSessionState().lastAction)
     }
 
-    func testCommandExecutionStateOwnsLastActionAndLatency() {
+    func testCommandExecutionStateOwnsLastActionAndProjectsSessionPayload() {
         var state = TheFence.CommandExecutionState()
-        XCTAssertNil(state.lastActionResult)
-        XCTAssertNil(state.lastActionPayload)
+        XCTAssertNil(state.lastAction.sessionPayload)
 
         state.completeAction(ActionResult(success: true, method: .activate))
+        XCTAssertEqual(
+            state.lastAction.sessionPayload,
+            SessionLastActionPayload(
+                method: .activate,
+                success: true,
+                message: nil,
+                latencyMs: 0
+            )
+        )
+
         state.noteDispatchedResponse(
             .action(result: ActionResult(success: true, method: .activate)),
             latencyMs: 17
         )
 
-        XCTAssertEqual(state.lastActionPayload?.method, .activate)
-        XCTAssertEqual(state.lastActionPayload?.success, true)
-        XCTAssertEqual(state.lastActionPayload?.latencyMs, 17)
+        XCTAssertEqual(
+            state.lastAction.sessionPayload,
+            SessionLastActionPayload(
+                method: .activate,
+                success: true,
+                message: nil,
+                latencyMs: 17
+            )
+        )
 
         state.noteDispatchedResponse(.ok(message: "noop"), latencyMs: 99)
-        XCTAssertEqual(state.lastActionPayload?.latencyMs, 17)
+        XCTAssertEqual(
+            state.lastAction.sessionPayload,
+            SessionLastActionPayload(
+                method: .activate,
+                success: true,
+                message: nil,
+                latencyMs: 17
+            )
+        )
 
         state.reset()
-        XCTAssertNil(state.lastActionPayload)
+        XCTAssertNil(state.lastAction.sessionPayload)
     }
 
     @ButtonHeistActor
