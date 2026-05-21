@@ -1312,41 +1312,6 @@ public final class TheFence {
         return .actionFailed(error.localizedDescription)
     }
 
-    func elementTarget(_ dictionary: [String: Any]) throws -> ElementTarget? {
-        ElementTarget(
-            heistId: try dictionary.schemaString("heistId"),
-            matcher: try elementMatcher(dictionary),
-            ordinal: try dictionary.schemaInteger("ordinal")
-        )
-    }
-
-    func elementMatcher(_ dictionary: [String: Any]) throws -> ElementMatcher {
-        return ElementMatcher(
-            label: try dictionary.schemaString("label"),
-            identifier: try dictionary.schemaString("identifier"),
-            value: try dictionary.schemaString("value"),
-            traits: try parseTraitNames(try dictionary.schemaStringArray("traits"), field: "traits"),
-            excludeTraits: try parseTraitNames(try dictionary.schemaStringArray("excludeTraits"), field: "excludeTraits")
-        )
-    }
-
-    /// Parse an array of trait name strings into typed `HeistTrait` values.
-    /// Throws `FenceError.invalidRequest` with the list of valid names when an
-    /// unknown name is encountered. Returns `nil` when `names` is `nil` so
-    /// callers can pass a missing field through unchanged.
-    private func parseTraitNames(_ names: [String]?, field: String) throws -> [HeistTrait]? {
-        try names?.enumerated().map { index, name in
-            guard let trait = HeistTrait(rawValue: name) else {
-                throw SchemaValidationError(
-                    field: "\(field)[\(index)]",
-                    observed: name as Any,
-                    expected: SchemaValidationError.expectedEnum(HeistTrait.self)
-                )
-            }
-            return trait
-        }
-    }
-
     // Expectation parsing (`parseExpectation` and its helpers) lives in
     // TheFence+ExpectationParsing.swift.
 
