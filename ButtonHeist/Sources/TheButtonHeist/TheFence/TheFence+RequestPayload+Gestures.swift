@@ -39,35 +39,89 @@ extension TheFence {
         }
     }
 
+    private struct TouchTapGestureRequest {
+        let elementTarget: ElementTarget?
+        let pointX: Double?
+        let pointY: Double?
+
+        var target: TouchTapTarget {
+            TouchTapTarget(elementTarget: elementTarget, pointX: pointX, pointY: pointY)
+        }
+    }
+
     private func decodeTouchTapTarget(_ request: [String: Any]) throws -> TouchTapTarget {
-        let target = TouchTapTarget(
+        let payload = TouchTapGestureRequest(
             elementTarget: try decodedElementTarget(request),
             pointX: try request.schemaNumber("x"),
             pointY: try request.schemaNumber("y")
         )
+        let target = payload.target
         if target.elementTarget == nil, target.point == nil {
             throw FenceError.invalidRequest("Must specify element (heistId or matcher) or coordinates (x, y)")
         }
         return target
     }
 
+    private struct LongPressGestureRequest {
+        let elementTarget: ElementTarget?
+        let pointX: Double?
+        let pointY: Double?
+        let duration: Double
+
+        var target: LongPressTarget {
+            LongPressTarget(
+                elementTarget: elementTarget,
+                pointX: pointX,
+                pointY: pointY,
+                duration: duration
+            )
+        }
+    }
+
     private func decodeLongPressTarget(_ request: [String: Any]) throws -> LongPressTarget {
-        let target = LongPressTarget(
+        let payload = LongPressGestureRequest(
             elementTarget: try decodedElementTarget(request),
             pointX: try request.schemaNumber("x"),
             pointY: try request.schemaNumber("y"),
             duration: try schemaGestureDuration(request) ?? 0.5
         )
+        let target = payload.target
         if target.elementTarget == nil, target.point == nil {
             throw FenceError.invalidRequest("Must specify element (heistId or matcher) or coordinates (x, y)")
         }
         return target
     }
 
+    private struct SwipeGestureRequest {
+        let elementTarget: ElementTarget?
+        let startX: Double?
+        let startY: Double?
+        let endX: Double?
+        let endY: Double?
+        let direction: SwipeDirection?
+        let duration: Double?
+        let start: UnitPoint?
+        let end: UnitPoint?
+
+        var target: SwipeTarget {
+            SwipeTarget(
+                elementTarget: elementTarget,
+                startX: startX,
+                startY: startY,
+                endX: endX,
+                endY: endY,
+                direction: direction,
+                duration: duration,
+                start: start,
+                end: end
+            )
+        }
+    }
+
     private func decodeSwipeTarget(_ request: [String: Any]) throws -> SwipeTarget {
         let start = try request.schemaUnitPoint("start")
         let end = try request.schemaUnitPoint("end")
-        let target = SwipeTarget(
+        let payload = SwipeGestureRequest(
             elementTarget: try decodedElementTarget(request),
             startX: try request.schemaNumber("startX"),
             startY: try request.schemaNumber("startY"),
@@ -78,52 +132,139 @@ extension TheFence {
             start: start,
             end: end
         )
+        let target = payload.target
         if (target.start != nil) != (target.end != nil) {
             throw FenceError.invalidRequest("Unit-point swipe requires both start and end")
         }
         return target
     }
 
+    private struct DragGestureRequest {
+        let elementTarget: ElementTarget?
+        let startX: Double?
+        let startY: Double?
+        let endX: Double
+        let endY: Double
+        let duration: Double?
+
+        var target: DragTarget {
+            DragTarget(
+                elementTarget: elementTarget,
+                startX: startX,
+                startY: startY,
+                endX: endX,
+                endY: endY,
+                duration: duration
+            )
+        }
+    }
+
     private func decodeDragTarget(_ request: [String: Any]) throws -> DragTarget {
-        DragTarget(
+        DragGestureRequest(
             elementTarget: try decodedElementTarget(request),
             startX: try request.schemaNumber("startX"),
             startY: try request.schemaNumber("startY"),
             endX: try request.requiredSchemaNumber("endX"),
             endY: try request.requiredSchemaNumber("endY"),
             duration: try schemaGestureDuration(request)
-        )
+        ).target
+    }
+
+    private struct PinchGestureRequest {
+        let elementTarget: ElementTarget?
+        let centerX: Double?
+        let centerY: Double?
+        let scale: Double
+        let spread: Double?
+        let duration: Double?
+
+        var target: PinchTarget {
+            PinchTarget(
+                elementTarget: elementTarget,
+                centerX: centerX,
+                centerY: centerY,
+                scale: scale,
+                spread: spread,
+                duration: duration
+            )
+        }
     }
 
     private func decodePinchTarget(_ request: [String: Any]) throws -> PinchTarget {
-        PinchTarget(
+        PinchGestureRequest(
             elementTarget: try decodedElementTarget(request),
             centerX: try request.schemaNumber("centerX"),
             centerY: try request.schemaNumber("centerY"),
             scale: try requiredSchemaPositiveNumber(request, key: "scale"),
             spread: try schemaPositiveNumber(request, key: "spread"),
             duration: try schemaGestureDuration(request)
-        )
+        ).target
+    }
+
+    private struct RotateGestureRequest {
+        let elementTarget: ElementTarget?
+        let centerX: Double?
+        let centerY: Double?
+        let angle: Double
+        let radius: Double?
+        let duration: Double?
+
+        var target: RotateTarget {
+            RotateTarget(
+                elementTarget: elementTarget,
+                centerX: centerX,
+                centerY: centerY,
+                angle: angle,
+                radius: radius,
+                duration: duration
+            )
+        }
     }
 
     private func decodeRotateTarget(_ request: [String: Any]) throws -> RotateTarget {
-        RotateTarget(
+        RotateGestureRequest(
             elementTarget: try decodedElementTarget(request),
             centerX: try request.schemaNumber("centerX"),
             centerY: try request.schemaNumber("centerY"),
             angle: try request.requiredSchemaNumber("angle"),
             radius: try schemaPositiveNumber(request, key: "radius"),
             duration: try schemaGestureDuration(request)
-        )
+        ).target
+    }
+
+    private struct TwoFingerTapGestureRequest {
+        let elementTarget: ElementTarget?
+        let centerX: Double?
+        let centerY: Double?
+        let spread: Double?
+
+        var target: TwoFingerTapTarget {
+            TwoFingerTapTarget(
+                elementTarget: elementTarget,
+                centerX: centerX,
+                centerY: centerY,
+                spread: spread
+            )
+        }
     }
 
     private func decodeTwoFingerTapTarget(_ request: [String: Any]) throws -> TwoFingerTapTarget {
-        TwoFingerTapTarget(
+        TwoFingerTapGestureRequest(
             elementTarget: try decodedElementTarget(request),
             centerX: try request.schemaNumber("centerX"),
             centerY: try request.schemaNumber("centerY"),
             spread: try schemaPositiveNumber(request, key: "spread")
-        )
+        ).target
+    }
+
+    private struct DrawPathGestureRequest {
+        let points: [PathPoint]
+        let duration: Double?
+        let velocity: Double?
+
+        var target: DrawPathTarget {
+            DrawPathTarget(points: points, duration: duration, velocity: velocity)
+        }
     }
 
     private func decodeDrawPathTarget(_ request: [String: Any]) throws -> DrawPathTarget {
@@ -146,11 +287,31 @@ extension TheFence {
             key: "duration",
             maximum: DecodeLimits.maxDrawGestureDurationSeconds
         )
-        return DrawPathTarget(
+        return DrawPathGestureRequest(
             points: points,
             duration: duration,
             velocity: try schemaPositiveNumber(request, key: "velocity")
-        )
+        ).target
+    }
+
+    private struct DrawBezierGestureRequest {
+        let startX: Double
+        let startY: Double
+        let segments: [BezierSegment]
+        let samplesPerSegment: Int?
+        let duration: Double?
+        let velocity: Double?
+
+        var target: DrawBezierTarget {
+            DrawBezierTarget(
+                startX: startX,
+                startY: startY,
+                segments: segments,
+                samplesPerSegment: samplesPerSegment,
+                duration: duration,
+                velocity: velocity
+            )
+        }
     }
 
     private func decodeDrawBezierTarget(_ request: [String: Any]) throws -> DrawBezierTarget {
@@ -194,14 +355,14 @@ extension TheFence {
             key: "duration",
             maximum: DecodeLimits.maxDrawGestureDurationSeconds
         )
-        return DrawBezierTarget(
+        return DrawBezierGestureRequest(
             startX: startX,
             startY: startY,
             segments: segments,
             samplesPerSegment: samplesPerSegment,
             duration: duration,
             velocity: try schemaPositiveNumber(request, key: "velocity")
-        )
+        ).target
     }
 
     private func validateArrayCount(

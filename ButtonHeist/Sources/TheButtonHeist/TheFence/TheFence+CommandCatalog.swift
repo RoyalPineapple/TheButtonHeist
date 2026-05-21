@@ -69,6 +69,55 @@ public struct FenceCommandAlias: Sendable, Equatable {
 }
 
 public extension TheFence.Command {
+    enum CLIProjection: String, Sendable {
+        case activate
+        case oneFingerTap
+        case longPress
+        case swipe
+        case drag
+        case pinch
+        case rotate
+        case twoFingerTap
+    }
+
+    static func cliCommand(for projection: CLIProjection) -> Self {
+        switch projection {
+        case .activate:
+            return .activate
+        case .oneFingerTap:
+            return .oneFingerTap
+        case .longPress:
+            return .longPress
+        case .swipe:
+            return .swipe
+        case .drag:
+            return .drag
+        case .pinch:
+            return .pinch
+        case .rotate:
+            return .rotate
+        case .twoFingerTap:
+            return .twoFingerTap
+        }
+    }
+
+    static func activationAlias(forActionName actionName: String?) -> FenceCommandAlias {
+        switch actionName.flatMap({ TheFence.Command(rawValue: $0.lowercased()) }) {
+        case .increment:
+            return FenceCommandAlias(command: .increment)
+        case .decrement:
+            return FenceCommandAlias(command: .decrement)
+        default:
+            if let actionName {
+                return FenceCommandAlias(
+                    command: .performCustomAction,
+                    parameters: [.action: .string(actionName)]
+                )
+            }
+            return FenceCommandAlias(command: .activate)
+        }
+    }
+
     /// Human-friendly command aliases accepted by the CLI session parser.
     static let humanCommandAliases: [String: FenceCommandAlias] = [
         "tap": .init(command: .oneFingerTap),

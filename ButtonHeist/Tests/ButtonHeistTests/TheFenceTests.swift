@@ -3844,8 +3844,7 @@ final class TheFenceTests: XCTestCase {
     /// dropped without affecting the connection or future actions. Before the
     /// fix, the timeout path called `forceDisconnect`, so a late response landed
     /// on a dead socket. Now the connection stays live, the response flows to
-    /// `actionTracker.resolve`, and the tracker silently no-ops on an unknown
-    /// requestId.
+    /// the action response tracker, which silently no-ops on an unknown requestId.
     @ButtonHeistActor
     func testLateActionResultAfterTimeoutIsSafelyDropped() async throws {
         let device = DiscoveredDevice(

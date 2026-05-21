@@ -7,6 +7,16 @@ protocol CLICommandContract {
     static var fenceCommand: TheFence.Command { get }
 }
 
+protocol CatalogBackedCLICommand: CLICommandContract {
+    static var fenceCommandProjection: TheFence.Command.CLIProjection { get }
+}
+
+extension CatalogBackedCLICommand {
+    static var fenceCommand: TheFence.Command {
+        TheFence.Command.cliCommand(for: fenceCommandProjection)
+    }
+}
+
 extension CLICommandContract {
     static var cliCommandName: String {
         fenceCommand.cliCommandName
