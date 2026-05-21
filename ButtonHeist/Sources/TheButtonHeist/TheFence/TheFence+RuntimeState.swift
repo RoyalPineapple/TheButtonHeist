@@ -9,6 +9,11 @@ private enum PendingRequestStore {
     case screen(PendingRequestTracker<ScreenPayload>)
 }
 
+private struct RecordingPendingWait<Value: Sendable>: Sendable {
+    let owner: UUID
+    let callback: @Sendable (Result<Value, Error>) -> Void
+}
+
 extension TheFence {
 
     /// Owns TheHandoff-backed connection projection for session-state reads.
@@ -267,12 +272,7 @@ extension TheFence {
 
     @ButtonHeistActor
     final class RecordingWait<Value: Sendable> {
-        private struct Pending: Sendable {
-            let owner: UUID
-            let callback: @Sendable (Result<Value, Error>) -> Void
-        }
-
-        private var pending: Pending?
+        private var pending: RecordingPendingWait<Value>?
 
         func wait(
             timeout: TimeInterval,
@@ -302,7 +302,7 @@ extension TheFence {
                         }
                     }
 
-                    pending = Pending(owner: owner) { result in
+                    pending = RecordingPendingWait(owner: owner) { result in
                         let shouldResume = didResume.withLock { flag -> Bool in
                             guard !flag else { return false }
                             flag = true
