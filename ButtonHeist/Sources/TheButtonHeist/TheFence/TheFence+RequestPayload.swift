@@ -51,15 +51,173 @@ extension TheFence {
     }
 
     enum GesturePayload {
-        case oneFingerTap(TouchTapTarget)
-        case longPress(LongPressTarget)
-        case swipe(SwipeTarget)
-        case drag(DragTarget)
-        case pinch(PinchTarget)
-        case rotate(RotateTarget)
-        case twoFingerTap(TwoFingerTapTarget)
-        case drawPath(DrawPathTarget)
-        case drawBezier(DrawBezierTarget)
+        case oneFingerTap(TouchTapGesturePayload)
+        case longPress(LongPressGesturePayload)
+        case swipe(SwipeGesturePayload)
+        case drag(DragGesturePayload)
+        case pinch(PinchGesturePayload)
+        case rotate(RotateGesturePayload)
+        case twoFingerTap(TwoFingerTapGesturePayload)
+        case drawPath(DrawPathGesturePayload)
+        case drawBezier(DrawBezierGesturePayload)
+    }
+
+    struct TouchTapGesturePayload {
+        let elementTarget: ElementTarget?
+        let pointX: Double?
+        let pointY: Double?
+
+        var target: TouchTapTarget {
+            TouchTapTarget(elementTarget: elementTarget, pointX: pointX, pointY: pointY)
+        }
+    }
+
+    struct LongPressGesturePayload {
+        let elementTarget: ElementTarget?
+        let pointX: Double?
+        let pointY: Double?
+        let duration: Double
+
+        var target: LongPressTarget {
+            LongPressTarget(
+                elementTarget: elementTarget,
+                pointX: pointX,
+                pointY: pointY,
+                duration: duration
+            )
+        }
+    }
+
+    struct SwipeGesturePayload {
+        let elementTarget: ElementTarget?
+        let startX: Double?
+        let startY: Double?
+        let endX: Double?
+        let endY: Double?
+        let direction: SwipeDirection?
+        let duration: Double?
+        let start: UnitPoint?
+        let end: UnitPoint?
+
+        var target: SwipeTarget {
+            SwipeTarget(
+                elementTarget: elementTarget,
+                startX: startX,
+                startY: startY,
+                endX: endX,
+                endY: endY,
+                direction: direction,
+                duration: duration,
+                start: start,
+                end: end
+            )
+        }
+    }
+
+    struct DragGesturePayload {
+        let elementTarget: ElementTarget?
+        let startX: Double?
+        let startY: Double?
+        let endX: Double
+        let endY: Double
+        let duration: Double?
+
+        var target: DragTarget {
+            DragTarget(
+                elementTarget: elementTarget,
+                startX: startX,
+                startY: startY,
+                endX: endX,
+                endY: endY,
+                duration: duration
+            )
+        }
+    }
+
+    struct PinchGesturePayload {
+        let elementTarget: ElementTarget?
+        let centerX: Double?
+        let centerY: Double?
+        let scale: Double
+        let spread: Double?
+        let duration: Double?
+
+        var target: PinchTarget {
+            PinchTarget(
+                elementTarget: elementTarget,
+                centerX: centerX,
+                centerY: centerY,
+                scale: scale,
+                spread: spread,
+                duration: duration
+            )
+        }
+    }
+
+    struct RotateGesturePayload {
+        let elementTarget: ElementTarget?
+        let centerX: Double?
+        let centerY: Double?
+        let angle: Double
+        let radius: Double?
+        let duration: Double?
+
+        var target: RotateTarget {
+            RotateTarget(
+                elementTarget: elementTarget,
+                centerX: centerX,
+                centerY: centerY,
+                angle: angle,
+                radius: radius,
+                duration: duration
+            )
+        }
+    }
+
+    struct TwoFingerTapGesturePayload {
+        let elementTarget: ElementTarget?
+        let centerX: Double?
+        let centerY: Double?
+        let spread: Double?
+
+        var target: TwoFingerTapTarget {
+            TwoFingerTapTarget(
+                elementTarget: elementTarget,
+                centerX: centerX,
+                centerY: centerY,
+                spread: spread
+            )
+        }
+    }
+
+    struct DrawPathGesturePayload {
+        let points: [PathPoint]
+        let duration: Double?
+        let velocity: Double?
+
+        var target: DrawPathTarget {
+            DrawPathTarget(points: points, duration: duration, velocity: velocity)
+        }
+    }
+
+    struct DrawBezierGesturePayload {
+        let startX: Double
+        let startY: Double
+        let segments: [BezierSegment]
+        let samplesPerSegment: Int?
+        let duration: Double?
+        let velocity: Double?
+
+        var target: DrawBezierTarget {
+            DrawBezierTarget(
+                startX: startX,
+                startY: startY,
+                segments: segments,
+                samplesPerSegment: samplesPerSegment,
+                duration: duration,
+                velocity: velocity
+            )
+        }
     }
 
     enum ScrollPayload {

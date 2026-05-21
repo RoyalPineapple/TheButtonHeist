@@ -74,27 +74,40 @@ extension TheFence {
 
     // MARK: - Handler: Gestures
 
-    func handleGesture(_ payload: GesturePayload) async throws -> FenceResponse {
-        switch payload {
-        case .oneFingerTap(let target):
-            return try await sendAction(.touchTap(target))
-        case .longPress(let target):
-            return try await sendAction(.touchLongPress(target))
-        case .swipe(let target):
-            return try await sendAction(.touchSwipe(target))
-        case .drag(let target):
-            return try await sendAction(.touchDrag(target))
-        case .pinch(let target):
-            return try await sendAction(.touchPinch(target))
-        case .rotate(let target):
-            return try await sendAction(.touchRotate(target))
-        case .twoFingerTap(let target):
-            return try await sendAction(.touchTwoFingerTap(target))
-        case .drawPath(let target):
-            return try await sendAction(.touchDrawPath(target))
-        case .drawBezier(let target):
-            return try await sendAction(.touchDrawBezier(target))
-        }
+    func handleOneFingerTap(_ payload: TouchTapGesturePayload) async throws -> FenceResponse {
+        try await sendAction(.touchTap(payload.target))
+    }
+
+    func handleLongPress(_ payload: LongPressGesturePayload) async throws -> FenceResponse {
+        try await sendAction(.touchLongPress(payload.target))
+    }
+
+    func handleSwipe(_ payload: SwipeGesturePayload) async throws -> FenceResponse {
+        try await sendAction(.touchSwipe(payload.target))
+    }
+
+    func handleDrag(_ payload: DragGesturePayload) async throws -> FenceResponse {
+        try await sendAction(.touchDrag(payload.target))
+    }
+
+    func handlePinch(_ payload: PinchGesturePayload) async throws -> FenceResponse {
+        try await sendAction(.touchPinch(payload.target))
+    }
+
+    func handleRotate(_ payload: RotateGesturePayload) async throws -> FenceResponse {
+        try await sendAction(.touchRotate(payload.target))
+    }
+
+    func handleTwoFingerTap(_ payload: TwoFingerTapGesturePayload) async throws -> FenceResponse {
+        try await sendAction(.touchTwoFingerTap(payload.target))
+    }
+
+    func handleDrawPath(_ payload: DrawPathGesturePayload) async throws -> FenceResponse {
+        try await sendAction(.touchDrawPath(payload.target))
+    }
+
+    func handleDrawBezier(_ payload: DrawBezierGesturePayload) async throws -> FenceResponse {
+        try await sendAction(.touchDrawBezier(payload.target))
     }
 
     // MARK: - Handler: Scroll Actions & Explore

@@ -742,6 +742,30 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testPinchRequestDecodesTypedPayloadBeforeDispatch() async throws {
+        let (fence, _) = makeConnectedFence()
+        let parsed = try fence.parseRequest([
+            "command": "pinch",
+            "heistId": "photo_view",
+            "scale": 2.0,
+            "centerX": 200.0,
+            "centerY": 500.0,
+            "spread": 24.0,
+            "duration": 0.25,
+        ])
+
+        guard case .gesture(.pinch(let payload)) = parsed.payload else {
+            return XCTFail("Expected typed pinch payload, got \(parsed.payload)")
+        }
+        XCTAssertEqual(payload.elementTarget, .heistId("photo_view"))
+        XCTAssertEqual(payload.scale, 2.0)
+        XCTAssertEqual(payload.centerX, 200.0)
+        XCTAssertEqual(payload.centerY, 500.0)
+        XCTAssertEqual(payload.spread, 24.0)
+        XCTAssertEqual(payload.duration, 0.25)
+    }
+
+    @ButtonHeistActor
     func testPinchWithCenterCoordinatesDispatchesCanonicalPayload() async {
         let (fence, mockConn) = makeConnectedFence()
         _ = try? await fence.execute(request: [
@@ -754,6 +778,33 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         XCTAssertEqual(target.centerX, 200.0)
         XCTAssertEqual(target.centerY, 500.0)
+    }
+
+    @ButtonHeistActor
+    func testGestureDispatchRejectsCommandPayloadMismatch() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        let parsed = TheFence.ParsedRequest(
+            command: .pinch,
+            requestId: "gesture-mismatch",
+            payload: .gesture(.rotate(.init(
+                elementTarget: nil,
+                centerX: 150.0,
+                centerY: 400.0,
+                angle: 1.57,
+                radius: nil,
+                duration: nil
+            ))),
+            expectationPayload: .init(expectation: nil, timeout: nil),
+            immediateResponse: nil
+        )
+
+        let response = try await fence.execute(parsed: parsed)
+
+        guard case .error(let message, _) = response else {
+            return XCTFail("Expected payload mismatch error, got \(response)")
+        }
+        XCTAssertEqual(message, "Internal payload mismatch for command: pinch")
+        XCTAssertTrue(mockConn.sent.isEmpty)
     }
 
     @ButtonHeistActor
