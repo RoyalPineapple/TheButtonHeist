@@ -69,38 +69,6 @@ public struct FenceCommandAlias: Sendable, Equatable {
 }
 
 public extension TheFence.Command {
-    enum CLIProjection: String, Sendable {
-        case activate
-        case oneFingerTap
-        case longPress
-        case swipe
-        case drag
-        case pinch
-        case rotate
-        case twoFingerTap
-    }
-
-    static func cliCommand(for projection: CLIProjection) -> Self {
-        switch projection {
-        case .activate:
-            return .activate
-        case .oneFingerTap:
-            return .oneFingerTap
-        case .longPress:
-            return .longPress
-        case .swipe:
-            return .swipe
-        case .drag:
-            return .drag
-        case .pinch:
-            return .pinch
-        case .rotate:
-            return .rotate
-        case .twoFingerTap:
-            return .twoFingerTap
-        }
-    }
-
     static func activationAlias(forActionName actionName: String?) -> FenceCommandAlias {
         switch actionName.flatMap({ TheFence.Command(rawValue: $0.lowercased()) }) {
         case .increment:

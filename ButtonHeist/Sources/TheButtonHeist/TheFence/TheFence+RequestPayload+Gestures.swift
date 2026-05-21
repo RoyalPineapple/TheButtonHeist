@@ -8,12 +8,12 @@ extension TheFence {
         command: Command,
         request: [String: Any]
     ) throws -> RequestPayload {
-        .gesture(try decodeGesturePayload(command: command, request: request))
+        .gesture(try decodeGesturePayload(command: command, request: GestureRequestInput(request)))
     }
 
     private func decodeGesturePayload(
         command: Command,
-        request: [String: Any]
+        request: GestureRequestInput
     ) throws -> GesturePayload {
         switch command {
         case .oneFingerTap:
@@ -39,6 +39,97 @@ extension TheFence {
         }
     }
 
+    private struct GestureRequestInput {
+        private let request: [String: Any]
+
+        init(_ request: [String: Any]) {
+            self.request = request
+        }
+
+        @ButtonHeistActor
+        func elementTarget(in fence: TheFence) throws -> ElementTarget? {
+            try fence.decodedElementTarget(request)
+        }
+
+        func number(_ key: String) throws -> Double? {
+            try request.schemaNumber(key)
+        }
+
+        func requiredNumber(_ key: String) throws -> Double {
+            try request.requiredSchemaNumber(key)
+        }
+
+        func positiveNumber(_ key: String) throws -> Double? {
+            guard let value = try number(key) else { return nil }
+            guard value > 0 else {
+                throw SchemaValidationError(field: key, observed: value, expected: "number > 0")
+            }
+            return value
+        }
+
+        func requiredPositiveNumber(_ key: String) throws -> Double {
+            guard let value = try positiveNumber(key) else {
+                throw SchemaValidationError(field: key, observed: nil, expected: "number > 0")
+            }
+            return value
+        }
+
+        func gestureDuration() throws -> Double? {
+            try boundedPositiveNumber("duration", maximum: DecodeLimits.maxDrawGestureDurationSeconds)
+        }
+
+        func boundedPositiveNumber(_ key: String, maximum: Double) throws -> Double? {
+            guard let value = try positiveNumber(key) else { return nil }
+            guard value <= maximum else {
+                throw SchemaValidationError(field: key, observed: value, expected: "number in 0...\(maximum)")
+            }
+            return value
+        }
+
+        func boundedPositiveInteger(_ key: String, minimum: Int, maximum: Int) throws -> Int? {
+            guard let value = try request.schemaInteger(key) else { return nil }
+            guard value >= minimum && value <= maximum else {
+                throw SchemaValidationError(field: key, observed: value, expected: "integer in \(minimum)...\(maximum)")
+            }
+            return value
+        }
+
+        func unitPoint(_ key: String) throws -> UnitPoint? {
+            try request.schemaUnitPoint(key)
+        }
+
+        func enumValue<E>(
+            _ key: String,
+            as type: E.Type,
+            normalizedBy normalize: (String) -> String = { $0 }
+        ) throws -> E? where E: CaseIterable & RawRepresentable, E.RawValue == String {
+            try request.schemaEnum(key, as: type, normalizedBy: normalize)
+        }
+
+        func requiredObjectArray(_ key: String) throws -> [GestureRequestObject] {
+            try request.requiredSchemaDictionaryArray(key).map(GestureRequestObject.init)
+        }
+    }
+
+    private struct GestureRequestObject {
+        private let dictionary: [String: Any]
+
+        fileprivate init(_ dictionary: [String: Any]) {
+            self.dictionary = dictionary
+        }
+
+        func requiredNumber(_ key: String, field: String) throws -> Double {
+            do {
+                guard let value = try dictionary.schemaNumber(key) else {
+                    throw SchemaValidationError(field: field, observed: nil, expected: "number")
+                }
+                return value
+            } catch let error as SchemaValidationError {
+                throw SchemaValidationError(field: field, observed: error.observed, expected: error.expected)
+            }
+        }
+    }
+
     private struct TouchTapGestureRequest {
         let elementTarget: ElementTarget?
         let pointX: Double?
@@ -49,11 +140,11 @@ extension TheFence {
         }
     }
 
-    private func decodeTouchTapTarget(_ request: [String: Any]) throws -> TouchTapTarget {
+    private func decodeTouchTapTarget(_ request: GestureRequestInput) throws -> TouchTapTarget {
         let payload = TouchTapGestureRequest(
-            elementTarget: try decodedElementTarget(request),
-            pointX: try request.schemaNumber("x"),
-            pointY: try request.schemaNumber("y")
+            elementTarget: try request.elementTarget(in: self),
+            pointX: try request.number("x"),
+            pointY: try request.number("y")
         )
         let target = payload.target
         if target.elementTarget == nil, target.point == nil {
@@ -78,12 +169,12 @@ extension TheFence {
         }
     }
 
-    private func decodeLongPressTarget(_ request: [String: Any]) throws -> LongPressTarget {
+    private func decodeLongPressTarget(_ request: GestureRequestInput) throws -> LongPressTarget {
         let payload = LongPressGestureRequest(
-            elementTarget: try decodedElementTarget(request),
-            pointX: try request.schemaNumber("x"),
-            pointY: try request.schemaNumber("y"),
-            duration: try schemaGestureDuration(request) ?? 0.5
+            elementTarget: try request.elementTarget(in: self),
+            pointX: try request.number("x"),
+            pointY: try request.number("y"),
+            duration: try request.gestureDuration() ?? 0.5
         )
         let target = payload.target
         if target.elementTarget == nil, target.point == nil {
@@ -118,17 +209,17 @@ extension TheFence {
         }
     }
 
-    private func decodeSwipeTarget(_ request: [String: Any]) throws -> SwipeTarget {
-        let start = try request.schemaUnitPoint("start")
-        let end = try request.schemaUnitPoint("end")
+    private func decodeSwipeTarget(_ request: GestureRequestInput) throws -> SwipeTarget {
+        let start = try request.unitPoint("start")
+        let end = try request.unitPoint("end")
         let payload = SwipeGestureRequest(
-            elementTarget: try decodedElementTarget(request),
-            startX: try request.schemaNumber("startX"),
-            startY: try request.schemaNumber("startY"),
-            endX: try request.schemaNumber("endX"),
-            endY: try request.schemaNumber("endY"),
-            direction: try request.schemaEnum("direction", as: SwipeDirection.self) { $0.lowercased() },
-            duration: try schemaGestureDuration(request),
+            elementTarget: try request.elementTarget(in: self),
+            startX: try request.number("startX"),
+            startY: try request.number("startY"),
+            endX: try request.number("endX"),
+            endY: try request.number("endY"),
+            direction: try request.enumValue("direction", as: SwipeDirection.self) { $0.lowercased() },
+            duration: try request.gestureDuration(),
             start: start,
             end: end
         )
@@ -159,14 +250,14 @@ extension TheFence {
         }
     }
 
-    private func decodeDragTarget(_ request: [String: Any]) throws -> DragTarget {
+    private func decodeDragTarget(_ request: GestureRequestInput) throws -> DragTarget {
         DragGestureRequest(
-            elementTarget: try decodedElementTarget(request),
-            startX: try request.schemaNumber("startX"),
-            startY: try request.schemaNumber("startY"),
-            endX: try request.requiredSchemaNumber("endX"),
-            endY: try request.requiredSchemaNumber("endY"),
-            duration: try schemaGestureDuration(request)
+            elementTarget: try request.elementTarget(in: self),
+            startX: try request.number("startX"),
+            startY: try request.number("startY"),
+            endX: try request.requiredNumber("endX"),
+            endY: try request.requiredNumber("endY"),
+            duration: try request.gestureDuration()
         ).target
     }
 
@@ -190,14 +281,14 @@ extension TheFence {
         }
     }
 
-    private func decodePinchTarget(_ request: [String: Any]) throws -> PinchTarget {
+    private func decodePinchTarget(_ request: GestureRequestInput) throws -> PinchTarget {
         PinchGestureRequest(
-            elementTarget: try decodedElementTarget(request),
-            centerX: try request.schemaNumber("centerX"),
-            centerY: try request.schemaNumber("centerY"),
-            scale: try requiredSchemaPositiveNumber(request, key: "scale"),
-            spread: try schemaPositiveNumber(request, key: "spread"),
-            duration: try schemaGestureDuration(request)
+            elementTarget: try request.elementTarget(in: self),
+            centerX: try request.number("centerX"),
+            centerY: try request.number("centerY"),
+            scale: try request.requiredPositiveNumber("scale"),
+            spread: try request.positiveNumber("spread"),
+            duration: try request.gestureDuration()
         ).target
     }
 
@@ -221,14 +312,14 @@ extension TheFence {
         }
     }
 
-    private func decodeRotateTarget(_ request: [String: Any]) throws -> RotateTarget {
+    private func decodeRotateTarget(_ request: GestureRequestInput) throws -> RotateTarget {
         RotateGestureRequest(
-            elementTarget: try decodedElementTarget(request),
-            centerX: try request.schemaNumber("centerX"),
-            centerY: try request.schemaNumber("centerY"),
-            angle: try request.requiredSchemaNumber("angle"),
-            radius: try schemaPositiveNumber(request, key: "radius"),
-            duration: try schemaGestureDuration(request)
+            elementTarget: try request.elementTarget(in: self),
+            centerX: try request.number("centerX"),
+            centerY: try request.number("centerY"),
+            angle: try request.requiredNumber("angle"),
+            radius: try request.positiveNumber("radius"),
+            duration: try request.gestureDuration()
         ).target
     }
 
@@ -248,12 +339,12 @@ extension TheFence {
         }
     }
 
-    private func decodeTwoFingerTapTarget(_ request: [String: Any]) throws -> TwoFingerTapTarget {
+    private func decodeTwoFingerTapTarget(_ request: GestureRequestInput) throws -> TwoFingerTapTarget {
         TwoFingerTapGestureRequest(
-            elementTarget: try decodedElementTarget(request),
-            centerX: try request.schemaNumber("centerX"),
-            centerY: try request.schemaNumber("centerY"),
-            spread: try schemaPositiveNumber(request, key: "spread")
+            elementTarget: try request.elementTarget(in: self),
+            centerX: try request.number("centerX"),
+            centerY: try request.number("centerY"),
+            spread: try request.positiveNumber("spread")
         ).target
     }
 
@@ -267,8 +358,8 @@ extension TheFence {
         }
     }
 
-    private func decodeDrawPathTarget(_ request: [String: Any]) throws -> DrawPathTarget {
-        let pointsArray = try request.requiredSchemaDictionaryArray("points")
+    private func decodeDrawPathTarget(_ request: GestureRequestInput) throws -> DrawPathTarget {
+        let pointsArray = try request.requiredObjectArray("points")
         try validateArrayCount(
             field: "points",
             count: pointsArray.count,
@@ -278,19 +369,18 @@ extension TheFence {
         )
         let points = try pointsArray.enumerated().map { index, point -> PathPoint in
             PathPoint(
-                x: try schemaNumber(in: point, key: "x", field: "points[\(index)].x"),
-                y: try schemaNumber(in: point, key: "y", field: "points[\(index)].y")
+                x: try point.requiredNumber("x", field: "points[\(index)].x"),
+                y: try point.requiredNumber("y", field: "points[\(index)].y")
             )
         }
-        let duration = try schemaBoundedPositiveNumber(
-            request,
-            key: "duration",
+        let duration = try request.boundedPositiveNumber(
+            "duration",
             maximum: DecodeLimits.maxDrawGestureDurationSeconds
         )
         return DrawPathGestureRequest(
             points: points,
             duration: duration,
-            velocity: try schemaPositiveNumber(request, key: "velocity")
+            velocity: try request.positiveNumber("velocity")
         ).target
     }
 
@@ -314,10 +404,10 @@ extension TheFence {
         }
     }
 
-    private func decodeDrawBezierTarget(_ request: [String: Any]) throws -> DrawBezierTarget {
-        let startX = try request.requiredSchemaNumber("startX")
-        let startY = try request.requiredSchemaNumber("startY")
-        let segmentsArray = try request.requiredSchemaDictionaryArray("segments")
+    private func decodeDrawBezierTarget(_ request: GestureRequestInput) throws -> DrawBezierTarget {
+        let startX = try request.requiredNumber("startX")
+        let startY = try request.requiredNumber("startY")
+        let segmentsArray = try request.requiredObjectArray("segments")
         try validateArrayCount(
             field: "segments",
             count: segmentsArray.count,
@@ -327,17 +417,16 @@ extension TheFence {
         )
         let segments = try segmentsArray.enumerated().map { index, segment -> BezierSegment in
             BezierSegment(
-                cp1X: try schemaNumber(in: segment, key: "cp1X", field: "segments[\(index)].cp1X"),
-                cp1Y: try schemaNumber(in: segment, key: "cp1Y", field: "segments[\(index)].cp1Y"),
-                cp2X: try schemaNumber(in: segment, key: "cp2X", field: "segments[\(index)].cp2X"),
-                cp2Y: try schemaNumber(in: segment, key: "cp2Y", field: "segments[\(index)].cp2Y"),
-                endX: try schemaNumber(in: segment, key: "endX", field: "segments[\(index)].endX"),
-                endY: try schemaNumber(in: segment, key: "endY", field: "segments[\(index)].endY")
+                cp1X: try segment.requiredNumber("cp1X", field: "segments[\(index)].cp1X"),
+                cp1Y: try segment.requiredNumber("cp1Y", field: "segments[\(index)].cp1Y"),
+                cp2X: try segment.requiredNumber("cp2X", field: "segments[\(index)].cp2X"),
+                cp2Y: try segment.requiredNumber("cp2Y", field: "segments[\(index)].cp2Y"),
+                endX: try segment.requiredNumber("endX", field: "segments[\(index)].endX"),
+                endY: try segment.requiredNumber("endY", field: "segments[\(index)].endY")
             )
         }
-        let samplesPerSegment = try schemaBoundedPositiveInteger(
-            request,
-            key: "samplesPerSegment",
+        let samplesPerSegment = try request.boundedPositiveInteger(
+            "samplesPerSegment",
             minimum: DecodeLimits.minDrawBezierSamplesPerSegment,
             maximum: DecodeLimits.maxDrawBezierSamplesPerSegment
         )
@@ -350,9 +439,8 @@ extension TheFence {
                 expected: "generated path point count <= \(DecodeLimits.maxDrawBezierGeneratedPathPoints)"
             )
         }
-        let duration = try schemaBoundedPositiveNumber(
-            request,
-            key: "duration",
+        let duration = try request.boundedPositiveNumber(
+            "duration",
             maximum: DecodeLimits.maxDrawGestureDurationSeconds
         )
         return DrawBezierGestureRequest(
@@ -361,7 +449,7 @@ extension TheFence {
             segments: segments,
             samplesPerSegment: samplesPerSegment,
             duration: duration,
-            velocity: try schemaPositiveNumber(request, key: "velocity")
+            velocity: try request.positiveNumber("velocity")
         ).target
     }
 
@@ -378,86 +466,6 @@ extension TheFence {
                 observed: "array count \(count)",
                 expected: "array count \(min)...\(max) (\(note))"
             )
-        }
-    }
-
-    private func requiredSchemaPositiveNumber(
-        _ dictionary: [String: Any],
-        key: String
-    ) throws -> Double {
-        guard let value = try schemaPositiveNumber(dictionary, key: key) else {
-            throw SchemaValidationError(field: key, observed: nil, expected: "number > 0")
-        }
-        return value
-    }
-
-    private func schemaPositiveNumber(
-        _ dictionary: [String: Any],
-        key: String
-    ) throws -> Double? {
-        guard let value = try dictionary.schemaNumber(key) else { return nil }
-        guard value > 0 else {
-            throw SchemaValidationError(field: key, observed: value, expected: "number > 0")
-        }
-        return value
-    }
-
-    private func schemaGestureDuration(_ dictionary: [String: Any]) throws -> Double? {
-        try schemaBoundedPositiveNumber(
-            dictionary,
-            key: "duration",
-            maximum: DecodeLimits.maxDrawGestureDurationSeconds
-        )
-    }
-
-    private func schemaBoundedPositiveNumber(
-        _ dictionary: [String: Any],
-        key: String,
-        maximum: Double
-    ) throws -> Double? {
-        guard let value = try schemaPositiveNumber(dictionary, key: key) else { return nil }
-        guard value <= maximum else {
-            throw SchemaValidationError(field: key, observed: value, expected: "number in 0...\(maximum)")
-        }
-        return value
-    }
-
-    private func schemaPositiveInteger(
-        _ dictionary: [String: Any],
-        key: String
-    ) throws -> Int? {
-        guard let value = try dictionary.schemaInteger(key) else { return nil }
-        guard value > 0 else {
-            throw SchemaValidationError(field: key, observed: value, expected: "integer > 0")
-        }
-        return value
-    }
-
-    private func schemaBoundedPositiveInteger(
-        _ dictionary: [String: Any],
-        key: String,
-        minimum: Int,
-        maximum: Int
-    ) throws -> Int? {
-        guard let value = try dictionary.schemaInteger(key) else { return nil }
-        guard value >= minimum && value <= maximum else {
-            throw SchemaValidationError(field: key, observed: value, expected: "integer in \(minimum)...\(maximum)")
-        }
-        return value
-    }
-
-    private func schemaNumber(
-        in dictionary: [String: Any],
-        key: String,
-        field: String
-    ) throws -> Double {
-        do {
-            guard let value = try dictionary.schemaNumber(key) else {
-                throw SchemaValidationError(field: field, observed: nil, expected: "number")
-            }
-            return value
-        } catch let error as SchemaValidationError {
-            throw SchemaValidationError(field: field, observed: error.observed, expected: error.expected)
         }
     }
 }

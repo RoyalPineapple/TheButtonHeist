@@ -486,135 +486,6 @@ public final class TheFence {
     /// session.
     public var onAuthApproved: (@ButtonHeistActor (String?) -> Void)?
 
-    /// Owns TheHandoff-backed connection projection for session-state reads.
-    struct SessionConnectionState {
-        let handoff: TheHandoff
-
-        @ButtonHeistActor
-        var snapshot: SessionConnectionSnapshot {
-            SessionConnectionSnapshot(
-                connected: handoff.isConnected,
-                phase: sessionConnectionPhase,
-                device: sessionDevicePayload,
-                lastFailure: sessionFailurePayload
-            )
-        }
-
-        @ButtonHeistActor
-        private var sessionConnectionPhase: SessionConnectionPhase {
-            switch handoff.connectionPhase {
-            case .disconnected:
-                return .disconnected
-            case .connecting:
-                return .connecting
-            case .connected:
-                return .connected
-            case .failed:
-                return .failed
-            }
-        }
-
-        @ButtonHeistActor
-        private var sessionDevicePayload: SessionDevicePayload? {
-            handoff.connectedDevice.map { device in
-                SessionDevicePayload(
-                    deviceName: handoff.displayName(for: device),
-                    appName: device.appName,
-                    connectionType: device.connectionType,
-                    shortId: device.shortId
-                )
-            }
-        }
-
-        @ButtonHeistActor
-        private var sessionFailurePayload: SessionFailurePayload? {
-            handoff.connectionDiagnosticFailure.map { failure in
-                SessionFailurePayload(
-                    errorCode: failure.failureCode,
-                    phase: failure.phase,
-                    retryable: failure.retryable,
-                    message: failure.errorDescription,
-                    hint: failure.hint
-                )
-            }
-        }
-    }
-
-    /// Owns retained accessibility captures plus the queued background traces.
-    struct BackgroundAccessibilityState {
-        private static let defaultPendingTraceLimit = 20
-
-        private var history = AccessibilityTrace.History(retention: .dropAfterDelivery)
-        private let pendingTraceLimit: Int
-
-        init(pendingTraceLimit: Int = Self.defaultPendingTraceLimit) {
-            self.pendingTraceLimit = pendingTraceLimit
-        }
-
-        var pendingTraceCount: Int {
-            history.pendingTraceCount
-        }
-
-        var latestRef: AccessibilityTrace.CaptureRef? {
-            history.latestRef
-        }
-
-        mutating func reset() {
-            history.reset()
-            history.retention = .dropAfterDelivery
-        }
-
-        mutating func enqueue(_ trace: AccessibilityTrace) {
-            history.enqueuePendingTrace(trace, limit: pendingTraceLimit)
-        }
-
-        mutating func drainTrace() -> AccessibilityTrace? {
-            history.drainPendingTrace()
-        }
-
-        mutating func drainTraces() -> [AccessibilityTrace] {
-            history.drainPendingTraces()
-        }
-
-        func pendingTraces(startingAt startIndex: Int = 0) -> [AccessibilityTrace.PendingTrace] {
-            history.pendingTraces(startingAt: startIndex)
-        }
-
-        mutating func removePendingTrace(at index: Int) -> AccessibilityTrace.PendingTrace? {
-            history.removePendingTrace(at: index)
-        }
-
-        @discardableResult
-        mutating func append(interface: Interface) -> AccessibilityTrace.CaptureRef {
-            history.append(interface: interface)
-        }
-
-        @discardableResult
-        mutating func ingest(_ trace: AccessibilityTrace) -> AccessibilityTrace.Cursor? {
-            history.ingest(trace)
-        }
-
-        func capture(ref: AccessibilityTrace.CaptureRef) -> AccessibilityTrace.Capture? {
-            history.capture(ref: ref)
-        }
-
-        func elementLookup(captureRef: AccessibilityTrace.CaptureRef?) -> [HeistId: HeistElement] {
-            history.elementLookup(captureRef: captureRef)
-        }
-
-        mutating func markDelivered(through ref: AccessibilityTrace.CaptureRef?) {
-            history.markDelivered(through: ref)
-        }
-
-        mutating func beginRecordingRetention() {
-            history.retention = .persistForSession
-        }
-
-        mutating func endRecordingRetention() {
-            history.retention = .dropAfterDelivery
-        }
-    }
-
     var config: Configuration
     private let sessionConnectionState = SessionConnectionState(handoff: TheHandoff())
     var handoff: TheHandoff {
@@ -624,7 +495,6 @@ public final class TheFence {
         sessionConnectionState.snapshot
     }
     let bookKeeper: TheBookKeeper
-    var configuredAuthTokenForStatus: String?
     /// Heist playback re-entrancy state. `.playing` carries the wall-clock
     /// timestamp playback started so callers can reason about how long the
     /// current playback has been running.
@@ -639,285 +509,7 @@ public final class TheFence {
     /// retained captures when validation or recording needs them.
     private var backgroundAccessibilityState = BackgroundAccessibilityState()
 
-    // MARK: - Pending Request Tracking
-
-    struct PendingRequestTrackers {
-        let action = PendingRequestTracker<ActionResult>()
-        let interface = PendingRequestTracker<Interface>()
-        let screen = PendingRequestTracker<ScreenPayload>()
-
-        @ButtonHeistActor
-        func resolveTransientResponse(_ message: ServerMessage, requestId: String) -> Bool {
-            switch message {
-            case .interface(let payload):
-                interface.resolve(requestId: requestId, result: .success(payload))
-            case .actionResult(let result):
-                action.resolve(requestId: requestId, result: .success(result))
-            case .screen(let payload):
-                screen.resolve(requestId: requestId, result: .success(payload))
-            case .error(let serverError):
-                resolveTransientFailure(FenceError.serverError(serverError), requestId: requestId)
-            default:
-                return false
-            }
-            return true
-        }
-
-        @ButtonHeistActor
-        func resolveTransientFailure(_ error: Error, requestId: String) {
-            action.resolve(requestId: requestId, result: .failure(error))
-            interface.resolve(requestId: requestId, result: .failure(error))
-            screen.resolve(requestId: requestId, result: .failure(error))
-        }
-
-        @ButtonHeistActor
-        func cancelAll(error: Error) {
-            action.cancelAll(error: error)
-            interface.cancelAll(error: error)
-            screen.cancelAll(error: error)
-        }
-    }
-
     private let pendingRequests = PendingRequestTrackers()
-
-    /// Fence-owned recording state. Handoff forwards server recording
-    /// messages, but request decisions and wait ownership live here.
-    enum RecordingLifecycle {
-        case idle
-        case starting(waitId: String)
-        case recording
-        case completing(waitId: String, serverRecording: Bool)
-    }
-
-    enum RecordingPendingWait {
-        case start(String)
-        case completion(String)
-    }
-
-    struct RecordingState {
-        private(set) var lifecycle: RecordingLifecycle = .idle
-
-        var snapshot: RecordingSnapshot {
-            RecordingSnapshot(
-                isRecording: isRecording,
-                isWaitingForCompletion: isWaitingForCompletion
-            )
-        }
-
-        var isRecording: Bool {
-            switch lifecycle {
-            case .recording:
-                return true
-            case .completing(_, let serverRecording):
-                return serverRecording
-            case .idle, .starting:
-                return false
-            }
-        }
-
-        var isWaitingForCompletion: Bool {
-            completionWaitId != nil
-        }
-
-        var startWaitId: String? {
-            if case .starting(let waitId) = lifecycle {
-                return waitId
-            }
-            return nil
-        }
-
-        var completionWaitId: String? {
-            if case .completing(let waitId, _) = lifecycle {
-                return waitId
-            }
-            return nil
-        }
-
-        var startRecordingConflictError: FenceError {
-            switch lifecycle {
-            case .idle:
-                return .invalidRequest("Recording state changed while starting")
-            case .starting:
-                return .invalidRequest("start_recording already waiting for acknowledgement")
-            case .recording:
-                return .invalidRequest("Recording already in progress — use stop_recording first")
-            case .completing:
-                return .invalidRequest("stop_recording already waiting for completion")
-            }
-        }
-
-        mutating func beginStartWait(syntheticId: String) -> Bool {
-            guard case .idle = lifecycle else { return false }
-            lifecycle = .starting(waitId: syntheticId)
-            return true
-        }
-
-        mutating func finishStartWait(syntheticId: String) {
-            guard case .starting(let waitId) = lifecycle, waitId == syntheticId else { return }
-            lifecycle = .idle
-        }
-
-        mutating func beginCompletionWait(syntheticId: String) -> Bool {
-            switch lifecycle {
-            case .idle:
-                lifecycle = .completing(waitId: syntheticId, serverRecording: false)
-            case .recording:
-                lifecycle = .completing(waitId: syntheticId, serverRecording: true)
-            case .starting, .completing:
-                return false
-            }
-            return true
-        }
-
-        mutating func finishCompletionWait(syntheticId: String) {
-            guard case .completing(let waitId, _) = lifecycle, waitId == syntheticId else { return }
-            lifecycle = .idle
-        }
-
-        mutating func noteStarted() -> String? {
-            switch lifecycle {
-            case .starting(let waitId):
-                lifecycle = .recording
-                return waitId
-            case .completing(let waitId, _):
-                lifecycle = .completing(waitId: waitId, serverRecording: true)
-                return nil
-            case .idle, .recording:
-                lifecycle = .recording
-                return nil
-            }
-        }
-
-        mutating func noteFinished() {
-            switch lifecycle {
-            case .completing(let waitId, _):
-                lifecycle = .completing(waitId: waitId, serverRecording: false)
-            case .idle, .starting, .recording:
-                lifecycle = .idle
-            }
-        }
-
-        mutating func noteCompleted() -> String? {
-            let waitId = completionWaitId
-            lifecycle = .idle
-            return waitId
-        }
-
-        mutating func noteFailed() -> RecordingPendingWait? {
-            let pendingWait: RecordingPendingWait?
-            switch lifecycle {
-            case .starting(let waitId):
-                pendingWait = .start(waitId)
-            case .completing(let waitId, _):
-                pendingWait = .completion(waitId)
-            case .idle, .recording:
-                pendingWait = nil
-            }
-            lifecycle = .idle
-            return pendingWait
-        }
-    }
-
-    struct RecordingCoordinator {
-        private var state = RecordingState()
-        private let startTracker = PendingRequestTracker<Bool>()
-        private let completionTracker = PendingRequestTracker<RecordingPayload>()
-
-        var snapshot: RecordingSnapshot {
-            state.snapshot
-        }
-
-        mutating func reset() {
-            state = RecordingState()
-        }
-
-        @ButtonHeistActor
-        func cancelAll(error: Error) {
-            startTracker.cancelAll(error: error)
-            completionTracker.cancelAll(error: error)
-        }
-
-        mutating func beginStartWait(syntheticId: String) throws {
-            guard state.beginStartWait(syntheticId: syntheticId) else {
-                throw state.startRecordingConflictError
-            }
-        }
-
-        mutating func finishStartWait(syntheticId: String) {
-            state.finishStartWait(syntheticId: syntheticId)
-        }
-
-        @ButtonHeistActor
-        func waitForStart(
-            requestId: String,
-            timeout: TimeInterval,
-            afterRegister: (() -> Void)?
-        ) async throws {
-            _ = try await startTracker.wait(requestId: requestId, timeout: timeout, afterRegister: afterRegister)
-        }
-
-        @ButtonHeistActor
-        func resolveStartWait(_ result: Result<Bool, Error>) {
-            guard let syntheticId = state.startWaitId else { return }
-            startTracker.resolve(requestId: syntheticId, result: result)
-        }
-
-        @ButtonHeistActor
-        func resolveStartWait(requestId: String, result: Result<Bool, Error>) {
-            startTracker.resolve(requestId: requestId, result: result)
-        }
-
-        mutating func beginCompletionWait(syntheticId: String) throws {
-            guard state.beginCompletionWait(syntheticId: syntheticId) else {
-                throw FenceError.invalidRequest("stop_recording already waiting for completion")
-            }
-        }
-
-        mutating func finishCompletionWait(syntheticId: String) {
-            state.finishCompletionWait(syntheticId: syntheticId)
-        }
-
-        @ButtonHeistActor
-        func waitForCompletion(
-            requestId: String,
-            timeout: TimeInterval,
-            afterRegister: (() -> Void)?
-        ) async throws -> RecordingPayload {
-            try await completionTracker.wait(requestId: requestId, timeout: timeout, afterRegister: afterRegister)
-        }
-
-        @ButtonHeistActor
-        func resolveCompletionWait(_ result: Result<RecordingPayload, Error>) {
-            guard let syntheticId = state.completionWaitId else { return }
-            completionTracker.resolve(requestId: syntheticId, result: result)
-        }
-
-        @ButtonHeistActor
-        mutating func handleEvent(_ event: RecordingEvent) {
-            switch event {
-            case .started:
-                if let syntheticId = state.noteStarted() {
-                    startTracker.resolve(requestId: syntheticId, result: .success(true))
-                }
-            case .stopped:
-                state.noteFinished()
-            case .completed(let payload):
-                if let syntheticId = state.noteCompleted() {
-                    completionTracker.resolve(requestId: syntheticId, result: .success(payload))
-                }
-            case .failed(let message):
-                let error = FenceError.actionFailed("Recording failed: \(message)")
-                switch state.noteFailed() {
-                case .start(let syntheticId):
-                    startTracker.resolve(requestId: syntheticId, result: .failure(error))
-                case .completion(let syntheticId):
-                    completionTracker.resolve(requestId: syntheticId, result: .failure(error))
-                case nil:
-                    break
-                }
-            }
-        }
-    }
 
     private var recording = RecordingCoordinator()
     var recordingSnapshot: RecordingSnapshot {
@@ -935,7 +527,6 @@ public final class TheFence {
         self.config = configuration
         self.bookKeeper = TheBookKeeper(baseDirectory: configuration.bookKeeperBaseDirectory)
         let configuredToken = configuration.token ?? EnvironmentKey.buttonheistToken.value
-        self.configuredAuthTokenForStatus = configuredToken
         self.handoff.token = configuredToken
         self.handoff.driverId = EnvironmentKey.buttonheistDriverId.value
         self.handoff.onAuthApproved = { [weak self] token in
@@ -954,6 +545,10 @@ public final class TheFence {
             onStatus?(message)
         }
         onAuthApproved?(token)
+    }
+
+    private var configuredAuthTokenForStatus: String? {
+        config.token ?? EnvironmentKey.buttonheistToken.value
     }
 
     private func wireUpResponseCallbacks() {
@@ -1703,29 +1298,56 @@ public final class TheFence {
     }
 
     func sendAndAwaitAction(_ message: ClientMessage, timeout: TimeInterval) async throws -> ActionResult {
-        try await sendAndAwait(message, tracker: pendingRequests.action, timeout: timeout)
-    }
-
-    func sendAndAwaitInterface(_ message: ClientMessage, timeout: TimeInterval) async throws -> Interface {
-        try await sendAndAwait(message, tracker: pendingRequests.interface, timeout: timeout)
-    }
-
-    func sendAndAwaitScreen(_ message: ClientMessage, timeout: TimeInterval) async throws -> ScreenPayload {
-        try await sendAndAwait(message, tracker: pendingRequests.screen, timeout: timeout)
-    }
-
-    private func sendAndAwait<T: Sendable>(
-        _ message: ClientMessage,
-        tracker: PendingRequestTracker<T>,
-        timeout: TimeInterval
-    ) async throws -> T {
         guard handoff.isConnected else { throw FenceError.notConnected }
         let requestId = UUID().uuidString
         do {
-            return try await tracker.wait(requestId: requestId, timeout: timeout) {
+            return try await pendingRequests.waitForAction(requestId: requestId, timeout: timeout) {
                 let outcome = self.handoff.send(message, requestId: requestId)
                 if case .failed(let failure) = outcome {
-                    tracker.resolve(requestId: requestId, result: .failure(FenceError(failure)))
+                    self.pendingRequests.resolveAction(
+                        requestId: requestId,
+                        result: Result<ActionResult, Error>.failure(FenceError(failure))
+                    )
+                }
+            }
+        } catch let error as CancellationError {
+            throw error
+        } catch {
+            throw mapCaughtError(error)
+        }
+    }
+
+    func sendAndAwaitInterface(_ message: ClientMessage, timeout: TimeInterval) async throws -> Interface {
+        guard handoff.isConnected else { throw FenceError.notConnected }
+        let requestId = UUID().uuidString
+        do {
+            return try await pendingRequests.waitForInterface(requestId: requestId, timeout: timeout) {
+                let outcome = self.handoff.send(message, requestId: requestId)
+                if case .failed(let failure) = outcome {
+                    self.pendingRequests.resolveInterface(
+                        requestId: requestId,
+                        result: Result<Interface, Error>.failure(FenceError(failure))
+                    )
+                }
+            }
+        } catch let error as CancellationError {
+            throw error
+        } catch {
+            throw mapCaughtError(error)
+        }
+    }
+
+    func sendAndAwaitScreen(_ message: ClientMessage, timeout: TimeInterval) async throws -> ScreenPayload {
+        guard handoff.isConnected else { throw FenceError.notConnected }
+        let requestId = UUID().uuidString
+        do {
+            return try await pendingRequests.waitForScreen(requestId: requestId, timeout: timeout) {
+                let outcome = self.handoff.send(message, requestId: requestId)
+                if case .failed(let failure) = outcome {
+                    self.pendingRequests.resolveScreen(
+                        requestId: requestId,
+                        result: Result<ScreenPayload, Error>.failure(FenceError(failure))
+                    )
                 }
             }
         } catch let error as CancellationError {
@@ -1780,58 +1402,6 @@ public final class TheFence {
     // Expectation parsing (`parseExpectation` and its helpers) lives in
     // TheFence+ExpectationParsing.swift.
 
-    // MARK: - Command Execution State
-
-    /// Two-phase action history: `.unrun` before any action has completed,
-    /// `.completed` once one has. Display state derives from the active case;
-    /// no caller has to guard a nullable to know whether an action ever ran.
-    enum LastActionHistory {
-        case unrun
-        case completed(ActionResult)
-    }
-
-    /// Owns command-execution state derived from dispatched action responses.
-    /// The last action and its measured dispatch latency move together so
-    /// session-state projection cannot read from sibling lifecycle fields.
-    struct CommandExecutionState {
-        private(set) var lastActionHistory: LastActionHistory = .unrun
-        private(set) var lastLatencyMs: Int = 0
-
-        var snapshot: CommandExecutionSnapshot {
-            CommandExecutionSnapshot(lastAction: lastActionPayload)
-        }
-
-        var lastActionResult: ActionResult? {
-            if case .completed(let result) = lastActionHistory { return result }
-            return nil
-        }
-
-        var lastActionPayload: SessionLastActionPayload? {
-            lastActionResult.map { last in
-                SessionLastActionPayload(
-                    method: last.method,
-                    success: last.success,
-                    message: last.message,
-                    latencyMs: lastLatencyMs
-                )
-            }
-        }
-
-        mutating func noteDispatchedResponse(_ response: FenceResponse, latencyMs: Int) {
-            guard response.actionResult != nil else { return }
-            lastLatencyMs = latencyMs
-        }
-
-        mutating func completeAction(_ result: ActionResult) {
-            lastActionHistory = .completed(result)
-        }
-
-        mutating func reset() {
-            lastActionHistory = .unrun
-            lastLatencyMs = 0
-        }
-    }
-
     private var commandExecutionState = CommandExecutionState()
     var commandExecutionSnapshot: CommandExecutionSnapshot {
         commandExecutionState.snapshot
@@ -1880,15 +1450,15 @@ public final class TheFence {
     // MARK: - Async Wait Methods
 
     func waitForActionResult(requestId: String, timeout: TimeInterval) async throws -> ActionResult {
-        try await pendingRequests.action.wait(requestId: requestId, timeout: timeout)
+        try await pendingRequests.waitForAction(requestId: requestId, timeout: timeout)
     }
 
     func waitForInterface(requestId: String, timeout: TimeInterval = 10.0) async throws -> Interface {
-        try await pendingRequests.interface.wait(requestId: requestId, timeout: timeout)
+        try await pendingRequests.waitForInterface(requestId: requestId, timeout: timeout)
     }
 
     func waitForScreen(requestId: String, timeout: TimeInterval = 30.0) async throws -> ScreenPayload {
-        try await pendingRequests.screen.wait(requestId: requestId, timeout: timeout)
+        try await pendingRequests.waitForScreen(requestId: requestId, timeout: timeout)
     }
 
     // Recording responses do not carry request IDs, so synthesize a single key
@@ -1925,7 +1495,10 @@ public final class TheFence {
                 case .enqueued:
                     didSendStart = true
                 case .failed(let failure):
-                    self.recording.resolveStartWait(requestId: syntheticId, result: .failure(FenceError(failure)))
+                    self.recording.resolveStartWait(
+                        requestId: syntheticId,
+                        result: Result<Bool, Error>.failure(FenceError(failure))
+                    )
                 }
             }
         } catch {

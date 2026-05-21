@@ -3,8 +3,8 @@ import ButtonHeist
 
 // MARK: - Tap
 
-struct TapSubcommand: AsyncParsableCommand, CatalogBackedCLICommand {
-    static let fenceCommandProjection: TheFence.Command.CLIProjection = .oneFingerTap
+struct TapSubcommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.oneFingerTap
 
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
@@ -54,8 +54,8 @@ struct TapSubcommand: AsyncParsableCommand, CatalogBackedCLICommand {
 
 // MARK: - Long Press
 
-struct LongPressSubcommand: AsyncParsableCommand, CatalogBackedCLICommand {
-    static let fenceCommandProjection: TheFence.Command.CLIProjection = .longPress
+struct LongPressSubcommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.longPress
 
     static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Long press at a point or element")
 
@@ -95,8 +95,8 @@ struct LongPressSubcommand: AsyncParsableCommand, CatalogBackedCLICommand {
 
 // MARK: - Swipe
 
-struct SwipeSubcommand: AsyncParsableCommand, CatalogBackedCLICommand {
-    static let fenceCommandProjection: TheFence.Command.CLIProjection = .swipe
+struct SwipeSubcommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.swipe
 
     static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Swipe between two points or in a direction")
 
@@ -199,8 +199,8 @@ struct SwipeSubcommand: AsyncParsableCommand, CatalogBackedCLICommand {
 
 // MARK: - Drag
 
-struct DragSubcommand: AsyncParsableCommand, CatalogBackedCLICommand {
-    static let fenceCommandProjection: TheFence.Command.CLIProjection = .drag
+struct DragSubcommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.drag
 
     static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Drag from one point to another")
 
@@ -250,8 +250,8 @@ struct DragSubcommand: AsyncParsableCommand, CatalogBackedCLICommand {
 
 // MARK: - Pinch
 
-struct PinchSubcommand: AsyncParsableCommand, CatalogBackedCLICommand {
-    static let fenceCommandProjection: TheFence.Command.CLIProjection = .pinch
+struct PinchSubcommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.pinch
 
     static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Pinch/zoom at a point or element")
 
@@ -299,8 +299,8 @@ struct PinchSubcommand: AsyncParsableCommand, CatalogBackedCLICommand {
 
 // MARK: - Rotate
 
-struct RotateSubcommand: AsyncParsableCommand, CatalogBackedCLICommand {
-    static let fenceCommandProjection: TheFence.Command.CLIProjection = .rotate
+struct RotateSubcommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.rotate
 
     static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Rotate at a point or element")
 
@@ -348,8 +348,8 @@ struct RotateSubcommand: AsyncParsableCommand, CatalogBackedCLICommand {
 
 // MARK: - Two-Finger Tap
 
-struct TwoFingerTapSubcommand: AsyncParsableCommand, CatalogBackedCLICommand {
-    static let fenceCommandProjection: TheFence.Command.CLIProjection = .twoFingerTap
+struct TwoFingerTapSubcommand: AsyncParsableCommand, CLICommandContract {
+    static let fenceCommand = TheFence.Command.twoFingerTap
 
     static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Tap with two fingers at a point or element")
 
