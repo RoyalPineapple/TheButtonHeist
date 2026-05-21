@@ -2,18 +2,6 @@ import Foundation
 
 import TheScore
 
-private extension TheFence.Command {
-    var requiresConnectionBeforeDispatch: Bool {
-        switch self {
-        case .getSessionState, .listDevices, .connect, .listTargets,
-             .getSessionLog, .archiveSession, .startHeist, .stopHeist:
-            return false
-        default:
-            return true
-        }
-    }
-}
-
 extension TheFence {
     struct DispatchResult {
         let response: FenceResponse
