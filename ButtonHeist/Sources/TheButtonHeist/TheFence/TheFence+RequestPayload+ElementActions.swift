@@ -9,146 +9,35 @@ extension TheFence {
         request: [String: Any]
     ) throws -> RequestPayload {
         switch command {
-        case .scroll, .scrollToVisible, .elementSearch, .scrollToEdge:
-            return .scroll(try decodeScrollPayload(command: command, request: request))
-        case .activate, .increment, .decrement, .performCustomAction:
-            return .accessibility(try decodeAccessibilityPayload(command: command, request: request))
+        case .scroll:
+            return .scroll(.scroll(try ScrollRequestInput(request, fence: self).target))
+        case .scrollToVisible:
+            return .scroll(.scrollToVisible(try ScrollToVisibleRequestInput(request, fence: self).target))
+        case .elementSearch:
+            return .scroll(.elementSearch(try ElementSearchRequestInput(request, fence: self).target))
+        case .scrollToEdge:
+            return .scroll(.scrollToEdge(try ScrollToEdgeRequestInput(request, fence: self).target))
+        case .activate:
+            return .accessibility(try ActivateRequestInput(request, fence: self).payload)
+        case .increment:
+            return .accessibility(try IncrementRequestInput(request, fence: self).payload)
+        case .decrement:
+            return .accessibility(try DecrementRequestInput(request, fence: self).payload)
+        case .performCustomAction:
+            return .accessibility(try PerformCustomActionRequestInput(request, fence: self).payload)
         case .rotor:
-            return .rotor(try decodeRotorTarget(request))
+            return .rotor(try RotorRequestInput(request, fence: self).target)
         case .typeText:
-            return .typeText(try decodeTypeTextTarget(request))
+            return .typeText(try TypeTextRequestInput(request, fence: self).target)
         case .editAction:
-            return .editAction(EditActionTarget(
-                action: try request.requiredSchemaEnum("action", as: EditAction.self)
-            ))
+            return .editAction(try EditActionRequestInput(request).target)
         case .setPasteboard:
-            return .setPasteboard(SetPasteboardTarget(
-                text: try request.requiredSchemaString("text")
-            ))
+            return .setPasteboard(try SetPasteboardRequestInput(request).target)
         case .waitFor:
-            return .waitFor(try decodeWaitForTarget(request))
+            return .waitFor(try WaitForRequestInput(request, fence: self).target)
         default:
             throw FenceError.invalidRequest("Unexpected element action command: \(command.rawValue)")
         }
-    }
-
-    private func decodeScrollPayload(
-        command: Command,
-        request: [String: Any]
-    ) throws -> ScrollPayload {
-        switch command {
-        case .scroll:
-            let direction = try request.requiredSchemaEnum("direction", as: ScrollDirection.self) { $0.lowercased() }
-            return .scroll(ScrollTarget(
-                elementTarget: try requiredElementTarget(request, command: command),
-                direction: direction
-            ))
-        case .scrollToVisible:
-            return .scrollToVisible(ScrollToVisibleTarget(
-                elementTarget: try requiredElementTarget(request, command: command)
-            ))
-        case .elementSearch:
-            return .elementSearch(ElementSearchTarget(
-                elementTarget: try requiredElementTarget(request, command: command),
-                direction: try request.schemaEnum("direction", as: ScrollSearchDirection.self) { $0.lowercased() }
-            ))
-        case .scrollToEdge:
-            let edge = try request.requiredSchemaEnum("edge", as: ScrollEdge.self) { $0.lowercased() }
-            return .scrollToEdge(ScrollToEdgeTarget(
-                elementTarget: try requiredElementTarget(request, command: command),
-                edge: edge
-            ))
-        default:
-            throw FenceError.invalidRequest("Unexpected scroll command: \(command.rawValue)")
-        }
-    }
-
-    private func decodeAccessibilityPayload(
-        command: Command,
-        request: [String: Any]
-    ) throws -> AccessibilityPayload {
-        let target = try requiredElementTarget(request, command: command)
-        let count = CountArgument(
-            value: try request.schemaInteger("count"),
-            observed: request["count"]
-        )
-        switch command {
-        case .activate:
-            return .activate(
-                target,
-                actionName: try request.schemaString("action"),
-                count: count
-            )
-        case .increment:
-            return .increment(target, count: count)
-        case .decrement:
-            return .decrement(target, count: count)
-        case .performCustomAction:
-            return .performCustomAction(
-                target,
-                actionName: try request.requiredSchemaString("action"),
-                count: count
-            )
-        default:
-            throw FenceError.invalidRequest("Unexpected accessibility command: \(command.rawValue)")
-        }
-    }
-
-    private func decodeRotorTarget(_ request: [String: Any]) throws -> RotorTarget {
-        let target = try requiredElementTarget(request, command: .rotor)
-        if let rotorIndex = try request.schemaInteger("rotorIndex"), rotorIndex < 0 {
-            throw SchemaValidationError(field: "rotorIndex", observed: rotorIndex, expected: "integer >= 0")
-        }
-        let currentTextStartOffset = try request.schemaInteger("currentTextStartOffset")
-        let currentTextEndOffset = try request.schemaInteger("currentTextEndOffset")
-        if (currentTextStartOffset == nil) != (currentTextEndOffset == nil) {
-            throw FenceError.invalidRequest("currentTextStartOffset and currentTextEndOffset must be provided together")
-        }
-        let currentTextRange: TextRangeReference?
-        if let startOffset = currentTextStartOffset, let endOffset = currentTextEndOffset {
-            guard try request.schemaString("currentHeistId") != nil else {
-                throw SchemaValidationError(field: "currentHeistId", observed: nil, expected: "string")
-            }
-            guard startOffset >= 0, endOffset >= startOffset else {
-                throw SchemaValidationError(
-                    field: "currentTextStartOffset/currentTextEndOffset",
-                    observed: "\(startOffset)..<\(endOffset)",
-                    expected: "integer range with start >= 0 and end >= start"
-                )
-            }
-            currentTextRange = TextRangeReference(startOffset: startOffset, endOffset: endOffset)
-        } else {
-            currentTextRange = nil
-        }
-
-        return RotorTarget(
-            elementTarget: target,
-            rotor: try request.schemaString("rotor"),
-            rotorIndex: try request.schemaInteger("rotorIndex"),
-            direction: try request.schemaEnum("direction", as: RotorDirection.self) { $0.lowercased() } ?? .next,
-            currentHeistId: try request.schemaString("currentHeistId"),
-            currentTextRange: currentTextRange
-        )
-    }
-
-    private func decodeTypeTextTarget(_ request: [String: Any]) throws -> TypeTextTarget {
-        let text = try request.requiredSchemaString("text")
-        if text.isEmpty {
-            throw SchemaValidationError(field: "text", observed: text as Any, expected: "non-empty string")
-        }
-        return TypeTextTarget(
-            text: text,
-            elementTarget: try decodedElementTarget(request)
-        )
-    }
-
-    private func decodeWaitForTarget(_ request: [String: Any]) throws -> WaitForTarget {
-        let target = try requiredElementTarget(request, command: .waitFor)
-        return WaitForTarget(
-            elementTarget: target,
-            absent: try request.schemaBoolean("absent"),
-            timeout: try request.schemaNumber("timeout")
-        )
     }
 
     func decodedElementTarget(_ request: [String: Any]) throws -> ElementTarget? {
@@ -204,5 +93,222 @@ extension TheFence {
             }
             return trait
         }
+    }
+}
+
+private extension TheFence {
+
+    struct ScrollRequestInput {
+        let target: ScrollTarget
+
+        @ButtonHeistActor
+        init(_ request: [String: Any], fence: TheFence) throws {
+            let direction = try request.requiredSchemaEnum("direction", as: ScrollDirection.self) { $0.lowercased() }
+            target = ScrollTarget(
+                elementTarget: try fence.requiredElementTarget(request, command: .scroll),
+                direction: direction
+            )
+        }
+    }
+
+    struct ScrollToVisibleRequestInput {
+        let target: ScrollToVisibleTarget
+
+        @ButtonHeistActor
+        init(_ request: [String: Any], fence: TheFence) throws {
+            target = ScrollToVisibleTarget(
+                elementTarget: try fence.requiredElementTarget(request, command: .scrollToVisible)
+            )
+        }
+    }
+
+    struct ElementSearchRequestInput {
+        let target: ElementSearchTarget
+
+        @ButtonHeistActor
+        init(_ request: [String: Any], fence: TheFence) throws {
+            target = ElementSearchTarget(
+                elementTarget: try fence.requiredElementTarget(request, command: .elementSearch),
+                direction: try request.schemaEnum("direction", as: ScrollSearchDirection.self) { $0.lowercased() }
+            )
+        }
+    }
+
+    struct ScrollToEdgeRequestInput {
+        let target: ScrollToEdgeTarget
+
+        @ButtonHeistActor
+        init(_ request: [String: Any], fence: TheFence) throws {
+            let edge = try request.requiredSchemaEnum("edge", as: ScrollEdge.self) { $0.lowercased() }
+            target = ScrollToEdgeTarget(
+                elementTarget: try fence.requiredElementTarget(request, command: .scrollToEdge),
+                edge: edge
+            )
+        }
+    }
+
+    struct ActivateRequestInput {
+        let payload: AccessibilityPayload
+
+        @ButtonHeistActor
+        init(_ request: [String: Any], fence: TheFence) throws {
+            let target = try fence.requiredElementTarget(request, command: .activate)
+            let count = try CountArgument(request)
+            payload = .activate(
+                target,
+                actionName: try request.schemaString("action"),
+                count: count
+            )
+        }
+    }
+
+    struct IncrementRequestInput {
+        let payload: AccessibilityPayload
+
+        @ButtonHeistActor
+        init(_ request: [String: Any], fence: TheFence) throws {
+            let target = try fence.requiredElementTarget(request, command: .increment)
+            payload = .increment(target, count: try CountArgument(request))
+        }
+    }
+
+    struct DecrementRequestInput {
+        let payload: AccessibilityPayload
+
+        @ButtonHeistActor
+        init(_ request: [String: Any], fence: TheFence) throws {
+            let target = try fence.requiredElementTarget(request, command: .decrement)
+            payload = .decrement(target, count: try CountArgument(request))
+        }
+    }
+
+    struct PerformCustomActionRequestInput {
+        let payload: AccessibilityPayload
+
+        @ButtonHeistActor
+        init(_ request: [String: Any], fence: TheFence) throws {
+            let target = try fence.requiredElementTarget(request, command: .performCustomAction)
+            let count = try CountArgument(request)
+            payload = .performCustomAction(
+                target,
+                actionName: try request.requiredSchemaString("action"),
+                count: count
+            )
+        }
+    }
+
+    struct RotorRequestInput {
+        let target: RotorTarget
+
+        @ButtonHeistActor
+        init(_ request: [String: Any], fence: TheFence) throws {
+            let elementTarget = try fence.requiredElementTarget(request, command: .rotor)
+            let rotorIndex = try request.schemaInteger("rotorIndex")
+            if let rotorIndex, rotorIndex < 0 {
+                throw SchemaValidationError(field: "rotorIndex", observed: rotorIndex, expected: "integer >= 0")
+            }
+
+            let currentTextStartOffset = try request.schemaInteger("currentTextStartOffset")
+            let currentTextEndOffset = try request.schemaInteger("currentTextEndOffset")
+            if (currentTextStartOffset == nil) != (currentTextEndOffset == nil) {
+                throw FenceError.invalidRequest("currentTextStartOffset and currentTextEndOffset must be provided together")
+            }
+
+            let currentTextRange: TextRangeReference?
+            let requiredCurrentHeistId: String?
+            if let startOffset = currentTextStartOffset, let endOffset = currentTextEndOffset {
+                guard let currentHeistId = try request.schemaString("currentHeistId") else {
+                    throw SchemaValidationError(field: "currentHeistId", observed: nil, expected: "string")
+                }
+                guard startOffset >= 0, endOffset >= startOffset else {
+                    throw SchemaValidationError(
+                        field: "currentTextStartOffset/currentTextEndOffset",
+                        observed: "\(startOffset)..<\(endOffset)",
+                        expected: "integer range with start >= 0 and end >= start"
+                    )
+                }
+                currentTextRange = TextRangeReference(startOffset: startOffset, endOffset: endOffset)
+                requiredCurrentHeistId = currentHeistId
+            } else {
+                currentTextRange = nil
+                requiredCurrentHeistId = nil
+            }
+
+            let rotor = try request.schemaString("rotor")
+            let direction = try request.schemaEnum("direction", as: RotorDirection.self) { $0.lowercased() } ?? .next
+            let currentHeistId = if let requiredCurrentHeistId {
+                requiredCurrentHeistId
+            } else {
+                try request.schemaString("currentHeistId")
+            }
+
+            target = RotorTarget(
+                elementTarget: elementTarget,
+                rotor: rotor,
+                rotorIndex: rotorIndex,
+                direction: direction,
+                currentHeistId: currentHeistId,
+                currentTextRange: currentTextRange
+            )
+        }
+    }
+
+    struct TypeTextRequestInput {
+        let target: TypeTextTarget
+
+        @ButtonHeistActor
+        init(_ request: [String: Any], fence: TheFence) throws {
+            let text = try request.requiredSchemaString("text")
+            if text.isEmpty {
+                throw SchemaValidationError(field: "text", observed: text as Any, expected: "non-empty string")
+            }
+            target = TypeTextTarget(
+                text: text,
+                elementTarget: try fence.decodedElementTarget(request)
+            )
+        }
+    }
+
+    struct EditActionRequestInput {
+        let target: EditActionTarget
+
+        init(_ request: [String: Any]) throws {
+            target = EditActionTarget(
+                action: try request.requiredSchemaEnum("action", as: EditAction.self)
+            )
+        }
+    }
+
+    struct SetPasteboardRequestInput {
+        let target: SetPasteboardTarget
+
+        init(_ request: [String: Any]) throws {
+            target = SetPasteboardTarget(
+                text: try request.requiredSchemaString("text")
+            )
+        }
+    }
+
+    struct WaitForRequestInput {
+        let target: WaitForTarget
+
+        @ButtonHeistActor
+        init(_ request: [String: Any], fence: TheFence) throws {
+            target = WaitForTarget(
+                elementTarget: try fence.requiredElementTarget(request, command: .waitFor),
+                absent: try request.schemaBoolean("absent"),
+                timeout: try request.schemaNumber("timeout")
+            )
+        }
+    }
+}
+
+private extension TheFence.CountArgument {
+
+    init(_ request: [String: Any]) throws {
+        self.init(
+            value: try request.schemaInteger("count"),
+            observed: request["count"]
+        )
     }
 }
