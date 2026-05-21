@@ -277,7 +277,7 @@ struct ToolSyncTests {
         ]
 
         for (mode, command) in expectedCommands {
-            #expect(mode.canonicalCommand == command.rawValue)
+            #expect(TheFence.Command.command(for: mode) == command)
         }
     }
 

@@ -261,6 +261,19 @@ public extension TheFence.Command {
         allCases.filter(\.catalogPlaybackExecutable)
     }
 
+    static func command(for scrollMode: ScrollMode) -> Self {
+        switch scrollMode {
+        case .page:
+            return .scroll
+        case .toVisible:
+            return .scrollToVisible
+        case .search:
+            return .elementSearch
+        case .toEdge:
+            return .scrollToEdge
+        }
+    }
+
     /// Commands that are persisted when a heist recording is active.
     var isHeistRecordable: Bool {
         descriptor.isHeistRecordable
@@ -487,9 +500,7 @@ extension TheFence.Command {
                 ),
                 defaultValue: ScrollMode.page.rawValue,
                 commandByValue: Dictionary(
-                    ScrollMode.allCases.compactMap { mode in
-                        Self(rawValue: mode.canonicalCommand).map { (mode.rawValue, $0) }
-                    },
+                    ScrollMode.allCases.map { mode in (mode.rawValue, Self.command(for: mode)) },
                     uniquingKeysWith: { _, newest in newest }
                 )
             )
