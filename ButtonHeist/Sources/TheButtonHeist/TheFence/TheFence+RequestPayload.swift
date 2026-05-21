@@ -122,7 +122,6 @@ extension TheFence {
     struct ParsedRequest {
         let command: Command
         let requestId: String
-        let originalRequest: [String: Any]
         let payload: RequestPayload
         let expectationPayload: ExpectationPayload
         /// Non-nil when the command short-circuits before dispatch (help/quit/exit).
@@ -144,6 +143,84 @@ extension TheFence {
 
     struct PlayHeistRequest {
         let inputPath: String
+    }
+
+    /// Parse and validate a raw request dictionary into typed fields.
+    /// Returns an ImmediateResponse-bearing `ParsedRequest` for help/quit/exit
+    /// so the caller short-circuits without logging or dispatching.
+    func parseRequest(_ request: [String: Any]) throws -> ParsedRequest {
+        let commandString = try request.requiredSchemaString("command")
+        guard let command = Command(rawValue: commandString) else {
+            return ParsedRequest(
+                command: .help,
+                requestId: "",
+                payload: .none,
+                expectationPayload: ExpectationPayload(expectation: nil, timeout: nil),
+                immediateResponse: .error("Unknown command: \(commandString). Use 'help' for available commands.")
+            )
+        }
+        var arguments = request
+        arguments.removeValue(forKey: "command")
+        return try parseRequest(command: command, arguments: arguments)
+    }
+
+    func parseRequest(command: Command, request: [String: Any]) throws -> ParsedRequest {
+        var arguments = request
+        arguments.removeValue(forKey: "command")
+        return try parseRequest(command: command, arguments: arguments)
+    }
+
+    func parseRequest(command: Command, arguments: [String: Any]) throws -> ParsedRequest {
+        try validateRequestKeys(command: command, arguments: arguments)
+        if let immediate = handleImmediateCommand(command) {
+            return ParsedRequest(
+                command: command,
+                requestId: "",
+                payload: .none,
+                expectationPayload: ExpectationPayload(expectation: nil, timeout: nil),
+                immediateResponse: immediate
+            )
+        }
+        let requestId = (arguments["requestId"] as? String) ?? UUID().uuidString
+        let expectationPayload = try parseExpectationPayload(arguments)
+        let payload: RequestPayload = if command == .waitForChange {
+            .waitForChange(expectationPayload)
+        } else {
+            try decodeRequestPayload(command: command, request: arguments, requestId: requestId)
+        }
+
+        return ParsedRequest(
+            command: command,
+            requestId: requestId,
+            payload: payload,
+            expectationPayload: expectationPayload,
+            immediateResponse: nil
+        )
+    }
+
+    func parseRequest(operation: NormalizedOperation) throws -> ParsedRequest {
+        try parseRequest(command: operation.command, arguments: operation.arguments)
+    }
+
+    private func validateRequestKeys(command: Command, arguments: [String: Any]) throws {
+        let metadataKeys = Set(["requestId"])
+        let parameterKeys = Set(command.parameters.map(\.key))
+        let allowedKeys = metadataKeys.union(parameterKeys)
+        guard let unexpectedKey = arguments.keys.sorted().first(where: { !allowedKeys.contains($0) }) else {
+            return
+        }
+        throw SchemaValidationError(
+            field: unexpectedKey,
+            observed: arguments[unexpectedKey],
+            expected: "valid \(command.rawValue) parameter"
+        )
+    }
+
+    func parsePlaybackOperation(
+        _ operation: PlaybackOperation,
+        bridgeArguments request: [String: Any]
+    ) throws -> ParsedRequest {
+        try parseRequest(command: operation.command, request: request)
     }
 
     func decodeRequestPayload(

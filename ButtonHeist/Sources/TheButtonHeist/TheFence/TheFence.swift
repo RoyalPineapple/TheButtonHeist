@@ -17,353 +17,6 @@ struct RecordingSnapshot {
     let isWaitingForCompletion: Bool
 }
 
-struct CommandExecutionSnapshot {
-    let lastAction: SessionLastActionPayload?
-}
-
-/// Stable client-side phase for connection and request failures.
-///
-/// This is not part of the wire protocol. It classifies existing local errors
-/// so CLI/MCP surfaces and tests can reason about failures without parsing
-/// human messages.
-public enum FailurePhase: String, Sendable, Equatable, CaseIterable {
-    case discovery
-    case setup
-    case transport
-    case authentication = "auth"
-    case session
-    case request
-    case recording
-    case protocolNegotiation = "protocol"
-    case tls
-    case client
-    case server
-}
-
-/// Typed connection-attempt failure preserved from the lower-level disconnect cause.
-public struct ConnectionFailure: Equatable, Sendable {
-    public let message: String
-    public let errorCode: String
-    public let phase: FailurePhase
-    public let retryable: Bool
-    public let hint: String?
-
-    public init(
-        message: String,
-        errorCode: String,
-        phase: FailurePhase,
-        retryable: Bool,
-        hint: String?
-    ) {
-        self.message = message
-        self.errorCode = errorCode
-        self.phase = phase
-        self.retryable = retryable
-        self.hint = hint
-    }
-}
-
-extension ConnectionFailure {
-    init(disconnectReason reason: DisconnectReason) {
-        self.init(
-            message: reason.connectionFailureMessage,
-            errorCode: reason.failureCode,
-            phase: reason.phase,
-            retryable: reason.retryable,
-            hint: reason.hint
-        )
-    }
-}
-
-/// Errors thrown by TheFence during command dispatch, connection, and action execution.
-public enum FenceError: Error, LocalizedError {
-    case invalidRequest(String)
-    case noDeviceFound
-    case noMatchingDevice(filter: String, available: [String])
-    case connectionTimeout
-    case connectionFailed(String)
-    case connectionFailure(ConnectionFailure)
-    case sessionLocked(String)
-    case authFailed(String)
-    case authApprovalPending(String)
-    case notConnected
-    case actionTimeout
-    case actionFailed(String)
-    case serverError(ServerError)
-
-    private static let actionTimeoutRecoveryHint =
-        "The app may be busy on its main thread, processing a long-running UI update, " +
-        "or sending a large response. The connection is preserved; retry the command on the same session."
-
-    public var errorDescription: String? {
-        switch self {
-        case .invalidRequest(let message):
-            return message
-        case .noDeviceFound:
-            return "No devices found within timeout. Is the app running?"
-        case .noMatchingDevice(let filter, let available):
-            let list = available.isEmpty ? "(none)" : available.joined(separator: ", ")
-            return "No device matching '\(filter)'. Available: \(list)"
-        case .connectionTimeout:
-            return """
-                Connection timed out
-                  Hint: Is the app running? Check 'buttonheist list' to see available devices.
-                """
-        case .connectionFailed(let message):
-            return """
-                Connection failed: \(message)
-                  Hint: Is the app running? Check 'buttonheist list' to see available devices.
-                """
-        case .connectionFailure(let failure):
-            return failure.message
-        case .sessionLocked(let message):
-            return """
-                Session locked: \(message)
-                  Another driver is currently connected. Wait for it to disconnect
-                  or for the session to time out.
-                  If this is your own stale session, retry with the same BUTTONHEIST_DRIVER_ID
-                  or restart the app to release it.
-                """
-        case .authFailed(let message):
-            let base = "Auth failed: \(message)"
-            guard let hint = Self.authFailureRecoveryHint(for: message) else { return base }
-            return """
-                \(base)
-                  \(hint)
-                """
-        case .authApprovalPending(let message):
-            return """
-                Auth approval pending: \(message)
-                  Waiting for approval on the device. Tap Allow on the iOS device to continue.
-                """
-        case .notConnected:
-            return """
-                Not connected to device.
-                  The previous connection may have closed or timed out.
-                  Hint: Check that the app is running, then retry the command. Use 'buttonheist list' to see available devices.
-                """
-        case .actionTimeout:
-            return """
-                Command timed out waiting for a response from the app.
-                  \(Self.actionTimeoutRecoveryHint)
-                """
-        case .actionFailed(let message):
-            return "Action failed: \(message)"
-        case .serverError(let serverError):
-            return "Action failed: \(serverError.message)"
-        }
-    }
-
-    public var errorCode: String {
-        switch self {
-        case .invalidRequest:
-            return "request.invalid"
-        case .noDeviceFound:
-            return "discovery.no_device_found"
-        case .noMatchingDevice:
-            return "discovery.no_matching_device"
-        case .connectionTimeout:
-            return "setup.timeout"
-        case .connectionFailed:
-            return "connection.failed"
-        case .connectionFailure(let failure):
-            return failure.errorCode
-        case .sessionLocked:
-            return "session.locked"
-        case .authFailed:
-            return "auth.failed"
-        case .authApprovalPending:
-            return "auth.approval_pending"
-        case .notConnected:
-            return "connection.not_connected"
-        case .actionTimeout:
-            return "request.timeout"
-        case .actionFailed:
-            return "request.action_failed"
-        case .serverError(let serverError):
-            return serverError.errorCode
-        }
-    }
-
-    public var phase: FailurePhase {
-        switch self {
-        case .invalidRequest, .notConnected, .actionTimeout, .actionFailed:
-            return .request
-        case .noDeviceFound, .noMatchingDevice:
-            return .discovery
-        case .connectionTimeout:
-            return .setup
-        case .connectionFailed:
-            return .transport
-        case .connectionFailure(let failure):
-            return failure.phase
-        case .sessionLocked:
-            return .session
-        case .authFailed, .authApprovalPending:
-            return .authentication
-        case .serverError(let serverError):
-            return serverError.phase
-        }
-    }
-
-    public var retryable: Bool {
-        switch self {
-        case .noDeviceFound, .connectionTimeout, .connectionFailed, .sessionLocked,
-             .notConnected, .actionTimeout:
-            return true
-        case .connectionFailure(let failure):
-            return failure.retryable
-        case .authApprovalPending:
-            return true
-        case .invalidRequest, .noMatchingDevice, .authFailed, .actionFailed:
-            return false
-        case .serverError(let serverError):
-            return serverError.retryable
-        }
-    }
-
-    public var hint: String? {
-        switch self {
-        case .invalidRequest:
-            return "Fix the request shape or arguments before retrying."
-        case .noDeviceFound:
-            return "Start the app and confirm it advertises a Button Heist session."
-        case .noMatchingDevice:
-            return "Check the device filter or target name against 'buttonheist list'."
-        case .connectionTimeout:
-            return "Is the app running? Check 'buttonheist list' to see available devices."
-        case .connectionFailed:
-            return "Is the app running? Check 'buttonheist list' to see available devices."
-        case .connectionFailure(let failure):
-            return failure.hint
-        case .sessionLocked:
-            return "Wait for the current driver to disconnect or for the session to time out. " +
-                "If this is your own stale session, retry with the same BUTTONHEIST_DRIVER_ID or restart the app."
-        case .authFailed(let message):
-            return Self.authFailureRecoveryHint(for: message)
-        case .authApprovalPending:
-            return "Waiting for approval on the device. Tap Allow on the iOS device to continue."
-        case .notConnected:
-            return "Check that the app is running, then retry the command. Use 'buttonheist list' to see available devices."
-        case .actionTimeout:
-            return Self.actionTimeoutRecoveryHint
-        case .actionFailed:
-            return nil
-        case .serverError(let serverError):
-            return serverError.hint
-        }
-    }
-
-    fileprivate static func authFailureRecoveryHint(for message: String) -> String? {
-        if message.localizedCaseInsensitiveContains("configured token") {
-            return "Retry with the configured token."
-        }
-        if message.localizedCaseInsensitiveContains("retry without") {
-            return "Retry without --token to request a fresh session."
-        }
-        return nil
-    }
-}
-
-public extension ServerError {
-    var errorCode: String {
-        kind.errorCode
-    }
-
-    var phase: FailurePhase {
-        kind.phase
-    }
-
-    var retryable: Bool {
-        kind.retryable
-    }
-
-    var hint: String? {
-        if kind == .authFailure {
-            return FenceError.authFailureRecoveryHint(for: message)
-        }
-        return kind.hint
-    }
-}
-
-private extension ErrorKind {
-    var errorCode: String {
-        switch self {
-        case .elementNotFound:
-            return "request.element_not_found"
-        case .timeout:
-            return "request.timeout"
-        case .unsupported:
-            return "request.unsupported"
-        case .inputError:
-            return "request.input_error"
-        case .validationError:
-            return "request.validation_error"
-        case .actionFailed:
-            return "request.action_failed"
-        case .authFailure:
-            return "auth.failed"
-        case .authApprovalPending:
-            return "auth.approval_pending"
-        case .recording:
-            return "recording.failed"
-        case .general:
-            return "server.general"
-        }
-    }
-
-    var phase: FailurePhase {
-        switch self {
-        case .elementNotFound, .timeout, .unsupported, .inputError,
-             .validationError, .actionFailed:
-            return .request
-        case .authFailure, .authApprovalPending:
-            return .authentication
-        case .recording:
-            return .recording
-        case .general:
-            return .server
-        }
-    }
-
-    var retryable: Bool {
-        switch self {
-        case .timeout:
-            return true
-        case .authApprovalPending:
-            return true
-        case .elementNotFound, .unsupported, .inputError, .validationError,
-             .actionFailed, .authFailure, .recording, .general:
-            return false
-        }
-    }
-
-    var hint: String? {
-        switch self {
-        case .elementNotFound:
-            return "Refresh the interface and verify the target's accessibility properties."
-        case .timeout:
-            return "The request timed out; retry on the same session if the app is responsive."
-        case .unsupported:
-            return "Use a supported command or target for this element."
-        case .inputError:
-            return "Fix the request input before retrying."
-        case .validationError:
-            return "Fix the request so it satisfies the server-side validation rules."
-        case .actionFailed:
-            return nil
-        case .authFailure:
-            return nil
-        case .authApprovalPending:
-            return "Waiting for approval on the device. Tap Allow on the iOS device to continue."
-        case .recording:
-            return "Stop any in-progress recording and retry after resolving the recording error."
-        case .general:
-            return nil
-        }
-    }
-}
-
 private extension TheFence.Command {
     var requiresConnectionBeforeDispatch: Bool {
         switch self {
@@ -389,32 +42,6 @@ private extension FenceResponse {
     var heistRecordingReceipt: HeistRecordingReceipt? {
         guard case .action(let result, let expectation) = self else { return nil }
         return HeistRecordingReceipt(actionResult: result, expectation: expectation)
-    }
-}
-
-extension FenceError {
-    init(_ connectionError: TheHandoff.ConnectionError) {
-        switch connectionError {
-        case .connectionFailed(let message): self = .connectionFailed(message)
-        case .disconnected(.authFailed(let reason)): self = .authFailed(reason)
-        case .disconnected(.authApprovalPending(let message)): self = .authApprovalPending(message)
-        case .disconnected(.sessionLocked(let message)): self = .sessionLocked(message)
-        case .disconnected(let reason): self = .connectionFailure(ConnectionFailure(disconnectReason: reason))
-        case .timeout: self = .connectionTimeout
-        case .noDeviceFound: self = .noDeviceFound
-        case .noMatchingDevice(let filter, let available): self = .noMatchingDevice(filter: filter, available: available)
-        }
-    }
-
-    init(_ sendFailure: DeviceSendFailure) {
-        switch sendFailure {
-        case .notConnected:
-            self = .notConnected
-        case .encodingFailed(let message):
-            self = .actionFailed("Failed to send request: \(message)")
-        case .transportFailed(let message):
-            self = .actionFailed("Transport send failed: \(message)")
-        }
     }
 }
 
@@ -607,8 +234,8 @@ public final class TheFence {
     func clearClientSessionState(error: Error) {
         backgroundAccessibilityState.reset()
         commandExecutionState.reset()
-        recording.reset()
         cancelAllPendingRequests(error: error)
+        recording.reset()
     }
 
     private func handleRecordingEvent(_ event: RecordingEvent) {
@@ -662,6 +289,23 @@ public final class TheFence {
         let parsed: ParsedRequest
         do {
             parsed = try parseRequest(request)
+        } catch let error as SchemaValidationError {
+            return .error(error.message)
+        } catch let error as MissingElementTarget {
+            return missingElementTargetResponse(command: error.command)
+        } catch let error as FenceError {
+            return .error(error.coreMessage, details: error.failureDetails)
+        }
+        return try await execute(parsed: parsed)
+    }
+
+    /// Execute an operation that has already been normalized by the shared command catalog.
+    ///
+    /// This keeps adapters from rebuilding command dictionaries after routing.
+    public func execute(operation: NormalizedOperation) async throws -> FenceResponse {
+        let parsed: ParsedRequest
+        do {
+            parsed = try parseRequest(operation: operation)
         } catch let error as SchemaValidationError {
             return .error(error.message)
         } catch let error as MissingElementTarget {
@@ -748,75 +392,6 @@ public final class TheFence {
         let deliveredCaptureRef: AccessibilityTrace.CaptureRef?
     }
 
-    /// Parse and validate a raw request dictionary into typed fields.
-    /// Returns an ImmediateResponse-bearing `ParsedRequest` for help/quit/exit
-    /// so the caller short-circuits without logging or dispatching.
-    func parseRequest(_ request: [String: Any]) throws -> ParsedRequest {
-        let commandString = try request.requiredSchemaString("command")
-        guard let command = Command(rawValue: commandString) else {
-            return ParsedRequest(
-                command: .help,
-                requestId: "",
-                originalRequest: request,
-                payload: .none,
-                expectationPayload: ExpectationPayload(expectation: nil, timeout: nil),
-                immediateResponse: .error("Unknown command: \(commandString). Use 'help' for available commands.")
-            )
-        }
-        return try parseRequest(command: command, request: request)
-    }
-
-    func parseRequest(command: Command, request: [String: Any]) throws -> ParsedRequest {
-        try validateRequestKeys(command: command, request: request)
-        if let immediate = handleImmediateCommand(command) {
-            return ParsedRequest(
-                command: command,
-                requestId: "",
-                originalRequest: request,
-                payload: .none,
-                expectationPayload: ExpectationPayload(expectation: nil, timeout: nil),
-                immediateResponse: immediate
-            )
-        }
-        let requestId = (request["requestId"] as? String) ?? UUID().uuidString
-        let expectationPayload = try parseExpectationPayload(request)
-        let payload: RequestPayload = if command == .waitForChange {
-            .waitForChange(expectationPayload)
-        } else {
-            try decodeRequestPayload(command: command, request: request, requestId: requestId)
-        }
-
-        return ParsedRequest(
-            command: command,
-            requestId: requestId,
-            originalRequest: request,
-            payload: payload,
-            expectationPayload: expectationPayload,
-            immediateResponse: nil
-        )
-    }
-
-    private func validateRequestKeys(command: Command, request: [String: Any]) throws {
-        let metadataKeys = Set(["command", "requestId"])
-        let parameterKeys = Set(command.parameters.map(\.key))
-        let allowedKeys = metadataKeys.union(parameterKeys)
-        guard let unexpectedKey = request.keys.sorted().first(where: { !allowedKeys.contains($0) }) else {
-            return
-        }
-        throw SchemaValidationError(
-            field: unexpectedKey,
-            observed: request[unexpectedKey],
-            expected: "valid \(command.rawValue) parameter"
-        )
-    }
-
-    private func parsePlaybackOperation(
-        _ operation: PlaybackOperation,
-        bridgeArguments request: [String: Any]
-    ) throws -> ParsedRequest {
-        try parseRequest(command: operation.command, request: request)
-    }
-
     /// Ensure the connection is up if the command needs it, then dispatch
     /// the command and capture wall-clock duration.
     private func dispatchCommand(_ parsed: ParsedRequest) async throws -> DispatchResult {
@@ -861,7 +436,7 @@ public final class TheFence {
         )
     }
 
-    private func handleImmediateCommand(_ command: Command) -> FenceResponse? {
+    func handleImmediateCommand(_ command: Command) -> FenceResponse? {
         switch command {
         case .help:
             return .help(commands: Self.supportedCommands)
@@ -1364,67 +939,10 @@ public final class TheFence {
         return .actionFailed(error.localizedDescription)
     }
 
-    func elementTarget(_ dictionary: [String: Any]) throws -> ElementTarget? {
-        ElementTarget(
-            heistId: try dictionary.schemaString("heistId"),
-            matcher: try elementMatcher(dictionary),
-            ordinal: try dictionary.schemaInteger("ordinal")
-        )
-    }
-
-    func elementMatcher(_ dictionary: [String: Any]) throws -> ElementMatcher {
-        return ElementMatcher(
-            label: try dictionary.schemaString("label"),
-            identifier: try dictionary.schemaString("identifier"),
-            value: try dictionary.schemaString("value"),
-            traits: try parseTraitNames(try dictionary.schemaStringArray("traits"), field: "traits"),
-            excludeTraits: try parseTraitNames(try dictionary.schemaStringArray("excludeTraits"), field: "excludeTraits")
-        )
-    }
-
-    /// Parse an array of trait name strings into typed `HeistTrait` values.
-    /// Throws `FenceError.invalidRequest` with the list of valid names when an
-    /// unknown name is encountered. Returns `nil` when `names` is `nil` so
-    /// callers can pass a missing field through unchanged.
-    private func parseTraitNames(_ names: [String]?, field: String) throws -> [HeistTrait]? {
-        try names?.enumerated().map { index, name in
-            guard let trait = HeistTrait(rawValue: name) else {
-                throw SchemaValidationError(
-                    field: "\(field)[\(index)]",
-                    observed: name as Any,
-                    expected: SchemaValidationError.expectedEnum(HeistTrait.self)
-                )
-            }
-            return trait
-        }
-    }
-
     // Expectation parsing (`parseExpectation` and its helpers) lives in
     // TheFence+ExpectationParsing.swift.
 
-    private var commandExecutionState = CommandExecutionState()
-    var commandExecutionSnapshot: CommandExecutionSnapshot {
-        commandExecutionState.snapshot
-    }
-
-    var lastActionHistory: LastActionHistory {
-        commandExecutionState.lastActionHistory
-    }
-
-    /// Convenience read of the last completed action's result, if any.
-    var lastActionResult: ActionResult? {
-        commandExecutionState.lastActionResult
-    }
-
-    var lastActionPayload: SessionLastActionPayload? {
-        commandExecutionSnapshot.lastAction
-    }
-
-    /// Round-trip time in milliseconds for the last action command that
-    /// completed (request issued → response received).
-    var lastLatencyMs: Int {
-        commandExecutionState.lastLatencyMs
-    }
+    private(set) var commandExecutionState = CommandExecutionState()
 
     func recordCompletedAction(_ result: ActionResult) {
         commandExecutionState.completeAction(result)
@@ -1461,9 +979,9 @@ public final class TheFence {
         try await pendingRequests.waitForScreen(requestId: requestId, timeout: timeout)
     }
 
-    // Recording responses do not carry request IDs, so synthesize a single key
-    // while a stop_recording wait is in flight. Keeping the tracker on TheFence
-    // lets disconnect handling fail the wait immediately instead of timing out.
+    // Recording responses do not carry request IDs. The recording lifecycle
+    // carries the active start/completion wait so disconnect handling can fail
+    // it immediately instead of letting the caller time out.
     public func waitForRecording(timeout: TimeInterval = 120.0) async throws -> RecordingPayload {
         try await waitForRecording(timeout: timeout, afterRegister: nil)
     }
@@ -1473,7 +991,7 @@ public final class TheFence {
         return try await waitForRecording(timeout: timeout) {
             let outcome = self.handoff.send(.stopRecording, requestId: UUID().uuidString)
             if case .failed(let failure) = outcome {
-                self.resolveRecordingCompletion(.failure(FenceError(failure)))
+                self.recording.resolveActiveCompletion(.failure(FenceError(failure)))
             }
         }
     }
@@ -1483,22 +1001,18 @@ public final class TheFence {
         guard !isRecording else {
             throw FenceError.invalidRequest("Recording already in progress — use stop_recording first")
         }
-        let syntheticId = "recording-start"
-        try recording.beginStartWait(syntheticId: syntheticId)
-        defer { recording.finishStartWait(syntheticId: syntheticId) }
+        let wait = try recording.beginStartWait()
+        defer { recording.finishStartWait(wait) }
 
         var didSendStart = false
         do {
-            try await recording.waitForStart(requestId: syntheticId, timeout: timeout) {
+            try await wait.wait(timeout: timeout) {
                 let outcome = self.handoff.send(.startRecording(config), requestId: UUID().uuidString)
                 switch outcome {
                 case .enqueued:
                     didSendStart = true
                 case .failed(let failure):
-                    self.recording.resolveStartWait(
-                        requestId: syntheticId,
-                        result: Result<Bool, Error>.failure(FenceError(failure))
-                    )
+                    wait.resolve(.failure(FenceError(failure)))
                 }
             }
         } catch {
@@ -1507,14 +1021,6 @@ public final class TheFence {
             }
             throw error
         }
-    }
-
-    private func resolveRecordingStart(_ result: Result<Bool, Error>) {
-        recording.resolveStartWait(result)
-    }
-
-    private func resolveRecordingCompletion(_ result: Result<RecordingPayload, Error>) {
-        recording.resolveCompletionWait(result)
     }
 
     /// Run a recording from start to completion as a single async unit.
@@ -1570,10 +1076,9 @@ public final class TheFence {
         timeout: TimeInterval,
         afterRegister: (() -> Void)?
     ) async throws -> RecordingPayload {
-        let syntheticId = "recording"
-        try recording.beginCompletionWait(syntheticId: syntheticId)
-        defer { recording.finishCompletionWait(syntheticId: syntheticId) }
-        return try await recording.waitForCompletion(requestId: syntheticId, timeout: timeout, afterRegister: afterRegister)
+        let wait = try recording.beginCompletionWait()
+        defer { recording.finishCompletionWait(wait) }
+        return try await wait.wait(timeout: timeout, afterRegister: afterRegister)
     }
 
     private func cancelAllPendingRequests(error: Error = FenceError.actionTimeout) {

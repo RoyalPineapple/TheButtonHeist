@@ -562,8 +562,65 @@ final class TheFenceTests: XCTestCase {
 
         let text = FenceResponse.interface(interface, detail: .summary).compactFormatted()
         XCTAssertTrue(text.contains("<scrollable = \"390x1200\">"))
-        XCTAssertTrue(text.contains("  [0] wifi_toggle id=\"wifi\" \"Wi-Fi\" = \"On\" [button] hint=\"Double tap to toggle\""))
+        XCTAssertTrue(text.contains("  [0] wifi_toggle \"Wi-Fi\":\"On\" button hint=\"Double tap to toggle\" id=\"wifi\""))
         XCTAssertFalse(text.contains("frame"))
+    }
+
+    func testCompactElementLineNormalizesMissingStringsAndShowsDenseSignal() {
+        let missingStrings = HeistElement(
+            heistId: "rich_row",
+            description: "",
+            label: "",
+            value: "",
+            identifier: "",
+            hint: "",
+            traits: [.button, .staticText, .unknown("none"), .selected],
+            frameX: 0,
+            frameY: 0,
+            frameWidth: 100,
+            frameHeight: 44,
+            rotors: [HeistRotor(name: "Links"), HeistRotor(name: "")],
+            actions: [.activate, .custom("Open details")]
+        )
+        let nilStrings = HeistElement(
+            heistId: "rich_row",
+            description: "",
+            label: nil,
+            value: nil,
+            identifier: nil,
+            hint: nil,
+            traits: [.button, .staticText, .unknown("none"), .selected],
+            frameX: 0,
+            frameY: 0,
+            frameWidth: 100,
+            frameHeight: 44,
+            rotors: [HeistRotor(name: "Links")],
+            actions: [.activate, .custom("Open details")]
+        )
+        let labeled = HeistElement(
+            heistId: "cart-row",
+            description: "Cart row",
+            label: "Espresso, Espresso",
+            value: "$ 3,00",
+            identifier: "cart-row",
+            hint: "Use \"menu\"",
+            traits: [.staticText],
+            frameX: 0,
+            frameY: 0,
+            frameWidth: 100,
+            frameHeight: 44,
+            actions: []
+        )
+
+        XCTAssertEqual(
+            FenceResponse.compactElementLine(missingStrings, displayIndex: 4),
+            "[4] rich_row \"\" button | staticText | selected {Open details} [Links]"
+        )
+        XCTAssertEqual(FenceResponse.compactElementLine(missingStrings), FenceResponse.compactElementLine(nilStrings))
+        XCTAssertEqual(
+            FenceResponse.compactElementLine(labeled),
+            "cart-row \"Espresso, Espresso\":\"$ 3,00\" staticText hint=\"Use \\\"menu\\\"\" id=\"cart-row\""
+        )
     }
 
     func testFullCompactInterfaceIncludesGeometry() {
@@ -740,7 +797,7 @@ final class TheFenceTests: XCTestCase {
         let text = FenceResponse.action(result: result).compactFormatted()
 
         XCTAssertTrue(text.contains("element_search: found after 1 scrolls (29 unique elements seen)"))
-        XCTAssertTrue(text.contains("long_list_button \"Long List\" [button]"))
+        XCTAssertTrue(text.contains("long_list_button \"Long List\" button"))
         XCTAssertFalse(text.contains("scroll_to_visible"))
     }
 
@@ -1624,34 +1681,56 @@ final class TheFenceTests: XCTestCase {
         let (fence, mockConnection) = makeConnectedFence()
         fence.handoff.connect(to: TheFenceFixtures.testDevice)
         fence.recordCompletedAction(ActionResult(success: true, method: .activate))
-        XCTAssertNotNil(fence.lastActionResult)
+        XCTAssertNotNil(fence.currentSessionState().lastAction)
 
         mockConnection.onEvent?(.disconnected(.serverClosed))
 
-        XCTAssertNil(fence.lastActionResult)
         XCTAssertNil(fence.currentSessionState().lastAction)
     }
 
-    func testCommandExecutionStateOwnsLastActionAndLatency() {
+    func testCommandExecutionStateOwnsLastActionAndProjectsSessionPayload() {
         var state = TheFence.CommandExecutionState()
-        XCTAssertNil(state.lastActionResult)
-        XCTAssertNil(state.lastActionPayload)
+        XCTAssertNil(state.lastAction.sessionPayload)
 
         state.completeAction(ActionResult(success: true, method: .activate))
+        XCTAssertEqual(
+            state.lastAction.sessionPayload,
+            SessionLastActionPayload(
+                method: .activate,
+                success: true,
+                message: nil,
+                latencyMs: 0
+            )
+        )
+
         state.noteDispatchedResponse(
             .action(result: ActionResult(success: true, method: .activate)),
             latencyMs: 17
         )
 
-        XCTAssertEqual(state.lastActionPayload?.method, .activate)
-        XCTAssertEqual(state.lastActionPayload?.success, true)
-        XCTAssertEqual(state.lastActionPayload?.latencyMs, 17)
+        XCTAssertEqual(
+            state.lastAction.sessionPayload,
+            SessionLastActionPayload(
+                method: .activate,
+                success: true,
+                message: nil,
+                latencyMs: 17
+            )
+        )
 
         state.noteDispatchedResponse(.ok(message: "noop"), latencyMs: 99)
-        XCTAssertEqual(state.lastActionPayload?.latencyMs, 17)
+        XCTAssertEqual(
+            state.lastAction.sessionPayload,
+            SessionLastActionPayload(
+                method: .activate,
+                success: true,
+                message: nil,
+                latencyMs: 17
+            )
+        )
 
         state.reset()
-        XCTAssertNil(state.lastActionPayload)
+        XCTAssertNil(state.lastAction.sessionPayload)
     }
 
     @ButtonHeistActor

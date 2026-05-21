@@ -6,19 +6,19 @@ struct ToolRoutingTests {
 
     @Test("direct tools route to same command")
     func directToolRoutesToSameCommand() throws {
-        let request = try routed(TheFence.Command.startHeist.rawValue, ["identifier": "demo"])
+        let operation = try routed(TheFence.Command.startHeist.rawValue, ["identifier": "demo"])
 
-        #expect(request["command"] as? String == TheFence.Command.startHeist.rawValue)
-        #expect(request["identifier"] as? String == "demo")
+        #expect(operation.command == .startHeist)
+        #expect(operation.arguments["identifier"] as? String == "demo")
     }
 
     @Test("gesture type routes to command and removes type")
     func gestureTypeRoutesToCommand() throws {
-        let request = try routed("gesture", ["type": TheFence.Command.swipe.rawValue, "direction": "left"])
+        let operation = try routed("gesture", ["type": TheFence.Command.swipe.rawValue, "direction": "left"])
 
-        #expect(request["command"] as? String == TheFence.Command.swipe.rawValue)
-        #expect(request["type"] == nil)
-        #expect(request["direction"] as? String == "left")
+        #expect(operation.command == .swipe)
+        #expect(operation.arguments["type"] == nil)
+        #expect(operation.arguments["direction"] as? String == "left")
     }
 
     @Test("gesture requires type")
@@ -51,11 +51,11 @@ struct ToolRoutingTests {
             if let mode = routeCase.mode {
                 arguments["mode"] = mode
             }
-            let request = try routed(TheFence.Command.scroll.rawValue, arguments)
+            let operation = try routed(TheFence.Command.scroll.rawValue, arguments)
 
-            #expect(request["command"] as? String == routeCase.command)
-            #expect(request["mode"] == nil)
-            #expect(request["direction"] as? String == "down")
+            #expect(operation.command.rawValue == routeCase.command)
+            #expect(operation.arguments["mode"] == nil)
+            #expect(operation.arguments["direction"] as? String == "down")
         }
     }
 
@@ -75,18 +75,18 @@ struct ToolRoutingTests {
 
     @Test("edit_action dismiss routes to dismiss_keyboard")
     func editActionDismissRoutesToDismissKeyboard() throws {
-        let request = try routed(TheFence.Command.editAction.rawValue, ["action": "dismiss"])
+        let operation = try routed(TheFence.Command.editAction.rawValue, ["action": "dismiss"])
 
-        #expect(request["command"] as? String == TheFence.Command.dismissKeyboard.rawValue)
-        #expect(request["action"] == nil)
+        #expect(operation.command == .dismissKeyboard)
+        #expect(operation.arguments["action"] == nil)
     }
 
     @Test("edit_action keeps standard edit actions")
     func editActionKeepsStandardEditActions() throws {
-        let request = try routed(TheFence.Command.editAction.rawValue, ["action": "copy"])
+        let operation = try routed(TheFence.Command.editAction.rawValue, ["action": "copy"])
 
-        #expect(request["command"] as? String == TheFence.Command.editAction.rawValue)
-        #expect(request["action"] as? String == "copy")
+        #expect(operation.command == .editAction)
+        #expect(operation.arguments["action"] as? String == "copy")
     }
 
     @Test("run_batch still accepts canonical Fence command shapes")
@@ -224,9 +224,9 @@ struct ToolRoutingTests {
     @Test("all registered tools route through the catalog")
     func allRegisteredToolsRouteThroughCatalog() throws {
         for tool in ToolDefinitions.all {
-            let request = try routed(tool.name, minimalArguments(for: tool.name))
+            let operation = try routed(tool.name, minimalArguments(for: tool.name))
 
-            #expect(request["command"] is String, "\(tool.name) did not produce a command")
+            #expect(!operation.command.rawValue.isEmpty, "\(tool.name) did not produce a command")
         }
     }
 
@@ -244,10 +244,10 @@ struct ToolRoutingTests {
     private func routed(
         _ name: String,
         _ arguments: [String: Any]
-    ) throws -> [String: Any] {
+    ) throws -> NormalizedOperation {
         switch ButtonHeistMCPServer.routeToolRequest(name: name, arguments: arguments) {
-        case .success(let request):
-            return request
+        case .success(let operation):
+            return operation
         case .failure(let error):
             throw error
         }
