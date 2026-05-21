@@ -1582,6 +1582,59 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testTypeTextRequestDecodesTypedPayloadBeforeDispatch() async throws {
+        let (fence, _) = makeConnectedFence()
+        let parsed = try fence.parseRequest([
+            "command": "type_text",
+            "text": "hello",
+            "heistId": "search_field",
+        ])
+
+        guard case .typeText(let target) = parsed.payload else {
+            return XCTFail("Expected typed type_text payload, got \(parsed.payload)")
+        }
+        XCTAssertEqual(target.text, "hello")
+        XCTAssertEqual(target.elementTarget, .heistId("search_field"))
+    }
+
+    @ButtonHeistActor
+    func testTypeTextTypedPayloadDispatchesCanonicalWireMessage() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+
+        let response = try await fence.execute(request: [
+            "command": "type_text",
+            "text": "hello",
+            "heistId": "search_field",
+        ])
+
+        guard case .action = response else {
+            return XCTFail("Expected action response, got \(response)")
+        }
+        guard let (message, _) = mockConn.sent.last,
+              case .typeText(let target) = message else {
+            return XCTFail("Expected typeText message, got \(String(describing: mockConn.sent.last))")
+        }
+        XCTAssertEqual(target.text, "hello")
+        XCTAssertEqual(target.elementTarget, .heistId("search_field"))
+    }
+
+    @ButtonHeistActor
+    func testTypeTextRejectsNonStringTextBeforeDispatch() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+
+        let response = try await fence.execute(request: [
+            "command": "type_text",
+            "text": 3,
+        ])
+
+        guard case .error(let message, _) = response else {
+            return XCTFail("Expected error response, got \(response)")
+        }
+        XCTAssertEqual(message, "schema validation failed for text: observed integer 3; expected string")
+        XCTAssertTrue(mockConn.sent.isEmpty)
+    }
+
+    @ButtonHeistActor
     func testEditActionMissingAction() async {
         await assertValidationError(
             ["command": "edit_action"],
