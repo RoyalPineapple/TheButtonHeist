@@ -308,7 +308,7 @@ extension FenceResponse {
     }
 
     /// Compact one-line element format for LLM agents. Geometry is omitted.
-    static func compactElementLine(
+    public static func compactElementLine(
         _ element: HeistElement,
         displayIndex: Int? = nil,
         detail: InterfaceDetail = .summary
@@ -317,43 +317,29 @@ extension FenceResponse {
         if let displayIndex { parts.append("[\(displayIndex)]") }
         parts.append(element.heistId)
 
-        if let identifier = element.identifier, !identifier.isEmpty {
-            parts.append("id=\"\(identifier)\"")
+        var labelValue = quotedString(nonEmpty(element.label) ?? "")
+        if let value = nonEmpty(element.value) {
+            labelValue += ":\(quotedString(value))"
         }
-        if let label = element.label {
-            parts.append("\"\(label)\"")
-        }
-        if let value = element.value, !value.isEmpty {
-            parts.append("= \"\(value)\"")
-        }
+        parts.append(labelValue)
 
-        let meaningful = element.traits.filter { $0 != .staticText }
-        if !meaningful.isEmpty {
-            parts.append("[\(meaningful.map(\.rawValue).joined(separator: ", "))]")
+        let traits = element.traits.filter { $0.rawValue != "none" }
+        if !traits.isEmpty {
+            parts.append(traits.map(\.rawValue).joined(separator: " | "))
         }
 
         let actions = meaningfulActions(element)
         if !actions.isEmpty {
             parts.append("{\(actions.map(\.description).joined(separator: ", "))}")
         }
-        if let rotors = element.rotors, !rotors.isEmpty {
-            parts.append("rotors={\(rotors.map(\.name).joined(separator: ", "))}")
+        if let rotors = element.rotors?.compactMap({ nonEmpty($0.name) }), !rotors.isEmpty {
+            parts.append("[\(rotors.joined(separator: ", "))]")
         }
-        if let hint = element.hint, !hint.isEmpty {
-            parts.append("hint=\"\(hint)\"")
+        if let hint = nonEmpty(element.hint) {
+            parts.append("hint=\(quotedString(hint))")
         }
-        if let customContent = element.customContent {
-            let content = customContent.compactMap { item -> String? in
-                switch (item.label.isEmpty, item.value.isEmpty) {
-                case (false, false): return "\(item.label): \(item.value)"
-                case (false, true): return item.label
-                case (true, false): return item.value
-                case (true, true): return nil
-                }
-            }
-            if !content.isEmpty {
-                parts.append("content=\"\(content.joined(separator: "; "))\"")
-            }
+        if let identifier = nonEmpty(element.identifier) {
+            parts.append("id=\(quotedString(identifier))")
         }
         if detail == .full {
             parts.append("frame=(\(Int(element.frameX)),\(Int(element.frameY)),\(Int(element.frameWidth)),\(Int(element.frameHeight)))")
@@ -361,6 +347,19 @@ extension FenceResponse {
         }
 
         return parts.joined(separator: " ")
+    }
+
+    private static func nonEmpty(_ value: String?) -> String? {
+        guard let value, !value.isEmpty else { return nil }
+        return value
+    }
+
+    private static func quotedString(_ value: String) -> String {
+        if let data = try? JSONEncoder().encode(value),
+           let encoded = String(data: data, encoding: .utf8) {
+            return encoded
+        }
+        return "\"\(value.replacingOccurrences(of: "\"", with: "\\\""))\""
     }
 
     static func compactInterface(_ interface: Interface) -> String {

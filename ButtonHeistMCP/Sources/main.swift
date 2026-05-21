@@ -126,10 +126,10 @@ struct ButtonHeistMCPServer {
             case .screenChanged(let payload):
                 lines.append("[while_idle: screen changed (\(payload.elementCount) elements)]")
                 for (index, element) in payload.newInterface.elements.enumerated() {
-                    lines.append("  [\(index)] \(Self.compactBackgroundElement(element))")
+                    lines.append("  \(FenceResponse.compactElementLine(element, displayIndex: index))")
                 }
                 for element in transient {
-                    lines.append("  +- \(Self.compactBackgroundElement(element))")
+                    lines.append("  +- \(FenceResponse.compactElementLine(element))")
                 }
             case .elementsChanged(let payload):
                 let edits = payload.edits
@@ -140,18 +140,18 @@ struct ButtonHeistMCPServer {
                 if !transient.isEmpty { parts.append("+-\(transient.count)") }
                 lines.append("[while_idle: elements changed \(parts.joined(separator: " ")) (\(payload.elementCount) total)]")
                 for element in edits.added {
-                    lines.append("  + \(element.heistId) \"\(element.label ?? "")\"")
+                    lines.append("  + \(FenceResponse.compactElementLine(element))")
                 }
                 for heistId in edits.removed {
                     lines.append("  - \(heistId)")
                 }
                 for element in transient {
-                    lines.append("  +- \(Self.compactBackgroundElement(element))")
+                    lines.append("  +- \(FenceResponse.compactElementLine(element))")
                 }
             case .noChange(let payload):
                 lines.append("[while_idle: no net change (\(payload.elementCount) elements)]")
                 for element in transient {
-                    lines.append("  +- \(Self.compactBackgroundElement(element))")
+                    lines.append("  +- \(FenceResponse.compactElementLine(element))")
                 }
             }
             if !lines.isEmpty {
@@ -179,13 +179,4 @@ struct ButtonHeistMCPServer {
         return String(data: data, encoding: .utf8)
     }
 
-    private static func compactBackgroundElement(_ element: HeistElement) -> String {
-        var parts = [element.heistId]
-        if let label = element.label { parts.append("\"\(label)\"") }
-        if !element.traits.isEmpty {
-            let traitNames = element.traits.map(\.rawValue)
-            parts.append("[\(traitNames.joined(separator: ", "))]")
-        }
-        return parts.joined(separator: " ")
-    }
 }
