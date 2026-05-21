@@ -178,66 +178,72 @@ final class ReplSession {
 
 nonisolated extension ReplSession {
 
-    static let humanHelp = """
+    static var humanHelp: String {
+        let commandLines = descriptorHelpLines()
+        let aliasLines = aliasHelpLines()
+        let aliasSection = aliasLines.isEmpty ? "" : """
+
+            Aliases:
+        \(aliasLines.joined(separator: "\n"))
+        """
+
+        return """
         Commands (type a command, or use JSON for full control):
 
-        Quick reference:
-          help                        Show this help
-          status                      Connection status
-          quit / exit                 End session
-          devices                     List available devices
-
-        Inspect:
-          ui                          Get accessibility interface
-          screen                      Capture screenshot
-          screen output=photo.png     Save screenshot to file
-          change                      Wait for any UI change
-          change expect=screen_changed  Wait for specific change
-          change timeout=10           Wait with custom timeout
-          wait label="Loading" absent=true  Wait for element to disappear
-
-        Gestures:
-          tap <heistId>               Tap by current heistId handle
-          tap 100 200                 Tap at coordinates
-          press <id>                  Long press (duration=N for seconds)
-          swipe up <id>               Swipe direction on element
-          drag endX=200 endY=300      Drag gesture
-          pinch <id> scale=2.0        Pinch (>1 zoom in, <1 zoom out)
-          rotate <id> angle=1.57      Rotate (radians)
-          two_finger_tap <id>         Two-finger tap
-          draw_path points=[...]      Draw path through waypoints (JSON)
-          draw_bezier segments=[...]  Draw bezier curves (JSON)
-
-        Scrolling:
-          scroll down <id>            Scroll direction on element
-          scroll_to_visible <id>      Bring known element into view
-          element_search -l "text"    Search scroll content for element
-          scroll_to_edge top <id>     Scroll to edge
-
-        Actions:
-          activate <id>               Activate element
-          increment <id>              Increment (e.g. slider)
-          decrement <id>              Decrement
-          perform_custom_action <id>  Perform named custom action
-          rotor <id> rotor=Errors     Move to next rotor result
-          rotor previous <id>         Move to previous rotor result
-          type "hello world"          Type text
-          copy / paste / cut / delete Edit actions
-          select / select_all         Selection actions
-          dismiss_keyboard            Dismiss keyboard
-
-        Pasteboard:
-          set_pasteboard text="hello"  Write text to pasteboard
-          get_pasteboard               Read text from pasteboard
-
-        Recording:
-          record                      Start recording
-          stop_recording              Stop and retrieve recording
+        Commands:
+        \(commandLines.joined(separator: "\n"))
+        \(aliasSection)
 
         Bare words are looked up as current heistId handles (from get_interface).
         Key=value pairs work for any parameter: tap identifier=btn x=100 y=200
         JSON input still works: {"command":"activate","heistId":"button_save"}
         """
+    }
+
+    private static func descriptorHelpLines() -> [String] {
+        let descriptors = TheFence.Command.descriptors
+            .filter { descriptor in descriptor.cliExposure != .notExposed }
+            .sorted { $0.canonicalName < $1.canonicalName }
+        let width = descriptors.map(\.canonicalName.count).max() ?? 0
+
+        return descriptors.map { descriptor in
+            "  \(padded(descriptor.canonicalName, to: width))  \(oneLineDescription(descriptor.description))"
+        }
+    }
+
+    private static func aliasHelpLines() -> [String] {
+        var aliases: [HelpAlias] = []
+        for descriptor in TheFence.Command.descriptors {
+            for alias in descriptor.humanAliases.keys {
+                aliases.append(HelpAlias(alias: alias, command: descriptor.canonicalName))
+            }
+        }
+        aliases.sort { lhs, rhs in
+            lhs.alias == rhs.alias ? lhs.command < rhs.command : lhs.alias < rhs.alias
+        }
+
+        let width = aliases.map(\.alias.count).max() ?? 0
+        return aliases.map { alias in
+            "  \(padded(alias.alias, to: width))  -> \(alias.command)"
+        }
+    }
+
+    private static func oneLineDescription(_ description: String) -> String {
+        description
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first(where: { !$0.isEmpty }) ?? ""
+    }
+
+    private static func padded(_ value: String, to width: Int) -> String {
+        guard value.count < width else { return value }
+        return value + String(repeating: " ", count: width - value.count)
+    }
+
+    private struct HelpAlias {
+        let alias: String
+        let command: String
+    }
 
     private struct HumanCommandRequest {
         let command: TheFence.Command?
