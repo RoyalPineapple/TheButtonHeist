@@ -14,7 +14,7 @@ final class ScreenTests: XCTestCase {
         value: String? = nil,
         identifier: String? = nil,
         traits: UIAccessibilityTraits = .none,
-        shape: AccessibilityElement.Shape = .frame(.zero)
+        shape: AccessibilityElement.Shape = .frame(AccessibilityRect.zero)
     ) -> AccessibilityElement {
         .make(label: label, value: value, identifier: identifier, traits: traits, shape: shape)
     }
@@ -122,13 +122,13 @@ final class ScreenTests: XCTestCase {
         let top = AccessibilityElement.make(
             label: "Chicken Tikka",
             traits: .button,
-            shape: .frame(CGRect(x: 0, y: 0, width: 200, height: 44)),
+            shape: .frame(AccessibilityRect(CGRect(x: 0, y: 0, width: 200, height: 44))),
             activationPoint: CGPoint(x: 100, y: 22)
         )
         let scrolled = AccessibilityElement.make(
             label: "Chicken Tikka",
             traits: .button,
-            shape: .frame(CGRect(x: 0, y: -300, width: 200, height: 44)),
+            shape: .frame(AccessibilityRect(CGRect(x: 0, y: -300, width: 200, height: 44))),
             activationPoint: CGPoint(x: 100, y: -278)
         )
         let before = Screen.makeForTests(elements: [(top, "chicken_tikka_button")])
@@ -216,12 +216,12 @@ final class ScreenTests: XCTestCase {
         let contentHeader = makeElement(
             label: "Section Header Style",
             traits: .header,
-            shape: .frame(CGRect(x: 20, y: 240, width: 200, height: 44))
+            shape: .frame(AccessibilityRect(CGRect(x: 20, y: 240, width: 200, height: 44)))
         )
         let navigationTitle = makeElement(
             label: "Display",
             traits: .header,
-            shape: .frame(CGRect(x: 120, y: 72, width: 100, height: 44))
+            shape: .frame(AccessibilityRect(CGRect(x: 120, y: 72, width: 100, height: 44)))
         )
         let screen = Screen(
             elements: [:],

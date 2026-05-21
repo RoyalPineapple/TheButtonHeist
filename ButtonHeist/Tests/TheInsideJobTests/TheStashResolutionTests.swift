@@ -38,7 +38,7 @@ final class TheStashResolutionTests: XCTestCase {
             value: value,
             identifier: identifier,
             traits: traits,
-            shape: .frame(frame)
+            shape: .frame(AccessibilityRect(frame))
         )
     }
 

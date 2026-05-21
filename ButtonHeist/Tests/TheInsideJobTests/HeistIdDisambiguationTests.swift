@@ -45,7 +45,7 @@ final class HeistIdDisambiguationTests: XCTestCase {
 
         let container = AccessibilityContainer(
             type: .scrollable(contentSize: AccessibilitySize(scrollView.contentSize)),
-            frame: scrollView.frame
+            frame: AccessibilityRect(scrollView.frame)
         )
         let children: [AccessibilityHierarchy] = elements.enumerated().map { index, element in
             .element(element, traversalIndex: index)
@@ -66,7 +66,7 @@ final class HeistIdDisambiguationTests: XCTestCase {
             label: label,
             value: value,
             traits: .button,
-            shape: .frame(frame),
+            shape: .frame(AccessibilityRect(frame)),
             activationPoint: CGPoint(x: frame.midX, y: frame.midY),
             respondsToUserInteraction: true
         )
@@ -153,14 +153,14 @@ final class HeistIdDisambiguationTests: XCTestCase {
             description: "thing",
             label: nil,
             value: "alpha",
-            shape: .frame(firstFrame),
+            shape: .frame(AccessibilityRect(firstFrame)),
             activationPoint: CGPoint(x: firstFrame.midX, y: firstFrame.midY)
         )
         let second = AccessibilityElement.make(
             description: "thing",
             label: nil,
             value: "beta",
-            shape: .frame(secondFrame),
+            shape: .frame(AccessibilityRect(secondFrame)),
             activationPoint: CGPoint(x: secondFrame.midX, y: secondFrame.midY)
         )
 

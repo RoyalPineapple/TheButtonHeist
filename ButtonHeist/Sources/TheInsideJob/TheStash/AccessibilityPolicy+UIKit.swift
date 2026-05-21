@@ -11,7 +11,7 @@ import AccessibilitySnapshotParser
 /// Parser-bitmask projections of `AccessibilityPolicy` policy sets.
 ///
 /// Each `*Bitmask` value is derived from the corresponding `Set<HeistTrait>`
-/// via `AccessibilityTraits.fromNames` so the two forms cannot drift.
+/// via ButtonHeist's trait-name projection so the two forms cannot drift.
 /// Consumers that work with parser traits read these directly instead of
 /// building their own.
 extension AccessibilityPolicy {

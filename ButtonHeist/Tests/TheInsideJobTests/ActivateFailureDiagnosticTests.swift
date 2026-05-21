@@ -20,7 +20,7 @@ final class ActivateFailureDiagnosticTests: XCTestCase {
             description: "",
             label: "Charge $16.99",
             traits: traits,
-            shape: .frame(frame),
+            shape: .frame(AccessibilityRect(frame)),
             activationPoint: activationPoint,
             usesDefaultActivationPoint: false,
             respondsToUserInteraction: false
@@ -352,7 +352,7 @@ final class ActivateOutcomeBehaviorTests: XCTestCase {
         let element = AccessibilityElement(
             description: "", label: "x", value: nil, traits: [],
             identifier: nil, hint: nil, userInputLabels: nil,
-            shape: .frame(.zero), activationPoint: .zero,
+            shape: .frame(AccessibilityRect.zero), activationPoint: .zero,
             usesDefaultActivationPoint: true, customActions: [],
             customContent: [], customRotors: [], accessibilityLanguage: nil,
             respondsToUserInteraction: false

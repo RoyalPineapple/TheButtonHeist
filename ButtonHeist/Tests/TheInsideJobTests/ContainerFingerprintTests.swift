@@ -40,7 +40,7 @@ final class ContainerFingerprintTests: XCTestCase {
         .container(
             AccessibilityContainer(
                 type: .scrollable(contentSize: AccessibilitySize(contentSize)),
-                frame: frame
+                frame: AccessibilityRect(frame)
             ),
             children: children
         )
@@ -194,11 +194,11 @@ final class ContainerFingerprintTests: XCTestCase {
     func testMultipleContainersGetIndependentFingerprints() {
         let container1 = AccessibilityContainer(
             type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 1000)),
-            frame: CGRect(x: 0, y: 0, width: 320, height: 250)
+            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 250))
         )
         let container2 = AccessibilityContainer(
             type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 800)),
-            frame: CGRect(x: 0, y: 250, width: 320, height: 250)
+            frame: AccessibilityRect(CGRect(x: 0, y: 250, width: 320, height: 250))
         )
 
         let tree: [AccessibilityHierarchy] = [
@@ -237,11 +237,11 @@ final class ContainerFingerprintTests: XCTestCase {
     func testOnlyChangedContainerFingerprintChanges() {
         let container1 = AccessibilityContainer(
             type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 1000)),
-            frame: CGRect(x: 0, y: 0, width: 320, height: 250)
+            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 250))
         )
         let container2 = AccessibilityContainer(
             type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 800)),
-            frame: CGRect(x: 0, y: 250, width: 320, height: 250)
+            frame: AccessibilityRect(CGRect(x: 0, y: 250, width: 320, height: 250))
         )
 
         let before: [AccessibilityHierarchy] = [
@@ -335,11 +335,11 @@ final class ContainerFingerprintTests: XCTestCase {
     func testScrollableContainersPreservesPreOrder() {
         let outerContainer = AccessibilityContainer(
             type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 2000)),
-            frame: CGRect(x: 0, y: 0, width: 320, height: 500)
+            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 500))
         )
         let innerContainer = AccessibilityContainer(
             type: .scrollable(contentSize: AccessibilitySize(width: 320, height: 800)),
-            frame: CGRect(x: 0, y: 0, width: 320, height: 200)
+            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 200))
         )
 
         let tree: [AccessibilityHierarchy] = [

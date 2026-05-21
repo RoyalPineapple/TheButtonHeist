@@ -380,45 +380,43 @@ extension Navigation {
 
         stash.refresh()
 
-        // Already visible — ensure it's in the comfort zone and return.
-        // Known entries can guide inflation, but only the live visible
-        // hierarchy can prove scroll_to_visible success.
-        if let found = stash.resolveVisibleTarget(elementTarget).resolved {
-            guard ensureOnScreenSync(found) else {
-                return .failure(
-                    .scrollToVisible,
-                    message: "Element is present but could not be scrolled fully on-screen"
-                )
-            }
-            return .success(method: .scrollToVisible, message: "Already visible")
-        }
-
         let knownScreen = recordedScreen ?? stash.currentScreen
-        if let entry = knownOffscreenEntry(for: elementTarget, in: knownScreen) {
-            guard case .resolved = stash.inflateKnownTarget(entry) else {
+        switch stash.resolveTarget(elementTarget, in: knownScreen) {
+        case .resolved(let semanticTarget):
+            let inflation = stash.inflateTarget(semanticTarget.screenElement)
+            if case .failed = inflation {
                 return .failure(
                     .scrollToVisible,
-                    message: scrollToVisibleKnownTargetFailureMessage(entry)
+                    message: scrollToVisibleKnownTargetFailureMessage(semanticTarget.screenElement)
                 )
             }
-            await tripwire.yieldRealFrames(Self.postJumpRealFrames)
-            refresh()
-            var liveResolution = stash.resolveVisibleTarget(elementTarget)
-            if let found = liveResolution.resolved {
-                let didEnsure = ensureOnScreenSync(found)
-                await tripwire.yieldRealFrames(Self.postJumpRealFrames)
+            if inflation.didScroll {
+                await tripwire.yieldFrames(Self.postScrollLayoutFrames)
                 refresh()
-                liveResolution = stash.resolveVisibleTarget(elementTarget)
-                if didEnsure, liveResolution.resolved != nil {
-                    return .success(method: .scrollToVisible)
-                }
             }
-            let suffix = liveResolution.diagnostics.isEmpty ? "" : ": \(liveResolution.diagnostics)"
-            return .failure(.scrollToVisible, message: "Element not visible after inflation\(suffix)")
+            let liveResolution = stash.resolveVisibleTarget(elementTarget)
+            guard let found = liveResolution.resolved else {
+                let suffix = liveResolution.diagnostics.isEmpty ? "" : ": \(liveResolution.diagnostics)"
+                return .failure(.scrollToVisible, message: "Element not visible after inflation\(suffix)")
+            }
+            let ensureResult = await ensureVisibleResolvedTarget(found)
+            guard ensureResult.succeeded else {
+                let failure = ensureResult.failure
+                return .failure(
+                    failure?.method ?? .scrollToVisible,
+                    message: failure?.message ?? "Element is present but could not be scrolled fully on-screen"
+                )
+            }
+            let refreshedResolution = stash.resolveVisibleTarget(elementTarget)
+            guard refreshedResolution.resolved != nil else {
+                let suffix = refreshedResolution.diagnostics.isEmpty ? "" : ": \(refreshedResolution.diagnostics)"
+                return .failure(.scrollToVisible, message: "Element disappeared after inflation\(suffix)")
+            }
+            let message = inflation.didScroll ? nil : "Already visible"
+            return .success(method: .scrollToVisible, message: message)
+        case .notFound(let diagnostics), .ambiguous(_, let diagnostics):
+            return .failure(.scrollToVisible, message: diagnostics)
         }
-
-        return .failure(.scrollToVisible,
-                        message: scrollToVisibleFailureMessage(for: elementTarget, in: knownScreen))
     }
 
     // MARK: - Element Search (Iterative)
@@ -690,24 +688,19 @@ extension Navigation {
             return .operationLocalRotorResult
         }
 
-        let visibleResolution = stash.resolveVisibleTarget(target)
-        if let visible = visibleResolution.resolved {
-            return await ensureVisibleResolvedTarget(visible)
-        }
-        if case .ambiguous(_, let diagnostics) = visibleResolution {
-            return .failed(.elementNotFound(diagnostics))
-        }
-
         let knownScreen = recordedScreen ?? stash.currentScreen
-        if let entry = knownOffscreenEntry(for: target, in: knownScreen) {
-            guard case .resolved = stash.inflateKnownTarget(entry) else {
+        switch stash.resolveTarget(target, in: knownScreen) {
+        case .resolved(let semanticTarget):
+            let inflation = stash.inflateTarget(semanticTarget.screenElement)
+            if case .failed = inflation {
                 return .failed(.actionFailed(
-                    "ensure_on_screen failed: \(scrollToVisibleKnownTargetFailureMessage(entry))"
+                    "ensure_on_screen failed: \(scrollToVisibleKnownTargetFailureMessage(semanticTarget.screenElement))"
                 ))
             }
-            await tripwire.yieldRealFrames(Self.postJumpRealFrames)
-            refresh()
-
+            if inflation.didScroll {
+                await tripwire.yieldFrames(Self.postScrollLayoutFrames)
+                refresh()
+            }
             let liveResolution = stash.resolveVisibleTarget(target)
             guard let liveTarget = liveResolution.resolved else {
                 let suffix = liveResolution.diagnostics.isEmpty ? "" : ": \(liveResolution.diagnostics)"
@@ -717,23 +710,7 @@ extension Navigation {
             }
             let ensureResult = await ensureVisibleResolvedTarget(liveTarget)
             guard ensureResult.succeeded else { return ensureResult }
-            await tripwire.yieldRealFrames(Self.postJumpRealFrames)
-            refresh()
-            guard stash.resolveVisibleTarget(target).resolved != nil else {
-                return .failed(.elementNotFound(
-                    "ensure_on_screen failed: target disappeared after inflation"
-                ))
-            }
-            return .recoveredKnownOffscreen
-        }
-
-        switch stash.resolveTarget(target, in: knownScreen) {
-        case .resolved(let resolved):
-            return .failed(.elementNotFound(
-                "ensure_on_screen failed: target \(Self.describeScrollTarget(resolved.screenElement)) "
-                    + "is known but not currently visible and could not be inflated; "
-                    + "use \(ScrollMode.toVisible.canonicalCommand) or \(ScrollMode.search.canonicalCommand)."
-            ))
+            return inflation.didScroll ? .recoveredKnownOffscreen : ensureResult
         case .notFound(let diagnostics), .ambiguous(_, let diagnostics):
             return .failed(.elementNotFound(diagnostics))
         }
@@ -789,9 +766,9 @@ extension Navigation {
     // MARK: - Known Offscreen Lookup
 
     /// Find a known element that matches `target` but is NOT in the live
-    /// viewport. Used by `scroll_to_visible` and `element_search` to inflate a
-    /// target when an element scrolled out of view since the last exploration
-    /// committed.
+    /// viewport. This is a semantic lookup helper; runtime positioning goes
+    /// through `inflateTarget` so visible targets no-op and off-screen targets
+    /// use the same inflation path.
     ///
     /// Returns nil if the element is already on-screen or unknown. Callers that
     /// preserve a known semantic screen across a visible refresh pass it in

@@ -223,22 +223,4 @@ extension Array where Element == AccessibilityHierarchy {
     }
 }
 
-// MARK: - Trait Formatting
-
-extension AccessibilityTraits {
-    /// Parser-native trait names, including an explicit token for unknown
-    /// residual bits so internal diagnostics and wire conversion share one
-    /// source of truth before TheScore DTO exfiltration.
-    var namesIncludingUnknownBits: [String] {
-        var result = traitNames
-        var remaining = rawValue
-        for (trait, _) in Self.knownTraits where contains(trait) {
-            remaining &= ~trait.rawValue
-        }
-        if remaining != 0 {
-            result.append("unknown(0x\(String(remaining, radix: 16)))")
-        }
-        return result
-    }
-}
 #endif // canImport(UIKit) && canImport(AccessibilitySnapshotParser)
