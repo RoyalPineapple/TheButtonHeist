@@ -150,9 +150,9 @@ private extension ActionMethod {
     var compactScrollSearchCommandName: String {
         switch self {
         case .elementSearch:
-            return ScrollMode.search.canonicalCommand
+            return TheFence.Command.command(for: .search).rawValue
         case .scrollToVisible:
-            return ScrollMode.toVisible.canonicalCommand
+            return TheFence.Command.command(for: .toVisible).rawValue
         default:
             return rawValue
         }
