@@ -368,10 +368,11 @@ final class HeistPlaybackTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(
-            step.description,
-            #"step(command="activate" matcher(label="Save" traits=[button]) args=arguments("count"=2 "text"="hello") recorded(heistId="save_button" frame(1,2,3,4) coordinateOnly=false expectation(met=true expected=screen_changed actual="screenChanged")))"#
-        )
+        let expected = #"step(command="activate" matcher(label="Save" traits=[button]) "#
+            + #"args=arguments("count"=2 "text"="hello") "#
+            + #"recorded(heistId="save_button" frame(1,2,3,4) coordinateOnly=false "#
+            + #"expectation(met=true expected=screen_changed actual="screenChanged")))"#
+        XCTAssertEqual(step.description, expected)
     }
 
     func testRecordedEvidenceDescriptionsCompose() {
